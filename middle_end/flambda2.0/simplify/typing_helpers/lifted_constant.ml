@@ -69,7 +69,7 @@ let introduce (T { env = orig_typing_env; types; _ }) typing_env =
         if TE.mem typing_env sym then typing_env
         else
           let sym =
-            Name_in_binding_pos.create sym Name_occurrence_kind.normal
+            Name_in_binding_pos.create sym Name_mode.normal
           in
           TE.add_definition typing_env sym (T.kind typ))
       types
@@ -83,7 +83,7 @@ let introduce (T { env = orig_typing_env; types; _ }) typing_env =
         let typing_env =
           let name =
             Name_in_binding_pos.create (Name.var var)
-              Name_occurrence_kind.in_types
+              Name_mode.in_types
           in
           TE.add_definition typing_env name kind
         in

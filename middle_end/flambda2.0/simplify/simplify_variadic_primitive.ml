@@ -80,37 +80,30 @@ Format.eprintf "simplifying make_block on %a (num args %d)\n%!"
   | Full_of_naked_floats -> Misc.fatal_error "Not yet implemented"
   | Generic_array _spec -> Misc.fatal_error "Not yet implemented"
 
-let try_cse dacc prim args ~min_occurrence_kind ~result_var
+let try_cse dacc prim args ~min_name_mode ~result_var
       : Simplify_common.cse =
-  match
-    S.simplify_simples dacc args
-      ~min_occurrence_kind:Name_occurrence_kind.min_in_types
-  with
-  | Bottom ->
-    let kind = P.result_kind_of_variadic_primitive' prim in
-    Invalid (T.bottom kind)
+  let result_kind = P.result_kind_of_variadic_primitive' prim in
+  match S.simplify_simples dacc args ~min_name_mode:Name_mode.min_in_types with
+  | Bottom -> Invalid (T.bottom result_kind)
   | Ok args_with_tys ->
     let args, _tys = List.split args_with_tys in
     let original_prim : P.t = Variadic (prim, args) in
-    let result_kind =
-      P.result_kind_of_variadic_primitive' prim
-    in
     Simplify_common.try_cse dacc ~original_prim ~result_kind
-      ~min_occurrence_kind ~result_var
+      ~min_name_mode ~result_var
 
 let simplify_variadic_primitive dacc
       (prim : P.variadic_primitive) args dbg ~result_var =
-  let min_occurrence_kind = Var_in_binding_pos.occurrence_kind result_var in
+  let min_name_mode = Var_in_binding_pos.name_mode result_var in
   let result_var' = Var_in_binding_pos.var result_var in
   let invalid ty =
     let env_extension = TEE.one_equation (Name.var result_var') ty in
     Reachable.invalid (), env_extension, dacc
   in
-  match try_cse dacc prim args ~min_occurrence_kind ~result_var:result_var' with
+  match try_cse dacc prim args ~min_name_mode ~result_var:result_var' with
   | Invalid ty -> invalid ty
   | Applied result -> result
   | Not_applied dacc ->
-    match S.simplify_simples dacc args ~min_occurrence_kind with
+    match S.simplify_simples dacc args ~min_name_mode with
     | Bottom ->
       let kind = P.result_kind_of_variadic_primitive' prim in
       invalid (T.bottom kind)

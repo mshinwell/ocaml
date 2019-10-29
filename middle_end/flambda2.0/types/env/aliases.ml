@@ -378,6 +378,11 @@ end) = struct
       Some add_result, t
 
   let add_canonical_element t element =
+(*
+Format.eprintf "add canonical %a:\n%s\n%!"
+  E.print element
+  (Printexc.raw_backtrace_to_string (Printexc.get_callstack 20));
+*)
     if E.Map.mem element t.canonical_elements then begin
       if E.implicitly_bound_and_canonical element then
         t
@@ -403,6 +408,12 @@ end) = struct
       t
 
   let add t element1 element2 =
+(*
+Format.eprintf "add element1 %a element2 %a:\n%s\n%!"
+  E.print element1
+  E.print element2
+  (Printexc.raw_backtrace_to_string (Printexc.get_callstack 20));
+*)
     let original_t = t in
     let t = add_implicitly_bound_canonical_element t element1 in
     let t = add_implicitly_bound_canonical_element t element2 in

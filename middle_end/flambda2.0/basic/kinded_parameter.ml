@@ -72,7 +72,7 @@ let equal_kinds t1 t2 =
   Flambda_kind.equal t1.kind t2.kind
 
 let free_names ({ param = _; kind = _; } as t) =
-  Name_occurrences.singleton_variable (var t) Name_occurrence_kind.normal
+  Name_occurrences.singleton_variable (var t) Name_mode.normal
 
 let apply_name_permutation ({ param = _; kind; } as t) perm =
   match Name_permutation.apply_name perm (name t) with
@@ -88,10 +88,10 @@ let name_permutation t1 t2 =
   add_to_name_permutation t1 t2 Name_permutation.empty
 
 let singleton_occurrence_in_terms t =
-  Name_occurrences.singleton_variable (var t) Name_occurrence_kind.normal
+  Name_occurrences.singleton_variable (var t) Name_mode.normal
 
 let add_occurrence_in_terms t occs =
-  Name_occurrences.add_variable occs (var t) Name_occurrence_kind.normal
+  Name_occurrences.add_variable occs (var t) Name_mode.normal
 
 module List = struct
   type nonrec t = t list

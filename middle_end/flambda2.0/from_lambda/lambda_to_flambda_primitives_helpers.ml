@@ -104,7 +104,7 @@ let expression_for_failure ~backend exn_cont ~register_const_string
       ]
       in
       let extra_let_binding =
-        Var_in_binding_pos.create exn_bucket Name_occurrence_kind.normal,
+        Var_in_binding_pos.create exn_bucket Name_mode.normal,
           Named.create_prim (Variadic (Make_block (
               Full_of_values (Tag.Scannable.zero,
                   [Definitely_pointer; Definitely_pointer]),
@@ -251,7 +251,7 @@ and bind_rec_primitive ~backend exn_cont ~register_const_string
     cont s
   | Prim p ->
     let var = Variable.create "prim" in
-    let var' = VB.create var Name_occurrence_kind.normal in
+    let var' = VB.create var Name_mode.normal in
     let cont named =
       Flambda.Expr.create_let var' named (cont (Simple.var var))
     in

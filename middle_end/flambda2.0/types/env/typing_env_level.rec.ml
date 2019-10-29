@@ -33,7 +33,17 @@ let defined_vars_in_order t =
 
 let defined_vars_in_order' t = List.map fst (defined_vars_in_order t)
 
-let print_with_cache ~cache ppf (({ defined_vars; equations; cse; } as t) : t) =
+let defined_names t =
+  Name.set_of_var_set (Variable.Map.keys t.defined_vars)
+
+let defines_name_but_no_equations t name =
+  match Name.to_var name with
+  | None -> false
+  | Some var ->
+    Variable.Map.mem var t.defined_vars
+      && not (Name.Map.mem name t.equations)
+
+let print_with_cache ~cache ppf { defined_vars; equations; cse; } =
   let print_equations ppf equations =
     let equations = Name.Map.bindings equations in
     match equations with
@@ -50,24 +60,35 @@ let print_with_cache ~cache ppf (({ defined_vars; equations; cse; } as t) : t) =
       Format.pp_print_string ppf ")"
   in
   if Variable.Map.is_empty defined_vars then
-    Format.fprintf ppf
-      "@[<hov 1>(\
-        @[<hov 1>(equations@ @[<v 1>%a@])@])@ \
-        @[<hov 1>(cse@ @[<hov 1>%a@])@]\
-        @]"
-      print_equations equations
-      (Flambda_primitive.Eligible_for_cse.Map.print Simple.print) cse
+    if Flambda_primitive.Eligible_for_cse.Map.is_empty cse then
+      Format.fprintf ppf
+        "@[<hov 1>(\
+          @[<hov 1>(equations@ @[<v 1>%a@])@])\
+          @]"
+        print_equations equations
+    else
+      Format.fprintf ppf
+        "@[<hov 1>(\
+          @[<hov 1>(equations@ @[<v 1>%a@])@])@ \
+          @[<hov 1>(cse@ @[<hov 1>%a@])@]\
+          @]"
+        print_equations equations
+        (Flambda_primitive.Eligible_for_cse.Map.print Simple.print) cse
   else
-    Format.fprintf ppf
-      "@[<hov 1>(\
-        @[<hov 1>(defined_vars@ @[<hov 1>%a@])@]@ \
-        @[<hov 1>(equations@ @[<v 1>%a@])@]@ \
-        @[<hov 1>(cse@ @[<hov 1>%a@])@]\
-        )@]"
-      (Format.pp_print_list ~pp_sep:Format.pp_print_space Variable.print)
-      (defined_vars_in_order' t)
-      print_equations equations
-      (Flambda_primitive.Eligible_for_cse.Map.print Simple.print) cse
+    if Flambda_primitive.Eligible_for_cse.Map.is_empty cse then
+      Format.fprintf ppf
+        "@[<hov 1>(\
+          @[<hov 1>(equations@ @[<v 1>%a@])@]@ \
+          )@]"
+        print_equations equations
+    else
+      Format.fprintf ppf
+        "@[<hov 1>(\
+          @[<hov 1>(equations@ @[<v 1>%a@])@]@ \
+          @[<hov 1>(cse@ @[<hov 1>%a@])@]\
+          )@]"
+        print_equations equations
+        (Flambda_primitive.Eligible_for_cse.Map.print Simple.print) cse
 
 let print ppf t =
   print_with_cache ~cache:(Printing_cache.create ()) ppf t
@@ -126,13 +147,13 @@ let apply_name_permutation ({ defined_vars; equations; cse; } as t)
 let free_names { defined_vars; equations; cse; } =
   let free_names_defined_vars =
     Name_occurrences.create_variables (Variable.Map.keys defined_vars)
-      Name_occurrence_kind.in_types
+      Name_mode.in_types
   in
   let free_names_equations =
     Name.Map.fold (fun name typ free_names ->
         let free_names' = 
           Name_occurrences.add_name (Type_grammar.free_names typ)
-            name Name_occurrence_kind.in_types
+            name Name_mode.in_types
         in
         Name_occurrences.union free_names free_names')
       equations
@@ -146,10 +167,10 @@ let free_names { defined_vars; equations; cse; } =
         let free_in_prim =
           Name_occurrences.downgrade_occurrences_at_strictly_greater_kind
             (Flambda_primitive.Eligible_for_cse.free_names prim)
-            Name_occurrence_kind.in_types
+            Name_mode.in_types
         in
         Name_occurrences.add_name free_in_prim
-          name Name_occurrence_kind.in_types)
+          name Name_mode.in_types)
     cse
     free_names_equations
 
@@ -303,7 +324,7 @@ let meet0 env (t1 : t) (t2 : t) =
       Variable.Map.fold (fun var (kind, _binding_time) typing_env ->
           let name =
             Name_in_binding_pos.create (Name.var var)
-              Name_occurrence_kind.in_types
+              Name_mode.in_types
           in
           Typing_env.add_definition typing_env name kind)
         defined_vars
@@ -381,10 +402,10 @@ let cse_after_n_way_join envs_with_extensions ~vars_in_scope_at_join
     let allowed_vars =
       Variable.Set.union vars_in_scope_at_join additional_allowed_vars
     in
-    fun env simple ~min_occurrence_kind ->
+    fun env simple ~min_name_mode ->
       (* CR mshinwell: Think again as to whether [get_canonical_simple]
          will do, given how the allowed sets work. *)
-      Typing_env.earliest_alias_of_simple_satisfying env ~min_occurrence_kind
+      Typing_env.earliest_alias_of_simple_satisfying env ~min_name_mode
         ~allowed_vars simple
   in
   let canonicalise_lhs env cse =
@@ -396,8 +417,8 @@ let cse_after_n_way_join envs_with_extensions ~vars_in_scope_at_join
               match cannot_use with
               | Equation_ineligible -> Equation_ineligible, arg
               | Equation_ok () ->
-                let min_occurrence_kind = Name_occurrence_kind.in_types in
-                match canonicalise env arg ~min_occurrence_kind with
+                let min_name_mode = Name_mode.in_types in
+                match canonicalise env arg ~min_name_mode with
                 | None -> Equation_ineligible, arg
                 | Some arg -> Equation_ok (), arg)
         in
@@ -432,8 +453,8 @@ Format.eprintf "Checking primitive %a\n%!" EP.print prim;
             | Equation_ok rhs_kinds ->
               let bound_to = EP.Map.find prim cse in
               let rhs_kind : Rhs_kind.t cannot_use =
-                let min_occurrence_kind = Name_occurrence_kind.normal in
-                match canonicalise env bound_to ~min_occurrence_kind with
+                let min_name_mode = Name_mode.normal in
+                match canonicalise env bound_to ~min_name_mode with
                 | None ->
 (*
                   Format.eprintf "No canonical variable for %a\n%!"

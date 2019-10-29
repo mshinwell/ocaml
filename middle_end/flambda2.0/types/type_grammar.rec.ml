@@ -213,6 +213,15 @@ let is_obviously_bottom (t : t) =
   | Naked_int64 ty -> T_N64.is_obviously_bottom ty
   | Naked_nativeint ty -> T_NN.is_obviously_bottom ty
 
+let is_obviously_unknown (t : t) =
+  match t with
+  | Value ty -> T_V.is_obviously_unknown ty
+  | Naked_immediate ty -> T_NI.is_obviously_unknown ty
+  | Naked_float ty -> T_Nf.is_obviously_unknown ty
+  | Naked_int32 ty -> T_N32.is_obviously_unknown ty
+  | Naked_int64 ty -> T_N64.is_obviously_unknown ty
+  | Naked_nativeint ty -> T_NN.is_obviously_unknown ty
+
 let alias_type_of (kind : K.t) name : t =
   match kind with
   | Value -> Value (T_V.create_equals name)
@@ -365,10 +374,9 @@ let box_nativeint (t : t) : t =
       print t
 
 let any_tagged_immediate () : t =
-  Value (T_V.create_no_alias (Ok (Variant {
-    immediates = Unknown;
-    blocks = Known (Row_like.For_blocks.create_bottom ());
-  })))
+  Value (T_V.create_no_alias (Ok (Variant (T_V.Variant.create
+    ~immediates:Unknown
+    ~blocks:(Known (Row_like.For_blocks.create_bottom ()))))))
 
 let this_tagged_immediate imm : t =
   Value (T_V.create_equals (Simple.const (Tagged_immediate imm)))
@@ -379,11 +387,9 @@ let these_tagged_immediates0 ~no_alias imms : t =
   | _ ->
     if Immediate.Set.is_empty imms then bottom K.value
     else
-      Value (T_V.create_no_alias (
-        Ok (Variant {
-          immediates = Known (these_naked_immediates imms);
-          blocks = Known (Row_like.For_blocks.create_bottom ());
-        })))
+      Value (T_V.create_no_alias (Ok (Variant (T_V.Variant.create
+        ~immediates:(Known (these_naked_immediates imms))
+        ~blocks:(Known (Row_like.For_blocks.create_bottom ()))))))
 
 let these_tagged_immediates imms =
   these_tagged_immediates0 ~no_alias:false imms
@@ -394,11 +400,9 @@ let this_tagged_immediate_without_alias imm =
 let tag_immediate t : t =
   match t with
   | Naked_immediate _ ->
-    Value (T_V.create_no_alias (
-      Ok (Variant {
-        immediates = Known t;
-        blocks = Known (Row_like.For_blocks.create_bottom ());
-      })))
+    Value (T_V.create_no_alias (Ok (Variant (T_V.Variant.create
+      ~immediates:(Known t)
+      ~blocks:(Known (Row_like.For_blocks.create_bottom ()))))))
   | Value _ | Naked_float _ | Naked_int32 _ | Naked_int64 _
   | Naked_nativeint _ ->
     Misc.fatal_errorf "Type of wrong kind for [tag_immediate]: %a"
@@ -409,21 +413,9 @@ let tagged_immediate_alias_to ~naked_immediate : t =
     T_NI.create_equals (Simple.var naked_immediate)))
 
 let any_block () : t =
-  Value (T_V.create_no_alias (Ok (Variant {
-    immediates = Known (bottom K.naked_immediate);
-    blocks = Unknown;
-  })))
-
-(*
-let any_block_with_tag tag : t =
-  let blocks =
-    Row_like.For_blocks.create ~field_tys:[] (Open (Known tag))
-  in
-  Value (T_V.create_no_alias (Ok (Variant {
-    immediates = Known (bottom K.naked_immediate);
-    blocks = Known blocks;
-  })))
-*)
+  Value (T_V.create_no_alias (Ok (Variant (T_V.Variant.create
+    ~immediates:(Known (bottom K.naked_immediate))
+    ~blocks:Unknown))))
 
 let is_int_for_scrutinee ~scrutinee : t =
   Naked_immediate (T_NI.create (Is_int (alias_type_of K.value scrutinee)))
@@ -460,10 +452,9 @@ let blocks_with_these_tags tags =
   let blocks =
     Row_like.For_blocks.create_blocks_with_these_tags tags
   in
-  Value (T_V.create_no_alias (Ok (Variant {
-    immediates = Known (bottom K.naked_immediate);
-    blocks = Known blocks;
-  })))
+  Value (T_V.create_no_alias (Ok (Variant (T_V.Variant.create
+    ~immediates:(Known (bottom K.naked_immediate))
+    ~blocks:(Known blocks)))))
 
 let immutable_block tag ~fields =
   (* CR mshinwell: We should check the field kinds against the tag. *)
@@ -472,11 +463,10 @@ let immutable_block tag ~fields =
     (* CR mshinwell: This should be a special kind of error. *)
     Misc.fatal_error "Block too long for target"
   | Some _size ->
-    Value (T_V.create_no_alias (Ok (
-      Variant {
-        immediates = Known (bottom K.naked_immediate);
-        blocks = Known (Row_like.For_blocks.create ~field_tys:fields (Closed tag));
-      })))
+    Value (T_V.create_no_alias (Ok (Variant (T_V.Variant.create
+      ~immediates:(Known (bottom K.naked_immediate))
+      ~blocks:(Known (Row_like.For_blocks.create
+        ~field_tys:fields (Closed tag)))))))
 
 let immutable_block_with_size_at_least ~n ~field_n_minus_one =
   let n = Targetint.OCaml.to_int n in
@@ -485,11 +475,9 @@ let immutable_block_with_size_at_least ~n ~field_n_minus_one =
         if index < n - 1 then any_value ()
         else alias_type_of K.value (Simple.var field_n_minus_one))
   in
-  Value (T_V.create_no_alias (Ok (
-    Variant {
-      immediates = Known (bottom K.naked_immediate);
-      blocks = Known (Row_like.For_blocks.create ~field_tys (Open Unknown));
-    })))
+  Value (T_V.create_no_alias (Ok (Variant (T_V.Variant.create
+    ~immediates:(Known (bottom K.naked_immediate))
+    ~blocks:(Known (Row_like.For_blocks.create ~field_tys (Open Unknown)))))))
 
 let this_immutable_string str =
   (* CR mshinwell: Use "length" not "size" for strings *)

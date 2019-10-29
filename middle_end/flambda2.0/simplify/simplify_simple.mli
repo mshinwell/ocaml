@@ -21,11 +21,11 @@
 val simplify_simple
    : Downwards_acc.t
   -> Simple.t
-  -> min_occurrence_kind:Name_occurrence_kind.t
+  -> min_name_mode:Name_mode.t
   -> Simple.t Or_bottom.t * Flambda_type.t
 
 val simplify_simples
    : Downwards_acc.t
   -> Simple.t list
-  -> min_occurrence_kind:Name_occurrence_kind.t
+  -> min_name_mode:Name_mode.t
   -> (Simple.t * Flambda_type.t) list Or_bottom.t

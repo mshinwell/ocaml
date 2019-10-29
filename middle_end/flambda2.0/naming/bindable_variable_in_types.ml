@@ -21,7 +21,7 @@ include Variable
 let print_with_cache ~cache:_ ppf t = print ppf t
 
 let free_names t =
-  Name_occurrences.singleton_variable t Name_occurrence_kind.in_types
+  Name_occurrences.singleton_variable t Name_mode.in_types
 
 let apply_name_permutation t perm = Name_permutation.apply_variable perm t
 
@@ -35,7 +35,7 @@ let name_permutation t1 t2 =
 
 (* CR mshinwell: These shouldn't have "in_terms" on their names *)
 let singleton_occurrence_in_terms t =
-  Name_occurrences.singleton_variable t Name_occurrence_kind.in_types
+  Name_occurrences.singleton_variable t Name_mode.in_types
 
 let add_occurrence_in_terms t occs =
-  Name_occurrences.add_variable occs t Name_occurrence_kind.in_types
+  Name_occurrences.add_variable occs t Name_mode.in_types

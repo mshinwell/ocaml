@@ -73,9 +73,9 @@ include Identifiable.Make (struct
     | Phantom -> Format.pp_print_string ppf "Phantom"
 
   let output _ _ =
-    Misc.fatal_error "Name_occurrence_kind.output not yet implemented"
+    Misc.fatal_error "Name_mode.output not yet implemented"
 
-  let hash _ = Misc.fatal_error "Name_occurrence_kind.hash not yet implemented"
+  let hash _ = Misc.fatal_error "Name_mode.hash not yet implemented"
 
   let compare t1 t2 =
     (* We explicitly make this agree with [compare_partial_order], above. *)

@@ -126,13 +126,13 @@ module type S = sig
 
     val get_canonical_simple
        : t
-      -> ?min_occurrence_kind:Name_occurrence_kind.t
+      -> ?min_name_mode:Name_mode.t
       -> Simple.t
       -> Simple.t option Or_bottom.t
 
     val get_canonical_simple_with_kind
        : t
-      -> ?min_occurrence_kind:Name_occurrence_kind.t
+      -> ?min_name_mode:Name_mode.t
       -> Simple.t
       -> Simple.t option Or_bottom.t * Flambda_kind.t
 
@@ -441,7 +441,7 @@ module type S = sig
 
   val reify
      : Typing_env.t
-    -> min_occurrence_kind:Name_occurrence_kind.t
+    -> min_name_mode:Name_mode.t
     -> t
     -> reification_result
 end

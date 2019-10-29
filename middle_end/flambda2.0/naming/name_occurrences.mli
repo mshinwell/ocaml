@@ -44,19 +44,19 @@ val count_continuation : t -> Continuation.t -> Num_occurrences.t
 
 val count_variable : t -> Variable.t -> Num_occurrences.t
 
-val singleton_variable : Variable.t -> Name_occurrence_kind.t -> t
+val singleton_variable : Variable.t -> Name_mode.t -> t
 
-val add_variable : t -> Variable.t -> Name_occurrence_kind.t -> t
+val add_variable : t -> Variable.t -> Name_mode.t -> t
 
-val add_name : t -> Name.t -> Name_occurrence_kind.t -> t
+val add_name : t -> Name.t -> Name_mode.t -> t
 
-val singleton_name : Name.t -> Name_occurrence_kind.t -> t
+val singleton_name : Name.t -> Name_mode.t -> t
 
-val singleton_symbol : Symbol.t -> Name_occurrence_kind.t -> t
+val singleton_symbol : Symbol.t -> Name_mode.t -> t
 
-val create_variables : Variable.Set.t -> Name_occurrence_kind.t -> t
+val create_variables : Variable.Set.t -> Name_mode.t -> t
 
-val create_names : Name.Set.t -> Name_occurrence_kind.t -> t
+val create_names : Name.Set.t -> Name_mode.t -> t
 
 (** [diff t1 t2] removes from [t1] all those names that occur in [t2].
     The number of occurrences of any names in the return value will be exactly
@@ -88,12 +88,12 @@ val remove_vars : t -> Variable.Set.t -> t
 
 val only_contains_symbols : t -> bool
 
-val greatest_occurrence_kind_var
+val greatest_name_mode_var
    : t
   -> Variable.t
-  -> Name_occurrence_kind.Or_absent.t
+  -> Name_mode.Or_absent.t
 
 val downgrade_occurrences_at_strictly_greater_kind
    : t
-  -> Name_occurrence_kind.t
+  -> Name_mode.t
   -> t

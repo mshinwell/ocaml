@@ -21,10 +21,10 @@
 
 type t
 
-val create : Name.t -> Name_occurrence_kind.t -> t
+val create : Name.t -> Name_mode.t -> t
 
 val name : t -> Name.t
-val occurrence_kind : t -> Name_occurrence_kind.t
+val name_mode : t -> Name_mode.t
 
 val var : Var_in_binding_pos.t -> t
 val symbol : Symbol.t -> t

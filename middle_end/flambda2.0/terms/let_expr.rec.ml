@@ -33,8 +33,8 @@ let pattern_match t ~f =
 let print_with_cache ~cache ppf
       ({ bound_vars_and_body = _; defining_expr; } as t) =
   let let_bound_var_colour bound_vars =
-    let kind = Bindable_let_bound.name_occurrence_kind bound_vars in
-    if Name_occurrence_kind.is_phantom kind then
+    let kind = Bindable_let_bound.name_mode bound_vars in
+    if Name_mode.is_phantom kind then
       Flambda_colours.elide ()
     else
       Flambda_colours.let_bound_var ()
@@ -110,14 +110,14 @@ let defining_expr t = t.defining_expr
 
 let free_names ({ bound_vars_and_body = _; defining_expr; } as t) =
   pattern_match t ~f:(fun ~bound_vars ~body ->
-    let name_occurrence_kind =
-      Bindable_let_bound.name_occurrence_kind bound_vars
+    let name_mode =
+      Bindable_let_bound.name_mode bound_vars
     in
     let bound_vars = Bindable_let_bound.all_bound_vars' bound_vars in
     let from_defining_expr =
       Name_occurrences.downgrade_occurrences_at_strictly_greater_kind
         (Named.free_names defining_expr)
-        name_occurrence_kind
+        name_mode
     in
     let from_body = Expr.free_names body in
     Name_occurrences.union from_defining_expr

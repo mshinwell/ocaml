@@ -399,7 +399,7 @@ and simplify_direct_partial_application
           | None -> expr
           | Some applied_arg ->
             let applied_arg =
-              VB.create applied_arg Name_occurrence_kind.normal
+              VB.create applied_arg Name_mode.normal
             in
             Expr.create_let applied_arg
               (Named.create_prim
@@ -439,7 +439,7 @@ and simplify_direct_partial_application
       ~args:[Simple.var wrapper_var]
   in
   let expr =
-    let wrapper_var = VB.create wrapper_var Name_occurrence_kind.normal in
+    let wrapper_var = VB.create wrapper_var Name_mode.normal in
     let closure_vars =
       Closure_id.Map.singleton wrapper_closure_id wrapper_var
     in
@@ -679,11 +679,11 @@ and simplify_apply_shared dacc apply : _ Or_bottom.t =
   DA.check_continuation_is_bound dacc (Apply.continuation apply);
   DA.check_exn_continuation_is_bound dacc (Apply.exn_continuation apply);
 *)
-  let min_occurrence_kind = Name_occurrence_kind.normal in
-  match S.simplify_simple dacc (Apply.callee apply) ~min_occurrence_kind with
+  let min_name_mode = Name_mode.normal in
+  match S.simplify_simple dacc (Apply.callee apply) ~min_name_mode with
   | Bottom, _ty -> Bottom
   | Ok callee, callee_ty ->
-    match S.simplify_simples dacc (Apply.args apply) ~min_occurrence_kind with
+    match S.simplify_simples dacc (Apply.args apply) ~min_name_mode with
     | Bottom -> Bottom
     | Ok args_with_types ->
       let args, arg_types = List.split args_with_types in
@@ -828,8 +828,8 @@ and simplify_apply_cont
   : 'a. DA.t -> Apply_cont.t -> 'a k -> Expr.t * 'a * UA.t
 = fun dacc apply_cont k ->
   let module AC = Apply_cont in
-  let min_occurrence_kind = Name_occurrence_kind.normal in
-  match S.simplify_simples dacc (AC.args apply_cont) ~min_occurrence_kind with
+  let min_name_mode = Name_mode.normal in
+  match S.simplify_simples dacc (AC.args apply_cont) ~min_name_mode with
   | Bottom ->
     let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
     Expr.create_invalid (), user_data, uacc
@@ -973,7 +973,7 @@ Format.eprintf "Apply_cont is now %a\n%!" Expr.print apply_cont_expr;
 and simplify_switch
   : 'a. DA.t -> Switch.t -> 'a k -> Expr.t * 'a * UA.t
 = fun dacc switch k ->
-  let min_occurrence_kind = Name_occurrence_kind.normal in
+  let min_name_mode = Name_mode.normal in
   let scrutinee = Switch.scrutinee switch in
   let invalid () =
     let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
@@ -983,7 +983,7 @@ and simplify_switch
   Format.eprintf "Simplifying Switch, env@ %a@ %a\n%!"
     TE.print (DE.typing_env (DA.denv dacc)) Switch_expr.print switch;
     *)
-  match S.simplify_simple dacc scrutinee ~min_occurrence_kind with
+  match S.simplify_simple dacc scrutinee ~min_name_mode with
   | Bottom, _ty -> invalid ()
   | Ok scrutinee, scrutinee_ty ->
   (*
@@ -1103,7 +1103,7 @@ and simplify_switch
     let create_tagged_scrutinee k =
       let bound_to = Variable.create "tagged_scrutinee" in
       let bound_vars =
-        Bindable_let_bound.singleton (VB.create bound_to NOK.normal)
+        Bindable_let_bound.singleton (VB.create bound_to NM.normal)
       in
       let named =
         Named.create_prim (Unary (Box_number Untagged_immediate, scrutinee))
@@ -1129,7 +1129,7 @@ and simplify_switch
             let apply_cont =
               Apply_cont.create dest ~args:[Simple.var not_scrutinee]
             in
-            Expr.create_let (VB.create not_scrutinee NOK.normal)
+            Expr.create_let (VB.create not_scrutinee NM.normal)
               (Named.create_prim (P.Unary (Boolean_not, tagged_scrutinee))
                 Debuginfo.none)
               (Expr.create_apply_cont apply_cont))

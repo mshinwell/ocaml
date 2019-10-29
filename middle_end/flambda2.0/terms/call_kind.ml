@@ -143,7 +143,7 @@ let free_names t =
   | Method { kind = _; obj; } ->
     match Simple.descr obj with
     | Name obj ->
-      Name_occurrences.singleton_name obj Name_occurrence_kind.normal
+      Name_occurrences.singleton_name obj Name_mode.normal
     | Const _ -> Name_occurrences.empty
 
 let apply_name_permutation t perm =

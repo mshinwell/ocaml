@@ -25,4 +25,6 @@ type t = private
 val reachable : Named.t -> t
 val invalid : unit -> t
 
+val is_invalid : t -> bool
+
 val print : Format.formatter -> t -> unit

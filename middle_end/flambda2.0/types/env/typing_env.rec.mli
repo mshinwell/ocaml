@@ -93,19 +93,19 @@ val add_env_extension
 
 val get_canonical_simple
    : t
-  -> ?min_occurrence_kind:Name_occurrence_kind.t
+  -> ?min_name_mode:Name_mode.t
   -> Simple.t
   -> Simple.t option Or_bottom.t
 
 val get_canonical_simple_with_kind
    : t
-  -> ?min_occurrence_kind:Name_occurrence_kind.t
+  -> ?min_name_mode:Name_mode.t
   -> Simple.t
   -> Simple.t option Or_bottom.t * Flambda_kind.t
 
 val get_alias_then_canonical_simple
    : t
-  -> ?min_occurrence_kind:Name_occurrence_kind.t
+  -> ?min_name_mode:Name_mode.t
   -> Type_grammar.t
   -> Simple.t option Or_bottom.t
 
@@ -113,12 +113,10 @@ val aliases_of_simple_allowable_in_types : t -> Simple.t -> Simple.Set.t
 
 val earliest_alias_of_simple_satisfying
    : t
-  -> min_occurrence_kind:Name_occurrence_kind.t
+  -> min_name_mode:Name_mode.t
   -> allowed_vars:Variable.Set.t
   -> Simple.t
   -> Simple.t option
-
-val defined_earlier : t -> Simple.t -> than:Simple.t -> bool
 
 (* CR mshinwell: Consider labelling arguments e.g. [definition_typing_env] *)
 val cut_and_n_way_join

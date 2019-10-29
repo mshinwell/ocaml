@@ -37,7 +37,7 @@ val try_cse
    : Downwards_acc.t
   -> original_prim:Flambda_primitive.t
   -> result_kind:Flambda_kind.t
-  -> min_occurrence_kind:Name_occurrence_kind.t
+  -> min_name_mode:Name_mode.t
   -> result_var:Variable.t
   -> cse
 

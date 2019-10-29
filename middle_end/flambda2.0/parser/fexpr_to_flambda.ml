@@ -264,7 +264,7 @@ let rec expr env (e : Fexpr.expr) : E.t =
     let id, env = fresh_var env var in
     let body = expr env body in
     let var =
-      Var_in_binding_pos.create id Name_occurrence_kind.normal
+      Var_in_binding_pos.create id Name_mode.normal
     in
     E.create_let var named body
   | Let_cont
@@ -414,7 +414,7 @@ let rec expr env (e : Fexpr.expr) : E.t =
         Closure_id.Map.add closure_id
           (Var_in_binding_pos.create
              bound_closure_var
-             Name_occurrence_kind.normal)
+             Name_mode.normal)
           closure_vars
       in
 

@@ -22,11 +22,17 @@ module Aliases = Aliases.Make (Alias)
 module Cached : sig
   type t
 
+  val print_name_modes
+     : restrict_to:Name.Set.t
+    -> Format.formatter
+    -> t
+    -> unit
+
   val empty : t
 
   val names_to_types
      : t
-    -> (Type_grammar.t * Binding_time.t * Name_occurrence_kind.t) Name.Map.t
+    -> (Type_grammar.t * Binding_time.t * Name_mode.t) Name.Map.t
 
   val aliases : t -> Aliases.t
 
@@ -43,7 +49,7 @@ module Cached : sig
     -> Name.t
     -> Type_grammar.t
     -> Binding_time.t
-    -> Name_occurrence_kind.t
+    -> Name_mode.t
     -> new_aliases:Aliases.t
     -> t
 
@@ -51,12 +57,23 @@ module Cached : sig
 end = struct
   type t = {
     names_to_types :
-      (Type_grammar.t * Binding_time.t * Name_occurrence_kind.t) Name.Map.t;
+      (Type_grammar.t * Binding_time.t * Name_mode.t) Name.Map.t;
     domain : Name.Set.t;
     var_domain : Variable.Set.t;
     aliases : Aliases.t;
     cse : Simple.t Flambda_primitive.Eligible_for_cse.Map.t;
   }
+
+  let print_kind_and_mode ppf (ty, _, mode) =
+    let kind = Type_grammar.kind ty in
+    Format.fprintf ppf ":: %a %a"
+      Flambda_kind.print kind
+      Name_mode.print mode
+
+  let print_name_modes ~restrict_to ppf t =
+    Name.Map.print print_kind_and_mode ppf
+      (Name.Map.filter (fun name _ -> Name.Set.mem name restrict_to)
+        t.names_to_types)
 
 (*
   let _print_with_cache ~cache ppf { names_to_types; aliases; } =
@@ -102,9 +119,9 @@ end = struct
   let cse t = t.cse
 
   let add_or_replace_binding t (name : Name.t) ty binding_time
-        name_occurrence_kind ~new_aliases =
+        name_mode ~new_aliases =
     let names_to_types =
-      Name.Map.add name (ty, binding_time, name_occurrence_kind)
+      Name.Map.add name (ty, binding_time, name_mode)
         t.names_to_types
     in
     let domain = Name.Set.add name t.domain in
@@ -126,7 +143,7 @@ end = struct
     match Name.Map.find name t.names_to_types with
     | exception Not_found ->
       Misc.fatal_errorf "Unbound name %a" Name.print name
-    | (_ty, time, _name_occurrence_kind) -> time
+    | (_ty, time, _name_mode) -> time
 
   let with_cse t ~cse = { t with cse; }
 end
@@ -139,11 +156,20 @@ module One_level = struct
   }
 
   let print_with_cache ~cache:_ ppf
-        { scope = _; level; just_after_level = _; } =
-    Format.fprintf ppf "@[<hov 1>\
-        @[<hov 1>(level@ %a)@]\
-        @]"
-      Typing_env_level.print level
+        { scope = _; level; just_after_level; } =
+    let restrict_to = Typing_env_level.defined_names level in
+    if Name.Set.is_empty restrict_to then
+      Format.fprintf ppf "@[<hov 0>\
+          %a\
+          @]"
+        Typing_env_level.print level
+    else
+      Format.fprintf ppf "@[<hov 0>\
+          @[<hov 1>(defined_vars@ %a)@]@ \
+          %a\
+          @]"
+        (Cached.print_name_modes ~restrict_to) just_after_level
+        Typing_env_level.print level
 
   let create scope level ~just_after_level =
     { scope;
@@ -162,6 +188,9 @@ module One_level = struct
   let just_after_level t = t.just_after_level
 
   let is_empty t = Typing_env_level.is_empty t.level
+
+  let defines_name_but_no_equations t name =
+    Typing_env_level.defines_name_but_no_equations t.level name
 end
 
 type t = {
@@ -191,14 +220,18 @@ let print_with_cache ~cache ppf
     let levels =
       Scope.Map.add (One_level.scope current_level) current_level prev_levels
     in
+    let levels =
+      Scope.Map.filter (fun _ level -> not (One_level.is_empty level))
+        levels
+    in
     Printing_cache.with_cache cache ppf "env" t (fun ppf () ->
       Format.fprintf ppf
         "@[<hov 1>(\
-            @[<hov 1>(levels@ %a)@]@ \
-            @[<hov 1>(defined_symbols@ %a)@]\
+            @[<hov 1>(defined_symbols@ %a)@]@ \
+            @[<hov 1>(levels@ %a)@]\
             )@]"
-        (Scope.Map.print (One_level.print_with_cache ~cache)) levels
-        (Symbol.Map.print K.print) defined_symbols)
+        (Symbol.Map.print K.print) defined_symbols
+        (Scope.Map.print (One_level.print_with_cache ~cache)) levels)
 
 let print ppf t =
   print_with_cache ~cache:(Printing_cache.create ()) ppf t
@@ -295,36 +328,27 @@ let find t name =
       Name.print name
       print t
   (* CR mshinwell: Should this resolve aliases? *)
-  | ty, _binding_time, _name_occurrence_kind -> ty
+  | ty, _binding_time, _name_mode -> ty
 
 let find_params t params =
   List.map (fun param -> find t (Kinded_parameter.name param)) params
 
-let _find_with_occurrence_kind t name =
+let find_with_name_mode t name =
   match Name.Map.find name (names_to_types t) with
   | exception Not_found ->
     Misc.fatal_errorf "Name %a not bound in typing environment:@ %a"
       Name.print name
       print t
   (* CR mshinwell: Should this resolve aliases? *)
-  | ty, _binding_time, name_occurrence_kind -> ty, name_occurrence_kind
+  | ty, _binding_time, name_mode -> ty, name_mode
 
-let find_with_binding_time t name =
+let find_with_binding_time_and_mode t name =
   match Name.Map.find name (names_to_types t) with
   | exception Not_found ->
     Misc.fatal_errorf "Name %a not bound in typing environment:@ %a"
       Name.print name
       print t
-  | ty, binding_time, _name_occurrence_kind -> ty, binding_time
-
-let find_name_occurrence_kind t name =
-  match Name.Map.find name (names_to_types t) with
-  | exception Not_found ->
-    Misc.fatal_errorf "Name %a not bound in typing environment:@ %a"
-      Name.print name
-      print t
-  (* CR mshinwell: Should this resolve aliases? *)
-  | _ty, _binding_time, name_occurrence_kind -> name_occurrence_kind
+  | ty, binding_time, name_mode -> ty, binding_time, name_mode
 
 let mem t name =
   Name.Map.mem name (names_to_types t)
@@ -347,7 +371,7 @@ let with_current_level_and_next_binding_time t ~current_level
 
 let cached t = One_level.just_after_level t.current_level
 
-let add_variable_definition t var kind name_occurrence_kind =
+let add_variable_definition t var kind name_mode =
   let name = Name.var var in
   if mem t name then begin
     Misc.fatal_errorf "Cannot rebind %a in environment:@ %a"
@@ -362,13 +386,13 @@ let add_variable_definition t var kind name_occurrence_kind =
     let aliases =
       let canonical =
         Alias.create kind (Simple.name name) t.next_binding_time
-          name_occurrence_kind
+          name_mode
       in
       Aliases.add_canonical_element (aliases t) canonical
     in
     Cached.add_or_replace_binding (cached t)
       name (Type_grammar.unknown kind)
-      t.next_binding_time name_occurrence_kind
+      t.next_binding_time name_mode
       ~new_aliases:aliases
   in
   let current_level =
@@ -378,19 +402,19 @@ let add_variable_definition t var kind name_occurrence_kind =
     (Binding_time.succ t.next_binding_time)
 
 let add_symbol_definition t sym kind =
-  let name_occurrence_kind = Name_occurrence_kind.normal in
+  let name_mode = Name_mode.normal in
   let name = Name.symbol sym in
   let just_after_level =
     let aliases =
       let canonical =
         Alias.create kind (Simple.name name) Binding_time.symbols
-          name_occurrence_kind
+          name_mode
       in
       Aliases.add_canonical_element (aliases t) canonical
     in
     Cached.add_or_replace_binding (cached t)
       name (Type_grammar.unknown kind)
-      Binding_time.symbols name_occurrence_kind
+      Binding_time.symbols name_mode
       ~new_aliases:aliases
   in
   let current_level =
@@ -403,26 +427,25 @@ let add_symbol_definition t sym kind =
   }
 
 let alias_of_simple t simple =
-  let kind, binding_time =
+  let kind, binding_time, mode =
     match Simple.descr simple with
     | Const const ->
       Type_grammar.kind_for_const const,
-        Binding_time.consts_and_discriminants
+        Binding_time.consts_and_discriminants,
+        Name_mode.normal
     | Name name ->
-      let ty, binding_time = find_with_binding_time t name in
-      Type_grammar.kind ty, binding_time
+      let ty, binding_time, mode = find_with_binding_time_and_mode t name in
+      Type_grammar.kind ty, binding_time, mode
   in
-  Alias.create kind simple binding_time
+  Alias.create kind simple binding_time mode
 
 let add_definition t (name : Name_in_binding_pos.t) kind =
-  let occurrence_kind = Name_in_binding_pos.occurrence_kind name in
+  let name_mode = Name_in_binding_pos.name_mode name in
   match Name_in_binding_pos.name name with
-  | Var var -> add_variable_definition t var kind occurrence_kind
+  | Var var -> add_variable_definition t var kind name_mode
   | Symbol sym ->
-    if not (Name_occurrence_kind.equal occurrence_kind
-      Name_occurrence_kind.normal)
-    then begin
-      Misc.fatal_errorf "Cannot define symbol %a with occurrence kind that \
+    if not (Name_mode.equal name_mode Name_mode.normal) then begin
+      Misc.fatal_errorf "Cannot define symbol %a with name mode that \
           is not `normal'"
         Name_in_binding_pos.print name
     end;
@@ -432,7 +455,7 @@ let invariant_for_new_equation t name ty =
   if !Clflags.flambda_invariant_checks then begin
     (* CR mshinwell: This should check that precision is not decreasing. *)
     let defined_names =
-      Name_occurrences.create_names (domain0 t) Name_occurrence_kind.in_types
+      Name_occurrences.create_names (domain0 t) Name_mode.in_types
     in
     let free_names = Type_grammar.free_names ty in
     if not (Name_occurrences.subset_domain free_names defined_names) then begin
@@ -463,24 +486,28 @@ let add_cse t prim ~bound_to =
   in
   with_current_level t ~current_level
 
-let add_equation0 t aliases name name_occurrence_kind ty =
+let add_equation0 t aliases name name_mode ty =
   invariant_for_new_equation t name ty;
-  let level =
-    Typing_env_level.add_or_replace_equation
-      (One_level.level t.current_level) name ty
-  in
-  let just_after_level = One_level.just_after_level t.current_level in
-  (* CR mshinwell: remove second lookup *)
-  let binding_time = Cached.binding_time just_after_level name in
-  let just_after_level =
-    Cached.add_or_replace_binding just_after_level
-      name ty binding_time name_occurrence_kind
-      ~new_aliases:aliases
-  in
-  let current_level =
-    One_level.create (current_scope t) level ~just_after_level
-  in
-  with_current_level t ~current_level
+  if Type_grammar.is_obviously_unknown ty
+    && One_level.defines_name_but_no_equations t.current_level name
+  then t
+  else
+    let level =
+      Typing_env_level.add_or_replace_equation
+        (One_level.level t.current_level) name ty
+    in
+    let just_after_level = One_level.just_after_level t.current_level in
+    (* CR mshinwell: remove second lookup *)
+    let binding_time = Cached.binding_time just_after_level name in
+    let just_after_level =
+      Cached.add_or_replace_binding just_after_level
+        name ty binding_time name_mode
+        ~new_aliases:aliases
+    in
+    let current_level =
+      One_level.create (current_scope t) level ~just_after_level
+    in
+    with_current_level t ~current_level
 
 let rec add_equation t name ty =
 (*
@@ -489,7 +516,17 @@ Format.eprintf "Adding equation %a : %a from:\n%s\n%!"
   Type_grammar.print ty
   (Printexc.raw_backtrace_to_string (Printexc.get_callstack 5));
 *)
-  let name_occurrence_kind = find_name_occurrence_kind t name in
+  let existing_ty, name_mode = find_with_name_mode t name in
+  if not (K.equal (Type_grammar.kind existing_ty) (Type_grammar.kind ty))
+  then begin
+    Misc.fatal_errorf "Cannot add equation %a = %a@ given existing binding \
+        %a = %a@ whose type is of a different kind:@ %a"
+      Name.print name
+      Type_grammar.print ty
+      Name.print name
+      Type_grammar.print existing_ty
+      print t
+  end;
   (* XXX Needs to be guarded
   let free_names = Type_free_names.free_names ty in
   if not (Name_occurrences.subset_domain free_names (domain t))
@@ -526,27 +563,22 @@ Format.eprintf "Trying to add equation %a = %a\n%!"
 Format.eprintf "Aliases before adding equation:@ %a\n%!"
   Aliases.print (aliases t);
   *)
-  let aliases, simple, rec_info, t, ty =
+  let aliases, simple, name_mode, rec_info, t, ty =
     let aliases = aliases t in
     match Type_grammar.get_alias ty with
-    | None -> aliases, Simple.name name, None, t, ty
+    | None -> aliases, Simple.name name, name_mode, None, t, ty
     | Some alias_of ->
       let kind = Type_grammar.kind ty in
       let alias =
         let binding_time = Cached.binding_time (cached t) name in
-        Alias.create_name kind name binding_time name_occurrence_kind
+        Alias.create_name kind name binding_time name_mode
       in
       let rec_info = Simple.rec_info alias_of in
-      let alias_of =
-        let name_occurrence_kind =
-          match Simple.descr alias_of with
-          | Const _ -> Name_occurrence_kind.normal
-          | Name alias_of -> find_name_occurrence_kind t alias_of
-        in
-        alias_of_simple t alias_of name_occurrence_kind
-      in
+      let alias_of = alias_of_simple t alias_of in
       match Aliases.add aliases alias alias_of with
-      | None, aliases -> aliases, Alias.simple alias_of, rec_info, t, ty
+      | None, aliases ->
+        aliases, Alias.simple alias_of, Alias.name_mode alias_of,
+          rec_info, t, ty
       | (Some { canonical_element; alias_of; }), aliases ->
 (*
 Format.eprintf "For name %a, Aliases returned CN=%a, alias_of=%a\n%!"
@@ -555,11 +587,13 @@ Format.eprintf "For name %a, Aliases returned CN=%a, alias_of=%a\n%!"
    Alias.print alias_of; 
    *)
         let kind = Type_grammar.kind ty in
+        assert (K.equal kind (Alias.kind canonical_element));
         let ty =
           Type_grammar.alias_type_of kind
             (Alias.simple canonical_element)
         in
-        aliases, Alias.simple alias_of, rec_info, t, ty
+        aliases, Alias.simple alias_of, Alias.name_mode alias_of,
+          rec_info, t, ty
   in
   (* Beware: if we're about to add the equation on a name which is different
      from the one that the caller passed in, then we need to make sure that the
@@ -571,7 +605,9 @@ Format.eprintf "For name %a, Aliases returned CN=%a, alias_of=%a\n%!"
      [p] is now to be "= x", then this function will add an equation on [x]
      rather than [p], due to the definition ordering. However we should not just
      say that [x] has type "= p", as that would forget any existing information
-     about [x]. Instead we should say that [x] has type "(= p) meet ty". *)
+     about [x]. Instead we should say that [x] has type "(= p) meet ty".
+
+     Note also that [p] and [x] may have different name modes! *)
   let ty, t =
     match Simple.descr simple with
     | Name eqn_name when not (Name.equal name eqn_name) ->
@@ -608,20 +644,17 @@ Format.eprintf "Now really adding equation %a = %a\n%!"
 *)
   match Simple.descr simple with
   | Const _ -> t
-  | Name name -> add_equation0 t aliases name name_occurrence_kind ty
+  | Name name -> add_equation0 t aliases name name_mode ty
 
 and add_env_extension_from_level t level : t =
   let t =
     List.fold_left (fun t (var, kind) ->
-        add_variable_definition t var kind Name_occurrence_kind.in_types)
+        add_variable_definition t var kind Name_mode.in_types)
       t
       (Typing_env_level.defined_vars_in_order level)
   in
   let t =
-    Name.Map.fold (fun name ty t ->
-        (* CR mshinwell: Do we actually need the "more precise" check here?
-           Shouldn't the extensions always be as or more precise? *)
-        add_equation t name ty)
+    Name.Map.fold (fun name ty t -> add_equation t name ty)
       (Typing_env_level.equations level)
       t
   in
@@ -638,7 +671,7 @@ let add_definitions_of_params t ~params =
   List.fold_left (fun t param ->
       let name =
         Name_in_binding_pos.create (Kinded_parameter.name param)
-          Name_occurrence_kind.normal
+          Name_mode.normal
       in
       add_definition t name (Kinded_parameter.kind param))
     t
@@ -782,12 +815,7 @@ let cut_and_n_way_join definition_typing_env ts_and_use_ids
   let env_extension = Typing_env_extension.create level in
   env_extension, extra_params_and_args
 
-let find_name_occurrence_kind_of_simple t simple =
-  match Simple.descr simple with
-  | Const _ -> Name_occurrence_kind.normal
-  | Name name -> find_name_occurrence_kind t name
-
-let get_canonical_simple0 t ?min_occurrence_kind simple : _ Or_bottom.t * _ =
+let get_canonical_simple0 t ?min_name_mode simple : _ Or_bottom.t * _ =
   let newer_rec_info =
     let newer_rec_info = Simple.rec_info simple in
     match Simple.descr simple with
@@ -805,17 +833,24 @@ let get_canonical_simple0 t ?min_occurrence_kind simple : _ Or_bottom.t * _ =
           | Some newer_rec_info ->
             Some (Rec_info.merge rec_info ~newer:newer_rec_info)
   in
-  let occurrence_kind = find_name_occurrence_kind_of_simple t simple in
-  let alias = alias_of_simple t simple occurrence_kind in
+  let alias = alias_of_simple t simple in
   let kind = Alias.kind alias in
   let min_order_within_equiv_class =
-    match min_occurrence_kind with
-    | None -> occurrence_kind
-    | Some occurrence_kind -> occurrence_kind
+    match min_name_mode with
+    | None -> Alias.name_mode alias
+    | Some name_mode -> name_mode
   in
   let result =
-    Aliases.get_canonical_element (aliases t) alias
-      ~min_order_within_equiv_class
+    try
+      Aliases.get_canonical_element (aliases t) alias
+        ~min_order_within_equiv_class
+    with Misc.Fatal_error -> begin
+      Format.eprintf "\n%sContext is:%s typing environment@ %a\n"
+        (Flambda_colours.error ())
+        (Flambda_colours.normal ())
+        print t;
+      raise Misc.Fatal_error
+    end
   in 
   match result with
   | None -> Ok None, kind
@@ -835,31 +870,27 @@ let get_canonical_simple0 t ?min_occurrence_kind simple : _ Or_bottom.t * _ =
         then Bottom, kind
         else Ok (Some (simple, rec_info)), kind
 
-let get_canonical_simple_with_kind t ?min_occurrence_kind simple =
-  let result, kind = get_canonical_simple0 t ?min_occurrence_kind simple in
+let get_canonical_simple_with_kind t ?min_name_mode simple =
+  let result, kind = get_canonical_simple0 t ?min_name_mode simple in
   let result =
     Or_bottom.map result ~f:(fun result ->
       Option.map (fun (simple, _rec_info) -> simple) result)
   in
   result, kind
 
-let get_canonical_simple t ?min_occurrence_kind simple =
-  fst (get_canonical_simple_with_kind t ?min_occurrence_kind simple)
+let get_canonical_simple t ?min_name_mode simple =
+  fst (get_canonical_simple_with_kind t ?min_name_mode simple)
 
-let get_alias_then_canonical_simple t ?min_occurrence_kind typ : _ Or_bottom.t =
+let get_alias_then_canonical_simple t ?min_name_mode typ : _ Or_bottom.t =
   match Type_grammar.get_alias typ with
   | None -> Ok None
-  | Some simple -> get_canonical_simple t ?min_occurrence_kind simple
+  | Some simple -> get_canonical_simple t ?min_name_mode simple
 
-let aliases_of_simple0 t ~min_occurrence_kind simple =
-  let name_occurrence_kind = find_name_occurrence_kind_of_simple t simple in
-  let alias = alias_of_simple t simple name_occurrence_kind in
+let aliases_of_simple0 t ~min_name_mode simple =
+  let alias = alias_of_simple t simple in
   Alias.Set.fold (fun alias result ->
-      let name_occurrence_kind = Alias.name_occurrence_kind alias in
-      match
-        Name_occurrence_kind.compare_partial_order name_occurrence_kind
-          min_occurrence_kind
-      with
+      let name_mode = Alias.name_mode alias in
+      match Name_mode.compare_partial_order name_mode min_name_mode with
       | None -> result
       | Some c ->
         if c >= 0 then Alias.Set_ordered_by_binding_time.add alias result
@@ -867,37 +898,30 @@ let aliases_of_simple0 t ~min_occurrence_kind simple =
     (Aliases.get_aliases (aliases t) alias)
     Alias.Set_ordered_by_binding_time.empty
 
-let aliases_of_simple t ~min_occurrence_kind simple =
+let aliases_of_simple t ~min_name_mode simple =
   let newer_rec_info = Simple.rec_info simple in
   Alias.Set_ordered_by_binding_time.fold (fun alias simples ->
       let simple = Alias.simple alias in
       match Simple.merge_rec_info simple ~newer_rec_info with
       | None -> simples
       | Some simple -> Simple.Set.add simple simples)
-    (aliases_of_simple0 t ~min_occurrence_kind simple)
+    (aliases_of_simple0 t ~min_name_mode simple)
     Simple.Set.empty
 
 let aliases_of_simple_allowable_in_types t simple =
-  aliases_of_simple t ~min_occurrence_kind:Name_occurrence_kind.in_types simple
+  aliases_of_simple t ~min_name_mode:Name_mode.in_types simple
 
-let earliest_alias_of_simple_satisfying t ~min_occurrence_kind ~allowed_vars
+let earliest_alias_of_simple_satisfying t ~min_name_mode ~allowed_vars
       simple =
   let aliases =
     Alias.Set_ordered_by_binding_time.filter (fun alias ->
         match Simple.descr (Alias.simple alias) with
         | Name (Var var) -> Variable.Set.mem var allowed_vars
         | Name (Symbol _) | Const _ -> true)
-      (aliases_of_simple0 t ~min_occurrence_kind simple)
+      (aliases_of_simple0 t ~min_name_mode simple)
   in
   Option.map Alias.simple
     (Alias.Set_ordered_by_binding_time.min_elt_opt aliases)
-
-let defined_earlier t simple ~than =
-  Alias.defined_earlier
-    (alias_of_simple t simple
-      (find_name_occurrence_kind_of_simple t simple))
-    ~than:(alias_of_simple t than
-      (find_name_occurrence_kind_of_simple t than))
 
 (* CR mshinwell: This function is a performance bottleneck. *)
 let create_using_resolver_and_symbol_bindings_from t =
@@ -910,7 +934,7 @@ let create_using_resolver_and_symbol_bindings_from t =
       (create_using_resolver_from t)
   in
   Name.Map.fold
-    (fun (name : Name.t) (typ, _binding_time, _occurrence_kind) t ->
+    (fun (name : Name.t) (typ, _binding_time, _name_mode) t ->
       match name with
       | Var _ -> t
       | Symbol _ ->

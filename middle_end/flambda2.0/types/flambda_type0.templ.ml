@@ -116,7 +116,7 @@ module Make
       | Name _ ->
         match
           Typing_env.get_canonical_simple env simple
-            ~min_occurrence_kind:Name_occurrence_kind.normal
+            ~min_name_mode:Name_mode.normal
         with
         | Bottom -> Invalid
         | Ok None -> Unknown
@@ -490,7 +490,7 @@ module Make
   let prove_boxed_floats env t : _ proof =
     let result_var = Variable.create "result" in
     let result_var' =
-      Var_in_binding_pos.create result_var Name_occurrence_kind.normal
+      Var_in_binding_pos.create result_var Name_mode.normal
     in
     let result_simple = Simple.var result_var in
     let result_kind = K.naked_float in
@@ -501,7 +501,7 @@ module Make
       let env =
         Typing_env.add_definition env
           (Name_in_binding_pos.create (Name.var result_var)
-            Name_occurrence_kind.normal)
+            Name_mode.normal)
           result_kind
       in
       let env = Typing_env.add_env_extension env ~env_extension in
@@ -511,7 +511,7 @@ module Make
   let prove_boxed_int32s env t : _ proof =
     let result_var = Variable.create "result" in
     let result_var' =
-      Var_in_binding_pos.create result_var Name_occurrence_kind.normal
+      Var_in_binding_pos.create result_var Name_mode.normal
     in
     let result_simple = Simple.var result_var in
     let result_kind = K.naked_int32 in
@@ -522,7 +522,7 @@ module Make
       let env =
         Typing_env.add_definition env
           (Name_in_binding_pos.create (Name.var result_var)
-            Name_occurrence_kind.normal)
+            Name_mode.normal)
           result_kind
       in
       let env = Typing_env.add_env_extension env ~env_extension in
@@ -532,7 +532,7 @@ module Make
   let prove_boxed_int64s env t : _ proof =
     let result_var = Variable.create "result" in
     let result_var' =
-      Var_in_binding_pos.create result_var Name_occurrence_kind.normal
+      Var_in_binding_pos.create result_var Name_mode.normal
     in
     let result_simple = Simple.var result_var in
     let result_kind = K.naked_int64 in
@@ -543,7 +543,7 @@ module Make
       let env =
         Typing_env.add_definition env
           (Name_in_binding_pos.create (Name.var result_var)
-            Name_occurrence_kind.normal)
+            Name_mode.normal)
           result_kind
       in
       let env = Typing_env.add_env_extension env ~env_extension in
@@ -553,7 +553,7 @@ module Make
   let prove_boxed_nativeints env t : _ proof =
     let result_var = Variable.create "result" in
     let result_var' =
-      Var_in_binding_pos.create result_var Name_occurrence_kind.normal
+      Var_in_binding_pos.create result_var Name_mode.normal
     in
     let result_simple = Simple.var result_var in
     let result_kind = K.naked_nativeint in
@@ -564,7 +564,7 @@ module Make
       let env =
         Typing_env.add_definition env
           (Name_in_binding_pos.create (Name.var result_var)
-            Name_occurrence_kind.normal)
+            Name_mode.normal)
           result_kind
       in
       let env = Typing_env.add_env_extension env ~env_extension in
@@ -603,12 +603,12 @@ module Make
 
   (* CR mshinwell: Think more to identify all the cases that should be
      in this function. *)
-  let reify env ~min_occurrence_kind t : reification_result =
+  let reify env ~min_name_mode t : reification_result =
 (*
 Format.eprintf "reifying %a\n%!" print t;
 *)
     match
-      Typing_env.get_alias_then_canonical_simple env ~min_occurrence_kind t
+      Typing_env.get_alias_then_canonical_simple env ~min_name_mode t
     with
     | Bottom -> Invalid
     | Ok (Some canonical_simple)

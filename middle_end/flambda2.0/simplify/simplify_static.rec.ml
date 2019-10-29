@@ -134,8 +134,8 @@ let simplify_of_kind_value dacc (of_kind_value : Of_kind_value.t) =
     of_kind_value, ty
   | Tagged_immediate i -> of_kind_value, T.this_tagged_immediate i
   | Dynamically_computed var ->
-    let min_occurrence_kind = Name_occurrence_kind.normal in
-    match S.simplify_simple dacc (Simple.var var) ~min_occurrence_kind with
+    let min_name_mode = Name_mode.normal in
+    match S.simplify_simple dacc (Simple.var var) ~min_name_mode with
     | Bottom, ty ->
       assert (K.equal (T.kind ty) K.value);
       (* CR mshinwell: This should be "invalid" and propagate up *)
@@ -192,7 +192,7 @@ let simplify_set_of_closures dacc ~result_dacc set_of_closures
       ~closure_symbols =
   let can_lift, closure_elements, closure_element_types =
     Simplify_named.type_closure_elements_and_make_lifting_decision dacc
-      ~min_occurrence_kind:Name_occurrence_kind.normal set_of_closures
+      ~min_name_mode:Name_mode.normal set_of_closures
   in
   if not can_lift then begin
     Misc.fatal_errorf "Set of closures cannot be statically allocated:@ %a"

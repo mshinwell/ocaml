@@ -69,9 +69,9 @@ module Of_kind_value = struct
   let free_names t =
     match t with
     | Dynamically_computed var ->
-      Name_occurrences.singleton_variable var Name_occurrence_kind.normal
+      Name_occurrences.singleton_variable var Name_mode.normal
     | Symbol sym ->
-      Name_occurrences.singleton_symbol sym Name_occurrence_kind.normal
+      Name_occurrences.singleton_symbol sym Name_mode.normal
     | Tagged_immediate _ -> Name_occurrences.empty
 
   let invariant env t =
@@ -137,7 +137,7 @@ module Static_part = struct
         (Name_occurrences.empty)
         fields
     | Fabricated_block v ->
-      Name_occurrences.singleton_variable v Name_occurrence_kind.normal
+      Name_occurrences.singleton_variable v Name_mode.normal
     | Set_of_closures set -> Flambda.Set_of_closures.free_names set
     | Boxed_float (Var v)
     | Boxed_int32 (Var v)
@@ -145,7 +145,7 @@ module Static_part = struct
     | Boxed_nativeint (Var v)
     | Mutable_string { initial_value = Var v; }
     | Immutable_string (Var v) ->
-      Name_occurrences.singleton_variable v Name_occurrence_kind.normal
+      Name_occurrences.singleton_variable v Name_mode.normal
     | Boxed_float (Const _)
     | Boxed_int32 (Const _)
     | Boxed_int64 (Const _)
@@ -156,7 +156,7 @@ module Static_part = struct
       List.fold_left (fun fns (field : _ or_variable) ->
           match field with
           | Var v ->
-            Name_occurrences.add_variable fns v Name_occurrence_kind.normal
+            Name_occurrences.add_variable fns v Name_mode.normal
           | Const _ -> fns)
         (Name_occurrences.empty)
         fields

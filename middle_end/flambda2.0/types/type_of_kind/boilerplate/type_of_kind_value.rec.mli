@@ -16,6 +16,15 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
+module Variant : sig
+  type t = Type_of_kind_value0.Variant.t
+
+  val create
+     : immediates:Type_grammar.t Or_unknown.t
+    -> blocks:Row_like.For_blocks.t Or_unknown.t
+    -> t
+end
+
 include Type_descr_intf.S
   with type flambda_type := Type_grammar.t
   with type typing_env := Typing_env.t

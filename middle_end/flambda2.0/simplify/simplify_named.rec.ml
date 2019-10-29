@@ -25,7 +25,7 @@ let compute_closure_element_types_inside_function ~env_outside_function
          (env_inside_function, types_inside_function) ->
       let var = Variable.create "clos_var" in
       let env_inside_function =
-        let var = Var_in_binding_pos.create var NOK.in_types in
+        let var = Var_in_binding_pos.create var NM.in_types in
         TE.add_definition env_inside_function
           (Name_in_binding_pos.var var)
           K.value
@@ -104,7 +104,7 @@ let bind_closure_types_inside_function ~denv_outside_function
         let irrelevant = not (Name_in_binding_pos.is_symbol bound_name) in
         let bound_name =
           Name_in_binding_pos.create name
-            (if irrelevant then NOK.in_types else NOK.normal)
+            (if irrelevant then NM.in_types else NM.normal)
         in
         DE.define_name denv bound_name K.value)
       closure_bound_names_inside
@@ -150,7 +150,7 @@ let denv_inside_function ~denv_outside_function ~denv_after_enter_closure
   | name ->
     let name = Name_in_binding_pos.name name in
     DE.add_variable denv
-      (Var_in_binding_pos.create my_closure NOK.normal)
+      (Var_in_binding_pos.create my_closure NM.normal)
       (T.alias_type_of K.value (Simple.name name))
 
 let simplify_function dacc closure_id function_decl ~all_function_decls_in_set
@@ -331,7 +331,7 @@ let simplify_non_lifted_set_of_closures dacc ~bound_vars ~closure_bound_vars
   in
   [bound_vars, defining_expr], dacc
 
-let type_closure_elements_and_make_lifting_decision dacc ~min_occurrence_kind
+let type_closure_elements_and_make_lifting_decision dacc ~min_name_mode
       set_of_closures =
   (* By computing the types of the closure elements, attempt to show that
      the set of closures can be lifted, and hence statically allocated.
@@ -344,7 +344,7 @@ let type_closure_elements_and_make_lifting_decision dacc ~min_occurrence_kind
     Var_within_closure.Map.fold
       (fun closure_var simple (closure_elements, closure_element_types) ->
         let simple, ty =
-          match S.simplify_simple dacc simple ~min_occurrence_kind with
+          match S.simplify_simple dacc simple ~min_name_mode with
           | Bottom, ty ->
             assert (K.equal (T.kind ty) K.value);
             simple, ty
@@ -373,11 +373,11 @@ let simplify_set_of_closures dacc ~(bound_vars : Bindable_let_bound.t)
   in
   (* CR mshinwell: This should probably be handled differently, but
      will require some threading through *)
-  let min_occurrence_kind =
-    Bindable_let_bound.name_occurrence_kind bound_vars
+  let min_name_mode =
+    Bindable_let_bound.name_mode bound_vars
   in
   let can_lift, closure_elements, closure_element_types =
-    type_closure_elements_and_make_lifting_decision dacc ~min_occurrence_kind
+    type_closure_elements_and_make_lifting_decision dacc ~min_name_mode
       set_of_closures
   in
   if can_lift then
@@ -392,8 +392,8 @@ let simplify_named0 dacc ~(bound_vars : Bindable_let_bound.t)
   match named with
   | Simple simple ->
     let bound_var = Bindable_let_bound.must_be_singleton bound_vars in
-    let min_occurrence_kind = Var_in_binding_pos.occurrence_kind bound_var in
-    begin match S.simplify_simple dacc simple ~min_occurrence_kind with
+    let min_name_mode = Var_in_binding_pos.name_mode bound_var in
+    begin match S.simplify_simple dacc simple ~min_name_mode with
     | Bottom, _ty ->
       let defining_expr = Reachable.invalid () in
       [bound_vars, defining_expr], dacc
@@ -409,10 +409,13 @@ let simplify_named0 dacc ~(bound_vars : Bindable_let_bound.t)
     let term, env_extension, dacc =
       Simplify_primitive.simplify_primitive dacc prim dbg ~result_var:bound_var
     in
-    let dacc =
+    let original_dacc =
       DA.map_denv dacc ~f:(fun denv ->
         let kind = P.result_kind' prim in
-        let denv = DE.add_variable denv bound_var (T.unknown kind) in
+        DE.add_variable denv bound_var (T.unknown kind))
+    in
+    let dacc =
+      DA.map_denv original_dacc ~f:(fun denv ->
         DE.extend_typing_environment denv env_extension)
     in
     (* CR mshinwell: Add check along the lines of: types are unknown
