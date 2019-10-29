@@ -296,6 +296,9 @@ let simplify_and_lift_set_of_closures dacc ~closure_bound_vars
     in
     List.fold_left R.new_lifted_constant (DA.r dacc) lifted_constants
   in
+  let denv =
+    DE.add_lifted_constants (DA.denv dacc) ~lifted:(R.get_lifted_constants r)
+  in
   let denv, bindings =
     Closure_id.Map.fold (fun closure_id bound_var (denv, bindings) ->
         match Closure_id.Map.find closure_id closure_symbols with
@@ -310,7 +313,7 @@ let simplify_and_lift_set_of_closures dacc ~closure_bound_vars
           let bound_var = Bindable_let_bound.singleton bound_var in
           denv, (bound_var, Reachable.reachable defining_expr) :: bindings)
       closure_bound_vars
-      (DA.denv dacc, [])
+      (denv, [])
   in
   bindings, DA.with_denv (DA.with_r dacc r) denv
 

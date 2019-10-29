@@ -1,5 +1,5 @@
 
-let [@inline never] kfprintf k o _ = 0
+let [@inline never] foo k o _ = 0
 
-let fprintf oc fmt = kfprintf (fun x -> x) oc fmt
-let printf fmt = fprintf 0 fmt
+let bar oc z = foo (fun x -> x) oc z
+let f z = bar 0 z
