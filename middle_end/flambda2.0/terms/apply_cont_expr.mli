@@ -51,3 +51,5 @@ val update_args : t -> args:Simple.t list -> t
 val is_goto : t -> Continuation.t -> bool
 
 val to_goto : t -> Continuation.t option
+
+val clear_trap_action : t -> t

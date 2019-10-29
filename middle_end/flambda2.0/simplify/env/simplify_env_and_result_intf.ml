@@ -186,6 +186,8 @@ module type Upwards_env = sig
 
   val find_continuation : t -> Continuation.t -> Continuation_in_env.t
 
+  val mem_continuation : t -> Continuation.t -> bool
+
   val resolve_continuation_aliases : t -> Continuation.t -> Continuation.t
 
   val resolve_exn_continuation_aliases

@@ -34,6 +34,7 @@ module Make (CHL : Continuation_handler_like_intf.S) = struct
         ~simplify_continuation_handler_like k =
     let body, (result, uenv', user_data), uacc =
       let scope = DE.get_continuation_scope_level (DA.denv dacc) in
+      let is_exn_handler = CHL.is_exn_handler cont_handler in
       CHL.pattern_match cont_handler ~f:(fun handler ->
         let params = CHL.Opened.params handler in
         let denv = DE.define_parameters (DA.denv dacc) ~params in
@@ -64,11 +65,13 @@ module Make (CHL : Continuation_handler_like_intf.S) = struct
               cont_handler, user_data, uacc
             | Uses { handler_typing_env; arg_types_by_use_id;
                      extra_params_and_args; } ->
-              let typing_env, extra_params_and_args =
-                let param_types = TE.find_params handler_typing_env params in
-                Unbox_continuation_params.make_unboxing_decisions
-                  handler_typing_env ~arg_types_by_use_id ~params
-                  ~param_types extra_params_and_args
+               let typing_env, extra_params_and_args =
+                if is_exn_handler then handler_typing_env, EPA.empty
+                else
+                  let param_types = TE.find_params handler_typing_env params in
+                  Unbox_continuation_params.make_unboxing_decisions
+                    handler_typing_env ~arg_types_by_use_id ~params
+                    ~param_types extra_params_and_args
               in
               let dacc =
                 DA.create (DE.with_typing_env denv typing_env) cont_uses_env r
@@ -91,7 +94,9 @@ module Make (CHL : Continuation_handler_like_intf.S) = struct
           let uenv = UA.uenv uacc in
           let uenv_to_return = uenv in
           let uenv =
-            if CHL.is_exn_handler handler then
+            assert (is_exn_handler = CHL.is_exn_handler handler);
+            if is_exn_handler then
+              (* CR mshinwell: share code with below? *)
               match CHL.behaviour handler with
               | Alias_for { arity; alias_for; } ->
                 (* CR mshinwell: More checks here?  e.g. on the arity and
@@ -99,7 +104,9 @@ module Make (CHL : Continuation_handler_like_intf.S) = struct
                 UE.add_continuation_alias uenv cont arity ~alias_for
               | Apply_cont_with_constant_arg { cont = _; arg = _; arity; } ->
                 UE.add_continuation uenv cont scope arity
-              | Unreachable { arity; } | Unknown { arity; } ->
+              | Unreachable { arity; } ->
+                UE.add_unreachable_continuation uenv cont scope arity
+              | Unknown { arity; } ->
                 UE.add_continuation uenv cont scope arity
             else
               let normal_case ~arity =

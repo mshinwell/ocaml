@@ -345,6 +345,9 @@ end = struct
         print t
     | (_scope_level, cont_in_env) -> cont_in_env
 
+  let mem_continuation t cont =
+    Continuation.Map.mem cont t.continuations
+
   let resolve_continuation_aliases t cont =
     match Continuation.Map.find cont t.continuation_aliases with
     | exception Not_found -> cont

@@ -860,6 +860,13 @@ Format.eprintf "Apply_cont starts out being %a\n%!"
     in
     let apply_cont_expr, apply_cont, args =
       let apply_cont = AC.update_continuation_and_args apply_cont cont ~args in
+      let apply_cont =
+        match AC.trap_action apply_cont with
+        | None -> apply_cont
+        | Some (Push { exn_handler; } | Pop { exn_handler; _ }) ->
+          if UE.mem_continuation uenv exn_handler then apply_cont
+          else AC.clear_trap_action apply_cont
+      in
       (* CR mshinwell: Could remove the option type most likely if
          [Simplify_static] was fixed to handle the toplevel exn continuation
          properly. *)
