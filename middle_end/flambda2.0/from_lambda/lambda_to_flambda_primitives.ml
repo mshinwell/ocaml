@@ -103,13 +103,13 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
       args)
   | Pmakearray (kind, mutability), _ ->
     let flag = C.convert_mutable_flag mutability in
-    let kind =
+    let kind, args =
       let module S = P.Generic_array_specialisation in
       match kind with
-      | Pgenarray -> S.no_specialisation ()
-      | Paddrarray -> S.full_of_arbitrary_values_but_not_floats ()
-      | Pintarray -> S.full_of_immediates ()
-      | Pfloatarray -> S.full_of_naked_floats ()
+      | Pgenarray -> S.no_specialisation (), args
+      | Paddrarray -> S.full_of_arbitrary_values_but_not_floats (), args
+      | Pintarray -> S.full_of_immediates (), args
+      | Pfloatarray -> S.full_of_naked_floats (), List.map unbox_float args
     in
     Variadic (Make_block (Generic_array kind, flag), args)
   | Popaque, [arg] ->

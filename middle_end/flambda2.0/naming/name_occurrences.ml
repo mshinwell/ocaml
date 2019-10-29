@@ -144,8 +144,14 @@ end = struct
           strictly_greater
           (Option.value at_max_kind ~default:0)
       in
+      let by_kind =
+        if count_at_max_kind > 0 then
+          Kind.Map.add max_kind count_at_max_kind strictly_less
+        else
+          strictly_less
+      in
       { num_occurrences = t.num_occurrences;
-        by_kind = Kind.Map.add max_kind count_at_max_kind strictly_less;
+        by_kind;
       }
 
     let max_kind_opt t =
