@@ -853,7 +853,12 @@ and apply_cont env e =
   end else begin
     let make_jump types cont =
       (* The provided args should match the types in tys *)
-      assert (List.compare_lengths types args = 0);
+      if List.compare_lengths types args <> 0 then begin
+        Misc.fatal_errorf "Types (%a) do not match arguments of@ %a"
+          (Format.pp_print_list ~pp_sep:Format.pp_print_space
+            Printcmm.machtype) types
+          Apply_cont_expr.print e
+      end;
       let trap_actions =
         match Apply_cont_expr.trap_action e with
         | None -> []
