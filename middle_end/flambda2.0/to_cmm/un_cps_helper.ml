@@ -247,14 +247,14 @@ let block_set ?(dbg=Debuginfo.none) kind init block index value =
   | Pintarray ->
       return_unit dbg (int_array_set block index value dbg)
   | Pfloatarray ->
-      return_unit dbg (float_array_set block index value dbg)
+      return_unit dbg (float_array_set block index (unbox_float dbg value) dbg)
   | Paddrarray ->
       return_unit dbg (addr_array_store init block index value dbg)
   | Pgenarray ->
       return_unit dbg (
         ite ~dbg (is_addr_array_ptr block dbg)
           ~then_:(addr_array_store init block index value dbg) ~then_dbg:dbg
-          ~else_:(float_array_set block index value dbg) ~else_dbg:dbg
+          ~else_:(float_array_set block index (unbox_float dbg value) dbg) ~else_dbg:dbg
       )
 
 
