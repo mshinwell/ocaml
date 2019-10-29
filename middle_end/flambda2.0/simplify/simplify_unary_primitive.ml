@@ -322,7 +322,7 @@ let simplify_float_arith_op (op : P.unary_float_arith_op) dacc ~original_term
   let result_unknown () =
     let ty = T.unknown K.naked_float in
     let env_extension = TEE.one_equation result ty in
-    Reachable.invalid (), env_extension, dacc
+    Reachable.reachable original_term, env_extension, dacc
   in
   let result_invalid () =
     let ty = T.bottom K.naked_float in

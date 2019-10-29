@@ -76,6 +76,7 @@ Format.eprintf "simplifying make_block on %a (num args %d)\n%!"
       let env_extension = TEE.one_equation (Name.var result_var) ty in
       Reachable.reachable term, env_extension, dacc
     end
+  (* CR mshinwell: Implement these *)
   | Full_of_naked_floats -> Misc.fatal_error "Not yet implemented"
   | Generic_array _spec -> Misc.fatal_error "Not yet implemented"
 
