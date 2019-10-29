@@ -472,6 +472,14 @@ let variadic_primitive _env dbg f args =
   match (f : Flambda_primitive.variadic_primitive) with
   | Make_block (kind, _mut) ->
       C.make_block ~dbg kind args
+  | Bigarray_load (_is_safe, dimensions, Unknown, _)
+  | Bigarray_load (_is_safe, dimensions, _, Unknown) ->
+      let f = "caml_ba_get_" ^ string_of_int dimensions in
+      C.extcall ~dbg ~alloc:true f typ_val args
+  | Bigarray_set (_is_safe, dimensions, Unknown, _)
+  | Bigarray_set (_is_safe, dimensions, _, Unknown) ->
+      let f = "caml_ba_set_" ^ string_of_int dimensions in
+      C.extcall ~dbg ~alloc:true f typ_val args
   | Bigarray_load (is_safe, dimensions, kind, layout) ->
       C.bigarray_load ~dbg is_safe dimensions kind layout args
   | Bigarray_set (is_safe, dimensions, kind, layout) ->
