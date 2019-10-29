@@ -249,7 +249,7 @@ let archive_then_bind kind env var effs inline cmm_expr =
   add_binding kind env var effs inline cmm_expr
 
 let bind_variable env var effs inline cmm_expr =
-  (* shorthand to respecetively:
+  (* shorthands to respecetively:
      - bind the variable in the current stage, and change the stage kind
      - archive the current stage, then bind the variable in a new stage
        with the given kind. *)
