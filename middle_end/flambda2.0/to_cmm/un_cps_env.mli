@@ -92,6 +92,15 @@ val add_inline_cont :
     Returns the Cmm continuation id, a reference that will be set to true if
     a catch handler is needed, and the environment. *)
 
+val add_exn_handler :
+  t -> Continuation.t -> Flambda.Continuation_handler.t
+  -> t * (Backend_var.t * Flambda_kind.t) list
+(** Setup the extra mutable variables needed if the handler has extra arguments *)
+
+val get_exn_extra_args :
+  t -> Continuation.t -> Backend_var.t list
+(** Recover the mutable variables associated with the given continuation *)
+
 val get_k : t -> Continuation.t -> cont
 (** Return the binding for a given continuation. Will fail
     (i.e. assertion failure) if given an unbound continuation. *)
