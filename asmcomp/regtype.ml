@@ -33,6 +33,10 @@ let print_reason fmt = function
       Format.fprintf fmt " > %a || %a"
         Printmach.reg r Printmach.instr i
 
+let print_reasons fmt reasons =
+  let pp_sep fmt () = Format.fprintf fmt "@ || " in
+  Format.pp_print_list ~pp_sep Printmach.instr fmt reasons
+
 (* Statically known upper bound on register types. These arise from stores, which
    set a static upper bounds on the contents of a register. *)
 type upper_bound = {
@@ -41,10 +45,9 @@ type upper_bound = {
 }
 
 let print_upper_bound fmt { ty; reasons; } =
-  let pp_sep fmt () = Format.fprintf fmt "@ || " in
   Format.fprintf fmt " <= %a @[<hv>|| %a@]"
     Printcmm.machtype_component ty
-    (Format.pp_print_list ~pp_sep Printmach.instr) reasons
+    print_reasons reasons
 
 
 (* Register typing environment.
@@ -78,8 +81,15 @@ let set_upper_bound env i r ty =
     match Reg.Map.find r env.upper_bounds with
     | exception Not_found -> { ty; reasons = [instr]; }
     | b' ->
-        { ty = Cmm.glb_component ty b'.ty;
-          reasons = instr :: b'.reasons; }
+        let reasons = instr :: b'.reasons in
+        begin try { ty = Cmm.glb_component ty b'.ty; reasons; }
+        with Cmm.Incompatible_types (c1, c2) ->
+          Misc.fatal_errorf
+            ("Register %a should have a type <= %a@\n  because of %a@\n"
+             ^^ "but the upper bound of %a and %a does not exists")
+            Printmach.reg r Printcmm.machtype_component ty
+            print_reasons reasons Printcmm.machtype_component c1 Printcmm.machtype_component c2
+        end
   in
   { env with upper_bounds = Reg.Map.add r b env.upper_bounds; }
 
@@ -87,18 +97,26 @@ let set_upper_bound env i r ty =
 let rec set_lower_bound_aux env stack =
   match Stack.pop stack with
   | (r, reason, bound) ->
-      if Cmm.ge_component r.typ bound then ()
-      else begin
-        let typ = Cmm.lub_component r.typ bound in
-        assert (typ <> r.typ);
-        Format.fprintf Format.err_formatter
-          "WARNING ! adjusted reg %a: %a -> %a@\n  because of %a@."
-          Printmach.reg r Printcmm.machtype_component r.typ Printcmm.machtype_component typ
-          print_reason reason;
-        r.typ <- typ;
-        let s = get_constraint env r in
-        Reg.Map.iter (fun r' reason -> Stack.push (r', reason, typ) stack) s;
-        set_lower_bound_aux env stack
+      begin try
+        if Cmm.ge_component r.typ bound then ()
+        else begin
+          let typ = Cmm.lub_component r.typ bound in
+          assert (typ <> r.typ);
+          Format.fprintf Format.err_formatter
+            "WARNING ! adjusted reg %a: %a -> %a@\n  because of %a@."
+            Printmach.reg r Printcmm.machtype_component r.typ Printcmm.machtype_component typ
+            print_reason reason;
+          r.typ <- typ;
+          let s = get_constraint env r in
+          Reg.Map.iter (fun r' reason -> Stack.push (r', reason, typ) stack) s;
+          set_lower_bound_aux env stack
+        end
+      with Cmm.Incompatible_types (c1, c2) ->
+        Misc.fatal_errorf
+          ("Register %a should have a type >= %a@\n  because of %a@\n"
+           ^^ "but the lower bound of %a and %a does not exists")
+          Printmach.reg r Printcmm.machtype_component bound
+          print_reason reason Printcmm.machtype_component c1 Printcmm.machtype_component c2
       end
   | exception Stack.Empty ->
       ()
@@ -224,7 +242,11 @@ and instruction env i =
 
 let check_upper_bounds env =
   Reg.Map.iter (fun r b ->
-      if not (Cmm.ge_component b.ty r.typ) then
+      let error =
+        try not (Cmm.ge_component b.ty r.typ)
+        with Cmm.Incompatible_types _ -> true
+      in
+      if error then
         Misc.fatal_errorf "Invalid register typ %a for %a@\n  because of %a"
           Printcmm.machtype_component r.typ Printmach.reg r
           print_upper_bound b
