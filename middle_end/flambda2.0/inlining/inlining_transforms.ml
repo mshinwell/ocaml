@@ -16,7 +16,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-open! Flambda.Import
+open! Simplify_import
 
 module DA = Downwards_acc
 module DE = Simplify_env_and_result.Downwards_env
@@ -69,14 +69,14 @@ let inline dacc ~callee ~args function_decl
               (DE.add_inlined_debuginfo denv dbg)
               apply_inlining_depth
           in
-          let perm =
-            Name_permutation.add_continuation
-              (Name_permutation.add_continuation Name_permutation.empty
-                return_continuation apply_return_continuation)
-              (Exn_continuation.exn_handler exn_continuation)
-              (Exn_continuation.exn_handler apply_exn_continuation)
-          in
-          let expr =
+          let make_inlined_body ~apply_exn_continuation =
+            let perm =
+              Name_permutation.add_continuation
+                (Name_permutation.add_continuation Name_permutation.empty
+                  return_continuation apply_return_continuation)
+                (Exn_continuation.exn_handler exn_continuation)
+                apply_exn_continuation
+            in
             Expr.apply_name_permutation
               (Expr.bind_parameters_to_simples ~bind:params ~target:args
                 (Expr.create_let
@@ -84,6 +84,34 @@ let inline dacc ~callee ~args function_decl
                   (Named.create_simple callee)
                   body))
               perm
+          in
+          let expr =
+            assert (Exn_continuation.extra_args exn_continuation = []);
+            match Exn_continuation.extra_args apply_exn_continuation with
+            | [] ->
+              make_inlined_body ~apply_exn_continuation:
+                (Exn_continuation.exn_handler apply_exn_continuation)
+            | extra_args ->
+              let wrapper = Continuation.create ~sort:Exn () in
+              let body = make_inlined_body ~apply_exn_continuation:wrapper in
+              let wrapper_handler =
+                let param = Variable.create "exn" in
+                let kinded_params =
+                  [KP.create (Parameter.wrap param) K.value]
+                in
+                let handler =
+                  Expr.create_apply_cont (Apply_cont.create
+                    (Exn_continuation.exn_handler apply_exn_continuation)
+                    ~args:((Simple.var param) :: (List.map fst extra_args)))
+                in
+                let params_and_handler =
+                  Continuation_params_and_handler.create kinded_params ~handler
+                in
+                Continuation_handler.create ~params_and_handler
+                  ~stub:false
+                  ~is_exn_handler:true
+              in
+              Let_cont.create_non_recursive wrapper wrapper_handler ~body
           in
 (*
   Format.eprintf "Inlined body to be simplified:@ %a\n%!" Expr.print expr;
