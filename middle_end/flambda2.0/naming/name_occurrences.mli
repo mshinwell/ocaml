@@ -17,6 +17,12 @@
 (** A structure for counting name-like entities that occur free in terms
     or types. *)
 
+(* CR mshinwell: (from gbury on PR#44) Additionally, it might be useful in the
+   future to extend the Name_occurrences.t type to distinguish names used one
+   semantically from those used once syntaxically, so that variables used once,
+   but in the body of a loop can be distinguished from those that are really
+   only used once in a program. *)
+
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module Num_occurrences : sig
