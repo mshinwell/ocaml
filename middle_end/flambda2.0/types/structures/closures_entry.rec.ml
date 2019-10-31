@@ -185,9 +185,9 @@ struct
           let join_extensions env ext1 ext2 =
             let env_extension, _ =
               TEE.n_way_join ~initial_env_at_join:env [
-                left_env, Apply_cont_rewrite_id.create (),
+                left_env, Apply_cont_rewrite_id.create (), Non_inlinable,
                   Variable.Set.empty, ext1;
-                right_env, Apply_cont_rewrite_id.create (),
+                right_env, Apply_cont_rewrite_id.create (), Non_inlinable,
                   Variable.Set.empty, ext2;
               ]
             in

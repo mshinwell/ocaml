@@ -28,7 +28,6 @@ end = struct
     backend : (module Flambda2_backend_intf.S);
     round : int;
     typing_env : TE.t;
-    continuation_scope_level : Scope.t;
     inlined_debuginfo : Debuginfo.t;
     can_inline : bool;
     inlining_depth_increment : int;
@@ -36,13 +35,12 @@ end = struct
   }
 
   let print ppf { backend = _; round; typing_env;
-                  continuation_scope_level; inlined_debuginfo; can_inline;
+                  inlined_debuginfo; can_inline;
                   inlining_depth_increment; float_const_prop;
                 } =
     Format.fprintf ppf "@[<hov 1>(\
         @[<hov 1>(round@ %d)@]@ \
         @[<hov 1>(typing_env@ %a)@]@ \
-        @[<hov 1>(continuation_scope_level@ %a)@]@ \
         @[<hov 1>(inlined_debuginfo@ %a)@]@ \
         @[<hov 1>(can_inline@ %b)@]@ \
         @[<hov 1>(inlining_depth_increment@ %d)@]@ \
@@ -50,7 +48,6 @@ end = struct
         )@]"
       round
       TE.print typing_env
-      Scope.print continuation_scope_level
       Debuginfo.print inlined_debuginfo
       can_inline
       inlining_depth_increment
@@ -64,7 +61,6 @@ end = struct
     { backend;
       round;
       typing_env = TE.create ~resolver;
-      continuation_scope_level = Scope.initial;
       inlined_debuginfo = Debuginfo.none;
       can_inline = true;
       inlining_depth_increment = 0;
@@ -75,7 +71,7 @@ end = struct
   let backend t = t.backend
   let typing_env t = t.typing_env
   let round t = t.round
-  let get_continuation_scope_level t = t.continuation_scope_level
+  let get_continuation_scope_level t = TE.current_scope t.typing_env
   let can_inline t = t.can_inline
   let float_const_prop t = t.float_const_prop
   let get_inlining_depth_increment t = t.inlining_depth_increment
@@ -85,13 +81,8 @@ end = struct
 
   (* CR mshinwell: remove "_level" *)
   let increment_continuation_scope_level t =
-    let continuation_scope_level = Scope.next t.continuation_scope_level in
-    let typing_env =
-      TE.increment_scope_to t.typing_env continuation_scope_level
-    in
     { t with
-      typing_env;
-      continuation_scope_level = Scope.next t.continuation_scope_level;
+      typing_env = TE.increment_scope t.typing_env;
     }
 
   let increment_continuation_scope_level_twice t =
@@ -100,14 +91,12 @@ end = struct
 
   let enter_closure { backend; round; typing_env;
                       inlined_debuginfo = _; can_inline;
-                      continuation_scope_level = _;
                       inlining_depth_increment = _;
                       float_const_prop;
                     } =
     { backend;
       round;
       typing_env = TE.create_using_resolver_and_symbol_bindings_from typing_env;
-      continuation_scope_level = Scope.initial;
       inlined_debuginfo = Debuginfo.none;
       can_inline;
       inlining_depth_increment = 0;

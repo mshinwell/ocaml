@@ -114,17 +114,27 @@ Format.eprintf "uses for %a\n%!" Continuation.print t.continuation;
             |> TE.add_equations_on_params ~params
                  ~param_types:(U.arg_types use)
           in
-          use_env, U.id use, Variable.Set.empty (* CR mshinwell: remove *) )
+          use_env, U.id use, U.use_kind use,
+            Variable.Set.empty (* CR mshinwell: remove *) )
         uses
     in
 (*
 Format.eprintf "Unknown at or later than %a\n%!"
   Scope.print (Scope.next definition_scope_level);
 *)
-    let env_extension, extra_params_and_args =
-      TE.cut_and_n_way_join typing_env use_envs_with_ids
-        ~unknown_if_defined_at_or_later_than:(Scope.next definition_scope_level)
-    in
+    let handler_typing_env, extra_params_and_args =
+      match use_envs_with_ids with
+      | [use_env, _, Inlinable, _] ->
+        (* A single inlinable use will be inlined out by the simplifier, so
+           avoid any join-related computations. *)
+        use_env, Continuation_extra_params_and_args.empty
+      | [] | [_, _, Non_inlinable, _]
+      | (_, _, (Inlinable | Non_inlinable), _) :: _ ->
+        let env_extension, extra_params_and_args =
+          TE.cut_and_n_way_join typing_env use_envs_with_ids
+            ~unknown_if_defined_at_or_later_than:
+              (Scope.next definition_scope_level)
+        in
 (*
 Format.eprintf "handler env extension for %a is:@ %a\n%!"
   Continuation.print t.continuation
@@ -132,10 +142,13 @@ Format.eprintf "handler env extension for %a is:@ %a\n%!"
 Format.eprintf "The extra params and args are:@ %a\n%!"
   Continuation_extra_params_and_args.print extra_params_and_args;
 *)
-    let handler_typing_env =
-      typing_env
-      |> TE.add_definitions_of_params ~params:extra_params_and_args.extra_params
-      |> TE.add_env_extension ~env_extension
+        let handler_env =
+          typing_env
+          |> TE.add_definitions_of_params
+            ~params:extra_params_and_args.extra_params
+          |> TE.add_env_extension ~env_extension
+        in
+        handler_env, extra_params_and_args
     in
     let arg_types_by_use_id =
       List.fold_left (fun args use ->

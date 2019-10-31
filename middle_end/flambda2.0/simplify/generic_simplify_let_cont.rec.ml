@@ -70,6 +70,14 @@ module Make (CHL : Continuation_handler_like_intf.S) = struct
                 | Normal ->
                   assert (not is_exn_handler);
                   let param_types = TE.find_params handler_typing_env params in
+                  (* CR mshinwell: This should not be done if the continuation
+                     is going to be inlined.
+                     In fact: the "trivial join" case also shouldn't be doing
+                     all the existential/CSE stuff for inlinable cases.
+                     Although this might be tricky; we currently don't
+                     simplify the handler when inlining.  Should be ok if we
+                     just return the typing_env_at_use, which we have, in the
+                     trivial join function. *)
                   Unbox_continuation_params.make_unboxing_decisions
                     handler_typing_env ~arg_types_by_use_id ~params
                     ~param_types extra_params_and_args

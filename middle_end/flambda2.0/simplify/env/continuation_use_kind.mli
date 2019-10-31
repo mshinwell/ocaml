@@ -17,5 +17,5 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 type t =
-  | Normal
-  | Fixed_arity
+  | Inlinable
+  | Non_inlinable

@@ -429,7 +429,7 @@ let cse_after_n_way_join envs_with_extensions ~vars_in_scope_at_join
       EP.Map.empty
   in
   let cses_with_canonicalised_lhs =
-    List.map (fun (env, id, _interesting_vars, t) ->
+    List.map (fun (env, id, _use_kind, _interesting_vars, t) ->
         env, id, canonicalise_lhs env t.cse)
       envs_with_extensions
   in
@@ -607,7 +607,8 @@ let non_trivial_join ~initial_env_at_join:env_at_join envs_with_levels =
   (* For non-trivial joins, no existentials are currently propagated. *)
   let names_with_equations_in_join =
     let names_at_join = Typing_env.name_domain env_at_join in
-    List.fold_left (fun names_with_equations_in_join (_env, _id, _vars, t) ->
+    List.fold_left
+      (fun names_with_equations_in_join (_env, _id, _use_kind, _vars, t) ->
         Name.Set.inter (Name.Map.keys t.equations)
           names_with_equations_in_join)
       names_at_join
@@ -619,7 +620,8 @@ let non_trivial_join ~initial_env_at_join:env_at_join envs_with_levels =
         assert (not (Name.Map.mem name result_t.equations));
         match envs_with_levels with
         | [] -> result_t
-        | (first_env_at_use, _id, _vars, _first_t) :: envs_with_levels ->
+        | (first_env_at_use, _id, _use_kind, _vars, _first_t)
+            :: envs_with_levels ->
           let result_t, join_ty =
             Type_grammar.make_suitable_for_environment0
               (Typing_env.find first_env_at_use name) first_env_at_use
@@ -627,7 +629,8 @@ let non_trivial_join ~initial_env_at_join:env_at_join envs_with_levels =
           in
           let result_t, join_ty =
             List.fold_left
-              (fun (result_t, join_ty) (env_at_use, _id, _vars, _t) ->
+              (fun (result_t, join_ty)
+                   (env_at_use, _id, _use_kind, _vars, _t) ->
                 let result_t, ty =
                   Type_grammar.make_suitable_for_environment0
                     (Typing_env.find env_at_use name) env_at_use
@@ -667,6 +670,9 @@ Format.eprintf "Non-trivial join CSE:@ %a"
 let n_way_join ~initial_env_at_join envs_with_levels =
   match envs_with_levels with
   | [] -> empty (), Continuation_extra_params_and_args.empty
-  | [env_at_use, _id, _interesting_vars, t] as envs_with_levels ->
+  | [_env_at_use, _id, Continuation_use_kind.Inlinable,
+     _interesting_vars, _t] ->
+    Misc.fatal_error "Unnecessary join; should have been caught earlier"
+  | [env_at_use, _id, _use_kind, _interesting_vars, t] as envs_with_levels ->
     trivial_join t ~initial_env_at_join ~env_at_use envs_with_levels
   | envs_with_levels -> non_trivial_join ~initial_env_at_join envs_with_levels
