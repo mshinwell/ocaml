@@ -120,7 +120,7 @@ Format.eprintf "About to simplify handler %a, params %a, EPA %a\n%!"
     in
     *)
     let handler =
-      let params = used_extra_params @ used_params in
+      let params = used_params @ used_extra_params in
       CH.with_params_and_handler (CH.Opened.original cont_handler)
         (CPH.create params ~handler)
     in
@@ -304,7 +304,7 @@ Format.eprintf "Simplifying inlined body with DE depth delta = %d\n%!"
         ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
         ~arg_types:(T.unknown_types_from_arity result_arity)
     in
-    let dacc, _id =
+    let dacc, exn_cont_use_id =
       DA.record_continuation_use dacc
         (Exn_continuation.exn_handler (Apply.exn_continuation apply))
         Normal
@@ -313,6 +313,10 @@ Format.eprintf "Simplifying inlined body with DE depth delta = %d\n%!"
           Exn_continuation.arity (Apply.exn_continuation apply)))
     in
     let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
+    let apply =
+      Simplify_common.update_exn_continuation_extra_args uacc ~exn_cont_use_id
+        apply
+    in
     let expr =
       Simplify_common.add_wrapper_for_fixed_arity_apply uacc ~use_id
         result_arity apply
@@ -543,7 +547,7 @@ and simplify_function_call_where_callee's_type_unavailable
   let cont = Apply.continuation apply in
   let denv = DA.denv dacc in
   let typing_env_at_use = DE.typing_env denv in
-  let dacc, _id =
+  let dacc, exn_cont_use_id =
     DA.record_continuation_use dacc
       (Exn_continuation.exn_handler (Apply.exn_continuation apply))
       Normal
@@ -606,7 +610,10 @@ and simplify_function_call_where_callee's_type_unavailable
       call_kind, use_id, dacc
   in
   let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
-  let apply = Apply.with_call_kind apply call_kind in
+  let apply =
+    Apply.with_call_kind apply call_kind
+    |> Simplify_common.update_exn_continuation_extra_args uacc ~exn_cont_use_id
+  in
   let expr =
     Simplify_common.add_wrapper_for_fixed_arity_apply uacc ~use_id
       (Call_kind.return_arity call_kind) apply
@@ -736,7 +743,7 @@ and simplify_method_call
       ~typing_env_at_use:(DE.typing_env denv)
       ~arg_types:[T.any_value ()]
   in
-  let dacc, _id =
+  let dacc, exn_cont_use_id =
     DA.record_continuation_use dacc
       (Exn_continuation.exn_handler (Apply.exn_continuation apply))
       Normal
@@ -747,6 +754,10 @@ and simplify_method_call
   (* CR mshinwell: Need to record exception continuation use (check all other
      cases like this too) *)
   let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
+  let apply =
+    Simplify_common.update_exn_continuation_extra_args uacc ~exn_cont_use_id
+      apply
+  in
   let expr =
     Simplify_common.add_wrapper_for_fixed_arity_apply uacc ~use_id
       (Flambda_arity.create [K.value]) apply
@@ -789,7 +800,7 @@ and simplify_c_call
       ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
       ~arg_types:(T.unknown_types_from_arity return_arity)
   in
-  let dacc, _id =
+  let dacc, exn_cont_use_id =
     (* CR mshinwell: Try to factor out these stanzas, here and above. *)
     DA.record_continuation_use dacc
       (Exn_continuation.exn_handler (Apply.exn_continuation apply))
@@ -801,6 +812,10 @@ and simplify_c_call
   let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
   (* CR mshinwell: Make sure that [resolve_continuation_aliases] has been
      called before building of any term that contains a continuation *)
+  let apply =
+    Simplify_common.update_exn_continuation_extra_args uacc ~exn_cont_use_id
+      apply
+  in
   let expr =
     Simplify_common.add_wrapper_for_fixed_arity_apply uacc ~use_id
       return_arity apply

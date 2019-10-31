@@ -63,6 +63,12 @@ val add_wrapper_for_fixed_arity_apply
   -> Apply_expr.t
   -> Flambda.Expr.t
 
+val update_exn_continuation_extra_args
+   : Upwards_acc.t
+  -> exn_cont_use_id:Apply_cont_rewrite_id.t
+  -> Apply_expr.t
+  -> Apply_expr.t
+
 val bind_let_bound
    : bindings:((Bindable_let_bound.t * Reachable.t) list)
   -> body:Flambda.Expr.t
