@@ -41,5 +41,6 @@ let print ppf { typing_env = _; id = _; kind = _; arg_types; } =
     arg_types
 
 let id t = t.id
+let use_kind t = t.kind
 let arg_types t = t.arg_types
 let typing_env_at_use t = t.typing_env

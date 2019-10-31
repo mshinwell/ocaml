@@ -30,7 +30,7 @@ val resolver : t -> (Export_id.t -> Type_grammar.t option)
 
 val current_scope : t -> Scope.t
 
-val increment_scope_to : t -> Scope.t -> t
+val increment_scope : t -> t
 
 val var_domain : t -> Variable.Set.t
 
@@ -121,7 +121,8 @@ val earliest_alias_of_simple_satisfying
 (* CR mshinwell: Consider labelling arguments e.g. [definition_typing_env] *)
 val cut_and_n_way_join
    : t
-  -> (t * Apply_cont_rewrite_id.t * Variable.Set.t) list
+  -> (t * Apply_cont_rewrite_id.t * Continuation_use_kind.t
+       * Variable.Set.t) list
   -> unknown_if_defined_at_or_later_than:Scope.t
   -> Typing_env_extension.t * Continuation_extra_params_and_args.t
 

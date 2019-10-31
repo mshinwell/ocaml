@@ -291,19 +291,13 @@ let create ~resolver =
 
 let create_using_resolver_from t = create ~resolver:t.resolver
 
-let increment_scope_to t scope =
+let increment_scope t =
   let current_scope = current_scope t in
-  if Scope.(<=) scope current_scope then begin
-    Misc.fatal_errorf "New level %a must exceed %a:@ %a"
-      Scope.print scope
-      Scope.print current_scope
-      print t
-  end;
   let prev_levels =
     Scope.Map.add current_scope t.current_level t.prev_levels
   in
   let current_level =
-    One_level.create scope (Typing_env_level.empty ())
+    One_level.create (Scope.next current_scope) (Typing_env_level.empty ())
       ~just_after_level:(One_level.just_after_level t.current_level)
   in
   { t with
@@ -803,9 +797,9 @@ let cut_and_n_way_join definition_typing_env ts_and_use_ids
   (* CR mshinwell: Can't [unknown_if_defined_at_or_later_than] just be
      computed by this function? *)
   let after_cuts =
-    List.map (fun (t, use_id, interesting_vars) ->
+    List.map (fun (t, use_id, use_kind, interesting_vars) ->
         let level, _in_scope = cut t ~unknown_if_defined_at_or_later_than in
-        t, use_id, interesting_vars, level)
+        t, use_id, use_kind, interesting_vars, level)
       ts_and_use_ids
   in
   let level, extra_params_and_args =

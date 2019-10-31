@@ -31,5 +31,6 @@ val create
 val print : Format.formatter -> t -> unit
 
 val id : t -> Apply_cont_rewrite_id.t
+val use_kind : t -> Continuation_use_kind.t
 val arg_types : t -> T.t list
 val typing_env_at_use : t -> TE.t

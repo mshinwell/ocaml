@@ -61,7 +61,8 @@ val meet : Meet_env.t -> t -> t -> t
 
 val n_way_join
    : initial_env_at_join:Typing_env.t
-  -> (Typing_env.t * Apply_cont_rewrite_id.t * Variable.Set.t * t) list
+  -> (Typing_env.t * Apply_cont_rewrite_id.t * Continuation_use_kind.t
+       * Variable.Set.t * t) list
   -> t * Continuation_extra_params_and_args.t
 
 val cse : t -> Simple.t Flambda_primitive.Eligible_for_cse.Map.t
