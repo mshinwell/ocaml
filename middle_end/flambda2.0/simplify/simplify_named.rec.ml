@@ -396,7 +396,11 @@ let simplify_named0 dacc ~(bound_vars : Bindable_let_bound.t)
     let bound_var = Bindable_let_bound.must_be_singleton bound_vars in
     let min_name_mode = Var_in_binding_pos.name_mode bound_var in
     begin match S.simplify_simple dacc simple ~min_name_mode with
-    | Bottom, _ty ->
+    | Bottom, ty ->
+      let dacc =
+        DA.map_denv dacc ~f:(fun denv ->
+          DE.add_variable denv bound_var (T.bottom (T.kind ty)))
+      in
       let defining_expr = Reachable.invalid () in
       [bound_vars, defining_expr], dacc
     | Ok simple, ty ->
