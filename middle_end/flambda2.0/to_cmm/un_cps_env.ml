@@ -38,24 +38,28 @@ type cont =
    let-bound vars to be permuted with non-linear let-bound vars.
 
    Let-bound variables can be one of three kinds: pure, coeffect and effect
-   (effectful variables can also have coeffects).
-   Pure let-bound variables are simply added to the environment usual map.
-   Effectful and coeffectful variables are organised into stages:
-   a stage is either:
-   - a serie of consecutive bindings with only coeffects
+   (effectful variables can also have coeffects). Each binding is given
+   an id/order which are strictly increasing, in order to be able to get back
+   the chronological defintion order of bindings.
+
+   Pure variables are put in a map, given that they can commute with everything.
+   Effectful and coeffectful variables, are organised into stages. A stage is a
+   set of (non-pure) bindings that can all commute with each other.
+   Concretely, a stage is either:
+   - a series of consecutive bindings with only coeffects
    - a single effectful binding
    Whenever a new binding that doesn't match the current stage is added,
    the current stage is archived, and replaced by a new stage.
-   Only bindings in the current stage are candidates to inlining.
-   When inlined, a binding is removed from its stage (as only linear
-   bindings are supposed to be inlined), and if the current stage becomes
-   empty, the last archived stage is "un-archived".
+   Only bindings in the current stage, or in the map of pure bindings are
+   candidates to inlining. When inlined, a binding is removed from its stage
+   (as only linear bindings are supposed to be inlined), and if the current stage
+   becomes empty, the last archived stage is "un-archived".
 *)
 
 type kind =
   | Pure
-  | Coeff
   | Effect
+  | Coeffect
 
 type binding = {
   order : int;
@@ -65,11 +69,9 @@ type binding = {
   cmm_expr : Cmm.expression;
 }
 
-type stage = {
-  kind : kind;
-  order : int;
-  map : binding Variable.Map.t;
-}
+type stage =
+  | Eff of Variable.t * binding
+  | Coeff of binding Variable.Map.t
 
 (* Translation environment *)
 
@@ -88,19 +90,16 @@ type t = {
   offsets : Un_cps_closure.env;
   (* Offsets for closure_ids and var_within_closures. *)
 
-  archived : stage list;
+  pures : binding Variable.Map.t;
+  (* pure bindings that can be inlined across stages. *)
+  stages : stage list;
   (* archived stages, in reverse chronological order. *)
-  current : stage;
-  (* current stage of bound variables *)
 }
-
-let empty_stage =
-  { kind = Pure; order = 0; map = Variable.Map.empty; }
 
 let mk offsets k k_exn = {
   k; k_exn; offsets;
-  archived = [];
-  current = empty_stage;
+  stages = [];
+  pures = Variable.Map.empty;
   vars = Variable.Map.empty;
   conts = Continuation.Map.empty;
 }
@@ -215,94 +214,111 @@ let print_binding_list fmt l =
   Format.fprintf fmt "@]"
 *)
 
-(* Inlining of let-bindings *)
+(* Variable binding (for potential inlinging) *)
+
+let next_order =
+  let r = ref 0 in
+  (fun () -> incr r; !r)
 
 let classify effs =
   if Effects_and_coeffects.has_commuting_effects effs then
     Effect
   else if Effects_and_coeffects.has_commuting_coeffects effs then
-    Coeff
+    Coeffect
   else
     Pure
 
-let add_binding_aux env var effs inline cmm_expr =
-  let map = env.current.map in
-  let order = env.current.order in
+let mk_binding env inline effs var cmm_expr =
+  let order = next_order () in
   let cmm_var = gen_variable var in
-  let binding = { order; inline; effs; cmm_var; cmm_expr; } in
-  let map = Variable.Map.add var binding map in
+  let b = { order; inline; effs; cmm_var; cmm_expr; } in
   let v = Backend_var.With_provenance.var cmm_var in
   let e = Un_cps_helper.var v in
   let env = { env with vars = Variable.Map.add var e env.vars; } in
-  env, order + 1, map
+  env, b
 
-let add_binding kind env var effs inline cmm_expr =
-  let env, order, map = add_binding_aux env var effs inline cmm_expr in
-  { env with current = { kind; order; map; }; }
+let bind_pure env var b =
+  { env with pures = Variable.Map.add var b env.pures }
 
-let archive_then_bind kind env var effs inline cmm_expr =
-  let env = {
-    env with
-    current = empty_stage;
-    archived = env.current :: env.archived;
-  } in
-  add_binding kind env var effs inline cmm_expr
+let bind_eff env var b =
+  { env with stages = Eff (var, b) :: env.stages }
+
+let bind_coeff env var b =
+  match env.stages with
+  | Coeff m :: r ->
+      let m' = Variable.Map.add var b m in
+      { env with stages = Coeff m' :: r }
+  | ([] as r)
+  | ((Eff _ :: _) as r) ->
+      let m = Variable.Map.singleton var b in
+      { env with stages = Coeff m :: r }
 
 let bind_variable env var effs inline cmm_expr =
-  (* shorthands to respecetively:
-     - bind the variable in the current stage, and change the stage kind
-     - archive the current stage, then bind the variable in a new stage
-       with the given kind. *)
-  let bind kind = add_binding kind env var effs inline cmm_expr in
-  let archive kind = archive_then_bind kind env var effs inline cmm_expr in
-
-  match classify effs, env.current.kind with
-  | Pure, _ when inline ->
-      { env with vars = Variable.Map.add var cmm_expr env.vars }
-  (* Pure bindings can be mixed with anything (since they commute with everything) *)
-  | Pure, (Pure as kind)
-  | Pure, (Coeff | Effect as kind)
-  | (Coeff | Effect as kind), Pure -> bind kind
-  (* Coeffects commute with themselves *)
-  | Coeff, Coeff -> bind Coeff
-  (* Effects do not commute with anything, themselves included ! *)
-  | Effect, Coeff
-  | Coeff, Effect
-  | Effect, Effect -> archive Effect
+  let env, b = mk_binding env inline effs var cmm_expr in
+  match classify effs with
+  | Pure -> bind_pure env var b
+  | Effect -> bind_eff env var b
+  | Coeffect -> bind_coeff env var b
 
 
+(* Variable lookup (for potential inlining) *)
 
-let pop_stage env =
-  match env.archived with
-  | [] ->
-      { env with current = empty_stage; }
-  | s :: r ->
-      { env with current = s; archived = r; }
+let inline_res env b =
+  b.cmm_expr, env, b.effs
 
-let remove_binding env v =
-  let map = Variable.Map.remove v env.current.map in
-  if Variable.Map.is_empty map then
-    pop_stage env
-  else
-    { env with current = { env.current with map } }
+let inline_not env b =
+  let v' = Backend_var.With_provenance.var b.cmm_var in
+  Un_cps_helper.var v', env, Effects_and_coeffects.pure
 
-let inline_variable env v =
-  match Variable.Map.find v env.current.map with
+let inline_not_found env v =
+  match Variable.Map.find v env.vars with
   | exception Not_found ->
-      begin match Variable.Map.find v env.vars with
-      | exception Not_found ->
-          Misc.fatal_errorf "Variable %a not found in env" Variable.print v
-      | e -> e, env, Effects_and_coeffects.pure
-      end
+      Misc.fatal_errorf "Variable %a not found in env" Variable.print v
+  | e -> e, env, Effects_and_coeffects.pure
+
+let inline_found_pure env var b =
+  if b.inline then
+    let pures = Variable.Map.remove var env.pures in
+    let env = { env with pures } in
+    inline_res env b
+  else
+    inline_not env b
+
+let inline_found_eff env var v b r =
+  if not (Variable.equal var v) then
+    inline_not_found env var
+  else begin
+    if b.inline then begin
+      let env = { env with stages = r } in
+      inline_res env b
+    end else
+      inline_not env b
+  end
+
+let inline_found_coeff env var m r =
+  match Variable.Map.find var m with
+  | exception Not_found -> inline_not_found env var
   | b ->
       if b.inline then begin
-        let env = remove_binding env v in
-        b.cmm_expr, env, b.effs
-      end else begin
-        let v = Backend_var.With_provenance.var b.cmm_var in
-        Un_cps_helper.var v, env, Effects_and_coeffects.pure
-      end
+        let m' = Variable.Map.remove var m in
+        let env =
+          if Variable.Map.is_empty m'
+          then { env with stages = r }
+          else { env with stages = Coeff m' :: r }
+        in
+        inline_res env b
+      end else
+        inline_not env b
 
+let inline_variable env var =
+  match Variable.Map.find var env.pures with
+  | b -> inline_found_pure env var b
+  | exception Not_found ->
+      begin match env.stages with
+      | [] -> inline_not_found env var
+      | Eff (v, b) :: r -> inline_found_eff env var v b r
+      | Coeff m :: r -> inline_found_coeff env var m r
+      end
 
 (* Map on integers in descending order *)
 module M = Map.Make(struct
@@ -310,17 +326,25 @@ module M = Map.Make(struct
     let compare x y = compare y x
   end)
 
+let order_add b acc =
+  M.add b.order b acc
+
+let order_add_map m acc =
+  Variable.Map.fold (fun _ b acc -> order_add b acc) m acc
+
 let flush_delayed_lets env =
   (* generate a wrapper function to introduce the delayed let-bindings. *)
-  let wrap_aux acc stage =
-    let order_map = Variable.Map.fold (fun _ (b: binding) acc ->
-        M.add b.order b acc
-      ) stage.map M.empty in
+  let wrap_aux pures stages e =
+    let order_map = order_add_map pures M.empty in
+    let order_map = List.fold_left (fun acc -> function
+        | Eff (_, b) -> order_add b acc
+        | Coeff m -> order_add_map m acc
+      ) order_map stages in
     M.fold (fun _ b acc ->
         Un_cps_helper.letin b.cmm_var b.cmm_expr acc
-      ) order_map acc
+      ) order_map e
   in
-  let wrap e = List.fold_left wrap_aux e (env.current :: env.archived) in
+  let wrap e = wrap_aux env.pures env.stages e in
   (* Return a wrapper and a cleared env *)
-  wrap, { env with current = empty_stage; archived = []; }
+  wrap, { env with stages = []; pures = Variable.Map.empty; }
 
