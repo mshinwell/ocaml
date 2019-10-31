@@ -175,7 +175,9 @@ module Make
       | Naked_int64 _ | Naked_nativeint _) -> wrong_kind ()
     | Resolved resolved ->
       match resolved with
-      | Naked_float (Ok fs) -> Proved fs
+      | Naked_float (Ok fs) ->
+        if Float.Set.is_empty fs then Invalid
+        else Proved fs
       | Naked_float Unknown -> Unknown
       | Naked_float Bottom -> Invalid
       | Value _ -> wrong_kind ()
@@ -194,7 +196,9 @@ module Make
       | Naked_int64 _ | Naked_nativeint _) -> wrong_kind ()
     | Resolved resolved ->
       match resolved with
-      | Naked_int32 (Ok is) -> Proved is
+      | Naked_int32 (Ok is) ->
+        if Int32.Set.is_empty is then Invalid
+        else Proved is
       | Naked_int32 Unknown -> Unknown
       | Naked_int32 Bottom -> Invalid
       | Value _ -> wrong_kind ()
@@ -213,7 +217,9 @@ module Make
       | Naked_int32 _ | Naked_nativeint _) -> wrong_kind ()
     | Resolved resolved ->
       match resolved with
-      | Naked_int64 (Ok is) -> Proved is
+      | Naked_int64 (Ok is) ->
+        if Int64.Set.is_empty is then Invalid
+        else Proved is
       | Naked_int64 Unknown -> Unknown
       | Naked_int64 Bottom -> Invalid
       | Value _ -> wrong_kind ()
@@ -232,7 +238,9 @@ module Make
       | Naked_int32 _ | Naked_int64 _) -> wrong_kind ()
     | Resolved resolved ->
       match resolved with
-      | Naked_nativeint (Ok is) -> Proved is
+      | Naked_nativeint (Ok is) ->
+        if Targetint.Set.is_empty is then Invalid
+        else Proved is
       | Naked_nativeint Unknown -> Unknown
       | Naked_nativeint Bottom -> Invalid
       | Value _ -> wrong_kind ()
@@ -291,9 +299,13 @@ module Make
             match blocks_imms.blocks with
             | Unknown -> Unknown
             | Known blocks ->
+              (* CR mshinwell: maybe [all_tags] should return the [Invalid]
+                 case directly? *)
               match Row_like.For_blocks.all_tags blocks with
               | Unknown -> Unknown
-              | Known tags -> Proved tags
+              | Known tags ->
+                if Tag.Set.is_empty tags then Invalid
+                else Proved tags
         end
       | Value (Ok _) -> Invalid
       | Value Unknown -> Unknown
@@ -315,7 +327,11 @@ module Make
       | Naked_int64 _ | Naked_nativeint _) -> wrong_kind ()
     | Resolved resolved ->
       match resolved with
-      | Naked_immediate (Ok (Naked_immediates is)) -> Proved is
+      | Naked_immediate (Ok (Naked_immediates is)) ->
+        (* CR mshinwell: As noted elsewhere, add abstraction to avoid the need
+           for these checks *)
+        if Immediate.Set.is_empty is then Invalid
+        else Proved is
       | Naked_immediate (Ok (Is_int scrutinee_ty)) ->
         begin match prove_is_int env scrutinee_ty with
         | Proved true -> Proved (Immediate.Set.singleton Immediate.bool_true)
