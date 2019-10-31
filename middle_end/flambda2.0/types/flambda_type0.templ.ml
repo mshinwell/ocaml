@@ -374,8 +374,10 @@ module Make
         begin match blocks_imms.blocks, blocks_imms.immediates with
         | Unknown, Unknown | Unknown, Known _ | Known _, Unknown -> Unknown
         | Known blocks, Known imms ->
+          (* CR mshinwell: Check this.  Again it depends on the context; is
+             this a context where variants are ok? *)
           if not (Row_like.For_blocks.is_bottom blocks)
-          then Proved Immediate.Set.empty
+          then Unknown
           else prove_naked_immediates env imms
         end
       | Value (Ok _) -> Invalid
