@@ -222,7 +222,6 @@ let array_like_thing_index_kind = K.value
 let bigarray_kind = K.value
 let bigstring_kind = K.value
 let block_kind = K.value
-let block_element_kind = K.value
 let string_or_bytes_kind = K.value
 
 type comparison = Eq | Neq | Lt | Gt | Le | Ge
@@ -938,8 +937,9 @@ let print_ternary_primitive ppf p =
 
 let args_kind_of_ternary_primitive p =
   match p with
-  | Block_set _ ->
-    block_kind, array_like_thing_index_kind, block_element_kind
+  | Block_set (block_access_kind, _) ->
+    block_kind, array_like_thing_index_kind,
+      Block_access_kind.element_kind block_access_kind
   | Bytes_or_bigstring_set (Bytes, (Eight | Sixteen)) ->
     string_or_bytes_kind, array_like_thing_index_kind,
       K.value

@@ -478,7 +478,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
     let field = Simple.const (Simple.Const.Tagged_immediate imm) in
     Ternary (Block_set (Block Naked_float,
         C.convert_init_or_assign init_or_assign),
-      block, Simple field, value)
+      block, Simple field, unbox_float value)
   | Pdivint Unsafe, [arg1; arg2] ->
     Binary (Int_arith (I.Tagged_immediate, Div), arg1, arg2)
   | Pdivint Safe, [arg1; arg2] ->
@@ -643,7 +643,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
       array, index, new_value)
   | Parraysetu Pfloatarray, [array; index; new_value] ->
     Ternary (Block_set (Array Naked_float, Assignment),
-      array, index, new_value)
+      array, index, unbox_float new_value)
   | Parraysets (Pgenarray | Paddrarray | Pintarray),
       [array; index; new_value] ->
     Checked {
@@ -664,7 +664,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
     Checked {
       primitive =
         Ternary (Block_set (Array Naked_float, Assignment),
-          array, index, new_value);
+          array, index, unbox_float new_value);
       validity_conditions = [
         Binary (Int_comp (Tagged_immediate, Signed, Ge), index,
           Simple (Simple.const (Simple.Const.Tagged_immediate
