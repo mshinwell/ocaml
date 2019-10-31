@@ -54,7 +54,7 @@ let print_with_cache ~cache ppf
     | _ -> expr
   in
   pattern_match t ~f:(fun ~bound_vars ~body ->
-    fprintf ppf "@[<hov 1>(@<0>%slet@<0>%s@ @[<hov 1>(\
+    fprintf ppf "@[<hov 1>(@<0>%slet@<0>%s@ @[<v 1>(\
         @<0>%s%a@<0>%s =@<0>%s@ %a"
       (Flambda_colours.expr_keyword ())
       (Flambda_colours.normal ())
