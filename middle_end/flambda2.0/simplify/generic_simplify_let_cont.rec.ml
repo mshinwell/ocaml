@@ -80,14 +80,17 @@ module Make (CHL : Continuation_handler_like_intf.S) = struct
                 simplify_continuation_handler_like dacc ~extra_params_and_args
                   cont handler k
               with Misc.Fatal_error -> begin
-                Format.eprintf "\n%sContext is:%s simplifying continuation \
-                    handler@ %a@ with [extra_params_and_args]@ %a@ \
-                    with downwards accumulator:@ %a\n"
-                  (Flambda_colours.error ())
-                  (Flambda_colours.normal ())
-                  CHL.print cont_handler
-                  Continuation_extra_params_and_args.print extra_params_and_args
-                  DA.print dacc;
+                if !Clflags.flambda2_context_on_error then begin
+                  Format.eprintf "\n%sContext is:%s simplifying continuation \
+                      handler@ %a@ with [extra_params_and_args]@ %a@ \
+                      with downwards accumulator:@ %a\n"
+                    (Flambda_colours.error ())
+                    (Flambda_colours.normal ())
+                    CHL.print cont_handler
+                    Continuation_extra_params_and_args.print
+                    extra_params_and_args
+                    DA.print dacc
+                end;
                 raise Misc.Fatal_error
               end
           in

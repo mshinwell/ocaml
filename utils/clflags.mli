@@ -222,6 +222,7 @@ val set_dumped_pass : string -> bool -> unit
 val dump_into_file : bool ref
 
 val flambda2_unicode : bool ref
+val flambda2_context_on_error : bool ref
 
 (* Support for flags that can also be set from an environment variable *)
 type 'a env_reader = {

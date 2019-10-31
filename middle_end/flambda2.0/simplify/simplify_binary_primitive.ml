@@ -202,7 +202,7 @@ end = struct
     match proof1, proof2 with
     | (Proved nums1, Proved nums2)
         when N.ok_to_evaluate denv ->
-      assert (not (N.Lhs.Set.is_empty nums1));
+      assert (not (N.Lhs.Set.is_empty nums1)); (* XXX Fails, typedecl.ml *)
       assert (not (N.Rhs.Set.is_empty nums2));
       let all_pairs = N.cross_product nums1 nums2 in
       let possible_results =

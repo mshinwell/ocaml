@@ -479,6 +479,9 @@ let read_one_param ppf position name v =
     let filter = Clflags.Compiler_pass.can_start_from in
     set_compiler_pass ppf v ~name Clflags.start_from ~filter
 
+  | "flambda2-context-on-error" ->
+    set "flambda2-context-on-error" [ flambda2_context_on_error ] v
+
   | _ ->
     if not (List.mem name !can_discard) then begin
       can_discard := name :: !can_discard;

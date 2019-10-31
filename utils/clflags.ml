@@ -362,6 +362,7 @@ let o3_arguments = {
 }
 
 let flambda2_unicode = ref true
+let flambda2_context_on_error = ref false
 
 let all_passes = ref []
 let dumped_passes_list = ref []
