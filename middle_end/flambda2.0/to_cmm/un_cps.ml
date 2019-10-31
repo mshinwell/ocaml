@@ -159,6 +159,17 @@ let const_static _env c =
   | Naked_nativeint t ->
       [C.cint (nativeint_of_targetint t)]
 
+let default_of_kind (k : Flambda_kind.t) =
+  match k with
+  | Value -> C.int 1
+  | Naked_number Naked_immediate -> C.int 0
+  | Naked_number Naked_float -> C.float 0.
+  | Naked_number Naked_int32 -> C.int 0
+  | Naked_number Naked_int64 when C.arch32 -> todo ()
+  | Naked_number Naked_int64 -> C.int 0
+  | Naked_number Naked_nativeint -> C.int 0
+  | Fabricated -> Misc.fatal_error "Fabricated_kind have no default value"
+
 (* Function symbol *)
 
 let function_name s =
@@ -690,19 +701,34 @@ and let_cont_jump env k h body =
   let vars, handle = continuation_handler env h in
   let id, env = Env.add_jump_cont env (List.map snd vars) k in
   if Continuation_handler.is_exn_handler h then
-    let exn_var =
+    let exn_var, extra_params =
       match vars with
-      | [(v, _)] -> v
-      | _ -> Misc.fatal_errorf
-               "Exception continuation %a should have one argument"
+      | (v, _) :: rest -> v, rest
+      | [] -> Misc.fatal_errorf
+               "Exception continuation %a should have at least one argument"
                Continuation.print k
     in
-    C.trywith
-      ~dbg:Debuginfo.none
-      ~kind:(Delayed id)
-      ~body:(expr env body)
-      ~exn_var
-      ~handler:handle
+    let env_body, extra_vars = Env.add_exn_handler env k h in
+    let handler =
+      List.fold_left2
+        (fun handler (v, _) (p, _) -> C.letin p (C.var v) handler)
+        handle extra_vars extra_params
+    in
+    let trywith =
+      C.trywith
+        ~dbg:Debuginfo.none
+        ~kind:(Delayed id)
+        ~body:(expr env_body body)
+        ~exn_var
+        ~handler:handler
+    in
+    let with_provenance =
+      List.map (fun (v, k) -> Backend_var.With_provenance.create v, k)
+        extra_vars
+    in
+    List.fold_left
+      (fun expr (v, k) -> C.letin v (default_of_kind k) expr)
+      trywith with_provenance
   else
     C.ccatch
       ~rec_flag:false
@@ -746,6 +772,17 @@ and continuation_handler env h =
 
 and apply_expr env e =
   let call, env, effs = apply_call env e in
+  let k_exn = Apply_expr.exn_continuation e in
+  let call, env =
+    let mut_vars =
+      Env.get_exn_extra_args env (Exn_continuation.exn_handler k_exn)
+    in
+    List.fold_left2
+      (fun (call, env) (arg, _k) v ->
+         let arg, env, _ = simple env arg in
+         C.sequence (C.assign v arg) call, env)
+      (call, env) (Exn_continuation.extra_args k_exn) mut_vars
+  in
   let wrap, env = Env.flush_delayed_lets env in
   wrap (wrap_cont env effs call e)
 
@@ -827,15 +864,21 @@ and apply_cont env e =
   let args = Apply_cont_expr.args e in
   if (* Continuation.equal (Env.exn_cont env) k *) Continuation.is_exn k then begin
     match args with
-    | [res] ->
+    | res :: extra ->
         let exn, env, _ = simple env res in
+        let extra, env, _ = arg_list env extra in
+        let mut_vars = Env.get_exn_extra_args env k in
         let wrap, _ = Env.flush_delayed_lets env in
-        wrap (C.raise_prim Raise_regular exn Debuginfo.none)
-    | _ ->
-        Misc.fatal_errorf
-          "Continuation %a (exn cont) should be applied to a single argument in@\n%a@\n%s"
-          Continuation.print k Apply_cont_expr.print e
-          "Exception continuations should only applied to a single argument"
+        let expr = C.raise_prim Raise_regular exn Debuginfo.none in
+        let expr =
+          List.fold_left2
+            (fun expr arg v -> C.sequence (C.assign v arg) expr)
+            expr extra mut_vars
+        in
+        wrap expr
+    | [] ->
+        Misc.fatal_errorf "Exception continuation %a has no arguments"
+          Continuation.print k
   end else if Continuation.equal (Env.return_cont env) k then begin
     match args with
     | [] -> C.void
@@ -1255,25 +1298,13 @@ let function_decl offsets fun_name _ d =
   let p = Function_declaration.params_and_body d in
   Function_params_and_body.pattern_match p
     ~f:(fun ~return_continuation:k k_exn vars ~body ~my_closure ->
-        try
           let args = function_args vars my_closure body in
           let k_exn = Exn_continuation.exn_handler k_exn in
           let env = Env.mk offsets k k_exn in
           let env, fun_args = var_list env args in
           let fun_body = expr env body in
           let fun_flags = function_flags () in
-          C.fundecl fun_name fun_args fun_body fun_flags fun_dbg
-        with Misc.Fatal_error -> begin
-          if !Clflags.flambda2_context_on_error then begin
-            Format.eprintf "\n%sContext is:%s translating function %s to Cmm \
-                with body@ %a\n"
-              (Flambda_colours.error ())
-              (Flambda_colours.normal ())
-              fun_name
-              Expr.print body
-          end;
-          raise Misc.Fatal_error
-        end)
+          C.fundecl fun_name fun_args fun_body fun_flags fun_dbg)
 
 (* Programs *)
 
