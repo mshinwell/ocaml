@@ -89,6 +89,9 @@ type t = {
      continuation and expression of the continuation handler). *)
   offsets : Un_cps_closure.env;
   (* Offsets for closure_ids and var_within_closures. *)
+  exn_conts_extra_args : Backend_var.t list Continuation.Map.t;
+  (* Mutable variables used for compiling extra arguments to
+     exception handlers *)
 
   pures : binding Variable.Map.t;
   (* pure bindings that can be inlined across stages. *)
@@ -102,6 +105,7 @@ let mk offsets k k_exn = {
   pures = Variable.Map.empty;
   vars = Variable.Map.empty;
   conts = Continuation.Map.empty;
+  exn_conts_extra_args = Continuation.Map.empty;
 }
 
 let dummy offsets =
@@ -184,6 +188,25 @@ let add_inline_cont env types k vars e =
   in
   let conts = Continuation.Map.add k info env.conts in
   cont, used_as_jump, { env with conts }
+
+let add_exn_handler env k h =
+  let arity = Flambda.Continuation_handler.arity h in
+  match arity with
+  | [] -> Misc.fatal_error "Exception handler with no arguments"
+  | [_] -> env, []
+  | _ :: extra_args ->
+      let mut_vars =
+        List.map (fun kind -> Backend_var.create_local "exn_extra_arg", kind) extra_args
+      in
+      let vars_only = List.map fst mut_vars in
+      { env with exn_conts_extra_args =
+                   Continuation.Map.add k vars_only env.exn_conts_extra_args; },
+      mut_vars
+
+let get_exn_extra_args env k =
+  match Continuation.Map.find_opt k env.exn_conts_extra_args with
+  | Some l -> l
+  | None -> []
 
 (* Offsets *)
 

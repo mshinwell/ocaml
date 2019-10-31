@@ -184,6 +184,9 @@ val bigarray_store :
 
 (** {2 Expression combinators} *)
 
+val assign : Backend_var.t -> Cmm.expression -> Cmm.expression
+(** Cassign *)
+
 val sequence : Cmm.expression -> Cmm.expression -> Cmm.expression
 (** Create a sequence of expressions. Will erase void expressions as needed. *)
 

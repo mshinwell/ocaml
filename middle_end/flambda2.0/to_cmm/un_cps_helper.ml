@@ -84,6 +84,8 @@ let infix_field_address ~dbg ptr n =
   else
     Cmm.Cop (Cmm.Caddv, [ptr; int ~dbg (n * Arch.size_addr)], dbg)
 
+let assign x e = Cmm.Cassign (x, e)
+
 (* Sequence *)
 
 let sequence x y =
