@@ -308,12 +308,6 @@ and transform_let_cont env
   let { Env. body_env; handler_env; extra_params } =
     Env.add_continuation env name recursive
   in
-  let is_exn_handler =
-    is_exn_handler &&
-      match extra_params with
-      | [] -> true
-      | _ -> false
-  in
   let extra_params =
     List.map (fun (id, kind) -> id, Ilambda.User_visible, kind) extra_params
   in

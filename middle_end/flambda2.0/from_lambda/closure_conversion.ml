@@ -408,11 +408,6 @@ let rec close t env (ilam : Ilambda.t) : Expr.t =
   | Let_cont { name; is_exn_handler; params; recursive; body;
       handler; } ->
     if is_exn_handler then begin
-      if List.length params <> 1 then begin
-        Misc.fatal_errorf "[Let_cont]s marked as exception handlers must \
-            have exactly one parameter: %a"
-          Ilambda.print ilam
-      end;
       match recursive with
       | Nonrecursive -> ()
       | Recursive ->
