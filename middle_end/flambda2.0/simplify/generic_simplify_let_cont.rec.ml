@@ -65,13 +65,20 @@ module Make (CHL : Continuation_handler_like_intf.S) = struct
               cont_handler, user_data, uacc
             | Uses { handler_typing_env; arg_types_by_use_id;
                      extra_params_and_args; } ->
-               let typing_env, extra_params_and_args =
-                if is_exn_handler then handler_typing_env, extra_params_and_args
-                else
+              let typing_env, extra_params_and_args =
+                match Continuation.sort cont with
+                | Normal ->
+                  assert (not is_exn_handler);
                   let param_types = TE.find_params handler_typing_env params in
                   Unbox_continuation_params.make_unboxing_decisions
                     handler_typing_env ~arg_types_by_use_id ~params
                     ~param_types extra_params_and_args
+                | Return | Toplevel_return ->
+                  assert (not is_exn_handler);
+                  handler_typing_env, extra_params_and_args
+                | Exn ->
+                  assert is_exn_handler;
+                  handler_typing_env, extra_params_and_args
               in
               let dacc =
                 DA.create (DE.with_typing_env denv typing_env) cont_uses_env r
