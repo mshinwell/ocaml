@@ -411,13 +411,10 @@ let simplify_named0 dacc ~(bound_vars : Bindable_let_bound.t)
     let term, env_extension, dacc =
       Simplify_primitive.simplify_primitive dacc prim dbg ~result_var:bound_var
     in
-    let original_dacc =
+    let dacc =
       DA.map_denv dacc ~f:(fun denv ->
         let kind = P.result_kind' prim in
-        DE.add_variable denv bound_var (T.unknown kind))
-    in
-    let dacc =
-      DA.map_denv original_dacc ~f:(fun denv ->
+        let denv = DE.add_variable denv bound_var (T.unknown kind) in
         DE.extend_typing_environment denv env_extension)
     in
     (* CR mshinwell: Add check along the lines of: types are unknown
