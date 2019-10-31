@@ -102,7 +102,7 @@ let rec set_lower_bound_aux env stack =
         else begin
           let typ = Cmm.lub_component r.typ bound in
           assert (typ <> r.typ);
-          Format.fprintf Format.err_formatter
+          Format.ifprintf Format.err_formatter
             "WARNING ! adjusted reg %a: %a -> %a@\n  because of %a@."
             Printmach.reg r Printcmm.machtype_component r.typ Printcmm.machtype_component typ
             print_reason reason;

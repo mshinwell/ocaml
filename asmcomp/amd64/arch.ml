@@ -163,9 +163,6 @@ let infer_specific arg res = function
   | Isextend32 | Izextend32 ->
       [ `Bound (arg.(0), Cmm.Int);
         `Bound (res.(0), Cmm.Int) ]
-  | Izextend32 ->
-      [ `Bound (arg.(0), Cmm.Int);
-        `Bound (res.(0), Cmm.Int) ]
 
 let win64 =
   match Config.system with
