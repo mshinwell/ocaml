@@ -362,6 +362,13 @@ let close_primitive t env ~let_bound_var named (prim : Lambda.primitive) ~args
       | Some exn_continuation -> exn_continuation
     in
     let exn_handler = Exn_continuation.exn_handler exn_continuation in
+    let args =
+      let extra_args =
+        List.map (fun (simple, _kind) -> simple)
+          (Exn_continuation.extra_args exn_continuation)
+      in
+      args @ extra_args
+    in
     let raise_kind = Some (LC.raise_kind raise_kind) in
     let trap_action = Trap_action.Pop { exn_handler; raise_kind; } in
     let apply_cont = Flambda.Apply_cont.create ~trap_action exn_handler ~args in
