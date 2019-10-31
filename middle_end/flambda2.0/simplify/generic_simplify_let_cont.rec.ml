@@ -66,7 +66,7 @@ module Make (CHL : Continuation_handler_like_intf.S) = struct
             | Uses { handler_typing_env; arg_types_by_use_id;
                      extra_params_and_args; } ->
                let typing_env, extra_params_and_args =
-                if is_exn_handler then handler_typing_env, EPA.empty
+                if is_exn_handler then handler_typing_env, extra_params_and_args
                 else
                   let param_types = TE.find_params handler_typing_env params in
                   Unbox_continuation_params.make_unboxing_decisions

@@ -243,6 +243,9 @@ let with_continuations t continuation exn_continuation =
     exn_continuation;
   }
 
+let with_exn_continuation t exn_continuation =
+  { t with exn_continuation; }
+
 let with_call_kind t call_kind =
   { t with call_kind; }
 

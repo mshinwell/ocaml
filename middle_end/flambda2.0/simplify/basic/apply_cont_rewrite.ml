@@ -123,12 +123,35 @@ let rewrite_use t id apply_cont =
         | Already_in_scope simple -> simple)
       extra_args_list
   in
-  let args = extra_args @ args in
+  let args = args @ extra_args in
   let apply_cont =
     Flambda.Apply_cont.update_args apply_cont ~args
   in
   let expr = Flambda.Expr.create_apply_cont apply_cont in
   expr, apply_cont, args
+
+(* CR mshinwell: tidy up *)
+let rewrite_exn_continuation t id exn_cont =
+  let exn_cont_arity = Exn_continuation.arity exn_cont in
+  let original_params_arity = List.map KP.kind t.original_params in
+  if not (Flambda_arity.equal exn_cont_arity original_params_arity) then begin
+    Misc.fatal_errorf "Arity of exception continuation %a does not \
+        match@ [original_params] (%a)"
+      Exn_continuation.print exn_cont
+      KP.List.print t.original_params
+  end;
+  assert (List.length exn_cont_arity >= 1);
+  let extra_args_list = extra_args t id in
+  assert (List.compare_lengths t.used_extra_params extra_args_list = 0);
+  let extra_args =
+    List.map2
+      (fun param (arg : Continuation_extra_params_and_args.Extra_arg.t) ->
+        match arg with
+        | Already_in_scope simple -> simple, KP.kind param)
+      t.used_extra_params extra_args_list
+  in
+  Exn_continuation.create ~exn_handler:(Exn_continuation.exn_handler exn_cont)
+    ~extra_args
 
 let original_params_arity t =
   KP.List.arity t.original_params

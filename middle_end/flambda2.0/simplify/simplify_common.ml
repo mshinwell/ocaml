@@ -129,6 +129,18 @@ let add_wrapper_for_fixed_arity_apply uacc ~use_id arity apply =
       let apply = Apply.with_continuations apply return_cont exn_cont in
       Expr.create_apply apply)
 
+let update_exn_continuation_extra_args uacc ~exn_cont_use_id apply =
+  let exn_cont_rewrite =
+    UE.find_apply_cont_rewrite (UA.uenv uacc)
+      (Exn_continuation.exn_handler (Apply.exn_continuation apply))
+  in
+  match exn_cont_rewrite with
+  | None -> apply
+  | Some rewrite ->
+    Apply.with_exn_continuation apply
+      (Apply_cont_rewrite.rewrite_exn_continuation rewrite exn_cont_use_id
+        (Apply.exn_continuation apply))
+
 (* CR mshinwell: Should probably move [Reachable] into the [Flambda] recursive
    loop and then move this into [Expr].  Maybe this could be tidied up a bit
    too? *)

@@ -18,9 +18,6 @@
 
 open! Simplify_import
 
-(* CR mshinwell: Make sure for exception continuations that we don't
-   disturb the property that the exception bucket must be the first param. *)
-
 (* CR mshinwell: Add a command-line flag. *)
 let max_unboxing_depth = 1
 
