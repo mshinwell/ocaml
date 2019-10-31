@@ -33,12 +33,14 @@ let simplify_toplevel dacc expr ~return_continuation ~return_arity
         in
         cont_uses_env, UA.create uenv r)
     with Misc.Fatal_error -> begin
-      Format.eprintf "\n%sContext is:%s simplifying toplevel expression:@ %a@ \
-          in downwards accumulator:@ %a"
-        (Flambda_colours.error ())
-        (Flambda_colours.normal ())
-        Expr.print expr
-        DA.print dacc;
+      if !Clflags.flambda2_context_on_error then begin
+        Format.eprintf "\n%sContext is:%s simplifying toplevel \
+            expression:@ %a@ in downwards accumulator:@ %a"
+          (Flambda_colours.error ())
+          (Flambda_colours.normal ())
+          Expr.print expr
+          DA.print dacc
+      end;
       raise Misc.Fatal_error
     end
   in

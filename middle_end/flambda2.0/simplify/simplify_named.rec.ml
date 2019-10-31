@@ -182,19 +182,21 @@ let simplify_function dacc closure_id function_decl ~all_function_decls_in_set
           in
           function_decl, r
         | exception Misc.Fatal_error ->
-          Format.eprintf "\n%sContext is:%s simplifying function \
-              with closure ID %a,@ params %a,@ return continuation %a,@ \
-              exn continuation %a,@ my_closure %a,@ body:@ %a@ \
-              with downwards accumulator:@ %a\n"
-            (Flambda_colours.error ())
-            (Flambda_colours.normal ())
-            Closure_id.print closure_id
-            Kinded_parameter.List.print params
-            Continuation.print return_continuation
-            Exn_continuation.print exn_continuation
-            Variable.print my_closure
-            Expr.print body
-            DA.print dacc;
+          if !Clflags.flambda2_context_on_error then begin
+            Format.eprintf "\n%sContext is:%s simplifying function \
+                with closure ID %a,@ params %a,@ return continuation %a,@ \
+                exn continuation %a,@ my_closure %a,@ body:@ %a@ \
+                with downwards accumulator:@ %a\n"
+              (Flambda_colours.error ())
+              (Flambda_colours.normal ())
+              Closure_id.print closure_id
+              Kinded_parameter.List.print params
+              Continuation.print return_continuation
+              Exn_continuation.print exn_continuation
+              Variable.print my_closure
+              Expr.print body
+              DA.print dacc
+          end;
           raise Misc.Fatal_error)
   in
   let function_decl = FD.update_params_and_body function_decl params_and_body in
@@ -434,12 +436,14 @@ let simplify_named0 dacc ~(bound_vars : Bindable_let_bound.t)
 let simplify_named dacc ~bound_vars named =
   try simplify_named0 dacc ~bound_vars named
   with Misc.Fatal_error -> begin
-    Format.eprintf "\n%sContext is:%s simplifying [Let] binding@ %a =@ %a@ \
-        with downwards accumulator:@ %a\n"
-      (Flambda_colours.error ())
-      (Flambda_colours.normal ())
-      Bindable_let_bound.print bound_vars
-      Named.print named
-      DA.print dacc;
+    if !Clflags.flambda2_context_on_error then begin
+      Format.eprintf "\n%sContext is:%s simplifying [Let] binding@ %a =@ %a@ \
+          with downwards accumulator:@ %a\n"
+        (Flambda_colours.error ())
+        (Flambda_colours.normal ())
+        Bindable_let_bound.print bound_vars
+        Named.print named
+        DA.print dacc
+    end;
     raise Misc.Fatal_error
   end

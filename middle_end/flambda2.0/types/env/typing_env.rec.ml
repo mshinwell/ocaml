@@ -845,10 +845,12 @@ let get_canonical_simple0 t ?min_name_mode simple : _ Or_bottom.t * _ =
       Aliases.get_canonical_element (aliases t) alias
         ~min_order_within_equiv_class
     with Misc.Fatal_error -> begin
-      Format.eprintf "\n%sContext is:%s typing environment@ %a\n"
-        (Flambda_colours.error ())
-        (Flambda_colours.normal ())
-        print t;
+      if !Clflags.flambda2_context_on_error then begin
+        Format.eprintf "\n%sContext is:%s typing environment@ %a\n"
+          (Flambda_colours.error ())
+          (Flambda_colours.normal ())
+          print t
+      end;
       raise Misc.Fatal_error
     end
   in 

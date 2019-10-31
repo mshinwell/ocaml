@@ -56,14 +56,16 @@ let add_use t kind ~typing_env_at_use id ~arg_types =
       uses = use :: t.uses;
     }
   with Misc.Fatal_error -> begin
-    Format.eprintf "\n%sContext is:%s adding use of %a with \
-          arg types@ (%a);@ existing uses:@ %a; environment:@ %a"
-      (Flambda_colours.error ())
-      (Flambda_colours.normal ())
-      Continuation.print t.continuation
-      (Format.pp_print_list ~pp_sep:Format.pp_print_space T.print) arg_types
-      print t
-      TE.print typing_env_at_use;
+    if !Clflags.flambda2_context_on_error then begin
+      Format.eprintf "\n%sContext is:%s adding use of %a with \
+            arg types@ (%a);@ existing uses:@ %a; environment:@ %a"
+        (Flambda_colours.error ())
+        (Flambda_colours.normal ())
+        Continuation.print t.continuation
+        (Format.pp_print_list ~pp_sep:Format.pp_print_space T.print) arg_types
+        print t
+        TE.print typing_env_at_use
+    end;
     raise Misc.Fatal_error
   end
 
