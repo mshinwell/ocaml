@@ -233,7 +233,7 @@ let block_load ?(dbg=Debuginfo.none) kind block index =
   match array_kind_of_block_access kind with
   | Lambda.Pintarray -> int_array_ref block index dbg
   | Lambda.Paddrarray -> addr_array_ref block index dbg
-  | Lambda.Pfloatarray -> float_array_ref block index dbg
+  | Lambda.Pfloatarray -> unboxed_float_array_ref block index dbg
   | Lambda.Pgenarray ->
       ite ~dbg (is_addr_array_ptr block dbg)
         ~then_:(addr_array_ref block index dbg) ~then_dbg:dbg
@@ -249,7 +249,7 @@ let block_set ?(dbg=Debuginfo.none) kind init block index value =
   | Pintarray ->
       return_unit dbg (int_array_set block index value dbg)
   | Pfloatarray ->
-      return_unit dbg (float_array_set block index (unbox_float dbg value) dbg)
+      return_unit dbg (float_array_set block index value dbg)
   | Paddrarray ->
       return_unit dbg (addr_array_store init block index value dbg)
   | Pgenarray ->

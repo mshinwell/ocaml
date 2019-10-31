@@ -168,7 +168,7 @@ let calling_conventions first_int last_int first_float last_float make_stack
     match arg.(i).typ with
     | Val | Int | Addr as ty ->
         if !int <= last_int then begin
-          loc.(i) <- phys_reg !int;
+          loc.(i) <- Reg.at_location ty (Reg !int);
           incr int
         end else begin
           loc.(i) <- stack_slot (make_stack !ofs) ty;
@@ -237,7 +237,7 @@ let win64_loc_external_arguments arg =
     match arg.(i).typ with
     | Val | Int | Addr as ty ->
         if !reg < 4 then begin
-          loc.(i) <- phys_reg win64_int_external_arguments.(!reg);
+          loc.(i) <- Reg.at_location ty (Reg win64_int_external_arguments.(!reg));
           incr reg
         end else begin
           loc.(i) <- stack_slot (Outgoing !ofs) ty;
