@@ -105,8 +105,8 @@ let simplify_variadic_primitive dacc
   | Not_applied dacc ->
     match S.simplify_simples dacc args ~min_name_mode with
     | Bottom ->
-      let kind = P.result_kind_of_variadic_primitive' prim in
-      invalid (T.bottom kind)
+      let result_kind = P.result_kind_of_variadic_primitive' prim in
+      invalid (T.bottom result_kind)
     | Ok args_with_tys ->
       match prim with
       | Make_block ((Full_of_values _) as make_block_kind, mutable_or_immutable) ->

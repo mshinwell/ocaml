@@ -369,8 +369,9 @@ let simplify_unary_primitive dacc (prim : P.unary_primitive)
   | Invalid ty -> invalid ty
   | Applied result -> result
   | Not_applied dacc ->
+    let result_kind = P.result_kind_of_unary_primitive' prim in
     match S.simplify_simple dacc arg ~min_name_mode with
-    | Bottom, ty -> invalid ty
+    | Bottom, _arg_ty -> invalid (T.bottom result_kind)
     | Ok arg, arg_ty ->
       let original_prim : P.t = Unary (prim, arg) in
       let original_term = Named.create_prim original_prim dbg in
@@ -412,8 +413,7 @@ let simplify_unary_primitive dacc (prim : P.unary_primitive)
              still be checked.  Same for binary/ternary/etc. *)
           fun dacc ~original_term:_ ~arg ~arg_ty:_ ~result_var:_ ->
             let named = Named.create_prim (Unary (prim, arg)) dbg in
-            let kind = P.result_kind_of_unary_primitive' prim in
-            let ty = T.unknown kind in
+            let ty = T.unknown result_kind in
             let env_extension = TEE.one_equation (Name.var result_var') ty in
             Reachable.reachable named, env_extension, dacc
       in

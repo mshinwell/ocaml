@@ -931,11 +931,12 @@ let simplify_binary_primitive dacc (prim : P.binary_primitive)
   | Invalid ty -> invalid ty
   | Applied result -> result
   | Not_applied dacc ->
+    let result_kind = P.result_kind_of_binary_primitive' prim in
     match S.simplify_simple dacc arg1 ~min_name_mode with
-    | Bottom, ty -> invalid ty
+    | Bottom, _arg1_ty -> invalid (T.bottom result_kind)
     | Ok arg1, arg1_ty ->
       match S.simplify_simple dacc arg2 ~min_name_mode with
-      | Bottom, ty -> invalid ty
+      | Bottom, _arg2_ty -> invalid (T.bottom result_kind)
       | Ok arg2, arg2_ty ->
         let original_prim : P.t = Binary (prim, arg1, arg2) in
         let original_term = Named.create_prim original_prim dbg in
@@ -982,8 +983,7 @@ let simplify_binary_primitive dacc (prim : P.binary_primitive)
             fun dacc ~original_term:_ dbg ~arg1 ~arg1_ty:_ ~arg2 ~arg2_ty:_
                 ~result_var:_ ->
               let named = Named.create_prim (Binary (prim, arg1, arg2)) dbg in
-              let kind = P.result_kind_of_binary_primitive' prim in
-              let ty = T.unknown kind in
+              let ty = T.unknown result_kind in
               let env_extension = TEE.one_equation (Name.var result_var') ty in
               Reachable.reachable named, env_extension, dacc
         in
