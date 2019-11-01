@@ -638,6 +638,9 @@ end = struct
     | Add
     | Mul
 
+  (* To be certain of correctness we restrict identities on floating-point
+     numbers to those that preserve the _bit pattern_. *)
+
   let symmetric_op_one_side_unknown (op : symmetric_op) ~this_side
         : F.t binary_arith_outcome_for_one_side_only =
     match op with
