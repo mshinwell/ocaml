@@ -33,27 +33,35 @@ let (|>>) (x, y) f = (x, f y)
 
 (* XXX *)
 module Flambda2_backend = struct
-  let symbol_for_global' id =
+  let symbol_for_global' ?comp_unit id =
+    let comp_unit =
+      match comp_unit with
+      | None -> Flambda2.Compilation_unit.get_current_exn ()
+      | Some comp_unit -> comp_unit
+    in
     Flambda2.Symbol.unsafe_create
-      (Flambda2.Compilation_unit.get_current_exn ())
+      comp_unit
       (Flambda2.Linkage_name.create (Compilenv.symbol_for_global id))
 
   let closure_symbol _ = failwith "Not yet implemented"
 
-  let really_import_approx _ = failwith "Not yet implemented"
-  let import_symbol _ = failwith "Not yet implemented"
-
   let division_by_zero =
-    symbol_for_global' Predef.ident_division_by_zero
+    symbol_for_global'
+      ~comp_unit:(Flambda2.Compilation_unit.predefined_exception ())
+      Predef.ident_division_by_zero
 
   let invalid_argument =
-    symbol_for_global' Predef.ident_invalid_argument
+    symbol_for_global'
+      ~comp_unit:(Flambda2.Compilation_unit.predefined_exception ())
+      Predef.ident_invalid_argument
 
   let all_predefined_exception_symbols =
     Flambda2.Symbol.Set.of_list [
       division_by_zero;
       invalid_argument;
     ] (* CR mshinwell: and the rest... *)
+
+  let symbol_for_global' id : Flambda2.Symbol.t = symbol_for_global' id
 
   let size_int = Arch.size_int
   let big_endian = Arch.big_endian

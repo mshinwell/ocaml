@@ -97,7 +97,7 @@
  (name ocamlmiddleend)
  (wrapped false)
  (flags (:standard -principal -nostdlib))
- (libraries stdlib ocamlcommon)
+ (libraries stdlib ocamlcommon flambda2)
  (modules_without_implementation
    cmx_format cmxs_format backend_intf inlining_decision_intf
    simplify_boxed_integer_ops_intf)
@@ -157,7 +157,8 @@
  (name ocamloptcomp)
  (wrapped false)
  (flags (:standard -principal -nostdlib))
- (libraries stdlib ocamlcommon ocamlmiddleend ocamloptcommon flambda2)
+ (libraries stdlib ocamlcommon ocamlmiddleend ocamloptcommon flambda2
+            flambda2_to_cmm)
  (modules
    ;; asmcomp/
    afl_instrument asmgen asmlibrarian asmlink asmpackager branch_relaxation

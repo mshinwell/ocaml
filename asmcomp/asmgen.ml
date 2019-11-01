@@ -202,7 +202,7 @@ let compile_implementation2 ?toplevel ~backend ~filename ~prefixname ~size
         (middle_end : middle_end2) ~backend ~size ~filename ~prefixname
           ~ppf_dump ~module_ident ~module_initializer
       in
-      end_gen_implementation ?toplevel ~ppf_dump Flambda2.Un_cps.program
+      end_gen_implementation ?toplevel ~ppf_dump Flambda2_to_cmm.Un_cps.program
         translated_program)
 
 let compile_implementation_flambda ?toplevel ~prefixname
@@ -215,7 +215,8 @@ let compile_implementation_flambda ?toplevel ~prefixname
   compile_unit asmfile !keep_asm_file (prefixname ^ ext_obj)
     (fun () ->
       Ident.Set.iter Compilenv.require_global required_globals;
-      end_gen_implementation ?toplevel ~ppf_dump Flambda2.Un_cps.program program)
+      end_gen_implementation ?toplevel ~ppf_dump
+        Flambda2_to_cmm.Un_cps.program program)
 
 (* Error report *)
 

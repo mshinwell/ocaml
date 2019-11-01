@@ -116,6 +116,10 @@ let make_symbol ?(unitname = current_unit.ui_symbol) idopt =
 let current_unit_linkage_name () =
   Linkage_name.create (make_symbol ~unitname:current_unit.ui_symbol None)
 
+let current_unit_linkage_name_flambda2 () =
+  Flambda2.Linkage_name.create
+    (make_symbol ~unitname:current_unit.ui_symbol None)
+
 let reset ?packname name =
   Hashtbl.clear global_infos_table;
   Set_of_closures_id.Tbl.clear imported_sets_of_closures_table;
@@ -139,7 +143,13 @@ let reset ?packname name =
       (Ident.create_persistent name)
       (current_unit_linkage_name ())
   in
-  Compilation_unit.set_current compilation_unit
+  Compilation_unit.set_current compilation_unit;
+  let compilation_unit =
+    Flambda2.Compilation_unit.create
+      (Ident.create_persistent name)
+      (current_unit_linkage_name_flambda2 ())
+  in
+  Flambda2.Compilation_unit.set_current compilation_unit
 
 let current_unit_infos () =
   current_unit

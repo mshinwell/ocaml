@@ -14,7 +14,8 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-open! Flambda
+open! Flambda2
+open! Flambda.Import
 
 (* Mappings from elements of a closure to offsets. *)
 

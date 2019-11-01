@@ -55,11 +55,11 @@ module Return_cont_handler = struct
   (* Silence warning 37. *)
   let _ = Unreachable { arity = []; }
   let _ = Apply_cont_with_constant_arg {
-    cont = Continuation.create ();
+    cont = Continuation.dummy;
     arg = Tagged_immediate Immediate.zero;
     arity = [];
   }
-  let _ = Alias_for { arity = []; alias_for = Continuation.create (); }
+  let _ = Alias_for { arity = []; alias_for = Continuation.dummy; }
 
   let arity t = KP.List.arity t.computed_values
 
@@ -97,11 +97,11 @@ module Exn_cont_handler = struct
   (* Silence warning 37. *)
   let _ = Unreachable { arity = []; }
   let _ = Apply_cont_with_constant_arg {
-    cont = Continuation.create ();
+    cont = Continuation.dummy;
     arg = Tagged_immediate Immediate.zero;
     arity = [];
   }
-  let _ = Alias_for { arity = []; alias_for = Continuation.create (); }
+  let _ = Alias_for { arity = []; alias_for = Continuation.dummy; }
 
   let arity _t = [K.value]
 
