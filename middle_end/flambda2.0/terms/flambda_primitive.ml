@@ -739,9 +739,6 @@ let binary_primitive_eligible_for_cse p =
   | Int_arith _
   | Int_shift _
   | Int_comp _  -> true
-    (* CR mshinwell: Can changing rounding mode affect the result of
-       comparisons in any way?  If not, we could return [true] for
-       [Float_comp]. *)
     (* CR mshinwell: Elsewhere, we don't directly depend on [Clflags].
        Maybe that's a mistake? *)
   | Float_arith _
