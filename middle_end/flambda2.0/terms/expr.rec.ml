@@ -130,16 +130,23 @@ type let_creation_result =
 
 let create_singleton_let (bound_var : Var_in_binding_pos.t) defining_expr body
       : t * let_creation_result =
+  let free_names_of_body = free_names body in
+  let print_result = ref false in
   begin match !Clflags.dump_flambda_let with
   | None -> ()
   | Some stamp ->
     Variable.debug_when_stamp_matches (Var_in_binding_pos.var bound_var) ~stamp
       ~f:(fun () ->
-        Printf.eprintf "Creation of [Let] with stamp %d:\n%s\n%!"
+        Format.eprintf "Creation of [Let] with stamp %d:\n%s\n\
+            Bound to: %a Defining_expr: %a@ Body free names:@ %a\nBody:@ %a\n%!"
           stamp
-          (Printexc.raw_backtrace_to_string (Printexc.get_callstack max_int)))
+          (Printexc.raw_backtrace_to_string (Printexc.get_callstack max_int))
+          Var_in_binding_pos.print bound_var
+          Named.print defining_expr
+          Name_occurrences.print free_names_of_body
+          Expr.print body;
+        print_result := true)
   end;
-  let free_names_of_body = free_names body in
   (* CR mshinwell: [let_creation_result] should really be some kind of
      "benefit" type. *)
   let bound_var, keep_binding, let_creation_result =
@@ -271,6 +278,9 @@ Format.eprintf "Free names %a for new let expr:@ %a\n%!"
         free_names = Ok free_names;
       }
     in
+    if !print_result then begin
+      Format.eprintf "Creation result:@ %a\n%!" print t
+    end;
     t, Nothing_deleted
 
 let create_set_of_closures_let ~closure_vars defining_expr body
