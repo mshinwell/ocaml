@@ -16,11 +16,10 @@
 
 (** Representation of conditional control flow: the [Switch] expression.
 
-    Scrutinees of [Switch]es are [Immediate]s of kind [Fabricated]---not
-    regular integers or similar. There are no default cases. Switches always
-    have at least two cases.
+    Scrutinees of [Switch]es are of kind [Naked_immediate]. There are no
+    default cases. Switches always have at least two cases.
 *)
-
+    
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 type t
