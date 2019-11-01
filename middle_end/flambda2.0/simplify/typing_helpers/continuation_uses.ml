@@ -122,12 +122,12 @@ Format.eprintf "uses for %a\n%!" Continuation.print t.continuation;
 Format.eprintf "Unknown at or later than %a\n%!"
   Scope.print (Scope.next definition_scope_level);
 *)
-    let handler_typing_env, extra_params_and_args =
+    let handler_typing_env, extra_params_and_args, is_single_inlinable_use =
       match use_envs_with_ids with
       | [use_env, _, Inlinable, _] ->
         (* A single inlinable use will be inlined out by the simplifier, so
            avoid any join-related computations. *)
-        use_env, Continuation_extra_params_and_args.empty
+        use_env, Continuation_extra_params_and_args.empty, true
       | [] | [_, _, Non_inlinable, _]
       | (_, _, (Inlinable | Non_inlinable), _) :: _ ->
         let env_extension, extra_params_and_args =
@@ -148,7 +148,7 @@ Format.eprintf "The extra params and args are:@ %a\n%!"
             ~params:extra_params_and_args.extra_params
           |> TE.add_env_extension ~env_extension
         in
-        handler_env, extra_params_and_args
+        handler_env, extra_params_and_args, false
     in
     let arg_types_by_use_id =
       List.fold_left (fun args use ->
@@ -165,4 +165,5 @@ Format.eprintf "The extra params and args are:@ %a\n%!"
       handler_typing_env;
       arg_types_by_use_id;
       extra_params_and_args;
+      is_single_inlinable_use;
     }
