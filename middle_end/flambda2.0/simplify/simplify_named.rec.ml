@@ -250,6 +250,7 @@ let simplify_set_of_closures0 dacc ~result_dacc set_of_closures
       fun_types
       Name_in_binding_pos.Map.empty
   in
+  (* XXX Maybe [my_closure] is missing here... *)
   let dacc =
     DA.map_denv (DA.with_r result_dacc r) ~f:(fun denv ->
       let denv =
