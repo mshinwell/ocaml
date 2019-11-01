@@ -64,9 +64,12 @@ module Make (CHL : Continuation_handler_like_intf.S) = struct
               let user_data, uacc = k cont_uses_env r in
               cont_handler, user_data, uacc
             | Uses { handler_typing_env; arg_types_by_use_id;
-                     extra_params_and_args; } ->
+                     extra_params_and_args; is_single_inlinable_use; } ->
               let typing_env, extra_params_and_args =
                 match Continuation.sort cont with
+                | Normal when is_single_inlinable_use ->
+                  assert (not is_exn_handler);
+                  handler_typing_env, extra_params_and_args
                 | Normal ->
                   assert (not is_exn_handler);
                   let param_types = TE.find_params handler_typing_env params in
