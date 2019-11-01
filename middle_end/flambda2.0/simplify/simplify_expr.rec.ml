@@ -94,14 +94,19 @@ Format.eprintf "About to simplify handler %a, params %a, EPA %a\n%!"
     *)
     let free_names = Expr.free_names handler in
     let used_params =
-      (* CR mshinwell: See note in Un_cps about this.  We need to fix that
-         so it can accept exception continuations with any number of
-         parameters; then this can be deleted. *)
-      if Continuation.is_exn cont then params
-      else
-        List.filter (fun param ->
-            Name_occurrences.mem_var free_names (KP.var param))
-          params
+      let first = ref true in
+      List.filter (fun param ->
+          (* CR mshinwell: We should have a robust means of propagating which
+             parameter is the exception bucket.  Then this hack can be
+             removed. *)
+          if !first && Continuation.is_exn cont then begin
+            first := false;
+            true
+          end else begin
+            first := false;
+            Name_occurrences.mem_var free_names (KP.var param)
+          end)
+        params
     in
     let used_extra_params =
       List.filter (fun extra_param ->
