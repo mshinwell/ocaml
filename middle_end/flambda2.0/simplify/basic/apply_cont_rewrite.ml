@@ -130,7 +130,9 @@ let rewrite_use t id apply_cont =
   let expr = Flambda.Expr.create_apply_cont apply_cont in
   expr, apply_cont, args
 
-(* CR mshinwell: tidy up *)
+(* CR mshinwell: tidy up.
+   Also remove confusion between "extra args" as added by e.g. unboxing and
+   "extra args" as in [Exn_continuation]. *)
 let rewrite_exn_continuation t id exn_cont =
   let exn_cont_arity = Exn_continuation.arity exn_cont in
   let original_params_arity = List.map KP.kind t.original_params in
@@ -141,15 +143,26 @@ let rewrite_exn_continuation t id exn_cont =
       KP.List.print t.original_params
   end;
   assert (List.length exn_cont_arity >= 1);
-  let extra_args_list = extra_args t id in
-  assert (List.compare_lengths t.used_extra_params extra_args_list = 0);
-  let extra_args =
+  let pre_existing_extra_params_with_args =
+    List.combine (List.tl t.original_params)
+      (Exn_continuation.extra_args exn_cont)
+  in
+  let extra_args0 =
+    List.filter_map (fun (pre_existing_extra_param, arg) ->
+        if KP.Set.mem pre_existing_extra_param t.used_params then Some arg
+        else None)
+      pre_existing_extra_params_with_args
+  in
+  let extra_args1 =
+    let extra_args_list = extra_args t id in
+    assert (List.compare_lengths t.used_extra_params extra_args_list = 0);
     List.map2
       (fun param (arg : Continuation_extra_params_and_args.Extra_arg.t) ->
         match arg with
         | Already_in_scope simple -> simple, KP.kind param)
       t.used_extra_params extra_args_list
   in
+  let extra_args = extra_args0 @ extra_args1 in
   Exn_continuation.create ~exn_handler:(Exn_continuation.exn_handler exn_cont)
     ~extra_args
 
