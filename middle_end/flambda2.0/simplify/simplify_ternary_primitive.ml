@@ -53,14 +53,15 @@ let simplify_ternary_primitive dacc (prim : P.ternary_primitive)
   | Invalid ty -> invalid ty
   | Applied result -> result
   | Not_applied dacc ->
+    let result_kind = P.result_kind_of_ternary_primitive' prim in
     match S.simplify_simple dacc arg1 ~min_name_mode with
-    | Bottom, ty -> invalid ty
+    | Bottom, _arg1_ty -> invalid (T.bottom result_kind)
     | Ok arg1, _arg1_ty ->
       match S.simplify_simple dacc arg2 ~min_name_mode with
-      | Bottom, ty -> invalid ty
+      | Bottom, _arg2_ty -> invalid (T.bottom result_kind)
       | Ok arg2, _arg2_ty ->
         match S.simplify_simple dacc arg3 ~min_name_mode with
-        | Bottom, ty -> invalid ty
+        | Bottom, _arg3_ty -> invalid (T.bottom result_kind)
         | Ok arg3, _arg3_ty ->
           match prim with
           | Block_set _
@@ -68,7 +69,6 @@ let simplify_ternary_primitive dacc (prim : P.ternary_primitive)
             let named =
               Named.create_prim (Ternary (prim, arg1, arg2, arg3)) dbg
             in
-            let kind = P.result_kind_of_ternary_primitive' prim in
-            let ty = T.unknown kind in
+            let ty = T.unknown result_kind in
             let env_extension = TEE.one_equation (Name.var result_var') ty in
             Reachable.reachable named, env_extension, dacc
