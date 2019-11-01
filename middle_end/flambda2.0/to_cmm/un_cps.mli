@@ -14,6 +14,6 @@
 
 (* Translate flambda2 expressions and programs into Cmm *)
 
-val program : Flambda_static.Program.t -> Cmm.phrase list
+val program : Flambda2.Flambda_static.Program.t -> Cmm.phrase list
 (** Translate a program. *)
 

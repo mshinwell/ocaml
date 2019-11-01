@@ -14,6 +14,8 @@
 
 (** Cmm helpers for flambda2 to cmm translation. *)
 
+open Flambda2
+
 (** {2 Useful misc values} *)
 
 val arch32 : bool

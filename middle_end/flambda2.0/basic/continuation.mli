@@ -26,6 +26,8 @@ type sort =
   | Toplevel_return
   | Exn
 
+val dummy : t
+
 val create : ?sort:sort -> unit -> t
 
 val to_int : t -> int

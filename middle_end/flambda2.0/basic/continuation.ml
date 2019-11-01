@@ -77,6 +77,16 @@ include Identifiable.Make (struct
     print (Format.formatter_of_out_channel chan) t
 end)
 
+let dummy =
+  let compilation_unit =
+    Compilation_unit.create (Ident.create_persistent "*dummy*")
+      (Linkage_name.create "*dummy*")
+  in
+  { id = next_raise_count ();
+    compilation_unit;
+    sort = Normal;
+  }
+
 let create ?sort () : t =
   let sort = Option.value sort ~default:Normal in
   { id = next_raise_count ();
