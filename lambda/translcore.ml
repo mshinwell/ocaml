@@ -344,16 +344,21 @@ and transl_exp0 ~scopes e =
         fields representation extended_expression
   | Texp_field(arg, _, lbl) ->
       let targ = transl_exp ~scopes arg in
+      let sem =
+        match lbl.lbl_mut with
+        | Immutable -> Reads_agree
+        | Mutable -> Reads_vary
+      in
       begin match lbl.lbl_repres with
           Record_regular | Record_inlined _ ->
-          Lprim (Pfield lbl.lbl_pos, [targ],
+          Lprim (Pfield (lbl.lbl_pos, sem), [targ],
                  of_raw_location ~scopes e.exp_loc)
         | Record_unboxed _ -> targ
         | Record_float ->
-          Lprim (Pfloatfield lbl.lbl_pos, [targ],
+          Lprim (Pfloatfield (lbl.lbl_pos, sem), [targ],
                  of_raw_location ~scopes e.exp_loc)
         | Record_extension _ ->
-          Lprim (Pfield (lbl.lbl_pos + 1), [targ],
+          Lprim (Pfield (lbl.lbl_pos + 1, sem), [targ],
                  of_raw_location ~scopes e.exp_loc)
       end
   | Texp_setfield(arg, _, lbl, newval) ->
@@ -453,7 +458,8 @@ and transl_exp0 ~scopes e =
       Lapply{ap_should_be_tailcall=false;
              ap_loc=loc;
              ap_func=
-               Lprim(Pfield 0, [transl_class_path loc e.exp_env cl], loc);
+               Lprim(Pfield (0, Reads_vary),
+                     [transl_class_path loc e.exp_env cl], loc);
              ap_args=[lambda_unit];
              ap_inlined=Default_inline;
              ap_specialised=Default_specialise}
@@ -461,7 +467,7 @@ and transl_exp0 ~scopes e =
       let loc = of_raw_location ~scopes e.exp_loc in
       let self = transl_value_path loc e.exp_env path_self in
       let var = transl_value_path loc e.exp_env path in
-      Lprim(Pfield_computed, [self; var], loc)
+      Lprim(Pfield_computed Reads_vary, [self; var], loc)
   | Texp_setinstvar(path_self, path, _, expr) ->
       let loc = of_raw_location ~scopes e.exp_loc in
       let self = transl_value_path loc e.exp_env path_self in
@@ -583,7 +589,7 @@ and transl_exp0 ~scopes e =
           let body, _ =
             List.fold_left (fun (body, pos) id ->
               Llet(Alias, Pgenval, id,
-                   Lprim(Pfield pos, [Lvar oid],
+                   Lprim(Pfield (pos, Reads_agree), [Lvar oid],
                          of_raw_location ~scopes od.open_loc), body),
               pos + 1
             ) (transl_exp ~scopes e, 0)
@@ -872,16 +878,21 @@ and transl_record ~scopes loc env fields repres opt_init_expr =
     let init_id = Ident.create_local "init" in
     let lv =
       Array.mapi
-        (fun i (_, definition) ->
+        (fun i (lbl, definition) ->
            match definition with
            | Kept typ ->
                let field_kind = value_kind env typ in
+               let sem =
+                 match lbl.lbl_mut with
+                 | Immutable -> Reads_agree
+                 | Mutable -> Reads_vary
+               in
                let access =
                  match repres with
-                   Record_regular | Record_inlined _ -> Pfield i
+                   Record_regular | Record_inlined _ -> Pfield (i, sem)
                  | Record_unboxed _ -> assert false
-                 | Record_extension _ -> Pfield (i + 1)
-                 | Record_float -> Pfloatfield i in
+                 | Record_extension _ -> Pfield (i + 1, sem)
+                 | Record_float -> Pfloatfield (i, sem) in
                Lprim(access, [Lvar init_id],
                      of_raw_location ~scopes loc),
                field_kind

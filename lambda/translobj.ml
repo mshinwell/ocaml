@@ -125,8 +125,8 @@ let transl_label_init_flambda f =
 let transl_store_label_init glob size f arg =
   assert(not Config.flambda);
   assert(!Clflags.native_code);
-  method_cache := Lprim(Pfield size,
-                        [Lprim(Pgetglobal glob, [], Loc_unknown)],
+  method_cache := Lprim(Pfield (size, Reads_vary),
+                        [Lprim(Pgetglobal glob, [], Location.none)],
                         Loc_unknown);
   let expr = f arg in
   let (size, expr) =

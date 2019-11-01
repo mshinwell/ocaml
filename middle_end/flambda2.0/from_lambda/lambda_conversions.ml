@@ -224,3 +224,9 @@ let convert_bigarray_layout (layout : L.bigarray_layout) : P.bigarray_layout =
   | Pbigarray_unknown_layout -> Unknown
   | Pbigarray_c_layout -> C
   | Pbigarray_fortran_layout -> Fortran
+
+let convert_field_read_semantics (sem : L.field_read_semantics)
+      : Effects.mutable_or_immutable =
+  match sem with
+  | Reads_agree -> Immutable
+  | Reads_vary -> Mutable

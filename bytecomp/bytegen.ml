@@ -388,10 +388,12 @@ let comp_primitive p args =
     Pgetglobal id -> Kgetglobal id
   | Psetglobal id -> Ksetglobal id
   | Pintcomp cmp -> Kintcomp cmp
-  | Pfield n -> Kgetfield n
-  | Pfield_computed -> Kgetvectitem
+  | Pmakeblock(tag, _mut, _) -> Kmakeblock(List.length args, tag)
+  | Pfield (n, _sem) -> Kgetfield n
+  | Pfield_computed _sem -> Kgetvectitem
   | Psetfield(n, _ptr, _init) -> Ksetfield n
   | Psetfield_computed(_ptr, _init) -> Ksetvectitem
+  | Pfloatfield (n, _sem) -> Kgetfloatfield n
   | Psetfloatfield (n, _init) -> Ksetfloatfield n
   | Pduprecord _ -> Kccall("caml_obj_dup", 1)
   | Pccall p -> Kccall(p.prim_name, p.prim_arity)
