@@ -54,8 +54,8 @@ let print_with_cache ~cache ppf
     | _ -> expr
   in
   pattern_match t ~f:(fun ~bound_vars ~body ->
-    fprintf ppf "@[<hov 1>(@<0>%slet@<0>%s@ @[<v 1>(\
-        @<0>%s%a@<0>%s =@<0>%s@ %a"
+    fprintf ppf "@[<v 1>(@<0>%slet@<0>%s@ (@[<v 0>\
+        @[<hov 1>@<0>%s%a@<0>%s =@<0>%s@ %a@]"
       (Flambda_colours.expr_keyword ())
       (Flambda_colours.normal ())
       (let_bound_var_colour bound_vars)
@@ -64,7 +64,7 @@ let print_with_cache ~cache ppf
       (Flambda_colours.normal ())
       (Named.print_with_cache ~cache) defining_expr;
     let expr = let_body body in
-    fprintf ppf ")@]@ %a)@]"
+    fprintf ppf "@])@ %a)@]"
       (Expr.print_with_cache ~cache) expr)
 
 let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
