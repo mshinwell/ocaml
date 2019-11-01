@@ -85,3 +85,7 @@ val convert_bigarray_kind
 val convert_bigarray_layout
    : Lambda.bigarray_layout
   -> Flambda_primitive.bigarray_layout
+
+val convert_field_read_semantics
+   : Lambda.field_read_semantics
+  -> Effects.mutable_or_immutable

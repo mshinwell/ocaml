@@ -185,9 +185,9 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
   | Pfloatcomp comp, [arg1; arg2] ->
     tag_int (Binary (Float_comp (C.convert_float_comparison comp),
       unbox_float arg1, unbox_float arg2))
-  | Pfield_computed, [obj; field] ->
+  | Pfield_computed sem, [obj; field] ->
     Binary (Block_load (
-      Block (Value Anything), Mutable), obj, field)
+      Block (Value Anything), C.convert_field_read_semantics sem), obj, field)
   | Psetfield_computed (imm_or_pointer, init_or_assign), [obj; field; value] ->
     let access_kind =
       C.convert_access_kind imm_or_pointer
@@ -448,23 +448,20 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
            (Immediate.int (Targetint.OCaml.of_int n)))
     in
     Binary (Int_arith (I.Tagged_immediate, Add), arg, Simple const)
-  | Pfield field, [arg] ->
+  | Pfield (field, sem), [arg] ->
     (* CR mshinwell: Cause fatal error if the field value is < 0.
        We can't do this once we convert to Flambda *)
-    (* CR pchambart: every load is annotated as mutable we must be
-       careful to update that when we know it is not. This should not
-       be an error.
-       We need more type propagations to be precise here *)
     let imm = Immediate.int (Targetint.OCaml.of_int field) in
     let field = Simple.const (Simple.Const.Tagged_immediate imm) in
-    (* CR mshinwell: This currently says [Immutable]! *)
-    Binary (Block_load (Block (Value Anything), Immutable), arg,
+    let mutability = C.convert_field_read_semantics sem in
+    Binary (Block_load (Block (Value Anything), mutability), arg,
       Simple field)
-  | Pfloatfield field, [arg] ->
+  | Pfloatfield (field, sem), [arg] ->
     let imm = Immediate.int (Targetint.OCaml.of_int field) in
     let field = Simple.const (Simple.Const.Tagged_immediate imm) in
+    let mutability = C.convert_field_read_semantics sem in
     box_float
-      (Binary (Block_load (Block Naked_float, Mutable), arg, Simple field))
+      (Binary (Block_load (Block Naked_float, mutability), arg, Simple field))
   | Psetfield (field, immediate_or_pointer, initialization_or_assignment),
     [block; value] ->
     let access_kind = C.convert_access_kind immediate_or_pointer in
@@ -848,7 +845,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
     | Pstring_load_16 _ | Pstring_load_32 _ | Pstring_load_64 _
     | Pbytes_load_16 _ | Pbytes_load_32 _ | Pbytes_load_64 _
     | Pisout | Paddbint _ | Psubbint _ | Pmulbint _ | Pandbint _ | Porbint _
-    | Pxorbint _ | Plslbint _ | Plsrbint _ | Pasrbint _ | Pfield_computed
+    | Pxorbint _ | Plslbint _ | Plsrbint _ | Pasrbint _ | Pfield_computed _
     | Pdivbint _ | Pmodbint _ | Psetfloatfield _ | Pbintcomp _
     | Pbigstring_load_16 _ | Pbigstring_load_32 _ | Pbigstring_load_64 _
     | Parrayrefu (Pgenarray | Paddrarray | Pintarray | Pfloatarray)

@@ -120,8 +120,8 @@ let primitives_table =
     "%loc_LINE", Loc Loc_LINE;
     "%loc_POS", Loc Loc_POS;
     "%loc_MODULE", Loc Loc_MODULE;
-    "%field0", Primitive ((Pfield 0), 1);
-    "%field1", Primitive ((Pfield 1), 1);
+    "%field0", Primitive ((Pfield (0, Reads_vary)), 1);
+    "%field1", Primitive ((Pfield (1, Reads_vary)), 1);
     "%setfield0", Primitive ((Psetfield(0, Pointer, Assignment)), 2);
     "%makeblock", Primitive ((Pmakeblock(0, Immutable, None)), 1);
     "%makemutable", Primitive ((Pmakeblock(0, Mutable, None)), 1);
