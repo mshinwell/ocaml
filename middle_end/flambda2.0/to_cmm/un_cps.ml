@@ -1309,13 +1309,22 @@ let function_decl offsets fun_name _ d =
   let p = Function_declaration.params_and_body d in
   Function_params_and_body.pattern_match p
     ~f:(fun ~return_continuation:k k_exn vars ~body ~my_closure ->
+        try
           let args = function_args vars my_closure body in
           let k_exn = Exn_continuation.exn_handler k_exn in
           let env = Env.mk offsets k k_exn in
           let env, fun_args = var_list env args in
           let fun_body = expr env body in
           let fun_flags = function_flags () in
-          C.fundecl fun_name fun_args fun_body fun_flags fun_dbg)
+          C.fundecl fun_name fun_args fun_body fun_flags fun_dbg
+        with Misc.Fatal_error ->
+          Format.eprintf "\n%sContext is:%s translating function %s to Cmm \
+              with body@ %a\n"
+            (Flambda_colours.error ())
+            (Flambda_colours.normal ())
+            fun_name
+            Expr.print body;
+          raise Misc.Fatal_error)
 
 (* Programs *)
 
