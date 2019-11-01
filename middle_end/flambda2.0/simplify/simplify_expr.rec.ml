@@ -860,7 +860,9 @@ and simplify_apply_cont
 *)
     let dacc, rewrite_id =
       DA.record_continuation_use dacc
-        (AC.continuation apply_cont) Inlinable
+        (AC.continuation apply_cont)
+        (if Option.is_none (Apply_cont.trap_action apply_cont) then Inlinable
+          else Non_inlinable)
         ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
         ~arg_types
     in
