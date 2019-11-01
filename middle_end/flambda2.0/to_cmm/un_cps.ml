@@ -778,11 +778,21 @@ and apply_expr env e =
     let mut_vars =
       Env.get_exn_extra_args env (Exn_continuation.exn_handler k_exn)
     in
+    let extra_args = Exn_continuation.extra_args k_exn in
+    if List.compare_lengths extra_args mut_vars <> 0 then begin
+      Misc.fatal_errorf "Length of [extra_args] in exception continuation %a@ \
+          does not match those in the environment (%a)@ for application \
+          expression:@ %a"
+        Exn_continuation.print k_exn
+        (Format.pp_print_list ~pp_sep:Format.pp_print_space Ident.print)
+        mut_vars
+        Apply_expr.print e
+    end;
     List.fold_left2
       (fun (call, env) (arg, _k) v ->
          let arg, env, _ = simple env arg in
          C.sequence (C.assign v arg) call, env)
-      (call, env) (Exn_continuation.extra_args k_exn) mut_vars
+      (call, env) extra_args mut_vars
   in
   let wrap, env = Env.flush_delayed_lets env in
   wrap (wrap_cont env effs call e)
