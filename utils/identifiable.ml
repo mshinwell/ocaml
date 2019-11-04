@@ -33,7 +33,6 @@ module type Set = sig
   val to_string : t -> string
   val of_list : elt list -> t
   val map : (elt -> elt) -> t -> t
-  val get_singleton : t -> elt option
 end
 
 module type Map = sig
@@ -44,8 +43,6 @@ module type Map = sig
 
   val filter_map : 'a t -> f:(key -> 'a -> 'b option) -> 'b t
   val of_list : (key * 'a) list -> 'a t
-
-  val get_singleton : 'a t -> (key * 'a) option
 
   val disjoint_union :
     ?eq:('a -> 'a -> bool) -> ?print:(Format.formatter -> 'a -> unit) -> 'a t ->
@@ -111,11 +108,6 @@ module Make_map (T : Thing) (Set : Set with module T := T) = struct
   include Map.Make (T)
 
   module Set = Set
-
-  let get_singleton t =
-    match bindings t with
-    | [key, datum] -> Some (key, datum)
-    | _ -> None
 
   let filter_map t ~f =
     fold (fun id v map ->
@@ -244,11 +236,6 @@ module Make_set (T : Thing) = struct
     | t :: q -> List.fold_left (fun acc e -> add e acc) (singleton t) q
 
   let map f s = of_list (List.map f (elements s))
-
-  let get_singleton t =
-    match elements t with
-    | [elt] -> Some elt
-    | _ -> None
 end
 
 module Make_tbl (T : Thing) (Map : Map with module T := T) = struct

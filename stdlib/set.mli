@@ -264,6 +264,8 @@ module type S =
         except perhaps for lists with many duplicated elements.
         @since 4.02.0 *)
 
+    val get_singleton : t -> elt option
+
     (** {1 Iterators} *)
 
     val to_seq_from : elt -> t -> elt Seq.t

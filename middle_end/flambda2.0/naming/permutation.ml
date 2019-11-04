@@ -71,7 +71,7 @@ module Make (N : Identifiable.S) = struct
       backwards = t.forwards;
     }
 
-  let post_swap t n1 n2 =
+  let [@inline always] post_swap t n1 n2 =
     let n1' = apply_backwards t n1 in
     let n2' = apply_backwards t n2 in
     (* CR mshinwell: These next two lines are a major source of allocation *)
@@ -87,7 +87,7 @@ module Make (N : Identifiable.S) = struct
   let is_empty t =
     N.Map.is_empty t.forwards
 
-  let compose ~second ~first =
+  let compose0 ~second ~first =
     let rec compose ~second ~first =
       match N.Map.choose second.forwards with
       | exception Not_found -> first
@@ -99,6 +99,14 @@ module Make (N : Identifiable.S) = struct
     let t = compose ~second ~first in
     t
 
-  let compose_one ~second n1 n2 =
-    post_swap second n1 n2
+  let compose_one ~first n1 n2 =
+    post_swap first n1 n2
+
+  let compose ~second ~first =
+    if is_empty second then first
+    else if is_empty first then second
+    else
+      match N.Map.get_singleton_exn second.forwards with
+      | exception Not_found -> compose0 ~second ~first
+      | n1, n2 -> post_swap first n1 n2
 end
