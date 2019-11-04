@@ -397,6 +397,7 @@ type descr =
 
 let descr (t : t) : descr =
   match t with
+  (* CR mshinwell: This causes quite a lot of allocation *)
   | Name name | Rec_name (name, _) -> Name name
   | Const const -> Const const
 

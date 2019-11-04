@@ -25,8 +25,8 @@ type t = {
 }
 
 let empty =
-  { continuations = Continuations.create ();
-    variables = Variables.create ();
+  { continuations = Continuations.empty;
+    variables = Variables.empty;
   }
 
 let print ppf { continuations; variables; } =
@@ -57,7 +57,7 @@ let compose
 
 let add_variable t var1 var2 =
   { t with
-    variables = Variables.compose_one ~second:t.variables var1 var2;
+    variables = Variables.compose_one ~first:t.variables var1 var2;
   }
 
 let apply_variable t var =
@@ -77,7 +77,7 @@ let apply_name t (name : Name.t) =
 
 let add_continuation t k1 k2 =
   { t with
-    continuations = Continuations.compose_one ~second:t.continuations k1 k2;
+    continuations = Continuations.compose_one ~first:t.continuations k1 k2;
   }
 
 let apply_continuation t k =

@@ -61,6 +61,7 @@ module type S =
     val find_last: (elt -> bool) -> t -> elt
     val find_last_opt: (elt -> bool) -> t -> elt option
     val of_list: elt list -> t
+    val get_singleton : t -> elt option
     val to_seq_from : elt -> t -> elt Seq.t
     val to_seq : t -> elt Seq.t
     val add_seq : elt Seq.t -> t -> t
@@ -510,6 +511,11 @@ module Make(Ord: OrderedType) =
           let c = Ord.compare x v in
           if c = 0 then Some v
           else find_opt x (if c < 0 then l else r)
+
+    let get_singleton t =
+      match t with
+      | Node { l = Empty; v; r = Empty; } -> Some v
+      | Empty | Node _ -> None
 
     let try_join l v r =
       (* [join l v r] can only be called when (elements of l < v <

@@ -44,6 +44,8 @@ module Cached : sig
 
   val var_domain : t -> Variable.Set.t
 
+  val sym_domain : t -> Symbol.Set.t
+
   val add_or_replace_binding
      : t
     -> Name.t
@@ -60,6 +62,7 @@ end = struct
       (Type_grammar.t * Binding_time.t * Name_mode.t) Name.Map.t;
     domain : Name.Set.t;
     var_domain : Variable.Set.t;
+    sym_domain : Symbol.Set.t;
     aliases : Aliases.t;
     cse : Simple.t Flambda_primitive.Eligible_for_cse.Map.t;
   }
@@ -108,6 +111,7 @@ end = struct
     { names_to_types = Name.Map.empty;
       domain = Name.Set.empty;
       var_domain = Variable.Set.empty;
+      sym_domain = Symbol.Set.empty;
       aliases = Aliases.empty;
       cse = Flambda_primitive.Eligible_for_cse.Map.empty;
     }
@@ -115,6 +119,7 @@ end = struct
   let names_to_types t = t.names_to_types
   let domain t = t.domain
   let var_domain t = t.var_domain
+  let sym_domain t = t.sym_domain
   let aliases t = t.aliases
   let cse t = t.cse
 
@@ -131,9 +136,15 @@ end = struct
       | Var var -> Variable.Set.add var t.var_domain
       | Symbol _ -> t.var_domain
     in
+    let sym_domain =
+      match name with
+      | Symbol sym -> Symbol.Set.add sym t.sym_domain
+      | Var _ -> t.sym_domain
+    in
     { names_to_types;
       domain;
       var_domain;
+      sym_domain;
       aliases = new_aliases;
       cse = t.cse;
     }
@@ -770,8 +781,11 @@ let cut t ~unknown_if_defined_at_or_later_than:min_scope =
             defined_symbols = t.defined_symbols;
           }
         in
+        let symbols_still_defined =
+          Cached.sym_domain (One_level.just_after_level current_level)
+        in
         Symbol.Map.fold (fun symbol kind t ->
-            if not (mem t (Name.symbol symbol)) then
+            if not (Symbol.Set.mem symbol symbols_still_defined) then
               add_symbol_definition t symbol kind
             else
               t)

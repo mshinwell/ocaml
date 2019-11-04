@@ -391,8 +391,12 @@ Format.eprintf "add canonical %a:\n%s\n%!"
           E.print element
           print t
     end else begin
-      let canonical_elements = E.Map.add element element t.canonical_elements in
+      let canonical_elements =
+        (* CR mshinwell: Major source of allocation *)
+        E.Map.add element element t.canonical_elements
+      in
       let aliases_of_canonical_elements =
+        (* CR mshinwell: Major source of allocation *)
         E.Map.add element Aliases_of_canonical_element.empty
           t.aliases_of_canonical_elements
       in
