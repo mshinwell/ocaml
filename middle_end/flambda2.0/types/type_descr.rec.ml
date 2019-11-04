@@ -404,7 +404,13 @@ module Make (Head : Type_head_intf.S
             |> add_equation env simple1 (to_type (create_no_alias head))
             |> add_equation env simple2 (to_type (create_equals simple1))
           in
-          create_equals simple1, env_extension
+          (* It makes things easier (to check if the result of [meet] was
+             bottom) to not return "=simple" in the bottom case.  This is ok
+             because no constraint is being dropped; the type cannot be
+             refined any further. *)
+          match head with
+          | Bottom -> bottom (), env_extension
+          | Unknown | Ok _ -> create_equals simple1, env_extension
         end
       | Ok (Some (simple, Name _)), Ok (None | Some (_, Const _)) ->
         begin match meet_head_or_unknown_or_bottom env head1 head2 with
@@ -420,7 +426,9 @@ module Make (Head : Type_head_intf.S
             env_extension
             |> add_equation env simple (to_type (create_no_alias head))
           in
-          create_equals simple, env_extension
+          match head with
+          | Bottom -> bottom (), env_extension
+          | Unknown | Ok _ -> create_equals simple, env_extension
         end
       | Ok (None | Some (_, Const _)), Ok (Some (simple, Name _)) ->
         begin match meet_head_or_unknown_or_bottom env head1 head2 with
@@ -436,7 +444,9 @@ module Make (Head : Type_head_intf.S
             env_extension
             |> add_equation env simple (to_type (create_no_alias head))
           in
-          create_equals simple, env_extension
+          match head with
+          | Bottom -> bottom (), env_extension
+          | Unknown | Ok _ -> create_equals simple, env_extension
         end
 
     let join ~force_to_kind ~to_type typing_env t1 t2 =
