@@ -856,7 +856,7 @@ let simplify_phys_equal (op : P.equality_comparison)
         T.values_structurally_distinct (env, arg1_ty) (env, arg2_ty)
         *)
       in
-      let const bool =
+      let _const bool =
         let env_extension =
           TEE.one_equation result
             (T.this_naked_immediate (Immediate.bool bool))
@@ -865,10 +865,12 @@ let simplify_phys_equal (op : P.equality_comparison)
           env_extension, dacc
       in
       begin match op, physically_equal, physically_distinct with
+(*
       | Eq, true, _ -> const true
       | Neq, true, _ -> const false
       | Eq, _, true -> const false
       | Neq, _, true -> const true
+*)
       | _, _, _ ->
         let env_extension =
           TEE.one_equation result
