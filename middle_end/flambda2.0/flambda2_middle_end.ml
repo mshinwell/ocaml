@@ -78,19 +78,22 @@ let middle_end0 ppf ~prefixname:_ ~backend ~size ~filename
       ~module_ident ~module_initializer =
   Profile.record_call "flambda2.0" (fun () ->
     let prepared_lambda, recursive_static_catches =
-      Profile.record_call ~accumulate:true "prepare_lambda" (fun () ->
+      Profile.record_call "prepare_lambda" (fun () ->
         Prepare_lambda.run module_initializer)
     in
     print_prepared_lambda ppf prepared_lambda;
     let ilambda =
-      Profile.record_call ~accumulate:true "cps_conversion" (fun () ->
+      Profile.record_call "cps_conversion" (fun () ->
         Cps_conversion.lambda_to_ilambda prepared_lambda
           ~recursive_static_catches)
     in
     print_ilambda ppf ilambda;
     let ilambda =
       if ilambda.uses_mutable_variables then begin
-        let ilambda = Eliminate_mutable_vars.run ilambda in
+        let ilambda =
+          Profile.record_call "eliminate_mutable_variables" (fun () ->
+            Eliminate_mutable_vars.run ilambda)
+        in
         print_ilambda_after_mutable_variable_elimination ppf ilambda;
         ilambda
       end else begin
@@ -98,15 +101,21 @@ let middle_end0 ppf ~prefixname:_ ~backend ~size ~filename
       end
     in
     let flambda =
-      Profile.record_call ~accumulate:true "closure_conversion" (fun () ->
+      Profile.record_call "closure_conversion" (fun () ->
         Closure_conversion.ilambda_to_flambda ~backend ~module_ident
           ~size ~filename ilambda)
     in
     print_rawflambda ppf flambda;
     check_invariants flambda;
-    let flambda = Simplify.run ~backend ~round:1 flambda in
+    let flambda =
+      Profile.record_call ~accumulate:true "simplify"
+        (fun () -> Simplify.run ~backend ~round:1 flambda)
+    in
     print_flambda "simplify" ppf flambda;
-    let flambda = Remove_unused_closure_vars.run flambda in
+    let flambda =
+      Profile.record_call ~accumulate:true "remove_unused_closure_vars"
+        (fun () -> Remove_unused_closure_vars.run flambda)
+    in
     print_flambda "remove_unused_closure_vars" ppf flambda;
     flambda)
 

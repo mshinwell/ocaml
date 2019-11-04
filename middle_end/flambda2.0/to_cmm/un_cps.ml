@@ -1346,7 +1346,7 @@ let program_functions offsets p =
   in
   List.map (fun decl -> C.cfunction decl) sorted
 
-let program (p : Flambda_static.Program.t) =
+let program0 (p : Flambda_static.Program.t) =
   let offsets = Un_cps_closure.compute_offsets p in
   let functions = program_functions offsets p in
   let sym, res = program_body offsets [] p.body in
@@ -1354,3 +1354,5 @@ let program (p : Flambda_static.Program.t) =
   let cmm_data = C.flush_cmmgen_state () in
   (C.gc_root_table [symbol sym]) :: data @ cmm_data @ functions @ [entry]
 
+let program p =
+  Profile.record_call "flambda2_to_cmm" (fun () -> program0 p)
