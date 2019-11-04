@@ -295,6 +295,10 @@ module type S =
         @since 4.05
        *)
 
+    val get_singleton : 'a t -> (key * 'a) option
+
+    val get_singleton_exn : 'a t -> key * 'a
+
     val map: ('a -> 'b) -> 'a t -> 'b t
     (** [map f m] returns a map with same domain as [m], where the
        associated value [a] of all bindings of [m] has been

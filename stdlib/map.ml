@@ -56,6 +56,8 @@ module type S =
     val find_first_opt: (key -> bool) -> 'a t -> (key * 'a) option
     val find_last: (key -> bool) -> 'a t -> key * 'a
     val find_last_opt: (key -> bool) -> 'a t -> (key * 'a) option
+    val get_singleton : 'a t -> (key * 'a) option
+    val get_singleton_exn : 'a t -> key * 'a
     val map: ('a -> 'b) -> 'a t -> 'b t
     val mapi: (key -> 'a -> 'b) -> 'a t -> 'b t
     val map_sharing: ('a -> 'a) -> 'a t -> 'a t
@@ -218,6 +220,16 @@ module Make(Ord: OrderedType) = struct
           let c = Ord.compare x v in
           if c = 0 then Some d
           else find_opt x (if c < 0 then l else r)
+
+    let get_singleton t =
+      match t with
+      | Node { l = Empty; v; d; r = Empty; } -> Some (v, d)
+      | Empty | Node _ -> None
+
+    let get_singleton_exn t =
+      match t with
+      | Node { l = Empty; v; d; r = Empty; } -> v, d
+      | Empty | Node _ -> raise Not_found
 
     let rec mem x = function
         Empty ->

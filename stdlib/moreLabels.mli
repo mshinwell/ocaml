@@ -168,6 +168,8 @@ module Map : sig
       val find_first_opt : f:(key -> bool) -> 'a t -> (key * 'a) option
       val find_last : f:(key -> bool) -> 'a t -> key * 'a
       val find_last_opt : f:(key -> bool) -> 'a t -> (key * 'a) option
+      val get_singleton : 'a t -> (key * 'a) option
+      val get_singleton_exn : 'a t -> key * 'a
       val map : f:('a -> 'b) -> 'a t -> 'b t
       val mapi : f:(key -> 'a -> 'b) -> 'a t -> 'b t
       val map_sharing: ('a -> 'a) -> 'a t -> 'a t
@@ -223,6 +225,7 @@ module Set : sig
       val find_last: f:(elt -> bool) -> t -> elt
       val find_last_opt: f:(elt -> bool) -> t -> elt option
       val of_list: elt list -> t
+      val get_singleton : t -> elt option
       val to_seq_from : elt -> t -> elt Seq.t
       val to_seq : t -> elt Seq.t
       val add_seq : elt Seq.t -> t -> t

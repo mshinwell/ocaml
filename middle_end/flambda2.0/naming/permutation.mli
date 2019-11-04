@@ -21,7 +21,7 @@
 module Make (N : Identifiable.S) : sig
   type t
 
-  val create : unit -> t
+  val empty : t
 
   val print : Format.formatter -> t -> unit
 
@@ -31,7 +31,7 @@ module Make (N : Identifiable.S) : sig
 
   val apply : t -> N.t -> N.t
 
-  val compose_one : second:t -> N.t -> N.t -> t
+  val compose_one : first:t -> N.t -> N.t -> t
 
   val compose : second:t -> first:t -> t
 end

@@ -43,7 +43,6 @@ module type Set = sig
   val to_string : t -> string
   val of_list : elt list -> t
   val map : (elt -> elt) -> t -> t
-  val get_singleton : t -> elt option
 end
 
 module type Map = sig
@@ -54,8 +53,6 @@ module type Map = sig
 
   val filter_map : 'a t -> f:(key -> 'a -> 'b option) -> 'b t
   val of_list : (key * 'a) list -> 'a t
-
-  val get_singleton : 'a t -> (key * 'a) option
 
   (** [disjoint_union m1 m2] contains all bindings from [m1] and
       [m2]. If some binding is present in both and the associated
