@@ -263,6 +263,7 @@ Format.eprintf "Deleting binding of %a; free names of body are:@ %a\n%!"
       (* We avoid [Let_expr.free_names] since we already know the free names
          of [body] -- and calling that function would cause an abstraction
          to be opened. *)
+      (* CR mshinwell: This is a major source of allocation *)
       Name_occurrences.union from_defining_expr
         (Name_occurrences.remove_var free_names_of_body
           (Var_in_binding_pos.var bound_var))

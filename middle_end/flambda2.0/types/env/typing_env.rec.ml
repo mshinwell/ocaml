@@ -121,6 +121,7 @@ end = struct
   let add_or_replace_binding t (name : Name.t) ty binding_time
         name_mode ~new_aliases =
     let names_to_types =
+      (* CR mshinwell: Major source of allocation (via Map) *)
       Name.Map.add name (ty, binding_time, name_mode)
         t.names_to_types
     in
