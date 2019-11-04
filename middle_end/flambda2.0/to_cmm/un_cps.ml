@@ -797,9 +797,7 @@ and apply_expr env e =
   let wrap, env = Env.flush_delayed_lets env in
   wrap (wrap_cont env effs call e)
 
-(* CR mshinwell: I've seen (e.g. in List.map) calls to [caml_apply1], which
-   I don't think should exist.  You can just directly call through the
-   first word of the closure. *)
+(* Bare function calls *)
 and apply_call env e =
   let f = Apply_expr.callee e in
   let dbg = Apply_expr.dbg e in

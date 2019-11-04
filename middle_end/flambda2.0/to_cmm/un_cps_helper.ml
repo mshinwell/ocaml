@@ -419,13 +419,8 @@ let direct_call ?(dbg=Debuginfo.none) ty f args =
   Cmm.Cop (Cmm.Capply ty, f :: args, dbg)
 
 let indirect_call ?(dbg=Debuginfo.none) ty f = function
-  (* CR Gbury: does this optimization (found in cmm_helpers),
-               actually matters ? Also, does always using Mutable here
-               (instead of sometimes using Immutable as done in cmm_helpers'
-               mut_from_env) affect perfs ?
   | [arg] ->
-      Cmm.Cop (Cmm.Capply ty, [load Cmm.Word_val Asttypes.Mutable f; arg; f], dbg)
-  *)
+      Cmm.Cop (Cmm.Capply ty, [load Cmm.Word_int Asttypes.Mutable f; arg; f], dbg)
   | args ->
       let arity = List.length args in
       let l = symbol (apply_function_sym arity) :: args @ [f] in
