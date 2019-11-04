@@ -23,7 +23,7 @@ module Ece = Effects_and_coeffects
 (* Notes:
    - an int64 on a 32-bit host is represented across two registers,
      hence most operations on them will actually need to call C primitive
-      that can handle them.
+     that can handle them.
    - int32 on 64 bits are represented as an int64 in the range of
      32-bit integers. Currently we trust flambda2 to insert
      double shifts to clear the higher order 32-bits between operations.
@@ -317,22 +317,16 @@ let binary_int_arith_primitive _env dbg kind op x y =
   | Tagged_immediate, Or  -> C.or_int_caml x y dbg
   | Tagged_immediate, Xor -> C.xor_int_caml x y dbg
   (* Naked ints *)
-  | (Naked_int32 | Naked_int64 | Naked_nativeint), Add ->
-      C.add_int x y dbg
-  | (Naked_int32 | Naked_int64 | Naked_nativeint), Sub ->
-      C.sub_int x y dbg
-  | (Naked_int32 | Naked_int64 | Naked_nativeint), Mul ->
-      C.mul_int x y dbg
+  | (Naked_int32 | Naked_int64 | Naked_nativeint), Add -> C.add_int x y dbg
+  | (Naked_int32 | Naked_int64 | Naked_nativeint), Sub -> C.sub_int x y dbg
+  | (Naked_int32 | Naked_int64 | Naked_nativeint), Mul -> C.mul_int x y dbg
   | (Naked_int32 | Naked_int64 | Naked_nativeint), Div ->
       C.div_int x y Lambda.Unsafe dbg
   | (Naked_int32 | Naked_int64 | Naked_nativeint), Mod ->
       C.mod_int x y Lambda.Unsafe dbg
-  | (Naked_int32 | Naked_int64 | Naked_nativeint), And ->
-      C.and_ ~dbg x y
-  | (Naked_int32 | Naked_int64 | Naked_nativeint), Or ->
-      C.or_ ~dbg x y
-  | (Naked_int32 | Naked_int64 | Naked_nativeint), Xor ->
-      C.xor_ ~dbg x y
+  | (Naked_int32 | Naked_int64 | Naked_nativeint), And -> C.and_ ~dbg x y
+  | (Naked_int32 | Naked_int64 | Naked_nativeint), Or -> C.or_ ~dbg x y
+  | (Naked_int32 | Naked_int64 | Naked_nativeint), Xor -> C.xor_ ~dbg x y
 
 let binary_int_shift_primitive _env dbg kind op x y =
   match (kind : Flambda_kind.Standard_int.t),
@@ -382,22 +376,14 @@ let binary_int_comp_primitive _env dbg kind signed cmp x y =
   | Tagged_immediate, Unsigned, Gt -> C.ugt ~dbg x y
   | Tagged_immediate, Unsigned, Ge -> C.uge ~dbg x y
   (* Naked integers. *)
-  | (Naked_int32|Naked_int64|Naked_nativeint), Signed, Lt ->
-      C.lt ~dbg x y
-  | (Naked_int32|Naked_int64|Naked_nativeint), Signed, Le ->
-      C.le ~dbg x y
-  | (Naked_int32|Naked_int64|Naked_nativeint), Signed, Gt ->
-      C.gt ~dbg x y
-  | (Naked_int32|Naked_int64|Naked_nativeint), Signed, Ge ->
-      C.ge ~dbg x y
-  | (Naked_int32|Naked_int64|Naked_nativeint), Unsigned, Lt ->
-      C.ult ~dbg x y
-  | (Naked_int32|Naked_int64|Naked_nativeint), Unsigned, Le ->
-      C.ule ~dbg x y
-  | (Naked_int32|Naked_int64|Naked_nativeint), Unsigned, Gt ->
-      C.ugt ~dbg x y
-  | (Naked_int32|Naked_int64|Naked_nativeint), Unsigned, Ge ->
-      C.uge ~dbg x y
+  | (Naked_int32|Naked_int64|Naked_nativeint), Signed, Lt -> C.lt ~dbg x y
+  | (Naked_int32|Naked_int64|Naked_nativeint), Signed, Le -> C.le ~dbg x y
+  | (Naked_int32|Naked_int64|Naked_nativeint), Signed, Gt -> C.gt ~dbg x y
+  | (Naked_int32|Naked_int64|Naked_nativeint), Signed, Ge -> C.ge ~dbg x y
+  | (Naked_int32|Naked_int64|Naked_nativeint), Unsigned, Lt -> C.ult ~dbg x y
+  | (Naked_int32|Naked_int64|Naked_nativeint), Unsigned, Le -> C.ule ~dbg x y
+  | (Naked_int32|Naked_int64|Naked_nativeint), Unsigned, Gt -> C.ugt ~dbg x y
+  | (Naked_int32|Naked_int64|Naked_nativeint), Unsigned, Ge -> C.uge ~dbg x y
 
 let binary_float_arith_primitive _env dbg op x y =
   match (op : Flambda_primitive.binary_float_arith_op) with
@@ -563,6 +549,14 @@ let var_list env l =
     ) cmm_vars l in
   env, vars
 
+let split_exn_cont_args k = function
+  | (v, _) :: rest ->
+      v, rest
+  | [] ->
+      Misc.fatal_errorf
+        "Exception continuation %a should have at least one argument"
+        Continuation.print k
+
 (* effects and co-effects *)
 
 let cont_has_one_occurrence k num =
@@ -618,33 +612,36 @@ and let_expr env t =
           let v = Var_in_binding_pos.var v in
           let_expr_aux env v e body
       | Set_of_closures { closure_vars; _ }, Set_of_closures soc ->
-          (* First translate the set of closures, and bind it in the env *)
-          let csoc, env, effs = set_of_closures env soc in
-          let soc_var = Variable.create "*set_of_closures*" in
-          let env = Env.bind_variable env soc_var effs false csoc in
-          (* Then get from the env the cmm variable that was created and bound
-             to the compiled set of closures. *)
-          let soc_cmm_var, env, peff = Env.inline_variable env soc_var in
-          assert (Ece.is_pure peff);
-          (* Add env bindings for all the closure variables. *)
-          let effs = Effects_and_coeffects.read in
-          let env =
-            Closure_id.Map.fold (fun cid v acc ->
-                let v = Var_in_binding_pos.var v in
-                let e =
-                  C.infix_field_address ~dbg: Debuginfo.none
-                    soc_cmm_var (Env.closure_offset env cid)
-                in
-                let_expr_bind body acc v e effs
-              ) closure_vars env in
-          (* The set of closures, as well as the individual closures variables
-             are correctly set in the env, go on translating the body. *)
-          expr env body
+          let_set_of_closures env body closure_vars soc
       | Set_of_closures _, (Simple _ | Prim _) ->
           Misc.fatal_errorf
             "Set_of_closures binding a non-Set_of_closures:@ %a"
             Let.print t
     )
+
+and let_set_of_closures env body closure_vars soc =
+  (* First translate the set of closures, and bind it in the env *)
+  let csoc, env, effs = set_of_closures env soc in
+  let soc_var = Variable.create "*set_of_closures*" in
+  let env = Env.bind_variable env soc_var effs false csoc in
+  (* Then get from the env the cmm variable that was created and bound
+     to the compiled set of closures. *)
+  let soc_cmm_var, env, peff = Env.inline_variable env soc_var in
+  assert (Ece.is_pure peff);
+  (* Add env bindings for all the closure variables. *)
+  let effs = Effects_and_coeffects.read in
+  let env =
+    Closure_id.Map.fold (fun cid v acc ->
+        let v = Var_in_binding_pos.var v in
+        let e =
+          C.infix_field_address ~dbg: Debuginfo.none
+            soc_cmm_var (Env.closure_offset env cid)
+        in
+        let_expr_bind body acc v e effs
+      ) closure_vars env in
+  (* The set of closures, as well as the individual closures variables
+     are correctly set in the env, go on translating the body. *)
+  expr env body
 
 and let_expr_bind body env v cmm_expr effs =
   match decide_inline_let effs v body with
@@ -683,58 +680,74 @@ and let_cont env = function
           let_cont_rec env conts body
         )
 
+(* The bound continuation [k] will try to be inlined. However, if [k] occurs in a
+   trap action, it is not possible to inline it. In those cases, we need to translate
+   [k] as a jump. For that purpose, a reference is used to record whether [k] is used
+   in a trap action, or rather, if [k] is used as a jump continuation, in which case,
+   a handler and a ccatch must be computed. *)
 and let_cont_inline env k h body =
   let args, handler = continuation_handler_split h in
   let env_handler, vars = var_list env args in
   let types = List.map snd vars in
   let id, used_as_jump, env_body = Env.add_inline_cont env types k args handler in
   let body = expr env_body body in
-  match !used_as_jump with
-  | false -> body
-  | true ->
-      let handler_cmm = expr env_handler handler in
-      C.ccatch
-        ~rec_flag:false
-        ~body
-        ~handlers:[C.handler id vars handler_cmm]
+  if not !used_as_jump then
+    body
+  else begin
+    let handler_cmm = expr env_handler handler in
+    C.ccatch
+      ~rec_flag:false
+      ~body
+      ~handlers:[C.handler id vars handler_cmm]
+  end
 
+(* Continuations that are not inlined are translated using a jump:
+   - exceptions continuations use "dynamic" jumps using the
+     raise/trywith cmm mechanism
+   - regular continuations use static jumps, through the
+     exit/catch cmm mechanism *)
 and let_cont_jump env k h body =
   let vars, handle = continuation_handler env h in
   let id, env = Env.add_jump_cont env (List.map snd vars) k in
   if Continuation_handler.is_exn_handler h then
-    let exn_var, extra_params =
-      match vars with
-      | (v, _) :: rest -> v, rest
-      | [] -> Misc.fatal_errorf
-               "Exception continuation %a should have at least one argument"
-               Continuation.print k
-    in
-    let env_body, extra_vars = Env.add_exn_handler env k h in
-    let handler =
-      List.fold_left2
-        (fun handler (v, _) (p, _) -> C.letin p (C.var v) handler)
-        handle extra_vars extra_params
-    in
-    let trywith =
-      C.trywith
-        ~dbg:Debuginfo.none
-        ~kind:(Delayed id)
-        ~body:(expr env_body body)
-        ~exn_var
-        ~handler:handler
-    in
-    let with_provenance =
-      List.map (fun (v, k) -> Backend_var.With_provenance.create v, k)
-        extra_vars
-    in
-    List.fold_left
-      (fun expr (v, k) -> C.letin v (default_of_kind k) expr)
-      trywith with_provenance
+    let_cont_exn env k h body vars handle id
   else
     C.ccatch
       ~rec_flag:false
       ~body:(expr env body)
       ~handlers:[C.handler id vars handle]
+
+(* Exception continuations, translated using delayed trywith blocks.
+   Additionally, exn continuations in flambda2 can have extra args, which
+   are passed through the trywith using mutable cmm variables. Thus the
+   exn handler must first read the contents of thos extra args (eagerly
+   in order to minmize the lifetime of the mutable variables) *)
+and let_cont_exn env k h body vars handle id =
+  let exn_var, extra_params = split_exn_cont_args k vars in
+  let env_body, extra_vars = Env.add_exn_handler env k h in
+  let handler = exn_handler handle extra_vars extra_params in
+  let trywith =
+    C.trywith
+      ~dbg:Debuginfo.none
+      ~kind:(Delayed id)
+      ~body:(expr env_body body)
+      ~exn_var
+      ~handler:handler
+  in
+  wrap_let_cont_exn_body trywith extra_vars
+
+(* wrap a exn handler with read of the mutable variables *)
+and exn_handler handle extra_vars extra_params =
+  List.fold_left2
+    (fun handler (v, _) (p, _) -> C.letin p (C.var v) handler)
+    handle extra_vars extra_params
+
+(* define and initialize the mutable cmm variables used by an exn extra args *)
+and wrap_let_cont_exn_body handler extra_vars =
+  List.fold_left (fun expr (v, k) ->
+      let v = Backend_var.With_provenance.create v in
+      C.letin v (default_of_kind k) expr
+    ) handler extra_vars
 
 and let_cont_rec env conts body =
   let wrap, env = Env.flush_delayed_lets env in
@@ -771,29 +784,14 @@ and continuation_handler env h =
   let env, vars = var_list env args in
   vars, expr env handler
 
+(* Function calls: besides the function calls, there are a few things to do:
+   - setup the mutable variables for the exn cont extra args if needed
+   - Flush the delayed let-bindings (this is not stricly necessary)
+   - translate the call continuation (either through a jump, or inlining). *)
 and apply_expr env e =
   let call, env, effs = apply_call env e in
   let k_exn = Apply_expr.exn_continuation e in
-  let call, env =
-    let mut_vars =
-      Env.get_exn_extra_args env (Exn_continuation.exn_handler k_exn)
-    in
-    let extra_args = Exn_continuation.extra_args k_exn in
-    if List.compare_lengths extra_args mut_vars <> 0 then begin
-      Misc.fatal_errorf "Length of [extra_args] in exception continuation %a@ \
-          does not match those in the environment (%a)@ for application \
-          expression:@ %a"
-        Exn_continuation.print k_exn
-        (Format.pp_print_list ~pp_sep:Format.pp_print_space Ident.print)
-        mut_vars
-        Apply_expr.print e
-    end;
-    List.fold_left2
-      (fun (call, env) (arg, _k) v ->
-         let arg, env, _ = simple env arg in
-         C.sequence (C.assign v arg) call, env)
-      (call, env) extra_args mut_vars
-  in
+  let call, env = wrap_call_exn env e call k_exn in
   let wrap, env = Env.flush_delayed_lets env in
   wrap (wrap_cont env effs call e)
 
@@ -839,6 +837,29 @@ and apply_call env e =
       let args, env, _ = arg_list env (Apply_expr.args e) in
       C.send kind meth obj args dbg, env, effs
 
+(* function calls that have an exn continuation with extra arguments
+   must be wrapped with assignments for the mutable variables used
+   to pass the extra arguments. *)
+and wrap_call_exn env e call k_exn =
+  let h_exn = Exn_continuation.exn_handler k_exn in
+  let mut_vars = Env.get_exn_extra_args env h_exn in
+  let extra_args = Exn_continuation.extra_args k_exn in
+  if List.compare_lengths extra_args mut_vars = 0 then begin
+    let aux (call, env) (arg, _k) v =
+      let arg, env, _ = simple env arg in
+      C.sequence (C.assign v arg) call, env
+    in
+    List.fold_left2 aux (call, env) extra_args mut_vars
+  end else
+    Misc.fatal_errorf "Length of [extra_args] in exception continuation %a@ \
+                       does not match those in the environment (%a)@ for application \
+                       expression:@ %a"
+      Exn_continuation.print k_exn
+      (Format.pp_print_list ~pp_sep:Format.pp_print_space Ident.print)
+      mut_vars
+      Apply_expr.print e
+
+(* Wrap a function call to honour its continuation *)
 and wrap_cont env effs res e =
   let k = Apply_expr.continuation e in
   if Continuation.equal (Env.return_cont env) k then
@@ -868,77 +889,98 @@ and wrap_cont env effs res e =
           "Multi-arguments continuation across function calls are not yet supported"
   end
 
+(* Exception Continuations always raise their first argument (which is
+   supposed to be an exception). Additionally, they may have extra arguments
+   that are passed to the handler via mutables variables (which are expected to be
+   spilled on the stack). *)
+and apply_cont_exn env e k = function
+  | res :: extra ->
+      let exn, env, _ = simple env res in
+      let extra, env, _ = arg_list env extra in
+      let mut_vars = Env.get_exn_extra_args env k in
+      let wrap, _ = Env.flush_delayed_lets env in
+      let expr = C.raise_prim Raise_regular exn Debuginfo.none in
+      let expr =
+        List.fold_left2
+          (fun expr arg v -> C.sequence (C.assign v arg) expr)
+          expr extra mut_vars
+      in
+      wrap expr
+  | [] ->
+      Misc.fatal_errorf "Exception continuation %a has no arguments in@\n%a"
+        Continuation.print k Apply_cont.print e
+
 and apply_cont env e =
   let k = Apply_cont_expr.continuation e in
   let args = Apply_cont_expr.args e in
-  if (* Continuation.equal (Env.exn_cont env) k *) Continuation.is_exn k then begin
-    match args with
-    | res :: extra ->
-        let exn, env, _ = simple env res in
-        let extra, env, _ = arg_list env extra in
-        let mut_vars = Env.get_exn_extra_args env k in
-        let wrap, _ = Env.flush_delayed_lets env in
-        let expr = C.raise_prim Raise_regular exn Debuginfo.none in
-        let expr =
-          List.fold_left2
-            (fun expr arg v -> C.sequence (C.assign v arg) expr)
-            expr extra mut_vars
-        in
-        wrap expr
-    | [] ->
-        Misc.fatal_errorf "Exception continuation %a has no arguments"
-          Continuation.print k
-  end else if Continuation.equal (Env.return_cont env) k then begin
-    match args with
-    | [] -> C.void
-    | [res] ->
-        let res, env, _ = simple env res in
-        let wrap, _ = Env.flush_delayed_lets env in
-        wrap res
-    | _ ->
-        (* TODO: add support using unboxed tuples *)
-        Misc.fatal_errorf
-          "Continuation %a (return cont) should be applied to a single argument in@\n%a@\n%s"
-          Continuation.print k Apply_cont_expr.print e
-          "Multi-arguments continuation across function calls are not yet supported"
-  end else begin
-    let make_jump types cont =
-      (* The provided args should match the types in tys *)
-      if List.compare_lengths types args <> 0 then begin
-        Misc.fatal_errorf "Types (%a) do not match arguments of@ %a"
-          (Format.pp_print_list ~pp_sep:Format.pp_print_space
-            Printcmm.machtype) types
-          Apply_cont_expr.print e
-      end;
-      let trap_actions =
-        match Apply_cont_expr.trap_action e with
-        | None -> []
-        | Some (Pop _) -> [Cmm.Pop]
-        | Some (Push { exn_handler; }) ->
-            let cont = Env.get_jump_id env exn_handler in
-            [Cmm.Push cont]
-      in
-      let args, env, _ = arg_list env args in
+  if Continuation.is_exn k then
+    apply_cont_exn env e k args
+  else if Continuation.equal (Env.return_cont env) k then
+    apply_cont_ret env e k args
+  else
+    apply_cont_regular env e k args
+
+(* A call to the return continuation of the current block simply is the return value
+   for the current block being translated. *)
+and apply_cont_ret env e k = function
+  | [] -> C.void
+  | [res] ->
+      let res, env, _ = simple env res in
       let wrap, _ = Env.flush_delayed_lets env in
-      wrap (C.cexit cont args trap_actions)
-    in
-    match Env.get_k env k with
-    | Inline { handler_params; handler_body; _ }
-      when Apply_cont_expr.trap_action e = None ->
-        if not (List.length args = List.length handler_params) then
-          Misc.fatal_errorf
-            "Continuation %a in@\n%a@\nExpected %d arguments but got %a."
-            Continuation.print k Apply_cont_expr.print e
-            (List.length handler_params) Apply_cont_expr.print e;
-        let vars = List.map Kinded_parameter.var handler_params in
-        let args = List.map Named.create_simple args in
-        let env = List.fold_left2 (let_expr_env handler_body) env vars args in
-        expr env handler_body
-    | Jump { types; cont; } -> make_jump types cont
-    | Inline { types; cont; used_as_jump; _ } ->
-        used_as_jump := true;
-        make_jump types cont
-  end
+      wrap res
+  | _ ->
+      (* TODO: add support using unboxed tuples *)
+      Misc.fatal_errorf
+        "Continuation %a (return cont) should be applied to a single argument in@\n%a@\n%s"
+        Continuation.print k Apply_cont_expr.print e
+        "Multi-arguments continuation across function calls are not yet supported"
+
+and apply_cont_regular env e k args =
+  match Env.get_k env k with
+  | Inline { handler_params; handler_body; _ }
+    when Apply_cont_expr.trap_action e = None ->
+      apply_cont_inline env e k args handler_body handler_params
+  | Jump { types; cont; } ->
+      apply_cont_jump env e types cont args
+  | Inline { types; cont; used_as_jump; _ } ->
+      used_as_jump := true;
+      apply_cont_jump env e types cont args
+
+(* Inlining a continuation call simply needs to bind the arguments to the
+   variables that the continuation's body expects. The delayed lets in the
+   environment enables that translation to be tail-rec. *)
+and apply_cont_inline env e k args handler_body handler_params =
+  if List.compare_lengths args handler_params = 0 then begin
+    let vars = List.map Kinded_parameter.var handler_params in
+    let args = List.map Named.create_simple args in
+    let env = List.fold_left2 (let_expr_env handler_body) env vars args in
+    expr env handler_body
+  end else
+    Misc.fatal_errorf
+      "Continuation %a in@\n%a@\nExpected %d arguments but got %a."
+      Continuation.print k Apply_cont_expr.print e
+      (List.length handler_params) Apply_cont_expr.print e;
+
+(* Continuation calls need to also translate the associated trap actions. *)
+and apply_cont_jump env e types cont args =
+  if List.compare_lengths types args = 0 then begin
+    let trap_actions = apply_cont_trap_actions env e in
+    let args, env, _ = arg_list env args in
+    let wrap, _ = Env.flush_delayed_lets env in
+    wrap (C.cexit cont args trap_actions)
+  end else
+    Misc.fatal_errorf "Types (%a) do not match arguments of@ %a"
+      (Format.pp_print_list ~pp_sep:Format.pp_print_space
+         Printcmm.machtype) types
+      Apply_cont_expr.print e
+
+and apply_cont_trap_actions env e =
+  match Apply_cont_expr.trap_action e with
+  | None -> []
+  | Some (Pop _) -> [Cmm.Pop]
+  | Some (Push { exn_handler; }) ->
+      let cont = Env.get_jump_id env exn_handler in
+      [Cmm.Push cont]
 
 and switch env s =
   let e, env, _ = simple env (Switch.scrutinee s) in
@@ -1364,16 +1406,16 @@ let program_functions offsets p =
   in
   List.map (fun decl -> C.cfunction decl) sorted
 
-let program0 (p : Flambda_static.Program.t) =
-  let offsets = Un_cps_closure.compute_offsets p in
-  let functions = program_functions offsets p in
-  let used_closure_vars =
-    Name_occurrences.closure_vars (Flambda_static.Program.free_names p)
-  in
-  let sym, res = program_body ~used_closure_vars offsets [] p.body in
-  let data, entry = R.to_cmm res in
-  let cmm_data = C.flush_cmmgen_state () in
-  (C.gc_root_table [symbol sym]) :: data @ cmm_data @ functions @ [entry]
+let program (p : Flambda_static.Program.t) =
+  Profile.record_call "flambda2_to_cmm" (fun () ->
+      let offsets = Un_cps_closure.compute_offsets p in
+      let functions = program_functions offsets p in
+      let used_closure_vars =
+        Name_occurrences.closure_vars (Flambda_static.Program.free_names p)
+      in
+      let sym, res = program_body ~used_closure_vars offsets [] p.body in
+      let data, entry = R.to_cmm res in
+      let cmm_data = C.flush_cmmgen_state () in
+      (C.gc_root_table [symbol sym]) :: data @ cmm_data @ functions @ [entry]
+    )
 
-let program p =
-  Profile.record_call "flambda2_to_cmm" (fun () -> program0 p)
