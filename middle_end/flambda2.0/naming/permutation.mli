@@ -21,7 +21,7 @@
 module Make (N : Identifiable.S) : sig
   type t
 
-  val create : unit -> t
+  val empty : t
 
   val print : Format.formatter -> t -> unit
 

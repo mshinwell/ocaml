@@ -25,8 +25,8 @@ type t = {
 }
 
 let empty =
-  { continuations = Continuations.create ();
-    variables = Variables.create ();
+  { continuations = Continuations.empty;
+    variables = Variables.empty;
   }
 
 let print ppf { continuations; variables; } =

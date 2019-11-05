@@ -33,7 +33,7 @@ module Make (N : Identifiable.S) = struct
     backwards : backwards;
   }
 
-  let create () =
+  let empty =
     { forwards = N.Map.empty;
       backwards = Not_computed;
     }
