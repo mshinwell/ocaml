@@ -155,56 +155,61 @@ let denv_inside_function ~denv_outside_function ~denv_after_enter_closure
 
 let simplify_function dacc closure_id function_decl ~all_function_decls_in_set
       ~closure_bound_names ~closure_element_types =
-  let denv_after_enter_closure = DE.enter_closure (DA.denv dacc) in
-  let params_and_body, r =
-    Function_params_and_body.pattern_match (FD.params_and_body function_decl)
-      ~f:(fun ~return_continuation exn_continuation params ~body ~my_closure ->
-        let dacc =
-          DA.map_denv dacc ~f:(fun denv_outside_function ->
-            denv_inside_function ~denv_outside_function
-              ~denv_after_enter_closure ~params ~my_closure
-              closure_id ~all_function_decls_in_set ~closure_bound_names
-              ~closure_element_types)
-        in
-        match
-          Simplify_toplevel.simplify_toplevel dacc body
-            ~return_continuation
-            ~return_arity:(FD.result_arity function_decl)
-            exn_continuation
-            ~return_cont_scope:Scope.initial
-            ~exn_cont_scope:(Scope.next Scope.initial)
-        with
-        | body, _cont_uses, r ->
-          (* CR mshinwell: Should probably look at [cont_uses]? *)
-          let function_decl =
-            Function_params_and_body.create ~return_continuation
-              exn_continuation params ~body ~my_closure
+  let name = Format.asprintf "%a" Closure_id.print closure_id in
+  Profile.record_call ~accumulate:true name (fun () ->
+    let denv_after_enter_closure = DE.enter_closure (DA.denv dacc) in
+    let params_and_body, r =
+      Function_params_and_body.pattern_match (FD.params_and_body function_decl)
+        ~f:(fun ~return_continuation exn_continuation params ~body
+                ~my_closure ->
+          let dacc =
+            DA.map_denv dacc ~f:(fun denv_outside_function ->
+              denv_inside_function ~denv_outside_function
+                ~denv_after_enter_closure ~params ~my_closure
+                closure_id ~all_function_decls_in_set ~closure_bound_names
+                ~closure_element_types)
           in
-          function_decl, r
-        | exception Misc.Fatal_error ->
-          if !Clflags.flambda2_context_on_error then begin
-            Format.eprintf "\n%sContext is:%s simplifying function \
-                with closure ID %a,@ params %a,@ return continuation %a,@ \
-                exn continuation %a,@ my_closure %a,@ body:@ %a@ \
-                with downwards accumulator:@ %a\n"
-              (Flambda_colours.error ())
-              (Flambda_colours.normal ())
-              Closure_id.print closure_id
-              Kinded_parameter.List.print params
-              Continuation.print return_continuation
-              Exn_continuation.print exn_continuation
-              Variable.print my_closure
-              Expr.print body
-              DA.print dacc
-          end;
-          raise Misc.Fatal_error)
-  in
-  let function_decl = FD.update_params_and_body function_decl params_and_body in
-  let ty =
-    function_decl_type ~denv_outside_function:(DA.denv dacc) function_decl
-      Rec_info.initial
-  in
-  function_decl, ty, r
+          match
+            Simplify_toplevel.simplify_toplevel dacc body
+              ~return_continuation
+              ~return_arity:(FD.result_arity function_decl)
+              exn_continuation
+              ~return_cont_scope:Scope.initial
+              ~exn_cont_scope:(Scope.next Scope.initial)
+          with
+          | body, _cont_uses, r ->
+            (* CR mshinwell: Should probably look at [cont_uses]? *)
+            let function_decl =
+              Function_params_and_body.create ~return_continuation
+                exn_continuation params ~body ~my_closure
+            in
+            function_decl, r
+          | exception Misc.Fatal_error ->
+            if !Clflags.flambda2_context_on_error then begin
+              Format.eprintf "\n%sContext is:%s simplifying function \
+                  with closure ID %a,@ params %a,@ return continuation %a,@ \
+                  exn continuation %a,@ my_closure %a,@ body:@ %a@ \
+                  with downwards accumulator:@ %a\n"
+                (Flambda_colours.error ())
+                (Flambda_colours.normal ())
+                Closure_id.print closure_id
+                Kinded_parameter.List.print params
+                Continuation.print return_continuation
+                Exn_continuation.print exn_continuation
+                Variable.print my_closure
+                Expr.print body
+                DA.print dacc
+            end;
+            raise Misc.Fatal_error)
+    in
+    let function_decl =
+      FD.update_params_and_body function_decl params_and_body
+    in
+    let ty =
+      function_decl_type ~denv_outside_function:(DA.denv dacc) function_decl
+        Rec_info.initial
+    in
+    function_decl, ty, r)
 
 let simplify_set_of_closures0 dacc ~result_dacc set_of_closures
       ~closure_bound_names ~closure_elements ~closure_element_types =
