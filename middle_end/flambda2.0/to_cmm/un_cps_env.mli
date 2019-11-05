@@ -122,3 +122,11 @@ val env_var_offset : t -> Var_within_closure.t -> int
 val layout :
   t -> Closure_id.t list -> Var_within_closure.t list -> Un_cps_closure.layout
 (** Wrapper around {!Un_cps_closure.layout}. *)
+
+val used_closure_vars : t -> Var_within_closure.Set.t
+(** All closure variables used in the whole program. *)
+
+val with_used_closure_vars
+   : t
+  -> used_closure_vars:Var_within_closure.Set.t
+  -> t

@@ -1269,6 +1269,9 @@ let equal t1 t2 =
 
 let free_names t =
   match t with
+  | Unary (Project_var clos_var, x0) ->
+    Name_occurrences.add_closure_var (Simple.free_names x0)
+      clos_var Name_mode.normal
   | Unary (_prim, x0) -> Simple.free_names x0
   | Binary (_prim, x0, x1) ->
     Name_occurrences.union_list [

@@ -216,7 +216,7 @@
 
 (executable
  (name optmain)
- (link_flags (-cclib -lunwind))
+ ;;(link_flags (-cclib -lunwind))
  (modes native)
  (flags (:standard -principal -nostdlib))
  (libraries ocamloptcomp ocamloptcommon ocamlmiddleend flambda2 ocamlcommon runtimeopt stdlib)

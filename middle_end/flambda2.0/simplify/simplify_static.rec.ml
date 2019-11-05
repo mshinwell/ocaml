@@ -329,7 +329,10 @@ let simplify_return_continuation_handler dacc
     simplify_static_structure dacc return_cont_handler.static_structure
   in
   let handler, used_computed_values, uenv =
-    let free_variables = Static_structure.free_variables static_structure in
+    let free_variables =
+      Name_occurrences.variables
+        (Static_structure.free_names static_structure)
+    in
     let original_computed_values = return_cont_handler.computed_values in
     let used_computed_values =
       List.filter (fun param ->
@@ -446,7 +449,7 @@ let define_lifted_constants lifted_constants (body : Program_body.t) =
            automatically -- needs to be done for non-lifted constants too *)
         Static_structure.delete_bindings
           (Lifted_constant.static_structure lifted_constant)
-          ~allowed:(Program_body.free_symbols body)
+          ~allowed:(Name_occurrences.symbols (Program_body.free_names body))
       in
       if Static_structure.is_empty static_structure then body
       else

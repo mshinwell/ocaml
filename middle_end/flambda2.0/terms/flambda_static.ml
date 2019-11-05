@@ -161,10 +161,6 @@ module Static_part = struct
         (Name_occurrences.empty)
         fields
 
-  let free_symbols t = Name_occurrences.symbols (free_names t)
-
-  let free_variables t = Name_occurrences.variables (free_names t)
-
   let print_with_cache (type k) ~cache ppf (t : k t) =
     let print_float_array_field ppf = function
       | Const f -> fprintf ppf "%a" Numbers.Float_by_bit_pattern.print f
@@ -330,8 +326,7 @@ module Program_body = struct
         Exn_continuation.print exn_continuation
         Kinded_parameter.List.print computed_values
 
-    let free_symbols t =
-      Name_occurrences.symbols (Flambda.Expr.free_names t.expr)
+    let free_names t = Flambda.Expr.free_names t.expr
 
     let iter_expr t ~f = f t.expr
 
@@ -411,21 +406,11 @@ module Program_body = struct
         Symbol.Set.empty
         pieces
 
-    let free_symbols ((S pieces) as t) =
-      let free_in_static_parts =
-        List.fold_left (fun free_in_static_parts (_bound_syms, static_part) ->
-            Symbol.Set.union (Static_part.free_symbols static_part)
-              free_in_static_parts)
-          Symbol.Set.empty
-          pieces
-      in
-      Symbol.Set.diff free_in_static_parts (being_defined t)
-
-    let free_variables (S pieces) =
-      List.fold_left (fun free_in_static_parts (_bound_syms, static_part) ->
-          Variable.Set.union (Static_part.free_variables static_part)
-            free_in_static_parts)
-        Variable.Set.empty
+    let free_names (S pieces) =
+      List.fold_left (fun free_names (_bound_syms, static_part) ->
+          Name_occurrences.union free_names
+            (Static_part.free_names static_part))
+        Name_occurrences.empty
         pieces
 
     let delete_bindings (S pieces) ~allowed =
@@ -469,16 +454,16 @@ module Program_body = struct
         (Flambda_colours.normal ())
         (Static_structure.print_with_cache ~cache) static_structure
 
-    let free_symbols t =
+    let free_names t =
       let free_in_computation =
         match t.computation with
-        | None -> Symbol.Set.empty
-        | Some computation -> Computation.free_symbols computation
+        | None -> Name_occurrences.empty
+        | Some computation -> Computation.free_names computation
       in
       let free_in_static_structure =
-        Static_structure.free_symbols t.static_structure
+        Static_structure.free_names t.static_structure
       in
-      Symbol.Set.union free_in_computation free_in_static_structure
+      Name_occurrences.union free_in_computation free_in_static_structure
 
     let iter_computation t ~f =
       match t.computation with
@@ -508,7 +493,7 @@ module Program_body = struct
 
   type t =
     | Define_symbol of {
-        free_symbols : Symbol.Set.t;
+        free_names : Name_occurrences.t;
         defn : Definition.t;
         body : t;
       }
@@ -516,7 +501,7 @@ module Program_body = struct
 
   let rec print_with_cache ~cache ppf t =
     match t with
-    | Define_symbol { free_symbols = _; defn; body; } ->
+    | Define_symbol { free_names = _; defn; body; } ->
       Format.fprintf ppf "@[<v 2>(@<0>%sDefine_symbol@<0>%s@ %a)@]@;"
         (Flambda_colours.static_keyword ())
         (Flambda_colours.normal ())
@@ -533,25 +518,32 @@ module Program_body = struct
 
   let _invariant _env _t = ()
 
-  let free_symbols t =
+  let free_names t =
     match t with
-    | Define_symbol { free_symbols; _ } -> free_symbols
-    | Root sym -> Symbol.Set.singleton sym
+    | Define_symbol { free_names; _ } -> free_names
+    | Root sym -> Name_occurrences.singleton_symbol sym Name_mode.normal
+
+  let used_closure_vars t =
+    match t with
+    | Define_symbol { free_names; _ } ->
+      Name_occurrences.closure_vars free_names
+    | Root _ -> Var_within_closure.Set.empty
 
   let define_symbol defn ~body =
     let being_defined = Definition.being_defined defn in
-    let free_syms_of_body = free_symbols body in
+    let free_names_of_body = free_names body in
+    let free_syms_of_body = Name_occurrences.symbols free_names_of_body in
     let can_delete =
       Symbol.Set.is_empty (Symbol.Set.inter being_defined free_syms_of_body)
         && Definition.only_generative_effects defn
     in
     if can_delete then body
     else
-      let free_symbols =
-        Symbol.Set.union (Definition.free_symbols defn)
-          free_syms_of_body
+      let free_names =
+        Name_occurrences.union (Definition.free_names defn)
+          free_names_of_body
       in
-      Define_symbol { free_symbols; defn; body; }
+      Define_symbol { free_names; defn; body; }
 
   let root sym = Root sym
 
@@ -586,20 +578,13 @@ module Program_body = struct
       iter_definitions body ~f
     | Root _ -> ()
 
-  let rec map_definitions t ~f =
-    match t with
-    | Define_symbol { defn; body; free_symbols; } ->
-      let body = map_definitions body ~f in
-      Define_symbol { defn = f defn; body; free_symbols; }
-    | Root _ -> t
-
   type descr =
     | Define_symbol of Definition.t * t
     | Root of Symbol.t
 
   let descr (t : t) : descr =
     match t with
-    | Define_symbol { defn; body; free_symbols = _; } ->
+    | Define_symbol { defn; body; free_names = _; } ->
       Define_symbol (defn, body)
     | Root sym -> Root sym
 end
@@ -632,9 +617,12 @@ module Program = struct
     syms
 *)
 
-  let free_symbols t =
+  let free_names t =
     (* N.B. [imported_symbols] are not treated as free. *)
-    Program_body.free_symbols t.body
+    Program_body.free_names t.body
+
+  let used_closure_vars t =
+    Program_body.used_closure_vars t.body
 
   let imported_symbols t = t.imported_symbols
 

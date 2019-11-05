@@ -99,6 +99,7 @@ type t = {
   (* pure bindings that can be inlined across stages. *)
   stages : stage list;
   (* archived stages, in reverse chronological order. *)
+  used_closure_vars : Var_within_closure.Set.t;
 }
 
 let mk offsets k k_exn = {
@@ -108,6 +109,7 @@ let mk offsets k k_exn = {
   vars = Variable.Map.empty;
   conts = Continuation.Map.empty;
   exn_conts_extra_args = Continuation.Map.empty;
+  used_closure_vars = Var_within_closure.Set.empty;
 }
 
 let dummy offsets =
@@ -373,3 +375,7 @@ let flush_delayed_lets env =
   (* Return a wrapper and a cleared env *)
   wrap, { env with stages = []; pures = Variable.Map.empty; }
 
+let used_closure_vars t = t.used_closure_vars
+
+let with_used_closure_vars t ~used_closure_vars =
+  { t with used_closure_vars; }
