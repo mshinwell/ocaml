@@ -543,6 +543,11 @@ let trivial_join t ~initial_env_at_join ~env_at_use envs_with_levels =
      the argument types of the (single) continuation use.  Recall that the
      parameters of the continuation are defined in [initial_env_at_join] and
      are equipped with equations there.) *)
+  (* CR mshinwell: XXX This doesn't get called for inlinable cases.  So we're
+     basically left with switch arms as the place we might want to propagate
+     things to.  Those have no arguments.  This seems like we're just doing it
+     for the benefit of CSE now.  We should review whether at the non-trivial
+     joins we should propagate existentials for things used by the types. *)
   (* CR mshinwell: Add note about CSE handling. *)
   let vars_at_join = Typing_env.var_domain initial_env_at_join in
 (*
