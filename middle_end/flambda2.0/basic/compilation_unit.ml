@@ -25,27 +25,31 @@ type t = {
 
 let string_for_printing t = Ident.name t.id
 
+(* Multiple units can have the same [id] if they come from different packs.
+   To distinguish these we also keep the linkage name, which contains the
+   name of the pack. *)
+let compare0 v1 v2 =
+  if v1 == v2 then 0
+  else
+    let c = compare v1.hash v2.hash in
+    if c = 0 then
+      let v1_id = Ident.name v1.id in
+      let v2_id = Ident.name v2.id in
+      let c = String.compare v1_id v2_id in
+      if c = 0 then
+        Linkage_name.compare v1.linkage_name v2.linkage_name
+      else
+        c
+    else c
+
+let equal0 t1 t2 = (compare t1 t2 = 0)
+
 include Identifiable.Make (struct
   type nonrec t = t
 
-  (* Multiple units can have the same [id] if they come from different packs.
-     To distinguish these we also keep the linkage name, which contains the
-     name of the pack. *)
-  let compare v1 v2 =
-    if v1 == v2 then 0
-    else
-      let c = compare v1.hash v2.hash in
-      if c = 0 then
-        let v1_id = Ident.name v1.id in
-        let v2_id = Ident.name v2.id in
-        let c = String.compare v1_id v2_id in
-        if c = 0 then
-          Linkage_name.compare v1.linkage_name v2.linkage_name
-        else
-          c
-      else c
+  let compare = compare0
 
-  let equal t1 t2 = (compare t1 t2 = 0)
+  let equal = equal0
 
   let print ppf t = Format.pp_print_string ppf (string_for_printing t)
 
@@ -54,6 +58,14 @@ include Identifiable.Make (struct
 
   let hash x = x.hash
 end)
+
+(* Exposing [compare] and [equal] not via the functor application ensures
+   that [Closure] will give an approximation for them.  Otherwise they won't
+   be called directly. *)
+
+let compare = compare0
+
+let equal = equal0
 
 let create (id : Ident.t) linkage_name =
   if not (Ident.persistent id) then begin
