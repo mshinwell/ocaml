@@ -63,7 +63,7 @@ module Make (N : Identifiable.S) = struct
     | n -> n
 
   let add_to_map n1 n2 map =
-    if N.compare n1 n2 = 0 then N.Map.remove n1 map
+    if N.equal n1 n2 then N.Map.remove n1 map
     else N.Map.add n1 n2 map
 
   let flip t =
@@ -103,10 +103,8 @@ module Make (N : Identifiable.S) = struct
     post_swap first n1 n2
 
   let compose ~second ~first =
+(*Format.eprintf "second %a first %a\n%!" print second print first;*)
     if is_empty second then first
     else if is_empty first then second
-    else
-      match N.Map.get_singleton_exn second.forwards with
-      | exception Not_found -> compose0 ~second ~first
-      | n1, n2 -> post_swap first n1 n2
+    else compose0 ~second ~first
 end
