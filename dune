@@ -12,7 +12,16 @@
 ;*                                                                        *
 ;**************************************************************************
 
+
+
+;; "perf" has warnings-as-errors + cross-module inlining
 (env
+ (perf
+   (flags (
+     -w +a-4-9-40-41-42-44-45-48 -strict-sequence
+     -strict-formats -short-paths -keep-locs -warn-error +a
+   )
+ ))
  (dev     (flags (:standard -w +a-4-9-40-41-42-44-45-48)))
  (release (flags (:standard -w +a-4-9-40-41-42-44-45-48))))
 
