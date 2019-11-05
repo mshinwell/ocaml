@@ -1105,7 +1105,7 @@ module Make
 
   (I : IncrementalEngine.EVERYTHING)
 
-  (User : sig
+  (_ : sig
 
     (* [print s] is supposed to send the string [s] to some output channel. *)
 
@@ -1647,7 +1647,7 @@ end)
    [InspectionTableFormat]. *)
 
 module Make
-  (TT : TableFormat.TABLES)
+  (_ : TableFormat.TABLES)
   (IT : InspectionTableFormat.TABLES
         with type 'a lr1state = int)
   (ET : EngineTypes.TABLE
