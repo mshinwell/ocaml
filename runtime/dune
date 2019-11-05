@@ -39,7 +39,7 @@
    (progn
      (bash "touch .depend") ; hack.
      (run make %{targets})
-     (bash "rm .depend"))))
+     (bash "rm -f .depend"))))
 
 (rule
  (targets libasmrun.a)
@@ -58,7 +58,7 @@
   (progn
    (bash "touch .depend") ; hack.
    (run make %{targets})
-   (bash "rm .depend"))))
+   (bash "rm -f .depend"))))
 
 ;; HACK
 (library
