@@ -161,36 +161,38 @@ and remove_vars_set_of_closures used_closure_vars set_of_closures =
 
 let run program =
   let used_closure_vars = ref Var_within_closure.Set.empty in
-  Flambda_static.Program.iter_body program ~f:(fun body ->
-    Flambda_static.Program_body.iter_definitions body ~f:(fun defn ->
-      Flambda_static.Program_body.Definition.iter_computation defn
-        ~f:(fun computation ->
-          Flambda_static.Program_body.Computation.iter_expr computation
-            ~f:(fun expr -> collect_vars_expr used_closure_vars expr));
-      Flambda_static.Program_body.Definition.iter_static_parts defn
-        { f = (fun (type k) (static_part : k  Flambda_static.Static_part.t) ->
-          match static_part with
-          | Set_of_closures set_of_closures ->
-            collect_vars_set_of_closures used_closure_vars set_of_closures
-          | _ -> ());
-        }));
-  let used_closure_vars = !used_closure_vars in
-  Flambda_static.Program.map_body program ~f:(fun body ->
-    Flambda_static.Program_body.map_definitions body ~f:(fun defn ->
-      let defn =
-        Flambda_static.Program_body.Definition.map_computation defn
+  Profile.record_call ~accumulate:true "finding" (fun () ->
+    Flambda_static.Program.iter_body program ~f:(fun body ->
+      Flambda_static.Program_body.iter_definitions body ~f:(fun defn ->
+        Flambda_static.Program_body.Definition.iter_computation defn
           ~f:(fun computation ->
-            Flambda_static.Program_body.Computation.map_expr computation
-              ~f:(fun expr -> remove_vars_expr used_closure_vars expr))
-      in
-      Flambda_static.Program_body.Definition.map_static_parts defn
-        { f = (fun (type k) (static_part : k Flambda_static.Static_part.t)
-                : k Flambda_static.Static_part.t ->
+            Flambda_static.Program_body.Computation.iter_expr computation
+              ~f:(fun expr -> collect_vars_expr used_closure_vars expr));
+        Flambda_static.Program_body.Definition.iter_static_parts defn
+          { f = (fun (type k) (static_part : k  Flambda_static.Static_part.t) ->
             match static_part with
             | Set_of_closures set_of_closures ->
-              let set_of_closures =
-                remove_vars_set_of_closures used_closure_vars set_of_closures
-              in
-              Set_of_closures set_of_closures
-            | static_part -> static_part);
-        }))
+              collect_vars_set_of_closures used_closure_vars set_of_closures
+            | _ -> ());
+          })));
+  let used_closure_vars = !used_closure_vars in
+  Profile.record_call ~accumulate:true "removal" (fun () ->
+    Flambda_static.Program.map_body program ~f:(fun body ->
+      Flambda_static.Program_body.map_definitions body ~f:(fun defn ->
+        let defn =
+          Flambda_static.Program_body.Definition.map_computation defn
+            ~f:(fun computation ->
+              Flambda_static.Program_body.Computation.map_expr computation
+                ~f:(fun expr -> remove_vars_expr used_closure_vars expr))
+        in
+        Flambda_static.Program_body.Definition.map_static_parts defn
+          { f = (fun (type k) (static_part : k Flambda_static.Static_part.t)
+                  : k Flambda_static.Static_part.t ->
+              match static_part with
+              | Set_of_closures set_of_closures ->
+                let set_of_closures =
+                  remove_vars_set_of_closures used_closure_vars set_of_closures
+                in
+                Set_of_closures set_of_closures
+              | static_part -> static_part);
+          })))
