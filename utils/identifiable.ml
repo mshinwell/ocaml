@@ -125,7 +125,7 @@ module Make_map (T : Thing) (Set : Set with module T := T) = struct
           | Some eq -> eq v1 v2
         in
         if not ok then
-          let err =
+          let _err =
             match print with
             | None ->
               Format.asprintf "Map.disjoint_union %a" T.print id
@@ -133,7 +133,7 @@ module Make_map (T : Thing) (Set : Set with module T := T) = struct
               Format.asprintf "Map.disjoint_union %a => %a <> %a"
                 T.print id print v1 print v2
           in
-          Misc.fatal_error err
+          invalid_arg "disjoint_union"
         else Some v1)
       m1 m2
 
