@@ -201,6 +201,10 @@ let make_block ?(dbg=Debuginfo.none) kind args =
   | Full_of_naked_floats
   | Generic_array Full_of_naked_floats ->
       make_float_alloc dbg (Tag.to_int (float_tag args)) args
+  | Generic_array No_specialisation ->
+      extcall ~dbg ~alloc:true
+        "caml_make_array" Cmm.typ_val
+        [make_alloc dbg 0 args]
   | _ ->
       make_alloc dbg 0 args
 
