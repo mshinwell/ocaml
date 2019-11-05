@@ -996,7 +996,11 @@ and invalid _env _e =
 and set_of_closures env s =
   let fun_decls = Set_of_closures.function_decls s in
   let decls = Function_declarations.funs fun_decls in
-  let elts = Set_of_closures.closure_elements s in
+  let elts =
+    Var_within_closure.Map.filter (fun clos_var _bound_to ->
+        Var_within_closure.Set.mem clos_var (Env.used_closure_vars env))
+      (Set_of_closures.closure_elements s)
+  in
   let layout = Env.layout env
       (List.map fst (Closure_id.Map.bindings decls))
       (List.map fst (Var_within_closure.Map.bindings elts))
@@ -1111,7 +1115,12 @@ let static_boxed_number kind env s default emit transl v r =
 let rec static_set_of_closures env symbs set =
   let fun_decls = Set_of_closures.function_decls set in
   let decls = Function_declarations.funs fun_decls in
-  let elts = Set_of_closures.closure_elements set in
+  let elts =
+    Var_within_closure.Map.filter (fun clos_var _bound_to ->
+        Var_within_closure.Set.mem clos_var
+          (Env.used_closure_vars env))
+      (Set_of_closures.closure_elements set)
+  in
   let layout = Env.layout env
       (List.map fst (Closure_id.Map.bindings decls))
       (List.map fst (Var_within_closure.Map.bindings elts))
@@ -1194,7 +1203,9 @@ let static_structure_item (type a) env r (symb, st) =
       (* CR Gbury: What are those ? *)
       todo()
   | Set_of_closures s, Set_of_closures set ->
-      let data, updates = static_set_of_closures env s.closure_symbols set in
+      let data, updates =
+        static_set_of_closures env s.closure_symbols set
+      in
       R.wrap_init (C.sequence updates) (R.add_data data r)
   | Singleton s, Boxed_float v ->
       let default = Numbers.Float_by_bit_pattern.zero in
@@ -1240,7 +1251,7 @@ let static_structure env s =
 
 (* Definition *)
 
-let computation_wrapper offsets c =
+let computation_wrapper0 offsets c =
   match c with
   | None ->
       Env.dummy offsets, (fun x -> x)
@@ -1275,8 +1286,16 @@ let computation_wrapper offsets c =
          the variable definitions. *)
       s_env, wrap
 
-let definition offsets (d : Flambda_static.Program_body.Definition.t) =
-  let env, wrapper = computation_wrapper offsets d.computation in
+let computation_wrapper offsets ~used_closure_vars c =
+  let env, wrap = computation_wrapper0 offsets c in
+  let env = Env.with_used_closure_vars env ~used_closure_vars in
+  env, wrap
+
+let definition offsets ~used_closure_vars
+      (d : Flambda_static.Program_body.Definition.t) =
+  let env, wrapper =
+    computation_wrapper offsets ~used_closure_vars d.computation
+  in
   let r = static_structure env d.static_structure in
   R.wrap_init wrapper r
 
@@ -1329,13 +1348,13 @@ let function_decl offsets fun_name _ d =
 
 (* Programs *)
 
-let rec program_body offsets acc body =
+let rec program_body offsets ~used_closure_vars acc body =
   match Flambda_static.Program_body.descr body with
   | Flambda_static.Program_body.Root sym ->
       sym, List.fold_left (fun acc r -> R.combine r acc) R.empty acc
   | Flambda_static.Program_body.Define_symbol (def, rest) ->
-      let r = definition offsets def in
-      program_body offsets (r :: acc) rest
+      let r = definition offsets ~used_closure_vars def in
+      program_body offsets ~used_closure_vars (r :: acc) rest
 
 let program_functions offsets p =
   let fmap = Un_cps_closure.map_on_function_decl (function_decl offsets) p in
@@ -1350,7 +1369,10 @@ let program_functions offsets p =
 let program0 (p : Flambda_static.Program.t) =
   let offsets = Un_cps_closure.compute_offsets p in
   let functions = program_functions offsets p in
-  let sym, res = program_body offsets [] p.body in
+  let used_closure_vars =
+    Name_occurrences.closure_vars (Flambda_static.Program.free_names p)
+  in
+  let sym, res = program_body ~used_closure_vars offsets [] p.body in
   let data, entry = R.to_cmm res in
   let cmm_data = C.flush_cmmgen_state () in
   (C.gc_root_table [symbol sym]) :: data @ cmm_data @ functions @ [entry]

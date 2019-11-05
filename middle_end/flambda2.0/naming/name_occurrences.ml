@@ -277,26 +277,36 @@ module For_symbols = For_one_variety_of_names (struct
   let apply_name_permutation t _perm = t
 end)
 
+module For_closure_vars = For_one_variety_of_names (struct
+  include Var_within_closure
+  (* We never bind [Var_within_closure]s using [Name_abstraction]. *)
+  let apply_name_permutation t _perm = t
+end)
+
 type t = {
   variables : For_variables.t;
   continuations : For_continuations.t;
   symbols : For_symbols.t;
+  closure_vars : For_closure_vars.t;
 }
 
-let print ppf { variables; continuations; symbols; } =
+let print ppf { variables; continuations; symbols; closure_vars; } =
   Format.fprintf ppf "@[<hov 1>\
       @[<hov 1>(variables %a)@]@ \
       @[<hov 1>(continuations %a)@]@ \
-      @[<hov 1>(symbols %a)@]\
+      @[<hov 1>(symbols %a)@]@ \
+      @[<hov 1>(closure_vars %a)@]\
       @]"
     For_variables.print variables
     For_continuations.print continuations
     For_symbols.print symbols
+    For_closure_vars.print closure_vars
 
 let empty = {
   variables = For_variables.empty;
   continuations = For_continuations.empty;
   symbols = For_symbols.empty;
+  closure_vars = For_closure_vars.empty;
 }
 
 let singleton_continuation cont =
@@ -335,6 +345,11 @@ let add_name t (name : Name.t) kind =
   | Var var -> add_variable t var kind
   | Symbol sym -> add_symbol t sym kind
 
+let add_closure_var t clos_var kind =
+  { t with
+    closure_vars = For_closure_vars.add t.closure_vars clos_var kind;
+  }
+
 let singleton_symbol sym kind =
   { empty with
     symbols = For_symbols.singleton sym kind;
@@ -346,6 +361,7 @@ let singleton_name (name : Name.t) kind =
   | Symbol sym -> singleton_symbol sym kind
 
 let create_variables vars kind =
+  (* CR mshinwell: This reallocates the record for each [var]! *)
   Variable.Set.fold (fun (var : Variable.t) t ->
       add_variable t var kind)
     vars
@@ -359,7 +375,17 @@ let create_names names kind =
     names
     empty
 
-let apply_name_permutation ({ variables; continuations; symbols; } as t) perm =
+let create_closure_vars clos_vars =
+  let closure_vars =
+    Var_within_closure.Set.fold (fun clos_var closure_vars ->
+        For_closure_vars.add closure_vars clos_var Name_mode.normal)
+      clos_vars
+      For_closure_vars.empty
+  in
+  { empty with closure_vars; }
+
+let apply_name_permutation
+      ({ variables; continuations; symbols; closure_vars; } as t) perm =
   if Name_permutation.is_empty perm then t
   else
     let variables =
@@ -368,60 +394,71 @@ let apply_name_permutation ({ variables; continuations; symbols; } as t) perm =
     let continuations =
       For_continuations.apply_name_permutation continuations perm
     in
-    let symbols =
-      For_symbols.apply_name_permutation symbols perm
-    in
+    (* [Symbol]s and [Var_within_closure]s are never bound using
+       [Name_abstraction]. *)
     { variables;
       continuations;
       symbols;
+      closure_vars;
     }
 
 let binary_predicate ~for_variables ~for_continuations ~for_symbols
+      ~for_closure_vars
       { variables = variables1;
         continuations = continuations1;
         symbols = symbols1;
+        closure_vars = closure_vars1;
       }
       { variables = variables2;
         continuations = continuations2;
         symbols = symbols2;
+        closure_vars = closure_vars2;
       } =
   for_variables variables1 variables2
     && for_continuations continuations1 continuations2
     && for_symbols symbols1 symbols2
+    && for_closure_vars closure_vars1 closure_vars2
 
-let binary_op ~for_variables ~for_continuations ~for_symbols
+let binary_op ~for_variables ~for_continuations ~for_symbols ~for_closure_vars
       { variables = variables1;
         continuations = continuations1;
         symbols = symbols1;
+        closure_vars = closure_vars1;
       }
       { variables = variables2;
         continuations = continuations2;
         symbols = symbols2;
+        closure_vars = closure_vars2;
       } =
   let variables = for_variables variables1 variables2 in
   let continuations = for_continuations continuations1 continuations2 in
   let symbols = for_symbols symbols1 symbols2 in
+  let closure_vars = for_closure_vars closure_vars1 closure_vars2 in
   { variables;
     continuations;
     symbols;
+    closure_vars;
   }
 
 let diff t1 t2 =
   binary_op ~for_variables:For_variables.diff
     ~for_continuations:For_continuations.diff
     ~for_symbols:For_symbols.diff
+    ~for_closure_vars:For_closure_vars.diff
     t1 t2
 
 let union t1 t2 =
   binary_op ~for_variables:For_variables.union
     ~for_continuations:For_continuations.union
     ~for_symbols:For_symbols.union
+    ~for_closure_vars:For_closure_vars.union
     t1 t2
 
 let subset_domain t1 t2 =
   binary_predicate ~for_variables:For_variables.subset_domain
     ~for_continuations:For_continuations.subset_domain
     ~for_symbols:For_symbols.subset_domain
+    ~for_closure_vars:For_closure_vars.subset_domain
     t1 t2
 
 let rec union_list ts =
@@ -431,6 +468,7 @@ let rec union_list ts =
 
 let variables t = For_variables.keys t.variables
 let symbols t = For_symbols.keys t.symbols
+let closure_vars t = For_closure_vars.keys t.closure_vars
 
 let names t =
   Name.Set.union (Name.set_of_var_set (variables t))
@@ -453,16 +491,11 @@ let remove_var t var =
 let remove_vars t vars =
   Variable.Set.fold (fun var t -> remove_var t var) vars t
 
-let only_contains_symbols { variables; continuations; symbols; } =
-  For_variables.is_empty variables
-    && For_continuations.is_empty continuations
-    && For_symbols.is_empty symbols
-
 let greatest_name_mode_var t var =
   For_variables.greatest_name_mode t.variables var
 
 let downgrade_occurrences_at_strictly_greater_kind
-      { variables; continuations; symbols; } max_kind =
+      { variables; continuations; symbols; closure_vars; } max_kind =
   let variables =
     For_variables.downgrade_occurrences_at_strictly_greater_kind
       variables max_kind
@@ -475,7 +508,12 @@ let downgrade_occurrences_at_strictly_greater_kind
     For_symbols.downgrade_occurrences_at_strictly_greater_kind
       symbols max_kind
   in
+  let closure_vars =
+    For_closure_vars.downgrade_occurrences_at_strictly_greater_kind
+      closure_vars max_kind
+  in
   { variables;
     continuations;
     symbols;
+    closure_vars;
   }

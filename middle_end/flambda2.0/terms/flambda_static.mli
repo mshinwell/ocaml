@@ -127,9 +127,9 @@ module Program_body : sig
 
     val being_defined : t -> Symbol.Set.t
 
-    val free_variables : t -> Variable.Set.t
-
     val delete_bindings : t -> allowed:Symbol.Set.t -> t
+
+    val free_names : t -> Name_occurrences.t
   end
 
   module Definition : sig
@@ -167,11 +167,9 @@ module Program_body : sig
   (** The module block symbol for the compilation unit. *)
   val root : Symbol.t -> t
 
-  val free_symbols : t -> Symbol.Set.t
+  val free_names : t -> Name_occurrences.t
 
   val iter_definitions : t -> f:(Definition.t -> unit) -> unit
-
-  val map_definitions : t -> f:(Definition.t -> Definition.t) -> t
 
   type descr = private
     | Define_symbol of Definition.t * t
@@ -200,9 +198,11 @@ module Program : sig
   val gc_roots : t -> Symbol.Set.t
 *)
 
-  (** All free symbols in the given program.  Imported symbols are not treated
+  (** All free names in the given program.  Imported symbols are not treated
       as free. *)
-  val free_symbols : t -> Symbol.Set.t
+  val free_names : t -> Name_occurrences.t
+
+  val used_closure_vars : t -> Var_within_closure.Set.t
 
   (** All symbols imported from other compilation units by the given program. *)
   val imported_symbols : t -> Flambda_kind.t Symbol.Map.t

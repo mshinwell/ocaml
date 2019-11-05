@@ -56,6 +56,8 @@ val add_variable : t -> Variable.t -> Name_mode.t -> t
 
 val add_name : t -> Name.t -> Name_mode.t -> t
 
+val add_closure_var : t -> Var_within_closure.t -> Name_mode.t -> t
+
 val singleton_name : Name.t -> Name_mode.t -> t
 
 val singleton_symbol : Symbol.t -> Name_mode.t -> t
@@ -63,6 +65,8 @@ val singleton_symbol : Symbol.t -> Name_mode.t -> t
 val create_variables : Variable.Set.t -> Name_mode.t -> t
 
 val create_names : Name.Set.t -> Name_mode.t -> t
+
+val create_closure_vars : Var_within_closure.Set.t -> t
 
 (** [diff t1 t2] removes from [t1] all those names that occur in [t2].
     The number of occurrences of any names in the return value will be exactly
@@ -84,6 +88,8 @@ val symbols : t -> Symbol.Set.t
 
 val names : t -> Name.Set.t
 
+val closure_vars : t -> Var_within_closure.Set.t
+
 val mem_var : t -> Variable.t -> bool
 
 val mem_name : t -> Name.t -> bool
@@ -91,8 +97,6 @@ val mem_name : t -> Name.t -> bool
 val remove_var : t -> Variable.t -> t
 
 val remove_vars : t -> Variable.Set.t -> t
-
-val only_contains_symbols : t -> bool
 
 val greatest_name_mode_var
    : t

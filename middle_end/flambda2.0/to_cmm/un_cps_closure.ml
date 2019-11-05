@@ -389,7 +389,7 @@ module Greedy = struct
         let () = add_unallocated_slot_to_set s set in
         create_env_var_slots set state r
 
-  let create_slots_for_set state set_id =
+  let create_slots_for_set state ~used_closure_vars set_id =
     let set = make_set set_id in
     let state = add_set_to_state state set in
     (* Fill closure slots *)
@@ -398,7 +398,11 @@ module Greedy = struct
     let closures = Closure_id.Map.bindings closure_map in
     let state = create_closure_slots set state closures in
     (* Fill env var slots *)
-    let env_map = Set_of_closures.closure_elements set_id in
+    let env_map =
+      Var_within_closure.Map.filter (fun clos_var _bound_to ->
+          Var_within_closure.Set.mem clos_var used_closure_vars)
+        (Set_of_closures.closure_elements set_id)
+    in
     let env_vars = List.map fst (Var_within_closure.Map.bindings env_map) in
     let state = create_env_var_slots set state env_vars in
     state
@@ -666,7 +670,12 @@ end
 
 let compute_offsets program =
   let state = ref Greedy.empty_state in
-  let aux _ s = state := Greedy.create_slots_for_set !state s in
+  let used_closure_vars =
+    Name_occurrences.closure_vars (Flambda_static.Program.free_names program)
+  in
+  let aux _ s =
+    state := Greedy.create_slots_for_set !state ~used_closure_vars s
+  in
   Iter_on_sets_of_closures.program aux program;
   Greedy.finalize !state
 
