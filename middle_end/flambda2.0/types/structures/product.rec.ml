@@ -36,6 +36,7 @@ module Make (Index : Identifiable.S) = struct
   let print_with_cache ~cache:_ ppf t = print ppf t
 
   let create components_by_index =
+    (* CR mshinwell: Check that the types are all of the same kind *)
     { components_by_index;
     }
 
@@ -63,19 +64,11 @@ module Make (Index : Identifiable.S) = struct
           | None, None | Some _, None | None, Some _ -> None
           | Some ty1, Some ty2 ->
             let ty, env_extension' = Type_grammar.meet' env ty1 ty2 in
-            if Type_grammar.is_obviously_bottom ty then begin
-              Some (Type_grammar.bottom K.value)
-            end else begin
-              all_bottom := false;
-              (*
-Format.eprintf "Product TEE meet:@ TEE1: %a@ TEE2: %a\n%!"
-  TEE.print !env_extension
-  TEE.print env_extension';
-  *)
-              (* XXX bad performance! *)
-              env_extension := TEE.meet env !env_extension env_extension';
-              Some ty
-            end)
+            env_extension := TEE.meet env !env_extension env_extension';
+            if not (Type_grammar.is_obviously_bottom ty) then begin
+              all_bottom := false
+            end;
+            Some ty)
         components_by_index1
         components_by_index2
     in
@@ -100,8 +93,12 @@ Format.eprintf "Product TEE meet:@ TEE1: %a@ TEE2: %a\n%!"
     let missing_indexes = Index.Set.diff (indexes to_match) (indexes t) in
     let components_by_index =
       Index.Set.fold (fun index components_by_index ->
-          Index.Map.add index (Type_grammar.any_value ())
-            components_by_index)
+          let kind =
+            match Index.Map.choose to_match.components_by_index with
+            | exception Not_found -> assert false
+            | (_index, ty) -> Type_grammar.kind ty
+          in
+          Index.Map.add index (Type_grammar.unknown kind) components_by_index)
         missing_indexes
         t.components_by_index
     in

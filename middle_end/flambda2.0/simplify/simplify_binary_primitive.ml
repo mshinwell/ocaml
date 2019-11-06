@@ -824,7 +824,7 @@ let simplify_immutable_block_load ~result_kind dacc ~original_term _dbg
     in
     Simplify_common.simplify_projection
       dacc ~original_term ~deconstructing:block_ty
-      ~shape:(T.immutable_block_with_size_at_least ~n
+      ~shape:(T.immutable_block_with_size_at_least ~n ~field_kind:result_kind
         ~field_n_minus_one:result_var')
       ~result_var ~result_kind
 
