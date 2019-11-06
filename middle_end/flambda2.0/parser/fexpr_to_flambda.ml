@@ -345,7 +345,8 @@ let rec expr env (e : Fexpr.expr) : E.t =
       let closure_env = enter_closure env in
       let my_closure, closure_env = fresh_var closure_env name in
       let recursive = convert_recursive_flag recursive in
-      let closure_id = Closure_id.wrap my_closure in
+      let compilation_unit = Compilation_unit.get_current_exn () in
+      let closure_id = Closure_id.wrap compilation_unit my_closure in
       let arity =
         match ret_arity with
         | None -> 1

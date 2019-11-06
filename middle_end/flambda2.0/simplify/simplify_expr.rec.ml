@@ -372,7 +372,10 @@ and simplify_direct_partial_application
       Apply.print apply
   end;
   let wrapper_var = Variable.create "partial" in
-  let wrapper_closure_id = Closure_id.wrap (Variable.create "closure") in
+  let compilation_unit = Compilation_unit.get_current_exn () in
+  let wrapper_closure_id =
+    Closure_id.wrap compilation_unit (Variable.create "closure")
+  in
   let wrapper_taking_remaining_args =
     let return_continuation = Continuation.create () in
     let remaining_params =
@@ -388,7 +391,8 @@ and simplify_direct_partial_application
     in
     let applied_args_with_closure_vars = (* CR mshinwell: rename *)
       List.map (fun applied_arg ->
-          Var_within_closure.wrap (Variable.create "arg"), applied_arg)
+          Var_within_closure.wrap compilation_unit (Variable.create "arg"),
+            applied_arg)
         ((Apply.callee apply) :: applied_args)
     in
     let my_closure = Variable.create "my_closure" in
