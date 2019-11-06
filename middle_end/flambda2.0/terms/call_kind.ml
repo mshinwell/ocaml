@@ -157,3 +157,18 @@ let apply_name_permutation t perm =
         kind;
         obj = obj';
       }
+
+let size t =
+  (* CR mshinwell: Check / fix these numbers (and all other sizes!). *)
+  let size =
+    match t with
+    | Function call ->
+      begin match call with
+      | Direct _ -> 4
+      | Indirect_unknown_arity -> 6
+      | Indirect_known_arity _ -> 6
+      end
+    | C_call _ -> 1
+    | Method _ -> 1
+  in
+  Inlining_size.of_int size

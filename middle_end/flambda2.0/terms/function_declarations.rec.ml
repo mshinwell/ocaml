@@ -56,3 +56,9 @@ let apply_name_permutation ({ funs; } as t) perm =
   in
   if funs == funs' then t
   else { funs = funs'; }
+
+let size t =
+  Closure_id.Map.fold (fun _closure_id func_decl size ->
+      Inlining_size.(+) (Function_declaration.size func_decl) size)
+    t.funs
+    Inlining_size.zero

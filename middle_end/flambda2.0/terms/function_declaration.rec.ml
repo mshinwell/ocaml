@@ -190,3 +190,5 @@ let params_arity t =
     ~f:(fun ~return_continuation:_ _exn_continuation params ~body:_
             ~my_closure:_ ->
       KP.List.arity params)
+
+let size t = Function_params_and_body.size t.params_and_body

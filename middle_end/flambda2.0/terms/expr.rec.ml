@@ -417,3 +417,12 @@ let bind_parameters_to_simples ~bind ~target body =
       (List.combine bind target)
   in
   bind_parameters ~bindings ~body
+
+let size t =
+  match descr t with
+  | Let let_expr -> Let_expr.size let_expr
+  | Let_cont let_cont -> Let_cont_expr.size let_cont
+  | Apply_cont apply_cont -> Apply_cont.size apply_cont
+  | Apply apply -> Apply.size apply
+  | Switch switch -> Switch.size switch
+  | Invalid _ -> Inlining_size.zero

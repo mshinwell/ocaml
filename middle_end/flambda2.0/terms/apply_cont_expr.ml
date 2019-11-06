@@ -224,3 +224,5 @@ let to_goto t =
 
 let clear_trap_action t =
   { t with trap_action = None; }
+
+let size _t = Inlining_size.one

@@ -18,9 +18,9 @@
 
 module T0 = struct
   type t = {
-      handlers : Continuation_handlers.t;
-      body : Expr.t;
-    }
+    handlers : Continuation_handlers.t;
+    body : Expr.t;
+  }
 
   let invariant _env _t = ()
 
@@ -51,17 +51,42 @@ module T0 = struct
     }
 end
 
-include Name_abstraction.Make_list (Bindable_continuation) (T0)
+module A = Name_abstraction.Make_list (Bindable_continuation) (T0)
+
+type t = {
+  abst : A.t;
+  size : Inlining_size.t;
+}
+
+let print ppf t : unit = A.print ppf t.abst
+
+let print_with_cache ~cache ppf t : unit = A.print_with_cache ~cache ppf t.abst
 
 let invariant _env _t = ()
 
 let create ~body handlers =
   let bound = Continuation_handlers.domain handlers in
   let handlers0 = T0.create ~body handlers in
-  create (Continuation.Set.elements bound) handlers0
+  let size =
+    Inlining_size.(+) (Expr.size body)
+      (Continuation_handlers.size handlers)
+  in
+  let abst = A.create (Continuation.Set.elements bound) handlers0 in
+  { abst;
+    size;
+  }
 
 let pattern_match t ~f =
-  pattern_match t ~f:(fun _bound handlers0 ->
-      let body = T0.body handlers0 in
-      let handlers = T0.handlers handlers0 in
-      f ~body handlers)
+  A.pattern_match t.abst ~f:(fun _bound handlers0 ->
+    let body = T0.body handlers0 in
+    let handlers = T0.handlers handlers0 in
+    f ~body handlers)
+
+let size t = t.size
+
+let apply_name_permutation ({ abst; size; } as t) perm =
+  let abst' = A.apply_name_permutation abst perm in
+  if abst == abst' then t
+  else { abst = abst'; size; }
+
+let free_names { abst; size = _; } = A.free_names abst

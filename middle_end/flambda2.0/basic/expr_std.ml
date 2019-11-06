@@ -26,5 +26,7 @@ module type S = sig
 
   val invariant : Invariant_env.t -> t -> unit
 
+  val size : t -> Inlining_size.t
+
   include Contains_names.S with type t := t
 end

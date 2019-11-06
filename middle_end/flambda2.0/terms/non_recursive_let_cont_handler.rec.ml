@@ -22,6 +22,7 @@ module Continuation_and_body =
 type t = {
   continuation_and_body : Continuation_and_body.t;
   handler : Continuation_handler.t;
+  size : Inlining_size.t;
 }
 
 let invariant _env _t = ()
@@ -34,8 +35,12 @@ let create continuation ~body handler =
   let continuation_and_body =
     Continuation_and_body.create continuation body
   in
+  let size =
+    Inlining_size.(+) (Expr.size body) (Continuation_handler.size handler)
+  in
   { continuation_and_body;
     handler;
+    size;
   }
 
 let pattern_match t ~f =
@@ -44,12 +49,12 @@ let pattern_match t ~f =
 
 let handler t = t.handler
 
-let free_names { continuation_and_body; handler; } =
+let free_names { continuation_and_body; handler; size = _; } =
   Name_occurrences.union
     (Continuation_and_body.free_names continuation_and_body)
     (Continuation_handler.free_names handler)
 
-let apply_name_permutation { continuation_and_body; handler; } perm =
+let apply_name_permutation { continuation_and_body; handler; size; } perm =
   let continuation_and_body' =
     Continuation_and_body.apply_name_permutation continuation_and_body perm
   in
@@ -58,4 +63,7 @@ let apply_name_permutation { continuation_and_body; handler; } perm =
   in
   { handler = handler';
     continuation_and_body = continuation_and_body';
+    size;
   }
+
+let size t = t.size

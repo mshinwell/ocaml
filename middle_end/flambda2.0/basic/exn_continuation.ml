@@ -115,3 +115,5 @@ let arity t =
 
 let with_exn_handler t exn_handler =
   { t with exn_handler; }
+
+let size _t = Inlining_size.zero

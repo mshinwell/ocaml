@@ -26,7 +26,7 @@ module Threshold : sig
       Flambda expression may be in order to be inlined. *)
   type t =
     | Never_inline
-    | Can_inline_if_no_larger_than of int
+    | Can_inline_if_no_larger_than of Inlining_size.t
 
   val add : t -> t -> t
   val sub : t -> t -> t
@@ -39,7 +39,7 @@ end
 val can_inline
    : Expr.t
   -> Threshold.t
-  -> bonus:int
+  -> bonus:Inlining_size.t
   -> bool
 
 module Benefit : sig
@@ -51,8 +51,10 @@ module Benefit : sig
   type t
 
   val zero : t
+(*
   val (+) : t -> t -> t
   val max : round:int -> t -> t -> t
+*)
 
   val remove_call : t -> t
   (* CR mshinwell: can we use remove_primitive instead of remove_alloc etc? *)
@@ -67,7 +69,9 @@ module Benefit : sig
   val direct_call_of_indirect_known_arity : t -> t
   val requested_inline : t -> size_of:Expr.t -> t
 
+(*
   val print : Format.formatter -> t -> unit
+*)
 end
 
 val scale_inline_threshold_by : int

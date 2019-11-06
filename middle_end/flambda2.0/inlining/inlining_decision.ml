@@ -55,12 +55,15 @@ let make_decision_for_function_declaration denv function_decl
             in
             (* CR-soon pchambart: Add a warning if this is too big
                mshinwell: later *)
-            Can_inline_if_no_larger_than
-              (int_of_float
-                (unscaled *.
-                  (float_of_int Inlining_cost.scale_inline_threshold_by)))
+            let limit =
+              int_of_float
+               (unscaled *.
+                 (float_of_int Inlining_cost.scale_inline_threshold_by))
+            in
+            Can_inline_if_no_larger_than (Inlining_size.of_int limit)
           in
-          if Inlining_cost.can_inline body inlining_threshold ~bonus:0
+          if Inlining_cost.can_inline body inlining_threshold
+               ~bonus:Inlining_size.zero
           then Inline
           else Function_body_too_large)
 

@@ -139,3 +139,9 @@ let dummy_value (kind : K.t) : t =
     | Fabricated -> Misc.fatal_error "[Fabricated] kind not expected here"
   in
   Simple simple
+
+let size t =
+  match t with
+  | Simple _ -> Inlining_size.one
+  | Prim (prim, _dbg) -> Flambda_primitive.size prim
+  | Set_of_closures set_of_closures -> Set_of_closures.size set_of_closures

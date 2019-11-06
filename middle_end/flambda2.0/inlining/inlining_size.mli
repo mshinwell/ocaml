@@ -14,21 +14,25 @@
 (*                                                                        *)
 (**************************************************************************)
 
+(** Measurement of the size of Flambda terms. *)
+
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-(** The result of pattern matching on [Recursive_let_cont_handlers]
-    (see above). *)
 type t
 
-(** Obtain the mapping from continuation to handler. *)
-val to_map : t -> Continuation_handler.t Continuation.Map.t
+include Identifiable.S with type t := t
 
-(** The domain of [to_map t]. *)
-val domain : t -> Continuation.Set.t
+val zero : t
+val one : t
 
-(** Whether any of the continuations are exception handlers. *)
-val contains_exn_handler : t -> bool
+val of_int : int -> t
 
-val size : t -> Inlining_size.t
+val (+) : t -> t -> t
+val (-) : t -> t -> t
 
-include Contains_names.S with type t := t
+val (<) : t -> t -> bool
+val (>) : t -> t -> bool
+
+val min : t -> t -> t
+
+val max_value : t

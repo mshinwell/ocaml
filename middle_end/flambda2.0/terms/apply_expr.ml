@@ -255,3 +255,5 @@ let with_continuation_callee_and_args t continuation ~callee ~args =
     callee;
     args;
   }
+
+let size t = Call_kind.size t.call_kind

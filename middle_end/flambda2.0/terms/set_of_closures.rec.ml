@@ -87,3 +87,5 @@ let apply_name_permutation
     { function_decls = function_decls';
       closure_elements = closure_elements';
     }
+
+let size t = Function_declarations.size t.function_decls

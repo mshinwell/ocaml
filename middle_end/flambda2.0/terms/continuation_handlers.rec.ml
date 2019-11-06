@@ -51,3 +51,9 @@ let contains_exn_handler t =
   Continuation.Map.exists (fun _cont handler ->
       Continuation_handler.is_exn_handler handler)
     t
+
+let size t =
+  Continuation.Map.fold (fun _cont handler size ->
+      Inlining_size.(+) (Continuation_handler.size handler) size)
+    t
+    Inlining_size.zero

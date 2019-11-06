@@ -20,12 +20,14 @@ type t = {
   params_and_handler : Continuation_params_and_handler.t;
   stub : bool;
   is_exn_handler : bool;
+  size : Inlining_size.t;
 }
 
 let invariant _env _t = ()
 
 let print_using_where_with_cache (recursive : Recursive.t) ~cache ppf k
-      ({ params_and_handler = _; stub; is_exn_handler; } as t) ~first =
+      ({ params_and_handler = _; stub; is_exn_handler; size = _; } as t)
+      ~first =
   if not first then begin
     fprintf ppf "@ "
   end;
@@ -49,7 +51,8 @@ let print_using_where_with_cache (recursive : Recursive.t) ~cache ppf k
         (Expr.print_with_cache ~cache) handler;
       fprintf ppf "@]")
 
-let print_with_cache ~cache ppf { params_and_handler; stub; is_exn_handler; } =
+let print_with_cache ~cache ppf
+      { params_and_handler; stub; is_exn_handler; size = _; } =
   Format.fprintf ppf "@[<hov 1>\
       @[<hov 1>(params_and_handler@ %a)@]@ \
       @[<hov 1>(stub@ %b)@]@ \
@@ -107,6 +110,7 @@ let create ~params_and_handler ~stub ~is_exn_handler =
   { params_and_handler;
     stub;
     is_exn_handler;
+    size = Continuation_params_and_handler.size params_and_handler;
   }
 
 let params_and_handler t = t.params_and_handler
@@ -114,12 +118,12 @@ let stub t = t.stub
 let is_exn_handler t = t.is_exn_handler
 
 let free_names
-      { params_and_handler; stub = _; is_exn_handler = _; } =
+      { params_and_handler; stub = _; is_exn_handler = _; size = _; } =
   Continuation_params_and_handler.free_names params_and_handler
 
 let apply_name_permutation
       ({ params_and_handler; stub;
-         is_exn_handler; } as t) perm =
+         is_exn_handler; size; } as t) perm =
   let params_and_handler' =
     Continuation_params_and_handler.apply_name_permutation
       params_and_handler perm
@@ -129,6 +133,7 @@ let apply_name_permutation
     { params_and_handler = params_and_handler';
       stub;
       is_exn_handler;
+      size;
     }
 
 type behaviour =
@@ -185,3 +190,5 @@ let arity t =
 
 let with_params_and_handler t params_and_handler =
   { t with params_and_handler; }
+
+let size t = t.size

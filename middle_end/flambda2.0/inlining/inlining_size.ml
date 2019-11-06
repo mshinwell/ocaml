@@ -16,19 +16,19 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-(** The result of pattern matching on [Recursive_let_cont_handlers]
-    (see above). *)
-type t
+include Numbers.Int
 
-(** Obtain the mapping from continuation to handler. *)
-val to_map : t -> Continuation_handler.t Continuation.Map.t
+let zero = 0
+let one = 1
 
-(** The domain of [to_map t]. *)
-val domain : t -> Continuation.Set.t
+let of_int t = t
 
-(** Whether any of the continuations are exception handlers. *)
-val contains_exn_handler : t -> bool
+let (+) t1 t2 = t1 + t2
+let (-) t1 t2 = t1 - t2
 
-val size : t -> Inlining_size.t
+let (<) t1 t2 = t1 < t2
+let (>) t1 t2 = t1 > t2
 
-include Contains_names.S with type t := t
+let min t1 t2 = min t1 t2
+
+let max_value = max_int

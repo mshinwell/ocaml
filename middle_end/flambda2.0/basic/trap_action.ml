@@ -94,3 +94,5 @@ module Option = struct
       else Some trap_action'
 *)
 end
+
+let size _t = Inlining_size.zero

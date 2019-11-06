@@ -24,6 +24,7 @@ module Bound_vars_and_body = Name_abstraction.Make (Bindable_let_bound) (Expr)
 type t = {
   bound_vars_and_body : Bound_vars_and_body.t;
   defining_expr : Named.t;
+  size : Inlining_size.t;
 }
 
 let pattern_match t ~f =
@@ -31,7 +32,7 @@ let pattern_match t ~f =
     ~f:(fun bound_vars body -> f ~bound_vars ~body)
 
 let print_with_cache ~cache ppf
-      ({ bound_vars_and_body = _; defining_expr; } as t) =
+      ({ bound_vars_and_body = _; defining_expr; size = _; } as t) =
   let let_bound_var_colour bound_vars =
     let kind = Bindable_let_bound.name_mode bound_vars in
     if Name_mode.is_phantom kind then
@@ -41,7 +42,7 @@ let print_with_cache ~cache ppf
   in
   let rec let_body (expr : Expr.t) =
     match Expr.descr expr with
-    | Let ({ bound_vars_and_body = _; defining_expr; } as t) ->
+    | Let ({ bound_vars_and_body = _; defining_expr; size = _; } as t) ->
       pattern_match t ~f:(fun ~bound_vars ~body ->
         fprintf ppf
           "@ @[<hov 1>@<0>%s%a@<0>%s =@<0>%s@ %a@]"
@@ -70,9 +71,11 @@ let print_with_cache ~cache ppf
 let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
 let create ~bound_vars ~defining_expr ~body =
+  let size = Inlining_size.(+) (Named.size defining_expr) (Expr.size body) in
   let bound_vars_and_body = Bound_vars_and_body.create bound_vars body in
   { bound_vars_and_body;
     defining_expr;
+    size;
   }
 
 let invariant env t =
@@ -108,7 +111,7 @@ let invariant env t =
 
 let defining_expr t = t.defining_expr
 
-let free_names ({ bound_vars_and_body = _; defining_expr; } as t) =
+let free_names ({ bound_vars_and_body = _; defining_expr; size = _; } as t) =
   pattern_match t ~f:(fun ~bound_vars ~body ->
     let name_mode =
       Bindable_let_bound.name_mode bound_vars
@@ -123,7 +126,7 @@ let free_names ({ bound_vars_and_body = _; defining_expr; } as t) =
     Name_occurrences.union from_defining_expr
       (Name_occurrences.remove_vars from_body bound_vars))
 
-let apply_name_permutation ({ bound_vars_and_body; defining_expr; } as t)
+let apply_name_permutation ({ bound_vars_and_body; defining_expr; size; } as t)
       perm =
   let bound_vars_and_body' =
     Bound_vars_and_body.apply_name_permutation bound_vars_and_body perm
@@ -137,4 +140,7 @@ let apply_name_permutation ({ bound_vars_and_body; defining_expr; } as t)
   else
     { bound_vars_and_body = bound_vars_and_body';
       defining_expr = defining_expr';
+      size;
     }
+
+let size t = t.size

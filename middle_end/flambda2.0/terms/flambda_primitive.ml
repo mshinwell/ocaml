@@ -588,6 +588,9 @@ let print_unary_primitive ppf p =
     Format.fprintf ppf "@[(Project_var@ %a)@]"
       Var_within_closure.print var_within_closure
 
+(* CR mshinwell: Fix all of these functions *)
+let size_of_unary_primitive _p = Inlining_size.one
+
 let arg_kind_of_unary_primitive p =
   match p with
   | Duplicate_block _ -> K.value
@@ -829,6 +832,8 @@ let print_binary_primitive ppf p =
   | Float_arith op -> print_binary_float_arith_op ppf op
   | Float_comp c -> print_comparison ppf c; fprintf ppf "."
 
+let size_of_binary_primitive _p = Inlining_size.one
+
 let args_kind_of_binary_primitive p =
   match p with
   | Block_load _ ->
@@ -931,6 +936,8 @@ let print_ternary_primitive ppf p =
     fprintf ppf "(Bytes_set %a %a)"
       print_bytes_like_value kind
       print_string_accessor_width string_accessor_width
+
+let size_of_ternary_primitive _p = Inlining_size.one
 
 let args_kind_of_ternary_primitive p =
   match p with
@@ -1042,6 +1049,8 @@ let print_variadic_primitive ppf p =
       num_dimensions
       print_bigarray_kind kind
       print_bigarray_layout layout
+
+let size_of_variadic_primitive _p = Inlining_size.one
 
 let args_kind_of_variadic_primitive p : arg_kinds =
   match p with
@@ -1355,6 +1364,13 @@ let at_most_generative_effects t =
   match effects_and_coeffects t with
   | (No_effects | Only_generative_effects _), _ -> true
   | _, _ -> false
+
+let size (t : t) =
+  match t with
+  | Unary (prim, _) -> size_of_unary_primitive prim
+  | Binary (prim, _, _) -> size_of_binary_primitive prim
+  | Ternary (prim, _, _, _) -> size_of_ternary_primitive prim
+  | Variadic (prim, _) -> size_of_variadic_primitive prim
 
 module Eligible_for_cse = struct
   type t = primitive_application

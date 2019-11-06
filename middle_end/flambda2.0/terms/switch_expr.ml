@@ -112,3 +112,6 @@ let apply_name_permutation ({ scrutinee; arms; } as t) perm =
   in
   if scrutinee == scrutinee' && arms == arms' then t
   else { scrutinee = scrutinee'; arms = arms'; }
+
+let size t =
+  Inlining_size.of_int (5 * Immediate.Map.cardinal t.arms)
