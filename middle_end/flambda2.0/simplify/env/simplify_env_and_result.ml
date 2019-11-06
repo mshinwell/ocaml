@@ -370,6 +370,7 @@ end = struct
     add_continuation0 t cont scope (Unreachable { arity; })
 
   let add_continuation_alias t cont arity ~alias_for =
+    let alias_for = resolve_continuation_aliases t alias_for in
     let alias_for_arity = continuation_arity t alias_for in
     if not (Flambda_arity.equal arity alias_for_arity) then begin
       Misc.fatal_errorf "%a (arity %a) cannot be an alias for %a (arity %a) \
