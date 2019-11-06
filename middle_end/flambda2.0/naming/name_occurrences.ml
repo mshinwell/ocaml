@@ -236,10 +236,12 @@ end = struct
       | Some kind -> Kind.Or_absent.present kind
 
   let downgrade_occurrences_at_strictly_greater_kind t max_kind =
-    N.Map.map (fun for_one_name ->
-        For_one_name.downgrade_occurrences_at_strictly_greater_kind for_one_name
-          max_kind)
-      t
+    if max_kind = Kind.top then t
+    else
+      N.Map.map (fun for_one_name ->
+          For_one_name.downgrade_occurrences_at_strictly_greater_kind
+            for_one_name max_kind)
+        t
 end
 
 module For_variables = For_one_variety_of_names (struct
