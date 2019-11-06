@@ -271,15 +271,14 @@ module type S = sig
   (* CR mshinwell: decide on exact strategy for mutable blocks *)
 
   (** The type of an immutable block with a known tag, size and field types. *)
-  val immutable_block : Tag.t -> fields:t list -> t
+  val immutable_block : Tag.t -> field_kind:Flambda_kind.t -> fields:t list -> t
 
   (** The type of an immutable block with at least [n] fields and an unknown
       tag. The type of the [n - 1]th field is taken to be an [Equals] to the
       given variable. *)
-  (* CR mshinwell: Should add "kind" argument?  Implementation assumes
-     "value" at the moment *)
   val immutable_block_with_size_at_least
      : n:Targetint.OCaml.t
+    -> field_kind:Flambda_kind.t
     -> field_n_minus_one:Variable.t
     -> t
 
