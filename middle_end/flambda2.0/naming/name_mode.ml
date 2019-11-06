@@ -63,6 +63,8 @@ let is_phantom t =
 let min_in_types = In_types
 let min_in_terms = Phantom
 
+let top = Normal
+
 let can_be_in_terms t =
   match t with
   | Normal | Phantom -> true

@@ -38,6 +38,8 @@ val is_phantom : t -> bool
 val min_in_types : t
 val min_in_terms : t
 
+val top : t
+
 val can_be_in_terms : t -> bool
 
 include Identifiable.S with type t := t

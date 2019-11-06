@@ -133,13 +133,21 @@ end = struct
 
     let downgrade_occurrences_at_strictly_greater_kind t max_kind =
       let max_kind = Kind.to_int max_kind in
-      let t = Array.copy t in
+      let needed = ref false in
       for kind = max_kind + 1 to Kind.max_to_int do
-        let count = t.(kind) in
-        t.(max_kind) <- t.(max_kind) + count;
-        t.(kind) <- 0
+        if t.(kind) > 0 then begin
+          needed := true
+        end
       done;
-      t
+      if not !needed then t
+      else
+        let t = Array.copy t in
+        for kind = max_kind + 1 to Kind.max_to_int do
+          let count = t.(kind) in
+          t.(max_kind) <- t.(max_kind) + count;
+          t.(kind) <- 0
+        done;
+        t
 
     let max_kind_opt t =
       let result = ref (-1) in
@@ -236,10 +244,20 @@ end = struct
       | Some kind -> Kind.Or_absent.present kind
 
   let downgrade_occurrences_at_strictly_greater_kind t max_kind =
-    N.Map.map (fun for_one_name ->
-        For_one_name.downgrade_occurrences_at_strictly_greater_kind for_one_name
-          max_kind)
-      t
+    (* CR-someday mshinwell: This can be condensed when the compiler
+       removes the closure allocation if [max_kind] is captured. *)
+    match Kind.descr max_kind with
+    | Normal -> t
+    | Phantom ->
+      N.Map.map (fun for_one_name ->
+          For_one_name.downgrade_occurrences_at_strictly_greater_kind
+            for_one_name Kind.phantom)
+        t
+    | In_types ->
+      N.Map.map (fun for_one_name ->
+          For_one_name.downgrade_occurrences_at_strictly_greater_kind
+            for_one_name Kind.in_types)
+        t
 end
 
 module For_variables = For_one_variety_of_names (struct
