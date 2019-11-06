@@ -169,15 +169,6 @@ end) = struct
 
   let invariant t =
     if !Clflags.flambda_invariant_checks then begin
-      let canonical_elements1 =
-        E.Set.of_list (E.Map.data t.canonical_elements)
-      in
-      let canonical_elements2 = E.Map.keys t.aliases_of_canonical_elements in
-      if not (E.Set.subset canonical_elements1 canonical_elements2) then begin
-        Misc.fatal_errorf "Range of [canonical_elements] is not a subset of \
-            the domain of [aliases_of_canonical_elements]:@ %a"
-          print t
-      end;
       let _all_aliases : E.Set.t =
         E.Map.fold (fun canonical_element aliases all_aliases ->
             Aliases_of_canonical_element.invariant aliases;
@@ -229,19 +220,16 @@ end) = struct
 
   let get_aliases_of_canonical_element t ~canonical_element =
     match E.Map.find canonical_element t.aliases_of_canonical_elements with
-    | exception Not_found ->
-      Misc.fatal_errorf "No alias map entry for canonical element %a"
-        E.print canonical_element
+    | exception Not_found -> Aliases_of_canonical_element.empty
     | aliases -> aliases
 
   let add_alias_between_canonical_elements t ~canonical_element ~to_be_demoted =
-    assert (E.Map.mem canonical_element t.aliases_of_canonical_elements);
-    assert (E.Map.mem to_be_demoted t.aliases_of_canonical_elements);
     if E.equal canonical_element to_be_demoted then
       t
     else
       let canonical_elements =
         t.canonical_elements
+        (* CR mshinwell: A lot of allocation here *)
         |> E.Map.map (fun element ->
              if E.equal element to_be_demoted then canonical_element
              else element)
@@ -395,13 +383,8 @@ Format.eprintf "add canonical %a:\n%s\n%!"
         (* CR mshinwell: Major source of allocation *)
         E.Map.add element element t.canonical_elements
       in
-      let aliases_of_canonical_elements =
-        (* CR mshinwell: Major source of allocation *)
-        E.Map.add element Aliases_of_canonical_element.empty
-          t.aliases_of_canonical_elements
-      in
       { canonical_elements;
-        aliases_of_canonical_elements;
+        aliases_of_canonical_elements = t.aliases_of_canonical_elements;
       }
     end
 
