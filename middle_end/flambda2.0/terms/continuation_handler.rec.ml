@@ -142,6 +142,8 @@ type behaviour =
   | Unknown of { arity : Flambda_arity.t; }
 
 let behaviour t : behaviour =
+  (* CR mshinwell: Maybe [behaviour] should be cached, to avoid re-opening
+     the abstraction? *)
   (* This could be replaced by a more sophisticated analysis, but for the
      moment we just use a simple syntactic check. *)
   Continuation_params_and_handler.pattern_match t.params_and_handler
