@@ -22,7 +22,7 @@ include Identifiable.S
    Hmm, except that in e.g. Flambda.make_closure_declaration we still have
    uses *)
 
-val wrap : Variable.t -> t
+val wrap : Compilation_unit.t -> Variable.t -> t
 
 val unwrap : t -> Variable.t
 
