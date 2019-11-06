@@ -95,63 +95,67 @@ end = struct
 
     val union : t -> t -> t
   end = struct
-    type t = int Kind.Map.t
+    type t = int array
 
     let print ppf t =
+      let by_kind =
+        t
+        |> Array.mapi (fun mode count -> Kind.of_int mode, count)
+        |> Array.to_list
+        |> Kind.Map.of_list
+      in
       Format.fprintf ppf "@[<hov 1>(\
           @[<hov 1>(by_kind %a)@]\
           )@]"
-        (Kind.Map.print Format.pp_print_int) t
+        (Kind.Map.print Format.pp_print_int) by_kind
 
     let invariant t =
       (* CR mshinwell: Check num_occurrences *)
-      if Kind.Map.exists (fun _kind count -> count <= 0) t
+      if Array.length t <> Kind.max_to_int + 1
+        || Array.exists (fun count -> count < 0) t
       then begin
         Misc.fatal_errorf "[For_one_name] invariant failed:@ %a" print t
       end
 
     let num_occurrences t =
-      Kind.Map.fold (fun _name num_occs total -> num_occs + total)
-        t
-        0
+      Array.fold_left (fun total num_occs -> num_occs + total) 0 t
 
-    let one_occurrence kind = Kind.Map.singleton kind 1
+    let one_occurrence kind =
+      let kind = Kind.to_int kind in
+      Array.init (Kind.max_to_int + 1)
+        (fun mode -> if mode = kind then 1 else 0)
 
     let add t kind =
-      Kind.Map.update kind (function
-          | None -> Some 1
-          | Some count -> Some (count + 1))
-        t
+      let kind = Kind.to_int kind in
+      let t = Array.copy t in
+      t.(kind) <- t.(kind) + 1;
+      t
 
     let downgrade_occurrences_at_strictly_greater_kind t max_kind =
-      let strictly_less, at_max_kind, strictly_greater =
-        Kind.Map.split max_kind t
-      in
-      let count_at_max_kind =
-        Kind.Map.fold (fun _kind count count_at_max_kind ->
-            count + count_at_max_kind)
-          strictly_greater
-          (Option.value at_max_kind ~default:0)
-      in
-      if count_at_max_kind > 0 then
-        Kind.Map.add max_kind count_at_max_kind strictly_less
-      else
-        strictly_less
+      let max_kind = Kind.to_int max_kind in
+      let t = Array.copy t in
+      for kind = max_kind + 1 to Kind.max_to_int do
+        let count = t.(kind) in
+        t.(max_kind) <- t.(max_kind) + count;
+        t.(kind) <- 0
+      done;
+      t
 
     let max_kind_opt t =
-      match Kind.Map.max_binding_opt t with
-      | None -> None
-      | Some (kind, _count) -> Some kind
+      let result = ref (-1) in
+      for mode = 0 to Kind.max_to_int do
+        if t.(mode) > 0 then begin
+          result := mode
+        end;
+      done;
+      if !result < 0 then None else Some (Kind.of_int !result)
 
     let union t1 t2 =
-      Kind.Map.merge (fun _kind count1 count2 ->
-          let count1 = Option.value count1 ~default:0 in
-          let count2 = Option.value count2 ~default:0 in
-          let count = count1 + count2 in
-          assert (count >= 0);
-          if count = 0 then None
-          else Some count)
-        t1 t2
+      let t = Array.copy t1 in
+      for mode = 0 to Kind.max_to_int do
+        t.(mode) <- t.(mode) + t2.(mode)
+      done;
+      t
   end
 
   type t = For_one_name.t N.Map.t
