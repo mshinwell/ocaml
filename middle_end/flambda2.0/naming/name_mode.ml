@@ -35,6 +35,21 @@ let normal = Normal
 let in_types = In_types
 let phantom = Phantom
 
+let of_int i =
+  match i with
+  | 0 -> Normal
+  | 1 -> Phantom
+  | 2 -> In_types
+  | _ -> Misc.fatal_errorf "Name_mode.of_int %d" i
+
+let to_int t =
+  match t with
+  | Normal -> 0
+  | Phantom -> 1
+  | In_types -> 2
+
+let max_to_int = 2
+
 let is_normal t =
   match t with
   | Normal -> true
