@@ -456,8 +456,7 @@ let blocks_with_these_tags tags =
     ~immediates:(Known (bottom K.naked_immediate))
     ~blocks:(Known blocks)))))
 
-let immutable_block tag ~fields =
-  (* CR mshinwell: We should check the field kinds against the tag. *)
+let immutable_block tag ~field_kind ~fields =
   match Targetint.OCaml.of_int_option (List.length fields) with
   | None ->
     (* CR mshinwell: This should be a special kind of error. *)
@@ -465,19 +464,20 @@ let immutable_block tag ~fields =
   | Some _size ->
     Value (T_V.create_no_alias (Ok (Variant (T_V.Variant.create
       ~immediates:(Known (bottom K.naked_immediate))
-      ~blocks:(Known (Row_like.For_blocks.create
+      ~blocks:(Known (Row_like.For_blocks.create ~field_kind
         ~field_tys:fields (Closed tag)))))))
 
-let immutable_block_with_size_at_least ~n ~field_n_minus_one =
+let immutable_block_with_size_at_least ~n ~field_kind ~field_n_minus_one =
   let n = Targetint.OCaml.to_int n in
   let field_tys =
     List.init n (fun index ->
-        if index < n - 1 then any_value ()
-        else alias_type_of K.value (Simple.var field_n_minus_one))
+        if index < n - 1 then unknown field_kind
+        else alias_type_of field_kind (Simple.var field_n_minus_one))
   in
   Value (T_V.create_no_alias (Ok (Variant (T_V.Variant.create
     ~immediates:(Known (bottom K.naked_immediate))
-    ~blocks:(Known (Row_like.For_blocks.create ~field_tys (Open Unknown)))))))
+    ~blocks:(Known (Row_like.For_blocks.create ~field_kind
+      ~field_tys (Open Unknown)))))))
 
 let this_immutable_string str =
   (* CR mshinwell: Use "length" not "size" for strings *)

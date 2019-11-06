@@ -322,13 +322,73 @@ module For_blocks = struct
 
   type open_or_closed = Open of Tag.t Or_unknown.t | Closed of Tag.t
 
-  let create ~field_tys (open_or_closed : open_or_closed) =
+  let create ~(field_kind : Flambda_kind.t) ~field_tys
+        (open_or_closed : open_or_closed) =
+    let field_kind' =
+      List.map Type_grammar.kind field_tys
+      |> Flambda_kind.Set.of_list
+      |> Flambda_kind.Set.get_singleton
+    in
+    begin match field_kind' with
+    | None ->
+      if List.length field_tys <> 0 then begin
+        Misc.fatal_error "[field_tys] must all be of the same kind"
+      end
+    | Some field_kind' ->
+      if not (Flambda_kind.equal field_kind field_kind') then begin
+        Misc.fatal_errorf "Declared field kind %a doesn't match [field_tys]"
+          Flambda_kind.print field_kind
+      end
+    end;
+    let tag : _ Or_unknown.t =
+      let tag : _ Or_unknown.t =
+        match open_or_closed with
+        | Open (Known tag) -> Known tag
+        | Open Unknown -> Unknown
+        | Closed tag -> Known tag
+      in
+      match tag with
+      | Unknown ->
+        begin match field_kind with
+        | Value -> Unknown
+        | Naked_number Naked_float -> Known Tag.double_array_tag
+        | Naked_number Naked_immediate | Naked_number Naked_int32
+        | Naked_number Naked_int64 | Naked_number Naked_nativeint
+        | Fabricated ->
+          Misc.fatal_errorf "Bad kind %a for fields"
+            Flambda_kind.print field_kind
+        end
+      | Known tag ->
+        begin match field_kind with
+        | Value ->
+          begin match Tag.Scannable.of_tag tag with
+          | Some _ -> Known tag
+          | None ->
+            Misc.fatal_error "Blocks full of [Value]s must have a tag \
+              less than [No_scan_tag]"
+          end
+        | Naked_number Naked_float ->
+          if not (Tag.equal tag Tag.double_array_tag) then begin
+            Misc.fatal_error "Blocks full of naked floats must have tag \
+              [Tag.double_array_tag]"
+          end;
+          Known tag
+        | Naked_number Naked_immediate | Naked_number Naked_int32
+        | Naked_number Naked_int64 | Naked_number Naked_nativeint
+        | Fabricated ->
+          Misc.fatal_errorf "Bad kind %a for fields"
+            Flambda_kind.print field_kind
+        end
+    in
     let fields = List.mapi (fun index ty -> index, ty) field_tys in
     let product = Product.Int_indexed.create (Int.Map.of_list fields) in
     let size = Targetint.OCaml.of_int (List.length field_tys) in
     match open_or_closed with
-    | Open tag -> create_at_least (tag, size) product
-    | Closed tag -> create_exactly tag size product
+    | Open _ -> create_at_least (tag, size) product
+    | Closed _ ->
+      match tag with
+      | Known tag -> create_exactly tag size product
+      | Unknown -> assert false  (* see above *)
 
   let create_blocks_with_these_tags tags =
     let at_least =

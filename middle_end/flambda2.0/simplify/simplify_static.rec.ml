@@ -215,7 +215,10 @@ let simplify_static_part_of_kind_value dacc
         fields
     in
     let fields, field_tys = List.split fields_with_tys in
-    let ty = T.immutable_block (Tag.Scannable.to_tag tag) ~fields:field_tys in
+    let ty =
+      T.immutable_block (Tag.Scannable.to_tag tag) ~field_kind:K.value
+        ~fields:field_tys
+    in
     let dacc = bind_result_sym ty in
     Block (tag, is_mutable, fields), dacc
   | Fabricated_block var ->

@@ -203,14 +203,32 @@ module Make (U : Unboxing_spec) = struct
       typing_env, param_type, extra_params_and_args
 end
 
-module Block_spec : Unboxing_spec = struct
+module Block_of_values_spec : Unboxing_spec = struct
   let var_name = "unboxed"
 
-  let make_boxed_value = T.immutable_block
-  let make_boxed_value_with_size_at_least = T.immutable_block_with_size_at_least
+  let make_boxed_value tag ~fields =
+    T.immutable_block tag ~field_kind:Flambda_kind.value ~fields
+
+  let make_boxed_value_with_size_at_least ~n ~field_n_minus_one =
+    T.immutable_block_with_size_at_least ~n
+      ~field_kind:Flambda_kind.value ~field_n_minus_one
 
   let project_field ~block ~index =
     P.Binary (Block_load (Block (Value Anything), Immutable), block, index)
+end
+
+module Block_of_naked_floats_spec : Unboxing_spec = struct
+  let var_name = "unboxed"
+
+  let make_boxed_value tag ~fields =
+    T.immutable_block tag ~field_kind:Flambda_kind.naked_float ~fields
+
+  let make_boxed_value_with_size_at_least ~n ~field_n_minus_one =
+    T.immutable_block_with_size_at_least ~n
+      ~field_kind:Flambda_kind.naked_float ~field_n_minus_one
+
+  let project_field ~block ~index =
+    P.Binary (Block_load (Block Naked_float, Immutable), block, index)
 end
 
 module Make_unboxed_number_spec (N : sig
@@ -287,7 +305,8 @@ module Nativeint_spec : Unboxing_spec = Make_unboxed_number_spec (struct
   let box = T.box_nativeint
 end)
 
-module Blocks = Make (Block_spec)
+module Blocks_of_values = Make (Block_of_values_spec)
+module Blocks_of_naked_floats = Make (Block_of_naked_floats_spec)
 module Immediates = Make (Immediate_spec)
 module Floats = Make (Float_spec)
 module Int32s = Make (Int32_spec)
@@ -314,9 +333,24 @@ let rec make_unboxing_decision typing_env ~depth ~arg_types_by_use_id
   else
     match T.prove_unique_tag_and_size typing_env param_type with
     | Proved (tag, size) ->
-      Blocks.unbox_one_parameter typing_env ~depth ~arg_types_by_use_id
-        ~param_type extra_params_and_args ~unbox_value:make_unboxing_decision
-        tag size K.value
+      (* If the fields have kind [Naked_float] then the [tag] will always
+         be [Tag.double_array_tag].  See [Row_like.For_blocks]. *)
+      if Tag.equal tag Tag.double_array_tag then
+        Blocks_of_naked_floats.unbox_one_parameter typing_env ~depth
+          ~arg_types_by_use_id ~param_type extra_params_and_args
+          ~unbox_value:make_unboxing_decision tag size K.naked_float
+      else
+        begin match Tag.Scannable.of_tag tag with
+        | Some _ ->
+          Blocks_of_values.unbox_one_parameter typing_env ~depth
+            ~arg_types_by_use_id ~param_type extra_params_and_args
+            ~unbox_value:make_unboxing_decision tag size K.value
+        | None ->
+          Misc.fatal_errorf "Block that is not of tag [Double_array_tag] \
+              and yet also not scannable:@ %a@ in env:@ %a"
+            T.print param_type
+            TE.print typing_env
+        end
     | Wrong_kind | Invalid | Unknown ->
       let rec try_unboxing = function
         | [] -> typing_env, param_type, extra_params_and_args

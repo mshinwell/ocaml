@@ -29,7 +29,11 @@ module For_blocks : sig
 
   type open_or_closed = Open of Tag.t Or_unknown.t | Closed of Tag.t
 
-  val create : field_tys:Type_grammar.t list -> open_or_closed -> t
+  val create
+     : field_kind:Flambda_kind.t
+    -> field_tys:Type_grammar.t list
+    -> open_or_closed
+    -> t
 
   val create_blocks_with_these_tags : Tag.Set.t -> t
 

@@ -70,7 +70,7 @@ Format.eprintf "simplifying make_block on %a (num args %d)\n%!"
       let tag = Tag.Scannable.to_tag tag in
       let ty =
         match mutable_or_immutable with
-        | Immutable -> T.immutable_block tag ~fields
+        | Immutable -> T.immutable_block tag ~field_kind:K.value ~fields
         | Mutable -> T.any_value ()
       in
       let env_extension = TEE.one_equation (Name.var result_var) ty in
