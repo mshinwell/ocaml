@@ -17,6 +17,8 @@
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
 type t = {
+  (* CR mshinwell: Due to the new name strategy, [compilation_unit] shouldn't
+     be needed any more.  Same for [Continuation] etc. *)
   compilation_unit : Compilation_unit.t;
   name : string;
   name_stamp : int;
