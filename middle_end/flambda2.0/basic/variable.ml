@@ -17,55 +17,52 @@
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
 type t = {
-  (* CR mshinwell: Due to the new name strategy, [compilation_unit] shouldn't
-     be needed any more.  Same for [Continuation] etc. *)
-  compilation_unit : Compilation_unit.t;
   name : string;
   name_stamp : int;
-  (** [name_stamp]s are unique within any given compilation unit. *)
+  (** [name_stamp]s are unique within any given compilation unit.
+      We don't need to store the compilation unit because no variables are
+      free in a complete program.  Any variables seen (which might e.g. have
+      come from another compilation unit) will always be freshened first. *)
   user_visible : bool;
 }
+
+let compare0 t1 t2 =
+  if t1 == t2 then 0
+  else t1.name_stamp - t2.name_stamp
+
+let equal0 t1 t2 = (compare0 t1 t2 = 0)
 
 module Self = Identifiable.Make (struct
   type nonrec t = t
 
-  let compare t1 t2 =
-    if t1 == t2 then 0
-    else
-      let c = t1.name_stamp - t2.name_stamp in
-      if c <> 0 then c
-      else Compilation_unit.compare t1.compilation_unit t2.compilation_unit
+  let compare = compare0
 
-  let equal t1 t2 = (compare t1 t2 = 0)
+  let equal = equal0
 
-  let hash t = t.name_stamp lxor (Compilation_unit.hash t.compilation_unit)
+  let hash t = t.name_stamp
 
-  let print ppf t =
-    if Compilation_unit.equal t.compilation_unit
-        (Compilation_unit.get_current_exn ())
-    then begin
-      Format.fprintf ppf "%s/%d"
-        t.name t.name_stamp
-    end else begin
-      Format.fprintf ppf "%a.%s/%d"
-        Compilation_unit.print t.compilation_unit
-        t.name t.name_stamp
-    end
+  let print ppf t = Format.fprintf ppf "%s/%d" t.name t.name_stamp
 
-  let output chan t =
-    print (Format.formatter_of_out_channel chan) t
+  let output chan t = print (Format.formatter_of_out_channel chan) t
 end)
 
 include Self
 
+let compare = compare0
+
+let equal = equal0
+
 let previous_name_stamp = ref (-1)
 
 let create ?current_compilation_unit ?user_visible name =
+  ignore current_compilation_unit;
+(*
   let compilation_unit =
     match current_compilation_unit with
     | Some compilation_unit -> compilation_unit
     | None -> Compilation_unit.get_current_exn ()
   in
+*)
   let name_stamp =
     incr previous_name_stamp;
     !previous_name_stamp
@@ -76,8 +73,7 @@ if name_stamp = 285366 then begin
     (Printexc.raw_backtrace_to_string (Printexc.get_callstack 10))
 end;
 *)
-  { compilation_unit;
-    name;
+  { name;
     name_stamp;
     user_visible = Option.is_some user_visible;
   }
@@ -86,9 +82,6 @@ let create_with_same_name_as_ident ?user_visible ident : t =
   create ?user_visible (Ident.name ident)
 
 let fresh () : t = create "fresh"
-
-let clambda_name t =
-  (Compilation_unit.string_for_printing t.compilation_unit) ^ "_" ^ t.name
 
 let rename ?current_compilation_unit ?append t =
   let current_compilation_unit =
@@ -108,11 +101,6 @@ let user_visible t = t.user_visible
 
 let with_user_visible t ~user_visible =
   { t with user_visible; }
-
-let in_compilation_unit t cu =
-  Compilation_unit.equal cu t.compilation_unit
-
-let get_compilation_unit t = t.compilation_unit
 
 let raw_name t = t.name
 let raw_name_stamp t = t.name_stamp

@@ -84,8 +84,8 @@ let unwrap t =
   Variable.create ~current_compilation_unit:t.compilation_unit
     (to_string t)
 
-let wrap var =
-  { compilation_unit = Variable.get_compilation_unit var;
+let wrap compilation_unit var =
+  { compilation_unit;
     name = Variable.raw_name var;
     name_stamp = get_next_stamp ();
   }

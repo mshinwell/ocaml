@@ -142,6 +142,7 @@ let add_name t name kind =
         in some other scope"
       Name.print name
   end;
+(*
   let compilation_unit = Compilation_unit.get_current_exn () in
   if not (Name.in_compilation_unit name compilation_unit) then begin
     Misc.fatal_errorf "Binding occurrence of name %a cannot occur in \
@@ -149,6 +150,7 @@ let add_name t name kind =
         unit"
       Name.print name
   end;
+*)
   t.all_names_seen := Name.Set.add name !(t.all_names_seen);
   { t with
     names = Name.Map.add name kind t.names;

@@ -545,6 +545,7 @@ and close_let_rec t env ~defs ~body =
       defs env
   in
   let recursive_functions = Ilambda.recursive_functions defs in
+  let compilation_unit = Compilation_unit.get_current_exn () in
   let function_declarations =
     List.map (function (let_rec_ident,
             ({ kind; return_continuation; exn_continuation;
@@ -552,7 +553,7 @@ and close_let_rec t env ~defs ~body =
                attr; loc; stub;
              } : Ilambda.function_declaration)) ->
         let closure_id =
-          Closure_id.wrap
+          Closure_id.wrap compilation_unit
             (Variable.create_with_same_name_as_ident let_rec_ident)
         in
         let recursive : Recursive.t =
@@ -613,10 +614,11 @@ and close_functions t external_env function_declarations =
     Ident.Set.filter (fun ident -> not (Ident.is_predef ident))
       (Function_decls.all_free_idents function_declarations)
   in
+  let compilation_unit = Compilation_unit.get_current_exn () in
   let var_within_closures_from_idents =
     Ident.Set.fold (fun id map ->
         let var = Variable.create_with_same_name_as_ident id in
-        Ident.Map.add id (Var_within_closure.wrap var) map)
+        Ident.Map.add id (Var_within_closure.wrap compilation_unit var) map)
       all_free_idents
       Ident.Map.empty
   in
@@ -658,8 +660,9 @@ and close_one_function t ~external_env ~by_closure_id decl
   let my_closure = Variable.create "my_closure" in
   let closure_id = Function_decl.closure_id decl in
   let our_let_rec_ident = Function_decl.let_rec_ident decl in
+  let compilation_unit = Compilation_unit.get_current_exn () in
   let unboxed_version =
-    Closure_id.wrap (Variable.create (
+    Closure_id.wrap compilation_unit (Variable.create (
       Ident.name (Function_decl.let_rec_ident decl)))
   in
   let my_closure_id =

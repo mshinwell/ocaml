@@ -36,9 +36,6 @@ val create
 
 val create_with_same_name_as_ident : ?user_visible:unit -> Ident.t -> t
 
-val clambda_name : t -> string
-(* CR-someday pchambart: Should we propagate Variable.t into clambda ??? *)
-
 (* CR mshinwell: check on gdb branch if this preserves the "original ident".
    Sometimes it should and other times it should not (eg unboxing) *)
 val rename
@@ -53,11 +50,7 @@ val user_visible : t -> bool
 
 val with_user_visible : t -> user_visible:bool -> t
 
-val in_compilation_unit : t -> Compilation_unit.t -> bool
-
 val unique_name : t -> string
-
-val get_compilation_unit : t -> Compilation_unit.t
 
 val print_list : Format.formatter -> t list -> unit
 val print_opt : Format.formatter -> t option -> unit
