@@ -169,15 +169,6 @@ end) = struct
 
   let invariant t =
     if !Clflags.flambda_invariant_checks then begin
-      let canonical_elements1 =
-        E.Set.of_list (E.Map.data t.canonical_elements)
-      in
-      let canonical_elements2 = E.Map.keys t.aliases_of_canonical_elements in
-      if not (E.Set.subset canonical_elements1 canonical_elements2) then begin
-        Misc.fatal_errorf "Range of [canonical_elements] is not a subset of \
-            the domain of [aliases_of_canonical_elements]:@ %a"
-          print t
-      end;
       let _all_aliases : E.Set.t =
         E.Map.fold (fun canonical_element aliases all_aliases ->
             Aliases_of_canonical_element.invariant aliases;
