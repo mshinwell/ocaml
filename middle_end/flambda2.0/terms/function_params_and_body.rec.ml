@@ -41,13 +41,18 @@ module T0 = struct
 end
 module T1 = Name_abstraction.Make_list (Kinded_parameter) (T0)
 module T2 = Name_abstraction.Make (Bindable_exn_continuation) (T1)
-include Name_abstraction.Make (Bindable_continuation) (T2)
+module A = Name_abstraction.Make (Bindable_continuation) (T2)
+
+type t = {
+  abst : A.t;
+  params_arity : Flambda_arity.t;
+}
 
 let invariant _env _t = ()
 
-let print ppf t : unit = print ppf t
+let print ppf t : unit = A.print ppf t.abst
 
-let print_with_cache ~cache ppf t : unit = print_with_cache ~cache ppf t
+let print_with_cache ~cache ppf t : unit = A.print_with_cache ~cache ppf t.abst
 
 let create ~return_continuation exn_continuation params ~body ~my_closure =
   let t0 : T0.t =
@@ -59,10 +64,13 @@ let create ~return_continuation exn_continuation params ~body ~my_closure =
   in
   let t1 = T1.create (params @ [my_closure]) t0 in
   let t2 = T2.create exn_continuation t1 in
-  create return_continuation t2
+  let abst = A.create return_continuation t2 in
+  { abst;
+    params_arity = Kinded_parameter.List.arity params;
+  }
 
 let pattern_match t ~f =
-  pattern_match t ~f:(fun return_continuation t2 ->
+  A.pattern_match t.abst ~f:(fun return_continuation t2 ->
     T2.pattern_match t2 ~f:(fun exn_continuation t1 ->
       T1.pattern_match t1 ~f:(fun params_and_my_closure t0 ->
         let params, my_closure =
@@ -73,3 +81,12 @@ let pattern_match t ~f =
         in
         f ~return_continuation exn_continuation params ~body:t0.body
           ~my_closure)))
+
+let params_arity t = t.params_arity
+
+let apply_name_permutation ({ abst; params_arity; } as t) perm =
+  let abst' = A.apply_name_permutation abst perm in
+  if abst == abst' then t
+  else { abst = abst'; params_arity; }
+
+let free_names { abst; params_arity = _; } = A.free_names abst

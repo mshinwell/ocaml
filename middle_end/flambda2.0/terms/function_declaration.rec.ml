@@ -185,8 +185,4 @@ let apply_name_permutation
       recursive;
     }
 
-let params_arity t =
-  Function_params_and_body.pattern_match t.params_and_body
-    ~f:(fun ~return_continuation:_ _exn_continuation params ~body:_
-            ~my_closure:_ ->
-      KP.List.arity params)
+let params_arity t = Function_params_and_body.params_arity t.params_and_body

@@ -58,3 +58,5 @@ val pattern_match
     -> my_closure:Variable.t
     -> 'a)
   -> 'a
+
+val params_arity : t -> Flambda_arity.t
