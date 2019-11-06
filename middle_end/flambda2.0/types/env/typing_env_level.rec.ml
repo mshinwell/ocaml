@@ -582,10 +582,19 @@ Format.eprintf "new CSE:@ %a"
         | ty ->
           Variable.Set.union allowed
             (Typing_env.free_variables_transitive env_at_use ty))
-      (* CR mshinwell: The following [name_domain] is a major source of
-         allocation *)
-      (Name.Set.union (Typing_env.name_domain initial_env_at_join) used_in_cse)
+      (Typing_env.name_domain initial_env_at_join)
       (Variable.Set.union vars_at_join (Name.set_to_var_set used_in_cse))
+  in
+  let allowed =
+    (* CR mshinwell: factor out.  (Split from above to avoid a set union.) *)
+    Name.Set.fold (fun name allowed ->
+        match Name.Map.find name t.equations with
+        | exception Not_found -> allowed
+        | ty ->
+          Variable.Set.union allowed
+            (Typing_env.free_variables_transitive env_at_use ty))
+      used_in_cse
+      allowed
   in
   (*
 Format.eprintf "allowed vars are %a\n%!" Variable.Set.print allowed;
