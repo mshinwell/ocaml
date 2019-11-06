@@ -323,9 +323,7 @@ let domain0 t =
 let var_domain t =
   Cached.var_domain (One_level.just_after_level t.current_level)
 
-let name_domain t =
-  Name.Set.union (Name.set_of_var_set (var_domain t))
-    (Name.set_of_symbol_set (Symbol.Map.keys t.defined_symbols))
+let name_domain t = domain0 t
 
 let find t name =
   match Name.Map.find name (names_to_types t) with
