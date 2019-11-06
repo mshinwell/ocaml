@@ -622,8 +622,6 @@ let non_trivial_join ~initial_env_at_join:env_at_join envs_with_levels =
   assert (List.length envs_with_levels > 1);
   (* For non-trivial joins, no existentials are currently propagated. *)
   let names_with_equations_in_join =
-    (* CR mshinwell: Large amount of allocation caused by this
-       [name_domain] *)
     let names_at_join = Typing_env.name_domain env_at_join in
     List.fold_left
       (fun names_with_equations_in_join (_env, _id, _use_kind, _vars, t) ->
