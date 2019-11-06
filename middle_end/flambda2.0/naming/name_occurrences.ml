@@ -95,48 +95,37 @@ end = struct
 
     val union : t -> t -> t
   end = struct
-    type t = {
-      num_occurrences : int;
-      by_kind : int Kind.Map.t;
-    }
+    type t = int Kind.Map.t
 
-    let print ppf { num_occurrences; by_kind; } =
+    let print ppf t =
       Format.fprintf ppf "@[<hov 1>(\
-          @[<hov 1>(num_occurrences %d)@]@ \
           @[<hov 1>(by_kind %a)@]\
           )@]"
-        num_occurrences
-        (Kind.Map.print Format.pp_print_int) by_kind
+        (Kind.Map.print Format.pp_print_int) t
 
-    let invariant ({ num_occurrences = _; by_kind; } as t) =
+    let invariant t =
       (* CR mshinwell: Check num_occurrences *)
-      if Kind.Map.is_empty by_kind
-        || Kind.Map.exists (fun _kind count -> count <= 0) by_kind
+      if Kind.Map.exists (fun _kind count -> count <= 0) t
       then begin
         Misc.fatal_errorf "[For_one_name] invariant failed:@ %a" print t
       end
 
-    let num_occurrences t = t.num_occurrences
+    let num_occurrences t =
+      Kind.Map.fold (fun _name num_occs total -> num_occs + total)
+        t
+        0
 
-    let one_occurrence kind =
-      { num_occurrences = 1;
-        by_kind = Kind.Map.singleton kind 1;
-      }
+    let one_occurrence kind = Kind.Map.singleton kind 1
 
     let add t kind =
-      let by_kind =
-        Kind.Map.update kind (function
-            | None -> Some 1
-            | Some count -> Some (count + 1))
-          t.by_kind
-      in
-      { num_occurrences = t.num_occurrences + 1;
-        by_kind;
-      }
+      Kind.Map.update kind (function
+          | None -> Some 1
+          | Some count -> Some (count + 1))
+        t
 
     let downgrade_occurrences_at_strictly_greater_kind t max_kind =
       let strictly_less, at_max_kind, strictly_greater =
-        Kind.Map.split max_kind t.by_kind
+        Kind.Map.split max_kind t
       in
       let count_at_max_kind =
         Kind.Map.fold (fun _kind count count_at_max_kind ->
@@ -144,37 +133,25 @@ end = struct
           strictly_greater
           (Option.value at_max_kind ~default:0)
       in
-      let by_kind =
-        if count_at_max_kind > 0 then
-          Kind.Map.add max_kind count_at_max_kind strictly_less
-        else
-          strictly_less
-      in
-      { num_occurrences = t.num_occurrences;
-        by_kind;
-      }
+      if count_at_max_kind > 0 then
+        Kind.Map.add max_kind count_at_max_kind strictly_less
+      else
+        strictly_less
 
     let max_kind_opt t =
-      match Kind.Map.max_binding_opt t.by_kind with
+      match Kind.Map.max_binding_opt t with
       | None -> None
       | Some (kind, _count) -> Some kind
 
     let union t1 t2 =
-      let by_kind =
-        Kind.Map.merge (fun _kind count1 count2 ->
-            let count1 = Option.value count1 ~default:0 in
-            let count2 = Option.value count2 ~default:0 in
-            let count = count1 + count2 in
-            assert (count >= 0);
-            if count = 0 then None
-            else Some count)
-          t1.by_kind t2.by_kind
-      in
-      assert (not (Kind.Map.is_empty by_kind));
-      let num_occurrences = t1.num_occurrences + t2.num_occurrences in
-      { num_occurrences;
-        by_kind;
-      }
+      Kind.Map.merge (fun _kind count1 count2 ->
+          let count1 = Option.value count1 ~default:0 in
+          let count2 = Option.value count2 ~default:0 in
+          let count = count1 + count2 in
+          assert (count >= 0);
+          if count = 0 then None
+          else Some count)
+        t1 t2
   end
 
   type t = For_one_name.t N.Map.t
