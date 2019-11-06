@@ -131,6 +131,8 @@ end = struct
       t.(kind) <- t.(kind) + 1;
       t
 
+    (* CR mshinwell: Add -strict-sequence to the build *)
+
     let downgrade_occurrences_at_strictly_greater_kind t max_kind =
       let max_kind = Kind.to_int max_kind in
       let needed = ref false in
@@ -140,7 +142,7 @@ end = struct
         end
       done;
       if not !needed then t
-      else
+      else begin
         let t = Array.copy t in
         for kind = max_kind + 1 to Kind.max_to_int do
           let count = t.(kind) in
@@ -148,6 +150,7 @@ end = struct
           t.(kind) <- 0
         done;
         t
+      end
 
     let max_kind_opt t =
       let result = ref (-1) in
