@@ -142,6 +142,10 @@ let dummy_value (kind : K.t) : t =
 
 let size t =
   match t with
-  | Simple _ -> Inlining_size.one
+  | Simple simple ->
+    begin match Simple.descr simple with
+    | Name _ -> Inlining_size.zero
+    | Const _ -> Inlining_size.one
+    end
   | Prim (prim, _dbg) -> Flambda_primitive.size prim
   | Set_of_closures set_of_closures -> Set_of_closures.size set_of_closures
