@@ -47,6 +47,10 @@ val compare_partial_order : t -> t -> int option
 
 val compare : t -> t -> [ `Be_explicit_about_total_or_partial_ordering ]
 
+val to_int : t -> int
+val of_int : int -> t
+val max_to_int : int
+
 type descr = private
   | Normal
   | In_types
