@@ -305,6 +305,8 @@ let simplify_and_lift_set_of_closures dacc ~closure_bound_vars
     List.fold_left R.new_lifted_constant (DA.r dacc) lifted_constants
   in
   let denv =
+    (* CR mshinwell: Isn't this line redundant?  The fold just above adds
+       the constants. *)
     DE.add_lifted_constants (DA.denv dacc) ~lifted:(R.get_lifted_constants r)
   in
   let denv, bindings =
@@ -336,6 +338,10 @@ let simplify_non_lifted_set_of_closures dacc ~bound_vars ~closure_bound_vars
   in
   let defining_expr =
     Reachable.reachable (Named.create_set_of_closures set_of_closures)
+  in
+  let dacc =
+    DA.map_denv dacc ~f:(fun denv ->
+      DE.add_lifted_constants denv ~lifted:(R.get_lifted_constants (DA.r dacc)))
   in
   [bound_vars, defining_expr], dacc
 

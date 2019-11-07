@@ -114,6 +114,7 @@ let inline dacc ~callee ~args function_decl
               Let_cont.create_non_recursive wrapper wrapper_handler ~body
           in
 (*
-  Format.eprintf "Inlined body to be simplified:@ %a\n%!" Expr.print expr;
+  Format.eprintf "Inlined body to be simplified:@ %a@ dacc:@ %a\n%!"
+    Expr.print expr DA.print dacc;
 *)
           DA.with_denv dacc denv, expr)
