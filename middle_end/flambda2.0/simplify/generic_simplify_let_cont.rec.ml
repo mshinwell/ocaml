@@ -94,10 +94,12 @@ module Make (CHL : Continuation_handler_like_intf.S) = struct
               with Misc.Fatal_error -> begin
                 if !Clflags.flambda2_context_on_error then begin
                   Format.eprintf "\n%sContext is:%s simplifying continuation \
-                      handler@ %a@ with [extra_params_and_args]@ %a@ \
+                      handler (inlinable? %b)@ %a@ with \
+                      [extra_params_and_args]@ %a@ \
                       with downwards accumulator:@ %a\n"
                     (Flambda_colours.error ())
                     (Flambda_colours.normal ())
+                    is_single_inlinable_use
                     CHL.print cont_handler
                     Continuation_extra_params_and_args.print
                     extra_params_and_args
