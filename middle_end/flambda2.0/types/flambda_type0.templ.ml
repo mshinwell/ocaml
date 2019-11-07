@@ -447,7 +447,7 @@ module Make
 
   type variant = {
     const_ctors : Immediate.Set.t;
-    non_const_ctors_with_sizes : Targetint.OCaml.t Tag.Map.t;
+    non_const_ctors_with_sizes : Targetint.OCaml.t Tag.Scannable.Map.t;
   }
 
   let prove_variant env t : variant proof =
@@ -467,16 +467,37 @@ module Make
           | Unknown -> Unknown
           | Invalid -> Invalid
           | Proved const_ctors ->
-            match blocks_imms.blocks with
-            | Unknown -> Unknown
-            | Known blocks ->
-              match Row_like.For_blocks.all_tags_and_sizes blocks with
+            let valid =
+              Immediate.Set.for_all Immediate.is_strictly_positive const_ctors
+            in
+            if not valid then Invalid
+            else
+              match blocks_imms.blocks with
               | Unknown -> Unknown
-              | Known non_const_ctors_with_sizes ->
-                Proved {
-                  const_ctors;
-                  non_const_ctors_with_sizes;
-                }
+              | Known blocks ->
+                match Row_like.For_blocks.all_tags_and_sizes blocks with
+                | Unknown -> Unknown
+                | Known non_const_ctors_with_sizes ->
+                  let non_const_ctors_with_sizes =
+                    Tag.Map.fold
+                      (fun tag size (result : _ Or_bottom.t) : _ Or_bottom.t ->
+                        match result with
+                        | Bottom -> Bottom
+                        | Ok result ->
+                          match Tag.Scannable.of_tag tag with
+                          | None -> Bottom
+                          | Some tag ->
+                            Ok (Tag.Scannable.Map.add tag size result))
+                      non_const_ctors_with_sizes
+                      (Or_bottom.Ok Tag.Scannable.Map.empty)
+                  in
+                  match non_const_ctors_with_sizes with
+                  | Bottom -> Invalid
+                  | Ok non_const_ctors_with_sizes ->
+                    Proved {
+                      const_ctors;
+                      non_const_ctors_with_sizes;
+                    }
         end
       | Value (Ok _) -> Invalid
       | Value Unknown -> Unknown

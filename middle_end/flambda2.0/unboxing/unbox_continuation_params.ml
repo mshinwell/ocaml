@@ -352,20 +352,24 @@ let rec make_unboxing_decision typing_env ~depth ~arg_types_by_use_id
             TE.print typing_env
         end
     | Wrong_kind | Invalid | Unknown ->
-      let rec try_unboxing = function
-        | [] -> typing_env, param_type, extra_params_and_args
-        | (prover, unboxer, tag, kind) :: decisions ->
-          let proof : _ T.proof_allowing_kind_mismatch =
-            prover typing_env param_type
-          in
-          match proof with
-          | Proved () ->
-            unboxer typing_env ~depth ~arg_types_by_use_id ~param_type
-              extra_params_and_args ~unbox_value:make_unboxing_decision
-              tag Targetint.OCaml.one kind
-          | Wrong_kind | Invalid | Unknown -> try_unboxing decisions
-      in
-      try_unboxing unboxed_number_decisions
+      match T.prove_variant typing_env param_type with
+      | Proved variant ->
+
+      | Wrong_kind | Invalid | Unknown ->
+        let rec try_unboxing = function
+          | [] -> typing_env, param_type, extra_params_and_args
+          | (prover, unboxer, tag, kind) :: decisions ->
+            let proof : _ T.proof_allowing_kind_mismatch =
+              prover typing_env param_type
+            in
+            match proof with
+            | Proved () ->
+              unboxer typing_env ~depth ~arg_types_by_use_id ~param_type
+                extra_params_and_args ~unbox_value:make_unboxing_decision
+                tag Targetint.OCaml.one kind
+            | Wrong_kind | Invalid | Unknown -> try_unboxing decisions
+        in
+        try_unboxing unboxed_number_decisions
 
 let make_unboxing_decisions typing_env ~arg_types_by_use_id ~params ~param_types
       extra_params_and_args =

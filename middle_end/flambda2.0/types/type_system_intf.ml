@@ -411,7 +411,7 @@ module type S = sig
 
   type variant = private {
     const_ctors : Immediate.Set.t;
-    non_const_ctors_with_sizes : Targetint.OCaml.t Tag.Map.t;
+    non_const_ctors_with_sizes : Targetint.OCaml.t Tag.Scannable.Map.t;
   }
 
   val prove_variant : Typing_env.t -> t -> variant proof
