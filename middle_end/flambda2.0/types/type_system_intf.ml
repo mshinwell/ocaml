@@ -409,6 +409,13 @@ module type S = sig
     -> t
     -> (Tag.t * Targetint.OCaml.t) proof_allowing_kind_mismatch
 
+  type variant = private {
+    const_ctors : Immediate.Set.t;
+    non_const_ctors_with_sizes : Targetint.OCaml.t Tag.Map.t;
+  }
+
+  val prove_variant : Typing_env.t -> t -> variant proof
+
   val prove_is_int : Typing_env.t -> t -> bool proof
 
   (** Prove that the given type, of kind [Value], is a closures type
