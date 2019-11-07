@@ -34,6 +34,57 @@ module type Unboxing_spec = sig
   val project_field : block:Simple.t -> index:Simple.t -> P.t
 end
 
+module Tags_and_sizes : sig
+  type t = private
+    | Block of {
+        tag : Tag.t;
+        size : Targetint.OCaml.t;
+        field_kind : K.t;
+      }
+    | Variant of T.variant
+
+  val block : Tag.t -> size:Targetint.OCaml.t -> field_kind:K.t -> t
+  val variant : T.variant -> t
+
+  val is_variant : t -> bool
+
+  val unboxed_param_kind : t -> K.t
+
+  val must_be_a_block : t -> f:(Tag.t -> size:Targetint.OCaml.t -> 'a) -> 'a
+end = struct
+  type t =
+    | Block of {
+        tag : Tag.t;
+        size : Targetint.OCaml.t;
+        field_kind : K.t;
+      }
+    | Variant of T.variant
+
+  let block tag ~size ~field_kind =
+    Block {
+      tag;
+      size;
+      field_kind;
+    }
+
+  let variant v = Variant v
+
+  let is_variant t =
+    match t with
+    | Block _ -> false
+    | Variant _ -> true
+
+  let unboxed_param_kind t =
+    match t with
+    | Block { kind; _ } -> kind
+    | Variant _ -> K.value
+
+  let must_be_a_block t ~f =
+    match t with
+    | Block { tag; size; _ } -> f tag ~size
+    | Variant _ -> Misc.fatal_error "Not a block"
+end
+
 module Make (U : Unboxing_spec) = struct
   let unbox_one_field_of_one_parameter ~extra_param ~index
         ~arg_types_by_use_id =
@@ -153,18 +204,19 @@ module Make (U : Unboxing_spec) = struct
       extra_params_and_args
 
   let unbox_one_parameter typing_env ~depth ~arg_types_by_use_id ~param_type
-        extra_params_and_args ~unbox_value tag size kind =
+        extra_params_and_args ~unbox_value tags_and_sizes =
     let new_param_vars =
       List.init (Targetint.OCaml.to_int size) (fun index ->
         let name = Printf.sprintf "%s%d" U.var_name index in
         let var = Variable.create name in
-        KP.create (Parameter.wrap var) kind)
+        KP.create (Parameter.wrap var)
+          (Tags_and_sizes.unboxed_param_kind tags_and_sizes)
     in
     let fields, all_field_types_by_id, extra_params_and_args =
       unbox_fields_of_one_parameter ~new_param_vars ~arg_types_by_use_id
         extra_params_and_args
     in
-    let block_type = U.make_boxed_value tag ~fields in
+    let block_type = U.make_boxed_value tags_and_sizes ~fields in
     let typing_env =
       TE.add_definitions_of_params typing_env ~params:new_param_vars
     in
@@ -184,9 +236,12 @@ module Make (U : Unboxing_spec) = struct
           (fun (typing_env, extra_params_and_args) 
                field_type field_types_by_id ->
             (* For any field of kind [Value] of the parameter being unboxed,
-               then attempt to unbox its contents too. *)
+               then attempt to unbox its contents too.  (For the moment this
+               isn't done for variants.) *)
             let field_kind = T.kind field_type in
-            if not (K.equal field_kind K.value) then
+            if Tags_and_sizes.is_variant tags_and_sizes
+              || not (K.equal field_kind K.value)
+            then
               typing_env, extra_params_and_args
             else begin
               let typing_env, _, extra_params_and_args =
@@ -206,8 +261,10 @@ end
 module Block_of_values_spec : Unboxing_spec = struct
   let var_name = "unboxed"
 
-  let make_boxed_value tag ~fields =
-    T.immutable_block tag ~field_kind:Flambda_kind.value ~fields
+  let make_boxed_value tags_and_sizes ~fields =
+    Tags_and_sizes.must_be_a_block tags_and_sizes ~f:(fun tag ~size:_ ->
+      assert (Option.is_some (Tag.Scannable.of_tag tag));
+      T.immutable_block tag ~field_kind:Flambda_kind.value ~fields)
 
   let make_boxed_value_with_size_at_least ~n ~field_n_minus_one =
     T.immutable_block_with_size_at_least ~n
@@ -220,8 +277,10 @@ end
 module Block_of_naked_floats_spec : Unboxing_spec = struct
   let var_name = "unboxed"
 
-  let make_boxed_value tag ~fields =
-    T.immutable_block tag ~field_kind:Flambda_kind.naked_float ~fields
+  let make_boxed_value tags_and_sizes ~fields =
+    Tags_and_sizes.must_be_a_block tags_and_sizes ~f:(fun tag ~size:_ ->
+      assert (Tag.equal tag Tag.double_array_tag);
+      T.immutable_block tag ~field_kind:Flambda_kind.naked_float ~fields)
 
   let make_boxed_value_with_size_at_least ~n ~field_n_minus_one =
     T.immutable_block_with_size_at_least ~n
@@ -244,7 +303,7 @@ module Make_unboxed_number_spec (N : sig
 end) = struct
   let var_name = N.var_name
 
-  let make_boxed_value tag ~fields =
+  let make_boxed_value tags_and_sizes ~fields =
     assert (Tag.equal tag N.tag);
     match fields with
     | [field] -> N.box field
@@ -307,6 +366,7 @@ end)
 
 module Blocks_of_values = Make (Block_of_values_spec)
 module Blocks_of_naked_floats = Make (Block_of_naked_floats_spec)
+module Variants = Make (Variants_spec)
 module Immediates = Make (Immediate_spec)
 module Floats = Make (Float_spec)
 module Int32s = Make (Int32_spec)
@@ -336,15 +396,21 @@ let rec make_unboxing_decision typing_env ~depth ~arg_types_by_use_id
       (* If the fields have kind [Naked_float] then the [tag] will always
          be [Tag.double_array_tag].  See [Row_like.For_blocks]. *)
       if Tag.equal tag Tag.double_array_tag then
+        let tags_and_sizes =
+          Tags_and_sizes.block tag ~size ~field_kind:K.naked_float
+        in
         Blocks_of_naked_floats.unbox_one_parameter typing_env ~depth
           ~arg_types_by_use_id ~param_type extra_params_and_args
-          ~unbox_value:make_unboxing_decision tag size K.naked_float
+          ~unbox_value:make_unboxing_decision tags_and_sizes
       else
         begin match Tag.Scannable.of_tag tag with
         | Some _ ->
+          let tags_and_sizes =
+            Tags_and_sizes.block tag ~size ~field_kind:K.value
+          in
           Blocks_of_values.unbox_one_parameter typing_env ~depth
             ~arg_types_by_use_id ~param_type extra_params_and_args
-            ~unbox_value:make_unboxing_decision tag size K.value
+            ~unbox_value:make_unboxing_decision tags_and_sizes
         | None ->
           Misc.fatal_errorf "Block that is not of tag [Double_array_tag] \
               and yet also not scannable:@ %a@ in env:@ %a"
@@ -354,7 +420,10 @@ let rec make_unboxing_decision typing_env ~depth ~arg_types_by_use_id
     | Wrong_kind | Invalid | Unknown ->
       match T.prove_variant typing_env param_type with
       | Proved variant ->
-
+        let tags_and_sizes = Tags_and_sizes.of_variant variant in
+        Variants.unbox_one_parameter typing_env ~depth
+          ~arg_types_by_use_id ~param_type extra_params_and_args
+          ~unbox_value:make_unboxing_decision tags_and_sizes
       | Wrong_kind | Invalid | Unknown ->
         let rec try_unboxing = function
           | [] -> typing_env, param_type, extra_params_and_args
@@ -364,9 +433,13 @@ let rec make_unboxing_decision typing_env ~depth ~arg_types_by_use_id
             in
             match proof with
             | Proved () ->
+              let tags_and_sizes =
+                Tags_and_sizes.block tag ~size:Targetint.OCaml.one
+                  ~field_kind:kind
+              in
               unboxer typing_env ~depth ~arg_types_by_use_id ~param_type
                 extra_params_and_args ~unbox_value:make_unboxing_decision
-                tag Targetint.OCaml.one kind
+                tags_and_sizes
             | Wrong_kind | Invalid | Unknown -> try_unboxing decisions
         in
         try_unboxing unboxed_number_decisions
