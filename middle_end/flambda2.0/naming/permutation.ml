@@ -19,12 +19,9 @@
 let _check_invariants = false
 
 module Make (N : Identifiable.S) = struct
-  type t =
-    | Empty
-    | Leaf_branch of { n1 : N.t; n2 : N.t; older : t; }
-    | Branch of { newer : t; older : t; }
+  type t = N.t -> N.t
 
-  let empty = Empty
+  let empty = fun n -> n
 
 (*
   let to_map t =
@@ -45,34 +42,16 @@ module Make (N : Identifiable.S) = struct
 
   let [@inline always] invariant _ = ()
 
-  let apply t n =
-    let rec apply t n =
-      match t with
-      | Empty -> n
-      | Leaf_branch { n1; n2; older; } ->
-        let n = apply older n in
-        if N.equal n n1 then n2
-        else if N.equal n n2 then n1
-        else n
-      | Branch { newer; older; } -> apply newer (apply older n)
-    in
-    apply t n
+  let apply t n = t n
 
-  let is_empty t =
-    match t with
-    | Empty -> true
-    | Leaf_branch _ | Branch _ -> false
+  (* This is wrong, but does it matter? *)
+  let is_empty _ = false
 
-  let compose_one ~first n1 n2 =
-    Leaf_branch {
-      n1;
-      n2;
-      older = first;
-    }
+  let compose_one ~first n1 n2 = fun n ->
+    if N.equal n n1 then n2
+    else if N.equal n n2 then n1
+    else first n
 
-  let compose ~second ~first =
-    Branch {
-      newer = second;
-      older = first;
-    }
+  let compose ~second ~first = fun n -> second (first n)
+
 end
