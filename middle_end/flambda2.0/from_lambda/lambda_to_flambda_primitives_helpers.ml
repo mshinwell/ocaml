@@ -129,7 +129,13 @@ let expression_for_failure ~backend exn_cont ~register_const_string
       raise_kind = Some Regular;
     }
   in
-  let args = [exn_bucket] in
+  let args =
+    let extra_args =
+      List.map (fun (simple, _kind) -> simple)
+        (Exn_continuation.extra_args exn_cont)
+    in
+    [exn_bucket] @ extra_args
+  in
   let apply_cont =
     Expr.create_apply_cont (Apply_cont.create ~trap_action exn_handler ~args)
   in
