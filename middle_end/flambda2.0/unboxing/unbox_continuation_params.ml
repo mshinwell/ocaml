@@ -51,6 +51,8 @@ module Tags_and_sizes : sig
   val unboxed_param_kind : t -> K.t
 
   val must_be_a_block : t -> f:(Tag.t -> size:Targetint.OCaml.t -> 'a) -> 'a
+
+  val max_size : t -> Targetint.OCaml.t
 end = struct
   type t =
     | Block of {
@@ -83,7 +85,47 @@ end = struct
     match t with
     | Block { tag; size; _ } -> f tag ~size
     | Variant _ -> Misc.fatal_error "Not a block"
+
+  let max_size t =
+    match t with
+    | Block { size; _ } -> size
+    | Variant v ->
+      Tag.Map.fold (fun _tag size max_size ->
+          if Targetint.OCaml.compare size max_size > 0 then size
+          else max_size)
+        v.non_const_ctors_with_sizes
+        Targetint.OCaml.zero
 end
+
+(*
+Blocks:
+  b f0 ... fn
+
+  Shape
+  b : [0: =f0; ...; =fn]
+
+  No CSE.
+
+Variants:
+  v is_int tag f0 ... fn
+
+  n is the maximum index for any tag
+
+  Type assignments
+  is_int : Is_int (v)
+  tag : Get_tag (v)
+
+  Shape
+  v : =0
+    | =1
+    | [0: =f0; ...; = fn]
+    | [1: =f0]
+    | ...
+
+  CSE
+  Unary (Is_int v) = is_int
+  Unary (Get_tag v) = tag
+*)
 
 module Make (U : Unboxing_spec) = struct
   let unbox_one_field_of_one_parameter ~extra_param ~index
@@ -94,6 +136,8 @@ module Make (U : Unboxing_spec) = struct
       Name_in_binding_pos.create (Name.var field_var) Name_mode.in_types
     in
     let shape =
+      (* XXX Maybe this should be hoisted out.  Define all the field vars
+         first then make a single [shape].  Do the meet on that. *)
       U.make_boxed_value_with_size_at_least
         ~n:(Targetint.OCaml.of_int (index + 1))
         ~field_n_minus_one:field_var
