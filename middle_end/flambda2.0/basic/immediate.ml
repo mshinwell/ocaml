@@ -45,7 +45,7 @@ module T0 = struct
         && TO.compare t.value TO.hex_ff <= 0
     in
     if print_as_char then
-      Format.fprintf ppf "'%c'"
+      Format.fprintf ppf "%C"
         (Char.chr (TO.bottom_byte_to_int t.value))
     else
       Format.fprintf ppf "%a"
