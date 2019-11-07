@@ -363,6 +363,7 @@ let close_primitive t env ~let_bound_var named (prim : Lambda.primitive) ~args
     in
     let exn_handler = Exn_continuation.exn_handler exn_continuation in
     let args =
+      (* CR mshinwell: Share with [Lambda_to_flambda_primitives_helpers] *)
       let extra_args =
         List.map (fun (simple, _kind) -> simple)
           (Exn_continuation.extra_args exn_continuation)
