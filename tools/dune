@@ -14,7 +14,10 @@
 
 (executables
  (names   make_opcodes cvt_emit)
- (modules make_opcodes cvt_emit))
+ (modules make_opcodes cvt_emit)
+ (flags (:standard -principal -nostdlib))
+ (libraries stdlib runtimeopt)
+)
 
 (executables
  (names ocamlmklib ocamldep)
