@@ -21,19 +21,6 @@ open! Simplify_import
 (* CR mshinwell: Add a command-line flag. *)
 let max_unboxing_depth = 1
 
-module type Unboxing_spec = sig
-  val var_name : string
-
-  val make_boxed_value : Tag.t -> fields:T.t list -> T.t
-
-  val make_boxed_value_with_size_at_least
-     : n:Targetint.OCaml.t
-    -> field_n_minus_one:Variable.t
-    -> T.t
-
-  val project_field : block:Simple.t -> index:Simple.t -> P.t
-end
-
 module Tags_and_sizes : sig
   type t = private
     | Block of {
@@ -97,6 +84,20 @@ end = struct
         Targetint.OCaml.zero
 end
 
+module type Unboxing_spec = sig
+  val var_name : string
+
+  val make_boxed_value : Tag.t -> fields:T.t list -> T.t
+
+  val make_boxed_value_with_size_at_least
+     : n:Targetint.OCaml.t
+    -> field_n_minus_one:Variable.t
+    -> Tags_and_sizes.t
+    -> T.t
+
+  val project_field : block:Simple.t -> index:Simple.t -> P.t
+end
+
 (*
 Blocks:
   b f0 ... fn
@@ -129,16 +130,16 @@ Variants:
 
 module Make (U : Unboxing_spec) = struct
   let unbox_one_field_of_one_parameter ~extra_param ~index
-        ~arg_types_by_use_id =
+        ~arg_types_by_use_id tags_and_sizes =
     let param_kind = KP.kind extra_param in
     let field_var = Variable.create "field_at_use" in
     let field_name =
       Name_in_binding_pos.create (Name.var field_var) Name_mode.in_types
     in
     let shape =
-      (* XXX Maybe this should be hoisted out.  Define all the field vars
-         first then make a single [shape].  Do the meet on that. *)
-      U.make_boxed_value_with_size_at_least
+      (* CR mshinwell: Maybe we could form a single shape for all
+         fields at once? *)
+      U.make_boxed_value_with_size_at_least tags_and_sizes
         ~n:(Targetint.OCaml.of_int (index + 1))
         ~field_n_minus_one:field_var
     in
@@ -212,7 +213,7 @@ module Make (U : Unboxing_spec) = struct
       (Some Apply_cont_rewrite_id.Map.empty, Apply_cont_rewrite_id.Map.empty)
 
   let unbox_fields_of_one_parameter ~new_param_vars ~arg_types_by_use_id
-        extra_params_and_args =
+        extra_params_and_args tags_and_sizes =
     let _index, param_types_rev, all_field_types_by_id_rev,
         extra_params_and_args =
       List.fold_left
@@ -220,7 +221,7 @@ module Make (U : Unboxing_spec) = struct
               extra_params_and_args) extra_param ->
           let extra_args, field_types_by_id =
             unbox_one_field_of_one_parameter ~extra_param ~index
-              ~arg_types_by_use_id
+              ~arg_types_by_use_id tags_and_sizes
           in
           let param_type =
             let param_kind = KP.kind extra_param in
@@ -258,7 +259,7 @@ module Make (U : Unboxing_spec) = struct
     in
     let fields, all_field_types_by_id, extra_params_and_args =
       unbox_fields_of_one_parameter ~new_param_vars ~arg_types_by_use_id
-        extra_params_and_args
+        extra_params_and_args tags_and_sizes
     in
     let block_type = U.make_boxed_value tags_and_sizes ~fields in
     let typing_env =
@@ -308,11 +309,11 @@ module Block_of_values_spec : Unboxing_spec = struct
   let make_boxed_value tags_and_sizes ~fields =
     Tags_and_sizes.must_be_a_block tags_and_sizes ~f:(fun tag ~size:_ ->
       assert (Option.is_some (Tag.Scannable.of_tag tag));
-      T.immutable_block tag ~field_kind:Flambda_kind.value ~fields)
+      T.immutable_block tag ~field_kind:K.value ~fields)
 
-  let make_boxed_value_with_size_at_least ~n ~field_n_minus_one =
-    T.immutable_block_with_size_at_least ~n
-      ~field_kind:Flambda_kind.value ~field_n_minus_one
+  let make_boxed_value_with_size_at_least ~n ~field_n_minus_one _ =
+    T.immutable_block_with_size_at_least ~n ~field_kind:K.value
+      ~field_n_minus_one
 
   let project_field ~block ~index =
     P.Binary (Block_load (Block (Value Anything), Immutable), block, index)
@@ -326,12 +327,48 @@ module Block_of_naked_floats_spec : Unboxing_spec = struct
       assert (Tag.equal tag Tag.double_array_tag);
       T.immutable_block tag ~field_kind:Flambda_kind.naked_float ~fields)
 
-  let make_boxed_value_with_size_at_least ~n ~field_n_minus_one =
+  let make_boxed_value_with_size_at_least ~n ~field_n_minus_one _ =
     T.immutable_block_with_size_at_least ~n
       ~field_kind:Flambda_kind.naked_float ~field_n_minus_one
 
   let project_field ~block ~index =
     P.Binary (Block_load (Block Naked_float, Immutable), block, index)
+end
+
+module Block_of_values_spec : Unboxing_spec = struct
+  let var_name = "unboxed"
+
+  let make_boxed_value (tags_and_sizes : Tags_and_sizes.t) ~fields =
+    match tags_and_sizes with
+    | Variant v ->
+      let fields = Array.of_list fields in
+      let non_const_ctors =
+        Tag.Scannable.Map.map (fun size ->
+            List.init (Targetint.OCaml.to_int size)
+              (fun index -> fields.(index)))
+          v
+      in
+      T.variant ~const_ctors:v.const_ctors ~non_const_ctors
+    | Block _ -> Misc.fatal_error "Only variants expected here"
+
+  let make_boxed_value_with_size_at_least ~n ~field_n_minus_one
+        (tags_and_sizes : Tags_and_sizes.t) =
+    match tags_and_sizes with
+    | Variant v ->
+      let non_const_ctors =
+        Tag.Scannable.Map.map (fun size ->
+            List.init (Targetint.OCaml.to_int size) (fun index ->
+              if index = n - 1 then
+                T.alias_type_of K.value (Simple.var field_n_minus_one)
+              else
+                T.any_value ())
+          v
+      in
+      T.variant ~const_ctors:v.const_ctors ~non_const_ctors
+    | Block _ -> Misc.fatal_error "Only variants expected here"
+
+  let project_field ~block ~index =
+    P.Binary (Block_load (Block (Value Anything), Immutable), block, index)
 end
 
 module Make_unboxed_number_spec (N : sig
