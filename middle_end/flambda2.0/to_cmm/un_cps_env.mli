@@ -21,12 +21,15 @@ open Flambda2
 type t
 (** Environment for flambda2 to cmm translation *)
 
-val mk : Un_cps_closure.env -> Continuation.t -> Continuation.t -> t
-(** [mk offsets k k_exn] creates a local environment for translating
-    a flambda2 expression, with return continuation [k] and exception
-    continuation [k_exn]. *)
+val mk :
+  Un_cps_closure.env ->
+  Continuation.t -> Continuation.t ->
+  Var_within_closure.Set.t -> t
+(** [mk offsets k k_exn used_closure_vars] creates a local environment for
+    translating a flambda2 expression, with return continuation [k], exception
+    continuation [k_exn], and which uses the given closures variables. *)
 
-val dummy : Un_cps_closure.env -> t
+val dummy : Un_cps_closure.env -> Var_within_closure.Set.t -> t
 (** Create an environment with dummy return adn exception continuations. *)
 
 
@@ -126,7 +129,3 @@ val layout :
 val used_closure_vars : t -> Var_within_closure.Set.t
 (** All closure variables used in the whole program. *)
 
-val with_used_closure_vars
-   : t
-  -> used_closure_vars:Var_within_closure.Set.t
-  -> t

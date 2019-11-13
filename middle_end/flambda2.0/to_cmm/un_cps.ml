@@ -539,6 +539,16 @@ let meth_kind k =
   | Public -> (Public : Lambda.meth_kind)
   | Cached -> (Cached : Lambda.meth_kind)
 
+(* Closure variables *)
+
+let filter_closure_vars env s =
+  let used_closure_vars = Env.used_closure_vars env in
+  let aux clos_var _bound_to =
+    Var_within_closure.Set.mem clos_var used_closure_vars
+  in
+  Var_within_closure.Map.filter aux s
+
+
 (* Function calls and continuations *)
 
 let var_list env l =
@@ -1036,11 +1046,7 @@ and invalid _env _e =
 and set_of_closures env s =
   let fun_decls = Set_of_closures.function_decls s in
   let decls = Function_declarations.funs fun_decls in
-  let elts =
-    Var_within_closure.Map.filter (fun clos_var _bound_to ->
-        Var_within_closure.Set.mem clos_var (Env.used_closure_vars env))
-      (Set_of_closures.closure_elements s)
-  in
+  let elts = filter_closure_vars env (Set_of_closures.closure_elements s) in
   let layout = Env.layout env
       (List.map fst (Closure_id.Map.bindings decls))
       (List.map fst (Var_within_closure.Map.bindings elts))
@@ -1155,12 +1161,7 @@ let static_boxed_number kind env s default emit transl v r =
 let rec static_set_of_closures env symbs set =
   let fun_decls = Set_of_closures.function_decls set in
   let decls = Function_declarations.funs fun_decls in
-  let elts =
-    Var_within_closure.Map.filter (fun clos_var _bound_to ->
-        Var_within_closure.Set.mem clos_var
-          (Env.used_closure_vars env))
-      (Set_of_closures.closure_elements set)
-  in
+  let elts = filter_closure_vars env (Set_of_closures.closure_elements set) in
   let layout = Env.layout env
       (List.map fst (Closure_id.Map.bindings decls))
       (List.map fst (Var_within_closure.Map.bindings elts))
@@ -1201,21 +1202,24 @@ and fill_static_slot symbs decls elts env acc offset updates slot =
   | Closure c ->
       let decl = Closure_id.Map.find c decls in
       let symb = Closure_id.Map.find c symbs in
-      let name = symbol symb in
-      let acc = List.rev (C.define_symbol ~global:true name) @ acc in
+      let external_name = symbol symb in
+      let code_name =
+        Un_cps_closure.closure_code (Un_cps_closure.closure_name c)
+      in
+      let acc = List.rev (C.define_symbol ~global:true external_name) @ acc in
       let arity = List.length (Function_declaration.params_arity decl) in
       let tagged_arity = arity * 2 + 1 in
       (* We build here the **reverse** list of fields for the closure *)
       if arity = 1 || arity = 0 then begin
         let acc =
           C.cint (Nativeint.of_int tagged_arity) ::
-          C.symbol_address (Un_cps_closure.closure_code name) ::
+          C.symbol_address code_name ::
           acc
         in
         acc, offset + 2, updates
       end else begin
         let acc =
-          C.symbol_address (Un_cps_closure.closure_code name) ::
+          C.symbol_address code_name ::
           C.cint (Nativeint.of_int tagged_arity) ::
           C.symbol_address (C.curry_function_sym arity) ::
           acc
@@ -1291,19 +1295,19 @@ let static_structure env s =
 
 (* Definition *)
 
-let computation_wrapper0 offsets c =
+let computation_wrapper offsets used_closure_vars c =
   match c with
   | None ->
-      Env.dummy offsets, (fun x -> x)
+      Env.dummy offsets used_closure_vars, (fun x -> x)
   | Some (c : Flambda_static.Program_body.Computation.t) ->
       (* The env for the computation is given a dummy continuation,
          since the return continuation will be bound in the env. *)
       let dummy_k = Continuation.create () in
       let k_exn = Exn_continuation.exn_handler c.exn_continuation in
-      let c_env = Env.mk offsets dummy_k k_exn in
+      let c_env = Env.mk offsets dummy_k k_exn used_closure_vars in
       (* The environment for the static structure update must contain the
          variables produced by the computation *)
-      let s_env = Env.mk offsets dummy_k dummy_k in
+      let s_env = Env.mk offsets dummy_k dummy_k used_closure_vars in
       let s_env, vars = var_list s_env c.computed_values in
       (* Wrap the static structure update expression [e] by manually
          translating the computation return continuation by a jump to
@@ -1326,15 +1330,10 @@ let computation_wrapper0 offsets c =
          the variable definitions. *)
       s_env, wrap
 
-let computation_wrapper offsets ~used_closure_vars c =
-  let env, wrap = computation_wrapper0 offsets c in
-  let env = Env.with_used_closure_vars env ~used_closure_vars in
-  env, wrap
-
 let definition offsets ~used_closure_vars
       (d : Flambda_static.Program_body.Definition.t) =
   let env, wrapper =
-    computation_wrapper offsets ~used_closure_vars d.computation
+    computation_wrapper offsets used_closure_vars d.computation
   in
   let r = static_structure env d.static_structure in
   R.wrap_init wrapper r
@@ -1363,7 +1362,7 @@ let function_flags () =
   else
     [ Cmm.Reduce_code_size ]
 
-let function_decl offsets fun_name _ d =
+let function_decl offsets used_closure_vars fun_name _ d =
   Profile.record_call ~accumulate:true fun_name (fun () ->
     let fun_dbg = Function_declaration.dbg d in
     let p = Function_declaration.params_and_body d in
@@ -1372,7 +1371,7 @@ let function_decl offsets fun_name _ d =
           try
             let args = function_args vars my_closure body in
             let k_exn = Exn_continuation.exn_handler k_exn in
-            let env = Env.mk offsets k k_exn in
+            let env = Env.mk offsets k k_exn used_closure_vars in
             let env, fun_args = var_list env args in
             let fun_body = expr env body in
             let fun_flags = function_flags () in
@@ -1396,8 +1395,9 @@ let rec program_body offsets ~used_closure_vars acc body =
       let r = definition offsets ~used_closure_vars def in
       program_body offsets ~used_closure_vars (r :: acc) rest
 
-let program_functions offsets p =
-  let fmap = Un_cps_closure.map_on_function_decl (function_decl offsets) p in
+let program_functions offsets used_closure_vars p =
+  let aux = function_decl offsets used_closure_vars in
+  let fmap = Un_cps_closure.map_on_function_decl aux p in
   let all_functions = Closure_id.Map.fold (fun _ x acc -> x :: acc) fmap [] in
   (* This is to keep the current cmmgen behaviour which sorts functions by
      debuginfo (and thus keeps the order of declaration). *)
@@ -1409,10 +1409,10 @@ let program_functions offsets p =
 let program (p : Flambda_static.Program.t) =
   Profile.record_call "flambda2_to_cmm" (fun () ->
       let offsets = Un_cps_closure.compute_offsets p in
-      let functions = program_functions offsets p in
       let used_closure_vars =
         Name_occurrences.closure_vars (Flambda_static.Program.free_names p)
       in
+      let functions = program_functions offsets used_closure_vars p in
       let sym, res = program_body ~used_closure_vars offsets [] p.body in
       let data, entry = R.to_cmm res in
       let cmm_data = C.flush_cmmgen_state () in

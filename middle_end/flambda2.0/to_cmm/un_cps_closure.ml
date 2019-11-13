@@ -389,7 +389,7 @@ module Greedy = struct
         let () = add_unallocated_slot_to_set s set in
         create_env_var_slots set state r
 
-  let create_slots_for_set state ~used_closure_vars set_id =
+  let create_slots_for_set state used_closure_vars set_id =
     let set = make_set set_id in
     let state = add_set_to_state state set in
     (* Fill closure slots *)
@@ -674,7 +674,7 @@ let compute_offsets program =
     Name_occurrences.closure_vars (Flambda_static.Program.free_names program)
   in
   let aux _ s =
-    state := Greedy.create_slots_for_set !state ~used_closure_vars s
+    state := Greedy.create_slots_for_set !state used_closure_vars s
   in
   Iter_on_sets_of_closures.program aux program;
   Greedy.finalize !state
@@ -695,12 +695,14 @@ let closure_name id =
 let closure_id_name o id =
   match o with
   | None -> closure_name id
-  | Some map ->
+  | Some _map -> closure_name id
+  (*
       (* CR Gbury: is this part really necessary ? why not always
                    return closure_name id ? *)
       let s = Closure_id.Map.find id map in
       let name = Symbol.linkage_name s in
       Format.asprintf "%a" Linkage_name.print name
+  *)
 
 let closure_code s = Format.asprintf "%s_code" s
 

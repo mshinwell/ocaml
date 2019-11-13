@@ -84,6 +84,10 @@ type t = {
   k_exn : Continuation.t;
   (* The exception continuation of the current context
      (used to determine where to insert try-with blocks) *)
+  used_closure_vars : Var_within_closure.Set.t;
+  (* Closure variables that are used by the context begin translated.
+     (used to remove unused closure variables). *)
+
   vars  : Cmm.expression Variable.Map.t;
   (* Map from flambda2 variables to backend_variables *)
   conts : cont Continuation.Map.t;
@@ -99,24 +103,23 @@ type t = {
   (* pure bindings that can be inlined across stages. *)
   stages : stage list;
   (* archived stages, in reverse chronological order. *)
-  used_closure_vars : Var_within_closure.Set.t;
 }
 
-let mk offsets k k_exn = {
-  k; k_exn; offsets;
+let mk offsets k k_exn used_closure_vars = {
+  k; k_exn; used_closure_vars; offsets;
   stages = [];
   pures = Variable.Map.empty;
   vars = Variable.Map.empty;
   conts = Continuation.Map.empty;
   exn_conts_extra_args = Continuation.Map.empty;
-  used_closure_vars = Var_within_closure.Set.empty;
 }
 
-let dummy offsets =
+let dummy offsets used_closure_vars =
   mk
     offsets
     (Continuation.create ())
     (Continuation.create ())
+    used_closure_vars
 
 let return_cont env = env.k
 let exn_cont env = env.k_exn
@@ -377,5 +380,3 @@ let flush_delayed_lets env =
 
 let used_closure_vars t = t.used_closure_vars
 
-let with_used_closure_vars t ~used_closure_vars =
-  { t with used_closure_vars; }
