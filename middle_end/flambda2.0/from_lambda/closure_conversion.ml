@@ -228,8 +228,12 @@ let close_c_call t ~let_bound_var (prim : Primitive.description)
     Call_kind.c_call ~alloc:prim.prim_alloc ~param_arity ~return_arity
   in
   let call_symbol =
+    let prim_name =
+      if String.equal prim.prim_native_name "" then prim.prim_name
+      else prim.prim_native_name
+    in
     Symbol.create (Compilation_unit.external_symbols ())
-      (Linkage_name.create prim.prim_name)
+      (Linkage_name.create prim_name)
   in
   t.imported_symbols <- Symbol.Set.add call_symbol t.imported_symbols;
   let call args =

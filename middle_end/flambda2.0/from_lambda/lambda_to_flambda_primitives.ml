@@ -483,7 +483,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
       primitive =
         Binary (Int_arith (I.Tagged_immediate, Div), arg1, arg2);
       validity_conditions = [
-        Binary (Phys_equal (K.value, Eq), arg2,
+        Binary (Phys_equal (K.value, Neq), arg2,
                 Simple
                   (Simple.const
                      (Simple.Const.Tagged_immediate
@@ -497,7 +497,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
       primitive =
         Binary (Int_arith (I.Tagged_immediate, Mod), arg1, arg2);
       validity_conditions = [
-        Binary (Phys_equal (K.value, Eq), arg2,
+        Binary (Phys_equal (K.value, Neq), arg2,
                 Simple
                   (Simple.const
                      (Simple.Const.Tagged_immediate
@@ -516,7 +516,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
           (Binary (Int_arith (I.Naked_int32, Div),
             unbox_bint Pint32 arg1, unbox_bint Pint32 arg2));
       validity_conditions = [
-        Binary (Phys_equal (K.naked_int32, Eq), unbox_bint Pint32 arg2,
+        Binary (Phys_equal (K.naked_int32, Neq), unbox_bint Pint32 arg2,
                 Simple
                   (Simple.const
                      (Simple.Const.Naked_int32 0l)));
@@ -531,7 +531,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
           (Binary (Int_arith (I.Naked_int32, Mod),
             unbox_bint Pint32 arg1, unbox_bint Pint32 arg2));
       validity_conditions = [
-        Binary (Phys_equal (K.naked_int32, Eq), unbox_bint Pint32 arg2,
+        Binary (Phys_equal (K.naked_int32, Neq), unbox_bint Pint32 arg2,
                 Simple
                   (Simple.const
                      (Simple.Const.Naked_int32 0l)));
@@ -546,7 +546,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
           (Binary (Int_arith (I.Naked_int64, Div),
             unbox_bint Pint64 arg1, unbox_bint Pint64 arg2));
       validity_conditions = [
-        Binary (Phys_equal (K.naked_int64, Eq), unbox_bint Pint64 arg2,
+        Binary (Phys_equal (K.naked_int64, Neq), unbox_bint Pint64 arg2,
                 Simple
                   (Simple.const
                      (Simple.Const.Naked_int64 0L)));
@@ -561,7 +561,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
           (Binary (Int_arith (I.Naked_int64, Mod),
             unbox_bint Pint64 arg1, unbox_bint Pint64 arg2));
       validity_conditions = [
-        Binary (Phys_equal (K.naked_int64, Eq), unbox_bint Pint64 arg2,
+        Binary (Phys_equal (K.naked_int64, Neq), unbox_bint Pint64 arg2,
                 Simple
                   (Simple.const
                      (Simple.Const.Naked_int64 0L)));
@@ -576,7 +576,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
           (Binary (Int_arith (I.Naked_nativeint, Mod),
             unbox_bint Pnativeint arg1, unbox_bint Pnativeint arg2));
       validity_conditions = [
-        Binary (Phys_equal (K.naked_nativeint, Eq), unbox_bint Pnativeint arg2,
+        Binary (Phys_equal (K.naked_nativeint, Neq), unbox_bint Pnativeint arg2,
                 Simple
                   (Simple.const
                      (Simple.Const.Naked_nativeint Targetint.zero)));
@@ -591,7 +591,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
           (Binary (Int_arith (I.Naked_nativeint, Mod),
             unbox_bint Pnativeint arg1, unbox_bint Pnativeint arg2));
       validity_conditions = [
-        Binary (Phys_equal (K.naked_nativeint, Eq), unbox_bint Pnativeint arg2,
+        Binary (Phys_equal (K.naked_nativeint, Neq), unbox_bint Pnativeint arg2,
                 Simple
                   (Simple.const
                      (Simple.Const.Naked_nativeint Targetint.zero)));
