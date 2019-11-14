@@ -23,11 +23,7 @@ open! Flambda2
 type cont =
   | Jump of { types: Cmm.machtype list; cont: int; }
   | Inline of { handler_params: Kinded_parameter.t list;
-                handler_body: Flambda.Expr.t;
-                types: Cmm.machtype list;
-                cont: int;
-                used_as_jump: bool ref;
-              }
+                handler_body: Flambda.Expr.t; }
 
 (* Delayed let-bindings. Let bindings are delayed in stages in order
    to allow for potential reordering and inlining of variables that are bound
@@ -161,8 +157,8 @@ let get_variable env v =
 
 let get_jump_id env k =
   match Continuation.Map.find k env.conts with
-  | Jump { cont; _ }
-  | Inline { cont; _ } -> cont
+  | Jump { cont; _ } -> cont
+  | Inline _
   | exception Not_found ->
       Misc.fatal_errorf "Continuation %a not found in env"
         Continuation.print k
@@ -182,19 +178,13 @@ let add_jump_cont env types k =
   let conts = Continuation.Map.add k (Jump { types; cont; }) env.conts in
   cont, { env with conts }
 
-let add_inline_cont env types k vars e =
-  let cont = new_jump_id () in
-  let used_as_jump = ref false in
-  let info =
-    Inline { handler_params = vars;
-             handler_body = e;
-             types;
-             cont;
-             used_as_jump;
-           }
-  in
+let add_inline_cont env k vars e =
+  let info = Inline {
+      handler_params = vars;
+      handler_body = e;
+    } in
   let conts = Continuation.Map.add k info env.conts in
-  cont, used_as_jump, { env with conts }
+  { env with conts }
 
 let add_exn_handler env k h =
   let arity = Flambda.Continuation_handler.arity h in

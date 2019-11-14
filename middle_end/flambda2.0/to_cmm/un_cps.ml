@@ -697,19 +697,8 @@ and let_cont env = function
    a handler and a ccatch must be computed. *)
 and let_cont_inline env k h body =
   let args, handler = continuation_handler_split h in
-  let env_handler, vars = var_list env args in
-  let types = List.map snd vars in
-  let id, used_as_jump, env_body = Env.add_inline_cont env types k args handler in
-  let body = expr env_body body in
-  if not !used_as_jump then
-    body
-  else begin
-    let handler_cmm = expr env_handler handler in
-    C.ccatch
-      ~rec_flag:false
-      ~body
-      ~handlers:[C.handler id vars handler_cmm]
-  end
+  let env = Env.add_inline_cont env k args handler in
+  expr env body
 
 (* Continuations that are not inlined are translated using a jump:
    - exceptions continuations use "dynamic" jumps using the
@@ -947,13 +936,10 @@ and apply_cont_ret env e k = function
 
 and apply_cont_regular env e k args =
   match Env.get_k env k with
-  | Inline { handler_params; handler_body; _ }
-    when Apply_cont_expr.trap_action e = None ->
+  | Inline { handler_params; handler_body; } ->
+      assert (Apply_cont_expr.trap_action e = None);
       apply_cont_inline env e k args handler_body handler_params
   | Jump { types; cont; } ->
-      apply_cont_jump env e types cont args
-  | Inline { types; cont; used_as_jump; _ } ->
-      used_as_jump := true;
       apply_cont_jump env e types cont args
 
 (* Inlining a continuation call simply needs to bind the arguments to the
