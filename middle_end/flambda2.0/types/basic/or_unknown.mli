@@ -41,3 +41,19 @@ module Lift (I : Identifiable.S) : sig
 
   include Identifiable.S with type t := t
 end
+(*
+module Make_meet_or_join
+  (Known : functor (E1 : Lattice_ops_intf.S)
+    -> sig
+      val meet : meet_env -> t -> t -> (t * typing_env_extension) Or_bottom.t
+    end
+
+  end)
+  (E : Lattice_ops_intf.S
+    with type meet_env := E1.meet_env
+    with type typing_env := E1.typing_env
+    with type typing_env_extension := E1.typing_env_extension)
+: sig
+
+end
+*)

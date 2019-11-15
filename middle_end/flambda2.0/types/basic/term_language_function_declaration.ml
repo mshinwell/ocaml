@@ -21,3 +21,7 @@ module type S = sig
   val print_compact : Format.formatter -> t -> unit
   val code_id : t -> Code_id.t
 end
+
+module type S_code = sig
+  include Expr_std.S
+end

@@ -47,3 +47,8 @@ let map_sharing t ~f =
     let contents' = f contents in
     if contents == contents' then t
     else Ok contents'
+
+let of_or_unknown (unk : _ Or_unknown.t) : _ t =
+  match unk with
+  | Known contents -> Ok contents
+  | Unknown -> Unknown

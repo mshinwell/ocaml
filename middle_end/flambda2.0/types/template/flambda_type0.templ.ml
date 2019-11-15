@@ -31,6 +31,7 @@ module K = Flambda_kind
 
 module Make
   (Term_language_function_declaration : Term_language_function_declaration.S)
+  (Term_language_code : Term_language_function_declaration.S_code)
 = struct
   (* -- module rec binding here -- *)
 

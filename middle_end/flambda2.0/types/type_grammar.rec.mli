@@ -26,6 +26,7 @@ type t = private
   | Naked_int32 of Type_of_kind_naked_int32.t
   | Naked_int64 of Type_of_kind_naked_int64.t
   | Naked_nativeint of Type_of_kind_naked_nativeint.t
+  | Fabricated of Type_of_kind_fabricated.t
 
 val print : Format.formatter -> t -> unit
 

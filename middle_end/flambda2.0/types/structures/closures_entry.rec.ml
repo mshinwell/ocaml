@@ -92,79 +92,26 @@ struct
           closure_types = closure_types2;
           closure_var_types = closure_var_types2;
         } =
-    let meet_or_join_function_decl
-          (function_decl1 : Function_declaration_type.t Or_unknown.t)
-          (function_decl2 : Function_declaration_type.t Or_unknown.t)
-          : Function_declaration_type.t Or_unknown.t =
-      match function_decl1, function_decl2 with
-      | Unknown, Unknown -> Unknown
-      | Known _, Unknown ->
-        begin match E.op () with
-        | Join -> Unknown
-        | Meet -> function_decl1
-        end
-      | Unknown, Known _ ->
-        begin match E.op () with
-        | Join -> Unknown
-        | Meet -> function_decl2
-        end
-      | Known decl1, Known decl2 ->
-        match decl1, decl2 with
-        | Non_inlinable {
-            param_arity = param_arity1; result_arity = result_arity1;
-            recursive = recursive1;
-          }, Non_inlinable {
-            param_arity = param_arity2; result_arity = result_arity2;
-            recursive = recursive2;
-          } ->
-          (* CR mshinwell: Are fatal errors right here?  Given the arbitrary
-             choice below, it would seem so, but unsure.  Also, the error
-             message is currently poor. *)
-          if Flambda_arity.equal param_arity1 param_arity2
-            && Flambda_arity.equal result_arity1 result_arity2
-            && Recursive.equal recursive1 recursive2
-          then
-            Known decl1
-          else
-            Misc.fatal_error "Mismatched Non_inlinable arities"
-        | Non_inlinable _ , Inlinable _
-        | Inlinable _, Non_inlinable _ ->
-          (* CR mshinwell: This should presumably return [Non_inlinable] if
-             the arities match. *)
-          Unknown
-        | Inlinable { function_decl = decl1; rec_info = _rec_info1; },
-            Inlinable { function_decl = decl2; rec_info = _rec_info2; } ->
-          (* CR mshinwell: Assertions about other properties of
-             [decl1] versus [decl2]? *)
-          (* CR mshinwell: What about [rec_info]? *)
-          let module TFD = Term_language_function_declaration in
-          match E.op () with
-          | Join ->
-            (* CR mshinwell: As mentioned in [Function_declaration], [Code_id]
-               is a misnomer at present. *)
-            if Code_id.equal (TFD.code_id decl1) (TFD.code_id decl2)
-            then function_decl1
-            else Unknown
-          | Meet ->
-            (* We can arbitrarily pick one of the functions, since they must
-               both behave in the same way, even if we cannot prove it. *)
-            function_decl1
-    in
     let function_decls =
       Closure_id.Map.merge (fun _closure_id func_decl1 func_decl2 ->
           match func_decl1, func_decl2 with
           | None, None | Some _, None | None, Some _ -> None
           | Some func_decl1, Some func_decl2 ->
-            let func_decl = meet_or_join_function_decl func_decl1 func_decl2 in
+            let func_decl, env_extension =
+              Function_declaration_type.meet_or_join_unknown
+                func_decl1 func_decl2
+            in
             Some func_decl)
         function_decls1 function_decls2
     in
     let closure_types =
-      E.switch Product.Closure_id_indexed.meet Product.Closure_id_indexed.join
+      E.switch Product.Closure_id_indexed.meet
+        Product.Closure_id_indexed.join
         env closure_types1 closure_types2
     in
     let closure_var_types =
-      E.switch Product.Var_within_closure_indexed.meet Product.Var_within_closure_indexed.join
+      E.switch Product.Var_within_closure_indexed.meet
+        Product.Var_within_closure_indexed.join
         env closure_var_types1 closure_var_types2
     in
     Or_bottom.both closure_types closure_var_types

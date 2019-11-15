@@ -17,7 +17,7 @@
 [@@@ocaml.warning "+a-30-40-41-42"]
 
 type inlinable = {
-  function_decl : Term_language_function_declaration.t;
+  code : Type_grammar.t;
   rec_info : Rec_info.t;
 }
 
@@ -32,3 +32,8 @@ type t =
 (* CR mshinwell: Add [create] and make [private]. *)
 
 val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
+
+val meet_or_join_or_unknown
+   : t Or_unknown.t
+  -> t Or_unknown.t
+  -> t Or_unknown.t * Typing_env_extension.t
