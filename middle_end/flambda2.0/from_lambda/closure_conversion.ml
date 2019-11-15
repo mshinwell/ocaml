@@ -232,6 +232,7 @@ let close_c_call t ~let_bound_var (prim : Primitive.description)
       if String.equal prim.prim_native_name "" then prim.prim_name
       else prim.prim_native_name
     in
+    (* CR mshinwell: fix "extern" mess (see Un_cps) *)
     Symbol.create (Compilation_unit.external_symbols ())
       (Linkage_name.create prim_name)
   in
