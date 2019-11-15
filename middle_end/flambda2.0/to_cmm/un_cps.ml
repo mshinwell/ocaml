@@ -706,15 +706,17 @@ and let_cont_inline env k h body =
    - regular continuations use static jumps, through the
      exit/catch cmm mechanism *)
 and let_cont_jump env k h body =
+  let wrap, env = Env.flush_delayed_lets env in
   let vars, handle = continuation_handler env h in
   let id, env = Env.add_jump_cont env (List.map snd vars) k in
   if Continuation_handler.is_exn_handler h then
-    let_cont_exn env k h body vars handle id
+    wrap (let_cont_exn env k h body vars handle id)
   else
-    C.ccatch
-      ~rec_flag:false
-      ~body:(expr env body)
-      ~handlers:[C.handler id vars handle]
+    wrap (C.ccatch
+            ~rec_flag:false
+            ~body:(expr env body)
+            ~handlers:[C.handler id vars handle]
+         )
 
 (* Exception continuations, translated using delayed trywith blocks.
    Additionally, exn continuations in flambda2 can have extra args, which
@@ -888,6 +890,16 @@ and wrap_cont env effs res e =
           "Multi-arguments continuation across function calls are not yet supported"
   end
 
+and apply_cont env e =
+  let k = Apply_cont_expr.continuation e in
+  let args = Apply_cont_expr.args e in
+  if Continuation.is_exn k then
+    apply_cont_exn env e k args
+  else if Continuation.equal (Env.return_cont env) k then
+    apply_cont_ret env e k args
+  else
+    apply_cont_regular env e k args
+
 (* Exception Continuations always raise their first argument (which is
    supposed to be an exception). Additionally, they may have extra arguments
    that are passed to the handler via mutables variables (which are expected to be
@@ -908,16 +920,6 @@ and apply_cont_exn env e k = function
   | [] ->
       Misc.fatal_errorf "Exception continuation %a has no arguments in@\n%a"
         Continuation.print k Apply_cont.print e
-
-and apply_cont env e =
-  let k = Apply_cont_expr.continuation e in
-  let args = Apply_cont_expr.args e in
-  if Continuation.is_exn k then
-    apply_cont_exn env e k args
-  else if Continuation.equal (Env.return_cont env) k then
-    apply_cont_ret env e k args
-  else
-    apply_cont_regular env e k args
 
 (* A call to the return continuation of the current block simply is the return value
    for the current block being translated. *)
