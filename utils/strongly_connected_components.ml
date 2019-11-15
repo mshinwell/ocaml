@@ -164,6 +164,12 @@ module Make (Id : Identifiable.S) = struct
       Array.init size (fun i ->
         let _, dests = a.(i) in
         Id.Set.fold (fun dest acc ->
+            (* CR mshinwell: work out what to do about this *)
+            try
+              let v = Id.Map.find dest back in
+              v :: acc
+            with Not_found -> acc)
+(* Old code:
             let v =
               try Id.Map.find dest back
               with Not_found ->
@@ -172,6 +178,7 @@ module Make (Id : Identifiable.S) = struct
                   Id.print dest
             in
             v :: acc)
+*)
           dests [])
     in
     { back; forth }, integer_graph

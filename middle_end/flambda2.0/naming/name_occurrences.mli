@@ -38,6 +38,8 @@ type t
 
 val empty : t
 
+val is_empty : t -> bool
+
 val print : Format.formatter -> t -> unit
 
 val equal : t -> t -> bool
@@ -56,9 +58,19 @@ val singleton_variable : Variable.t -> Name_mode.t -> t
 
 val add_variable : t -> Variable.t -> Name_mode.t -> t
 
+val add_symbol : t -> Symbol.t -> Name_mode.t -> t
+
 val add_name : t -> Name.t -> Name_mode.t -> t
 
 val add_closure_var : t -> Var_within_closure.t -> Name_mode.t -> t
+
+(** If the use of the code ID is in a "newer version of" field, use
+    [add_newer_version_of_code_id], not this function -- see below. *)
+val add_code_id : t -> Code_id.t -> Name_mode.t -> t
+
+(** [add_newer_version_of_code_id] registers a use of a code ID occurring in a
+     "newer version of" field (e.g. in [Flambda_static.Static_part.code]). *)
+val add_newer_version_of_code_id : t -> Code_id.t -> Name_mode.t -> t
 
 val singleton_name : Name.t -> Name_mode.t -> t
 
@@ -84,6 +96,8 @@ val union_list : t list -> t
     those occurrences are ignored. *)
 val subset_domain : t -> t -> bool
 
+val overlap : t -> t -> bool
+
 val variables : t -> Variable.Set.t
 
 val symbols : t -> Symbol.Set.t
@@ -94,9 +108,23 @@ val continuations : t -> Continuation.Set.t
 
 val closure_vars : t -> Var_within_closure.Set.t
 
+val code_ids : t -> Code_id.Set.t
+
+val newer_version_of_code_ids : t -> Code_id.Set.t
+
+val only_newer_version_of_code_ids : t -> Code_id.Set.t
+
+val code_ids_and_newer_version_of_code_ids : t -> Code_id.Set.t
+
+val without_code_ids : t -> t
+
 val mem_var : t -> Variable.t -> bool
 
+val mem_symbol : t -> Symbol.t -> bool
+
 val mem_name : t -> Name.t -> bool
+
+val mem_code_id : t -> Code_id.t -> bool
 
 val remove_var : t -> Variable.t -> t
 

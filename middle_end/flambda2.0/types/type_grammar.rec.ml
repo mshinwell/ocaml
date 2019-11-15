@@ -232,7 +232,7 @@ let alias_type_of (kind : K.t) name : t =
   | Naked_number Naked_int32 -> Naked_int32 (T_N32.create_equals name)
   | Naked_number Naked_int64 -> Naked_int64 (T_N64.create_equals name)
   | Naked_number Naked_nativeint -> Naked_nativeint (T_NN.create_equals name)
-  | Fabricated -> Misc.fatal_error "Fabricated not expected here"
+  | Fabricated -> Misc.fatal_error "Only used in [Flambda_static] now"
 
 let bottom_value () = Value (T_V.bottom ())
 let bottom_naked_immediate () = Naked_immediate (T_NI.bottom ())
@@ -249,7 +249,7 @@ let bottom (kind : K.t) =
   | Naked_number Naked_int32 -> bottom_naked_int32 ()
   | Naked_number Naked_int64 -> bottom_naked_int64 ()
   | Naked_number Naked_nativeint -> bottom_naked_nativeint ()
-  | Fabricated -> Misc.fatal_error "Fabricated not expected here"
+  | Fabricated -> Misc.fatal_error "Only used in [Flambda_static] now"
 
 let bottom_like t = bottom (kind t)
 
@@ -268,7 +268,7 @@ let unknown (kind : K.t) =
   | Naked_number Naked_int32 -> any_naked_int32 ()
   | Naked_number Naked_int64 -> any_naked_int64 ()
   | Naked_number Naked_nativeint -> any_naked_nativeint ()
-  | Fabricated -> Misc.fatal_error "Fabricated not expected here"
+  | Fabricated -> Misc.fatal_error "Only used in [Flambda_static] now"
 
 let unknown_like t = unknown (kind t)
 
@@ -503,20 +503,18 @@ let any_boxed_int32 () = box_int32 (any_naked_int32 ())
 let any_boxed_int64 () = box_int64 (any_naked_int64 ())
 let any_boxed_nativeint () = box_nativeint (any_naked_nativeint ())
 
-let create_inlinable_function_declaration function_decl rec_info
+let create_inlinable_function_declaration ~code_id ~param_arity ~result_arity
+      ~stub ~dbg ~inline ~is_a_functor ~recursive ~rec_info
       : Function_declaration_type.t =
-  Inlinable {
-    function_decl;
-    rec_info;
-  }
+  Ok (Inlinable (
+    Function_declaration_type.Inlinable.create ~code_id ~param_arity
+      ~result_arity ~stub ~dbg ~inline ~is_a_functor ~recursive ~rec_info))
 
-let create_non_inlinable_function_declaration ~param_arity ~result_arity
-      ~recursive : Function_declaration_type.t =
-  Non_inlinable {
-    param_arity;
-    result_arity;
-    recursive;
-  }
+let create_non_inlinable_function_declaration ~code_id ~param_arity
+      ~result_arity ~recursive : Function_declaration_type.t =
+  Ok (Non_inlinable (
+    Function_declaration_type.Non_inlinable.create ~code_id ~param_arity
+      ~result_arity ~recursive))
 
 let exactly_this_closure closure_id ~all_function_decls_in_set:function_decls
       ~all_closures_in_set:closure_types
@@ -525,10 +523,6 @@ let exactly_this_closure closure_id ~all_function_decls_in_set:function_decls
   let closures_entry =
     let closure_var_types =
       Product.Var_within_closure_indexed.create closure_var_types
-    in
-    let function_decls =
-      Closure_id.Map.map (fun func_decl -> Or_unknown.Known func_decl)
-        function_decls
     in
     Closures_entry.create ~function_decls ~closure_types ~closure_var_types
   in
@@ -554,7 +548,7 @@ let at_least_the_closures_with_ids ~this_closure closure_ids_and_bindings =
       closure_ids_and_bindings
   in
   let function_decls =
-    Closure_id.Map.map (fun _ -> Or_unknown.Unknown)
+    Closure_id.Map.map (fun _ -> Or_unknown_or_bottom.Unknown)
       closure_ids_and_bindings
   in
   let closure_types = Product.Closure_id_indexed.create closure_ids_and_types in
@@ -676,6 +670,10 @@ let expand_head' t env : t =
     Naked_nativeint (
       T_NN.expand_head' ~force_to_kind:force_to_kind_naked_nativeint ty env)
 
+(* CR mshinwell: There is a subtlety here: the presence of a name in
+   [suitable_for] doesn't mean that we should blindly return "=name".  The
+   type of the name in [suitable_for] might be (much) worse than the one
+   in the environment [t]. *)
 let rec make_suitable_for_environment0_core t env ~depth ~suitable_for level =
   let free_vars = Name_occurrences.variables (free_names t) in
   if Variable.Set.is_empty free_vars then level, t
@@ -690,7 +688,8 @@ let rec make_suitable_for_environment0_core t env ~depth ~suitable_for level =
            variables in the returned [Typing_env_level], and swap them with
            the variables that we wish to erase throughout the type. *)
         Variable.Set.fold (fun to_erase (result_level, perm, binding_time) ->
-            let kind = kind (TE.find env (Name.var to_erase)) in
+            let original_type = TE.find env (Name.var to_erase) in
+            let kind = kind original_type in
             let fresh_var = Variable.rename to_erase in
             let fresh_var_name = Name.var fresh_var in
             let result_level =
@@ -762,10 +761,11 @@ let rec make_suitable_for_environment0_core t env ~depth ~suitable_for level =
 module Make_meet_or_join
   (E : Lattice_ops_intf.S
    with type meet_env := Meet_env.t
+   with type meet_or_join_env := Meet_or_join_env.t
    with type typing_env := Typing_env.t
    with type typing_env_extension := Typing_env_extension.t) =
 struct
-  let meet_or_join env t1 t2 =
+  let meet_or_join (env : Meet_or_join_env.t) t1 t2 =
     match t1, t2 with
     | Value ty1, Value ty2 ->
       (* CR mshinwell: Try to lift out these functor applications (or ditch
@@ -840,19 +840,24 @@ end
 module Meet = Make_meet_or_join (Lattice_ops.For_meet)
 module Join = Make_meet_or_join (Lattice_ops.For_join)
 
-let meet' env t1 t2 = Meet.meet_or_join env t1 t2
+let meet' env t1 t2 =
+  let env = Meet_or_join_env.create_for_meet env in
+  Meet.meet_or_join env t1 t2
 
 let meet env t1 t2 : _ Or_bottom.t =
   let ty, env_extension = meet' env t1 t2 in
   if is_obviously_bottom ty then Bottom
   else Ok (ty, env_extension)
 
-let join env t1 t2 =
-  let env = Meet_env.create env in
-  let joined, env_extension = Join.meet_or_join env t1 t2 in
+let join' env left_ty right_ty =
+  let joined, env_extension = Join.meet_or_join env left_ty right_ty in
   if not (TEE.is_empty env_extension) then begin
     Misc.fatal_errorf "Non-empty environment extension produced from a \
         [join] operation:@ %a"
       TEE.print env_extension
   end;
   joined
+
+let join env ~left_env ~left_ty ~right_env ~right_ty =
+  let env = Meet_or_join_env.create_for_join env ~left_env ~right_env in
+  join' env left_ty right_ty

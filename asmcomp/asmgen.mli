@@ -43,11 +43,11 @@ type middle_end2 =
      ppf_dump:Format.formatter
   -> prefixname:string
   -> backend:(module Flambda2_backend_intf.S)
-  -> size:int
   -> filename:string
   -> module_ident:Ident.t
+  -> module_block_size_in_words:int
   -> module_initializer:Lambda.lambda
-  -> Flambda_static.Program.t
+  -> Flambda_unit.t
 
 (** Compile an implementation from Lambda using the given middle end. *)
 val compile_implementation2
@@ -69,7 +69,7 @@ val compile_implementation_flambda
   -> prefixname:string
   -> ppf_dump:Format.formatter
   -> required_globals:Ident.Set.t
-  -> Flambda_static.Program.t
+  -> Flambda_unit.t
   -> unit
 
 val compile_phrase :

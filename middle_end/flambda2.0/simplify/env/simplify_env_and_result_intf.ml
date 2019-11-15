@@ -29,11 +29,13 @@ module type Downwards_env = sig
   (** Print a human-readable version of the given environment. *)
   val print : Format.formatter -> t -> unit
 
-  (** Create a new environment. *)
+  (** Create a new environment, marked as being at the toplevel of a
+      compilation unit. *)
   val create
      : round:int
     -> backend:(module Flambda2_backend_intf.S)
     -> float_const_prop:bool
+    -> unit_toplevel_exn_continuation:Continuation.t
     -> t
 
   (** Obtain the first-class module that gives information about the
@@ -44,6 +46,12 @@ module type Downwards_env = sig
 
   val float_const_prop : t -> bool
 
+  val at_unit_toplevel : t -> bool
+
+  val set_not_at_unit_toplevel : t -> t
+
+  val unit_toplevel_exn_continuation : t -> Continuation.t
+
   val enter_closure : t -> t
 
   val increment_continuation_scope_level : t -> t
@@ -51,6 +59,12 @@ module type Downwards_env = sig
   val increment_continuation_scope_level_twice : t -> t
 
   val get_continuation_scope_level : t -> Scope.t
+
+  val now_defining_symbol : t -> Symbol.t -> t
+
+  val no_longer_defining_symbol : t -> Symbol.t -> t
+
+  val symbol_is_currently_being_defined : t -> Symbol.t -> bool
 
   val typing_env : t -> Flambda_type.Typing_env.t
 
@@ -63,6 +77,8 @@ module type Downwards_env = sig
   val add_equation_on_variable : t -> Variable.t -> Flambda_type.t -> t
 
   val find_variable : t -> Variable.t -> Flambda_type.t
+
+  val mem_variable : t -> Variable.t -> bool
 
   val add_symbol : t -> Symbol.t -> Flambda_type.t -> t
 
@@ -113,6 +129,8 @@ module type Downwards_env = sig
 
   val check_simple_is_bound : t -> Simple.t -> unit
 
+  val check_code_id_is_bound : t -> Code_id.t -> unit
+
   (** Add the given lifted constants to the given environment.  Symbols
       defined in the lifted constants but already defined in the given
       environment are ignored.
@@ -123,7 +141,14 @@ module type Downwards_env = sig
       result structure. *)
   val add_lifted_constants_from_r : t -> result -> t
 
-  val define_code : t -> Code_id.t -> Function_params_and_body.t -> t
+  val define_code
+     : t
+    -> ?newer_version_of:Code_id.t
+    -> code_id:Code_id.t
+    -> params_and_body:Function_params_and_body.t
+    -> t
+
+  val mem_code : t -> Code_id.t -> bool
 
   val find_code : t -> Code_id.t -> Function_params_and_body.t
 
@@ -250,6 +275,14 @@ module type Result = sig
   (* CR mshinwell: Update name to reflect this *)
   val get_lifted_constants : t -> lifted_constant list
 
+  val set_lifted_constants : t -> lifted_constant list -> t
+
+  (* CR mshinwell: This whole lifted/shareable constant interface probably
+     still needs some work *)
+  val find_shareable_constant : t -> Static_const.t -> Symbol.t option
+
+  val consider_constant_for_sharing : t -> Symbol.t -> Static_const.t -> t
+
   val imported_symbols : t -> Flambda_kind.t Symbol.Map.t
 
   val clear_lifted_constants : t -> t
@@ -268,13 +301,26 @@ module type Lifted_constant = sig
   (** [create] takes the types of symbols to avoid re-inferring them. *)
   val create
      : downwards_env
-    -> Flambda_static.Program_body.Definition.t
+    -> Flambda.Let_symbol_expr.Bound_symbols.t
+    -> Flambda.Static_const.t
     -> types_of_symbols:Flambda_type.t Symbol.Map.t
-    -> pieces_of_code:Function_params_and_body.t Code_id.Map.t
+    -> t
+
+  val create_piece_of_code
+     : downwards_env
+    -> ?newer_version_of:Code_id.t
+    -> Code_id.t
+    -> Flambda.Function_params_and_body.t
+    -> t
+
+  val create_pieces_of_code
+     : downwards_env
+    -> ?newer_versions_of:Code_id.t Code_id.Map.t
+    -> Flambda.Function_params_and_body.t Code_id.Map.t
     -> t
 
   val denv_at_definition : t -> downwards_env
-  val definition : t -> Flambda_static.Program_body.Definition.t
+  val bound_symbols : t -> Flambda.Let_symbol_expr.Bound_symbols.t
+  val defining_expr : t -> Flambda.Static_const.t
   val types_of_symbols : t -> Flambda_type.t Symbol.Map.t
-  val pieces_of_code : t -> Function_params_and_body.t Code_id.Map.t
 end

@@ -22,6 +22,7 @@
 module type S = sig
   type typing_env
   type meet_env
+  type meet_or_join_env
   type typing_env_extension
 
   val name : unit -> string
@@ -81,24 +82,24 @@ module type S = sig
 
   val switch_no_bottom
      : (meet_env -> 'a -> 'a -> 'a * typing_env_extension)
-    -> (typing_env -> 'a -> 'a -> 'a)
-    -> meet_env
+    -> (meet_or_join_env -> 'a -> 'a -> 'a)
+    -> meet_or_join_env
     -> 'a
     -> 'a
     -> 'a * typing_env_extension
 
   val switch0
      : (meet_env -> 'a -> 'a -> 'a)
-    -> (typing_env -> 'a -> 'a -> 'a)
-    -> meet_env
+    -> (meet_or_join_env -> 'a -> 'a -> 'a)
+    -> meet_or_join_env
     -> 'a
     -> 'a
     -> 'a
 
   val switch
      : (meet_env -> 'a -> 'a -> ('a * typing_env_extension) Or_bottom.t)
-    -> (typing_env -> 'a -> 'a -> 'a)
-    -> meet_env
+    -> (meet_or_join_env -> 'a -> 'a -> 'a)
+    -> meet_or_join_env
     -> 'a
     -> 'a
     -> ('a * typing_env_extension) Or_bottom.t

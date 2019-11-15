@@ -18,6 +18,8 @@
 
 open! Flambda.Import
 
+module DE = Simplify_env_and_result.Downwards_env
+
 (* Simple approximation of the space cost of a primitive. *)
 let prim_size (_prim : Flambda_primitive.t) = 1
 (* CR mshinwell: Implement this function
@@ -73,27 +75,29 @@ let prim_size (_prim : Flambda_primitive.t) = 1
 let direct_call_size = 4
 let _project_size = 1
 
-let smaller' expr ~than:threshold =
+let smaller' denv expr ~than:threshold =
   let size = ref 0 in
-  let rec expr_size expr =
+  let rec expr_size denv expr =
     if !size > threshold then raise Exit;
     match Expr.descr expr with
     | Let let_expr ->
-      named_size (Let.defining_expr let_expr);
+      named_size denv (Let.defining_expr let_expr);
       Let.pattern_match let_expr
-        ~f:(fun ~bound_vars:_ ~body -> expr_size body)
+        ~f:(fun ~bound_vars:_ ~body -> expr_size denv body)
+    | Let_symbol let_symbol_expr ->
+      expr_size denv (Let_symbol.body let_symbol_expr)
     | Let_cont (Non_recursive { handler; _ }) ->
       Non_recursive_let_cont_handler.pattern_match handler
-        ~f:(fun _cont ~body -> expr_size body);
-      continuation_handler_size
+        ~f:(fun _cont ~body -> expr_size denv body);
+      continuation_handler_size denv
         (Non_recursive_let_cont_handler.handler handler)
     | Let_cont (Recursive handlers) ->
       Recursive_let_cont_handlers.pattern_match handlers
         ~f:(fun ~body handlers ->
-          expr_size body;
+          expr_size denv body;
           let handlers = Continuation_handlers.to_map handlers in
           Continuation.Map.iter (fun _cont handler ->
-              continuation_handler_size handler)
+              continuation_handler_size denv handler)
             handlers)
     | Apply apply ->
       let call_cost =
@@ -109,7 +113,7 @@ let smaller' expr ~than:threshold =
     | Apply_cont _ -> incr size
     | Switch switch -> size := !size + (5 * Switch.num_arms switch)
     | Invalid _ -> ()
-  and named_size (named : Named.t) =
+  and named_size denv (named : Named.t) =
     if !size > threshold then raise Exit;
     match named with
     | Simple simple ->
@@ -121,28 +125,29 @@ let smaller' expr ~than:threshold =
       let func_decls = Set_of_closures.function_decls set_of_closures in
       let funs = Function_declarations.funs func_decls in
       Closure_id.Map.iter (fun _ func_decl ->
-          Function_params_and_body.pattern_match
-            (Function_declaration.params_and_body func_decl)
+          let code_id = Function_declaration.code_id func_decl in
+          let params_and_body = DE.find_code denv code_id in
+          Function_params_and_body.pattern_match params_and_body
             ~f:(fun ~return_continuation:_ _exn_continuation _params
                     ~body ~my_closure:_ ->
-              expr_size body))
+              expr_size denv body))
         funs
     | Prim (prim, _dbg) ->
       size := !size + prim_size prim
-  and continuation_handler_size handler =
+  and continuation_handler_size denv handler =
     let params_and_handler = Continuation_handler.params_and_handler handler in
     Continuation_params_and_handler.pattern_match params_and_handler
-      ~f:(fun _params ~handler -> expr_size handler)
+      ~f:(fun _params ~handler -> expr_size denv handler)
   in
   try
-    expr_size expr;
+    expr_size denv expr;
     if !size <= threshold then Some !size
     else None
   with Exit ->
     None
 
-let size expr =
-  match smaller' expr ~than:max_int with
+let size denv expr =
+  match smaller' denv expr ~than:max_int with
   | Some size -> size
   | None ->
     (* There is no way that an expression of size max_int could fit in
@@ -182,14 +187,14 @@ module Threshold = struct
       Can_inline_if_no_larger_than (min i1 i2)
 end
 
-let smaller lam ~than =
-  smaller' lam ~than <> None
+let smaller denv lam ~than =
+  smaller' denv lam ~than <> None
 
-let can_inline lam inlining_threshold ~bonus =
+let can_inline denv lam inlining_threshold ~bonus =
   match inlining_threshold with
   | Threshold.Never_inline -> false
   | Threshold.Can_inline_if_no_larger_than inlining_threshold ->
-     smaller
+     smaller denv
        lam
        ~than:(inlining_threshold + bonus)
 
@@ -239,8 +244,8 @@ module Benefit = struct
   let direct_call_of_indirect_unknown_arity t =
     { t with direct_call_of_indirect = t.direct_call_of_indirect + 1; }
 
-  let requested_inline t ~size_of =
-    let size = size size_of in
+  let requested_inline denv t ~size_of =
+    let size = size denv size_of in
     { t with requested_inline = t.requested_inline + size; }
 
   let print ppf b =

@@ -52,6 +52,13 @@ let pr2162_1 z x y =
   float_of_int a -. b
 *)
 
+let pr2162_2_first z x y =
+  let a, b =
+    if z then (x * 2, y *. 3.)
+    else (x, y +. 0.)
+  in
+  float_of_int a -. b
+
 let pr2162_2 z x y =
   let a, b =
     if z then (x * 2, y *. 3.)

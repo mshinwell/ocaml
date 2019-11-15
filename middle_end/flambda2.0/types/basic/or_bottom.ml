@@ -35,6 +35,11 @@ let map t ~f =
   | Ok contents -> Ok (f contents)
   | Bottom -> Bottom
 
+let value_map t ~bottom ~f =
+  match t with
+  | Ok contents -> f contents
+  | Bottom -> bottom
+
 let all ts =
   let contents =
     List.filter_map (fun t ->

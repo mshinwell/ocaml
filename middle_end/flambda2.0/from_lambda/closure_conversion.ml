@@ -22,12 +22,12 @@ module Env = Closure_conversion_aux.Env
 module Expr = Flambda.Expr
 module Function_decls = Closure_conversion_aux.Function_decls
 module Function_decl = Function_decls.Function_decl
+module Function_params_and_body = Flambda.Function_params_and_body
+module Let_symbol = Flambda.Let_symbol_expr
 module Named = Flambda.Named
-module Program_body = Flambda_static.Program_body
-module Static_part = Flambda_static.Static_part
+module Static_const = Flambda.Static_const
 
 module K = Flambda_kind
-module KP = Kinded_parameter
 module LC = Lambda_conversions
 module P = Flambda_primitive
 module VB = Var_in_binding_pos
@@ -39,7 +39,9 @@ type t = {
   filename : string;
   mutable imported_symbols : Symbol.Set.t;
   (* All symbols in [imported_symbols] are to be of kind [Value]. *)
-  mutable declared_symbols : (Symbol.t * K.value Static_part.t) list;
+  mutable declared_symbols : (Symbol.t * Static_const.t) list;
+  mutable shareable_constants : Symbol.t Static_const.Map.t;
+  mutable code : (Code_id.t * Function_params_and_body.t) list;
 }
 
 let symbol_for_ident t id =
@@ -53,7 +55,7 @@ let symbol_for_ident t id =
 let tupled_function_call_stub
       (original_params : (Variable.t * Lambda.value_kind) list)
       (unboxed_version : Closure_id.t)
-      ~(closure_id : Closure_id.t)
+      code_id ~(closure_id : Closure_id.t)
       recursive =
   let dbg = Debuginfo.none in
   let return_continuation = Continuation.create ~sort:Return () in
@@ -73,7 +75,8 @@ let tupled_function_call_stub
   let unboxed_version_var = Variable.create "unboxed_version" in
   let call =
     let call_kind =
-      Call_kind.direct_function_call unboxed_version ~return_arity:[K.value]
+      Call_kind.direct_function_call code_id unboxed_version
+        ~return_arity:[K.value]
     in
     let apply =
       Flambda.Apply.create ~callee:(Simple.var unboxed_version_var)
@@ -129,36 +132,50 @@ let tupled_function_call_stub
       ~body
       ~my_closure
   in
-  Flambda.Function_declaration.create
-    ~params_and_body
-    ~result_arity:[K.value]
-    ~stub:true
-    ~dbg
-    ~inline:Default_inline
-    ~is_a_functor:false
-    ~recursive
-
-let register_const0 t (constant : K.value Static_part.t) name =
-  let current_compilation_unit = Compilation_unit.get_current_exn () in
-  (* Create a variable to ensure uniqueness of the symbol. *)
-  let var = Variable.create ~current_compilation_unit name in
-  let symbol =
-    Symbol.create (Compilation_unit.get_current_exn ())
-      (Linkage_name.create
-         (Variable.unique_name (Variable.rename var)))
+  let code_id =
+    Code_id.create ~name:((Closure_id.to_string closure_id) ^ "_tuple_stub")
+      (Compilation_unit.get_current_exn ())
   in
-  t.declared_symbols <- (symbol, constant) :: t.declared_symbols;
-  symbol
+  let func_decl =
+    Flambda.Function_declaration.create ~code_id
+      ~params_arity:[K.value]
+      ~result_arity:[K.value]
+      ~stub:true
+      ~dbg
+      ~inline:Default_inline
+      ~is_a_functor:false
+      ~recursive
+  in
+  func_decl, code_id, params_and_body
 
-let register_const t constant name : Flambda_static.Of_kind_value.t * string =
+let register_const0 t constant name =
+  match Static_const.Map.find constant t.shareable_constants with
+  | exception Not_found ->
+    let current_compilation_unit = Compilation_unit.get_current_exn () in
+    (* Create a variable to ensure uniqueness of the symbol. *)
+    let var = Variable.create ~current_compilation_unit name in
+    let symbol =
+      Symbol.create (Compilation_unit.get_current_exn ())
+        (Linkage_name.create
+           (Variable.unique_name (Variable.rename var)))
+    in
+    t.declared_symbols <- (symbol, constant) :: t.declared_symbols;
+    if Static_const.can_share constant then begin
+      t.shareable_constants
+        <- Static_const.Map.add constant symbol t.shareable_constants
+    end;
+    symbol
+  | symbol -> symbol
+
+let register_const t constant name : Static_const.Field_of_block.t * string =
   let symbol = register_const0 t constant name in
   Symbol symbol, name
 
 let register_const_string t str =
-  register_const0 t (Static_part.Immutable_string (Const str)) "string"
+  register_const0 t (Static_const.Immutable_string str) "string"
 
 let rec declare_const t (const : Lambda.structured_constant)
-      : Flambda_static.Of_kind_value.t * string =
+      : Static_const.Field_of_block.t * string =
   match const with
   | Const_base (Const_int c) ->
     Tagged_immediate (Immediate.int (Targetint.OCaml.of_int c)), "int"
@@ -169,9 +186,9 @@ let rec declare_const t (const : Lambda.structured_constant)
   | Const_base (Const_string (s, _)) ->
     let const, name =
       if Config.safe_string then
-        Static_part.Immutable_string (Const s), "immstring"
+        Static_const.Immutable_string s, "immstring"
       else
-        Static_part.Mutable_string { initial_value = Const s; }, "string"
+        Static_const.Mutable_string { initial_value = s; }, "string"
     in
     register_const t const name
   | Const_base (Const_float c) ->
@@ -186,17 +203,17 @@ let rec declare_const t (const : Lambda.structured_constant)
     let c = Targetint.of_int64 (Int64.of_nativeint c) in
     register_const t (Boxed_nativeint (Const c)) "nativeint"
   | Const_immstring c ->
-    register_const t (Immutable_string (Const c)) "immstring"
+    register_const t (Immutable_string c) "immstring"
   | Const_float_array c ->
     (* CR mshinwell: check that Const_float_array is always immutable *)
     register_const t
       (Immutable_float_array
          (List.map (fun s ->
            let f = Numbers.Float_by_bit_pattern.create (float_of_string s) in
-           Static_part.Const f) c))
+           Or_variable.Const f) c))
       "float_array"
   | Const_block (tag, consts) ->
-    let const : K.value Static_part.t =
+    let const : Static_const.t  =
       Block
         (Tag.Scannable.create_exn tag, Immutable,
          List.map (fun c -> fst (declare_const t c)) consts)
@@ -684,6 +701,9 @@ and close_one_function t ~external_env ~by_closure_id decl
   let closure_id = Function_decl.closure_id decl in
   let our_let_rec_ident = Function_decl.let_rec_ident decl in
   let compilation_unit = Compilation_unit.get_current_exn () in
+  let code_id =
+    Code_id.create ~name:(Closure_id.to_string closure_id) compilation_unit
+  in
   let unboxed_version =
     Closure_id.wrap compilation_unit (Variable.create (
       Ident.name (Function_decl.let_rec_ident decl)))
@@ -797,17 +817,18 @@ and close_one_function t ~external_env ~by_closure_id decl
       var_within_closures_to_bind
       body
   in
+  let exn_continuation =
+    close_exn_continuation external_env (Function_decl.exn_continuation decl)
+  in
+  let inline = LC.inline_attribute (Function_decl.inline decl) in
+  let params_and_body =
+    Flambda.Function_params_and_body.create
+      ~return_continuation:(Function_decl.return_continuation decl)
+      exn_continuation params ~body ~my_closure
+  in
   let fun_decl =
-    let exn_continuation =
-      close_exn_continuation external_env (Function_decl.exn_continuation decl)
-    in
-    let inline = LC.inline_attribute (Function_decl.inline decl) in
-    let params_and_body =
-      Flambda.Function_params_and_body.create
-        ~return_continuation:(Function_decl.return_continuation decl)
-        exn_continuation params ~body ~my_closure
-    in
-    Flambda.Function_declaration.create ~params_and_body
+    Flambda.Function_declaration.create ~code_id
+      ~params_arity:(Kinded_parameter.List.arity params)
       ~result_arity:[LC.value_kind return]
       ~stub
       ~dbg
@@ -815,18 +836,20 @@ and close_one_function t ~external_env ~by_closure_id decl
       ~is_a_functor:(Function_decl.is_a_functor decl)
       ~recursive
   in
+  t.code <- (code_id, params_and_body) :: t.code;
   match Function_decl.kind decl with
   | Curried -> Closure_id.Map.add my_closure_id fun_decl by_closure_id
   | Tupled ->
-    let generic_function_stub =
-      tupled_function_call_stub param_vars unboxed_version ~closure_id
+    let generic_function_stub, code_id, params_and_body =
+      tupled_function_call_stub param_vars unboxed_version code_id ~closure_id
         recursive
     in
+    t.code <- (code_id, params_and_body) :: t.code;
     Closure_id.Map.add unboxed_version fun_decl
       (Closure_id.Map.add closure_id generic_function_stub by_closure_id)
 
-let ilambda_to_flambda ~backend ~module_ident ~size ~filename
-      (ilam : Ilambda.program) : Flambda_static.Program.t =
+let ilambda_to_flambda ~backend ~module_ident ~module_block_size_in_words
+      ~filename (ilam : Ilambda.program) =
   let module Backend = (val backend : Flambda2_backend_intf.S) in
   let compilation_unit = Compilation_unit.get_current_exn () in
   let t =
@@ -836,31 +859,41 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
       filename;
       imported_symbols = Symbol.Set.empty;
       declared_symbols = [];
+      shareable_constants = Static_const.Map.empty;
+      code = [];
     }
   in
   let module_symbol = Backend.symbol_for_global' module_ident in
   let module_block_tag = Tag.Scannable.zero in
   let module_block_var = Variable.create "module_block" in
   let return_cont = Continuation.create ~sort:Toplevel_return () in
-  let field_vars =
-    List.init size (fun pos ->
-      let pos_str = string_of_int pos in
-      Variable.create ("cv_field_" ^ pos_str), K.value)
-  in
-  (* For review, skip down to "let expr =" below, read the comment then
-     come back here. *)
   let load_fields_body =
     let field_vars =
-      List.init size (fun pos ->
+      List.init module_block_size_in_words (fun pos ->
         let pos_str = string_of_int pos in
         pos, Variable.create ("field_" ^ pos_str))
     in
-    let body : Expr.t =
-      let fields = List.map (fun (_, var) -> Simple.var var) field_vars in
-      let apply_cont =
-        Flambda.Apply_cont.create return_cont ~args:fields ~dbg:Debuginfo.none
+    let body =
+      let static_const : Static_const.t =
+        let field_vars =
+          List.map (fun (_, var) : Static_const.Field_of_block.t ->
+              Dynamically_computed var)
+            field_vars
+        in
+        Block (module_block_tag, Immutable, field_vars)
       in
-      Flambda.Expr.create_apply_cont apply_cont
+      let return =
+        (* Module initialisers return unit, but since that is taken care of
+           during Cmm generation, we can instead "return" [module_symbol]
+           here to ensure that its associated [Let_symbol] doesn't get
+           deleted. *)
+        Flambda.Apply_cont.create return_cont
+          ~args:[Simple.symbol module_symbol]
+          ~dbg:Debuginfo.none
+        |> Expr.create_apply_cont
+      in
+      Let_symbol.create (Singleton module_symbol) static_const return
+      |> Flambda.Expr.create_let_symbol
     in
     List.fold_left (fun body (pos, var) ->
         let var = VB.create var Name_mode.normal in
@@ -887,13 +920,12 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
       ~stub:false  (* CR mshinwell: remove "stub" notion *)
       ~is_exn_handler:false
   in
-  let expr =
+  let body =
     (* This binds the return continuation that is free (or, at least, not bound)
        in the incoming Ilambda code. The handler for the continuation receives a
-       tuple with fields indexed from zero to [size]. The handler extracts the
-       fields; the variables bound to such fields are returned as the
-       [computed_values], below. The compilation of the [Define_symbol]
-       constructions below then causes the actual module block to be created. *)
+       tuple with fields indexed from zero to [module_block_size_in_words]. The
+       handler extracts the fields; the variables bound to such fields are then
+       used to define the module block symbol. *)
     let body = close t Env.empty ilam.expr in
     Flambda.Let_cont.create_non_recursive ilam.return_continuation
       load_fields_cont_handler
@@ -905,57 +937,50 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
     Misc.fatal_error "Ilambda toplevel exception continuation cannot have \
       extra arguments"
   end;
-  let exn_continuation =
-    Exn_continuation.create ~exn_handler:ilam.exn_continuation.exn_handler
-      ~extra_args:[]
-  in
-  let computed_values =
-    List.map (fun (var, kind) -> KP.create (Parameter.wrap var) kind)
-      field_vars
-  in
-  let computation : Program_body.Computation.t =
-    { expr;
-      return_continuation = return_cont;
-      exn_continuation;
-      computed_values;
-    }
-  in
-  let static_part : K.value Static_part.t =
-    let field_vars =
-      List.map (fun (var, _) : Flambda_static.Of_kind_value.t ->
-          Dynamically_computed var)
-        field_vars
-    in
-    Block (module_block_tag, Immutable, field_vars)
-  in
-  let program_body : Program_body.t =
-    let bound_symbols : K.value Program_body.Bound_symbols.t =
-      Singleton module_symbol
-    in
-    let definition : Program_body.Definition.t =
-      { computation = Some computation;
-        static_structure = [S (bound_symbols, static_part)];
-      }
-    in
-    Program_body.define_symbol definition
-      ~body:(Program_body.root module_symbol)
-  in
-  let program_body =
-    (* CR mshinwell: Share with [Simplify_program] *)
-    List.fold_left (fun body (symbol, static_part) : Program_body.t ->
-        let bound_symbols : K.value Program_body.Bound_symbols.t =
-          Singleton symbol
+  let exn_continuation = ilam.exn_continuation.exn_handler in
+  let body =
+    List.fold_left (fun body (code_id, params_and_body) ->
+        let bound_symbols : Let_symbol.Bound_symbols.t =
+          Sets_of_closures [{
+            code_ids = Code_id.Set.singleton code_id;
+            closure_symbols = Closure_id.Map.empty;
+          }]
         in
-        let static_structure : Program_body.Static_structure.t =
-          [S (bound_symbols, static_part)]
+        let static_const : Static_const.t =
+          let code : Static_const.Code.t =
+            { params_and_body = Present params_and_body;
+              newer_version_of = None;
+            }
+          in
+          Sets_of_closures [{
+            code = Code_id.Map.singleton code_id code;
+            set_of_closures = Set_of_closures.empty; 
+          }]
         in
-        let definition : Program_body.Definition.t =
-          { computation = None;
-            static_structure;
-          }
-        in
-        Program_body.define_symbol definition ~body)
-      program_body
+        Let_symbol.create bound_symbols static_const body
+        |> Flambda.Expr.create_let_symbol)
+      body
+      t.code
+  in
+  (* We must make sure there is always an outer [Let_symbol] binding so that
+     lifted constants not in the scope of any other [Let_symbol] binding get
+     put into the term and not dropped.  Adding this extra binding, which
+     will actually be removed by the simplifier, avoids a special case. *)
+  begin match t.declared_symbols with
+  | _::_ -> ()
+  | [] ->
+    let (_sym : Symbol.t) =
+      register_const0 t
+        (Static_const.Block (Tag.Scannable.zero, Immutable, []))
+        "first_const"
+    in
+    ()
+  end;
+  let body =
+    List.fold_left (fun body (symbol, static_const) ->
+        Let_symbol.create (Singleton symbol) static_const body
+        |> Flambda.Expr.create_let_symbol)
+      body
       t.declared_symbols
   in
   let imported_symbols =
@@ -970,6 +995,5 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
       Backend.all_predefined_exception_symbols
       imported_symbols
   in
-  { imported_symbols;
-    body = program_body;
-  }
+  Flambda_unit.create ~imported_symbols ~return_continuation:return_cont
+    ~exn_continuation ~body

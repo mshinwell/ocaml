@@ -30,4 +30,6 @@ val both : 'a t -> 'b t -> f:('a -> 'b -> 'c) -> 'c t
 
 val map : 'a t -> f:('a -> 'b) -> 'b t
 
+val value_map : 'a t -> bottom:'b -> f:('a -> 'b) -> 'b
+
 val all : 'a t list -> 'a list t

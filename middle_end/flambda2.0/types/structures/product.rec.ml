@@ -40,11 +40,17 @@ module Make (Index : Identifiable.S) = struct
     { components_by_index;
     }
 
-  (* XXX This isn't right -- it seems the 0-arity one isn't bottom.  This
-     presumably needs to take a kind? *)
   let create_bottom () =
     { components_by_index = Index.Map.empty;
     }
+
+  (* CR mshinwell: This "bottom" stuff is still dubious.
+     We can't treat 0-sized blocks as bottom; it's legal to bind one of
+     those (e.g. an empty module). *)
+
+  let is_bottom t =
+    Index.Map.exists (fun _ typ -> Type_grammar.is_obviously_bottom typ)
+      t.components_by_index
 
   let indexes t = Index.Map.keys t.components_by_index
 
@@ -83,7 +89,7 @@ module Make (Index : Identifiable.S) = struct
           match ty1_opt, ty2_opt with
           | None, None -> None
           | Some ty, None | None, Some ty -> Some ty
-          | Some ty1, Some ty2 -> Some (Type_grammar.join env ty1 ty2))
+          | Some ty1, Some ty2 -> Some (Type_grammar.join' env ty1 ty2))
         components_by_index1
         components_by_index2
     in

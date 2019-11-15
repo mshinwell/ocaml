@@ -95,7 +95,9 @@ let compute_handler_env t
       ~definition_typing_env_with_params_defined:typing_env
       ~params : Continuation_env_and_param_types.t =
 (*
-Format.eprintf "uses for %a\n%!" Continuation.print t.continuation;
+Format.eprintf "%d uses for %a\n%!"
+  (List.length t.uses)
+  Continuation.print t.continuation;
 *)
   match t.uses with
   | [] -> No_uses
@@ -104,7 +106,7 @@ Format.eprintf "uses for %a\n%!" Continuation.print t.continuation;
     let use_envs_with_ids =
       List.map (fun use ->
 (*
-          Format.eprintf "For use, parameters: %a, arg types: %a, env:@ %a\n%!"
+          Format.eprintf "Use: parameters: %a,@ arg types: %a,@ env:@ %a\n%!"
             Kinded_parameter.List.print params
             (Format.pp_print_list ~pp_sep:Format.pp_print_space T.print)
             (U.arg_types use) TE.print (U.typing_env_at_use use);

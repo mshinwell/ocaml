@@ -32,7 +32,7 @@ type t = {
 let print ppf { callee; continuation; exn_continuation; args; call_kind;
       dbg; inline; inlining_depth; } =
   Format.fprintf ppf "@[<hov 1>(\
-      @[<hov 1>(%a\u{3008}%a\u{3009}\u{300a}%a\u{300b}(%a))@]@ \
+      @[<hov 1>(%a\u{3008}%a\u{3009}\u{300a}%a\u{300b}@ (%a))@]@ \
       @[<hov 1>(call_kind@ %a)@]@ \
       @[<hov 1>@<0>%s(dbg@ %a)@<0>%s@]@ \
       @[<hov 1>(inline@ %a)@]@ \
@@ -74,7 +74,7 @@ let invariant env
 *)
     E.check_simple_is_bound_and_of_kind env callee K.value;
     begin match call_kind with
-    | Function (Direct { closure_id = _; return_arity = _; }) ->
+    | Function (Direct { code_id = _; closure_id = _; return_arity = _; }) ->
       (* Note that [return_arity] is checked for all the cases below. *)
       E.check_simples_are_bound env args
     | Function Indirect_unknown_arity ->

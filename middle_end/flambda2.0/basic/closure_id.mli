@@ -25,8 +25,15 @@
     unit), that identifies a closure within a particular set of closures
     (viz. [Project_closure]). *)
 
-include module type of Closure_element
+include Identifiable.S
 
-(* CR mshinwell: Fix the problem that Closure_id and Var_within_closure seem
-   to be being used interchangeably by the type checker---presumably they are
-   actually equal?? *)
+val wrap : Compilation_unit.t -> Variable.t -> t
+
+val unwrap : t -> Variable.t
+
+val in_compilation_unit : t -> Compilation_unit.t -> bool
+val get_compilation_unit : t -> Compilation_unit.t
+
+val to_string : t -> string
+
+val rename : t -> t

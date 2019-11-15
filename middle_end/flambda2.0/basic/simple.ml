@@ -143,6 +143,7 @@ let const_int i = Const (Const.const_int i)
 
 let const_true = Const Const.const_true
 let const_false = Const Const.const_false
+let const_unit = Const Const.const_unit
 
 let untagged_const_true = Const Const.untagged_const_true
 let untagged_const_false = Const Const.untagged_const_false
@@ -193,6 +194,11 @@ let without_rec_info t =
 let must_be_var t =
   match t with
   | Name (Var var) | Rec_name (Var var, _) -> Some var
+  | Name _ | Rec_name (_, _) | Const _ -> None
+
+let must_be_symbol t =
+  match t with
+  | Name (Symbol sym) | Rec_name (Symbol sym, _) -> Some sym
   | Name _ | Rec_name (_, _) | Const _ -> None
 
 let allowed t ~allowed =

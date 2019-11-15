@@ -35,10 +35,10 @@ let parse_program filename =
     Printexc.raise_with_backtrace e x
 
 let check_invariants program =
-  try Flambda_static.Program.invariant program
+  try Flambda_unit.invariant program
   with exn ->
     Format.eprintf "Program which failed invariant check:@ %a\n%!"
-      Flambda_static.Program.print program;
+      Flambda_unit.print program;
     raise exn
 
 let parse_ilambda ~backend file =
@@ -52,16 +52,16 @@ let parse_ilambda ~backend file =
       let fl2 =
         Closure_conversion.ilambda_to_flambda ~backend
           ~module_ident:il.module_ident
-          ~size:il.size
+          ~module_block_size_in_words:il.size
           ~filename:"/tmp/toto"
           il.program
       in
       Format.printf "flambda:@.%a@.@."
-        Flambda_static.Program.print fl2;
+        Flambda_unit.print fl2;
       check_invariants fl2;
       let fl2' = Simplify.run ~backend ~round:1 fl2 in
       Format.printf "simplify:@.%a@."
-        Flambda_static.Program.print fl2';
+        Flambda_unit.print fl2';
       fl2'
     | Error e ->
       begin match e with
@@ -86,11 +86,11 @@ let parse_flambda ~backend file =
         Print_fexpr.program program;
       let fl2 = Fexpr_to_flambda.conv ~backend program in
       Format.printf "flambda:@.%a@.@."
-        Flambda_static.Program.print fl2;
+        Flambda_unit.print fl2;
       check_invariants fl2;
       let fl2' = Simplify.run ~backend ~round:1 fl2 in
       Format.printf "simplify:@.%a@."
-        Flambda_static.Program.print fl2';
+        Flambda_unit.print fl2';
       fl2'
     | Error e ->
       begin match e with

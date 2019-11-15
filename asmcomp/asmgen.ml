@@ -241,14 +241,15 @@ type middle_end2 =
      ppf_dump:Format.formatter
   -> prefixname:string
   -> backend:(module Flambda2_backend_intf.S)
-  -> size:int
   -> filename:string
   -> module_ident:Ident.t
+  -> module_block_size_in_words:int
   -> module_initializer:Lambda.lambda
-  -> Flambda_static.Program.t
+  -> Flambda_unit.t
 
-let compile_implementation2 ?toplevel ~backend ~filename ~prefixname ~size
-    ~module_ident ~module_initializer ~middle_end ~ppf_dump required_globals =
+let compile_implementation2 ?toplevel ~backend ~filename ~prefixname
+    ~size:module_block_size_in_words ~module_ident ~module_initializer
+    ~middle_end ~ppf_dump required_globals =
   let asmfile =
     if !keep_asm_file || !Emitaux.binary_backend_available
     then prefixname ^ ext_asm
@@ -258,10 +259,10 @@ let compile_implementation2 ?toplevel ~backend ~filename ~prefixname ~size
     (fun () ->
       Ident.Set.iter Compilenv.require_global required_globals;
       let translated_program =
-        (middle_end : middle_end2) ~backend ~size ~filename ~prefixname
-          ~ppf_dump ~module_ident ~module_initializer
+        (middle_end : middle_end2) ~backend ~module_block_size_in_words
+          ~filename ~prefixname ~ppf_dump ~module_ident ~module_initializer
       in
-      end_gen_implementation ?toplevel ~ppf_dump Un_cps.program
+      end_gen_implementation ?toplevel ~ppf_dump Un_cps.unit
         translated_program)
 
 let linear_gen_implementation filename =
@@ -293,7 +294,7 @@ let compile_implementation_flambda ?toplevel ~prefixname
     (fun () ->
       Ident.Set.iter Compilenv.require_global required_globals;
       end_gen_implementation ?toplevel ~ppf_dump
-        Un_cps.program program)
+        Un_cps.unit program)
 
 (* Error report *)
 

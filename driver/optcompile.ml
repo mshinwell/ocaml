@@ -31,17 +31,33 @@ let (|>>) (x, y) f = (x, f y)
 
 (** Native compilation backend for .ml files. *)
 
-(* XXX *)
 module Flambda2_backend = struct
-  let symbol_for_global' ?comp_unit id =
+  let symbol_for_module_block id =
+    assert (Ident.global id);
+    assert (not (Ident.is_predef id));
     let comp_unit =
-      match comp_unit with
-      | None -> Compilation_unit.get_current_exn ()
-      | Some comp_unit -> comp_unit
+      (* CR mshinwell: Get rid of this "caml" hack *)
+      Compilation_unit.create id
+        (Linkage_name.create ("caml" ^ Ident.name id))
     in
     Symbol.unsafe_create
       comp_unit
       (Linkage_name.create (Compilenv.symbol_for_global id))
+
+  let symbol_for_global' ?comp_unit id =
+    if Ident.global id && not (Ident.is_predef id) then
+      symbol_for_module_block id
+    else
+      let comp_unit =
+        match comp_unit with
+        | Some comp_unit -> comp_unit
+        | None ->
+          if Ident.is_predef id then Compilation_unit.predefined_exception ()
+          else Compilation_unit.get_current_exn ()
+      in
+      Symbol.unsafe_create
+        comp_unit
+        (Linkage_name.create (Compilenv.symbol_for_global id))
 
   let closure_symbol _ = failwith "Not yet implemented"
 
@@ -56,10 +72,15 @@ module Flambda2_backend = struct
       Predef.ident_invalid_argument
 
   let all_predefined_exception_symbols =
-    Symbol.Set.of_list [
-      division_by_zero;
-      invalid_argument;
-    ] (* CR mshinwell: and the rest... *)
+    Predef.all_predef_exns
+    |> List.map (fun ident ->
+      symbol_for_global' ~comp_unit:(Compilation_unit.predefined_exception ())
+        ident)
+    |> Symbol.Set.of_list
+
+  let () =
+    assert (Symbol.Set.mem division_by_zero all_predefined_exception_symbols);
+    assert (Symbol.Set.mem invalid_argument all_predefined_exception_symbols)
 
   let symbol_for_global' id : Symbol.t = symbol_for_global' id
 

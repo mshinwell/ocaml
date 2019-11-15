@@ -21,7 +21,7 @@
 val ilambda_to_flambda
    : backend:(module Flambda2_backend_intf.S)
   -> module_ident:Ident.t
-  -> size:int
-  -> filename:string
+  -> module_block_size_in_words:int
+  -> filename:string  (* CR mshinwell: Filename of what? *)
   -> Ilambda.program
-  -> Flambda_static.Program.t
+  -> Flambda_unit.t

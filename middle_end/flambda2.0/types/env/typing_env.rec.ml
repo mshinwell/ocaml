@@ -208,6 +208,7 @@ end
 type t = {
   resolver : (Export_id.t -> Type_grammar.t option);
   defined_symbols : Flambda_kind.t Symbol.Map.t;
+  code_age_relation : Code_age_relation.t;
   prev_levels : One_level.t Scope.Map.t;
   (* CR mshinwell: hold list of symbol definitions, then change defined_names
      to variables, then remove artificial symbol precedence *)
@@ -224,7 +225,7 @@ let is_empty t =
 (* CR mshinwell: Add option to print [aliases] *)
 let print_with_cache ~cache ppf
       ({ resolver = _; prev_levels; current_level; next_binding_time = _;
-         defined_symbols;
+         defined_symbols; code_age_relation;
        } as t) =
   if is_empty t then
     Format.pp_print_string ppf "Empty"
@@ -240,9 +241,11 @@ let print_with_cache ~cache ppf
       Format.fprintf ppf
         "@[<hov 1>(\
             @[<hov 1>(defined_symbols@ %a)@]@ \
+            @[<hov 1>(code_age_relation@ %a)@]@ \
             @[<hov 1>(levels@ %a)@]\
             )@]"
         (Symbol.Map.print K.print) defined_symbols
+        Code_age_relation.print code_age_relation
         (Scope.Map.print (One_level.print_with_cache ~cache)) levels)
 
 let print ppf t =
@@ -299,6 +302,7 @@ let create ~resolver =
     current_level = One_level.create_empty Scope.initial;
     next_binding_time = Binding_time.earliest_var;
     defined_symbols = Symbol.Map.empty;
+    code_age_relation = Code_age_relation.empty;
   }
 
 let create_using_resolver_from t = create ~resolver:t.resolver
@@ -461,7 +465,10 @@ let invariant_for_new_equation t name ty =
     let defined_names =
       Name_occurrences.create_names (domain0 t) Name_mode.in_types
     in
-    let free_names = Type_grammar.free_names ty in
+    (* CR mshinwell: It's a shame we can't check code IDs here. *)
+    let free_names =
+      Name_occurrences.without_code_ids (Type_grammar.free_names ty)
+    in
     if not (Name_occurrences.subset_domain free_names defined_names) then begin
       let unbound_names = Name_occurrences.diff free_names defined_names in
       Misc.fatal_errorf "New equation@ %a@ =@ %a@ has unbound names@ (%a):@ %a"
@@ -739,6 +746,17 @@ let meet_equations_on_params t ~params ~param_types =
     t
     params param_types
 
+let add_to_code_age_relation t ~newer ~older =
+  let code_age_relation =
+    Code_age_relation.add t.code_age_relation ~newer ~older
+  in
+  { t with code_age_relation; }
+
+let code_age_relation t = t.code_age_relation
+
+let with_code_age_relation t code_age_relation =
+  { t with code_age_relation; }
+
 let cut t ~unknown_if_defined_at_or_later_than:min_scope =
   let current_scope = current_scope t in
   let original_t = t in
@@ -777,6 +795,7 @@ let cut t ~unknown_if_defined_at_or_later_than:min_scope =
             current_level;
             next_binding_time = t.next_binding_time;
             defined_symbols = t.defined_symbols;
+            code_age_relation = t.code_age_relation;
           }
         in
         let symbols_still_defined =

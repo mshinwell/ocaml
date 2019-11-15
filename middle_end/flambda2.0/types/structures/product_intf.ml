@@ -27,8 +27,9 @@ module type S = sig
   (** Create a product value given the indexes with associated components. *)
   val create : flambda_type Index.Map.t -> t
 
-  (* CR mshinwell: Change all of these to just [bottom : t]? *)
   val create_bottom : unit -> t
+
+  val is_bottom : t -> bool
 
   (** Widen the product by adding as many fields, after any existing fields,
       so that the product has the same number of fields as [to_match].  If the

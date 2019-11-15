@@ -25,9 +25,11 @@ include Identifiable.Make (struct
   type nonrec t = t
 
   let print_closure_binding ppf (closure_id, var) =
-    Format.fprintf ppf "@[(%a \u{21a6} %a)@]"
-      Closure_id.print closure_id
+    Format.fprintf ppf "@[%a @<0>%s\u{21a4}@<0>%s %a@]"
       Var_in_binding_pos.print var
+      (Flambda_colours.elide ())
+      (Flambda_colours.elide ())
+      Closure_id.print closure_id
 
   let print ppf t =
     match t with

@@ -36,12 +36,16 @@ end = struct
     inlining_depth_increment : int;
     float_const_prop : bool;
     code : Function_params_and_body.t Code_id.Map.t;
+    at_unit_toplevel : bool;
+    unit_toplevel_exn_continuation : Continuation.t;
+    symbols_currently_being_defined : Symbol.Set.t;
   }
 
   let print ppf { backend = _; round; typing_env;
                   inlined_debuginfo; can_inline;
                   inlining_depth_increment; float_const_prop;
-                  code;
+                  code; at_unit_toplevel; unit_toplevel_exn_continuation;
+                  symbols_currently_being_defined;
                 } =
     Format.fprintf ppf "@[<hov 1>(\
         @[<hov 1>(round@ %d)@]@ \
@@ -50,6 +54,9 @@ end = struct
         @[<hov 1>(can_inline@ %b)@]@ \
         @[<hov 1>(inlining_depth_increment@ %d)@]@ \
         @[<hov 1>(float_const_prop@ %b)@] \
+        @[<hov 1>(at_unit_toplevel@ %b)@] \
+        @[<hov 1>(unit_toplevel_exn_continuation@ %a)@]@ \
+        @[<hov 1>(symbols_currently_being_defined@ %a)@]@ \
         @[<hov 1>(code@ %a)@]\
         )@]"
       round
@@ -58,11 +65,14 @@ end = struct
       can_inline
       inlining_depth_increment
       float_const_prop
+      at_unit_toplevel
+      Continuation.print unit_toplevel_exn_continuation
+      Symbol.Set.print symbols_currently_being_defined
       (Code_id.Map.print Function_params_and_body.print) code
 
   let invariant _t = ()
 
-  let create ~round ~backend ~float_const_prop =
+  let create ~round ~backend ~float_const_prop ~unit_toplevel_exn_continuation =
     (* CR mshinwell: [resolver] should come from [backend] *)
     let resolver _export_id = None in
     { backend;
@@ -73,6 +83,9 @@ end = struct
       inlining_depth_increment = 0;
       float_const_prop;
       code = Code_id.Map.empty;
+      at_unit_toplevel = true;
+      unit_toplevel_exn_continuation;
+      symbols_currently_being_defined = Symbol.Set.empty;
     }
 
   let resolver t = TE.resolver t.typing_env
@@ -82,6 +95,14 @@ end = struct
   let get_continuation_scope_level t = TE.current_scope t.typing_env
   let can_inline t = t.can_inline
   let float_const_prop t = t.float_const_prop
+
+  let unit_toplevel_exn_continuation t = t.unit_toplevel_exn_continuation
+
+  let at_unit_toplevel t = t.at_unit_toplevel
+
+  let set_not_at_unit_toplevel t =
+    { t with at_unit_toplevel = false; }
+
   let get_inlining_depth_increment t = t.inlining_depth_increment
 
   let set_inlining_depth_increment t inlining_depth_increment =
@@ -97,10 +118,41 @@ end = struct
     increment_continuation_scope_level
       (increment_continuation_scope_level t)
 
+  let now_defining_symbol t symbol =
+    if Symbol.Set.mem symbol t.symbols_currently_being_defined then begin
+      Misc.fatal_errorf "Already defining symbol %a:@ %a"
+        Symbol.print symbol
+        print t
+    end;
+    let symbols_currently_being_defined =
+      Symbol.Set.add symbol t.symbols_currently_being_defined
+    in
+    { t with
+      symbols_currently_being_defined;
+    }
+
+  let no_longer_defining_symbol t symbol =
+    if not (Symbol.Set.mem symbol t.symbols_currently_being_defined) then begin
+      Misc.fatal_errorf "Not currently defining symbol %a:@ %a"
+        Symbol.print symbol
+        print t
+    end;
+    let symbols_currently_being_defined =
+      Symbol.Set.remove symbol t.symbols_currently_being_defined
+    in
+    { t with
+      symbols_currently_being_defined;
+    }
+
+  let symbol_is_currently_being_defined t symbol =
+    Symbol.Set.mem symbol t.symbols_currently_being_defined
+
   let enter_closure { backend; round; typing_env;
                       inlined_debuginfo = _; can_inline;
                       inlining_depth_increment = _;
-                      float_const_prop; code;
+                      float_const_prop; code; at_unit_toplevel = _;
+                      unit_toplevel_exn_continuation;
+                      symbols_currently_being_defined;
                     } =
     { backend;
       round;
@@ -110,6 +162,9 @@ end = struct
       inlining_depth_increment = 0;
       float_const_prop;
       code;
+      at_unit_toplevel = false;
+      unit_toplevel_exn_continuation;
+      symbols_currently_being_defined;
     }
 
   let define_variable t var kind =
@@ -151,6 +206,8 @@ end = struct
     | ty -> ty
 
   let find_variable t var = find_name t (Name.var var)
+
+  let mem_variable t var = TE.mem t.typing_env (Name.var var)
 
   let define_symbol t sym kind =
     let typing_env =
@@ -282,15 +339,32 @@ end = struct
     (* CR mshinwell: Convert [Typing_env] to map from [Simple]s. *)
     | Const _ -> ()
 
-  let define_code t id code =
-    if Code_id.Map.mem id t.code then begin
+  let check_code_id_is_bound t code_id =
+    if not (Code_id.Map.mem code_id t.code) then begin
+      Misc.fatal_errorf "Unbound code ID %a in environment:@ %a"
+        Code_id.print code_id
+        print t
+    end
+
+  let define_code t ?newer_version_of ~code_id ~params_and_body:code =
+    if Code_id.Map.mem code_id t.code then begin
       Misc.fatal_errorf "Code ID %a is already defined, cannot redefine to@ %a"
-        Code_id.print id
+        Code_id.print code_id
         Function_params_and_body.print code
     end;
+    let typing_env =
+      match newer_version_of with
+      | None -> t.typing_env
+      | Some older ->
+        TE.add_to_code_age_relation t.typing_env ~newer:code_id ~older
+    in
     { t with
-      code = Code_id.Map.add id code t.code;
+      typing_env;
+      code = Code_id.Map.add code_id code t.code;
     }
+
+  let mem_code t id =
+    Code_id.Map.mem id t.code
 
   let find_code t id =
     match Code_id.Map.find id t.code with
@@ -299,6 +373,8 @@ end = struct
     | code -> code
 
   (* CR mshinwell: The label should state what order is expected. *)
+  (* CR mshinwell: Rework lifted constant handling so we don't try to add
+     lifted constants we already know about. *)
   let add_lifted_constants t ~lifted =
     (*
     Format.eprintf "Adding lifted:@ %a\n%!"
@@ -306,34 +382,36 @@ end = struct
         Lifted_constant.print) lifted;
     *)
     let module LC = Lifted_constant in
+    let t =
+      List.fold_left (fun t lifted_constant ->
+          let types_of_symbols = LC.types_of_symbols lifted_constant in
+          Symbol.Map.fold (fun sym typ t ->
+              define_symbol_if_undefined t sym (T.kind typ))
+            types_of_symbols
+            t)
+        t
+        lifted
+    in
     List.fold_left (fun denv lifted_constant ->
         let denv_at_definition = LC.denv_at_definition lifted_constant in
         let types_of_symbols = LC.types_of_symbols lifted_constant in
-        let definition = LC.definition lifted_constant in
+        let bound_symbols = LC.bound_symbols lifted_constant in
+        let defining_expr = LC.defining_expr lifted_constant in
         let being_defined =
-          Flambda_static.Program_body.Definition.being_defined definition
+          Let_symbol.Bound_symbols.being_defined bound_symbols
         in
         let already_bound =
           Symbol.Set.filter (fun sym -> mem_symbol denv sym)
             being_defined
         in
-        if Symbol.Set.equal being_defined already_bound then denv
-        else if not (Symbol.Set.is_empty already_bound) then
-          Misc.fatal_errorf "Expected all or none of the following symbols \
-              to be found:@ %a@ denv:@ %a"
-            LC.print lifted_constant
-            print denv
-        else
-          let typing_env =
-            Symbol.Map.fold (fun sym typ typing_env ->
-                let sym =
-                  Name_in_binding_pos.create (Name.symbol sym) Name_mode.normal
-                in
-                TE.add_definition typing_env sym (T.kind typ))
-              types_of_symbols
-              denv.typing_env
-          in
-          let typing_env =
+        let typing_env =
+          if Symbol.Set.equal being_defined already_bound then denv.typing_env
+          else if not (Symbol.Set.is_empty already_bound) then
+            Misc.fatal_errorf "Expected all or none of the following symbols \
+                to be found:@ %a@ denv:@ %a"
+              LC.print lifted_constant
+              print denv
+          else begin
             Symbol.Map.fold (fun sym typ typing_env ->
                 let sym = Name.symbol sym in
                 let env_extension =
@@ -344,12 +422,15 @@ end = struct
                 in
                 TE.add_env_extension typing_env ~env_extension)
               types_of_symbols
-              typing_env
-          in
-          Code_id.Map.fold (fun code_id params_and_body denv ->
-              define_code denv code_id params_and_body)
-            (LC.pieces_of_code lifted_constant)
-            (with_typing_env denv typing_env))
+              denv.typing_env
+          end
+        in
+        Code_id.Map.fold
+          (fun code_id (params_and_body, newer_version_of) denv ->
+            if mem_code denv code_id then denv
+            else define_code denv ?newer_version_of ~code_id ~params_and_body)
+          (Static_const.get_pieces_of_code defining_expr)
+          (with_typing_env denv typing_env))
       t
       (List.rev lifted)
 
@@ -559,23 +640,28 @@ end = struct
     { resolver : (Export_id.t -> Flambda_type.t option);
       imported_symbols : Flambda_kind.t Symbol.Map.t;
       lifted_constants_innermost_last : Lifted_constant.t list;
+      shareable_constants : Symbol.t Static_const.Map.t;
     }
 
   let print ppf { resolver = _; imported_symbols;
                   lifted_constants_innermost_last;
+                  shareable_constants;
                 } =
     Format.fprintf ppf "@[<hov 1>(\
         @[<hov 1>(imported_symbols@ %a)@]@ \
-        @[<hov 1>(lifted_constants_innermost_last@ %a)@]\
+        @[<hov 1>(lifted_constants_innermost_last@ %a)@]@ \
+        @[<hov 1>(shareable_constants@ %a)@]\
         )@]"
       (Symbol.Map.print Flambda_kind.print) imported_symbols
       (Format.pp_print_list ~pp_sep:Format.pp_print_space Lifted_constant.print)
         lifted_constants_innermost_last
+      (Static_const.Map.print Symbol.print) shareable_constants
 
   let create ~resolver =
     { resolver;
       imported_symbols = Symbol.Map.empty;
       lifted_constants_innermost_last = [];
+      shareable_constants = Static_const.Map.empty;
     }
 
   let imported_symbols t = t.imported_symbols
@@ -588,56 +674,82 @@ end = struct
 
   let get_lifted_constants t = t.lifted_constants_innermost_last
 
+  let set_lifted_constants t consts =
+    { t with lifted_constants_innermost_last = consts; }
+
   let clear_lifted_constants t =
     { t with
       lifted_constants_innermost_last = [];
     }
+
+  let find_shareable_constant t static_const =
+    Static_const.Map.find_opt static_const t.shareable_constants
+
+  let consider_constant_for_sharing t symbol static_const =
+    if not (Static_const.can_share static_const) then t
+    else
+      { t with
+        shareable_constants =
+          Static_const.Map.add static_const symbol t.shareable_constants;
+      }
 end and Lifted_constant : sig
   include Simplify_env_and_result_intf.Lifted_constant
     with type downwards_env := Downwards_env.t
 end = struct
-  module Definition = Flambda_static.Program_body.Definition
-
   type t = {
     denv : Downwards_env.t;
-    definition : Definition.t;
+    bound_symbols : Let_symbol.Bound_symbols.t;
+    defining_expr : Static_const.t;
     types_of_symbols : Flambda_type.t Symbol.Map.t;
-    pieces_of_code : Function_params_and_body.t Code_id.Map.t;
   }
 
   let print ppf
-        { denv = _ ; definition; types_of_symbols = _; pieces_of_code = _; } =
+        { denv = _ ; bound_symbols; defining_expr; types_of_symbols = _; } =
     Format.fprintf ppf "@[<hov 1>(\
-        @[<hov 1>(definition@ %a)@]\
+        @[<hov 1>(bound_symbols@ %a)@]@ \
+        @[<hov 1>(static_const@ %a)@]\
         )@]"
-      Definition.print definition
+      Let_symbol.Bound_symbols.print bound_symbols
+      Static_const.print defining_expr
 
-  let create denv definition ~types_of_symbols ~pieces_of_code =
-    let being_defined = Definition.being_defined definition in
+  let create denv bound_symbols defining_expr ~types_of_symbols =
+    let being_defined = Let_symbol.Bound_symbols.being_defined bound_symbols in
     if not (Symbol.Set.subset (Symbol.Map.keys types_of_symbols) being_defined)
     then begin
       Misc.fatal_errorf "[types_of_symbols]:@ %a@ does not cover all symbols \
-          in the [Definition]:@ %a"
+          in the definition:@ %a"
         (Symbol.Map.print T.print) types_of_symbols
-        Definition.print definition
+        Let_symbol.Bound_symbols.print bound_symbols
     end;
-    let code_being_defined = Definition.code_being_defined definition in
-    if not (Code_id.Set.subset (Code_id.Map.keys pieces_of_code)
-      code_being_defined)
-    then begin
-      Misc.fatal_errorf "[pieces_of_code]:@ %a@ does not cover all code IDs \
-          in the [Definition]:@ %a"
-        (Code_id.Map.print Function_params_and_body.print) pieces_of_code
-        Definition.print definition
-    end;
+    (* CR mshinwell: This should check that [defining_expr] matches
+       [bound_symbols] in the code/set-of-closures case *)
     { denv;
-      definition;
+      bound_symbols;
+      defining_expr;
       types_of_symbols;
-      pieces_of_code;
     }
 
+  let create_pieces_of_code denv ?newer_versions_of code =
+    let bound_symbols, defining_expr =
+      Let_symbol.pieces_of_code ?newer_versions_of code
+    in
+    { denv;
+      bound_symbols;
+      defining_expr;
+      types_of_symbols = Symbol.Map.empty;
+    }
+
+  let create_piece_of_code denv ?newer_version_of code_id params_and_body =
+    let newer_versions_of =
+      match newer_version_of with
+      | None -> None
+      | Some older -> Some (Code_id.Map.singleton code_id older)
+    in
+    create_pieces_of_code denv ?newer_versions_of
+      (Code_id.Map.singleton code_id params_and_body)
+
   let denv_at_definition t = t.denv
-  let definition t = t.definition
+  let bound_symbols t = t.bound_symbols
+  let defining_expr t = t.defining_expr
   let types_of_symbols t = t.types_of_symbols
-  let pieces_of_code t = t.pieces_of_code
 end

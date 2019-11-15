@@ -143,15 +143,11 @@ let apply_rec_info t rec_info : _ Or_bottom.t =
   match t with
   | Closures { by_closure_id; } ->
     Or_bottom.map
-      (Row_like.For_closures_entry_by_set_of_closures_contents.map_function_decl_types
+      (Row_like.For_closures_entry_by_set_of_closures_contents.
+       map_function_decl_types
         by_closure_id
-        ~f:(fun (decl : Function_declaration_type.t)
-              : Function_declaration_type.t Or_bottom.t ->
-          match decl with
-          | Non_inlinable _ -> Ok decl
-          | Inlinable { function_decl; rec_info = old_rec_info; } ->
-            let rec_info = Rec_info.merge old_rec_info ~newer:rec_info in
-            Ok (Inlinable { function_decl; rec_info; })))
+        ~f:(fun (decl : Function_declaration_type.t) : _ Or_bottom.t ->
+          Function_declaration_type.apply_rec_info decl rec_info))
       ~f:(fun by_closure_id -> Closures { by_closure_id; })
   | Variant _
   | Boxed_float _
@@ -186,7 +182,7 @@ let meet_unknown meet_contents ~contents_is_bottom env
       if contents_is_bottom contents then Bottom
       else result
 
-let join_unknown join_contents env
+let join_unknown join_contents (env : Meet_or_join_env.t)
     (or_unknown1 : _ Or_unknown.t) (or_unknown2 : _ Or_unknown.t)
     : _ Or_unknown.t =
   match or_unknown1, or_unknown2 with
@@ -198,6 +194,7 @@ let join_unknown join_contents env
 module Make_meet_or_join
   (E : Lattice_ops_intf.S
    with type meet_env := Meet_env.t
+   with type meet_or_join_env := Meet_or_join_env.t
    with type typing_env := Typing_env.t
    with type typing_env_extension := Typing_env_extension.t) =
 struct
@@ -217,7 +214,7 @@ struct
     in
     let imms =
       E.switch (meet_unknown T.meet ~contents_is_bottom:T.is_obviously_bottom)
-        (join_unknown T.join) env imms1 imms2
+        (join_unknown T.join') env imms1 imms2
     in
     let imms : _ Or_bottom.t =
       match imms with
@@ -243,13 +240,13 @@ struct
       | Known imms -> assert (not (T.is_obviously_bottom imms));
       end;
       let env_extension =
-        (* XXX *)
-        let left_env = Meet_env.env env in
-        let right_env = Meet_env.env env in
+        let left_env = Meet_or_join_env.left_join_env env in
+        let right_env = Meet_or_join_env.right_join_env env in
         (* CR mshinwell: Move to [TEE] *)
         let join_extensions env ext1 ext2 =
+          let initial_env_at_join = Meet_or_join_env.target_join_env env in
           let env_extension, _ =
-            TEE.n_way_join ~initial_env_at_join:env [
+            TEE.n_way_join ~initial_env_at_join [
               left_env, Apply_cont_rewrite_id.create (), Non_inlinable,
                 Variable.Set.empty, ext1;
               right_env, Apply_cont_rewrite_id.create (), Non_inlinable,
@@ -273,19 +270,19 @@ struct
           Variant (Variant.create ~blocks ~immediates), env_extension)
     | Boxed_float n1, Boxed_float n2 ->
       Or_bottom_or_absorbing.of_or_bottom
-        (E.switch T.meet T.join env n1 n2)
+        (E.switch T.meet T.join' env n1 n2)
         ~f:(fun (n, env_extension) -> Boxed_float n, env_extension)
     | Boxed_int32 n1, Boxed_int32 n2 ->
       Or_bottom_or_absorbing.of_or_bottom
-        (E.switch T.meet T.join env n1 n2)
+        (E.switch T.meet T.join' env n1 n2)
         ~f:(fun (n, env_extension) -> Boxed_int32 n, env_extension)
     | Boxed_int64 n1, Boxed_int64 n2 ->
       Or_bottom_or_absorbing.of_or_bottom
-        (E.switch T.meet T.join env n1 n2)
+        (E.switch T.meet T.join' env n1 n2)
         ~f:(fun (n, env_extension) -> Boxed_int64 n, env_extension)
     | Boxed_nativeint n1, Boxed_nativeint n2 ->
       Or_bottom_or_absorbing.of_or_bottom
-        (E.switch T.meet T.join env n1 n2)
+        (E.switch T.meet T.join' env n1 n2)
         ~f:(fun (n, env_extension) -> Boxed_nativeint n, env_extension)
     | Closures { by_closure_id = by_closure_id1; },
         Closures { by_closure_id = by_closure_id2; } ->
@@ -300,7 +297,7 @@ struct
       else Or_bottom_or_absorbing.Ok (String strs, TEE.empty ())
     | Array { length = length1; }, Array { length = length2; } ->
       Or_bottom_or_absorbing.of_or_bottom
-        (E.switch T.meet T.join env length1 length2)
+        (E.switch T.meet T.join' env length1 length2)
         ~f:(fun (length, env_extension) -> Array { length; }, env_extension)
     | (Variant _
         | Boxed_float _

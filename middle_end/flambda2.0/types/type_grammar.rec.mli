@@ -133,12 +133,20 @@ val type_for_const : Simple.Const.t -> t
 val kind_for_const : Simple.Const.t -> Flambda_kind.t
 
 val create_inlinable_function_declaration
-   : Term_language_function_declaration.t
-  -> Rec_info.t
+   : code_id:Code_id.t
+  -> param_arity:Flambda_arity.t
+  -> result_arity:Flambda_arity.t
+  -> stub:bool
+  -> dbg:Debuginfo.t
+  -> inline:Inline_attribute.t
+  -> is_a_functor:bool
+  -> recursive:Recursive.t
+  -> rec_info:Rec_info.t
   -> Function_declaration_type.t
 
 val create_non_inlinable_function_declaration
-   : param_arity:Flambda_arity.t
+   : code_id:Code_id.t
+  -> param_arity:Flambda_arity.t
   -> result_arity:Flambda_arity.t
   -> recursive:Recursive.t
   -> Function_declaration_type.t
@@ -182,5 +190,16 @@ val expand_head : t -> Typing_env.t -> Resolved_type.t
 val meet : Meet_env.t -> t -> t -> (t * Typing_env_extension.t) Or_bottom.t
 val meet' : Meet_env.t -> t -> t -> t * Typing_env_extension.t
 
-(** Least upper bound of two types. *)
-val join : Typing_env.t -> t -> t -> t
+(** [join env ~left_env ~left_ty ~right_env ~right_ty] calculates the least
+    upper bound of two types.  [left_ty] is to be valid in [left_env] and
+    [right_ty] is to be valid in [right_env].  The result will be computed
+    so as to be valid in [env]. *)
+val join
+   : Typing_env.t
+  -> left_env:Typing_env.t
+  -> left_ty:t
+  -> right_env:Typing_env.t
+  -> right_ty:t
+  -> t
+
+val join' : Meet_or_join_env.t -> t -> t -> t

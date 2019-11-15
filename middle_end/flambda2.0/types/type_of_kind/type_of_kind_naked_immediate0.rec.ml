@@ -63,6 +63,7 @@ let apply_rec_info t rec_info : _ Or_bottom.t =
 module Make_meet_or_join
   (E : Lattice_ops_intf.S
     with type meet_env := Meet_env.t
+    with type meet_or_join_env := Meet_or_join_env.t
     with type typing_env := Typing_env.t
     with type typing_env_extension := Typing_env_extension.t) =
 struct
@@ -70,7 +71,7 @@ struct
     Misc.fatal_errorf "Bad naked immediate meet/join with %a and %a in env:@ %a"
       print t1
       print t2
-      TE.print (Meet_env.env env)
+      TE.print (Meet_or_join_env.target_join_env env)
 
   let meet_or_join env t1 t2 : _ Or_bottom_or_absorbing.t =
   (*
@@ -83,12 +84,12 @@ struct
       if I.Set.is_empty is then Bottom
       else Ok (Naked_immediates is, TEE.empty ())
     | Is_int ty1, Is_int ty2 ->
-      Or_bottom_or_absorbing.of_or_bottom (E.switch T.meet T.join env ty1 ty2)
+      Or_bottom_or_absorbing.of_or_bottom (E.switch T.meet T.join' env ty1 ty2)
         ~f:(fun (ty, env_extension) -> Is_int ty, env_extension)
     | Get_tag ty1, Get_tag ty2 ->
-      Or_bottom_or_absorbing.of_or_bottom (E.switch T.meet T.join env ty1 ty2)
+      Or_bottom_or_absorbing.of_or_bottom (E.switch T.meet T.join' env ty1 ty2)
         ~f:(fun (ty, env_extension) -> Get_tag ty, env_extension)
-    | Naked_immediates is_int, Is_int ty | Is_int ty, Naked_immediates is_int ->
+    | Is_int ty, Naked_immediates is_int ->
       begin match I.Set.elements is_int with
       | [] -> Bottom
       | [is_int] ->
@@ -98,11 +99,27 @@ struct
           else bad_meet_or_join env t1 t2
         in
         Or_bottom_or_absorbing.of_or_bottom
-          (E.switch T.meet T.join env ty shape)
+          (E.switch T.meet T.join' env ty shape)
           ~f:(fun (ty, env_extension) -> Is_int ty, env_extension)
       | _::_ -> bad_meet_or_join env t1 t2
       end
-    | Naked_immediates tags, Get_tag ty | Get_tag ty, Naked_immediates tags ->
+    | Naked_immediates is_int, Is_int ty ->
+      begin match I.Set.elements is_int with
+      | [] -> Bottom
+      | [is_int] ->
+        let shape =
+          if I.equal is_int I.zero then T.any_block ()
+          else if I.equal is_int I.one then T.any_tagged_immediate ()
+          else bad_meet_or_join env t1 t2
+        in
+        Or_bottom_or_absorbing.of_or_bottom
+          (E.switch T.meet T.join' env shape ty)
+          ~f:(fun (ty, env_extension) -> Is_int ty, env_extension)
+      | _::_ -> bad_meet_or_join env t1 t2
+      end
+    | Get_tag ty, Naked_immediates tags ->
+      (* CR mshinwell: eliminate code duplication, same above.  Or-patterns
+         aren't the answer, since join depends on the left/right envs! *)
       let tags =
         Immediate.Set.fold (fun tag tags ->
             match Immediate.to_tag tag with
@@ -113,7 +130,20 @@ struct
       in
       let shape = T.blocks_with_these_tags tags in
       Or_bottom_or_absorbing.of_or_bottom
-        (E.switch T.meet T.join env ty shape)
+        (E.switch T.meet T.join' env ty shape)
         ~f:(fun (ty, env_extension) -> Get_tag ty, env_extension)
     | (Is_int _ | Get_tag _), (Is_int _ | Get_tag _) -> Absorbing
+    | Naked_immediates tags, Get_tag ty ->
+      let tags =
+        Immediate.Set.fold (fun tag tags ->
+            match Immediate.to_tag tag with
+            | Some tag -> Tag.Set.add tag tags
+            | None -> bad_meet_or_join env t1 t2)
+          tags
+          Tag.Set.empty
+      in
+      let shape = T.blocks_with_these_tags tags in
+      Or_bottom_or_absorbing.of_or_bottom
+        (E.switch T.meet T.join' env shape ty)
+        ~f:(fun (ty, env_extension) -> Get_tag ty, env_extension)
 end

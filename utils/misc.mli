@@ -141,12 +141,27 @@ module Stdlib : sig
     (** Returns the longest list that, with respect to the provided equality
         function, is a prefix of both of the given lists.  The input lists,
         each with such longest common prefix removed, are also returned. *)
+
+    val fold_left4
+       : ('a -> 'b -> 'c -> 'd -> 'e -> 'a)
+      -> 'a
+      -> 'b list
+      -> 'c list
+      -> 'd list
+      -> 'e list
+      -> 'a
   end
 
   module Option : sig
     type 'a t = 'a option
 
     val print
+       : (Format.formatter -> 'a -> unit)
+      -> Format.formatter
+      -> 'a t
+      -> unit
+
+    val print_compact
        : (Format.formatter -> 'a -> unit)
       -> Format.formatter
       -> 'a t

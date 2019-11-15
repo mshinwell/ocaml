@@ -18,6 +18,7 @@
 
 type 'a k =
      Continuation_uses_env.t
+  -> Code_age_relation.t
   -> Simplify_env_and_result.Result.t
   -> ('a * Upwards_acc.t)
 

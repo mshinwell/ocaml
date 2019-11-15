@@ -16,7 +16,7 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
-(* CR-soon mshinwell: This module should be removed. *)
+(* CR-soon mshinwell: This module should be removed... maybe? *)
 
 (** Generic identifier type *)
 module type BaseId =
@@ -29,6 +29,7 @@ sig
   val to_string : t -> string
   val output : out_channel -> t -> unit
   val print : Format.formatter -> t -> unit
+  val rename : t -> t
 end
 
 module type Id =
@@ -44,6 +45,7 @@ sig
   include BaseId
   val create : ?name:string -> Compilation_unit.t -> t
   val unit : t -> Compilation_unit.t
+  val unique_name : t -> string
 end
 
 (** If applied generatively, i.e. [Id(struct end)], creates a new type

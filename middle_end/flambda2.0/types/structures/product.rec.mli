@@ -20,6 +20,7 @@ module Make (Index : Identifiable.S)
     with type flambda_type := Type_grammar.t
     with type typing_env := Typing_env.t
     with type meet_env := Meet_env.t
+    with type meet_or_join_env := Meet_or_join_env.t
     with type typing_env_extension := Typing_env_extension.t
 
 module Int_indexed
@@ -28,6 +29,7 @@ module Int_indexed
     with type flambda_type := Type_grammar.t
     with type typing_env := Typing_env.t
     with type meet_env := Meet_env.t
+    with type meet_or_join_env := Meet_or_join_env.t
     with type typing_env_extension := Typing_env_extension.t
 
 module Closure_id_indexed
@@ -36,6 +38,7 @@ module Closure_id_indexed
     with type flambda_type := Type_grammar.t
     with type typing_env := Typing_env.t
     with type meet_env := Meet_env.t
+    with type meet_or_join_env := Meet_or_join_env.t
     with type typing_env_extension := Typing_env_extension.t
 
 module Var_within_closure_indexed
@@ -44,4 +47,5 @@ module Var_within_closure_indexed
     with type flambda_type := Type_grammar.t
     with type typing_env := Typing_env.t
     with type meet_env := Meet_env.t
+    with type meet_or_join_env := Meet_or_join_env.t
     with type typing_env_extension := Typing_env_extension.t

@@ -25,5 +25,5 @@
 val run
    : backend:(module Flambda2_backend_intf.S)
   -> round:int
-  -> Flambda_static.Program.t
-  -> Flambda_static.Program.t
+  -> Flambda_unit.t
+  -> Flambda_unit.t

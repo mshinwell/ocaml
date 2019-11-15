@@ -22,8 +22,8 @@ val middle_end
    : ppf_dump:Format.formatter
   -> prefixname:string
   -> backend:(module Flambda2_backend_intf.S)
-  -> size:int
   -> filename:string
   -> module_ident:Ident.t
+  -> module_block_size_in_words:int
   -> module_initializer:Lambda.lambda
-  -> Flambda_static.Program.t
+  -> Flambda_unit.t

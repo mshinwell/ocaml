@@ -36,13 +36,26 @@ let print ppf { k; args; trap_action; dbg; } =
     | Return, None, _::_ -> "return", None
     | Return, Some trap_action, [] -> "return", Some trap_action
     | Return, Some trap_action, _::_ -> "return", Some trap_action
-    | Toplevel_return, None, [] -> "toplevel_init", None
-    | Toplevel_return, None, _::_ -> "toplevel_init", None
-    | Toplevel_return, Some trap_action, [] -> "toplevel_init", Some trap_action
-    | Toplevel_return, Some trap_action, _::_ -> "toplevel_init", Some trap_action
+    | Define_root_symbol, None, [] ->
+      "apply_cont", None
+    | Define_root_symbol, None, _::_ ->
+      "apply_cont", None
+    | Define_root_symbol, Some trap_action, [] ->
+      "apply_cont", Some trap_action
+    | Define_root_symbol, Some trap_action, _::_ ->
+      "apply_cont", Some trap_action
+    | Toplevel_return, None, [] ->
+      "module_init_end", None
+    | Toplevel_return, None, _::_ ->
+      "module_init_end", None
+    | Toplevel_return, Some trap_action, [] ->
+      "module_init_end", Some trap_action
+    | Toplevel_return, Some trap_action, _::_ ->
+      "module_init_end", Some trap_action
     (* CR mshinwell: See CR on [create], below. *)
     | Exn, (None | Some (Push _)), []
-    | Exn, (None | Some (Push _)), _::_ -> "apply_cont", trap_action (*assert false*)
+    | Exn, (None | Some (Push _)), _::_ ->
+      "apply_cont", trap_action (*assert false*)
     | Exn, Some (Pop _), [] -> "raise", None
     | Exn, Some (Pop _), _::_ -> "raise", None
   in
@@ -57,8 +70,10 @@ let print ppf { k; args; trap_action; dbg; } =
   | args ->
     Format.fprintf ppf " %a" Simple.List.print args
   end;
-  Format.fprintf ppf "%a" Debuginfo.print_or_elide dbg;
-  Format.fprintf ppf "@]"
+  Format.fprintf ppf "@<0>%s%a@<0>%s@]"
+    (Flambda_colours.elide ())
+    Debuginfo.print_or_elide dbg
+    (Flambda_colours.normal ())
 
 let print_with_cache ~cache:_ ppf t = print ppf t
 

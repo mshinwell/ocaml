@@ -851,76 +851,78 @@ let simplify_phys_equal (op : P.equality_comparison)
       (kind : K.t) dacc ~original_term dbg
       ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var =
   let result = Name.var (Var_in_binding_pos.var result_var) in
-  begin match kind with
-  | Value ->
-    let typing_env = DE.typing_env (DA.denv dacc) in
-    let proof1 = T.prove_equals_tagged_immediates typing_env arg1_ty in
-    let proof2 = T.prove_equals_tagged_immediates typing_env arg2_ty in
-    begin match proof1, proof2 with
-    | Proved _, Proved _ ->
-      Binary_int_eq_comp_tagged_immediate.simplify op dacc ~original_term dbg
-        ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
-    | _, _ ->
-      let physically_equal =
-        false
-        (* CR mshinwell: Resurrect this -- see cps_types branch.
-        T.values_physically_equal arg1_ty arg2_ty
-        *)
-      in
-      let physically_distinct =
-        false
-        (* CR mshinwell: Resurrect this -- see cps_types branch.
-        (* Structural inequality implies physical inequality. *)
-        let env = E.get_typing_environment env in
-        T.values_structurally_distinct (env, arg1_ty) (env, arg2_ty)
-        *)
-      in
-      let _const bool =
-        let env_extension =
-          TEE.one_equation result
-            (T.this_naked_immediate (Immediate.bool bool))
-        in
-        Reachable.reachable (Named.create_simple (Simple.const_bool bool)),
-          env_extension, dacc
-      in
-      begin match op, physically_equal, physically_distinct with
-(*
-      | Eq, true, _ -> const true
-      | Neq, true, _ -> const false
-      | Eq, _, true -> const false
-      | Neq, _, true -> const true
-*)
-      | _, _, _ ->
-        let env_extension =
-          TEE.one_equation result
-            (T.these_naked_immediates Immediate.all_bools)
-        in
-        Reachable.reachable original_term, env_extension, dacc
-      end
-    end
-  | Naked_number Naked_immediate ->
-    Misc.fatal_error "Not yet implemented"  (* CR mshinwell: deal with this *)
-  | Naked_number Naked_float ->
-    (* CR mshinwell: Should this case be statically disallowed in the type,
-       to force people to use [Float_comp]? *)
-    let op : P.comparison =
-      match op with
-      | Eq -> Eq
-      | Neq -> Neq
+  let const bool =
+    let env_extension =
+      TEE.one_equation result
+        (T.this_naked_immediate (Immediate.bool bool))
     in
-    Binary_float_comp.simplify op dacc ~original_term dbg
-      ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
-  | Naked_number Naked_int32 ->
-    Binary_int_eq_comp_int32.simplify op dacc ~original_term dbg
-      ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
-  | Naked_number Naked_int64 ->
-    Binary_int_eq_comp_int64.simplify op dacc ~original_term dbg
-      ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
-  | Naked_number Naked_nativeint ->
-    Binary_int_eq_comp_nativeint.simplify op dacc ~original_term dbg
-      ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
-  | Fabricated -> Misc.fatal_error "Fabricated kind not expected here"
-  end
+    Reachable.reachable (Named.create_simple (Simple.const_bool bool)),
+      env_extension, dacc
+  in
+  if Simple.equal arg1 arg2 then const true
+  else
+    begin match kind with
+    | Value ->
+      let typing_env = DE.typing_env (DA.denv dacc) in
+      let proof1 = T.prove_equals_tagged_immediates typing_env arg1_ty in
+      let proof2 = T.prove_equals_tagged_immediates typing_env arg2_ty in
+      begin match proof1, proof2 with
+      | Proved _, Proved _ ->
+        Binary_int_eq_comp_tagged_immediate.simplify op dacc ~original_term dbg
+          ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
+      | _, _ ->
+        let physically_equal =
+          false
+          (* CR mshinwell: Resurrect this -- see cps_types branch.
+          T.values_physically_equal arg1_ty arg2_ty
+          *)
+        in
+        let physically_distinct =
+          false
+          (* CR mshinwell: Resurrect this -- see cps_types branch.
+          (* Structural inequality implies physical inequality. *)
+          let env = E.get_typing_environment env in
+          T.values_structurally_distinct (env, arg1_ty) (env, arg2_ty)
+          *)
+        in
+        begin match op, physically_equal, physically_distinct with
+  (*
+        | Eq, true, _ -> const true
+        | Neq, true, _ -> const false
+        | Eq, _, true -> const false
+        | Neq, _, true -> const true
+  *)
+        | _, _, _ ->
+          let env_extension =
+            TEE.one_equation result
+              (T.these_naked_immediates Immediate.all_bools)
+          in
+          Reachable.reachable original_term, env_extension, dacc
+        end
+      end
+    | Naked_number Naked_immediate ->
+      Misc.fatal_error "Not yet implemented"  (* CR mshinwell: deal with this *)
+    | Naked_number Naked_float ->
+      (* CR mshinwell: Should this case be statically disallowed in the type,
+         to force people to use [Float_comp]? *)
+      let op : P.comparison =
+        match op with
+        | Eq -> Eq
+        | Neq -> Neq
+      in
+      Binary_float_comp.simplify op dacc ~original_term dbg
+        ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
+    | Naked_number Naked_int32 ->
+      Binary_int_eq_comp_int32.simplify op dacc ~original_term dbg
+        ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
+    | Naked_number Naked_int64 ->
+      Binary_int_eq_comp_int64.simplify op dacc ~original_term dbg
+        ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
+    | Naked_number Naked_nativeint ->
+      Binary_int_eq_comp_nativeint.simplify op dacc ~original_term dbg
+        ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
+    | Fabricated -> Misc.fatal_error "Fabricated kind not expected here"
+    end
 
 let try_cse dacc prim arg1 arg2 ~min_name_mode ~result_var
       : Simplify_common.cse =

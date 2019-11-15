@@ -21,11 +21,12 @@
 module Function_call : sig
   type t = private
     | Direct of {
+        code_id : Code_id.t;
+        (** The [code_id] uniquely determines the function symbol that must
+            be called. *)
         closure_id : Closure_id.t;
-        (** The [closure_id] isn't actually sufficient to perform a direct
-            call.  The set of closures involved has to be determined first
-            using reachability analysis.  If such determination fails, then
-            we have to fall back to an indirect call. *)
+        (** The [closure_id] identifies which closure is to be passed to the
+            function. *)
         return_arity : Flambda_arity.t;
         (** [return_arity] describes what the callee returns.  It matches up
             with the arity of [continuation] in the enclosing [Apply.t]
@@ -53,7 +54,11 @@ type t = private
 
 include Expr_std.S with type t := t
 
-val direct_function_call : Closure_id.t -> return_arity:Flambda_arity.t -> t
+val direct_function_call
+   : Code_id.t
+  -> Closure_id.t
+  -> return_arity:Flambda_arity.t
+  -> t
 
 val indirect_function_call_unknown_arity : unit -> t
 

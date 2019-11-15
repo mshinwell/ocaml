@@ -26,6 +26,7 @@ module type BaseId = sig
   val to_string : t -> string
   val output : out_channel -> t -> unit
   val print : Format.formatter -> t -> unit
+  val rename : t -> t
 end
 
 module type Id = sig
@@ -38,13 +39,15 @@ module type UnitId = sig
   include BaseId
   val create : ?name:string -> Compilation_unit.t -> t
   val unit : t -> Compilation_unit.t
+  val unique_name : t -> string
 end
 
 module Id(_:sig end) : Id = struct
   type t = int * string
   let empty_string = ""
-  let create = let r = ref 0 in
-    fun  ?(name=empty_string) () -> incr r; !r, name
+  let r = ref 0
+  let create ?(name=empty_string) () = incr r; !r, name
+  let rename (_stamp, name) = create ~name ()
   let equal (t1,_) (t2,_) = (t1:int) = t2
   let compare (t1,_) (t2,_) = t1 - t2
   let hash (t,_) = t
@@ -82,6 +85,13 @@ module UnitId(Innerid:Id)(Compilation_unit:Identifiable.Thing) :
   let hash off = Hashtbl.hash off
   let equal o1 o2 = compare o1 o2 = 0
   let name o = Innerid.name o.id
+  let unique_name o = Innerid.to_string o.id
+
+  let rename t =
+    { id = Innerid.rename t.id;
+      unit = t.unit;
+    }
+
   let to_string x =
     Format.asprintf "%a.%a"
       Compilation_unit.print x.unit

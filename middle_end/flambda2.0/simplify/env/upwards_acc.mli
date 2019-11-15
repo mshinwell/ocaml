@@ -23,15 +23,18 @@ val print : Format.formatter -> t -> unit
 
 val create
    : Simplify_env_and_result.Upwards_env.t
+  -> Code_age_relation.t
   -> Simplify_env_and_result.Result.t
   -> t
 
-(** Create an upwards accumulator by copying the result structure out of
-    the given downwards accumulator. *)
+(** Create an upwards accumulator by copying the result structure and
+    code age relation out of the given downwards accumulator. *)
 val of_dacc : Downwards_acc.t -> t
 
 (** Extract the environment component of the given upwards accumulator. *)
 val uenv : t -> Simplify_env_and_result.Upwards_env.t
+
+val code_age_relation : t -> Code_age_relation.t
 
 (** Map the environment component of the given upwards accumulator. *)
 val map_uenv

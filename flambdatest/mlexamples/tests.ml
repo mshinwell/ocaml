@@ -118,4 +118,4 @@ let foo3 arr f i =
 let f c m n x' y' =
   let x = if c < 0 then x' else x' + 10 in
   let y = if c < 0 then y' else y' + 20 in
-  x + y
+  x + y, 2L

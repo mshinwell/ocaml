@@ -17,33 +17,41 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module DA = Downwards_acc
+module DE = Simplify_env_and_result.Downwards_env
 module R = Simplify_env_and_result.Result
+module TE = Flambda_type.Typing_env
 module UE = Simplify_env_and_result.Upwards_env
 
 type t = {
   uenv : UE.t;
+  code_age_relation : Code_age_relation.t;
   r : R.t;
 }
 
-let print ppf { uenv; r; } =
+let print ppf { uenv; code_age_relation; r; } =
   Format.fprintf ppf "@[<hov 1>(\
       @[(uenv@ %a)@]@ \
+      @[(code_age_relation@ %a)@]@ \
       @[(r@ %a)@]\
       )@]"
     UE.print uenv
+    Code_age_relation.print code_age_relation
     R.print r
 
-let create uenv r =
+let create uenv code_age_relation r =
   { uenv;
+    code_age_relation;
     r;
   }
 
 let of_dacc dacc =
   { uenv = UE.empty;
+    code_age_relation = TE.code_age_relation (DE.typing_env (DA.denv dacc));
     r = DA.r dacc;
   }
 
 let uenv t = t.uenv
+let code_age_relation t = t.code_age_relation
 
 let map_uenv t ~f =
   { t with

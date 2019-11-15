@@ -21,4 +21,15 @@
     [Project_var], and not [Var], nodes are tagged with these
     identifiers. *)
 
-include module type of Closure_element
+include Identifiable.S
+
+val wrap : Compilation_unit.t -> Variable.t -> t
+
+val unwrap : t -> Variable.t
+
+val in_compilation_unit : t -> Compilation_unit.t -> bool
+val get_compilation_unit : t -> Compilation_unit.t
+
+val to_string : t -> string
+
+val rename : t -> t

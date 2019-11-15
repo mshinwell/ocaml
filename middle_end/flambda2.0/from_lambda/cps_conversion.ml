@@ -708,9 +708,7 @@ let lambda_to_ilambda lam ~recursive_static_catches:recursive_static_catches'
   try_stack_at_handler := Continuation.Map.empty;
   recursive_static_catches := recursive_static_catches';
   seen_let_mutable := false;
-  (* [the_end] is not a [Toplevel_return] continuation---the toplevel return
-     continuation is introduced by [Closure_conversion]. *)
-  let the_end = Continuation.create () in
+  let the_end = Continuation.create ~sort:Define_root_symbol () in
   let the_end_exn = Continuation.create ~sort:Exn () in
   let ilam = cps_tail lam the_end the_end_exn in
   let exn_continuation : I.exn_continuation =

@@ -12,8 +12,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(* Translate flambda2 expressions and programs into Cmm *)
+(* Translate Flambda compilation units into Cmm *)
 
-val program : Flambda_static.Program.t -> Cmm.phrase list
-(** Translate a program. *)
+val unit : Flambda_unit.t -> Cmm.phrase list
+(** Translate a compilation unit. *)
 

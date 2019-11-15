@@ -1,9 +1,11 @@
+(* Needs fixing
 module Program_body = Flambda_static.Program_body
 module Named = Flambda.Named
 module E = Flambda.Expr
 module I = Flambda_kind.Standard_int
 module P = Flambda_primitive
 module K = Flambda_kind
+module KP = Kinded_parameter
 
 module C = struct
   type t = string
@@ -393,15 +395,19 @@ let rec expr env (e : Fexpr.expr) : E.t =
       in
       let body = expr closure_env closure_expr in
 
-      let params_and_body =
+      let _params_and_body =
         Flambda.Function_params_and_body.create
           ~return_continuation
           exn_continuation params ~body ~my_closure
       in
-
+      let code_id =
+        Code_id.create ~name:(Closure_id.to_string closure_id)
+          (Compilation_unit.get_current_exn ())
+      in
       let function_declaration =
         Flambda.Function_declaration.create
-          ~params_and_body
+          ~code_id
+          ~params_arity:(KP.List.arity params)
           ~result_arity:[K.value]
           ~stub:false
           ~dbg:Debuginfo.none
@@ -409,7 +415,10 @@ let rec expr env (e : Fexpr.expr) : E.t =
           ~is_a_functor:false
           ~recursive
       in
-
+      let _ =
+        Misc.fatal_error "This needs fixing to register [params_and_body] \
+          in the environment as a piece of code with [code_id]"
+      in
       let bound_closure_var, env = fresh_var env name in
       let closure_vars =
         Closure_id.Map.add closure_id
@@ -505,10 +514,11 @@ let rec conv_top ~backend (func_env:func_env) (prog : Fexpr.program) : Program_b
       computed_values = [];
     } in
     let body = conv_top ~backend func_env tail in
-    Program_body.define_symbol ~body {
-      computation = Some computation;
-      static_structure = [];
-    }
+    Program_body.define_symbol ~body
+      { computation = Some computation;
+        static_structure = [];
+      }
+      Code_age_relation.empty
   | Define_symbol
       (Nonrecursive,
        { computation;
@@ -571,10 +581,11 @@ let rec conv_top ~backend (func_env:func_env) (prog : Fexpr.program) : Program_b
     in
     let structure = List.rev structure in
     let body = conv_top ~backend func_env tail in
-    Program_body.define_symbol ~body {
-      computation;
-      static_structure = structure;
-    }
+    Program_body.define_symbol ~body
+      { computation;
+        static_structure = structure;
+      }
+      Code_age_relation.empty
 
   | Let_code code :: tail ->
     let (name, _loc) = code.name in
@@ -590,3 +601,5 @@ let conv ~backend fexpr : Flambda_static.Program.t =
   let body = conv_top ~backend init_fenv fexpr in
   { imported_symbols = Symbol.Map.empty;
     body; }
+*)
+let conv ~backend:_ _fexpr = assert false

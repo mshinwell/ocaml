@@ -1,5 +1,5 @@
-generic_simplify_let_cont.rec.ml
 simplify_expr.rec.ml
 simplify_named.rec.ml
-simplify_static.rec.ml
+simplify_set_of_closures.rec.ml
+simplify_static_const.rec.ml
 simplify_toplevel.rec.ml

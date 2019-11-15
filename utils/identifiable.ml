@@ -33,6 +33,9 @@ module type Set = sig
   val to_string : t -> string
   val of_list : elt list -> t
   val map : (elt -> elt) -> t -> t
+  val union_list : t list -> t
+
+  module Set : Set.S with type elt = t
 end
 
 module type Map = sig
@@ -220,25 +223,35 @@ module Make_map (T : Thing) (Set : Set with module T := T) = struct
 end
 
 module Make_set (T : Thing) = struct
-  include Set.Make (T)
+  module T0 = struct
+    include Set.Make (T)
 
-  let output oc s =
-    Printf.fprintf oc " ( ";
-    iter (fun v -> Printf.fprintf oc "%a " T.output v) s;
-    Printf.fprintf oc ")"
+    let output oc s =
+      Printf.fprintf oc " ( ";
+      iter (fun v -> Printf.fprintf oc "%a " T.output v) s;
+      Printf.fprintf oc ")"
 
-  let print ppf s =
-    let elts ppf s = iter (fun e -> Format.fprintf ppf "@ %a" T.print e) s in
-    Format.fprintf ppf "@[<1>{@[%a@ @]}@]" elts s
+    let print ppf s =
+      let elts ppf s = iter (fun e -> Format.fprintf ppf "@ %a" T.print e) s in
+      Format.fprintf ppf "@[<1>{@[%a@ @]}@]" elts s
 
-  let to_string s = Format.asprintf "%a" print s
+    let to_string s = Format.asprintf "%a" print s
 
-  let of_list l = match l with
+    let of_list l = match l with
+      | [] -> empty
+      | [t] -> singleton t
+      | t :: q -> List.fold_left (fun acc e -> add e acc) (singleton t) q
+
+    let map f s = of_list (List.map f (elements s))
+  end
+
+  include T0
+  module Set = Set.Make (T0)
+
+  let rec union_list ts =
+    match ts with
     | [] -> empty
-    | [t] -> singleton t
-    | t :: q -> List.fold_left (fun acc e -> add e acc) (singleton t) q
-
-  let map f s = of_list (List.map f (elements s))
+    | t::ts -> union t (union_list ts)
 end
 
 module Make_tbl (T : Thing) (Map : Map with module T := T) = struct

@@ -44,8 +44,9 @@ let make_decision_for_function_declaration denv function_decl
   | Always_inline | Default_inline | Unroll _ ->
     if Function_declaration.stub function_decl then Stub
     else
-      Function_params_and_body.pattern_match
-        (Function_declaration.params_and_body function_decl)
+      let code_id = Function_declaration.code_id function_decl in
+      let params_and_body = DE.find_code denv code_id in
+      Function_params_and_body.pattern_match params_and_body
         ~f:(fun ~return_continuation:_ _exn_continuation _params ~body
                 ~my_closure:_ : Function_declaration_decision.t ->
           let inlining_threshold : Inlining_cost.Threshold.t =
@@ -60,7 +61,7 @@ let make_decision_for_function_declaration denv function_decl
                 (unscaled *.
                   (float_of_int Inlining_cost.scale_inline_threshold_by)))
           in
-          if Inlining_cost.can_inline body inlining_threshold ~bonus:0
+          if Inlining_cost.can_inline denv body inlining_threshold ~bonus:0
           then Inline
           else Function_body_too_large)
 

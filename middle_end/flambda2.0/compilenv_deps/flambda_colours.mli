@@ -35,9 +35,11 @@ val name : unit -> string
 val parameter : unit -> string
 val symbol : unit -> string
 val variable : unit -> string
-val closure_element : unit -> string
 
-val let_bound_var : unit -> string
+val closure_element : unit -> string
+val closure_var : unit -> string
+
+val code_id : unit -> string
 
 val expr_keyword : unit -> string
 val static_keyword : unit -> string
@@ -46,6 +48,7 @@ val static_part : unit -> string
 
 val continuation : unit -> string
 val continuation_definition : unit -> string
+val continuation_annotation : unit -> string
 
 val name_abstraction : unit -> string
 

@@ -29,9 +29,6 @@ module Switch = Switch_expr
 let fprintf = Format.fprintf
 
 (* -- module rec binding here -- *)
-and Flambda_type : Type_system_intf.S
-    with type term_language_function_declaration := Function_declaration.t
-  = Flambda_type0.Make (Function_declaration)
 
 (* CR mshinwell: Consider counting numbers of names in Name_occurrences *)
 (* CR mshinwell: Check that apply_cont is well-formed when there is a
@@ -42,8 +39,11 @@ and Flambda_type : Type_system_intf.S
    overapplication" be an invariant throughout.  At the moment I think this is
    only true after [Simplify] has split overapplications. *)
 
+module Function_declaration = Function_declaration
+module Function_declarations = Function_declarations
 module Let = Let_expr
 module Let_cont = Let_cont_expr
+module Set_of_closures = Set_of_closures
 
 module Import = struct
   module Apply = Apply
@@ -55,11 +55,13 @@ module Import = struct
   module Function_declaration = Function_declaration
   module Function_declarations = Function_declarations
   module Function_params_and_body = Function_params_and_body
-  module Let_cont = Let_cont
   module Let = Let
+  module Let_cont = Let_cont
+  module Let_symbol = Let_symbol_expr
   module Named = Named
   module Non_recursive_let_cont_handler = Non_recursive_let_cont_handler
   module Recursive_let_cont_handlers = Recursive_let_cont_handlers
   module Set_of_closures = Set_of_closures
+  module Static_const = Static_const
   module Switch = Switch
 end

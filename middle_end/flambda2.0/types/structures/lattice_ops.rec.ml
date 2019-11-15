@@ -45,14 +45,14 @@ module For_meet = struct
   module Var_within_closure = Make (Var_within_closure)
   module Tag = Make (Tag)
 
-  let switch_no_bottom meet _join meet_env thing1 thing2 =
-    meet meet_env thing1 thing2
+  let switch_no_bottom meet _join meet_or_join_env thing1 thing2 =
+    meet (Meet_or_join_env.meet_env meet_or_join_env) thing1 thing2
 
-  let switch0 meet _join meet_env thing1 thing2 =
-    meet meet_env thing1 thing2
+  let switch0 meet _join meet_or_join_env thing1 thing2 =
+    meet (Meet_or_join_env.meet_env meet_or_join_env) thing1 thing2
 
-  let switch meet _join meet_env thing1 thing2 =
-    meet meet_env thing1 thing2
+  let switch meet _join meet_or_join_env thing1 thing2 =
+    meet (Meet_or_join_env.meet_env meet_or_join_env) thing1 thing2
 end
 
 module For_join = struct
@@ -81,12 +81,12 @@ module For_join = struct
   module Var_within_closure = Make (Var_within_closure)
   module Tag = Make (Tag)
 
-  let switch_no_bottom _meet join meet_env thing1 thing2 =
-    join (Meet_env.env meet_env) thing1 thing2, TEE.empty ()
+  let switch_no_bottom _meet join meet_or_join_env thing1 thing2 =
+    join meet_or_join_env thing1 thing2, TEE.empty ()
 
-  let switch0 _meet join meet_env thing1 thing2 =
-    join (Meet_env.env meet_env) thing1 thing2
+  let switch0 _meet join meet_or_join_env thing1 thing2 =
+    join meet_or_join_env thing1 thing2
 
-  let switch _meet join meet_env thing1 thing2 : _ Or_bottom.t =
-    Ok (join (Meet_env.env meet_env) thing1 thing2, TEE.empty ())
+  let switch _meet join meet_or_join_env thing1 thing2 : _ Or_bottom.t =
+    Ok (join meet_or_join_env thing1 thing2, TEE.empty ())
 end

@@ -26,16 +26,44 @@ type t = {
 let fprintf = Format.fprintf
 
 let print_arms ppf arms =
+  let arms =
+    Immediate.Map.fold (fun discr k arms_inverse ->
+        match Continuation.Map.find k arms_inverse with
+        | exception Not_found ->
+          Continuation.Map.add k (Immediate.Set.singleton discr)
+            arms_inverse
+        | discrs ->
+          Continuation.Map.add k (Immediate.Set.add discr discrs)
+            arms_inverse)
+      arms
+      Continuation.Map.empty
+  in
   let spc = ref false in
-  Immediate.Map.iter (fun discriminant l ->
+  let arms =
+    List.sort (fun (k1, discrs1) (k2, discrs2) ->
+        let min1 = Immediate.Set.min_elt_opt discrs1 in
+        let min2 = Immediate.Set.min_elt_opt discrs2 in
+        match min1, min2 with
+        | None, None -> Continuation.compare k1 k2
+        | None, Some _ -> -1
+        | Some _, None -> 1
+        | Some min1, Some min2 -> Immediate.compare min1 min2)
+      (Continuation.Map.bindings arms)
+  in
+  List.iter (fun (k, discrs) ->
       if !spc then fprintf ppf "@ " else spc := true;
-      fprintf ppf "@[<h>| %a @<0>%s\u{21a6}@<0>%s@ @<0>%sgoto@<0>%s %a@]"
-        Immediate.print discriminant
+      let discrs = Immediate.Set.elements discrs in
+      fprintf ppf "@[<hov 2>@[<hov 0>| %a @<0>%s\u{21a6}@<0>%s@ @]\
+          @<0>%sgoto@<0>%s %a@]"
+        (Format.pp_print_list
+          ~pp_sep:(fun ppf () -> Format.fprintf ppf "@ | ")
+          Immediate.print)
+        discrs
         (Flambda_colours.elide ())
         (Flambda_colours.normal ())
         (Flambda_colours.expr_keyword ())
         (Flambda_colours.normal ())
-        Continuation.print l)
+        Continuation.print k)
     arms
 
 let print ppf { scrutinee; arms; } =

@@ -22,16 +22,17 @@ let simplify_toplevel dacc expr ~return_continuation ~return_arity
       exn_continuation ~return_cont_scope ~exn_cont_scope =
   let expr, cont_uses_env, uacc =
     try
-      Simplify_expr.simplify_expr dacc expr (fun cont_uses_env r ->
-        let uenv =
-          UE.add_continuation UE.empty return_continuation
-            return_cont_scope return_arity
-        in
-        let uenv =
-          UE.add_exn_continuation uenv exn_continuation
-            exn_cont_scope
-        in
-        cont_uses_env, UA.create uenv r)
+      Simplify_expr.simplify_expr dacc expr
+        (fun cont_uses_env code_age_relation r ->
+          let uenv =
+            UE.add_continuation UE.empty return_continuation
+              return_cont_scope return_arity
+          in
+          let uenv =
+            UE.add_exn_continuation uenv exn_continuation
+              exn_cont_scope
+          in
+          cont_uses_env, UA.create uenv code_age_relation r)
     with Misc.Fatal_error -> begin
       if !Clflags.flambda2_context_on_error then begin
         Format.eprintf "\n%sContext is:%s simplifying toplevel \

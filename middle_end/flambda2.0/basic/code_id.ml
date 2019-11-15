@@ -21,11 +21,36 @@ module Unit_id = Id_types.UnitId (Id) (Compilation_unit)
 
 type t = Unit_id.t
 
-include Identifiable.Make (Unit_id)
+include Identifiable.Make (struct
+  include Unit_id
 
-let create = Unit_id.create
+  let print ppf t =
+    Format.fprintf ppf "@<0>%s%a@<0>%s"
+      (Flambda_colours.code_id ())
+      print t
+      (Flambda_colours.normal ())
+end)
+
+let create ~name comp_unit = Unit_id.create ~name comp_unit
 let get_compilation_unit = Unit_id.unit
-let name = Unit_id.name
+
+let name t =
+  (* CR mshinwell: Id_types needs fixing to avoid this *)
+  match Unit_id.name t with
+  | Some name -> name
+  | None -> assert false
+
+let rename = Unit_id.rename
 
 let in_compilation_unit t cu =
   Compilation_unit.equal (get_compilation_unit t) cu
+
+let code_symbol t =
+  let linkage_name = Linkage_name.create (Unit_id.unique_name t ^ "_code") in
+  Symbol.create (get_compilation_unit t) linkage_name
+
+let invert_map map =
+  Map.fold (fun older newer invert_map ->
+      Map.add newer older invert_map)
+    map
+    Map.empty

@@ -35,7 +35,8 @@ module Switch = Switch_expr
       application for an inlined body (unlike in ANF form).
 *)
 module rec Expr : sig
-  (** The type of alpha-equivalence classes of expressions. *)
+  (** The type of equivalence classes of expressions up to alpha-renaming of
+      bound [Variable]s and [Continuation]s. *)
   type t
 
   (** Printing, invariant checks, name manipulation, etc. *)
@@ -46,6 +47,11 @@ module rec Expr : sig
     (** Bind a variable.  There can be no effect on control flow (save for
         asynchronous operations such as the invocation of finalisers or
         signal handlers as a result of reaching a safe point). *)
+    | Let_symbol of Let_symbol_expr.t
+    (** Bind code and/or data symbol(s).  This form of expression is only
+        allowed in certain "toplevel" contexts.  The bound symbols are not
+        treated up to alpha conversion; each such bound symbol must be
+        unique across the whole program being compiled. *)
     | Let_cont of Let_cont_expr.t
     (** Define one or more continuations. *)
     | Apply of Apply.t
@@ -62,6 +68,7 @@ module rec Expr : sig
   (** Extract the description of an expression. *)
   val descr : t -> descr
 
+  (** What happened when a [Let]-expression was created. *)
   type let_creation_result = private
     | Have_deleted of Named.t
     | Nothing_deleted
@@ -83,12 +90,17 @@ module rec Expr : sig
       (such as is required to bind a [Set_of_closures]). *)
   val create_pattern_let : Bindable_let_bound.t -> Named.t -> t -> t
 
+  (** Create a [Let_symbol] expression that binds a statically-allocated
+      value to a symbol. *)
+  val create_let_symbol : Let_symbol_expr.t -> t
+
   (** Create an application expression. *)
   val create_apply : Apply.t -> t
 
   (** Create a continuation application (in the zero-arity case, "goto"). *)
   val create_apply_cont : Apply_cont.t -> t
 
+  (** What happened when a [Switch]-expression was created. *)
   type switch_creation_result = private
     | Have_deleted_comparison_but_not_branch
     | Have_deleted_comparison_and_branch
@@ -200,6 +212,61 @@ end and Let_expr : sig
      : t
     -> f:(bound_vars:Bindable_let_bound.t -> body:Expr.t -> 'a)
     -> 'a
+end and Let_symbol_expr : sig
+  module Bound_symbols : sig
+    module Code_and_set_of_closures : sig
+      type t = {
+        code_ids : Code_id.Set.t;
+        closure_symbols : Symbol.t Closure_id.Map.t;
+      }
+
+      val print : Format.formatter -> t -> unit
+    end
+
+    type t =
+      | Singleton of Symbol.t
+        (** A binding of a single symbol of kind [Value]. *)
+      | Sets_of_closures of Code_and_set_of_closures.t list
+        (** A recursive binding of possibly multiple sets of closures with
+            associated code. All code IDs and symbols named in the
+            [Code_and_set_of_closures.t list] are in scope for _all_ associated
+            [Static_const.code_and_set_of_closures list] values on the
+            right-hand side of the corresponding [Let_symbol] expression.
+            Despite the recursive nature of the binding, the elements in the
+            [Code_and_set_of_closures.t list] must correspond elementwise to the
+            elements in the corresponding [Static_const.code_and_set_of_closures
+            list]. *)
+
+    val being_defined : t -> Symbol.Set.t
+
+    val code_being_defined : t -> Code_id.Set.t
+
+    val closure_symbols_being_defined : t -> Symbol.Set.t
+
+    val everything_being_defined : t -> Code_id_or_symbol.Set.t
+
+    include Expr_std.S with type t := t
+  end
+
+  type t
+
+  val create : Bound_symbols.t -> Static_const.t -> Expr.t -> t
+
+  val bound_symbols : t -> Bound_symbols.t
+
+  val defining_expr : t -> Static_const.t
+
+  val body : t -> Expr.t
+
+  include Expr_std.S with type t := t
+
+  (** If [newer_versions_of] maps [id1] to [id2] then [id1] is a newer
+      version of [id2]. *)
+  val pieces_of_code
+     : ?newer_versions_of:Code_id.t Code_id.Map.t
+    -> ?set_of_closures:(Symbol.t Closure_id.Map.t * Set_of_closures.t)
+    -> Function_params_and_body.t Code_id.Map.t
+    -> Bound_symbols.t * Static_const.t
 end and Let_cont_expr : sig
   (** Values of type [t] represent alpha-equivalence classes of the definitions
       of continuations:
@@ -376,70 +443,14 @@ end and Continuation_handlers : sig
 
   (** Whether any of the continuations are exception handlers. *)
   val contains_exn_handler : t -> bool
-end and Set_of_closures : sig
-  type t
-
-  (** Printing, invariant checks, name manipulation, etc. *)
-  include Expr_std.S with type t := t
-
-  (** Create a set of closures given the code for its functions and the
-      closure variables. *)
-  val create
-     : Function_declarations.t
-    -> closure_elements:Simple.t Var_within_closure.Map.t
-    -> t
-
-  (** The function declarations associated with the set of closures. *)
-  val function_decls : t -> Function_declarations.t
-
-  (** The map from the closure's environment entries to their values. *)
-  val closure_elements : t -> Simple.t Var_within_closure.Map.t
-
-  (** Returns true iff the given set of closures has an empty environment. *)
-  val has_empty_environment : t -> bool
-
-  (** Returns true iff the given set of closures does not contain any variables
-      in its environment.  (If this condition is satisfied, a set of closures
-      may be lifted.) *)
-  val environment_doesn't_mention_variables : t -> bool
-end and Function_declarations : sig
-  (** The representation of a set of function declarations (possibly mutually
-      recursive).  Such a set encapsulates the declarations themselves,
-      information about their defining environment, and information used
-      specifically for optimization.
-      Before a function can be applied it must be "projected" from a set of
-      closures to yield a "closure".  This is done using [Project_closure]
-      (see above).  Given a closure, not only can it be applied, but information
-      about its defining environment can be retrieved (using [Project_var],
-      see above).
-      At runtime, a [set_of_closures] corresponds to an OCaml value with tag
-      [Closure_tag] (possibly with inline [Infix_tag](s)).  As an optimization,
-      an operation ([Select_closure]) is provided (see above)
-      which enables one closure within a set to be located given another
-      closure in the same set.  This avoids keeping a pointer to the whole set
-      of closures alive when compiling, for example, mutually-recursive
-      functions.
-  *)
-  type t
-
-  (** Printing, invariant checks, name manipulation, etc. *)
-  include Expr_std.S with type t := t
-
-  (** Create a set of function declarations given the individual
-      declarations. *)
-  val create : Function_declaration.t Closure_id.Map.t -> t
-
-  (** The function(s) defined by the set of function declarations, indexed
-      by closure ID. *)
-  val funs : t -> Function_declaration.t Closure_id.Map.t
-
-  (** [find f t] raises [Not_found] if [f] is not in [t]. *)
-  val find : t -> Closure_id.t -> Function_declaration.t
 end and Function_params_and_body : sig
   (** A name abstraction that comprises a function's parameters (together with
       any relations between them), the code of the function, and the
       [my_closure] variable.  It also includes the return and exception
       continuations.
+
+      These values are bound using [Define_symbol] constructs
+      (see [Flambda_static]).
 
       From the body of the function, accesses to variables within the closure
       need to go via a [Project_var] (from [my_closure]); accesses to any other
@@ -478,66 +489,92 @@ end and Function_params_and_body : sig
       -> my_closure:Variable.t
       -> 'a)
     -> 'a
-end and Function_declaration : sig
-  type t
+end and Static_const : sig
+  (** Language terms that represent statically-allocated values, bound to
+      symbols. *)
 
-  (** Printing, invariant checks, name manipulation, etc. *)
-  include Expr_std.S with type t := t
+  module Field_of_block : sig
+    (** Inhabitants (of kind [Value]) of fields of statically-allocated blocks. *)
+    type t =
+      | Symbol of Symbol.t
+        (** The address of the given symbol. *)
+      | Tagged_immediate of Immediate.t
+        (** The given tagged immediate. *)
+      | Dynamically_computed of Variable.t
+        (** The value of the given variable. *)
 
-  (** Create a function declaration. *)
-  val create
-     : params_and_body:Function_params_and_body.t
-    -> result_arity:Flambda_arity.t
-    -> stub:bool
-    -> dbg:Debuginfo.t
-    -> inline:Inline_attribute.t
-    -> is_a_functor:bool
-    -> recursive:Recursive.t
-    -> t
+    (** Printing, total ordering, etc. *)
+    include Identifiable.S with type t := t
+  end
 
-  (** The alpha-equivalence class of the function's continuations and
-      parameters bound over the code of the function. *)
-  val params_and_body : t -> Function_params_and_body.t
+  (** A piece of code, comprising of the parameters and body of a function,
+      together with a field indicating whether the piece of code is a newer
+      version of one that existed previously (and may still exist), for
+      example after a round of simplification. *)
+  module Code : sig
+    type t = {
+      params_and_body : Function_params_and_body.t or_deleted;
+      newer_version_of : Code_id.t option;
+    }
+    and 'a or_deleted =
+      | Present of 'a
+      | Deleted
 
-  (** An identifier to provide fast (conservative) equality checking for
-      function bodies. *)
-  val code_id : t -> Code_id.t
+    val print : Format.formatter -> t -> unit
 
-  (* CR mshinwell: Be consistent: "param_arity" or "params_arity" throughout. *)
-  val params_arity : t -> Flambda_arity.t
+    val free_names : t -> Name_occurrences.t
 
-  (** The arity of the return continuation of the function.  This provides the
-      number of results that the function produces and their kinds. *)
-  (* CR mshinwell: Be consistent everywhere as regards "result" vs "return"
-     arity. *)
-  val result_arity : t -> Flambda_arity.t
+    val make_deleted : t -> t
+  end
 
-  (** A stub function is a generated function used to prepare arguments or
-      return values to allow indirect calls to functions with a special
-      calling convention.  For instance indirect calls to tuplified functions
-      must go through a stub.  Stubs will be unconditionally inlined. *)
-  val stub : t -> bool
+  (** The possibly-recursive declaration of pieces of code and any associated
+      set of closures. *)
+  module Code_and_set_of_closures : sig
+    type t = {
+      code : Code.t Code_id.Map.t;
+      (* CR mshinwell: Check the free names of the set of closures *)
+      set_of_closures : Set_of_closures.t;
+    }
 
-  (** Debug info for the function declaration. *)
-  val dbg : t -> Debuginfo.t
+    val map_code : t -> f:(Code_id.t -> Code.t -> Code.t) -> t
+  end
 
-  (** Inlining requirements from the source code. *)
-  val inline : t -> Inline_attribute.t
+  (** The static structure of a symbol, possibly with holes, ready to be filled
+      with values computed at runtime. *)
+  type t =
+    | Block of Tag.Scannable.t * Mutable_or_immutable.t
+        * (Field_of_block.t list)
+    | Sets_of_closures of Code_and_set_of_closures.t list
+      (** All code and sets of closures within the list are allowed to be
+          recursive across those sets (but not recursive with any other code or
+          set of closures). *)
+    | Boxed_float of Numbers.Float_by_bit_pattern.t Or_variable.t
+    | Boxed_int32 of Int32.t Or_variable.t
+    | Boxed_int64 of Int64.t Or_variable.t
+    | Boxed_nativeint of Targetint.t Or_variable.t
+    | Immutable_float_array of Numbers.Float_by_bit_pattern.t Or_variable.t list
+    | Mutable_string of { initial_value : string; }
+    | Immutable_string of string
 
-  (** Whether the function is known definitively to be a functor. *)
-  val is_a_functor : t -> bool
+  include Identifiable.S with type t := t
+  include Contains_names.S with type t := t
 
-  (** Change the parameters and code of a function declaration. *)
-  val update_params_and_body : t -> Function_params_and_body.t -> t
+  val get_pieces_of_code
+     : t
+    -> (Function_params_and_body.t * (Code_id.t option)) Code_id.Map.t
 
-  (** Whether the function is recursive, in the sense of the syntactic analysis
-      conducted during closure conversion. *)
-  val recursive : t -> Recursive.t
-end and Flambda_type : Type_system_intf.S
-  with type term_language_function_declaration := Function_declaration.t
+  val is_fully_static : t -> bool
 
+  val can_share : t -> bool
+
+  val must_be_sets_of_closures : t -> Code_and_set_of_closures.t list
+end
+
+module Function_declaration = Function_declaration
+module Function_declarations = Function_declarations
 module Let = Let_expr
 module Let_cont = Let_cont_expr
+module Set_of_closures = Set_of_closures
 
 (** The idea is that you should typically do "open! Flambda" at the top of
     files, thus bringing in the following standard set of module aliases. *)
@@ -551,11 +588,13 @@ module Import : sig
   module Function_declaration = Function_declaration
   module Function_declarations = Function_declarations
   module Function_params_and_body = Function_params_and_body
-  module Let_cont = Let_cont
   module Let = Let
+  module Let_cont = Let_cont
+  module Let_symbol = Let_symbol_expr
   module Named = Named
   module Non_recursive_let_cont_handler = Non_recursive_let_cont_handler
   module Recursive_let_cont_handlers = Recursive_let_cont_handlers
   module Set_of_closures = Set_of_closures
+  module Static_const = Static_const
   module Switch = Switch
 end

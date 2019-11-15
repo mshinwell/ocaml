@@ -21,6 +21,7 @@ module type S = sig
   type typing_env
   type typing_env_extension
   type meet_env
+  type meet_or_join_env
 
   include Contains_names.S
 
@@ -30,11 +31,12 @@ module type S = sig
 
   module Make_meet_or_join (_ : Lattice_ops_intf.S
     with type meet_env := meet_env
+    with type meet_or_join_env := meet_or_join_env
     with type typing_env := typing_env
     with type typing_env_extension := typing_env_extension)
   : sig
     val meet_or_join
-       : meet_env
+       : meet_or_join_env
       -> t
       -> t
       -> (t * typing_env_extension) Or_bottom_or_absorbing.t

@@ -2,17 +2,17 @@
   (targets simplify.ml)
   (deps
     rec_modules
-    generic_simplify_let_cont.rec.ml
-    generic_simplify_let_cont.rec.mli
     template/simplify.templ.ml
     simplify_expr.rec.ml
     simplify_named.rec.ml
-    simplify_static.rec.ml
+    simplify_set_of_closures.rec.ml
+    simplify_static_const.rec.ml
     simplify_toplevel.rec.ml
     simplify_expr.rec.mli
     simplify_named.rec.mli
-    simplify_static.rec.mli
     simplify_toplevel.rec.mli
+    simplify_set_of_closures.rec.mli
+    simplify_static_const.rec.mli
   )
   (action (run ../scripts/assemble_rec_modules.sh
                template/simplify.templ.ml

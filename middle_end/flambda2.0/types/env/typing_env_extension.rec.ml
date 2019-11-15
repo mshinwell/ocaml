@@ -83,6 +83,11 @@ let meet env (t1 : t) (t2 : t) : t =
   in
   { abst; }
 
+let rec n_way_meet env ts =
+  match ts with
+  | [] -> empty ()
+  | t::ts -> meet env t (n_way_meet env ts)
+
 let n_way_join ~initial_env_at_join envs_with_extensions : t * _ =
   let abst, extra_cse_bindings =
     let rec open_binders envs_with_extensions envs_with_levels =

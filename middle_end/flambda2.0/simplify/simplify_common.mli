@@ -73,3 +73,10 @@ val bind_let_bound
    : bindings:((Bindable_let_bound.t * Reachable.t) list)
   -> body:Flambda.Expr.t
   -> Flambda.Expr.t
+
+val create_let_symbol
+   : Code_age_relation.t
+  -> Flambda.Let_symbol_expr.Bound_symbols.t
+  -> Flambda.Static_const.t
+  -> Flambda.Expr.t
+  -> Flambda.Expr.t

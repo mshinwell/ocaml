@@ -22,6 +22,7 @@ module type S = sig
   type typing_env_extension
   type typing_env_level
   type meet_env
+  type meet_or_join_env
   type head
 
   module Descr : sig
@@ -77,13 +78,14 @@ module type S = sig
 
   module Make_meet_or_join (_ : Lattice_ops_intf.S
     with type meet_env := meet_env
+    with type meet_or_join_env := meet_or_join_env
     with type typing_env := typing_env
     with type typing_env_extension := typing_env_extension)
   : sig
     val meet_or_join
        : force_to_kind:(flambda_type -> t)  (* CR mshinwell: "of_type"? *)
       -> to_type:(t -> flambda_type)
-      -> meet_env
+      -> meet_or_join_env
       -> t
       -> t
       -> (t * typing_env_extension) Or_bottom.t

@@ -658,6 +658,7 @@ Format.eprintf "allowed vars are %a\n%!" Variable.Set.print allowed;
 let non_trivial_join ~initial_env_at_join:env_at_join envs_with_levels =
   assert (List.length envs_with_levels > 1);
   (* For non-trivial joins, no existentials are currently propagated. *)
+  (* CR mshinwell: It may be much easier to fix that now. *)
   let names_with_equations_in_join =
     let names_at_join = Typing_env.name_domain env_at_join in
     List.fold_left
@@ -671,40 +672,41 @@ let non_trivial_join ~initial_env_at_join:env_at_join envs_with_levels =
     Name.Set.fold (fun name result_t ->
         assert (Typing_env.mem env_at_join name);
         assert (not (Name.Map.mem name result_t.equations));
+(*
+        Format.eprintf "JOIN for %a@ env at join:@ %a\n%!" Name.print name
+          Typing_env.print env_at_join;
+*)
         match envs_with_levels with
-        | [] -> result_t
-        | (first_env_at_use, _id, _use_kind, _vars, _first_t)
-            :: envs_with_levels ->
-          let result_t, join_ty =
-            Type_grammar.make_suitable_for_environment0
-              (Typing_env.find first_env_at_use name) first_env_at_use
-              ~suitable_for:env_at_join result_t
+        | (first_env_at_use, _id, _use_kind, _vars, _first_t) :: _ :: _ ->
+          let kind =
+            Type_grammar.kind (Typing_env.find first_env_at_use name)
           in
-          let result_t, join_ty =
+          let join_ty =
             List.fold_left
-              (fun (result_t, join_ty)
-                   (env_at_use, _id, _use_kind, _vars, _t) ->
-                let result_t, ty =
-                  Type_grammar.make_suitable_for_environment0
-                    (Typing_env.find env_at_use name) env_at_use
-                    ~suitable_for:env_at_join result_t
-                in
-                let env_at_join =
-                  Typing_env.add_env_extension_from_level env_at_join
-                    result_t
+              (fun join_ty (env_at_use, _id, _use_kind, _vars, _t) ->
+                let use_ty = Typing_env.find env_at_use name in
+(*
+                Format.eprintf "Joining:@ %a@ and@ %a\n%!"
+                  Type_grammar.print join_ty
+                  Type_grammar.print use_ty;
+*)
+                let join_ty =
+                  (* CR mshinwell: Should [left_env] be updated around the
+                     loop? *)
+                  Type_grammar.join env_at_join
+                    ~left_env:env_at_join ~left_ty:join_ty
+                    ~right_env:env_at_use ~right_ty:use_ty
                 in
 (*
-                Format.eprintf "Joining:@ %a@ and@ %a@ (vars in scope: %a)\n%!"
-                  Type_grammar.print join_ty
-                  Type_grammar.print ty
-                  Variable.Set.print (Typing_env.var_domain env_at_join);
+                Format.eprintf "The joined type is:@ %a\n%!"
+                  Type_grammar.print join_ty;
 *)
-                let join_ty = Type_grammar.join env_at_join join_ty ty in
-                result_t, join_ty)
-              (result_t, join_ty)
+                join_ty)
+              (Type_grammar.bottom kind)
               envs_with_levels
           in
-          add_or_replace_equation result_t name join_ty)
+          add_or_replace_equation result_t name join_ty
+        | [] | [_] -> assert false (* see top of function *))
       names_with_equations_in_join
       (empty ())
   in

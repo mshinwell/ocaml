@@ -68,6 +68,8 @@ end) : sig
 
   val subset_domain : t -> t -> bool
 
+  val overlap : t -> t -> bool
+
   val mem : t -> N.t -> bool
 
   val remove : t -> N.t -> t
@@ -232,6 +234,9 @@ end = struct
 
   let subset_domain t1 t2 = N.Set.subset (N.Map.keys t1) (N.Map.keys t2)
 
+  let overlap t1 t2 =
+    not (N.Set.is_empty (N.Set.inter (N.Map.keys t1) (N.Map.keys t2)))
+
   let mem t name = N.Map.mem name t
 
   let remove t name = N.Map.remove name t
@@ -293,30 +298,47 @@ module For_closure_vars = For_one_variety_of_names (struct
   let apply_name_permutation t _perm = t
 end)
 
+module For_code_ids = For_one_variety_of_names (struct
+  include Code_id
+  (* We never bind [Code_id]s using [Name_abstraction]. *)
+  let apply_name_permutation t _perm = t
+end)
+
 type t = {
   variables : For_variables.t;
   continuations : For_continuations.t;
   symbols : For_symbols.t;
   closure_vars : For_closure_vars.t;
+  code_ids : For_code_ids.t;
+  newer_version_of_code_ids : For_code_ids.t;
+  (* [newer_version_of_code_ids] tracks those code IDs that occur in
+     "newer version of" fields (e.g. in [Flambda_static.Static_part.code]). *)
 }
 
-let print ppf { variables; continuations; symbols; closure_vars; } =
+let print ppf { variables; continuations; symbols; closure_vars;
+                code_ids; newer_version_of_code_ids; } =
   Format.fprintf ppf "@[<hov 1>\
       @[<hov 1>(variables %a)@]@ \
       @[<hov 1>(continuations %a)@]@ \
       @[<hov 1>(symbols %a)@]@ \
-      @[<hov 1>(closure_vars %a)@]\
+      @[<hov 1>(closure_vars %a)@]@ \
+      @[<hov 1>(code_ids %a)@]\
+      @[<hov 1>(newer_version_of_code_ids %a)@]\
       @]"
     For_variables.print variables
     For_continuations.print continuations
     For_symbols.print symbols
     For_closure_vars.print closure_vars
+    For_code_ids.print code_ids
+    For_code_ids.print newer_version_of_code_ids
 
 let empty = {
   variables = For_variables.empty;
   continuations = For_continuations.empty;
   symbols = For_symbols.empty;
   closure_vars = For_closure_vars.empty;
+  code_ids = For_code_ids.empty;
+  newer_version_of_code_ids = For_code_ids.empty;
 }
 
 let singleton_continuation cont =
@@ -360,6 +382,17 @@ let add_closure_var t clos_var kind =
     closure_vars = For_closure_vars.add t.closure_vars clos_var kind;
   }
 
+let add_code_id t id kind =
+  { t with
+    code_ids = For_code_ids.add t.code_ids id kind;
+  }
+
+let add_newer_version_of_code_id t id kind =
+  { t with
+    newer_version_of_code_ids =
+      For_code_ids.add t.newer_version_of_code_ids id kind;
+  }
+
 let singleton_symbol sym kind =
   { empty with
     symbols = For_symbols.singleton sym kind;
@@ -395,7 +428,9 @@ let create_closure_vars clos_vars =
   { empty with closure_vars; }
 
 let apply_name_permutation
-      ({ variables; continuations; symbols; closure_vars; } as t) perm =
+      ({ variables; continuations; symbols; closure_vars; code_ids;
+         newer_version_of_code_ids; } as t)
+      perm =
   if Name_permutation.is_empty perm then t
   else
     let variables =
@@ -404,50 +439,92 @@ let apply_name_permutation
     let continuations =
       For_continuations.apply_name_permutation continuations perm
     in
-    (* [Symbol]s and [Var_within_closure]s are never bound using
+    (* [Symbol]s, [Var_within_closure]s and [Code_id]s are never bound using
        [Name_abstraction]. *)
     { variables;
       continuations;
       symbols;
       closure_vars;
+      code_ids;
+      newer_version_of_code_ids;
     }
 
-let binary_predicate ~for_variables ~for_continuations ~for_symbols
-      ~for_closure_vars
+let binary_conjunction ~for_variables ~for_continuations ~for_symbols
+      ~for_closure_vars ~for_code_ids 
       { variables = variables1;
         continuations = continuations1;
         symbols = symbols1;
         closure_vars = closure_vars1;
+        code_ids = code_ids1;
+        newer_version_of_code_ids = newer_version_of_code_ids1;
       }
       { variables = variables2;
         continuations = continuations2;
         symbols = symbols2;
         closure_vars = closure_vars2;
+        code_ids = code_ids2;
+        newer_version_of_code_ids = newer_version_of_code_ids2;
       } =
   for_variables variables1 variables2
     && for_continuations continuations1 continuations2
     && for_symbols symbols1 symbols2
     && for_closure_vars closure_vars1 closure_vars2
+    && for_code_ids code_ids1 code_ids2
+    && for_code_ids newer_version_of_code_ids1 newer_version_of_code_ids2
 
-let binary_op ~for_variables ~for_continuations ~for_symbols ~for_closure_vars
+let binary_disjunction ~for_variables ~for_continuations ~for_symbols
+      ~for_closure_vars ~for_code_ids 
       { variables = variables1;
         continuations = continuations1;
         symbols = symbols1;
         closure_vars = closure_vars1;
+        code_ids = code_ids1;
+        newer_version_of_code_ids = newer_version_of_code_ids1;
       }
       { variables = variables2;
         continuations = continuations2;
         symbols = symbols2;
         closure_vars = closure_vars2;
+        code_ids = code_ids2;
+        newer_version_of_code_ids = newer_version_of_code_ids2;
+      } =
+  for_variables variables1 variables2
+    || for_continuations continuations1 continuations2
+    || for_symbols symbols1 symbols2
+    || for_closure_vars closure_vars1 closure_vars2
+    || for_code_ids code_ids1 code_ids2
+    || for_code_ids newer_version_of_code_ids1 newer_version_of_code_ids2
+
+let binary_op ~for_variables ~for_continuations ~for_symbols ~for_closure_vars
+      ~for_code_ids
+      { variables = variables1;
+        continuations = continuations1;
+        symbols = symbols1;
+        closure_vars = closure_vars1;
+        code_ids = code_ids1;
+        newer_version_of_code_ids = newer_version_of_code_ids1;
+      }
+      { variables = variables2;
+        continuations = continuations2;
+        symbols = symbols2;
+        closure_vars = closure_vars2;
+        code_ids = code_ids2;
+        newer_version_of_code_ids = newer_version_of_code_ids2;
       } =
   let variables = for_variables variables1 variables2 in
   let continuations = for_continuations continuations1 continuations2 in
   let symbols = for_symbols symbols1 symbols2 in
   let closure_vars = for_closure_vars closure_vars1 closure_vars2 in
+  let code_ids = for_code_ids code_ids1 code_ids2 in
+  let newer_version_of_code_ids =
+    for_code_ids newer_version_of_code_ids1 newer_version_of_code_ids2
+  in
   { variables;
     continuations;
     symbols;
     closure_vars;
+    code_ids;
+    newer_version_of_code_ids;
   }
 
 let diff t1 t2 =
@@ -455,6 +532,7 @@ let diff t1 t2 =
     ~for_continuations:For_continuations.diff
     ~for_symbols:For_symbols.diff
     ~for_closure_vars:For_closure_vars.diff
+    ~for_code_ids:For_code_ids.diff
     t1 t2
 
 let union t1 t2 =
@@ -462,20 +540,33 @@ let union t1 t2 =
     ~for_continuations:For_continuations.union
     ~for_symbols:For_symbols.union
     ~for_closure_vars:For_closure_vars.union
+    ~for_code_ids:For_code_ids.union
     t1 t2
 
 let equal t1 t2 =
-  binary_predicate ~for_variables:For_variables.equal
+  binary_conjunction ~for_variables:For_variables.equal
     ~for_continuations:For_continuations.equal
     ~for_symbols:For_symbols.equal
     ~for_closure_vars:For_closure_vars.equal
+    ~for_code_ids:For_code_ids.equal
     t1 t2
 
+let is_empty t = equal t empty
+
 let subset_domain t1 t2 =
-  binary_predicate ~for_variables:For_variables.subset_domain
+  binary_conjunction ~for_variables:For_variables.subset_domain
     ~for_continuations:For_continuations.subset_domain
     ~for_symbols:For_symbols.subset_domain
     ~for_closure_vars:For_closure_vars.subset_domain
+    ~for_code_ids:For_code_ids.subset_domain
+    t1 t2
+
+let overlap t1 t2 =
+  binary_disjunction ~for_variables:For_variables.overlap
+    ~for_continuations:For_continuations.overlap
+    ~for_symbols:For_symbols.overlap
+    ~for_closure_vars:For_closure_vars.overlap
+    ~for_code_ids:For_code_ids.overlap
     t1 t2
 
 let rec union_list ts =
@@ -487,6 +578,14 @@ let variables t = For_variables.keys t.variables
 let symbols t = For_symbols.keys t.symbols
 let closure_vars t = For_closure_vars.keys t.closure_vars
 let continuations t = For_continuations.keys t.continuations
+let code_ids t = For_code_ids.keys t.code_ids
+let newer_version_of_code_ids t = For_code_ids.keys t.newer_version_of_code_ids
+
+let code_ids_and_newer_version_of_code_ids t =
+  Code_id.Set.union (code_ids t) (newer_version_of_code_ids t)
+
+let only_newer_version_of_code_ids t =
+  Code_id.Set.diff (newer_version_of_code_ids t) (code_ids t)
 
 let names t =
   Name.Set.union (Name.set_of_var_set (variables t))
@@ -494,6 +593,7 @@ let names t =
 
 let mem_var t var = For_variables.mem t.variables var
 let mem_symbol t symbol = For_symbols.mem t.symbols symbol
+let mem_code_id t code_id = For_code_ids.mem t.code_ids code_id
 
 let mem_name t (name : Name.t) =
   match name with
@@ -513,7 +613,9 @@ let greatest_name_mode_var t var =
   For_variables.greatest_name_mode t.variables var
 
 let downgrade_occurrences_at_strictly_greater_kind
-      { variables; continuations; symbols; closure_vars; } max_kind =
+      { variables; continuations; symbols; closure_vars; code_ids;
+        newer_version_of_code_ids; }
+      max_kind =
   let variables =
     For_variables.downgrade_occurrences_at_strictly_greater_kind
       variables max_kind
@@ -530,8 +632,24 @@ let downgrade_occurrences_at_strictly_greater_kind
     For_closure_vars.downgrade_occurrences_at_strictly_greater_kind
       closure_vars max_kind
   in
+  let code_ids =
+    For_code_ids.downgrade_occurrences_at_strictly_greater_kind
+      code_ids max_kind
+  in
+  let newer_version_of_code_ids =
+    For_code_ids.downgrade_occurrences_at_strictly_greater_kind
+      newer_version_of_code_ids max_kind
+  in
   { variables;
     continuations;
     symbols;
     closure_vars;
+    code_ids;
+    newer_version_of_code_ids;
+  }
+
+let without_code_ids t =
+  { t with
+    code_ids = For_code_ids.empty;
+    newer_version_of_code_ids = For_code_ids.empty;
   }

@@ -19,7 +19,7 @@
 type t
 
 val create
-   : function_decls : Function_declaration_type.t Or_unknown.t Closure_id.Map.t
+   : function_decls : Function_declaration_type.t Closure_id.Map.t
   -> closure_types : Product.Closure_id_indexed.t
   -> closure_var_types : Product.Var_within_closure_indexed.t
   -> t
@@ -37,7 +37,11 @@ val map_function_decl_types
 val find_function_declaration
    : t
   -> Closure_id.t
-  -> Function_declaration_type.t Or_unknown.t
+  -> Function_declaration_type.t Or_bottom.t
+
+val closure_types : t -> Type_grammar.t Closure_id.Map.t
+
+val function_decl_types : t -> Function_declaration_type.t Closure_id.Map.t
 
 val closure_var_types : t -> Type_grammar.t Var_within_closure.Map.t
 
@@ -46,4 +50,5 @@ include Type_structure_intf.S
   with type flambda_type := Type_grammar.t
   with type typing_env := Typing_env.t
   with type meet_env := Meet_env.t
+  with type meet_or_join_env := Meet_or_join_env.t
   with type typing_env_extension := Typing_env_extension.t

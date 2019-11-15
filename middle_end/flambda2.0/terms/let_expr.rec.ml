@@ -37,7 +37,7 @@ let print_with_cache ~cache ppf
     if Name_mode.is_phantom kind then
       Flambda_colours.elide ()
     else
-      Flambda_colours.let_bound_var ()
+      Flambda_colours.variable ()
   in
   let rec let_body (expr : Expr.t) =
     match Expr.descr expr with

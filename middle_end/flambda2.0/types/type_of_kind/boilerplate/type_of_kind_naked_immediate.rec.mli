@@ -22,4 +22,5 @@ include Type_descr_intf.S
   with type typing_env_extension := Typing_env_extension.t
   with type typing_env_level := Typing_env_level.t
   with type meet_env := Meet_env.t
+  with type meet_or_join_env := Meet_or_join_env.t
   with type head := Type_of_kind_naked_immediate0.t

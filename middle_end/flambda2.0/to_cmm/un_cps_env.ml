@@ -71,6 +71,11 @@ type stage =
 
 (* Translation environment *)
 
+type function_info = {
+  needs_closure_arg : bool;
+  (* Whether direct calls need to provide a closure or can skip it *)
+}
+
 type t = {
   k_return : Continuation.t;
   (* The continuation of the current context
@@ -81,6 +86,9 @@ type t = {
   used_closure_vars : Var_within_closure.Set.t;
   (* Closure variables that are used by the context begin translated.
      (used to remove unused closure variables). *)
+
+  functions_info: function_info Code_id.Map.t;
+  (* Information about known functions *)
 
   vars  : Cmm.expression Variable.Map.t;
   (* Map from flambda2 variables to backend_variables *)
@@ -97,15 +105,33 @@ type t = {
   (* pure bindings that can be inlined across stages. *)
   stages : stage list;
   (* archived stages, in reverse chronological order. *)
+
+  names_in_scope : Code_id_or_symbol.Set.t;
+  (* Code ids and symbols bound in this scope, for invariant checking *)
 }
 
 let mk offsets k_return k_exn used_closure_vars = {
   k_return; k_exn; used_closure_vars; offsets;
+  functions_info = Code_id.Map.empty;
   stages = [];
   pures = Variable.Map.empty;
   vars = Variable.Map.empty;
   conts = Continuation.Map.empty;
   exn_conts_extra_args = Continuation.Map.empty;
+  names_in_scope = Code_id_or_symbol.Set.empty;
+}
+
+let enter_function_def env k_return k_exn = {
+  k_return; k_exn;
+  used_closure_vars = env.used_closure_vars;
+  offsets = env.offsets;
+  functions_info = env.functions_info;
+  stages = [];
+  pures = Variable.Map.empty;
+  vars = Variable.Map.empty;
+  conts = Continuation.Map.empty;
+  exn_conts_extra_args = Continuation.Map.empty;
+  names_in_scope = env.names_in_scope;
 }
 
 let dummy offsets used_closure_vars =
@@ -117,6 +143,17 @@ let dummy offsets used_closure_vars =
 
 let return_cont env = env.k_return
 let exn_cont env = env.k_exn
+
+(* Function info *)
+
+let add_function_info env code_id info =
+  let functions_info =
+    Code_id.Map.add code_id info env.functions_info
+  in
+  { env with functions_info; }
+
+let get_function_info env code_id =
+  Code_id.Map.find_opt code_id env.functions_info
 
 (* Variables *)
 
@@ -368,3 +405,22 @@ let flush_delayed_lets env =
 
 let used_closure_vars t = t.used_closure_vars
 
+let add_to_scope env names =
+  { env with
+    names_in_scope = Code_id_or_symbol.Set.union env.names_in_scope names;
+  }
+
+let check_scope env code_id_or_symbol =
+  let in_scope =
+    Code_id_or_symbol.Set.mem code_id_or_symbol env.names_in_scope
+  in
+  let in_another_unit =
+    not (Compilation_unit.equal
+      (Code_id_or_symbol.compilation_unit code_id_or_symbol)
+      (Compilation_unit.get_current_exn ()))
+  in
+  if in_scope || in_another_unit then ()
+  else
+    Misc.fatal_errorf "Use out of scope of %a@.Known names:@.%a@."
+      Code_id_or_symbol.print code_id_or_symbol
+      Code_id_or_symbol.Set.print env.names_in_scope

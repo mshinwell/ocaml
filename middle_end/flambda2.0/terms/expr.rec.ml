@@ -18,6 +18,7 @@
 
 type descr =
   | Let of Let_expr.t
+  | Let_symbol of Let_symbol_expr.t
   | Let_cont of Let_cont_expr.t
   | Apply of Apply.t
   | Apply_cont of Apply_cont.t
@@ -55,6 +56,12 @@ let descr t =
       let let_expr' = Let_expr.apply_name_permutation let_expr perm in
       if let_expr == let_expr' then t.descr
       else Let let_expr'
+    | Let_symbol let_symbol_expr ->
+      let let_symbol_expr' =
+        Let_symbol_expr.apply_name_permutation let_symbol_expr perm
+      in
+      if let_symbol_expr == let_symbol_expr' then t.descr
+      else Let_symbol let_symbol_expr'
     | Let_cont let_cont ->
       let let_cont' = Let_cont_expr.apply_name_permutation let_cont perm in
       if let_cont == let_cont' then t.descr
@@ -76,6 +83,7 @@ let descr t =
 let invariant env t =
   match descr t with
   | Let let_expr -> Let_expr.invariant env let_expr
+  | Let_symbol let_symbol_expr -> Let_symbol_expr.invariant env let_symbol_expr
   | Let_cont let_cont -> Let_cont_expr.invariant env let_cont
   | Apply_cont apply_cont -> Apply_cont.invariant env apply_cont
   | Apply apply -> Apply.invariant env apply
@@ -88,6 +96,8 @@ let invariant env t =
 let print_with_cache ~cache ppf (t : t) =
   match descr t with
   | Let let_expr -> Let_expr.print_with_cache ~cache ppf let_expr
+  | Let_symbol let_symbol_expr ->
+    Let_symbol_expr.print_with_cache ~cache ppf let_symbol_expr
   | Let_cont let_cont -> Let_cont_expr.print_with_cache ~cache ppf let_cont
   | Apply apply ->
     Format.fprintf ppf "@[<hov 1>(@<0>%sapply@<0>%s@ %a)@]"
@@ -112,6 +122,7 @@ let free_names t =
   | Not_computed ->
     match descr t with
     | Let let_expr -> Let_expr.free_names let_expr
+    | Let_symbol let_symbol_expr -> Let_symbol_expr.free_names let_symbol_expr
     | Let_cont let_cont -> Let_cont_expr.free_names let_cont
     | Apply apply -> Apply.free_names apply
     | Apply_cont apply_cont -> Apply_cont.free_names apply_cont
@@ -327,6 +338,7 @@ let create_pattern_let bound_vars defining_expr body : t =
   let expr, _ = create_pattern_let0 bound_vars defining_expr body in
   expr
 
+let create_let_symbol let_symbol = create (Let_symbol let_symbol)
 let create_let_cont let_cont = create (Let_cont let_cont)
 let create_apply apply = create (Apply apply)
 let create_apply_cont apply_cont = create (Apply_cont apply_cont)

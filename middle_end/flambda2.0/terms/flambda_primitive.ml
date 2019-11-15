@@ -589,13 +589,15 @@ let print_unary_primitive ppf p =
     fprintf ppf "Box_%a" K.Boxable_number.print_lowercase_short k
   | Select_closure { move_from; move_to; } ->
     Format.fprintf ppf "@[(Select_closure@ \
-        (%a \u{2192} %a))@]"
+        (%a \u{2192} %a@<0>%s))@]"
       Closure_id.print move_from
       Closure_id.print move_to
+      (Flambda_colours.prim_destructive ())
   | Project_var { project_from; var = var_within_closure; } ->
-    Format.fprintf ppf "@[(Project_var@ (%a@ %a))@]"
+    Format.fprintf ppf "@[(Project_var@ (%a@ %a@<0>%s))@]"
       Closure_id.print project_from
       Var_within_closure.print var_within_closure
+      (Flambda_colours.prim_destructive ())
 
 let arg_kind_of_unary_primitive p =
   match p with

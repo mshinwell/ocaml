@@ -37,6 +37,7 @@ module Make
     with type flambda_type := Type_grammar.t
     with type typing_env := Typing_env.t
     with type meet_env := Meet_env.t
+    with type meet_or_join_env := Meet_or_join_env.t
     with type typing_env_extension := Typing_env_extension.t) =
 struct
   type t = {
@@ -102,16 +103,14 @@ struct
     (E : Lattice_ops_intf.S
       with type typing_env := Typing_env.t
       with type meet_env := Meet_env.t
+      with type meet_or_join_env := Meet_or_join_env.t
       with type typing_env_extension := Typing_env_extension.t) =
   struct
-    let meet_or_join env t1 t2 : _ Or_bottom.t =
-(*
-Format.eprintf "RL meet/join: %a@ and@ %a\n%!" print t1 print t2;
-*)
+    let meet_or_join (env : Meet_or_join_env.t) t1 t2 : _ Or_bottom.t =
       let ({ known = known1; at_least = at_least1; } : t) = t1 in
       let ({ known = known2; at_least = at_least2; } : t) = t2 in
       let env_extension = ref (TEE.empty ()) in
-      let one_side_only (tag_or_unknown1 : _ Or_unknown.t) index1
+      let one_side_only env (tag_or_unknown1 : _ Or_unknown.t) index1
             maps_to1 at_least2 =
         let from_at_least2 =
           Tag_or_unknown_and_index.Map.find_last_opt
@@ -127,7 +126,26 @@ Format.eprintf "RL meet/join: %a@ and@ %a\n%!" print t1 print t2;
         | None ->
           begin match E.op () with
           | Meet -> None
-          | Join -> Some maps_to1
+          | Join ->
+            (* CR mshinwell: Same comment as per
+               Type_descr.join_head_or_unknown_or_bottom *)
+            let env =
+              Meet_or_join_env.create_for_join
+                (Meet_or_join_env.target_join_env env)
+                ~left_env:(Meet_or_join_env.left_join_env env)
+                ~right_env:(Meet_or_join_env.left_join_env env)
+            in
+            let maps_to =
+              E.switch Maps_to.meet Maps_to.join env
+                maps_to1 maps_to1
+            in
+            match maps_to with
+            | Bottom -> None
+            | Ok (maps_to, env_extension') ->
+              env_extension :=
+                TEE.meet (Meet_or_join_env.meet_env env)
+                  !env_extension env_extension';
+              Some maps_to
           end
         | Some ((_tag_or_unknown, index2), from_at_least2) ->
           assert (Index.subset index2 index1);
@@ -145,7 +163,9 @@ Format.eprintf "Existing env extension, case 1:@ %a\n%!"
 Format.eprintf "New env extension, case 1:@ %a\n%!"
   TEE.print env_extension';
 *)
-            env_extension := TEE.meet env !env_extension env_extension';
+            env_extension :=
+              TEE.meet (Meet_or_join_env.meet_env env)
+                !env_extension env_extension';
 (*
 Format.eprintf "Resulting env extension, case 1:@ %a\n%!"
   TEE.print !env_extension;
@@ -156,9 +176,10 @@ Format.eprintf "Resulting env extension, case 1:@ %a\n%!"
       let merge tag index maps_to1 maps_to2 =
         match maps_to1, maps_to2 with
         | Some maps_to1, None ->
-          one_side_only tag index maps_to1 at_least2
+          one_side_only env tag index maps_to1 at_least2
         | None, Some maps_to2 ->
-          one_side_only tag index maps_to2 at_least1
+          one_side_only (Meet_or_join_env.flip_join_envs env)
+            tag index maps_to2 at_least1
         | Some maps_to1, Some maps_to2 ->
           let maps_to =
             E.switch Maps_to.meet Maps_to.join env maps_to1 maps_to2
@@ -172,7 +193,9 @@ Format.eprintf "Existing env extension, case 2:@ %a\n%!"
 Format.eprintf "New env extension, case 2:@ %a\n%!"
   TEE.print env_extension';
 *)
-             env_extension := TEE.meet env !env_extension env_extension';
+            env_extension :=
+              TEE.meet (Meet_or_join_env.meet_env env)
+                !env_extension env_extension';
 (*
 Format.eprintf "Resulting env extension, case 2:@ %a\n%!"
   TEE.print !env_extension;
@@ -208,10 +231,11 @@ Format.eprintf "RL meet is returning bottom\n%!";
   module Meet = Row_like_meet_or_join (Lattice_ops.For_meet)
   module Join = Row_like_meet_or_join (Lattice_ops.For_join)
 
-  let meet env t1 t2 = Meet.meet_or_join env t1 t2
+  let meet env t1 t2 =
+    Meet.meet_or_join (Meet_or_join_env.create_for_meet env) t1 t2
 
   let join env t1 t2 =
-    match Join.meet_or_join (Meet_env.create env) t1 t2 with
+    match Join.meet_or_join env t1 t2 with
     | Ok (t, _env_extension) -> t
     | Bottom -> create_bottom ()
 

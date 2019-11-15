@@ -150,6 +150,20 @@ let rec print_compact ppf t =
     Format.fprintf ppf ";";
     print_compact ppf t
 
+(* CR mshinwell: read the formatter margin? *)
+let print_compact ppf t =
+  let str = Format.asprintf "%a" print_compact t in
+  if String.length str < 30 then print_compact ppf t
+  else begin
+    let t =
+      match t with
+      | [] | [_] -> t
+      | item::_ -> [item]
+    in
+    print_compact ppf t;
+    Format.fprintf ppf "; ..."
+  end
+
 let print_or_elide ppf t =
   if not (is_none t) then begin
     Format.fprintf ppf "@ <%a>" print_compact t

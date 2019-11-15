@@ -14,7 +14,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-30-40-41-42"]
+[@@@ocaml.warning "+a-30-40-41-42"]
 
 (* CR-someday xclerc: we could add annotations to external declarations
    (akin to [@@noalloc]) in order to be able to refine the computation of
@@ -30,6 +30,7 @@ let fprintf = Format.fprintf
 module Function_call = struct
   type t =
     | Direct of {
+        code_id : Code_id.t;
         closure_id : Closure_id.t;
         return_arity : Flambda_arity.t;
       }
@@ -41,8 +42,13 @@ module Function_call = struct
 
   let print ppf call =
     match call with
-    | Direct { closure_id; return_arity; } ->
-      fprintf ppf "@[(Direct %a %a)@]"
+    | Direct { code_id; closure_id; return_arity; } ->
+      fprintf ppf "@[<hov 1>(Direct@ \
+          @[<hov 1>(code_id@ %a)@]@ \
+          @[<hov 1>(closure_id@ %a)@]@ \
+          @[<hov 1>(return_arity@ %a)@]\
+          )@]"
+        Code_id.print code_id
         Closure_id.print closure_id
         Flambda_arity.print return_arity
     | Indirect_unknown_arity ->
@@ -54,7 +60,8 @@ module Function_call = struct
 
   let invariant t =
     match t with
-    | Direct { closure_id = _; return_arity; } -> check_arity return_arity
+    | Direct { code_id = _; closure_id = _; return_arity; } ->
+      check_arity return_arity
     | Indirect_unknown_arity -> ()
     | Indirect_known_arity { param_arity; return_arity; } ->
       check_arity param_arity;
@@ -112,8 +119,8 @@ let invariant0 t =
 
 let invariant _env t = invariant0 t
 
-let direct_function_call closure_id ~return_arity =
-  let t = Function (Direct { closure_id; return_arity; }) in
+let direct_function_call code_id closure_id ~return_arity =
+  let t = Function (Direct { code_id; closure_id; return_arity; }) in
   invariant0 t;
   t
 
@@ -139,7 +146,13 @@ let return_arity t : Flambda_arity.t =
 
 let free_names t =
   match t with
-  | Function _ | C_call _ -> Name_occurrences.empty
+  | Function (Direct { code_id; closure_id = _; return_arity = _; }) ->
+    Name_occurrences.add_code_id Name_occurrences.empty code_id
+      Name_mode.normal
+  | Function Indirect_unknown_arity
+  | Function (Indirect_known_arity { param_arity = _; return_arity = _; })
+  | C_call { alloc = _; param_arity = _; return_arity = _; } ->
+    Name_occurrences.empty
   | Method { kind = _; obj; } ->
     match Simple.descr obj with
     | Name obj ->
@@ -148,7 +161,10 @@ let free_names t =
 
 let apply_name_permutation t perm =
   match t with
-  | Function _ | C_call _ -> t
+  | Function (Direct { code_id = _; closure_id = _; return_arity = _; })
+  | Function Indirect_unknown_arity
+  | Function (Indirect_known_arity { param_arity = _; return_arity = _; })
+  | C_call { alloc = _; param_arity = _; return_arity = _; } -> t
   | Method { kind; obj; } ->
     let obj' = Simple.apply_name_permutation obj perm in
     if obj == obj' then t

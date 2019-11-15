@@ -23,6 +23,7 @@ module TEL = Typing_env_level
 
 module Make (Head : Type_head_intf.S
   with type meet_env := Meet_env.t
+  with type meet_or_join_env := Meet_or_join_env.t
   with type typing_env := Typing_env.t
   with type typing_env_extension := Typing_env_extension.t
   with type type_grammar := Type_grammar.t)
@@ -218,26 +219,27 @@ module Make (Head : Type_head_intf.S
         TE.aliases_of_simple_allowable_in_types env simple)
 
   let get_canonical_simples_and_expand_heads ~force_to_kind ~to_type
-      typing_env t1 t2 =
+      ~left_env ~left_ty ~right_env ~right_ty =
     let extract_descr simple : (Simple.t * Simple.descr) option Or_bottom.t =
       Or_bottom.map simple ~f:(fun simple ->
         Option.map (fun simple -> simple, Simple.descr simple) simple)
     in
     let canonical_simple1 =
-      TE.get_alias_then_canonical_simple typing_env (to_type t1)
+      TE.get_alias_then_canonical_simple left_env (to_type left_ty)
       |> extract_descr
     in
-    let head1 = expand_head ~force_to_kind t1 typing_env in
+    let head1 = expand_head ~force_to_kind left_ty left_env in
     let canonical_simple2 =
-      TE.get_alias_then_canonical_simple typing_env (to_type t2)
+      TE.get_alias_then_canonical_simple right_env (to_type right_ty)
       |> extract_descr
     in
-    let head2 = expand_head ~force_to_kind t2 typing_env in
+    let head2 = expand_head ~force_to_kind right_ty right_env in
     canonical_simple1, head1, canonical_simple2, head2
 
   module Make_meet_or_join
     (E : Lattice_ops_intf.S
      with type meet_env := Meet_env.t
+     with type meet_or_join_env := Meet_or_join_env.t
      with type typing_env := TE.t
      with type typing_env_extension := TEE.t) =
   struct
@@ -248,7 +250,7 @@ module Make (Head : Type_head_intf.S
       | Right_head_unchanged
       | New_head of Head.t Or_unknown_or_bottom.t * TEE.t
 
-    let meet_head_or_unknown_or_bottom env
+    let meet_head_or_unknown_or_bottom (env : Meet_env.t)
           (head1 : _ Or_unknown_or_bottom.t)
           (head2 : _ Or_unknown_or_bottom.t)
           : meet_or_join_head_or_unknown_or_bottom_result =
@@ -258,21 +260,55 @@ module Make (Head : Type_head_intf.S
       | Bottom, _ -> Left_head_unchanged
       | _, Bottom -> Right_head_unchanged
       | Ok head1, Ok head2 ->
+        let env = Meet_or_join_env.create_for_meet env in
         match Head_meet_or_join.meet_or_join env head1 head2 with
         | Ok (head, env_extension) -> New_head (Ok head, env_extension)
         | Absorbing | Bottom -> New_head (Bottom, TEE.empty ())
 
-    let join_head_or_unknown_or_bottom env
+    let join_head_or_unknown_or_bottom (env : Meet_or_join_env.t)
           (head1 : _ Or_unknown_or_bottom.t)
           (head2 : _ Or_unknown_or_bottom.t)
           : _ Or_unknown_or_bottom.t =
       match head1, head2 with
-      | _, Bottom -> head1
-      | Bottom, _ -> head2
+      | Bottom, Bottom -> Bottom
+      (* In these next two cases, we still need to traverse [head1] (or
+         [head2]), because they may contain names not bound in the target
+         join environment.  We force this by joining those types with
+         themselves. *)
+      (* CR mshinwell: It would be better to use [make_suitable_for_environment]
+         here as it's lazy.  In that case we would need to start returning
+         environment extensions from [join], which should be fine. *)
+      | Ok head1, Bottom ->
+        let env =
+          Meet_or_join_env.create_for_join
+            (Meet_or_join_env.target_join_env env)
+            ~left_env:(Meet_or_join_env.left_join_env env)
+            ~right_env:(Meet_or_join_env.left_join_env env)
+        in
+        begin match Head_meet_or_join.meet_or_join env head1 head1 with
+        | Ok (head, env_extension) ->
+          assert (TEE.is_empty env_extension);
+          Ok head
+        | Bottom -> Bottom
+        | Absorbing -> Unknown
+        end
+      | Bottom, Ok head2 ->
+        let env =
+          Meet_or_join_env.create_for_join
+            (Meet_or_join_env.target_join_env env)
+            ~left_env:(Meet_or_join_env.right_join_env env)
+            ~right_env:(Meet_or_join_env.right_join_env env)
+        in
+        begin match Head_meet_or_join.meet_or_join env head2 head2 with
+        | Ok (head, env_extension) ->
+          assert (TEE.is_empty env_extension);
+          Ok head
+        | Bottom -> Bottom
+        | Absorbing -> Unknown
+        end
       | Unknown, _ -> Unknown
       | _, Unknown -> Unknown
       | Ok head1, Ok head2 ->
-        let env = Meet_env.create env in
         match Head_meet_or_join.meet_or_join env head1 head2 with
         | Ok (head, env_extension) ->
           assert (TEE.is_empty env_extension);
@@ -280,11 +316,17 @@ module Make (Head : Type_head_intf.S
         | Bottom -> Bottom
         | Absorbing -> Unknown
 
+    (* CR mshinwell: I've seen one case (on tests12.ml) where it appears that
+       an env extension for a join point contains an equation for a symbol
+       which is just the same as that already in the environment.  This
+       shouldn't have been emitted from [meet]. *)
+
     let meet ~force_to_kind ~to_type env t1 t2 =
       let canonical_simple1, head1, canonical_simple2, head2 =
         let typing_env = Meet_env.env env in
         get_canonical_simples_and_expand_heads ~force_to_kind ~to_type
-          typing_env t1 t2
+          ~left_env:typing_env ~left_ty:t1
+          ~right_env:typing_env ~right_ty:t2
       in
       match canonical_simple1, canonical_simple2 with
       | Bottom, _ | _, Bottom -> bottom (), TEE.empty ()
@@ -295,14 +337,7 @@ module Make (Head : Type_head_intf.S
            might need transformation back from an expanded head (as would
            happen if we used the next case). *)
         create_equals simple1, TEE.empty ()
-      | Ok None, Ok None
-      | Ok None, Ok (Some (_, Const _))
-      | Ok (Some (_, Const _)), Ok None
-      | Ok (Some (_, Const _)), Ok (Some (_, Const _)) ->
-        (* [Simple]s that are constants must be treated differently during
-           [meet] from those that are e.g. variables. The reason is that the
-           latter encode constraints, which should not be forgotten, whereas the
-           former are treated just like they were part of the "head". *)
+      | Ok None, Ok None ->
         begin match meet_head_or_unknown_or_bottom env head1 head2 with
         | Left_head_unchanged -> t1, TEE.empty ()
         | Right_head_unchanged -> t2, TEE.empty ()
@@ -312,7 +347,7 @@ module Make (Head : Type_head_intf.S
           | Unknown -> unknown (), env_extension
           | Ok head -> create head, env_extension
         end
-      | Ok (Some (simple1, Name _)), Ok (Some (simple2, Name _)) ->
+      | Ok (Some (simple1, _)), Ok (Some (simple2, _)) ->
         assert (not (Simple.equal simple1 simple2));
         let env = Meet_env.now_meeting env simple1 simple2 in
         (* In the following cases we may generate equations "pointing the
@@ -346,7 +381,7 @@ module Make (Head : Type_head_intf.S
           | Bottom -> bottom (), env_extension
           | Unknown | Ok _ -> create_equals simple1, env_extension
         end
-      | Ok (Some (simple, Name _)), Ok (None | Some (_, Const _)) ->
+      | Ok (Some (simple, _)), Ok None ->
         begin match meet_head_or_unknown_or_bottom env head1 head2 with
         | Left_head_unchanged -> create_equals simple, TEE.empty ()
         | Right_head_unchanged ->
@@ -364,7 +399,7 @@ module Make (Head : Type_head_intf.S
           | Bottom -> bottom (), env_extension
           | Unknown | Ok _ -> create_equals simple, env_extension
         end
-      | Ok (None | Some (_, Const _)), Ok (Some (simple, Name _)) ->
+      | Ok None, Ok (Some (simple, _)) ->
         begin match meet_head_or_unknown_or_bottom env head1 head2 with
         | Left_head_unchanged ->
           let env_extension =
@@ -383,14 +418,54 @@ module Make (Head : Type_head_intf.S
           | Unknown | Ok _ -> create_equals simple, env_extension
         end
 
-    let join ~force_to_kind ~to_type typing_env t1 t2 =
+    let join ~force_to_kind ~to_type join_env t1 t2 =
       let canonical_simple1, head1, canonical_simple2, head2 =
         get_canonical_simples_and_expand_heads ~force_to_kind ~to_type
-          typing_env t1 t2
+          ~left_env:(Meet_or_join_env.left_join_env join_env)
+          ~left_ty:t1
+          ~right_env:(Meet_or_join_env.right_join_env join_env)
+          ~right_ty:t2
+      in
+      let choose_shared_alias ~shared_aliases =
+        let shared_aliases =
+          Simple.Set.filter (fun simple ->
+              match Simple.descr simple with
+              | Const _ -> true
+              | Name name ->
+                Typing_env.mem (Meet_or_join_env.target_join_env join_env)
+                  name)
+            shared_aliases
+        in
+        match Simple.Set.choose_opt shared_aliases with
+        | Some simple -> Some (create_equals simple)
+        | None -> None
       in
       match canonical_simple1, canonical_simple2 with
-      | Bottom, _ -> t2
-      | _, Bottom -> t1
+      | Bottom, Bottom -> bottom ()
+      | Ok canonical_simple, Bottom ->
+        let canonical_simple =
+          Option.map (fun (simple, _) -> simple) canonical_simple
+        in
+        let shared_aliases =
+          all_aliases_of (Meet_or_join_env.left_join_env join_env)
+            canonical_simple
+        in
+        begin match choose_shared_alias ~shared_aliases with
+        | Some joined_ty -> joined_ty
+        | None -> unknown ()
+        end
+      | Bottom, Ok canonical_simple ->
+        let canonical_simple =
+          Option.map (fun (simple, _) -> simple) canonical_simple
+        in
+        let shared_aliases =
+          all_aliases_of (Meet_or_join_env.right_join_env join_env)
+            canonical_simple
+        in
+        begin match choose_shared_alias ~shared_aliases with
+        | Some joined_ty -> joined_ty
+        | None -> unknown ()
+        end
       | Ok canonical_simple1, Ok canonical_simple2 ->
         let canonical_simple1 =
           Option.map (fun (simple, _) -> simple) canonical_simple1
@@ -399,16 +474,30 @@ module Make (Head : Type_head_intf.S
           Option.map (fun (simple, _) -> simple) canonical_simple2
         in
         let shared_aliases =
-          Simple.Set.inter (all_aliases_of typing_env canonical_simple1)
-            (all_aliases_of typing_env canonical_simple2)
+          Simple.Set.inter
+            (all_aliases_of (Meet_or_join_env.left_join_env join_env)
+              canonical_simple1)
+            (all_aliases_of (Meet_or_join_env.right_join_env join_env)
+              canonical_simple2)
         in
-        match Simple.Set.choose_opt shared_aliases with
-        | Some simple -> create_equals simple
+        match choose_shared_alias ~shared_aliases with
+        | Some joined_ty -> joined_ty
         | None ->
-          match join_head_or_unknown_or_bottom typing_env head1 head2 with
-          | Bottom -> bottom ()
-          | Unknown -> unknown ()
-          | Ok head -> create head
+          match canonical_simple1, canonical_simple2 with
+          | Some simple1, Some simple2
+              when Meet_or_join_env.already_joining join_env simple1 simple2 ->
+            unknown ()
+          | Some _, Some _ | Some _, None | None, Some _ | None, None ->
+            let join_env =
+              match canonical_simple1, canonical_simple2 with
+              | Some simple1, Some simple2 ->
+                Meet_or_join_env.now_joining join_env simple1 simple2
+              | Some _, None | None, Some _ | None, None -> join_env
+            in
+            match join_head_or_unknown_or_bottom join_env head1 head2 with
+            | Bottom -> bottom ()
+            | Unknown -> unknown ()
+            | Ok head -> create head
 
     let meet_or_join ~force_to_kind ~to_type env t1 t2 : _ Or_bottom.t =
       let t, env_extension =

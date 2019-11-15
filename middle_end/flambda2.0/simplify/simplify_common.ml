@@ -156,3 +156,71 @@ let bind_let_bound ~bindings ~body =
         | Set_of_closures _ -> Expr.create_pattern_let bound defining_expr expr)
     body
     (List.rev bindings)
+
+let create_let_symbol code_age_relation (bound_symbols : Bound_symbols.t)
+      (static_const : Static_const.t) body =
+  let bound_names = Bound_symbols.free_names bound_symbols in
+  let free_names_after = Expr.free_names body in
+(*
+  Format.eprintf "Creating Let_symbol %a@ =@ %a@ free_names_after:@ %a\n%!"
+    Bound_symbols.print bound_symbols
+    Static_const.print static_const
+    Name_occurrences.print free_names_after;
+*)
+  let all_code_ids_bound_names =
+    Name_occurrences.code_ids_and_newer_version_of_code_ids bound_names
+  in
+  let all_code_ids_free_names_after =
+    Name_occurrences.code_ids_and_newer_version_of_code_ids free_names_after
+  in
+  let all_code_ids =
+    (* CR mshinwell: This is only used for the code age relation check below;
+       maybe we don't need to check against as many code IDs as this? *)
+    Code_id.Set.union all_code_ids_bound_names all_code_ids_free_names_after
+  in
+  if (not (Name_occurrences.overlap bound_names free_names_after))
+    && Code_id.Set.is_empty (Code_id.Set.inter
+      all_code_ids_bound_names all_code_ids_free_names_after)
+  then body
+  else
+    match bound_symbols with
+    | Singleton _ ->
+      Let_symbol.create bound_symbols static_const body
+      |> Expr.create_let_symbol
+    | Sets_of_closures _ ->
+      (* Turn pieces of code that are only referenced in [newer_version_of]
+         fields into [Deleted]. *)
+      let code_ids_to_make_deleted =
+        (* CR-someday mshinwell: This could be made more precise, but would
+           probably require a proper analysis. *)
+        let code_ids_only_used_in_newer_version_of_after =
+          Name_occurrences.only_newer_version_of_code_ids free_names_after
+        in
+        let code_ids_static_const =
+          Name_occurrences.code_ids (Static_const.free_names static_const)
+        in
+        let code_ids_only_used_in_newer_version_of =
+          Code_id.Set.inter all_code_ids_bound_names
+            (Code_id.Set.diff code_ids_only_used_in_newer_version_of_after
+              code_ids_static_const)
+        in
+        (* We cannot delete code unless it is certain that a non-trivial join
+           operation between later versions of it cannot happen. *)
+        Code_id.Set.filter (fun code_id ->
+            Code_age_relation.newer_versions_form_linear_chain
+              code_age_relation code_id
+              ~all_code_ids_still_existing:all_code_ids)
+          code_ids_only_used_in_newer_version_of
+      in
+      let sets =
+        List.map (fun code_and_set_of_closures ->
+            Static_const.Code_and_set_of_closures.map_code
+              code_and_set_of_closures
+              ~f:(fun code_id code ->
+                if Code_id.Set.mem code_id code_ids_to_make_deleted
+                then Static_const.Code.make_deleted code
+                else code))
+          (Static_const.must_be_sets_of_closures static_const)
+      in
+      Let_symbol.create bound_symbols (Sets_of_closures sets) body
+      |> Expr.create_let_symbol

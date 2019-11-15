@@ -362,6 +362,13 @@ module Stdlib = struct
           }
       in
       find_prefix ~longest_common_prefix_rev:[] first second
+
+    let rec fold_left4 f accu l1 l2 l3 l4 =
+      match l1, l2, l3, l4 with
+      | [], [], [], [] -> accu
+      | a1::l1, a2::l2, a3::l3, a4::l4 ->
+        fold_left4 f (f accu a1 a2 a3 a4) l1 l2 l3 l4
+      | _, _, _, _ -> invalid_arg "List.fold_left4"
   end
 
   module Option = struct
@@ -372,6 +379,12 @@ module Stdlib = struct
       | None -> Format.pp_print_string ppf "None"
       | Some contents ->
         Format.fprintf ppf "@[(Some@ %a)@]" print_contents contents
+
+    let print_compact print_contents ppf t =
+      match t with
+      | None -> Format.pp_print_string ppf "()"
+      | Some contents ->
+        Format.fprintf ppf "%a" print_contents contents
   end
 
   module Array = struct

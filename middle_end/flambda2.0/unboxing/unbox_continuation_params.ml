@@ -91,6 +91,7 @@ module Make (U : Unboxing_spec) = struct
               (typing_env_at_use, field_type)
               field_types_by_id
           in
+          (* CR mshinwell: hoist extra_args None check *)
           match extra_args with
           | None -> None, field_types_by_id
           | Some extra_args ->
@@ -113,7 +114,8 @@ module Make (U : Unboxing_spec) = struct
                mshinwell: We never add any loads now, but might in the future.
             *)
             match canonical_simple with
-            | Bottom | Ok None -> None, field_types_by_id
+            | Bottom | Ok None ->
+              None, field_types_by_id
             | Ok (Some simple) ->
               if Simple.equal simple field then None, field_types_by_id
               else
@@ -273,8 +275,7 @@ end
 module Closures_info = struct
   type t = {
     closure_id : Closure_id.t;
-    func_decl_type : T.Function_declaration_type.t;
-    closure_type : T.t;
+    closures_entry : T.Closures_entry.t;
   }
 end
 
@@ -288,12 +289,11 @@ struct
   let var_name = "unboxed_clos_var"
 
   let make_boxed_value (info : Info.t) ~fields:closure_vars =
+    let closures_entry = info.closures_entry in
     let all_function_decls_in_set =
-      Closure_id.Map.singleton info.closure_id info.func_decl_type
+      T.Closures_entry.function_decl_types closures_entry
     in
-    let all_closures_in_set =
-      Closure_id.Map.singleton info.closure_id info.closure_type
-    in
+    let all_closures_in_set = T.Closures_entry.closure_types closures_entry in
     T.exactly_this_closure info.closure_id
       ~all_function_decls_in_set
       ~all_closures_in_set
@@ -467,23 +467,21 @@ let rec make_unboxing_decision typing_env ~depth ~arg_types_by_use_id
             TE.print typing_env
         end
     | Wrong_kind | Invalid | Unknown ->
-      (* CR-someday mshinwell: We could support more than a unique closure. *)
       match T.prove_single_closures_entry' typing_env param_type with
-      | Proved (closure_id, closures_entry, Known func_decl_type) ->
+      | Proved (closure_id, closures_entry, Ok _func_decl_type) ->
         let closure_var_types =
           T.Closures_entry.closure_var_types closures_entry
         in
         let info : Closures_spec.Info.t =
           { closure_id;
-            func_decl_type;
-            closure_type = param_type;
+            closures_entry;
           }
         in
         let closure_vars = Var_within_closure.Map.keys closure_var_types in
         Closures.unbox_one_parameter typing_env ~depth
           ~arg_types_by_use_id ~param_type extra_params_and_args
           ~unbox_value:make_unboxing_decision info closure_vars K.value
-      | Proved (_, _, Unknown) | Wrong_kind | Invalid | Unknown ->
+      | Proved (_, _, (Unknown | Bottom)) | Wrong_kind | Invalid | Unknown ->
         let rec try_unboxing = function
           | [] -> typing_env, param_type, extra_params_and_args
           | (prover, unboxer, tag, kind) :: decisions ->

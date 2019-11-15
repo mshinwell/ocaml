@@ -18,7 +18,13 @@
 
 include Identifiable.S
 
-val create : ?name:string -> Compilation_unit.t -> t
-val name : t -> string option
+val create : name:string -> Compilation_unit.t -> t
+val name : t -> string
 val get_compilation_unit : t -> Compilation_unit.t
 val in_compilation_unit : t -> Compilation_unit.t -> bool
+val rename : t -> t
+
+(** [Code_id]s uniquely determine function symbols. *)
+val code_symbol : t -> Symbol.t
+
+val invert_map : t Map.t -> t Map.t
