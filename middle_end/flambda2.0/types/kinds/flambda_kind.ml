@@ -135,6 +135,7 @@ let is_naked_float t =
 module Standard_int = struct
   type t =
     | Tagged_immediate
+    | Naked_immediate
     | Naked_int32
     | Naked_int64
     | Naked_nativeint
@@ -142,6 +143,7 @@ module Standard_int = struct
   let to_kind t : kind =
     match t with
     | Tagged_immediate -> Value
+    | Naked_immediate -> Naked_number Naked_immediate
     | Naked_int32 -> Naked_number Naked_int32
     | Naked_int64 -> Naked_number Naked_int64
     | Naked_nativeint -> Naked_number Naked_nativeint
@@ -152,6 +154,7 @@ module Standard_int = struct
     let print ppf t =
       match t with
       | Tagged_immediate -> Format.pp_print_string ppf "Tagged_immediate"
+      | Naked_immediate -> Format.pp_print_string ppf "Naked_immediate"
       | Naked_int32 -> Format.pp_print_string ppf "Naked_int32"
       | Naked_int64 -> Format.pp_print_string ppf "Naked_int64"
       | Naked_nativeint -> Format.pp_print_string ppf "Naked_nativeint"
@@ -167,6 +170,7 @@ module Standard_int = struct
   let print_lowercase ppf t =
     match t with
     | Tagged_immediate -> Format.pp_print_string ppf "tagged_immediate"
+    | Naked_immediate -> Format.pp_print_string ppf "naked_immediate"
     | Naked_int32 -> Format.pp_print_string ppf "naked_int32"
     | Naked_int64 -> Format.pp_print_string ppf "naked_int64"
     | Naked_nativeint -> Format.pp_print_string ppf "naked_nativeint"
@@ -175,6 +179,7 @@ end
 module Standard_int_or_float = struct
   type t =
     | Tagged_immediate
+    | Naked_immediate
     | Naked_float
     | Naked_int32
     | Naked_int64
@@ -183,6 +188,7 @@ module Standard_int_or_float = struct
   let to_kind t : kind =
     match t with
     | Tagged_immediate -> Value
+    | Naked_immediate -> Naked_number Naked_immediate
     | Naked_float -> Naked_number Naked_float
     | Naked_int32 -> Naked_number Naked_int32
     | Naked_int64 -> Naked_number Naked_int64
@@ -194,6 +200,7 @@ module Standard_int_or_float = struct
     let print ppf t =
       match t with
       | Tagged_immediate -> Format.pp_print_string ppf "Tagged_immediate"
+      | Naked_immediate -> Format.pp_print_string ppf "Naked_immediate"
       | Naked_float -> Format.pp_print_string ppf "Naked_float"
       | Naked_int32 -> Format.pp_print_string ppf "Naked_int32"
       | Naked_int64 -> Format.pp_print_string ppf "Naked_int64"
@@ -210,6 +217,7 @@ module Standard_int_or_float = struct
   let print_lowercase ppf t =
     match t with
     | Tagged_immediate -> Format.pp_print_string ppf "tagged_immediate"
+    | Naked_immediate -> Format.pp_print_string ppf "naked_immediate"
     | Naked_float -> Format.pp_print_string ppf "naked_float"
     | Naked_int32 -> Format.pp_print_string ppf "naked_int32"
     | Naked_int64 -> Format.pp_print_string ppf "naked_int64"

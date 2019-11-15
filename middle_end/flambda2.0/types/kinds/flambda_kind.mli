@@ -85,6 +85,7 @@ module Standard_int : sig
       known as "standard". *)
   type t =
     | Tagged_immediate
+    | Naked_immediate
     | Naked_int32
     | Naked_int64
     | Naked_nativeint
@@ -100,6 +101,7 @@ module Standard_int_or_float : sig
   (** The same as [Standard_int], but also permitting naked floats. *)
   type t =
     | Tagged_immediate
+    | Naked_immediate
     | Naked_float
     | Naked_int32
     | Naked_int64

@@ -309,7 +309,7 @@ val float_of_int : ?dbg:Debuginfo.t -> Cmm.expression -> Cmm.expression
 
 val direct_call :
   ?dbg:Debuginfo.t ->
-  Cmm.machtype -> Cmm.expression -> Cmm.expression list -> Cmm.expression
+  Cmm.machtype -> Cmm.expression -> Cmm.expression list -> Cmm.expression -> Cmm.expression
 (** [direct_call ty f args] creates a direct call to function [f] with
     arguments [args], with a return value of type [ty]. *)
 

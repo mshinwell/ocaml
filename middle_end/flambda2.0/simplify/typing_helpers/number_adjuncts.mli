@@ -42,7 +42,7 @@ module type Num_common = sig
 
   val to_const : t -> Simple.Const.t
 
-  val to_tagged_immediate : t -> Immediate.t
+  val to_immediate : t -> Immediate.t
   val to_naked_float : t -> Numbers.Float_by_bit_pattern.t
   val to_naked_int32 : t -> Numbers.Int32.t
   val to_naked_int64 : t -> Numbers.Int64.t
@@ -121,6 +121,7 @@ module type Boxable_int_number_kind = sig
 end
 
 module For_tagged_immediates : Int_number_kind
+module For_naked_immediates : Int_number_kind
 module For_floats : Boxable_number_kind
 module For_int32s : Boxable_int_number_kind
 module For_int64s : Boxable_int_number_kind

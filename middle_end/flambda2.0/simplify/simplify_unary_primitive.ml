@@ -126,23 +126,23 @@ let simplify_string_length dacc ~original_term ~arg:_ ~arg_ty:str_ty
   match T.prove_strings typing_env str_ty with
   | Proved str_infos ->
     if String_info.Set.is_empty str_infos then
-      let ty = T.bottom K.value in
+      let ty = T.bottom K.naked_immediate in
       Reachable.invalid (), TEE.one_equation name ty, dacc
     else
       begin match String_info.Set.get_singleton str_infos with
       | None ->
-        let ty = T.unknown K.value in
+        let ty = T.unknown K.naked_immediate in
         Reachable.reachable original_term, TEE.one_equation name ty, dacc
       | Some str ->
         let length = Immediate.int (String_info.size str) in
-        let ty = T.this_tagged_immediate length in
+        let ty = T.this_naked_immediate length in
         Reachable.reachable original_term, TEE.one_equation name ty, dacc
       end
   | Unknown ->
-    let ty = T.unknown K.value in
+    let ty = T.unknown K.naked_immediate in
     Reachable.reachable original_term, TEE.one_equation name ty, dacc
   | Invalid ->
-    let ty = T.bottom K.value in
+    let ty = T.bottom K.naked_immediate in
     Reachable.invalid (), TEE.one_equation name ty, dacc
 
 module Unary_int_arith (I : A.Int_number_kind) = struct
@@ -189,6 +189,8 @@ end
 
 module Unary_int_arith_tagged_immediate =
   Unary_int_arith (A.For_tagged_immediates)
+module Unary_int_arith_naked_immediate =
+  Unary_int_arith (A.For_naked_immediates)
 module Unary_int_arith_naked_int32 = Unary_int_arith (A.For_int32s)
 module Unary_int_arith_naked_int64 = Unary_int_arith (A.For_int64s)
 module Unary_int_arith_naked_nativeint = Unary_int_arith (A.For_nativeints)
@@ -212,11 +214,21 @@ module Make_simplify_int_conv (N : A.Number_kind) = struct
         | Tagged_immediate ->
           let imms =
             Num.Set.fold (fun i imms ->
-                Immediate.Set.add (Num.to_tagged_immediate i) imms)
+                Immediate.Set.add (Num.to_immediate i) imms)
               is
               Immediate.Set.empty
           in
           let ty = T.these_tagged_immediates imms in
+          let env_extension = TEE.one_equation result ty in
+          Reachable.reachable original_term, env_extension, dacc
+        | Naked_immediate ->
+          let imms =
+            Num.Set.fold (fun i imms ->
+                Immediate.Set.add (Num.to_immediate i) imms)
+              is
+              Immediate.Set.empty
+          in
+          let ty = T.these_naked_immediates imms in
           let env_extension = TEE.one_equation result ty in
           Reachable.reachable original_term, env_extension, dacc
         | Naked_float ->
@@ -269,6 +281,8 @@ end
 
 module Simplify_int_conv_tagged_immediate =
   Make_simplify_int_conv (A.For_tagged_immediates)
+module Simplify_int_conv_naked_immediate =
+  Make_simplify_int_conv (A.For_naked_immediates)
 module Simplify_int_conv_naked_float = Make_simplify_int_conv (A.For_floats)
 module Simplify_int_conv_naked_int32 = Make_simplify_int_conv (A.For_int32s)
 module Simplify_int_conv_naked_int64 = Make_simplify_int_conv (A.For_int64s)
@@ -391,6 +405,7 @@ let simplify_unary_primitive dacc (prim : P.unary_primitive)
         | Int_arith (kind, op) ->
           begin match kind with
           | Tagged_immediate -> Unary_int_arith_tagged_immediate.simplify op
+          | Naked_immediate -> Unary_int_arith_naked_immediate.simplify op
           | Naked_int32 -> Unary_int_arith_naked_int32.simplify op
           | Naked_int64 -> Unary_int_arith_naked_int64.simplify op
           | Naked_nativeint -> Unary_int_arith_naked_nativeint.simplify op
@@ -399,6 +414,7 @@ let simplify_unary_primitive dacc (prim : P.unary_primitive)
         | Num_conv { src; dst; } ->
           begin match src with
           | Tagged_immediate -> Simplify_int_conv_tagged_immediate.simplify ~dst
+          | Naked_immediate -> Simplify_int_conv_naked_immediate.simplify ~dst
           | Naked_float -> Simplify_int_conv_naked_float.simplify ~dst
           | Naked_int32 -> Simplify_int_conv_naked_int32.simplify ~dst
           | Naked_int64 -> Simplify_int_conv_naked_int64.simplify ~dst

@@ -419,8 +419,9 @@ let ccatch ~rec_flag ~handlers ~body =
 
 (* Function calls *)
 
-let direct_call ?(dbg=Debuginfo.none) ty f args =
-  Cmm.Cop (Cmm.Capply ty, f :: args, dbg)
+(* CR vlaviron: the closure, f, should not always be necessary (if the function is closed). *)
+let direct_call ?(dbg=Debuginfo.none) ty f_code_sym args f =
+  Cmm.Cop (Cmm.Capply ty, f_code_sym :: args @ [f], dbg)
 
 let indirect_call ?(dbg=Debuginfo.none) ty f = function
   | [arg] ->

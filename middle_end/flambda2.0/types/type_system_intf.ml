@@ -353,6 +353,11 @@ module type S = sig
     -> t
     -> Immediate.Set.t proof
 
+  val prove_naked_immediates
+     : Typing_env.t
+    -> t
+    -> Immediate.Set.t proof
+
   val prove_equals_single_tagged_immediate
      : Typing_env.t
     -> t

@@ -48,7 +48,7 @@ module type Num_common = sig
 
   val to_const : t -> Simple.Const.t
 
-  val to_tagged_immediate : t -> Immediate.t
+  val to_immediate : t -> Immediate.t
   val to_naked_float : t -> Numbers.Float_by_bit_pattern.t
   val to_naked_int32 : t -> Numbers.Int32.t
   val to_naked_int64 : t -> Numbers.Int64.t
@@ -165,7 +165,7 @@ module For_tagged_immediates : Int_number_kind = struct
 
     let to_const t = Simple.Const.Tagged_immediate t
 
-    let to_tagged_immediate t = t
+    let to_immediate t = t
 
     (* It seems as if the various [float_of_int] functions never raise
        an exception even in the case of NaN or infinity. *)
@@ -191,6 +191,65 @@ module For_tagged_immediates : Int_number_kind = struct
     Named.create_simple (Simple.const (Tagged_immediate imm))
 end
 
+module For_naked_immediates : Int_number_kind = struct
+  module Num = struct
+    include Immediate
+
+    let compare_unsigned _t1 _t2 =
+      (* CR mshinwell: Implement these *)
+      Misc.fatal_error
+        "For_naked_immediates.compare_unsigned not yet implemented"
+
+    let div t1 t2 =
+      if Immediate.equal t2 Immediate.zero then None
+      else Some (div t1 t2)
+
+    let mod_ t1 t2 =
+      if Immediate.equal t2 Immediate.zero then None
+      else Some (mod_ t1 t2)
+
+    let shift_left t shift =
+      with_shift shift zero (fun shift -> shift_left t shift)
+
+    let shift_right t shift =
+      with_shift shift zero (fun shift -> shift_right t shift)
+
+    let shift_right_logical t shift =
+      with_shift shift zero (fun shift -> shift_right_logical t shift)
+
+    let swap_byte_endianness t =
+      Immediate.map ~f:(fun i ->
+          Targetint.OCaml.get_least_significant_16_bits_then_byte_swap i)
+        t
+
+    let to_const t = Simple.Const.Naked_immediate t
+
+    let to_immediate t = t
+
+    (* It seems as if the various [float_of_int] functions never raise
+       an exception even in the case of NaN or infinity. *)
+    (* CR mshinwell: We should be sure this semantics is reasonable. *)
+    let to_naked_float t =
+      Float_by_bit_pattern.create (Targetint.OCaml.to_float (
+        Immediate.to_targetint t))
+
+    let to_naked_int32 t = Targetint.OCaml.to_int32 (Immediate.to_targetint t)
+    let to_naked_int64 t = Targetint.OCaml.to_int64 (Immediate.to_targetint t)
+    let to_naked_nativeint t =
+      Targetint.OCaml.to_targetint (Immediate.to_targetint t)
+  end
+
+  let kind : K.Standard_int_or_float.t = Naked_immediate
+  let standard_int_kind : K.Standard_int.t = Naked_immediate
+
+  let unboxed_prover = T.prove_naked_immediates
+  let this_unboxed = T.this_naked_immediate
+  let these_unboxed = T.these_naked_immediates
+
+  let term_unboxed imm =
+    Named.create_simple (Simple.const (Naked_immediate imm))
+end
+
 module For_floats : Boxable_number_kind = struct
   module Num = struct
     include Float_by_bit_pattern
@@ -208,7 +267,7 @@ module For_floats : Boxable_number_kind = struct
        [Targetint.of_float].  Ditto for [Float_of_int].  (For the record,
        [Pervasives.int_of_float] and [Nativeint.of_float] on [nan] produce
        wildly different results). *)
-    let to_tagged_immediate t =
+    let to_immediate t =
       Immediate.int (Targetint.OCaml.of_float (to_float t))
 
     let to_naked_float t = t
@@ -267,7 +326,7 @@ module For_int32s : Boxable_int_number_kind = struct
 
     let to_const t = Simple.Const.Naked_int32 t
 
-    let to_tagged_immediate t = Immediate.int (Targetint.OCaml.of_int32 t)
+    let to_immediate t = Immediate.int (Targetint.OCaml.of_int32 t)
     let to_naked_float t = Float_by_bit_pattern.create (Int32.to_float t)
     let to_naked_int32 t = t
     let to_naked_int64 t = Int64.of_int32 t
@@ -324,7 +383,7 @@ module For_int64s : Boxable_int_number_kind = struct
 
     let to_const t = Simple.Const.Naked_int64 t
 
-    let to_tagged_immediate t = Immediate.int (Targetint.OCaml.of_int64 t)
+    let to_immediate t = Immediate.int (Targetint.OCaml.of_int64 t)
     let to_naked_float t = Float_by_bit_pattern.create (Int64.to_float t)
     let to_naked_int32 t = Int64.to_int32 t
     let to_naked_int64 t = t
@@ -381,7 +440,7 @@ module For_nativeints : Boxable_int_number_kind = struct
 
     let to_const t = Simple.Const.Naked_nativeint t
 
-    let to_tagged_immediate t = Immediate.int (Targetint.OCaml.of_targetint t)
+    let to_immediate t = Immediate.int (Targetint.OCaml.of_targetint t)
     let to_naked_float t = Float_by_bit_pattern.create (Targetint.to_float t)
     let to_naked_int32 t = Targetint.to_int32 t
     let to_naked_int64 t = Targetint.to_int64 t

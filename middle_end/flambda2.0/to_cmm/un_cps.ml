@@ -200,6 +200,7 @@ let primitive_boxed_int_of_standard_int x =
   | Naked_int64 -> Primitive.Pint64
   | Naked_nativeint -> Primitive.Pnativeint
   | Tagged_immediate -> assert false
+  | Naked_immediate -> assert false
 
 let unary_int_arith_primitive _env dbg kind op arg =
   match (kind : Flambda_kind.Standard_int.t),
@@ -231,7 +232,7 @@ let arithmetic_conversion dbg src dst arg =
       C.extcall ~alloc:false "caml_int64_to_int" typ_int [arg]
   | Naked_int64, Naked_int32 when C.arch32 ->
       C.extcall ~alloc:false "caml_int64_to_int32" typ_int [arg]
-  | Naked_int64, Naked_nativeint when C.arch32 ->
+  | Naked_int64, (Naked_nativeint | Naked_immediate) when C.arch32 ->
       C.extcall ~alloc:false "caml_int64_to_nativeint" typ_int [arg]
   | Naked_int64, Naked_float when C.arch32 ->
       C.extcall ~alloc:false "caml_int64_to_float_unboxed" typ_float [arg]
@@ -241,7 +242,7 @@ let arithmetic_conversion dbg src dst arg =
   | Naked_int32, Naked_int64 when C.arch32 ->
       C.extcall ~alloc:true "caml_int64_of_int32" typ_val [arg]
       |> C.unbox_number ~dbg Flambda_kind.Boxable_number.Naked_int64
-  | Naked_nativeint, Naked_int64 when C.arch32 ->
+  | (Naked_nativeint | Naked_immediate), Naked_int64 when C.arch32 ->
       C.extcall ~alloc:true "caml_int64_of_nativeint" typ_val [arg]
       |> C.unbox_number ~dbg Flambda_kind.Boxable_number.Naked_int64
   | Naked_float, Naked_int64 when C.arch32 ->
@@ -250,23 +251,32 @@ let arithmetic_conversion dbg src dst arg =
   (* Identity on floats *)
   | Naked_float, Naked_float -> arg
   (* general cases between integers *)
-  | (Naked_int32 | Naked_int64 | Naked_nativeint), Tagged_immediate ->
+  | (Naked_int32 | Naked_int64 | Naked_nativeint | Naked_immediate),
+    Tagged_immediate ->
       C.tag_int arg dbg
-  | Tagged_immediate, (Naked_int32 | Naked_int64 | Naked_nativeint) ->
+  | Tagged_immediate,
+    (Naked_int32 | Naked_int64 | Naked_nativeint | Naked_immediate) ->
       C.untag_int arg dbg
   (* TODO: insert shifts to zero-out higher-order bits during
            the 64 to 32 bit conversion ? *)
   | Tagged_immediate, Tagged_immediate
-  | Naked_int32, (Naked_int32 | Naked_int64 | Naked_nativeint)
-  | Naked_int64, (Naked_int32 | Naked_int64 | Naked_nativeint)
-  | Naked_nativeint, (Naked_int32 | Naked_int64 | Naked_nativeint) ->
+  | Naked_int32, (Naked_int32 | Naked_int64 | Naked_nativeint | Naked_immediate)
+  | Naked_int64, (Naked_int32 | Naked_int64 | Naked_nativeint | Naked_immediate)
+  | Naked_nativeint,
+    (Naked_int32 | Naked_int64 | Naked_nativeint | Naked_immediate)
+  | Naked_immediate,
+    (Naked_int32 | Naked_int64 | Naked_nativeint | Naked_immediate) ->
       arg
   (* Int-Float conversions *)
-  | (Tagged_immediate | Naked_int32 | Naked_int64 | Naked_nativeint),
+  | Tagged_immediate, Naked_float ->
+      C.float_of_int ~dbg (C.untag_int arg dbg)
+  | (Naked_immediate | Naked_int32 | Naked_int64 | Naked_nativeint),
     Naked_float ->
       C.float_of_int ~dbg arg
+  | Naked_float, Tagged_immediate ->
+      C.tag_int (C.int_of_float ~dbg arg) dbg
   | Naked_float,
-    (Tagged_immediate | Naked_int32 | Naked_int64 | Naked_nativeint) ->
+    (Naked_immediate | Naked_int32 | Naked_int64 | Naked_nativeint) ->
       C.int_of_float ~dbg arg
 
 let binary_phys_comparison _env dbg kind op x y =
@@ -317,16 +327,22 @@ let binary_int_arith_primitive _env dbg kind op x y =
   | Tagged_immediate, Or  -> C.or_int_caml x y dbg
   | Tagged_immediate, Xor -> C.xor_int_caml x y dbg
   (* Naked ints *)
-  | (Naked_int32 | Naked_int64 | Naked_nativeint), Add -> C.add_int x y dbg
-  | (Naked_int32 | Naked_int64 | Naked_nativeint), Sub -> C.sub_int x y dbg
-  | (Naked_int32 | Naked_int64 | Naked_nativeint), Mul -> C.mul_int x y dbg
-  | (Naked_int32 | Naked_int64 | Naked_nativeint), Div ->
+  | (Naked_int32 | Naked_int64 | Naked_nativeint | Naked_immediate), Add ->
+      C.add_int x y dbg
+  | (Naked_int32 | Naked_int64 | Naked_nativeint | Naked_immediate), Sub ->
+      C.sub_int x y dbg
+  | (Naked_int32 | Naked_int64 | Naked_nativeint | Naked_immediate), Mul ->
+      C.mul_int x y dbg
+  | (Naked_int32 | Naked_int64 | Naked_nativeint | Naked_immediate), Div ->
       C.div_int x y Lambda.Unsafe dbg
-  | (Naked_int32 | Naked_int64 | Naked_nativeint), Mod ->
+  | (Naked_int32 | Naked_int64 | Naked_nativeint | Naked_immediate), Mod ->
       C.mod_int x y Lambda.Unsafe dbg
-  | (Naked_int32 | Naked_int64 | Naked_nativeint), And -> C.and_ ~dbg x y
-  | (Naked_int32 | Naked_int64 | Naked_nativeint), Or -> C.or_ ~dbg x y
-  | (Naked_int32 | Naked_int64 | Naked_nativeint), Xor -> C.xor_ ~dbg x y
+  | (Naked_int32 | Naked_int64 | Naked_nativeint | Naked_immediate), And ->
+      C.and_ ~dbg x y
+  | (Naked_int32 | Naked_int64 | Naked_nativeint | Naked_immediate), Or ->
+      C.or_ ~dbg x y
+  | (Naked_int32 | Naked_int64 | Naked_nativeint | Naked_immediate), Xor ->
+      C.xor_ ~dbg x y
 
 let binary_int_shift_primitive _env dbg kind op x y =
   match (kind : Flambda_kind.Standard_int.t),
@@ -343,9 +359,12 @@ let binary_int_shift_primitive _env dbg kind op x y =
   | Tagged_immediate, Lsr -> C.lsr_int_caml x y dbg
   | Tagged_immediate, Asr -> C.asr_int_caml x y dbg
   (* Naked ints *)
-  | (Naked_int32 | Naked_int64 | Naked_nativeint), Lsl -> C.lsl_int x y dbg
-  | (Naked_int32 | Naked_int64 | Naked_nativeint), Lsr -> C.lsr_int x y dbg
-  | (Naked_int32 | Naked_int64 | Naked_nativeint), Asr -> C.asr_int x y dbg
+  | (Naked_int32 | Naked_int64 | Naked_nativeint | Naked_immediate), Lsl ->
+      C.lsl_int x y dbg
+  | (Naked_int32 | Naked_int64 | Naked_nativeint | Naked_immediate), Lsr ->
+      C.lsr_int x y dbg
+  | (Naked_int32 | Naked_int64 | Naked_nativeint | Naked_immediate), Asr ->
+      C.asr_int x y dbg
 
 let binary_int_comp_primitive _env dbg kind signed cmp x y =
   match (kind : Flambda_kind.Standard_int.t),
@@ -376,14 +395,22 @@ let binary_int_comp_primitive _env dbg kind signed cmp x y =
   | Tagged_immediate, Unsigned, Gt -> C.ugt ~dbg x y
   | Tagged_immediate, Unsigned, Ge -> C.uge ~dbg x y
   (* Naked integers. *)
-  | (Naked_int32|Naked_int64|Naked_nativeint), Signed, Lt -> C.lt ~dbg x y
-  | (Naked_int32|Naked_int64|Naked_nativeint), Signed, Le -> C.le ~dbg x y
-  | (Naked_int32|Naked_int64|Naked_nativeint), Signed, Gt -> C.gt ~dbg x y
-  | (Naked_int32|Naked_int64|Naked_nativeint), Signed, Ge -> C.ge ~dbg x y
-  | (Naked_int32|Naked_int64|Naked_nativeint), Unsigned, Lt -> C.ult ~dbg x y
-  | (Naked_int32|Naked_int64|Naked_nativeint), Unsigned, Le -> C.ule ~dbg x y
-  | (Naked_int32|Naked_int64|Naked_nativeint), Unsigned, Gt -> C.ugt ~dbg x y
-  | (Naked_int32|Naked_int64|Naked_nativeint), Unsigned, Ge -> C.uge ~dbg x y
+  | (Naked_int32|Naked_int64|Naked_nativeint|Naked_immediate), Signed, Lt ->
+      C.lt ~dbg x y
+  | (Naked_int32|Naked_int64|Naked_nativeint|Naked_immediate), Signed, Le ->
+      C.le ~dbg x y
+  | (Naked_int32|Naked_int64|Naked_nativeint|Naked_immediate), Signed, Gt ->
+      C.gt ~dbg x y
+  | (Naked_int32|Naked_int64|Naked_nativeint|Naked_immediate), Signed, Ge ->
+      C.ge ~dbg x y
+  | (Naked_int32|Naked_int64|Naked_nativeint|Naked_immediate), Unsigned, Lt ->
+      C.ult ~dbg x y
+  | (Naked_int32|Naked_int64|Naked_nativeint|Naked_immediate), Unsigned, Le ->
+      C.ule ~dbg x y
+  | (Naked_int32|Naked_int64|Naked_nativeint|Naked_immediate), Unsigned, Gt ->
+      C.ugt ~dbg x y
+  | (Naked_int32|Naked_int64|Naked_nativeint|Naked_immediate), Unsigned, Ge ->
+      C.uge ~dbg x y
 
 let binary_float_arith_primitive _env dbg op x y =
   match (op : Flambda_primitive.binary_float_arith_op) with
@@ -806,10 +833,11 @@ and apply_call env e =
      given arbitrary effects and coeffects. *)
   | Call_kind.Function
       Call_kind.Function_call.Direct { closure_id; return_arity; } ->
-      let f = Un_cps_closure.(closure_code (closure_name closure_id)) in
+      let f_code = Un_cps_closure.(closure_code (closure_name closure_id)) in
+      let f, env, _ = simple env f in
       let args, env, _ = arg_list env (Apply_expr.args e) in
       let ty = machtype_of_return_arity return_arity in
-      C.direct_call ~dbg ty (C.symbol f) args, env, effs
+      C.direct_call ~dbg ty (C.symbol f_code) args f, env, effs
   | Call_kind.Function
       Call_kind.Function_call.Indirect_unknown_arity ->
       let f, env, _ = simple env f in

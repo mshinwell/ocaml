@@ -612,7 +612,7 @@ let result_kind_of_unary_primitive p : result_kind =
   | Duplicate_block _ -> Singleton K.value
   | Is_int
   | Get_tag -> Singleton K.naked_immediate
-  | String_length _ -> Singleton K.value
+  | String_length _ -> Singleton K.naked_immediate
   | Int_as_pointer ->
     (* This primitive is *only* to be used when the resulting pointer points
        at something which is a valid OCaml value (even if outside of the
@@ -624,8 +624,8 @@ let result_kind_of_unary_primitive p : result_kind =
     Singleton (K.Standard_int_or_float.to_kind dst)
   | Boolean_not -> Singleton K.value
   | Float_arith _ -> Singleton K.naked_float
-  | Array_length _
-  | Bigarray_length _ -> Singleton K.value
+  | Array_length _ -> Singleton K.value
+  | Bigarray_length _ -> Singleton K.naked_immediate
   | Unbox_number kind -> Singleton (K.Boxable_number.to_kind kind)
   | Box_number _
   | Select_closure _ -> Singleton K.value

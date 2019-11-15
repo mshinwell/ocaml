@@ -28,10 +28,8 @@ module P = Flambda_primitive
 
 let tag_int (arg : H.expr_primitive) : H.expr_primitive =
   Unary (Box_number Untagged_immediate, Prim arg)
-(*
 let untag_int (arg : H.simple_or_prim) : H.simple_or_prim =
   Prim (Unary (Unbox_number Untagged_immediate, arg))
-*)
 
 let box_float (arg : H.expr_primitive) : H.expr_primitive =
   Unary (Box_number Flambda_kind.Boxable_number.Naked_float, Prim arg)
@@ -54,38 +52,32 @@ let bint_shift bi prim arg1 arg2 =
     (Binary (Int_shift (C.standard_int_of_boxed_integer bi, prim),
              unbox_bint bi arg1, arg2))
 
+let string_or_bytes_access_validity_condition str kind index : H.expr_primitive =
+  Binary (Int_comp (I.Naked_immediate, Unsigned, Lt),
+          untag_int index,
+          (Prim (Unary (String_length kind, str))))
+
 let string_or_bytes_ref kind arg1 arg2 dbg : H.expr_primitive =
   Checked {
     primitive = Binary (String_or_bigstring_load (kind, Eight), arg1, arg2);
     validity_conditions = [
-      Binary (Int_comp (I.Tagged_immediate, Unsigned, Lt),
-              (* CR pchambart:
-                 Int_comp_unsigned assumes that the arguments are naked
-                 integers, but it is correct for tagged integers too as
-                 untagging of both arguments doesn't change the result.
-                 mshinwell: I'm confused.  Why can't
-                 [Int_comp Tagged_immediate] just do the right thing on
-                 tagged immediates?
-                 Update:
-                 Int_comp Tagged_immediate should do the same as for
-                 Int_comp Naked_nativeint *)
-              tagged_immediate_as_naked_nativeint arg2,
-              tagged_immediate_as_naked_nativeint
-                (Prim (Unary (String_length String, arg1))));
+      string_or_bytes_access_validity_condition arg1 String arg2;
     ];
     failure = Index_out_of_bounds;
     dbg;
   }
+
+let bigstring_access_validity_condition bstr index : H.expr_primitive =
+  Binary (Int_comp (I.Naked_immediate, Unsigned, Lt),
+          untag_int index,
+          (Prim (Unary (Bigarray_length { dimension = 1; }, bstr))))
 
 (* CR mshinwell: Same problems as previous function *)
 let bigstring_ref size arg1 arg2 dbg : H.expr_primitive =
   Checked {
     primitive = Binary (String_or_bigstring_load (Bigstring, size), arg1, arg2);
     validity_conditions = [
-      Binary (Int_comp (I.Tagged_immediate, Unsigned, Lt),
-              tagged_immediate_as_naked_nativeint arg2,
-              tagged_immediate_as_naked_nativeint
-                (Prim (Unary (Bigarray_length { dimension = 0; }, arg1))));
+      bigstring_access_validity_condition arg1 arg2;
     ];
     failure = Index_out_of_bounds;
     dbg;
@@ -214,9 +206,9 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
        tagged or untagged integers.  Probably easiest to match Cmm_helpers
        for now and change individual cases later for better codegen if
        required. *)
-    Unary (String_length String, arg)
+    tag_int (Unary (String_length String, arg))
   | Pbyteslength, [arg] ->
-    Unary (String_length Bytes, arg)
+    tag_int (Unary (String_length Bytes, arg))
   | Pstringrefu, [arg1; arg2] ->
     Binary (String_or_bigstring_load (String, Eight), arg1, arg2)
   | Pbytesrefu, [arg1; arg2] ->
@@ -246,12 +238,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
       primitive =
         Binary (String_or_bigstring_load (String, Sixteen), str, index);
       validity_conditions = [
-        (* CR mshinwell: use unsigned comparisons as above *)
-        Binary (Int_comp (Tagged_immediate, Signed, Ge), index,
-          Simple (Simple.const (Simple.Const.Tagged_immediate
-            (Immediate.int (Targetint.OCaml.zero)))));
-        Binary (Int_comp (Tagged_immediate, Signed, Lt), index,
-          Prim (Unary (String_length String, str)));
+        string_or_bytes_access_validity_condition str String index;
       ];
       failure = Index_out_of_bounds;
       dbg;
@@ -263,11 +250,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
           Prim (Binary (String_or_bigstring_load (String, Thirty_two),
             str, index)));
       validity_conditions = [
-        Binary (Int_comp (Tagged_immediate, Signed, Ge), index,
-          Simple (Simple.const (Simple.Const.Tagged_immediate
-            (Immediate.int (Targetint.OCaml.zero)))));
-        Binary (Int_comp (Tagged_immediate, Signed, Lt), index,
-          Prim (Unary (String_length String, str)));
+        string_or_bytes_access_validity_condition str String index;
       ];
       failure = Index_out_of_bounds;
       dbg;
@@ -279,11 +262,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
           Prim (Binary (String_or_bigstring_load (String, Sixty_four),
             str, index)));
       validity_conditions = [
-        Binary (Int_comp (Tagged_immediate, Signed, Ge), index,
-          Simple (Simple.const (Simple.Const.Tagged_immediate
-            (Immediate.int (Targetint.OCaml.zero)))));
-        Binary (Int_comp (Tagged_immediate, Signed, Lt), index,
-          Prim (Unary (String_length String, str)));
+        string_or_bytes_access_validity_condition str String index;
       ];
       failure = Index_out_of_bounds;
       dbg;
@@ -294,11 +273,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
       primitive =
         Binary (String_or_bigstring_load (Bytes, Sixteen), bytes, index);
       validity_conditions = [
-        Binary (Int_comp (Tagged_immediate, Signed, Ge), index,
-          Simple (Simple.const (Simple.Const.Tagged_immediate
-            (Immediate.int (Targetint.OCaml.zero)))));
-        Binary (Int_comp (Tagged_immediate, Signed, Lt), index,
-          Prim (Unary (String_length Bytes, bytes)));
+        string_or_bytes_access_validity_condition bytes Bytes index;
       ];
       failure = Index_out_of_bounds;
       dbg;
@@ -307,14 +282,10 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
     Checked {
       primitive =
         Unary (Box_number Naked_int32,
-          Prim (Binary (String_or_bigstring_load (String, Thirty_two),
+          Prim (Binary (String_or_bigstring_load (Bytes, Thirty_two),
             bytes, index)));
       validity_conditions = [
-        Binary (Int_comp (Tagged_immediate, Signed, Ge), index,
-          Simple (Simple.const (Simple.Const.Tagged_immediate
-            (Immediate.int (Targetint.OCaml.zero)))));
-        Binary (Int_comp (Tagged_immediate, Signed, Lt), index,
-          Prim (Unary (String_length Bytes, bytes)));
+        string_or_bytes_access_validity_condition bytes Bytes index;
       ];
       failure = Index_out_of_bounds;
       dbg;
@@ -323,14 +294,10 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
     Checked {
       primitive =
         Unary (Box_number Naked_int64,
-          Prim (Binary (String_or_bigstring_load (String, Sixty_four),
+          Prim (Binary (String_or_bigstring_load (Bytes, Sixty_four),
             bytes, index)));
       validity_conditions = [
-        Binary (Int_comp (Tagged_immediate, Signed, Ge), index,
-          Simple (Simple.const (Simple.Const.Tagged_immediate
-            (Immediate.int (Targetint.OCaml.zero)))));
-        Binary (Int_comp (Tagged_immediate, Signed, Lt), index,
-          Prim (Unary (String_length Bytes, bytes)));
+        string_or_bytes_access_validity_condition bytes Bytes index;
       ];
       failure = Index_out_of_bounds;
       dbg;
@@ -351,11 +318,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
         Ternary (Bytes_or_bigstring_set (Bytes, Sixteen),
           bytes, index, new_value);
       validity_conditions = [
-        Binary (Int_comp (Tagged_immediate, Signed, Ge), index,
-          Simple (Simple.const (Simple.Const.Tagged_immediate
-            (Immediate.int (Targetint.OCaml.zero)))));
-        Binary (Int_comp (Tagged_immediate, Signed, Lt), index,
-          Prim (Unary (String_length Bytes, bytes)));
+        string_or_bytes_access_validity_condition bytes Bytes index;
       ];
       failure = Index_out_of_bounds;
       dbg;
@@ -366,11 +329,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
         Ternary (Bytes_or_bigstring_set (Bytes, Thirty_two),
           bytes, index, new_value);
       validity_conditions = [
-        Binary (Int_comp (Tagged_immediate, Signed, Ge), index,
-          Simple (Simple.const (Simple.Const.Tagged_immediate
-            (Immediate.int (Targetint.OCaml.zero)))));
-        Binary (Int_comp (Tagged_immediate, Signed, Lt), index,
-          Prim (Unary (String_length Bytes, bytes)));
+        string_or_bytes_access_validity_condition bytes Bytes index;
       ];
       failure = Index_out_of_bounds;
       dbg;
@@ -381,11 +340,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
         Ternary (Bytes_or_bigstring_set (Bytes, Sixty_four),
           bytes, index, new_value);
       validity_conditions = [
-        Binary (Int_comp (Tagged_immediate, Signed, Ge), index,
-          Simple (Simple.const (Simple.Const.Tagged_immediate
-            (Immediate.int (Targetint.OCaml.zero)))));
-        Binary (Int_comp (Tagged_immediate, Signed, Lt), index,
-          Prim (Unary (String_length Bytes, bytes)));
+        string_or_bytes_access_validity_condition bytes Bytes index;
       ];
       failure = Index_out_of_bounds;
       dbg;
@@ -680,11 +635,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
         Ternary (Bytes_or_bigstring_set (Bytes, Eight),
           bytes, index, new_value);
       validity_conditions = [
-        Binary (Int_comp (Tagged_immediate, Signed, Ge), index,
-          Simple (Simple.const (Simple.Const.Tagged_immediate
-            (Immediate.int (Targetint.OCaml.zero)))));
-        Binary (Int_comp (Tagged_immediate, Signed, Lt), index,
-          Prim (Unary (String_length Bytes, bytes)));
+        string_or_bytes_access_validity_condition bytes Bytes index;
       ];
       failure = Index_out_of_bounds;
       dbg;
@@ -749,7 +700,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
     let layout = C.convert_bigarray_layout layout in
     Variadic (Bigarray_set (is_safe, num_dimensions, kind, layout), args)
   | Pbigarraydim dimension, [arg] ->
-    Unary (Bigarray_length { dimension; }, arg)
+    tag_int (Unary (Bigarray_length { dimension; }, arg))
   | Pbigstring_load_16 true, [arg1; arg2] ->
     Binary (String_or_bigstring_load (Bigstring, Sixteen), arg1, arg2)
   | Pbigstring_load_16 false, [arg1; arg2] ->
@@ -777,11 +728,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
         Ternary (Bytes_or_bigstring_set (Bigstring, Sixteen),
           bigstring, index, new_value);
       validity_conditions = [
-        Binary (Int_comp (Tagged_immediate, Signed, Ge), index,
-          Simple (Simple.const (Simple.Const.Tagged_immediate
-            (Immediate.int (Targetint.OCaml.zero)))));
-        Binary (Int_comp (Tagged_immediate, Signed, Lt), index,
-          Prim (Unary (Bigarray_length { dimension = 0; }, bigstring)));
+        bigstring_access_validity_condition bigstring index;
       ];
       failure = Index_out_of_bounds;
       dbg;
@@ -792,11 +739,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
         Ternary (Bytes_or_bigstring_set (Bigstring, Thirty_two),
           bigstring, index, new_value);
       validity_conditions = [
-        Binary (Int_comp (Tagged_immediate, Signed, Ge), index,
-          Simple (Simple.const (Simple.Const.Tagged_immediate
-            (Immediate.int (Targetint.OCaml.zero)))));
-        Binary (Int_comp (Tagged_immediate, Signed, Lt), index,
-          Prim (Unary (Bigarray_length { dimension = 0; }, bigstring)));
+        bigstring_access_validity_condition bigstring index;
       ];
       failure = Index_out_of_bounds;
       dbg;
@@ -807,11 +750,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
         Ternary (Bytes_or_bigstring_set (Bigstring, Sixty_four),
           bigstring, index, new_value);
       validity_conditions = [
-        Binary (Int_comp (Tagged_immediate, Signed, Ge), index,
-          Simple (Simple.const (Simple.Const.Tagged_immediate
-            (Immediate.int (Targetint.OCaml.zero)))));
-        Binary (Int_comp (Tagged_immediate, Signed, Lt), index,
-          Prim (Unary (Bigarray_length { dimension = 0; }, bigstring)));
+        bigstring_access_validity_condition bigstring index;
       ];
       failure = Index_out_of_bounds;
       dbg;
