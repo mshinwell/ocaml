@@ -935,7 +935,8 @@ and apply_cont env e =
    spilled on the stack). *)
 and apply_cont_exn env e k = function
   | res :: extra ->
-      assert (Apply_cont_expr.trap_action e = None);
+      assert (match Apply_cont_expr.trap_action e with
+          | Some Pop _ -> true| _ -> false);
       let exn, env, _ = simple env res in
       let extra, env, _ = arg_list env extra in
       let mut_vars = Env.get_exn_extra_args env k in
