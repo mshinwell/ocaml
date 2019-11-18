@@ -46,10 +46,8 @@ let typ_val = Cmm.typ_val
 let typ_float = Cmm.typ_float
 let typ_int64 = C.typ_int64
 
-
 (* Result for translating a program,
    named R instead of Result to avoid shadowing *)
-
 module R = struct
 
   type t = {
@@ -925,7 +923,8 @@ and apply_cont env e =
   let args = Apply_cont_expr.args e in
   if Continuation.is_exn k then
     apply_cont_exn env e k args
-  else if Continuation.equal (Env.return_cont env) k then
+  else if Continuation.equal (Env.return_cont env) k
+       && Apply_cont_expr.trap_action e = None then
     apply_cont_ret env e k args
   else
     apply_cont_regular env e k args
@@ -936,6 +935,7 @@ and apply_cont env e =
    spilled on the stack). *)
 and apply_cont_exn env e k = function
   | res :: extra ->
+      assert (Apply_cont_expr.trap_action e = None);
       let exn, env, _ = simple env res in
       let extra, env, _ = arg_list env extra in
       let mut_vars = Env.get_exn_extra_args env k in
@@ -954,8 +954,12 @@ and apply_cont_exn env e k = function
 (* A call to the return continuation of the current block simply is the return value
    for the current block being translated. *)
 and apply_cont_ret env e k = function
-  | [] -> C.void
+  | [] ->
+      assert (Apply_cont_expr.trap_action e = None);
+      let wrap, _ = Env.flush_delayed_lets env in
+      wrap C.void
   | [res] ->
+      assert (Apply_cont_expr.trap_action e = None);
       let res, env, _ = simple env res in
       let wrap, _ = Env.flush_delayed_lets env in
       wrap res
@@ -1319,12 +1323,15 @@ let computation_wrapper offsets used_closure_vars c =
       Env.dummy offsets used_closure_vars, (fun x -> x)
   | Some (c : Flambda_static.Program_body.Computation.t) ->
       (* The env for the computation is given a dummy continuation,
-         since the return continuation will be bound in the env. *)
+         since the return continuation will be explictly bound to a
+         jump before translating the computation. *)
       let dummy_k = Continuation.create () in
       let k_exn = Exn_continuation.exn_handler c.exn_continuation in
       let c_env = Env.mk offsets dummy_k k_exn used_closure_vars in
       (* The environment for the static structure update must contain the
-         variables produced by the computation *)
+         variables produced by the computation. It is given dummy
+         continuations, given that the return continuation will not
+         be used. *)
       let s_env = Env.mk offsets dummy_k dummy_k used_closure_vars in
       let s_env, vars = var_list s_env c.computed_values in
       (* Wrap the static structure update expression [e] by manually
@@ -1383,15 +1390,33 @@ let function_flags () =
 let function_decl offsets used_closure_vars fun_name _ d =
   Profile.record_call ~accumulate:true fun_name (fun () ->
     let fun_dbg = Function_declaration.dbg d in
+    let result_arity = Function_declaration.result_arity d in
+    let ret_machtype = machtype_of_return_arity result_arity in
     let p = Function_declaration.params_and_body d in
     Function_params_and_body.pattern_match p
       ~f:(fun ~return_continuation:k k_exn vars ~body ~my_closure ->
           try
             let args = function_args vars my_closure body in
             let k_exn = Exn_continuation.exn_handler k_exn in
+            (* Init the env and create a jump id for the ret closure
+               in case a trap action is attached to one of tis call *)
             let env = Env.mk offsets k k_exn used_closure_vars in
+            let id, env = Env.add_jump_cont env [ret_machtype] k in
+            let fun_handle_var = Backend_var.create_local "*fun_res*" in
+            let fun_handler = C.var fun_handle_var in
+            let fun_handle_vars = [
+              Backend_var.With_provenance.create fun_handle_var,
+              ret_machtype
+            ] in
+            (* translate the arg list and body, inserting a catch for the
+               return continuation. *)
             let env, fun_args = var_list env args in
-            let fun_body = expr env body in
+            let fun_body =
+              C.ccatch
+                ~rec_flag:false
+                ~body:(expr env body)
+                ~handlers:[C.handler id fun_handle_vars fun_handler]
+            in
             let fun_flags = function_flags () in
             C.fundecl fun_name fun_args fun_body fun_flags fun_dbg
           with Misc.Fatal_error ->
