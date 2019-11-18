@@ -433,7 +433,10 @@ type unary_primitive =
       move_from : Closure_id.t;
       move_to : Closure_id.t;
     }
-  | Project_var of Var_within_closure.t
+  | Project_var of {
+      closure_id : Closure_id.t;
+      var : Var_within_closure.t;
+    }
 
 (* Here and below, operations that are genuine projections shouldn't be
    eligible for CSE, since we deal with projections through types. *)
@@ -529,8 +532,13 @@ let compare_unary_primitive p1 p2 =
     let c = Closure_id.compare move_from1 move_from2 in
     if c <> 0 then c
     else Closure_id.compare move_to1 move_to2
-  | Project_var var_within_closure1, Project_var var_within_closure2 ->
-    Var_within_closure.compare var_within_closure1 var_within_closure2
+  | Project_var {
+      closure_id = closure_id1; var = var_within_closure1; },
+    Project_var {
+      closure_id = closure_id2; var = var_within_closure2; } ->
+      let c = Closure_id.compare closure_id1 closure_id2 in
+      if c <> 0 then c
+      else Var_within_closure.compare var_within_closure1 var_within_closure2
   | (Duplicate_block _
     | Is_int
     | Get_tag
@@ -584,8 +592,9 @@ let print_unary_primitive ppf p =
         (%a \u{2192} %a))@]"
       Closure_id.print move_from
       Closure_id.print move_to
-  | Project_var var_within_closure ->
-    Format.fprintf ppf "@[(Project_var@ %a)@]"
+  | Project_var { closure_id; var = var_within_closure; } ->
+    Format.fprintf ppf "@[(Project_var@ (%a@ %a))@]"
+      Closure_id.print closure_id
       Var_within_closure.print var_within_closure
 
 let arg_kind_of_unary_primitive p =
@@ -1112,7 +1121,9 @@ let invariant env t =
       E.check_simple_is_bound_and_of_kind env closure K.value;
       E.add_use_of_closure_id env move_from;
       E.add_use_of_closure_id env move_to
-    | Project_var var, closure ->
+    | Project_var { closure_id; var}, closure ->
+      (* CR Gbury: add an invariant using closure_id ? *)
+      E.add_use_of_closure_id env closure_id;
       E.add_use_of_var_within_closure env var;
       E.check_simple_is_bound_and_of_kind env closure K.value
     | Duplicate_block _, _
@@ -1269,7 +1280,8 @@ let equal t1 t2 =
 
 let free_names t =
   match t with
-  | Unary (Project_var clos_var, x0) ->
+  | Unary (Project_var { var = clos_var; _ }, x0) ->
+    (* CR: Add closure_id to the free_names/used_closure_vars ? *)
     Name_occurrences.add_closure_var (Simple.free_names x0)
       clos_var Name_mode.normal
   | Unary (_prim, x0) -> Simple.free_names x0

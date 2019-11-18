@@ -36,7 +36,7 @@ let simplify_select_closure ~move_from ~move_to
     ~shape:(T.at_least_the_closures_with_ids ~this_closure:move_from closures)
     ~result_var ~result_kind:K.value
 
-let simplify_project_var closure_element dacc ~original_term
+let simplify_project_var _closure_id closure_element dacc ~original_term
       ~arg:_ ~arg_ty:closure_ty ~result_var =
   Simplify_common.simplify_projection
     dacc ~original_term ~deconstructing:closure_ty
@@ -391,7 +391,8 @@ let simplify_unary_primitive dacc (prim : P.unary_primitive)
       let original_term = Named.create_prim original_prim dbg in
       let simplifier =
         match prim with
-        | Project_var closure_element -> simplify_project_var closure_element
+        | Project_var { closure_id; var; } ->
+          simplify_project_var closure_id var
         | Select_closure { move_from; move_to; } ->
           simplify_select_closure ~move_from ~move_to
         | Unbox_number boxable_number_kind ->

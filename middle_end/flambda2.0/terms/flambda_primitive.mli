@@ -222,8 +222,13 @@ type unary_primitive =
     }
     (** Given the pointer to one closure in some particular set of closures,
         return the pointer to another closure in the same set. *)
-  | Project_var of Var_within_closure.t
-    (** Read a value from the environment of a closure. *)
+  | Project_var of {
+      closure_id : Closure_id.t;
+      var : Var_within_closure.t;
+    }
+  (** Read a value from the environment of a closure. Also specifies
+      the id of the closure pointed at in the set of closures
+      given as argument. *)
 
 (** Binary arithmetic operations on integers. *)
 type binary_int_arith_op =

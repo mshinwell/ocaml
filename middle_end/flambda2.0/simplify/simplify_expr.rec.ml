@@ -416,7 +416,12 @@ and simplify_direct_partial_application
             in
             Expr.create_let applied_arg
               (Named.create_prim
-                (Unary (Project_var closure_var, Simple.var my_closure))
+                 (Unary (Project_var {
+                      (* CR Gbury: should this be callee's
+                         closure_id instead ? *)
+                      closure_id = wrapper_closure_id;
+                      var = closure_var;
+                    }, Simple.var my_closure))
                 dbg)
               expr)
         (Expr.create_apply full_application)
