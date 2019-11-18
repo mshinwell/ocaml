@@ -251,8 +251,8 @@ let close_c_call t ~let_bound_var (prim : Primitive.description)
     Flambda.Expr.create_apply apply
   in
   let call : Flambda.Expr.t =
-    List.fold_right2 (fun arg (arg_repr : Primitive.native_repr)
-            (call : Simple.t list -> Expr.t) ->
+    List.fold_left2 (fun (call : Simple.t list -> Expr.t)
+            arg (arg_repr : Primitive.native_repr) ->
         let unbox_arg : P.unary_primitive option =
           match arg_repr with
           | Same_as_ocaml_repr -> None
@@ -273,9 +273,10 @@ let close_c_call t ~let_bound_var (prim : Primitive.description)
              Expr.create_let unboxed_arg'
                (Named.create_prim (Unary (named, arg)) dbg)
                (call ((Simple.var unboxed_arg) :: args))))
+      call
       args
       prim.prim_native_repr_args
-      call []
+      []
   in
   (* We always replace the original Ilambda [Let] with an Flambda
      expression, so we call [k] with [None], to get just the closure-converted
