@@ -393,8 +393,8 @@ let simplify_unary_primitive dacc (prim : P.unary_primitive)
       let original_term = Named.create_prim original_prim dbg in
       let simplifier =
         match prim with
-        | Project_var { closure_id; var; } ->
-          simplify_project_var closure_id var
+        | Project_var { project_from; var; } ->
+          simplify_project_var project_from var
         | Select_closure { move_from; move_to; } ->
           simplify_select_closure ~move_from ~move_to
         | Unbox_number boxable_number_kind ->

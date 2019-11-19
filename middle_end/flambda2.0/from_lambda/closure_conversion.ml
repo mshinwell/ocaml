@@ -768,7 +768,7 @@ and close_one_function t ~external_env ~by_closure_id decl
           Expr.create_let var
             (Named.create_prim
               (Unary (Project_var {
-                 closure_id = my_closure_id;
+                 project_from = my_closure_id;
                  var = var_within_closure;
                }, my_closure'))
               Debuginfo.none)

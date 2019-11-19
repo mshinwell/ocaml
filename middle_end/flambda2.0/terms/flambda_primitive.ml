@@ -434,7 +434,7 @@ type unary_primitive =
       move_to : Closure_id.t;
     }
   | Project_var of {
-      closure_id : Closure_id.t;
+      project_from : Closure_id.t;
       var : Var_within_closure.t;
     }
 
@@ -533,9 +533,9 @@ let compare_unary_primitive p1 p2 =
     if c <> 0 then c
     else Closure_id.compare move_to1 move_to2
   | Project_var {
-      closure_id = closure_id1; var = var_within_closure1; },
+      project_from = closure_id1; var = var_within_closure1; },
     Project_var {
-      closure_id = closure_id2; var = var_within_closure2; } ->
+      project_from = closure_id2; var = var_within_closure2; } ->
       let c = Closure_id.compare closure_id1 closure_id2 in
       if c <> 0 then c
       else Var_within_closure.compare var_within_closure1 var_within_closure2
@@ -592,9 +592,9 @@ let print_unary_primitive ppf p =
         (%a \u{2192} %a))@]"
       Closure_id.print move_from
       Closure_id.print move_to
-  | Project_var { closure_id; var = var_within_closure; } ->
+  | Project_var { project_from; var = var_within_closure; } ->
     Format.fprintf ppf "@[(Project_var@ (%a@ %a))@]"
-      Closure_id.print closure_id
+      Closure_id.print project_from
       Var_within_closure.print var_within_closure
 
 let arg_kind_of_unary_primitive p =
@@ -1121,9 +1121,8 @@ let invariant env t =
       E.check_simple_is_bound_and_of_kind env closure K.value;
       E.add_use_of_closure_id env move_from;
       E.add_use_of_closure_id env move_to
-    | Project_var { closure_id; var}, closure ->
-      (* CR Gbury: add an invariant using closure_id ? *)
-      E.add_use_of_closure_id env closure_id;
+    | Project_var { project_from; var}, closure ->
+      E.add_use_of_closure_id env project_from;
       E.add_use_of_var_within_closure env var;
       E.check_simple_is_bound_and_of_kind env closure K.value
     | Duplicate_block _, _
