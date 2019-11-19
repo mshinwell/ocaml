@@ -37,7 +37,9 @@ let simplify_select_closure ~move_from ~move_to
     ~result_var ~result_kind:K.value
 
 let simplify_project_var _closure_id closure_element dacc ~original_term
-      ~arg:_ ~arg_ty:closure_ty ~result_var =
+      ~arg:_closure ~arg_ty:closure_ty ~result_var =
+  (* CR pchambart: the shape should assert that the closure contains
+     the closure_id we are projecting from *)
   Simplify_common.simplify_projection
     dacc ~original_term ~deconstructing:closure_ty
     ~shape:(T.closure_with_at_least_this_closure_var closure_element
