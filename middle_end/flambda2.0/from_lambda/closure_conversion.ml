@@ -767,10 +767,10 @@ and close_one_function t ~external_env ~by_closure_id decl
           let var = VB.create var Name_mode.normal in
           Expr.create_let var
             (Named.create_prim
-               (Unary (Project_var {
-                    closure_id = my_closure_id;
-                    var = var_within_closure;
-                  }, my_closure'))
+              (Unary (Project_var {
+                 closure_id = my_closure_id;
+                 var = var_within_closure;
+               }, my_closure'))
               Debuginfo.none)
             body)
       var_within_closures_to_bind
