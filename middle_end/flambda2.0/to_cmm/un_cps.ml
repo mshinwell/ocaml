@@ -465,9 +465,9 @@ let unary_primitive env dbg f arg =
       let diff = (Env.closure_offset env c2) - (Env.closure_offset env c1) in
       C.infix_field_address ~dbg arg diff
   | Project_var { project_from; var; } ->
-    let offset = Env.env_var_offset env var in
-    let base = Env.closure_offset env project_from in
-    C.get_field_gen Asttypes.Immutable arg (offset - base) dbg
+      let offset = Env.env_var_offset env var in
+      let base = Env.closure_offset env project_from in
+      C.get_field_gen Asttypes.Immutable arg (offset - base) dbg
 
 let binary_primitive env dbg f x y =
   match (f : Flambda_primitive.binary_primitive) with

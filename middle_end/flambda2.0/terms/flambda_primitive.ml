@@ -1279,8 +1279,7 @@ let equal t1 t2 =
 
 let free_names t =
   match t with
-  | Unary (Project_var { var = clos_var; _ }, x0) ->
-    (* CR: Add closure_id to the free_names/used_closure_vars ? *)
+  | Unary (Project_var { var = clos_var; project_from = _ }, x0) ->
     Name_occurrences.add_closure_var (Simple.free_names x0)
       clos_var Name_mode.normal
   | Unary (_prim, x0) -> Simple.free_names x0

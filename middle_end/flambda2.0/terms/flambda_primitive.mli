@@ -226,9 +226,9 @@ type unary_primitive =
       project_from : Closure_id.t;
       var : Var_within_closure.t;
     }
-  (** Read a value from the environment of a closure. Also specifies
-      the id of the closure pointed at in the set of closures
-      given as argument. *)
+    (** Read a value from the environment of a closure. Also specifies
+        the id of the closure pointed at in the set of closures
+        given as argument. *)
 
 (** Binary arithmetic operations on integers. *)
 type binary_int_arith_op =
