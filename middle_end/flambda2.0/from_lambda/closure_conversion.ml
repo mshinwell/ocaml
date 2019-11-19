@@ -14,7 +14,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-30-40-41-42"]
+[@@@ocaml.warning "+a-4-30-40-41-42-66"]
 
 open! Int_replace_polymorphic_compare
 
@@ -493,9 +493,6 @@ let rec close t env (ilam : Ilambda.t) : Expr.t =
     let apply_cont = Flambda.Apply_cont.create ?trap_action cont ~args in
     Flambda.Expr.create_apply_cont apply_cont
   | Switch (scrutinee, sw) ->
-    if List.length sw.consts < 1 then
-      Expr.create_invalid ()
-    else
       let arms =
         List.map (fun (case, arm) ->
             Immediate.int (Targetint.OCaml.of_int case), arm)
@@ -522,8 +519,11 @@ let rec close t env (ilam : Ilambda.t) : Expr.t =
           (Unary (Unbox_number Untagged_immediate, scrutinee))
           Debuginfo.none
       in
-      Expr.create_let untagged_scrutinee' untag
-        (Expr.create_switch ~scrutinee:(Simple.var untagged_scrutinee) ~arms)
+      if Immediate.Map.is_empty arms then
+        Expr.create_invalid ()
+      else
+        Expr.create_let untagged_scrutinee' untag
+          (Expr.create_switch ~scrutinee:(Simple.var untagged_scrutinee) ~arms)
 
 and close_named t env ~let_bound_var (named : Ilambda.named)
       (k : Named.t option -> Expr.t) : Expr.t =
