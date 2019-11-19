@@ -46,6 +46,7 @@ module Static_part : sig
     | Block : Tag.Scannable.t * mutable_or_immutable
         * (Of_kind_value.t list) -> Flambda_kind.value t
     | Fabricated_block : Variable.t -> Flambda_kind.value t
+    (* CR mshinwell: Check the free names of the set of closures *)
     | Set_of_closures : Flambda.Set_of_closures.t -> Flambda_kind.fabricated t
     | Boxed_float : Numbers.Float_by_bit_pattern.t or_variable
         -> Flambda_kind.value t
@@ -92,6 +93,8 @@ module Program_body : sig
           Since we don't really do any transformations on these structures, the
           [computed_values] variables are not treated up to alpha conversion. *)
     }
+
+    val print : Format.formatter -> t -> unit
 
     val iter_expr : t -> f:(Flambda.Expr.t -> unit) -> unit
 

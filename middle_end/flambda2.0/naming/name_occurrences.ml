@@ -471,6 +471,7 @@ let rec union_list ts =
 let variables t = For_variables.keys t.variables
 let symbols t = For_symbols.keys t.symbols
 let closure_vars t = For_closure_vars.keys t.closure_vars
+let continuations t = For_continuations.keys t.continuations
 
 let names t =
   Name.Set.union (Name.set_of_var_set (variables t))

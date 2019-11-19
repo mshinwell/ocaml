@@ -28,7 +28,8 @@ type t
 val print : Format.formatter -> t -> unit
 
 val create
-   : Flambda_type.Typing_env.t
+   : ?computation:Flambda_static.Program_body.Computation.t
+  -> Flambda_type.Typing_env.t
   -> Flambda_type.t Symbol.Map.t
   -> 'k Flambda_static.Program_body.Bound_symbols.t
   -> 'k Flambda_static.Static_part.t
@@ -49,3 +50,5 @@ val introduce
   -> Flambda_type.Typing_env.t
 
 val static_structure : t -> Flambda_static.Program_body.Static_structure.t
+
+val computation : t -> Flambda_static.Program_body.Computation.t option

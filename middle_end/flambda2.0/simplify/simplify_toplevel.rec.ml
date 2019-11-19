@@ -20,6 +20,12 @@ open! Simplify_import
 
 let simplify_toplevel dacc expr ~return_continuation ~return_arity
       exn_continuation ~return_cont_scope ~exn_cont_scope =
+  (* CR mshinwell: Check [return_continuation] is of sort [Toplevel_return]
+     and [exn_continuation] is of sort [Exn] *)
+  let dacc =
+    DA.map_denv dacc ~f:(fun denv ->
+      DE.set_toplevel_exn_cont denv exn_continuation)
+  in
   let expr, cont_uses_env, uacc =
     try
       Simplify_expr.simplify_expr dacc expr (fun cont_uses_env r ->

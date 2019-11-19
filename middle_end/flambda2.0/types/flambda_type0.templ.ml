@@ -62,6 +62,9 @@ module Make
   let unknown_types_from_arity arity =
     List.map (fun kind -> unknown kind) arity
 
+  let bottom_types_from_arity arity =
+    List.map (fun kind -> bottom kind) arity
+
   let is_bottom env t =
     match expand_head t env with
     | Resolved (Value Bottom)
@@ -666,6 +669,14 @@ Format.eprintf "reifying %a\n%!" print t;
                   List.filter_map
                     (fun field_type : symbol_or_tagged_immediate option ->
                       match
+                        (* XXX This is what needs to change to cope with
+                           recursive reification.  We need to be open to the
+                           possibility that [field_type] is in fact the type
+                           of a reifiable thing itself.  This probably needs
+                           to be subject to the same depth limit as unboxing.
+
+                           Maybe try implementing this independently and trying
+                           on examples first. *)
                         prove_equals_to_symbol_or_tagged_immediate env
                           field_type
                       with

@@ -88,6 +88,8 @@ val symbols : t -> Symbol.Set.t
 
 val names : t -> Name.Set.t
 
+val continuations : t -> Continuation.Set.t
+
 val closure_vars : t -> Var_within_closure.Set.t
 
 val mem_var : t -> Variable.t -> bool

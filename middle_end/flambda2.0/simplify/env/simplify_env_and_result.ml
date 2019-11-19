@@ -32,11 +32,14 @@ end = struct
     can_inline : bool;
     inlining_depth_increment : int;
     float_const_prop : bool;
+    still_at_toplevel : bool;
+    toplevel_exn_cont : Exn_continuation.t;
   }
 
   let print ppf { backend = _; round; typing_env;
                   inlined_debuginfo; can_inline;
                   inlining_depth_increment; float_const_prop;
+                  still_at_toplevel; toplevel_exn_cont;
                 } =
     Format.fprintf ppf "@[<hov 1>(\
         @[<hov 1>(round@ %d)@]@ \
@@ -44,7 +47,9 @@ end = struct
         @[<hov 1>(inlined_debuginfo@ %a)@]@ \
         @[<hov 1>(can_inline@ %b)@]@ \
         @[<hov 1>(inlining_depth_increment@ %d)@]@ \
-        @[<hov 1>(float_const_prop@ %b)@]\
+        @[<hov 1>(float_const_prop@ %b)@]@ \
+        @[<hov 1>(still_at_toplevel@ %b)@]@ \
+        @[<hov 1>(toplevel_exn_cont@ %a)@]\
         )@]"
       round
       TE.print typing_env
@@ -52,10 +57,12 @@ end = struct
       can_inline
       inlining_depth_increment
       float_const_prop
+      still_at_toplevel
+      Exn_continuation.print toplevel_exn_cont
 
   let invariant _t = ()
 
-  let create ~round ~backend ~float_const_prop =
+  let create ~round ~backend ~float_const_prop ~toplevel_exn_cont =
     (* CR mshinwell: [resolver] should come from [backend] *)
     let resolver _export_id = None in
     { backend;
@@ -65,6 +72,8 @@ end = struct
       can_inline = true;
       inlining_depth_increment = 0;
       float_const_prop;
+      still_at_toplevel = true;
+      toplevel_exn_cont;
     }
 
   let resolver t = TE.resolver t.typing_env
@@ -75,6 +84,15 @@ end = struct
   let can_inline t = t.can_inline
   let float_const_prop t = t.float_const_prop
   let get_inlining_depth_increment t = t.inlining_depth_increment
+  let still_at_toplevel t = t.still_at_toplevel
+
+  let set_toplevel_exn_cont t toplevel_exn_cont =
+    { t with toplevel_exn_cont; }
+
+  let toplevel_exn_continuation t = t.toplevel_exn_cont
+
+  let enter_continuation_handler t =
+    { t with still_at_toplevel = false; }
 
   let set_inlining_depth_increment t inlining_depth_increment =
     { t with inlining_depth_increment; }
@@ -92,8 +110,9 @@ end = struct
   let enter_closure { backend; round; typing_env;
                       inlined_debuginfo = _; can_inline;
                       inlining_depth_increment = _;
-                      float_const_prop;
-                    } =
+                      float_const_prop; still_at_toplevel = _;
+                      toplevel_exn_cont = _;
+                    } ~toplevel_exn_cont =
     { backend;
       round;
       typing_env = TE.create_using_resolver_and_symbol_bindings_from typing_env;
@@ -101,6 +120,8 @@ end = struct
       can_inline;
       inlining_depth_increment = 0;
       float_const_prop;
+      still_at_toplevel = false;
+      toplevel_exn_cont;
     }
 
   let define_variable t var kind =

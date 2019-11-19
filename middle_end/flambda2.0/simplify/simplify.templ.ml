@@ -21,9 +21,14 @@
 (* -- module rec binding here -- *)
 
 let run ~backend ~round program =
+  let dummy_toplevel_exn_cont = (* CR mshinwell: ugly? *)
+    Exn_continuation.create ~exn_handler:(Continuation.create ~sort:Exn ())
+      ~extra_args:[]
+  in
   let denv =
     Simplify_env_and_result.Downwards_env.create ~round
       ~backend
       ~float_const_prop:!Clflags.float_const_prop
+      ~toplevel_exn_cont:dummy_toplevel_exn_cont
   in
   Simplify_static.simplify_program denv program

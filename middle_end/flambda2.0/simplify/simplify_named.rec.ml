@@ -157,11 +157,13 @@ let simplify_function dacc closure_id function_decl ~all_function_decls_in_set
       ~closure_bound_names ~closure_element_types =
   let name = Format.asprintf "%a" Closure_id.print closure_id in
   Profile.record_call ~accumulate:true name (fun () ->
-    let denv_after_enter_closure = DE.enter_closure (DA.denv dacc) in
     let params_and_body, r =
       Function_params_and_body.pattern_match (FD.params_and_body function_decl)
         ~f:(fun ~return_continuation exn_continuation params ~body
                 ~my_closure ->
+          let denv_after_enter_closure =
+            DE.enter_closure (DA.denv dacc) ~toplevel_exn_cont:exn_continuation
+          in
           let dacc =
             DA.map_denv dacc ~f:(fun denv_outside_function ->
               denv_inside_function ~denv_outside_function

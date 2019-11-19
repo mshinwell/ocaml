@@ -33,6 +33,7 @@ module type Downwards_env = sig
      : round:int
     -> backend:(module Flambda2_backend_intf.S)
     -> float_const_prop:bool
+    -> toplevel_exn_cont:Exn_continuation.t
     -> t
 
   (** Obtain the first-class module that gives information about the
@@ -43,7 +44,15 @@ module type Downwards_env = sig
 
   val float_const_prop : t -> bool
 
-  val enter_closure : t -> t
+  val enter_closure : t -> toplevel_exn_cont:Exn_continuation.t -> t
+
+  val enter_continuation_handler : t -> t
+
+  val set_toplevel_exn_cont : t -> Exn_continuation.t -> t
+
+  val toplevel_exn_continuation : t -> Exn_continuation.t
+
+  val still_at_toplevel : t -> bool
 
   val increment_continuation_scope_level : t -> t
 

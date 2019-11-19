@@ -326,8 +326,8 @@ let simplify_static_structure dacc
   next_dacc, S (List.rev str_rev)
 
 let simplify_return_continuation_handler dacc
-      ~extra_params_and_args:_ cont
-      (return_cont_handler : Return_cont_handler.Opened.t) _k =
+      ~(extra_params_and_args : Continuation_extra_params_and_args.t)
+      cont (return_cont_handler : Return_cont_handler.Opened.t) _k =
   let dacc, static_structure =
     simplify_static_structure dacc return_cont_handler.static_structure
   in
@@ -342,17 +342,24 @@ let simplify_return_continuation_handler dacc
           Variable.Set.mem (KP.var param) free_variables)
         original_computed_values
     in
+    let used_extra_params =
+    (*
+      List.filter (fun extra_param ->
+          Name_occurrences.mem_var free_names (KP.var extra_param))
+    *)
+        extra_params_and_args.extra_params
+    in
     let handler : Return_cont_handler.t =
-      { computed_values = used_computed_values;
+      { computed_values = used_computed_values @ used_extra_params;
         static_structure;
       }
     in
     let rewrite =
       Apply_cont_rewrite.create ~original_params:original_computed_values
         ~used_params:(KP.Set.of_list used_computed_values)
-        ~extra_params:[]
-        ~extra_args:Apply_cont_rewrite_id.Map.empty
-        ~used_extra_params:KP.Set.empty
+        ~extra_params:extra_params_and_args.extra_params
+        ~extra_args:extra_params_and_args.extra_args
+        ~used_extra_params:(KP.Set.of_list used_extra_params)
     in
     let uenv = UE.add_apply_cont_rewrite UE.empty cont rewrite in
     handler, used_computed_values, uenv
@@ -385,6 +392,10 @@ let simplify_definition dacc (defn : Program_body.Definition.t) =
       let exn_continuation = computation.exn_continuation in
       let exn_cont_handler : Exn_cont_handler.t = () in
       let expr, _handler, (computed_values, static_structure, dacc), uacc =
+        let dacc =
+          DA.map_denv dacc ~f:(fun denv ->
+            DE.set_toplevel_exn_cont denv exn_continuation)
+        in
         let simplify_body dacc expr k =
           let expr, _handler, user_data, uacc =
             let simplify_body : _ Simplify_exn_cont.simplify_body =
@@ -457,7 +468,7 @@ let define_lifted_constants lifted_constants (body : Program_body.t) =
       if Static_structure.is_empty static_structure then body
       else
         let definition : Program_body.Definition.t =
-          { computation = None;
+          { computation = Lifted_constant.computation lifted_constant;
             static_structure;
           }
         in
