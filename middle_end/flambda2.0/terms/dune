@@ -11,10 +11,6 @@
     continuation_params_and_handler.rec.mli
     expr.rec.ml
     expr.rec.mli
-    function_declaration.rec.ml
-    function_declaration.rec.mli
-    function_declarations.rec.ml
-    function_declarations.rec.mli
     function_params_and_body.rec.ml
     function_params_and_body.rec.mli
     let_cont_expr.rec.ml
@@ -27,8 +23,6 @@
     non_recursive_let_cont_handler.rec.mli
     recursive_let_cont_handlers.rec.ml
     recursive_let_cont_handlers.rec.mli
-    set_of_closures.rec.ml
-    set_of_closures.rec.mli
   )
   (action (run ../scripts/assemble_rec_modules.sh
                template/flambda.templ.ml
