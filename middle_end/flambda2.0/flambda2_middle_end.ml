@@ -76,6 +76,7 @@ let print_flambda name ppf program =
 
 let middle_end0 ppf ~prefixname:_ ~backend ~size ~filename
       ~module_ident ~module_initializer =
+  Misc.Color.setup !Clflags.color;
   Profile.record_call "flambda2.0" (fun () ->
     let prepared_lambda, recursive_static_catches =
       Profile.record_call "prepare_lambda" (fun () ->

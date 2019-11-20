@@ -99,8 +99,15 @@ let inline dacc ~callee ~args function_decl
                 let kinded_params =
                   [KP.create (Parameter.wrap param) K.value]
                 in
+                let exn_handler =
+                  Exn_continuation.exn_handler apply_exn_continuation
+                in
+                let trap_action =
+                  Trap_action.Pop { exn_handler; raise_kind = None; }
+                in
                 let handler =
                   Expr.create_apply_cont (Apply_cont.create
+                    ~trap_action
                     (Exn_continuation.exn_handler apply_exn_continuation)
                     ~args:((Simple.var param) :: (List.map fst extra_args)))
                 in
