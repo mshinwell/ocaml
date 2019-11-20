@@ -24,8 +24,6 @@
 
 module Apply = Apply_expr
 module Apply_cont = Apply_cont_expr
-module Function_declaration = Function_declaration_expr
-module Set_of_closures = Set_of_closures_expr
 module Switch = Switch_expr
 
 (** The basic structure of the language ensures that:
