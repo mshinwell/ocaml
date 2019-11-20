@@ -19,7 +19,7 @@
 module TEE = Typing_env_extension
 
 type t = {
-  function_decls : Function_declaration_type.t Or_unknown.t Closure_id.Map.t;
+  function_decls : Function_declaration_type.t Closure_id.Map.t;
   closure_types : Product.Closure_id_indexed.t;
   closure_var_types : Product.Var_within_closure_indexed.t;
 }
@@ -44,9 +44,7 @@ let print_with_cache ~cache ppf
       @[<hov 1>(closure_types@ %a)@]@ \
       @[<hov 1>(closure_var_types@ %a)@]\
       )@]"
-    (Closure_id.Map.print
-      (Or_unknown.print
-        (Function_declaration_type.print_with_cache ~cache)))
+    (Closure_id.Map.print (Function_declaration_type.print_with_cache ~cache))
     function_decls
     (Product.Closure_id_indexed.print_with_cache ~cache) closure_types
     (Product.Var_within_closure_indexed.print_with_cache ~cache) closure_var_types
@@ -60,7 +58,7 @@ let widen t ~to_match =
   in
   let function_decls =
     Closure_id.Set.fold (fun closure_id function_decls ->
-        Closure_id.Map.add closure_id Or_unknown.Unknown function_decls)
+        Closure_id.Map.add closure_id Unknown function_decls)
       missing_function_decls
       t.function_decls
   in
@@ -98,8 +96,7 @@ struct
           | None, None | Some _, None | None, Some _ -> None
           | Some func_decl1, Some func_decl2 ->
             let func_decl, env_extension =
-              Function_declaration_type.meet_or_join_unknown
-                func_decl1 func_decl2
+              Function_declaration_type.meet_or_join func_decl1 func_decl2
             in
             Some func_decl)
         function_decls1 function_decls2

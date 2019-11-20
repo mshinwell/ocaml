@@ -16,14 +16,7 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
-module Variant : sig
-  type t = Type_of_kind_value0.Variant.t
-
-  val create
-     : immediates:Type_grammar.t Or_unknown.t
-    -> blocks:Row_like.For_blocks.t Or_unknown.t
-    -> t
-end
+val create_code : Term_language_code.t -> Type_of_kind_fabricated0.t
 
 include Type_descr_intf.S
   with type flambda_type := Type_grammar.t
@@ -31,4 +24,4 @@ include Type_descr_intf.S
   with type typing_env_extension := Typing_env_extension.t
   with type typing_env_level := Typing_env_level.t
   with type meet_env := Meet_env.t
-  with type head := Type_of_kind_value0.t
+  with type head := Type_of_kind_fabricated0.t

@@ -60,6 +60,8 @@ val add_name : t -> Name.t -> Name_mode.t -> t
 
 val add_closure_var : t -> Var_within_closure.t -> Name_mode.t -> t
 
+val add_code_id : t -> Code_id.t -> Name_mode.t -> t
+
 val singleton_name : Name.t -> Name_mode.t -> t
 
 val singleton_symbol : Symbol.t -> Name_mode.t -> t
@@ -93,6 +95,8 @@ val names : t -> Name.Set.t
 val continuations : t -> Continuation.Set.t
 
 val closure_vars : t -> Var_within_closure.Set.t
+
+val code_ids : t -> Code_id.Set.t
 
 val mem_var : t -> Variable.t -> bool
 

@@ -40,6 +40,11 @@ module Static_part : sig
   (** The mutability status of a block field. *)
   type mutable_or_immutable = Mutable | Immutable
 
+  type set_of_closures = {
+    code : Flambda.Function_params_and_body.t Code_id.Map.t;
+    closures : Flambda.Set_of_closures.t;
+  }
+
   (** The static structure of a symbol, possibly with holes, ready to be
       filled with values computed at runtime. *)
   type 'k t =
@@ -47,7 +52,7 @@ module Static_part : sig
         * (Of_kind_value.t list) -> Flambda_kind.value t
     | Fabricated_block : Variable.t -> Flambda_kind.value t
     (* CR mshinwell: Check the free names of the set of closures *)
-    | Set_of_closures : Flambda.Set_of_closures.t -> Flambda_kind.fabricated t
+    | Set_of_closures : set_of_closures -> Flambda_kind.fabricated t
     | Boxed_float : Numbers.Float_by_bit_pattern.t or_variable
         -> Flambda_kind.value t
     | Boxed_int32 : Int32.t or_variable -> Flambda_kind.value t
@@ -106,10 +111,12 @@ module Program_body : sig
       | Singleton : Symbol.t -> Flambda_kind.value t
         (** A binding of a single symbol of kind [Value]. *)
       | Set_of_closures : {
+          code_ids : Code_id.Set.t;
           closure_symbols : Symbol.t Closure_id.Map.t;
         } -> Flambda_kind.fabricated t
-        (** A binding of possibly multiple symbols to the individual closures
-            within a set of closures. *)
+        (** A recursive binding of possibly multiple symbols to the individual
+            closures within a set of closures; together with bindings of code
+            to code IDs. *)
 
     val print : Format.formatter -> _ t -> unit
 

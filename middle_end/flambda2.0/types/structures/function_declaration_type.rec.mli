@@ -21,7 +21,7 @@ type inlinable = {
   rec_info : Rec_info.t;
 }
 
-type t =
+type t0 =
   | Non_inlinable of {
       param_arity : Flambda_arity.t;
       result_arity : Flambda_arity.t;
@@ -29,11 +29,13 @@ type t =
     }
   | Inlinable of inlinable
 
+type t = t0 Or_unknown.t
+
 (* CR mshinwell: Add [create] and make [private]. *)
 
-val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
-
-val meet_or_join_or_unknown
-   : t Or_unknown.t
-  -> t Or_unknown.t
-  -> t Or_unknown.t * Typing_env_extension.t
+include Type_structure_intf.S
+  with type t := t
+  with type flambda_type := Type_grammar.t
+  with type typing_env := Typing_env.t
+  with type meet_env := Meet_env.t
+  with type typing_env_extension := Typing_env_extension.t

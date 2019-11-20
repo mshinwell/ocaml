@@ -16,6 +16,6 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
-include Type_descr.Make (Type_of_kind_value)
+include Type_descr.Make (Type_of_kind_fabricated0)
 
-val create_code : Function_params_and_body.t -> t
+let create_code = Type_of_kind_fabricated0.create_code
