@@ -139,12 +139,12 @@ let neq = binary Cmm.(Ccmpi Cne)
 let lt = binary Cmm.(Ccmpi Clt)
 let le = binary Cmm.(Ccmpi Cle)
 let gt = binary Cmm.(Ccmpi Cgt)
-let ge = binary Cmm.(Ccmpi Cgt)
+let ge = binary Cmm.(Ccmpi Cge)
 
 let ult = binary Cmm.(Ccmpa Clt)
 let ule = binary Cmm.(Ccmpa Cle)
 let ugt = binary Cmm.(Ccmpa Cgt)
-let uge = binary Cmm.(Ccmpa Cgt)
+let uge = binary Cmm.(Ccmpa Cge)
 
 let float_abs = unary Cmm.Cabsf
 let float_neg = unary Cmm.Cnegf
