@@ -863,7 +863,7 @@ let result_kind_of_binary_primitive p : result_kind =
   | Block_load (block_access_kind, _) ->
     Singleton (Block_access_kind.element_kind block_access_kind)
   | String_or_bigstring_load (_, (Eight | Sixteen)) ->
-    Singleton K.value
+    Singleton K.naked_immediate
   | String_or_bigstring_load (_, Thirty_two) ->
     Singleton K.naked_int32
   | String_or_bigstring_load (_, Sixty_four) ->

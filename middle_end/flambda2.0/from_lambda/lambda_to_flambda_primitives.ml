@@ -59,7 +59,8 @@ let string_or_bytes_access_validity_condition str kind index : H.expr_primitive 
 
 let string_or_bytes_ref kind arg1 arg2 dbg : H.expr_primitive =
   Checked {
-    primitive = Binary (String_or_bigstring_load (kind, Eight), arg1, arg2);
+    primitive =
+      tag_int (Binary (String_or_bigstring_load (kind, Eight), arg1, arg2));
     validity_conditions = [
       string_or_bytes_access_validity_condition arg1 String arg2;
     ];
@@ -210,19 +211,16 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
   | Pbyteslength, [arg] ->
     tag_int (Unary (String_length Bytes, arg))
   | Pstringrefu, [arg1; arg2] ->
-    Binary (String_or_bigstring_load (String, Eight), arg1, arg2)
+    tag_int (Binary (String_or_bigstring_load (String, Eight), arg1, arg2))
   | Pbytesrefu, [arg1; arg2] ->
-    Binary (String_or_bigstring_load (Bytes, Eight), arg1, arg2)
+    tag_int (Binary (String_or_bigstring_load (Bytes, Eight), arg1, arg2))
   | Pbytesrefs, [arg1; arg2] ->
     string_or_bytes_ref Bytes arg1 arg2 dbg
   | Pstringrefs, [arg1; arg2] ->
     string_or_bytes_ref String arg1 arg2 dbg
   | Pstring_load_16 true (* unsafe *), [arg1; arg2]
   | Pbytes_load_16 true (* unsafe *), [arg1; arg2] ->
-    (* XXX Looking at Cmm_helpers it looks like the quantity loaded is a
-       naked immediate.  We should check this and change the kinding in
-       [Flambda_primitive] if required *)
-    Binary (String_or_bigstring_load (String, Sixteen), arg1, arg2)
+    tag_int (Binary (String_or_bigstring_load (String, Sixteen), arg1, arg2))
   | Pstring_load_32 true (* unsafe *), [arg1; arg2]
   | Pbytes_load_32 true (* unsafe *), [arg1; arg2] ->
     Unary (Box_number Naked_int32,
@@ -236,7 +234,8 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
   | Pstring_load_16 false, [str; index] ->
     Checked {
       primitive =
-        Binary (String_or_bigstring_load (String, Sixteen), str, index);
+        tag_int
+          (Binary (String_or_bigstring_load (String, Sixteen), str, index));
       validity_conditions = [
         string_or_bytes_access_validity_condition str String index;
       ];
@@ -271,7 +270,8 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
   | Pbytes_load_16 false, [bytes; index] ->
     Checked {
       primitive =
-        Binary (String_or_bigstring_load (Bytes, Sixteen), bytes, index);
+        tag_int
+          (Binary (String_or_bigstring_load (Bytes, Sixteen), bytes, index));
       validity_conditions = [
         string_or_bytes_access_validity_condition bytes Bytes index;
       ];
