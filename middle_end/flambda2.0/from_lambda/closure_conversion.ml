@@ -214,9 +214,23 @@ let close_const t (const : Lambda.structured_constant) =
 let close_c_call t ~let_bound_var (prim : Primitive.description)
       ~(args : Simple.t list) exn_continuation dbg
       (k : Named.t option -> Expr.t) : Expr.t =
-  (* CR pchambart: there should be a special case if body is a
-     apply_cont *)
-  let return_continuation = Continuation.create () in
+  (* XCR pchambart: there should be a special case if body is a
+     apply_cont
+     mshinwell: done. *)
+  (* We always replace the original Ilambda [Let] with an Flambda
+     expression, so we call [k] with [None], to get just the closure-converted
+     body of that [Let]. *)
+  let body = k None in
+  let return_continuation, needs_wrapper =
+    match Flambda.Expr.descr body with
+    | Apply_cont apply_cont
+      when
+        Simple.List.equal (Apply_cont_expr.args apply_cont)
+          [Simple.var let_bound_var]
+        && Option.is_none (Apply_cont_expr.trap_action apply_cont) ->
+      Apply_cont_expr.continuation apply_cont, false
+    | _ -> Continuation.create (), true
+  in
   let param_arity =
     List.map LC.kind_of_primitive_native_repr prim.prim_native_repr_args
   in
@@ -278,11 +292,7 @@ let close_c_call t ~let_bound_var (prim : Primitive.description)
       prim.prim_native_repr_args
       []
   in
-  (* We always replace the original Ilambda [Let] with an Flambda
-     expression, so we call [k] with [None], to get just the closure-converted
-     body of that [Let]. *)
-  let body = k None in
-  let code_after_call, handler_param =
+  let code_after_call, handler_param, needs_wrapper =
     let box_return_value =
       match prim.prim_native_repr_res with
       | Same_as_ocaml_repr -> None
@@ -293,7 +303,7 @@ let close_c_call t ~let_bound_var (prim : Primitive.description)
       | Untagged_int -> Some (P.Box_number Untagged_immediate)
     in
     match box_return_value with
-    | None -> body, let_bound_var
+    | None -> body, let_bound_var, needs_wrapper
     | Some box_return_value ->
       let let_bound_var' = VB.create let_bound_var Name_mode.normal in
       let handler_param = Variable.rename let_bound_var in
@@ -304,22 +314,24 @@ let close_c_call t ~let_bound_var (prim : Primitive.description)
             dbg)
           body
       in
-      body, handler_param
+      body, handler_param, true
   in
-  let after_call =
-    let params =
-      [Kinded_parameter.create (Parameter.wrap handler_param) return_kind]
+  if not needs_wrapper then call
+  else
+    let after_call =
+      let params =
+        [Kinded_parameter.create (Parameter.wrap handler_param) return_kind]
+      in
+      let params_and_handler =
+        Flambda.Continuation_params_and_handler.create params
+          ~handler:code_after_call
+      in
+      Flambda.Continuation_handler.create ~params_and_handler
+        ~stub:false
+        ~is_exn_handler:false
     in
-    let params_and_handler =
-      Flambda.Continuation_params_and_handler.create params
-        ~handler:code_after_call
-    in
-    Flambda.Continuation_handler.create ~params_and_handler
-      ~stub:false
-      ~is_exn_handler:false
-  in
-  Flambda.Let_cont.create_non_recursive return_continuation after_call
-    ~body:call
+    Flambda.Let_cont.create_non_recursive return_continuation after_call
+      ~body:call
 
 let close_exn_continuation env (exn_continuation : Ilambda.exn_continuation) =
   let extra_args =
