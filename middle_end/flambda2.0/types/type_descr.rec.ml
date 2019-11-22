@@ -138,76 +138,6 @@ module Make (Head : Type_head_intf.S
       Or_bottom.map (Head.apply_rec_info head rec_info)
         ~f:(fun head -> create head)
 
-  let make_suitable_for_environment0 t env ~suitable_for level =
-    let free_vars = Name_occurrences.variables (free_names t) in
-    if Variable.Set.is_empty free_vars then level, t
-    else
-      let allowed = TE.var_domain suitable_for in
-      let to_erase = Variable.Set.diff free_vars allowed in
-      if Variable.Set.is_empty to_erase then level, t
-      else
-        let result_level, perm, _binding_time =
-          (* To avoid writing an erasure operation, we define irrelevant fresh
-             variables in the returned [Typing_env_level], and swap them with
-             the variables that we wish to erase throughout the type. *)
-          Variable.Set.fold (fun to_erase (result_level, perm, binding_time) ->
-              let kind = T.kind (TE.find env (Name.var to_erase)) in
-              let fresh_var = Variable.rename to_erase in
-              let fresh_var_name = Name.var fresh_var in
-              let result_level =
-                TEL.add_definition result_level fresh_var kind binding_time
-              in
-              let canonical_simple =
-                TE.get_canonical_simple env
-                  ~min_name_mode:Name_mode.in_types
-                  (Simple.var to_erase)
-              in
-              let result_level =
-                let ty =
-                  match canonical_simple with
-                  | Bottom -> T.bottom kind
-                  | Ok None -> T.unknown kind
-                  | Ok (Some canonical_simple) ->
-                    (* CR-someday mshinwell: If we can't find a [Simple] in
-                       [suitable_for] then we could expand the head of [ty],
-                       with a view to returning something better than
-                       [Unknown]. *)
-                    if TE.mem_simple suitable_for canonical_simple then
-                      T.alias_type_of kind canonical_simple
-                    else
-                      T.unknown kind
-                in
-                TEL.add_or_replace_equation result_level fresh_var_name ty
-              in
-              let perm =
-                Name_permutation.add_variable perm to_erase fresh_var
-              in
-              result_level, perm, Binding_time.succ binding_time)
-            to_erase
-            (level, Name_permutation.empty, Binding_time.earliest_var)
-        in
-        result_level, apply_name_permutation t perm
-
-  let make_suitable_for_environment t env ~suitable_for ~bind_to ~to_type =
-    let bind_to = Name.var bind_to in
-    if TE.mem env bind_to then begin
-      Misc.fatal_errorf "[bind_to] %a must not be bound in the \
-          source environment:@ %a"
-        Name.print bind_to
-        TE.print env
-    end;
-    if not (TE.mem suitable_for bind_to) then begin
-      Misc.fatal_errorf "[bind_to] %a is expected to be bound in the \
-          [suitable_for] environment:@ %a"
-        Name.print bind_to
-        TE.print suitable_for
-    end;
-    let level, ty =
-      make_suitable_for_environment0 t env ~suitable_for (TEL.empty ())
-    in
-    let level = TEL.add_or_replace_equation level bind_to (to_type ty) in
-    TEE.create level
-
   let force_to_head ~force_to_kind t =
     match descr (force_to_kind t) with
     | No_alias head -> head
@@ -270,6 +200,12 @@ module Make (Head : Type_head_intf.S
                 [Equals] type:@ %a"
               Simple.print simple
               TE.print env
+
+  let expand_head' ~force_to_kind t env =
+    match expand_head ~force_to_kind t env with
+    | Unknown -> unknown ()
+    | Ok head -> create_no_alias (Ok head)
+    | Bottom -> bottom ()
 
   let add_equation _env (simple : Simple.t) ty env_extension =
     match Simple.descr simple with

@@ -191,7 +191,7 @@ module type S = sig
      : t
     -> Typing_env.t
     -> suitable_for:Typing_env.t
-    -> bind_to:Variable.t
+    -> bind_to:Name.t
     -> Typing_env_extension.t
 
   val apply_rec_info : flambda_type -> Rec_info.t -> flambda_type Or_bottom.t

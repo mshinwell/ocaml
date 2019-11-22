@@ -59,6 +59,8 @@ let print_with_cache ~cache ppf { defined_vars; equations; cse; } =
         ppf equations;
       Format.pp_print_string ppf ")"
   in
+  (* CR mshinwell: Print [defined_vars] when not called from
+     [Typing_env.print] *)
   if Variable.Map.is_empty defined_vars then
     if Flambda_primitive.Eligible_for_cse.Map.is_empty cse then
       Format.fprintf ppf
@@ -330,10 +332,15 @@ let meet0 env (t1 : t) (t2 : t) =
         defined_vars
         typing_env)
   in
+  let t =
+    { (empty ()) with
+      defined_vars;
+    }
+  in
   let t, env =
     Name.Map.fold (fun name ty (t, env) -> meet_equation env t name ty)
       t1.equations
-      (empty (), env)
+      (t, env)
   in
   let t, _env =
     Name.Map.fold (fun name ty (t, env) -> meet_equation env t name ty)

@@ -207,32 +207,17 @@ let simplify_static_part_of_kind_value dacc ~result_dacc
       : K.value Static_part.t * DA.t =
   let bind_result_sym typ =
     DA.map_denv result_dacc ~f:(fun result_denv ->
-      let var = Variable.create "lifted" in
-      let suitable_for = DE.typing_env result_denv in
       let suitable_for =
-        let name =
-          Name_in_binding_pos.create (Name.var var) Name_mode.in_types
-        in
-        TE.add_definition suitable_for name (T.kind typ)
+        DE.typing_env (DE.define_symbol result_denv result_sym K.value)
       in
       let env_extension =
         T.make_suitable_for_environment typ
           (DE.typing_env (DA.denv dacc))
           ~suitable_for
-          ~bind_to:var (* CR mshinwell: allow [bind_to] to be a Symbol *)
+          ~bind_to:(Name.symbol result_sym)
       in
-      let result_denv =
-        DE.with_typing_env result_denv
-          (TE.add_env_extension suitable_for ~env_extension)
-      in
-      let typ = T.alias_type_of (T.kind typ) (Simple.var var) in
-(*
-Format.eprintf "Equation for symbol %a : %a in@ %a\n%!"
-  Symbol.print result_sym
-  T.print typ
-  DE.print result_denv;
-*)
-      DE.add_symbol result_denv result_sym typ)
+      DE.with_typing_env result_denv
+        (TE.add_env_extension suitable_for ~env_extension))
   in
   match static_part with
   | Block (tag, is_mutable, fields) ->

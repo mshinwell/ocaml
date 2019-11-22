@@ -63,26 +63,17 @@ module type S = sig
 
   val apply_rec_info : t -> Rec_info.t -> t Or_bottom.t
 
-  val make_suitable_for_environment0
-     : t
-    -> typing_env
-    -> suitable_for:typing_env
-    -> typing_env_level
-    -> typing_env_level * t
-
-  val make_suitable_for_environment
-     : t
-    -> typing_env
-    -> suitable_for:typing_env
-    -> bind_to:Variable.t
-    -> to_type:(t -> flambda_type)
-    -> typing_env_extension
-
   val expand_head
      : force_to_kind:(flambda_type -> t)  (* CR mshinwell: "of_type"? *)
     -> t
     -> typing_env
     -> head Or_unknown_or_bottom.t
+
+  val expand_head'
+     : force_to_kind:(flambda_type -> t)  (* CR mshinwell: "of_type"? *)
+    -> t
+    -> typing_env
+    -> t
 
   module Make_meet_or_join (_ : Lattice_ops_intf.S
     with type meet_env := meet_env

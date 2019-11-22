@@ -173,7 +173,7 @@ val make_suitable_for_environment
    : t
   -> Typing_env.t
   -> suitable_for:Typing_env.t
-  -> bind_to:Variable.t
+  -> bind_to:Name.t
   -> Typing_env_extension.t
 
 val expand_head : t -> Typing_env.t -> Resolved_type.t

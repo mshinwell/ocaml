@@ -86,23 +86,12 @@ let introduce { env = orig_typing_env; types; _ } typing_env =
   Symbol.Map.fold (fun sym typ typing_env ->
       let sym = Name.symbol sym in
       if not (TE.mem typing_env_before sym) then begin
-        let var = Variable.create "lifted" in
-        let kind = Flambda_kind.value in
-        let typing_env =
-          let name =
-            Name_in_binding_pos.create (Name.var var)
-              Name_mode.in_types
-          in
-          TE.add_definition typing_env name kind
-        in
         let env_extension =
           T.make_suitable_for_environment typ orig_typing_env
             ~suitable_for:typing_env
-            ~bind_to:var
+            ~bind_to:sym
         in
-        let typing_env = TE.add_env_extension typing_env ~env_extension in
-        let typ = T.alias_type_of kind (Simple.var var) in
-        TE.add_equation typing_env sym typ
+        TE.add_env_extension typing_env ~env_extension
       end else begin
         typing_env
       end)
