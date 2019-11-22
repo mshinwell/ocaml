@@ -359,6 +359,7 @@ let simplify_return_continuation_handler dacc
       ~(extra_params_and_args : Continuation_extra_params_and_args.t)
       cont (return_cont_handler : Return_cont_handler.Opened.t)
       ~user_data:result_dacc _k =
+  let result_dacc = DA.with_r result_dacc (DA.r dacc) in
   let result_dacc, static_structure =
     simplify_static_structure dacc ~result_dacc
       return_cont_handler.static_structure
@@ -396,7 +397,7 @@ let simplify_return_continuation_handler dacc
     let uenv = UE.add_apply_cont_rewrite UE.empty cont rewrite in
     handler, used_computed_values, uenv
   in
-  let uacc = UA.create uenv (DA.r dacc) in
+  let uacc = UA.create uenv (DA.r result_dacc) in
   handler, (used_computed_values, static_structure, result_dacc), uacc
 
 let simplify_exn_continuation_handler dacc
@@ -466,6 +467,7 @@ let simplify_definition dacc (defn : Program_body.Definition.t) =
       in
       let dacc = result_dacc in
       let dacc = DA.with_r dacc (UA.r uacc) in (* CR mshinwell: needed? *)
+Format.eprintf "Returned DA:@ %a\n%!" DA.print dacc;
       let computation_can_be_deleted =
         match Expr.descr expr with
         | Apply_cont apply_cont ->
