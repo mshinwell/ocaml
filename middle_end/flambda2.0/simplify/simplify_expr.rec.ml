@@ -295,11 +295,14 @@ and simplify_non_recursive_let_cont_handler
         (* We try to show that [handler] postdominates [body] (which is done by
            showing that [body] can only return through [cont]) and that if
            [body] raises any exceptions then it only does so to toplevel. If
-           this can be shown, then [body] can be lifted, since the expression
-           cannot have any free variables. Lifting is never performed if we are
-           under a continuation handler or a lambda. *)
+           this can be shown, then [body] can be lifted, so long as the
+           expression does not have any free variables. Lifting is never
+           performed if we are under a continuation handler or a lambda. *)
+        (* CR mshinwell: When can the expression have free vars? *)
         DE.still_at_toplevel denv
           && (not (Continuation_handler.is_exn_handler cont_handler))
+          && Variable.Set.is_empty
+               (Name_occurrences.variables free_names_of_body)
           && Continuation.Set.subset
                (Name_occurrences.continuations free_names_of_body)
                (Continuation.Set.of_list [cont; toplevel_exn_cont])

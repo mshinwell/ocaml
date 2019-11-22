@@ -467,7 +467,6 @@ let simplify_definition dacc (defn : Program_body.Definition.t) =
       in
       let dacc = result_dacc in
       let dacc = DA.with_r dacc (UA.r uacc) in (* CR mshinwell: needed? *)
-Format.eprintf "Returned DA:@ %a\n%!" DA.print dacc;
       let computation_can_be_deleted =
         match Expr.descr expr with
         | Apply_cont apply_cont ->
