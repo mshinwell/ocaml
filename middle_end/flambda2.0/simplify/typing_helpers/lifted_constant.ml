@@ -21,31 +21,22 @@ module TE = Flambda_type.Typing_env
 
 (* CR mshinwell: Add [Flambda_static.Import] *)
 module Bound_symbols = Flambda_static.Program_body.Bound_symbols
-module Computation = Flambda_static.Program_body.Computation
+module Definition = Flambda_static.Program_body.Definition
 module Program_body = Flambda_static.Program_body
-module Static_part = Flambda_static.Static_part
 
-type t =
-  | T : {
-    env : TE.t;
-    types : T.t Symbol.Map.t;
-    bound_symbols : 'k Bound_symbols.t;
-    static_part : 'k Static_part.t;
-    computation : Computation.t option;
-  } -> t
+type t = {
+  env : TE.t;
+  types : T.t Symbol.Map.t;
+  definition : Definition.t;
+}
 
-let print ppf
-      (T { env = _ ; types; bound_symbols; static_part; computation; }) =
+let print ppf { env = _ ; types; definition; } =
   Format.fprintf ppf "@[<hov 1>(\
       @[<hov 1>(types@ %a)@]@ \
-      @[<hov 1>(bound_symbols@ %a)@]@ \
-      @[<hov 1>(static_part@ %a)@]@ \
-      @[<hov 1>(computation@ %a)@]\
+      @[<hov 1>(definition@ %a)@]\
       )@]"
     (Symbol.Map.print T.print) types
-    Bound_symbols.print bound_symbols
-    Static_part.print static_part
-    (Misc.Stdlib.Option.print Computation.print) computation
+    Definition.print definition
 
 let create ?computation env types bound_symbols static_part =
   let being_defined = Bound_symbols.being_defined bound_symbols in
@@ -54,12 +45,14 @@ let create ?computation env types bound_symbols static_part =
       (Symbol.Map.print T.print) types
       Bound_symbols.print bound_symbols
   end;
-  T {
-    env;
+  let definition : Definition.t =
+    { computation;
+      static_structure = S [bound_symbols, static_part];
+    }
+  in
+  { env;
     types;
-    bound_symbols;
-    static_part;
-    computation;
+    definition;
   }
 
 let create_from_static_structure env types
@@ -68,7 +61,13 @@ let create_from_static_structure env types
       create env types bound_symbols static_part)
     pieces
 
-let introduce (T { env = orig_typing_env; types; _ }) typing_env =
+let create_from_definition env types definition =
+  { env;
+    types;
+    definition;
+  }
+
+let introduce { env = orig_typing_env; types; _ } typing_env =
   let typing_env_before = typing_env in
   let typing_env =
     Symbol.Map.fold (fun sym typ typing_env ->
@@ -108,8 +107,4 @@ let introduce (T { env = orig_typing_env; types; _ }) typing_env =
     types
     typing_env
 
-let static_structure (T { bound_symbols; static_part; _ })
-      : Program_body.Static_structure.t =
-  S [bound_symbols, static_part]
-
-let computation (T { computation; _ }) = computation
+let definition t = t.definition

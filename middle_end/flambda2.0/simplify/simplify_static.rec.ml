@@ -459,27 +459,7 @@ let simplify_definition dacc (defn : Program_body.Definition.t) =
 
 let define_lifted_constants lifted_constants (body : Program_body.t) =
   List.fold_left (fun body lifted_constant : Program_body.t ->
-      let static_structure =
-        (* CR mshinwell: We should have deletion of unused symbols
-           automatically -- needs to be done for non-lifted constants too *)
-        Static_structure.delete_bindings
-          (Lifted_constant.static_structure lifted_constant)
-          ~allowed:(Name_occurrences.symbols (Program_body.free_names body))
-      in
-      if Static_structure.is_empty static_structure then body
-      else
-        let definition : Program_body.Definition.t =
-          { computation = Lifted_constant.computation lifted_constant;
-            static_structure;
-          }
-        in
-        Program_body.define_symbol definition ~body)
-    body
-    lifted_constants
-
-let define_lifted_definitions lifted_definitions (body : Program_body.t) =
-  List.fold_left
-    (fun body (definition : Definition.t) : Program_body.t ->
+      let definition = Lifted_constant.definition lifted_constant in
       let static_structure =
         (* CR mshinwell: We should have deletion of unused symbols
            automatically -- needs to be done for non-lifted constants too *)
@@ -495,19 +475,17 @@ let define_lifted_definitions lifted_definitions (body : Program_body.t) =
         in
         Program_body.define_symbol definition ~body)
     body
-    lifted_definitions
+    lifted_constants
 
 let rec simplify_program_body0 dacc (body : Program_body.t) k =
   match Program_body.descr body with
   | Define_symbol (defn, body) ->
     let dacc = DA.map_r dacc ~f:(fun r -> R.clear_lifted_constants r) in
-    let dacc = DA.map_r dacc ~f:(fun r -> R.clear_lifted_definitions r) in
     let defn, dacc = simplify_definition dacc defn in
     let r = DA.r dacc in
     simplify_program_body0 dacc body (fun body dacc ->
       let body = Program_body.define_symbol defn ~body in
       let body = define_lifted_constants (R.get_lifted_constants r) body in
-      let body = define_lifted_definitions (R.get_lifted_definitions r) body in
       k body dacc)
   | Root _ -> k body dacc
 

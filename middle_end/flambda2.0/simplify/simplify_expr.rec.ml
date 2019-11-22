@@ -212,6 +212,8 @@ and lift_expression
     }
   in
   let definition, dacc = Simplify_static.simplify_definition dacc definition in
+Format.eprintf "New definition@ %a\n%!"
+  Flambda_static.Program_body.Definition.print definition;
   let dacc = DA.map_r dacc ~f:(fun r -> R.new_lifted_definition r definition) in
   Continuation_handler.pattern_match cont_handler ~f:(fun handler ->
     let args =

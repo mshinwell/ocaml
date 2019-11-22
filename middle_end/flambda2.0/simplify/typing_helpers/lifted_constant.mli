@@ -41,6 +41,12 @@ val create_from_static_structure
   -> Flambda_static.Program_body.Static_structure.t
   -> t list
 
+val create_from_definition
+   : Flambda_type.Typing_env.t
+  -> Flambda_type.t Symbol.Map.t
+  -> Flambda_static.Program_body.Definition.t
+  -> t
+
 (* CR mshinwell: Add comment that this doesn't introduce anything if the
    symbols are defined.  Is this the best semantics?  It comes from not wanting
    to diff lifted constants in [r] *)
@@ -49,6 +55,4 @@ val introduce
   -> Flambda_type.Typing_env.t
   -> Flambda_type.Typing_env.t
 
-val static_structure : t -> Flambda_static.Program_body.Static_structure.t
-
-val computation : t -> Flambda_static.Program_body.Computation.t option
+val definition : t -> Flambda_static.Program_body.Definition.t
