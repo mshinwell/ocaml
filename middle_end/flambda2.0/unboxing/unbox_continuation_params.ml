@@ -352,20 +352,31 @@ let rec make_unboxing_decision typing_env ~depth ~arg_types_by_use_id
             TE.print typing_env
         end
     | Wrong_kind | Invalid | Unknown ->
-      let rec try_unboxing = function
-        | [] -> typing_env, param_type, extra_params_and_args
-        | (prover, unboxer, tag, kind) :: decisions ->
-          let proof : _ T.proof_allowing_kind_mismatch =
-            prover typing_env param_type
-          in
-          match proof with
-          | Proved () ->
-            unboxer typing_env ~depth ~arg_types_by_use_id ~param_type
-              extra_params_and_args ~unbox_value:make_unboxing_decision
-              tag Targetint.OCaml.one kind
-          | Wrong_kind | Invalid | Unknown -> try_unboxing decisions
-      in
-      try_unboxing unboxed_number_decisions
+      (* CR-someday mshinwell: We could support more than a unique closure. *)
+      match T.prove_single_closures_entry' typing_env param_type with
+      | Proved (closure_id, closures_entry, _func_type_or_unknown) ->
+        let closure_var_types =
+          T.Closures_entry.closure_var_types closures_entry
+        in
+
+        Closure.unbox_one_parameter typing_env ~depth
+          ~arg_types_by_use_id ~param_type extra_params_and_args
+          ~unbox_value:make_unboxing_decision
+      | Wrong_kind | Invalid | Unknown ->
+        let rec try_unboxing = function
+          | [] -> typing_env, param_type, extra_params_and_args
+          | (prover, unboxer, tag, kind) :: decisions ->
+            let proof : _ T.proof_allowing_kind_mismatch =
+              prover typing_env param_type
+            in
+            match proof with
+            | Proved () ->
+              unboxer typing_env ~depth ~arg_types_by_use_id ~param_type
+                extra_params_and_args ~unbox_value:make_unboxing_decision
+                tag Targetint.OCaml.one kind
+            | Wrong_kind | Invalid | Unknown -> try_unboxing decisions
+        in
+        try_unboxing unboxed_number_decisions
 
 let make_unboxing_decisions typing_env ~arg_types_by_use_id ~params ~param_types
       extra_params_and_args =

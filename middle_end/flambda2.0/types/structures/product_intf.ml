@@ -40,6 +40,8 @@ module type S = sig
 
   val components : t -> flambda_type list
 
+  val to_map : t -> flambda_type Index.Map.t
+
   val map_types
      : t
     -> f:(flambda_type -> flambda_type Or_bottom.t)
