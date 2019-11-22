@@ -219,17 +219,19 @@ let simplify_static_part_of_kind_value dacc ~result_dacc
         T.make_suitable_for_environment typ
           (DE.typing_env (DA.denv dacc))
           ~suitable_for
-          ~bind_to:var
+          ~bind_to:var (* CR mshinwell: allow [bind_to] to be a Symbol *)
       in
       let result_denv =
         DE.with_typing_env result_denv
           (TE.add_env_extension suitable_for ~env_extension)
       in
       let typ = T.alias_type_of (T.kind typ) (Simple.var var) in
+(*
 Format.eprintf "Equation for symbol %a : %a in@ %a\n%!"
   Symbol.print result_sym
   T.print typ
   DE.print result_denv;
+*)
       DE.add_symbol result_denv result_sym typ)
   in
   match static_part with
@@ -394,7 +396,7 @@ let simplify_return_continuation_handler dacc
     let uenv = UE.add_apply_cont_rewrite UE.empty cont rewrite in
     handler, used_computed_values, uenv
   in
-  let uacc = UA.create uenv (DA.r result_dacc) in
+  let uacc = UA.create uenv (DA.r dacc) in
   handler, (used_computed_values, static_structure, result_dacc), uacc
 
 let simplify_exn_continuation_handler dacc
@@ -459,10 +461,11 @@ let simplify_definition dacc (defn : Program_body.Definition.t) =
           (fun _cont_uses_env r ->
             let uacc = UA.create UE.empty r in
             (* CR mshinwell: This should return an "invalid" node. *)
-            (computation.computed_values, defn.static_structure, dacc), uacc)
+            (computation.computed_values, defn.static_structure,
+              result_dacc), uacc)
       in
       let dacc = result_dacc in
-      let dacc = DA.with_r dacc (UA.r uacc) in
+      let dacc = DA.with_r dacc (UA.r uacc) in (* CR mshinwell: needed? *)
       let computation_can_be_deleted =
         match Expr.descr expr with
         | Apply_cont apply_cont ->
