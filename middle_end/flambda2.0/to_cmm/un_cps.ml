@@ -1088,7 +1088,7 @@ and fill_layout decls elts env effs acc i = function
 and fill_slot decls elts env acc offset slot =
   match (slot : Un_cps_closure.layout_slot) with
   | Infix_header ->
-      let field = C.alloc_infix_header offset Debuginfo.none in
+      let field = C.alloc_infix_header (offset + 1) Debuginfo.none in
       field :: acc, offset + 1, env, Ece.pure
   | Env_var v ->
       let field, env, eff = simple env (Var_within_closure.Map.find v elts) in
@@ -1206,7 +1206,7 @@ and fill_static_layout symbs decls elts env acc updates i = function
 and fill_static_slot symbs decls elts env acc offset updates slot =
   match (slot : Un_cps_closure.layout_slot) with
   | Infix_header ->
-      let field = C.cint (C.infix_header offset) in
+      let field = C.cint (C.infix_header (offset + 1)) in
       field :: acc, offset + 1, updates
   | Env_var v ->
       let fields, updates =
