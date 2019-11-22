@@ -454,6 +454,9 @@ module Program_body = struct
         (Flambda_colours.normal ())
         (Static_structure.print_with_cache ~cache) static_structure
 
+    let print ppf t =
+      print_with_cache ~cache:(Printing_cache.create ()) ppf t
+
     let free_names t =
       let free_in_computation =
         match t.computation with

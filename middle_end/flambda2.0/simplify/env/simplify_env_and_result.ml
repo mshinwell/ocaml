@@ -491,23 +491,31 @@ end = struct
     { resolver : (Export_id.t -> Flambda_type.t option);
       imported_symbols : Flambda_kind.t Symbol.Map.t;
       lifted_constants_innermost_first : Lifted_constant.t list;
+      lifted_definitions_innermost_first
+        : Flambda_static.Program_body.Definition.t list;
     }
 
   let print ppf { resolver = _; imported_symbols;
                   lifted_constants_innermost_first;
+                  lifted_definitions_innermost_first;
                 } =
     Format.fprintf ppf "@[<hov 1>(\
         @[<hov 1>(imported_symbols@ %a)@]@ \
-        @[<hov 1>(lifted_constants_innermost_first@ %a)@]\
+        @[<hov 1>(lifted_constants_innermost_first@ %a)@]@ \
+        @[<hov 1>(lifted_definitions_innermost_first@ %a)@]\
         )@]"
       (Symbol.Map.print Flambda_kind.print) imported_symbols
       (Format.pp_print_list ~pp_sep:Format.pp_print_space Lifted_constant.print)
         lifted_constants_innermost_first
+      (Format.pp_print_list ~pp_sep:Format.pp_print_space
+        Flambda_static.Program_body.Definition.print)
+        lifted_definitions_innermost_first
 
   let create ~resolver =
     { resolver;
       imported_symbols = Symbol.Map.empty;
       lifted_constants_innermost_first = [];
+      lifted_definitions_innermost_first = [];
     }
 
   let imported_symbols t = t.imported_symbols
@@ -516,6 +524,12 @@ end = struct
     { t with
       lifted_constants_innermost_first =
         lifted_constant :: t.lifted_constants_innermost_first;
+    }
+
+  let new_lifted_definition t lifted_definition =
+    { t with
+      lifted_definitions_innermost_first =
+        lifted_definition :: t.lifted_definitions_innermost_first;
     }
 
 (*
@@ -532,5 +546,12 @@ end = struct
   let clear_lifted_constants t =
     { t with
       lifted_constants_innermost_first = [];
+    }
+
+  let get_lifted_definitions t = t.lifted_definitions_innermost_first
+
+  let clear_lifted_definitions t =
+    { t with
+      lifted_definitions_innermost_first = [];
     }
 end

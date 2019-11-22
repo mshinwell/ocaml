@@ -231,16 +231,24 @@ module type Result = sig
 
   val new_lifted_constant : t -> Lifted_constant.t -> t
 
+  val new_lifted_definition : t -> Flambda_static.Program_body.Definition.t -> t
+
 (* can cause duplicates
   val add_lifted_constants : t -> from:t -> t
 *)
 
   (** Retrieve constants lifted to toplevel.  The constants must be defined
       in the order returned (first element of the list defined first). *)
-  (* CR mshinwell: Update name to reflect this *)
+  (* CR mshinwell: Update names to reflect this *)
   val get_lifted_constants : t -> Lifted_constant.t list
+
+  val get_lifted_definitions
+     : t
+    -> Flambda_static.Program_body.Definition.t list
 
   val imported_symbols : t -> Flambda_kind.t Symbol.Map.t
 
   val clear_lifted_constants : t -> t
+
+  val clear_lifted_definitions : t -> t
 end

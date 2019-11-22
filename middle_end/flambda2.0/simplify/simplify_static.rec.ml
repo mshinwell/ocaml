@@ -18,6 +18,7 @@
 
 open! Simplify_import
 
+module Definition = Flambda_static.Program_body.Definition
 module Of_kind_value = Flambda_static.Of_kind_value
 module Program = Flambda_static.Program
 module Program_body = Flambda_static.Program_body
@@ -476,15 +477,37 @@ let define_lifted_constants lifted_constants (body : Program_body.t) =
     body
     lifted_constants
 
+let define_lifted_definitions lifted_definitions (body : Program_body.t) =
+  List.fold_left
+    (fun body (definition : Definition.t) : Program_body.t ->
+      let static_structure =
+        (* CR mshinwell: We should have deletion of unused symbols
+           automatically -- needs to be done for non-lifted constants too *)
+        Static_structure.delete_bindings definition.static_structure
+          ~allowed:(Name_occurrences.symbols (Program_body.free_names body))
+      in
+      if Static_structure.is_empty static_structure then body
+      else
+        let definition : Program_body.Definition.t =
+          { computation = definition.computation;
+            static_structure;
+          }
+        in
+        Program_body.define_symbol definition ~body)
+    body
+    lifted_definitions
+
 let rec simplify_program_body0 dacc (body : Program_body.t) k =
   match Program_body.descr body with
   | Define_symbol (defn, body) ->
     let dacc = DA.map_r dacc ~f:(fun r -> R.clear_lifted_constants r) in
+    let dacc = DA.map_r dacc ~f:(fun r -> R.clear_lifted_definitions r) in
     let defn, dacc = simplify_definition dacc defn in
     let r = DA.r dacc in
     simplify_program_body0 dacc body (fun body dacc ->
       let body = Program_body.define_symbol defn ~body in
       let body = define_lifted_constants (R.get_lifted_constants r) body in
+      let body = define_lifted_definitions (R.get_lifted_definitions r) body in
       k body dacc)
   | Root _ -> k body dacc
 

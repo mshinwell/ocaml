@@ -30,6 +30,11 @@ val simplify_set_of_closures0
         * Flambda_type.t Symbol.Map.t
         * Flambda_static.Program_body.Static_structure.t
 
+val simplify_definition
+   : Downwards_acc.t
+  -> Flambda_static.Program_body.Definition.t
+  -> Flambda_static.Program_body.Definition.t * Downwards_acc.t
+
 val simplify_program
    : Simplify_env_and_result.Downwards_env.t
   -> Flambda_static.Program.t

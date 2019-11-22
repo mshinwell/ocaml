@@ -148,6 +148,8 @@ module Program_body : sig
           [static_structure] are simultaneous, not ordered, or recursive. *)
     }
 
+    val print : Format.formatter -> t -> unit
+
     val iter_computation : t -> f:(Computation.t -> unit) -> unit
 
     val map_computation : t -> f:(Computation.t -> Computation.t) -> t
