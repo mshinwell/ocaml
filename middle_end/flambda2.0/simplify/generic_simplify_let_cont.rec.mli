@@ -45,10 +45,12 @@ module Make (Continuation_handler_like : Continuation_handler_like_intf.S) : sig
       -> extra_params_and_args:Continuation_extra_params_and_args.t
       -> Continuation.t
       -> Continuation_handler_like.Opened.t
+      -> user_data:'user_data
       -> (Continuation_uses_env.t
         -> Simplify_env_and_result.Result.t
         -> ('a * Upwards_acc.t))
       -> Continuation_handler_like.t * 'a * Upwards_acc.t)
+    -> user_data:'user_data
     -> (Continuation_uses_env.t
       -> Simplify_env_and_result.Result.t
       -> ('a * Upwards_acc.t))

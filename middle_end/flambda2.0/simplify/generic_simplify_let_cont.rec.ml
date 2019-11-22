@@ -31,7 +31,7 @@ module Make (CHL : Continuation_handler_like_intf.S) = struct
 
   let simplify_body_of_non_recursive_let_cont dacc cont cont_handler
         ~(simplify_body : _ simplify_body) ~body
-        ~simplify_continuation_handler_like k =
+        ~simplify_continuation_handler_like ~user_data k =
     let body, (result, uenv', user_data), uacc =
       let scope = DE.get_continuation_scope_level (DA.denv dacc) in
       let is_exn_handler = CHL.is_exn_handler cont_handler in
@@ -88,7 +88,7 @@ module Make (CHL : Continuation_handler_like_intf.S) = struct
               try
                 let handler, user_data, uacc =
                   simplify_continuation_handler_like dacc ~extra_params_and_args
-                    cont handler k
+                    cont handler ~user_data k
                 in
                 handler, user_data, uacc, is_single_inlinable_use
               with Misc.Fatal_error -> begin

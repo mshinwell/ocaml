@@ -68,6 +68,8 @@ let create_from_definition env types definition =
   }
 
 let introduce { env = orig_typing_env; types; _ } typing_env =
+  (* CR mshinwell: Can't we use [Simplify_static] to give the type of the
+     definition? *)
   let typing_env_before = typing_env in
   let typing_env =
     Symbol.Map.fold (fun sym typ typing_env ->

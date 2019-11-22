@@ -202,11 +202,35 @@ let simplify_set_of_closures dacc ~result_dacc set_of_closures
   simplify_set_of_closures0 dacc ~result_dacc set_of_closures
     ~closure_symbols ~closure_elements ~closure_element_types
 
-let simplify_static_part_of_kind_value dacc
+let simplify_static_part_of_kind_value dacc ~result_dacc
       (static_part : K.value Static_part.t) ~result_sym
       : K.value Static_part.t * DA.t =
-  let bind_result_sym ty =
-    DA.map_denv dacc ~f:(fun denv -> DE.add_symbol denv result_sym ty)
+  let bind_result_sym typ =
+    DA.map_denv result_dacc ~f:(fun result_denv ->
+      let var = Variable.create "lifted" in
+      let suitable_for = DE.typing_env result_denv in
+      let suitable_for =
+        let name =
+          Name_in_binding_pos.create (Name.var var) Name_mode.in_types
+        in
+        TE.add_definition suitable_for name (T.kind typ)
+      in
+      let env_extension =
+        T.make_suitable_for_environment typ
+          (DE.typing_env (DA.denv dacc))
+          ~suitable_for
+          ~bind_to:var
+      in
+      let result_denv =
+        DE.with_typing_env result_denv
+          (TE.add_env_extension suitable_for ~env_extension)
+      in
+      let typ = T.alias_type_of (T.kind typ) (Simple.var var) in
+Format.eprintf "Equation for symbol %a : %a in@ %a\n%!"
+  Symbol.print result_sym
+  T.print typ
+  DE.print result_denv;
+      DE.add_symbol result_denv result_sym typ)
   in
   match static_part with
   | Block (tag, is_mutable, fields) ->
@@ -220,37 +244,37 @@ let simplify_static_part_of_kind_value dacc
       T.immutable_block (Tag.Scannable.to_tag tag) ~field_kind:K.value
         ~fields:field_tys
     in
-    let dacc = bind_result_sym ty in
-    Block (tag, is_mutable, fields), dacc
+    let result_dacc = bind_result_sym ty in
+    Block (tag, is_mutable, fields), result_dacc
   | Fabricated_block var ->
     DE.check_variable_is_bound (DA.denv dacc) var;
-    let dacc = bind_result_sym (T.any_value ()) in
-    static_part, dacc
+    let result_dacc = bind_result_sym (T.any_value ()) in
+    static_part, result_dacc
   (* CR mshinwell: Need to reify to change Equals types into new terms *)
   | Boxed_float or_var ->
     let or_var, ty =
       simplify_or_variable dacc (fun f -> T.this_boxed_float f) or_var
     in
-    let dacc = bind_result_sym ty in
-    Boxed_float or_var, dacc
+    let result_dacc = bind_result_sym ty in
+    Boxed_float or_var, result_dacc
   | Boxed_int32 or_var ->
     let or_var, ty =
       simplify_or_variable dacc (fun f -> T.this_boxed_int32 f) or_var
     in
-    let dacc = bind_result_sym ty in
-    Boxed_int32 or_var, dacc
+    let result_dacc = bind_result_sym ty in
+    Boxed_int32 or_var, result_dacc
   | Boxed_int64 or_var ->
     let or_var, ty =
       simplify_or_variable dacc (fun f -> T.this_boxed_int64 f) or_var
     in
-    let dacc = bind_result_sym ty in
-    Boxed_int64 or_var, dacc
+    let result_dacc = bind_result_sym ty in
+    Boxed_int64 or_var, result_dacc
   | Boxed_nativeint or_var ->
     let or_var, ty =
       simplify_or_variable dacc (fun f -> T.this_boxed_nativeint f) or_var
     in
-    let dacc = bind_result_sym ty in
-    Boxed_nativeint or_var, dacc
+    let result_dacc = bind_result_sym ty in
+    Boxed_nativeint or_var, result_dacc
   | Immutable_float_array fields ->
     let fields_with_tys =
       List.map (fun field ->
@@ -260,8 +284,8 @@ let simplify_static_part_of_kind_value dacc
         fields
     in
     let fields, _field_tys = List.split fields_with_tys in
-    let dacc = bind_result_sym (T.any_value ()) in
-    Immutable_float_array fields, dacc
+    let result_dacc = bind_result_sym (T.any_value ()) in
+    Immutable_float_array fields, result_dacc
   | Mutable_string { initial_value; } ->
     let initial_value, str_ty =
       simplify_or_variable dacc (fun initial_value ->
@@ -273,15 +297,15 @@ let simplify_static_part_of_kind_value dacc
         initial_value;
       }
     in
-    let dacc = bind_result_sym str_ty in
-    static_part, dacc
+    let result_dacc = bind_result_sym str_ty in
+    static_part, result_dacc
   | Immutable_string or_var ->
     let or_var, ty =
       simplify_or_variable dacc (fun str -> T.this_immutable_string str)
         or_var
     in
-    let dacc = bind_result_sym ty in
-    Immutable_string or_var, dacc
+    let result_dacc = bind_result_sym ty in
+    Immutable_string or_var, result_dacc
 
 let simplify_static_part_of_kind_fabricated dacc ~result_dacc
       (static_part : K.fabricated Static_part.t)
@@ -301,12 +325,13 @@ let simplify_piece_of_static_structure (type k) dacc ~result_dacc
       : k Static_part.t * DA.t =
   match bound_syms with
   | Singleton result_sym ->
-    simplify_static_part_of_kind_value dacc static_part ~result_sym
+    simplify_static_part_of_kind_value dacc ~result_dacc static_part
+      ~result_sym
   | Set_of_closures { closure_symbols; } ->
     simplify_static_part_of_kind_fabricated dacc ~result_dacc static_part
       ~closure_symbols
 
-let simplify_static_structure dacc
+let simplify_static_structure dacc ~result_dacc
       ((S pieces) : Program_body.Static_structure.t)
       : DA.t * Program_body.Static_structure.t =
   let str_rev, next_dacc =
@@ -314,6 +339,8 @@ let simplify_static_structure dacc
        simultaneous, so we keep a [result_dacc] accumulating the final
        environment, but always use [dacc] for the simplification of the
        pieces. *)
+    (* CR mshinwell: note in comment that [result_dacc] doesn't have the
+       [computed_values] bound in it *)
     List.fold_left (fun (str_rev, result_dacc) (bound_syms, static_part) ->
         let static_part, result_dacc =
           simplify_piece_of_static_structure dacc ~result_dacc
@@ -321,16 +348,18 @@ let simplify_static_structure dacc
         in
         let str_rev = (bound_syms, static_part) :: str_rev in
         str_rev, result_dacc)
-      ([], dacc)
+      ([], result_dacc)
       pieces
   in
   next_dacc, S (List.rev str_rev)
 
 let simplify_return_continuation_handler dacc
       ~(extra_params_and_args : Continuation_extra_params_and_args.t)
-      cont (return_cont_handler : Return_cont_handler.Opened.t) _k =
-  let dacc, static_structure =
-    simplify_static_structure dacc return_cont_handler.static_structure
+      cont (return_cont_handler : Return_cont_handler.Opened.t)
+      ~user_data:result_dacc _k =
+  let result_dacc, static_structure =
+    simplify_static_structure dacc ~result_dacc
+      return_cont_handler.static_structure
   in
   let handler, used_computed_values, uenv =
     let free_variables =
@@ -365,12 +394,12 @@ let simplify_return_continuation_handler dacc
     let uenv = UE.add_apply_cont_rewrite UE.empty cont rewrite in
     handler, used_computed_values, uenv
   in
-  let uacc = UA.create uenv (DA.r dacc) in
-  handler, (used_computed_values, static_structure, dacc), uacc
+  let uacc = UA.create uenv (DA.r result_dacc) in
+  handler, (used_computed_values, static_structure, result_dacc), uacc
 
 let simplify_exn_continuation_handler dacc
       ~extra_params_and_args:_ _cont
-      (_handler : Exn_cont_handler.Opened.t) k =
+      (_handler : Exn_cont_handler.Opened.t) ~user_data:_ k =
   let handler : Exn_cont_handler.t = () in
   let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
   handler, user_data, uacc
@@ -380,7 +409,7 @@ let simplify_definition dacc (defn : Program_body.Definition.t) =
     match defn.computation with
     | None ->
       let dacc, static_structure =
-        simplify_static_structure dacc defn.static_structure
+        simplify_static_structure dacc ~result_dacc:dacc defn.static_structure
       in
       dacc, None, static_structure
     | Some computation ->
@@ -392,10 +421,9 @@ let simplify_definition dacc (defn : Program_body.Definition.t) =
       in
       let exn_continuation = computation.exn_continuation in
       let exn_cont_handler : Exn_cont_handler.t = () in
-      let current_toplevel_exn_continuation =
-        DE.toplevel_exn_continuation (DA.denv dacc)
-      in
-      let expr, _handler, (computed_values, static_structure, dacc), uacc =
+      let result_dacc = dacc in
+      let expr, _handler, (computed_values, static_structure, result_dacc),
+          uacc =
         let dacc =
           DA.map_denv dacc ~f:(fun denv ->
             DE.set_toplevel_exn_cont denv exn_continuation)
@@ -412,6 +440,7 @@ let simplify_definition dacc (defn : Program_body.Definition.t) =
               ~body:expr
               ~simplify_continuation_handler_like:
                 simplify_exn_continuation_handler
+              ~user_data:result_dacc
               k
           in
           expr, user_data, uacc
@@ -426,15 +455,13 @@ let simplify_definition dacc (defn : Program_body.Definition.t) =
           ~body:computation.expr
           ~simplify_continuation_handler_like:
             simplify_return_continuation_handler
+          ~user_data:result_dacc
           (fun _cont_uses_env r ->
             let uacc = UA.create UE.empty r in
             (* CR mshinwell: This should return an "invalid" node. *)
             (computation.computed_values, defn.static_structure, dacc), uacc)
       in
-      let dacc =
-        DA.map_denv dacc ~f:(fun denv ->
-          DE.set_toplevel_exn_cont denv current_toplevel_exn_continuation)
-      in
+      let dacc = result_dacc in
       let dacc = DA.with_r dacc (UA.r uacc) in
       let computation_can_be_deleted =
         match Expr.descr expr with
