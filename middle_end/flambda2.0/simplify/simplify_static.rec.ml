@@ -392,6 +392,9 @@ let simplify_definition dacc (defn : Program_body.Definition.t) =
       in
       let exn_continuation = computation.exn_continuation in
       let exn_cont_handler : Exn_cont_handler.t = () in
+      let current_toplevel_exn_continuation =
+        DE.toplevel_exn_continuation (DA.denv dacc)
+      in
       let expr, _handler, (computed_values, static_structure, dacc), uacc =
         let dacc =
           DA.map_denv dacc ~f:(fun denv ->
@@ -427,6 +430,10 @@ let simplify_definition dacc (defn : Program_body.Definition.t) =
             let uacc = UA.create UE.empty r in
             (* CR mshinwell: This should return an "invalid" node. *)
             (computation.computed_values, defn.static_structure, dacc), uacc)
+      in
+      let dacc =
+        DA.map_denv dacc ~f:(fun denv ->
+          DE.set_toplevel_exn_cont denv current_toplevel_exn_continuation)
       in
       let dacc = DA.with_r dacc (UA.r uacc) in
       let computation_can_be_deleted =

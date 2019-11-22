@@ -214,6 +214,8 @@ and lift_expression
   let definition, dacc = Simplify_static.simplify_definition dacc definition in
 Format.eprintf "New definition@ %a\n%!"
   Flambda_static.Program_body.Definition.print definition;
+Format.eprintf "Symbol's type:@ %a\n%!"
+  T.print (TE.find (DE.typing_env (DA.denv dacc)) (Name.symbol symbol));
   let dacc = DA.map_r dacc ~f:(fun r -> R.new_lifted_definition r definition) in
   Continuation_handler.pattern_match cont_handler ~f:(fun handler ->
     let args =
@@ -289,6 +291,14 @@ and simplify_non_recursive_let_cont_handler
                (Name_occurrences.continuations free_names_of_body)
                (Continuation.Set.of_list [cont; toplevel_exn_cont])
       in
+Format.eprintf "Can lift %b: still at toplevel %b, free names of body:@ %a,@\
+    expected return cont %a, expected exn cont %a, body:@ %a\n%!"
+  can_lift
+  (DE.still_at_toplevel denv)
+  Name_occurrences.print free_names_of_body
+  Continuation.print cont
+  Continuation.print toplevel_exn_cont
+  Expr.print body;
       if not can_lift then
         let simplify_body : _ Simplify_let_cont.simplify_body =
           { simplify_body = simplify_expr; }
