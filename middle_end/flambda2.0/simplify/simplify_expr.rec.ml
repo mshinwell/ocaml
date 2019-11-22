@@ -213,6 +213,11 @@ and lift_expression
     }
   in
   let definition, dacc = Simplify_static.simplify_definition dacc definition in
+  let dacc =
+    DA.map_denv dacc ~f:(fun denv ->
+      DE.add_lifted_constants denv
+        ~lifted:(R.get_lifted_constants (DA.r dacc)))
+  in
 (*
 Format.eprintf "New definition@ %a\n%!"
   Flambda_static.Program_body.Definition.print definition;
