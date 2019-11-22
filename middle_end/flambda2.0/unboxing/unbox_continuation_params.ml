@@ -22,16 +22,19 @@ open! Simplify_import
 let max_unboxing_depth = 1
 
 module type Unboxing_spec = sig
+  type size
+  type index
+
   val var_name : string
 
   val make_boxed_value : Tag.t -> fields:T.t list -> T.t
 
   val make_boxed_value_with_size_at_least
-     : n:Targetint.OCaml.t
+     : n:size
     -> field_n_minus_one:Variable.t
     -> T.t
 
-  val project_field : block:Simple.t -> index:Simple.t -> P.t
+  val project_field : block:Simple.t -> index:index -> P.t
 end
 
 module Make (U : Unboxing_spec) = struct
@@ -204,12 +207,16 @@ module Make (U : Unboxing_spec) = struct
 end
 
 module Block_of_values_spec : Unboxing_spec = struct
+  type size = Targetint.OCaml.t
+  type index = Simple.t
+
   let var_name = "unboxed"
 
   let make_boxed_value tag ~fields =
     T.immutable_block tag ~field_kind:Flambda_kind.value ~fields
 
-  let make_boxed_value_with_size_at_least ~n ~field_n_minus_one =
+  let make_boxed_value_with_size_at_least ~n ~field_n_minus_one_index:_
+        ~field_n_minus_one =
     T.immutable_block_with_size_at_least ~n
       ~field_kind:Flambda_kind.value ~field_n_minus_one
 
@@ -218,17 +225,44 @@ module Block_of_values_spec : Unboxing_spec = struct
 end
 
 module Block_of_naked_floats_spec : Unboxing_spec = struct
+  type size = Targetint.OCaml.t
+  type index = Simple.t
+
   let var_name = "unboxed"
 
   let make_boxed_value tag ~fields =
     T.immutable_block tag ~field_kind:Flambda_kind.naked_float ~fields
 
-  let make_boxed_value_with_size_at_least ~n ~field_n_minus_one =
+  let make_boxed_value_with_size_at_least ~n ~field_n_minus_one_index:_
+        ~field_n_minus_one =
     T.immutable_block_with_size_at_least ~n
       ~field_kind:Flambda_kind.naked_float ~field_n_minus_one
 
   let project_field ~block ~index =
     P.Binary (Block_load (Block Naked_float, Immutable), block, index)
+end
+
+module Closures_spec : Unboxing_spec = struct
+  type size = Var_within_closure.Set.t
+  type index = Var_within_closure.t
+
+  let var_name = "unboxed"
+
+  let make_boxed_value tag ~fields:closure_vars =
+    T.exactly_this_closure closure_id
+      ~all_function_decls_in_set:Function_declaration_type.t Closure_id.Map.t
+      ~all_closures_in_set:t Closure_id.Map.t
+      ~all_closure_vars_in_set:flambda_type Var_within_closure.Map.t
+
+  let make_boxed_value_with_size_at_least ~n:closure_vars
+        ~field_n_minus_one_index:closure_element
+        ~field_n_minus_one:closure_element_var =
+    T.closure_with_at_least_these_closure_vars closure_vars
+      ~closure_element
+      ~closure_element_var
+
+  let project_field ~block ~index:closure_var =
+    P.Unary (Project_var closure_var, block)
 end
 
 module Make_unboxed_number_spec (N : sig
@@ -242,6 +276,9 @@ module Make_unboxed_number_spec (N : sig
 
   val box : T.t -> T.t
 end) = struct
+  type size = Targetint.OCaml.t
+  type index = Simple.t
+
   let var_name = N.var_name
 
   let make_boxed_value tag ~fields =
@@ -250,7 +287,8 @@ end) = struct
     | [field] -> N.box field
     | _ -> Misc.fatal_errorf "Boxed %ss only have one field" N.name
 
-  let make_boxed_value_with_size_at_least ~n ~field_n_minus_one =
+  let make_boxed_value_with_size_at_least ~n ~field_n_minus_one_index:_
+        ~field_n_minus_one =
     if not (Targetint.OCaml.equal n Targetint.OCaml.one) then begin
        Misc.fatal_errorf "Boxed %ss only have one field" N.name
     end;
@@ -307,6 +345,7 @@ end)
 
 module Blocks_of_values = Make (Block_of_values_spec)
 module Blocks_of_naked_floats = Make (Block_of_naked_floats_spec)
+module Closures = Make (Closures_spec)
 module Immediates = Make (Immediate_spec)
 module Floats = Make (Float_spec)
 module Int32s = Make (Int32_spec)
@@ -354,15 +393,14 @@ let rec make_unboxing_decision typing_env ~depth ~arg_types_by_use_id
     | Wrong_kind | Invalid | Unknown ->
       (* CR-someday mshinwell: We could support more than a unique closure. *)
       match T.prove_single_closures_entry' typing_env param_type with
-      | Proved (closure_id, closures_entry, _func_type_or_unknown) ->
+      | Proved (closure_id, closures_entry, Known func_type) ->
         let closure_var_types =
           T.Closures_entry.closure_var_types closures_entry
         in
-
-        Closure.unbox_one_parameter typing_env ~depth
+        Closures.unbox_one_parameter typing_env ~depth
           ~arg_types_by_use_id ~param_type extra_params_and_args
-          ~unbox_value:make_unboxing_decision
-      | Wrong_kind | Invalid | Unknown ->
+          ~unbox_value:make_unboxing_decision ...
+      | Proved (_, _, Unknown) | Wrong_kind | Invalid | Unknown ->
         let rec try_unboxing = function
           | [] -> typing_env, param_type, extra_params_and_args
           | (prover, unboxer, tag, kind) :: decisions ->

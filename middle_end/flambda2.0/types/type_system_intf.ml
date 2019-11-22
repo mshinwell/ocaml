@@ -323,6 +323,12 @@ module type S = sig
     -> closure_element_var:Variable.t
     -> flambda_type
 
+  val closure_with_at_least_these_closure_vars
+     : Var_within_closure.Set.t
+    -> closure_element:Var_within_closure.t
+    -> closure_element_var:Variable.t
+    -> flambda_type
+
   val array_of_length : length:flambda_type -> flambda_type
 
   (** Construct a type equal to the type of the given name.  (The name
