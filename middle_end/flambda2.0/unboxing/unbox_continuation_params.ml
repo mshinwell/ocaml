@@ -22,19 +22,20 @@ open! Simplify_import
 let max_unboxing_depth = 1
 
 module type Unboxing_spec = sig
-  type size
-  type index
+  module Index : Identifiable.S
+  module Info : sig type t end
 
   val var_name : string
 
-  val make_boxed_value : Tag.t -> fields:T.t list -> T.t
+  (* CR mshinwell: rename [fields] *)
+  val make_boxed_value : Info.t -> fields:T.t Index.Map.t -> T.t
 
-  val make_boxed_value_with_size_at_least
-     : n:size
-    -> field_n_minus_one:Variable.t
+  val make_boxed_value_accommodating
+     : Index.Set.t
+    -> highest_index_var:Variable.t
     -> T.t
 
-  val project_field : block:Simple.t -> index:index -> P.t
+  val project_field : block:Simple.t -> index:Index.t -> P.t
 end
 
 module Make (U : Unboxing_spec) = struct
@@ -46,8 +47,7 @@ module Make (U : Unboxing_spec) = struct
       Name_in_binding_pos.create (Name.var field_var) Name_mode.in_types
     in
     let shape =
-      U.make_boxed_value_with_size_at_least
-        ~n:(Targetint.OCaml.of_int (index + 1))
+      U.make_boxed_value_accommodating ~index
         ~field_n_minus_one:field_var
     in
     (* Don't unbox parameters unless, at all use sites, there is a
@@ -120,12 +120,12 @@ module Make (U : Unboxing_spec) = struct
       (Some Apply_cont_rewrite_id.Map.empty, Apply_cont_rewrite_id.Map.empty)
 
   let unbox_fields_of_one_parameter ~new_param_vars ~arg_types_by_use_id
-        extra_params_and_args =
-    let _index, param_types_rev, all_field_types_by_id_rev,
-        extra_params_and_args =
-      List.fold_left
-        (fun (index, param_types_rev, all_field_types_by_id_rev,
-              extra_params_and_args) extra_param ->
+        extra_params_and_args indexes =
+    let param_types_rev, all_field_types_by_id_rev, extra_params_and_args =
+      Index.Map.fold
+        (fun index extra_param
+             (param_types_rev, all_field_types_by_id_rev,
+              extra_params_and_args) ->
           let extra_args, field_types_by_id =
             unbox_one_field_of_one_parameter ~extra_param ~index
               ~arg_types_by_use_id
@@ -141,33 +141,33 @@ module Make (U : Unboxing_spec) = struct
           in
           match extra_args with
           | None ->
-            index + 1, param_type :: param_types_rev,
+            Index.Map.add index param_type param_types_rev,
               all_field_types_by_id_rev, extra_params_and_args
           | Some extra_args ->
             let extra_params_and_args =
               EPA.add extra_params_and_args ~extra_param ~extra_args
             in
-            index + 1, param_type :: param_types_rev,
+            Index.Map.add index param_type param_types_rev,
               all_field_types_by_id_rev, extra_params_and_args)
-        (0, [], [], extra_params_and_args)
         new_param_vars
+        (Index.Map.empty, [], extra_params_and_args)
     in
-    List.rev param_types_rev, List.rev all_field_types_by_id_rev,
+    param_types, List.rev all_field_types_by_id_rev,
       extra_params_and_args
 
   let unbox_one_parameter typing_env ~depth ~arg_types_by_use_id ~param_type
-        extra_params_and_args ~unbox_value tag size kind =
+        extra_params_and_args ~unbox_value info indexes kind =
     let new_param_vars =
-      List.init (Targetint.OCaml.to_int size) (fun index ->
-        let name = Printf.sprintf "%s%d" U.var_name index in
+      List.map (Index.Set.to_list indexes) (fun index ->
+        let name = Format.asprintf "%s%a" U.var_name Index.print index in
         let var = Variable.create name in
         KP.create (Parameter.wrap var) kind)
     in
     let fields, all_field_types_by_id, extra_params_and_args =
       unbox_fields_of_one_parameter ~new_param_vars ~arg_types_by_use_id
-        extra_params_and_args
+        extra_params_and_args indexes
     in
-    let block_type = U.make_boxed_value tag ~fields in
+    let block_type = U.make_boxed_value info ~fields in
     let typing_env =
       TE.add_definitions_of_params typing_env ~params:new_param_vars
     in
@@ -181,7 +181,7 @@ module Make (U : Unboxing_spec) = struct
          restrict ourselves to types where the field components are known
          [Simple]s. *)
       let typing_env = TE.add_env_extension typing_env ~env_extension in
-      assert (List.compare_lengths fields all_field_types_by_id = 0);
+      assert (Index.Map.cardinal fields = List.length all_field_types_by_id);
       let typing_env, extra_params_and_args =
         List.fold_left2
           (fun (typing_env, extra_params_and_args) 
@@ -201,68 +201,90 @@ module Make (U : Unboxing_spec) = struct
               typing_env, extra_params_and_args
             end)
           (typing_env, extra_params_and_args)
-          fields all_field_types_by_id
+          (Index.Map.data fields) all_field_types_by_id
       in
       typing_env, param_type, extra_params_and_args
 end
 
 module Block_of_values_spec : Unboxing_spec = struct
-  type size = Targetint.OCaml.t
-  type index = Simple.t
+  module Index = Targetint.OCaml
+  module Info = Tag
 
   let var_name = "unboxed"
 
   let make_boxed_value tag ~fields =
+    let fields = Index.Map.data fields in
     T.immutable_block tag ~field_kind:Flambda_kind.value ~fields
 
-  let make_boxed_value_with_size_at_least ~n ~field_n_minus_one_index:_
-        ~field_n_minus_one =
-    T.immutable_block_with_size_at_least ~n
-      ~field_kind:Flambda_kind.value ~field_n_minus_one
+  let make_boxed_value_accommodating tag indexes ~highest_index_var =
+    match Index.Set.max_elt_opt indexes with
+    | None -> make_boxed_value tag Index.Map.empty
+    | Some index ->
+      T.immutable_block_with_size_at_least ~n:(index + 1)
+        ~field_kind:Flambda_kind.value
+        ~field_n_minus_one:highest_index_var
 
   let project_field ~block ~index =
     P.Binary (Block_load (Block (Value Anything), Immutable), block, index)
 end
 
 module Block_of_naked_floats_spec : Unboxing_spec = struct
-  type size = Targetint.OCaml.t
-  type index = Simple.t
+  module Index = Targetint.OCaml
+  module Info = Tag
 
   let var_name = "unboxed"
 
   let make_boxed_value tag ~fields =
+    let fields = Index.Map.data fields in
     T.immutable_block tag ~field_kind:Flambda_kind.naked_float ~fields
 
-  let make_boxed_value_with_size_at_least ~n ~field_n_minus_one_index:_
-        ~field_n_minus_one =
-    T.immutable_block_with_size_at_least ~n
-      ~field_kind:Flambda_kind.naked_float ~field_n_minus_one
+  let make_boxed_value_accommodating tag indexes ~highest_index_var =
+    match Index.Set.max_elt_opt indexes with
+    | None -> make_boxed_value tag Index.Map.empty
+    | Some index ->
+      T.immutable_block_with_size_at_least ~n:(index + 1)
+        ~field_kind:Flambda_kind.naked_float
+        ~field_n_minus_one:highest_index_var
 
   let project_field ~block ~index =
     P.Binary (Block_load (Block Naked_float, Immutable), block, index)
 end
 
 module Closures_spec : Unboxing_spec = struct
-  type size = Var_within_closure.Set.t
-  type index = Var_within_closure.t
+  module Index = Var_within_closure
 
-  let var_name = "unboxed"
+  module Info = struct
+    type t = {
+      closure_id : Closure_id.t;
+      func_decl_type : Function_declaration_type.t;
+      closure_type : T.t;
+    }
+  end
 
-  let make_boxed_value tag ~fields:closure_vars =
-    T.exactly_this_closure closure_id
-      ~all_function_decls_in_set:Function_declaration_type.t Closure_id.Map.t
-      ~all_closures_in_set:t Closure_id.Map.t
-      ~all_closure_vars_in_set:flambda_type Var_within_closure.Map.t
+  let var_name = "unboxed_clos_var"
 
-  let make_boxed_value_with_size_at_least ~n:closure_vars
-        ~field_n_minus_one_index:closure_element
-        ~field_n_minus_one:closure_element_var =
-    T.closure_with_at_least_these_closure_vars closure_vars
-      ~closure_element
-      ~closure_element_var
+  let make_boxed_value (info : Info.t) ~fields:closure_vars =
+    let all_function_decls_in_set =
+      Closure_id.Map.singleton info.closure_id info.func_decl_type
+    in
+    let all_closures_in_set =
+      Closure_id.Map.singleton info.closure_id info.closure_type
+    in
+    T.exactly_this_closure info.closure_id
+      ~all_function_decls_in_set
+      ~all_closures_in_set
+      ~all_closure_vars_in_set:closure_vars
 
-  let project_field ~block ~index:closure_var =
-    P.Unary (Project_var closure_var, block)
+  let make_boxed_value_accommodating info closure_vars ~highest_index_var =
+    match Var_within_closure.Set.max_elt_opt closure_vars with
+    | None -> make_boxed_value info ~fields:Var_within_closure.Map.empty
+    | Some closure_element ->
+      T.closure_with_at_least_these_closure_vars closure_vars
+        ~closure_element
+        ~closure_element_var:highest_index_var
+
+  let project_field ~block:closure ~index:closure_var =
+    P.Unary (Project_var closure_var, closure)
 end
 
 module Make_unboxed_number_spec (N : sig
@@ -276,13 +298,14 @@ module Make_unboxed_number_spec (N : sig
 
   val box : T.t -> T.t
 end) = struct
-  type size = Targetint.OCaml.t
-  type index = Simple.t
+  module Index = Targetint.OCaml
+  module Info = Tag
 
   let var_name = N.var_name
 
   let make_boxed_value tag ~fields =
     assert (Tag.equal tag N.tag);
+    let fields = Index.Map.data fields in
     match fields with
     | [field] -> N.box field
     | _ -> Misc.fatal_errorf "Boxed %ss only have one field" N.name
@@ -397,9 +420,12 @@ let rec make_unboxing_decision typing_env ~depth ~arg_types_by_use_id
         let closure_var_types =
           T.Closures_entry.closure_var_types closures_entry
         in
+        let info =
+          ...
+        in
         Closures.unbox_one_parameter typing_env ~depth
           ~arg_types_by_use_id ~param_type extra_params_and_args
-          ~unbox_value:make_unboxing_decision ...
+          ~unbox_value:make_unboxing_decision info
       | Proved (_, _, Unknown) | Wrong_kind | Invalid | Unknown ->
         let rec try_unboxing = function
           | [] -> typing_env, param_type, extra_params_and_args
