@@ -471,7 +471,8 @@ module type S = sig
     | Invalid
 
   val reify
-     : Typing_env.t
+     : ?allowed_free_vars:Variable.Set.t
+    -> Typing_env.t
     -> min_name_mode:Name_mode.t
     -> t
     -> reification_result

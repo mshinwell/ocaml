@@ -350,15 +350,26 @@ let simplify_return_continuation_handler dacc
       return_cont_handler.static_structure
   in
   let original_computed_values = return_cont_handler.computed_values in
+  let allowed_free_vars =
+    Variable.Set.union
+      (Variable.Set.of_list
+        (List.map KP.var return_cont_handler.computed_values))
+      (Variable.Set.of_list
+        (List.map KP.var extra_params_and_args.extra_params))
+  in
   Format.eprintf "-------------------\n%a\n\n%!" DA.print dacc;
   List.iter (fun param ->
       let var = KP.var param in
       let typing_env = DE.typing_env (DA.denv dacc) in
       let ty = TE.find typing_env (Name.var var) in
       Format.eprintf "CV %a type %a\n%!" Variable.print var T.print ty;
-      match T.reify typing_env ~min_name_mode:NM.normal ty with
-      | Lift _ ->
-        Format.eprintf "...can be reified\n%!"
+      match
+        T.reify ~allowed_free_vars typing_env ~min_name_mode:NM.normal ty
+      with
+      | Lift to_lift ->
+        let static_part = Reification.create_static_part to_lift in
+        Format.eprintf "...can be reified:@ %a\n%!"
+          Flambda_static.Static_part.print static_part
       | Simple _ ->
         Format.eprintf "...Simple\n%!"
       | Cannot_reify ->

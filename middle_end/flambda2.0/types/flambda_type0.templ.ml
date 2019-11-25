@@ -93,7 +93,7 @@ module Make
     | Wrong_kind
 
   type var_or_symbol_or_tagged_immediate =
-    | Var of Var.t
+    | Var of Variable.t
     | Symbol of Symbol.t
     | Tagged_immediate of Immediate.t
 
@@ -617,7 +617,8 @@ module Make
       | Naked_nativeint _ -> wrong_kind ()
 
   type to_lift =
-    | Immutable_block of Tag.Scannable.t * (var_or_symbol_or_tagged_immediate list)
+    | Immutable_block of Tag.Scannable.t
+        * (var_or_symbol_or_tagged_immediate list)
     | Boxed_float of Float.t
     | Boxed_int32 of Int32.t
     | Boxed_int64 of Int64.t
@@ -631,7 +632,10 @@ module Make
 
   (* CR mshinwell: Think more to identify all the cases that should be
      in this function. *)
-  let reify env ~min_name_mode t : reification_result =
+  let reify ?allowed_free_vars env ~min_name_mode t : reification_result =
+    let allowed_free_vars =
+      Option.value allowed_free_vars ~default:Variable.Set.empty
+    in
 (*
 Format.eprintf "reifying %a\n%!" print t;
 *)
@@ -672,9 +676,10 @@ Format.eprintf "reifying %a\n%!" print t;
                 let field_types =
                   Product.Int_indexed.components field_types
                 in
-                let symbols_or_tagged_immediates =
+                let vars_or_symbols_or_tagged_immediates =
                   List.filter_map
-                    (fun field_type : symbol_or_tagged_immediate option ->
+                    (fun field_type
+                           : var_or_symbol_or_tagged_immediate option ->
                       match
                         (* XXX This is what needs to change to cope with
                            recursive reification.  We need to be open to the
@@ -688,7 +693,10 @@ Format.eprintf "reifying %a\n%!" print t;
                           field_type
                       with
                       | Proved (Var var) ->
-                        Some (Var var)
+                        if Variable.Set.mem var allowed_free_vars then
+                          Some (Var var)
+                        else
+                          None
                       | Proved (Symbol sym) -> Some (Symbol sym)
                       | Proved (Tagged_immediate sym) ->
                         Some (Tagged_immediate sym)
@@ -696,12 +704,13 @@ Format.eprintf "reifying %a\n%!" print t;
                       | Unknown | Invalid -> None)
                     field_types
                 in
-                if List.compare_lengths field_types symbols_or_tagged_immediates
-                  = 0
+                if List.compare_lengths field_types
+                     vars_or_symbols_or_tagged_immediates = 0
                 then
                   match Tag.Scannable.of_tag tag with
                   | Some tag ->
-                    Lift (Immutable_block (tag, symbols_or_tagged_immediates))
+                    Lift (Immutable_block (
+                      tag, vars_or_symbols_or_tagged_immediates))
                   | None -> try_canonical_simple ()
                 else
                   try_canonical_simple ()
