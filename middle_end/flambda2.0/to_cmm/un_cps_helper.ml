@@ -225,8 +225,8 @@ let array_kind_of_block_access kind =
   | Array Value Definitely_immediate
   | Generic_array Full_of_immediates -> Lambda.Pintarray
   (* Arrays of caml values (i.e specifically not naked floats) *)
-  | Block Value (Anything|Definitely_pointer)
-  | Array Value (Anything|Definitely_pointer)
+  | Block Value Definitely_pointer
+  | Array Value Definitely_pointer
   | Generic_array Full_of_arbitrary_values_but_not_floats -> Lambda.Paddrarray
   (* General case: the array might contain naked floats *)
   | _ -> Lambda.Pgenarray
