@@ -356,8 +356,8 @@ let simplify_return_continuation_handler dacc
   Format.eprintf "Static structure starts as:@ %a\n%!"
     Static_structure.print return_cont_handler.static_structure;
   let result_dacc, static_structure =
-    let dacc =
-      List.fold_left (fun dacc param ->
+    let result_dacc, dacc =
+      List.fold_left (fun (result_dacc, dacc) param ->
           let var = KP.var param in
           let typing_env = DE.typing_env (DA.denv dacc) in
           let ty = TE.find typing_env (Name.var var) in
@@ -373,13 +373,20 @@ let simplify_return_continuation_handler dacc
             in
             Format.eprintf "...can be reified:@ %a\n%!"
               Flambda_static.Static_part.print static_part;
-            DA.map_denv dacc ~f:(fun denv ->
-              DE.add_equation_on_name
-                (DE.define_symbol denv symbol K.value)
-                (Name.var var)
-                (T.alias_type_of K.value (Simple.symbol symbol)))
-          | Simple _ | Cannot_reify | Invalid -> dacc)
-        dacc
+            let result_dacc =
+              DA.map_denv result_dacc ~f:(fun denv ->
+                DE.define_symbol denv symbol K.value)
+            in
+            let dacc =
+              DA.map_denv dacc ~f:(fun denv ->
+                DE.add_equation_on_name
+                  (DE.define_symbol denv symbol K.value)
+                  (Name.var var)
+                  (T.alias_type_of K.value (Simple.symbol symbol)))
+            in
+            result_dacc, dacc
+          | Simple _ | Cannot_reify | Invalid -> result_dacc, dacc)
+        (result_dacc, dacc)
         original_computed_values
     in
     simplify_static_structure dacc ~result_dacc
