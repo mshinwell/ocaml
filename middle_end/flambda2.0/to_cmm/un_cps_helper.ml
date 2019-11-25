@@ -425,7 +425,13 @@ let direct_call ?(dbg=Debuginfo.none) ty f_code_sym args f =
 
 let indirect_call ?(dbg=Debuginfo.none) ty f = function
   | [arg] ->
-      Cmm.Cop (Cmm.Capply ty, [load Cmm.Word_int Asttypes.Mutable f; arg; f], dbg)
+      (* Use a variable to avoid duplicating the cmm code of [f]. *)
+      let v = Backend_var.create_local "*code*" in
+      let v' = Backend_var.With_provenance.create v in
+      letin v' f @@
+      Cmm.Cop (Cmm.Capply ty,
+               [load Cmm.Word_int Asttypes.Mutable (var v); arg; (var v)],
+               dbg)
   | args ->
       let arity = List.length args in
       let l = symbol (apply_function_sym arity) :: args @ [f] in
