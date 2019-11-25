@@ -31,15 +31,18 @@ module type Unboxing_spec = sig
   val make_boxed_value : Info.t -> fields:T.t Index.Map.t -> T.t
 
   val make_boxed_value_accommodating
-     : Index.Set.t
-    -> highest_index_var:Variable.t
+     : Info.t
+    -> Index.t
+    -> index_var:Variable.t
     -> T.t
 
   val project_field : block:Simple.t -> index:Index.t -> P.t
 end
 
 module Make (U : Unboxing_spec) = struct
-  let unbox_one_field_of_one_parameter ~extra_param ~index
+  module Index = U.Index
+
+  let unbox_one_field_of_one_parameter info ~extra_param ~index
         ~arg_types_by_use_id =
     let param_kind = KP.kind extra_param in
     let field_var = Variable.create "field_at_use" in
@@ -47,8 +50,7 @@ module Make (U : Unboxing_spec) = struct
       Name_in_binding_pos.create (Name.var field_var) Name_mode.in_types
     in
     let shape =
-      U.make_boxed_value_accommodating ~index
-        ~field_n_minus_one:field_var
+      U.make_boxed_value_accommodating info index ~index_var:field_var
     in
     (* Don't unbox parameters unless, at all use sites, there is a
        non-irrelevant [Simple] available for the corresponding field of the
@@ -119,15 +121,15 @@ module Make (U : Unboxing_spec) = struct
       arg_types_by_use_id
       (Some Apply_cont_rewrite_id.Map.empty, Apply_cont_rewrite_id.Map.empty)
 
-  let unbox_fields_of_one_parameter ~new_param_vars ~arg_types_by_use_id
-        extra_params_and_args indexes =
-    let param_types_rev, all_field_types_by_id_rev, extra_params_and_args =
+  let unbox_fields_of_one_parameter info ~new_param_vars ~arg_types_by_use_id
+        extra_params_and_args =
+    let param_types, all_field_types_by_id_rev, extra_params_and_args =
       Index.Map.fold
         (fun index extra_param
              (param_types_rev, all_field_types_by_id_rev,
               extra_params_and_args) ->
           let extra_args, field_types_by_id =
-            unbox_one_field_of_one_parameter ~extra_param ~index
+            unbox_one_field_of_one_parameter info ~extra_param ~index
               ~arg_types_by_use_id
           in
           let param_type =
@@ -158,18 +160,22 @@ module Make (U : Unboxing_spec) = struct
   let unbox_one_parameter typing_env ~depth ~arg_types_by_use_id ~param_type
         extra_params_and_args ~unbox_value info indexes kind =
     let new_param_vars =
-      List.map (Index.Set.to_list indexes) (fun index ->
-        let name = Format.asprintf "%s%a" U.var_name Index.print index in
-        let var = Variable.create name in
-        KP.create (Parameter.wrap var) kind)
+      Index.Set.fold (fun index new_param_vars ->
+          let name = Format.asprintf "%s%a" U.var_name Index.print index in
+          let var = Variable.create name in
+          let param = KP.create (Parameter.wrap var) kind in
+          Index.Map.add index param new_param_vars)
+        indexes
+        Index.Map.empty
     in
     let fields, all_field_types_by_id, extra_params_and_args =
-      unbox_fields_of_one_parameter ~new_param_vars ~arg_types_by_use_id
-        extra_params_and_args indexes
+      unbox_fields_of_one_parameter info ~new_param_vars ~arg_types_by_use_id
+        extra_params_and_args
     in
     let block_type = U.make_boxed_value info ~fields in
     let typing_env =
-      TE.add_definitions_of_params typing_env ~params:new_param_vars
+      TE.add_definitions_of_params typing_env
+        ~params:(Index.Map.data new_param_vars)
     in
     match T.meet typing_env block_type param_type with
     | Bottom ->
@@ -206,7 +212,10 @@ module Make (U : Unboxing_spec) = struct
       typing_env, param_type, extra_params_and_args
 end
 
-module Block_of_values_spec : Unboxing_spec = struct
+module Block_of_values_spec : Unboxing_spec
+  with module Info = Tag
+  with module Index = Targetint.OCaml =
+struct
   module Index = Targetint.OCaml
   module Info = Tag
 
@@ -216,19 +225,22 @@ module Block_of_values_spec : Unboxing_spec = struct
     let fields = Index.Map.data fields in
     T.immutable_block tag ~field_kind:Flambda_kind.value ~fields
 
-  let make_boxed_value_accommodating tag indexes ~highest_index_var =
-    match Index.Set.max_elt_opt indexes with
-    | None -> make_boxed_value tag Index.Map.empty
-    | Some index ->
-      T.immutable_block_with_size_at_least ~n:(index + 1)
-        ~field_kind:Flambda_kind.value
-        ~field_n_minus_one:highest_index_var
+  let make_boxed_value_accommodating _tag index ~index_var =
+    (* CR mshinwell: Should create the type using the tag too. *)
+    T.immutable_block_with_size_at_least
+      ~n:(Targetint.OCaml.add index Targetint.OCaml.one)
+      ~field_kind:Flambda_kind.value
+      ~field_n_minus_one:index_var
 
   let project_field ~block ~index =
+    let index = Simple.const_int index in
     P.Binary (Block_load (Block (Value Anything), Immutable), block, index)
 end
 
-module Block_of_naked_floats_spec : Unboxing_spec = struct
+module Block_of_naked_floats_spec : Unboxing_spec
+  with module Info = Tag
+  with module Index = Targetint.OCaml =
+struct
   module Index = Targetint.OCaml
   module Info = Tag
 
@@ -238,18 +250,18 @@ module Block_of_naked_floats_spec : Unboxing_spec = struct
     let fields = Index.Map.data fields in
     T.immutable_block tag ~field_kind:Flambda_kind.naked_float ~fields
 
-  let make_boxed_value_accommodating tag indexes ~highest_index_var =
-    match Index.Set.max_elt_opt indexes with
-    | None -> make_boxed_value tag Index.Map.empty
-    | Some index ->
-      T.immutable_block_with_size_at_least ~n:(index + 1)
-        ~field_kind:Flambda_kind.naked_float
-        ~field_n_minus_one:highest_index_var
+  let make_boxed_value_accommodating _tag index ~index_var =
+    (* CR mshinwell: Should create the type using the tag too. *)
+    T.immutable_block_with_size_at_least
+      ~n:(Targetint.OCaml.add index Targetint.OCaml.one)
+      ~field_kind:Flambda_kind.naked_float
+      ~field_n_minus_one:index_var
 
   let project_field ~block ~index =
+    let index = Simple.const_int index in
     P.Binary (Block_load (Block Naked_float, Immutable), block, index)
 end
-
+(*
 module Closures_spec : Unboxing_spec = struct
   module Index = Var_within_closure
 
@@ -286,6 +298,7 @@ module Closures_spec : Unboxing_spec = struct
   let project_field ~block:closure ~index:closure_var =
     P.Unary (Project_var closure_var, closure)
 end
+*)
 
 module Make_unboxed_number_spec (N : sig
   val name : string
@@ -310,18 +323,21 @@ end) = struct
     | [field] -> N.box field
     | _ -> Misc.fatal_errorf "Boxed %ss only have one field" N.name
 
-  let make_boxed_value_with_size_at_least ~n ~field_n_minus_one_index:_
-        ~field_n_minus_one =
-    if not (Targetint.OCaml.equal n Targetint.OCaml.one) then begin
+  let make_boxed_value_accommodating _tag index ~index_var =
+    (* CR mshinwell: Should create the type using the tag too. *)
+    if not (Targetint.OCaml.equal index Targetint.OCaml.one) then begin
        Misc.fatal_errorf "Boxed %ss only have one field" N.name
     end;
-    N.box (T.alias_type_of N.unboxed_kind (Simple.var field_n_minus_one))
+    N.box (T.alias_type_of N.unboxed_kind (Simple.var index_var))
 
   let project_field ~block ~index:_ =
     P.Unary (Unbox_number N.boxable_number_kind, block)
 end
 
-module Immediate_spec : Unboxing_spec = Make_unboxed_number_spec (struct
+module Immediate_spec : Unboxing_spec
+  with module Info = Tag
+  with module Index = Targetint.OCaml =
+Make_unboxed_number_spec (struct
   let name = "immediate"
   let var_name = "untagged_imm"
   let tag = Tag.zero  (* CR mshinwell: make optional *)
@@ -330,7 +346,10 @@ module Immediate_spec : Unboxing_spec = Make_unboxed_number_spec (struct
   let box = T.tag_immediate
 end)
 
-module Float_spec : Unboxing_spec = Make_unboxed_number_spec (struct
+module Float_spec : Unboxing_spec
+  with module Info = Tag
+  with module Index = Targetint.OCaml =
+Make_unboxed_number_spec (struct
   let name = "float"
   let var_name = "unboxed_float"
   let tag = Tag.double_tag
@@ -339,7 +358,10 @@ module Float_spec : Unboxing_spec = Make_unboxed_number_spec (struct
   let box = T.box_float
 end)
 
-module Int32_spec : Unboxing_spec = Make_unboxed_number_spec (struct
+module Int32_spec : Unboxing_spec
+  with module Info = Tag
+  with module Index = Targetint.OCaml =
+Make_unboxed_number_spec (struct
   let name = "int32"
   let var_name = "unboxed_int32"
   let tag = Tag.custom_tag
@@ -348,7 +370,10 @@ module Int32_spec : Unboxing_spec = Make_unboxed_number_spec (struct
   let box = T.box_int32
 end)
 
-module Int64_spec : Unboxing_spec = Make_unboxed_number_spec (struct
+module Int64_spec : Unboxing_spec
+  with module Info = Tag
+  with module Index = Targetint.OCaml =
+Make_unboxed_number_spec (struct
   let name = "int64"
   let var_name = "unboxed_int64"
   let tag = Tag.custom_tag
@@ -357,7 +382,10 @@ module Int64_spec : Unboxing_spec = Make_unboxed_number_spec (struct
   let box = T.box_int64
 end)
 
-module Nativeint_spec : Unboxing_spec = Make_unboxed_number_spec (struct
+module Nativeint_spec : Unboxing_spec
+  with module Info = Tag
+  with module Index = Targetint.OCaml =
+Make_unboxed_number_spec (struct
   let name = "nativeint"
   let var_name = "unboxed_nativeint"
   let tag = Tag.custom_tag
@@ -368,7 +396,7 @@ end)
 
 module Blocks_of_values = Make (Block_of_values_spec)
 module Blocks_of_naked_floats = Make (Block_of_naked_floats_spec)
-module Closures = Make (Closures_spec)
+(*module Closures = Make (Closures_spec)*)
 module Immediates = Make (Immediate_spec)
 module Floats = Make (Float_spec)
 module Int32s = Make (Int32_spec)
@@ -395,18 +423,23 @@ let rec make_unboxing_decision typing_env ~depth ~arg_types_by_use_id
   else
     match T.prove_unique_tag_and_size typing_env param_type with
     | Proved (tag, size) ->
+      let indexes =
+        let size = Targetint.OCaml.to_int size in
+        Targetint.OCaml.Set.of_list
+          (List.init size (fun index -> Targetint.OCaml.of_int index))
+      in
       (* If the fields have kind [Naked_float] then the [tag] will always
          be [Tag.double_array_tag].  See [Row_like.For_blocks]. *)
       if Tag.equal tag Tag.double_array_tag then
         Blocks_of_naked_floats.unbox_one_parameter typing_env ~depth
           ~arg_types_by_use_id ~param_type extra_params_and_args
-          ~unbox_value:make_unboxing_decision tag size K.naked_float
+          ~unbox_value:make_unboxing_decision tag indexes K.naked_float
       else
         begin match Tag.Scannable.of_tag tag with
         | Some _ ->
           Blocks_of_values.unbox_one_parameter typing_env ~depth
             ~arg_types_by_use_id ~param_type extra_params_and_args
-            ~unbox_value:make_unboxing_decision tag size K.value
+            ~unbox_value:make_unboxing_decision tag indexes K.value
         | None ->
           Misc.fatal_errorf "Block that is not of tag [Double_array_tag] \
               and yet also not scannable:@ %a@ in env:@ %a"
@@ -415,6 +448,7 @@ let rec make_unboxing_decision typing_env ~depth ~arg_types_by_use_id
         end
     | Wrong_kind | Invalid | Unknown ->
       (* CR-someday mshinwell: We could support more than a unique closure. *)
+(*
       match T.prove_single_closures_entry' typing_env param_type with
       | Proved (closure_id, closures_entry, Known func_type) ->
         let closure_var_types =
@@ -427,6 +461,7 @@ let rec make_unboxing_decision typing_env ~depth ~arg_types_by_use_id
           ~arg_types_by_use_id ~param_type extra_params_and_args
           ~unbox_value:make_unboxing_decision info
       | Proved (_, _, Unknown) | Wrong_kind | Invalid | Unknown ->
+*)
         let rec try_unboxing = function
           | [] -> typing_env, param_type, extra_params_and_args
           | (prover, unboxer, tag, kind) :: decisions ->
@@ -435,9 +470,12 @@ let rec make_unboxing_decision typing_env ~depth ~arg_types_by_use_id
             in
             match proof with
             | Proved () ->
+              let indexes =
+                Targetint.OCaml.Set.singleton Targetint.OCaml.zero
+              in
               unboxer typing_env ~depth ~arg_types_by_use_id ~param_type
                 extra_params_and_args ~unbox_value:make_unboxing_decision
-                tag Targetint.OCaml.one kind
+                tag indexes kind
             | Wrong_kind | Invalid | Unknown -> try_unboxing decisions
         in
         try_unboxing unboxed_number_decisions
