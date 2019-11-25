@@ -353,9 +353,18 @@ let simplify_return_continuation_handler dacc
   Format.eprintf "-------------------\n%a\n\n%!" DA.print dacc;
   List.iter (fun param ->
       let var = KP.var param in
-      Format.eprintf "CV %a type %a\n%!"
-        Variable.print var
-        T.print (TE.find (DE.typing_env (DA.denv dacc)) (Name.var var)))
+      let typing_env = DE.typing_env (DA.denv dacc) in
+      let ty = TE.find typing_env (Name.var var) in
+      Format.eprintf "CV %a type %a\n%!" Variable.print var T.print ty;
+      match T.reify typing_env ~min_name_mode:NM.normal ty with
+      | Lift _ ->
+        Format.eprintf "...can be reified\n%!"
+      | Simple _ ->
+        Format.eprintf "...Simple\n%!"
+      | Cannot_reify ->
+        Format.eprintf "Cannot_reify\n%!"
+      | Invalid ->
+        Format.eprintf "Invalid\n%!")
     original_computed_values;
   List.iter (fun param ->
       let var = KP.var param in

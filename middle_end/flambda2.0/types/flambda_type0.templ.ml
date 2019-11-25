@@ -92,12 +92,13 @@ module Make
     | Invalid
     | Wrong_kind
 
-  type symbol_or_tagged_immediate =
+  type var_or_symbol_or_tagged_immediate =
+    | Var of Var.t
     | Symbol of Symbol.t
     | Tagged_immediate of Immediate.t
 
-  let prove_equals_to_symbol_or_tagged_immediate env t
-        : symbol_or_tagged_immediate proof =
+  let prove_equals_to_var_or_symbol_or_tagged_immediate env t
+        : var_or_symbol_or_tagged_immediate proof =
     let original_kind = kind t in
     if not (K.equal original_kind K.value) then begin
       Misc.fatal_errorf "Type %a is not of kind value"
@@ -129,7 +130,7 @@ module Make
              it will be canonical *)
           match Simple.descr simple with
           | Name (Symbol sym) -> Proved (Symbol sym)
-          | Name (Var _) -> Unknown
+          | Name (Var var) -> Proved (Var var)
           | Const (Tagged_immediate imm) -> Proved (Tagged_immediate imm)
           | Const _ ->
             let kind = kind t in
@@ -616,7 +617,7 @@ module Make
       | Naked_nativeint _ -> wrong_kind ()
 
   type to_lift =
-    | Immutable_block of Tag.Scannable.t * (symbol_or_tagged_immediate list)
+    | Immutable_block of Tag.Scannable.t * (var_or_symbol_or_tagged_immediate list)
     | Boxed_float of Float.t
     | Boxed_int32 of Int32.t
     | Boxed_int64 of Int64.t
@@ -683,9 +684,11 @@ Format.eprintf "reifying %a\n%!" print t;
 
                            Maybe try implementing this independently and trying
                            on examples first. *)
-                        prove_equals_to_symbol_or_tagged_immediate env
+                        prove_equals_to_var_or_symbol_or_tagged_immediate env
                           field_type
                       with
+                      | Proved (Var var) ->
+                        Some (Var var)
                       | Proved (Symbol sym) -> Some (Symbol sym)
                       | Proved (Tagged_immediate sym) ->
                         Some (Tagged_immediate sym)
