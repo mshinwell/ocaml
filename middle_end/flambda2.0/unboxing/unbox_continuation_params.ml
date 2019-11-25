@@ -325,7 +325,7 @@ end) = struct
 
   let make_boxed_value_accommodating _tag index ~index_var =
     (* CR mshinwell: Should create the type using the tag too. *)
-    if not (Targetint.OCaml.equal index Targetint.OCaml.one) then begin
+    if not (Targetint.OCaml.equal index Targetint.OCaml.zero) then begin
        Misc.fatal_errorf "Boxed %ss only have one field" N.name
     end;
     N.box (T.alias_type_of N.unboxed_kind (Simple.var index_var))

@@ -349,22 +349,33 @@ let simplify_return_continuation_handler dacc
     simplify_static_structure dacc ~result_dacc
       return_cont_handler.static_structure
   in
+  let original_computed_values = return_cont_handler.computed_values in
+  Format.eprintf "-------------------\n%a\n\n%!" DA.print dacc;
+  List.iter (fun param ->
+      let var = KP.var param in
+      Format.eprintf "CV %a type %a\n%!"
+        Variable.print var
+        T.print (TE.find (DE.typing_env (DA.denv dacc)) (Name.var var)))
+    original_computed_values;
+  List.iter (fun param ->
+      let var = KP.var param in
+      Format.eprintf "EP %a type %a\n%!"
+        Variable.print var
+        T.print (TE.find (DE.typing_env (DA.denv dacc)) (Name.var var)))
+    extra_params_and_args.extra_params;
   let handler, used_computed_values, uenv =
     let free_variables =
       Name_occurrences.variables
         (Static_structure.free_names static_structure)
     in
-    let original_computed_values = return_cont_handler.computed_values in
     let used_computed_values =
       List.filter (fun param ->
           Variable.Set.mem (KP.var param) free_variables)
         original_computed_values
     in
     let used_extra_params =
-    (*
       List.filter (fun extra_param ->
-          Name_occurrences.mem_var free_names (KP.var extra_param))
-    *)
+          Variable.Set.mem (KP.var extra_param) free_variables)
         extra_params_and_args.extra_params
     in
     let handler : Return_cont_handler.t =
