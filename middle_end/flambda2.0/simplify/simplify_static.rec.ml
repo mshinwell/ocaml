@@ -345,10 +345,6 @@ let simplify_return_continuation_handler dacc
       cont (return_cont_handler : Return_cont_handler.Opened.t)
       ~user_data:result_dacc _k =
   let result_dacc = DA.with_r result_dacc (DA.r dacc) in
-  let result_dacc, static_structure =
-    simplify_static_structure dacc ~result_dacc
-      return_cont_handler.static_structure
-  in
   let original_computed_values = return_cont_handler.computed_values in
   let allowed_free_vars =
     Variable.Set.union
@@ -357,32 +353,40 @@ let simplify_return_continuation_handler dacc
       (Variable.Set.of_list
         (List.map KP.var extra_params_and_args.extra_params))
   in
-  Format.eprintf "-------------------\n%a\n\n%!" DA.print dacc;
-  List.iter (fun param ->
-      let var = KP.var param in
-      let typing_env = DE.typing_env (DA.denv dacc) in
-      let ty = TE.find typing_env (Name.var var) in
-      Format.eprintf "CV %a type %a\n%!" Variable.print var T.print ty;
-      match
-        T.reify ~allowed_free_vars typing_env ~min_name_mode:NM.normal ty
-      with
-      | Lift to_lift ->
-        let static_part = Reification.create_static_part to_lift in
-        Format.eprintf "...can be reified:@ %a\n%!"
-          Flambda_static.Static_part.print static_part
-      | Simple _ ->
-        Format.eprintf "...Simple\n%!"
-      | Cannot_reify ->
-        Format.eprintf "Cannot_reify\n%!"
-      | Invalid ->
-        Format.eprintf "Invalid\n%!")
-    original_computed_values;
-  List.iter (fun param ->
-      let var = KP.var param in
-      Format.eprintf "EP %a type %a\n%!"
-        Variable.print var
-        T.print (TE.find (DE.typing_env (DA.denv dacc)) (Name.var var)))
-    extra_params_and_args.extra_params;
+  Format.eprintf "Static structure starts as:@ %a\n%!"
+    Static_structure.print return_cont_handler.static_structure;
+  let result_dacc, static_structure =
+    let dacc =
+      List.fold_left (fun dacc param ->
+          let var = KP.var param in
+          let typing_env = DE.typing_env (DA.denv dacc) in
+          let ty = TE.find typing_env (Name.var var) in
+          Format.eprintf "CV %a type %a\n%!" Variable.print var T.print ty;
+          match
+            T.reify ~allowed_free_vars typing_env ~min_name_mode:NM.normal ty
+          with
+          | Lift to_lift ->
+            let static_part = Reification.create_static_part to_lift in
+            let symbol =
+              Symbol.create (Compilation_unit.get_current_exn ())
+                (Linkage_name.create (Variable.unique_name var))
+            in
+            Format.eprintf "...can be reified:@ %a\n%!"
+              Flambda_static.Static_part.print static_part;
+            DA.map_denv dacc ~f:(fun denv ->
+              DE.add_equation_on_name
+                (DE.define_symbol denv symbol K.value)
+                (Name.var var)
+                (T.alias_type_of K.value (Simple.symbol symbol)))
+          | Simple _ | Cannot_reify | Invalid -> dacc)
+        dacc
+        original_computed_values
+    in
+    simplify_static_structure dacc ~result_dacc
+      return_cont_handler.static_structure
+  in
+  Format.eprintf "Static structure is now:@ %a\n%!"
+    Static_structure.print static_structure;
   let handler, used_computed_values, uenv =
     let free_variables =
       Name_occurrences.variables
