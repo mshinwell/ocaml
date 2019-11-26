@@ -454,7 +454,9 @@ let simplify_return_continuation_handler dacc
       in
       Static_structure.S [Singleton symbol, static_part], result_dacc
   in
-  Format.eprintf "Static structure for fresh symbol is now:@ %a\n%!"
+  Format.eprintf "Static structure for fresh symbol (orig CVs %a, EPs %a) is now:@ %a\n%!"
+    KP.List.print original_computed_values
+    Continuation_extra_params_and_args.print extra_params_and_args
     Static_structure.print static_structure;
   let handler, used_computed_values, uenv =
     let free_variables =
@@ -471,8 +473,9 @@ let simplify_return_continuation_handler dacc
           Variable.Set.mem (KP.var extra_param) free_variables)
         extra_params_and_args.extra_params
     in
+    let computed_values = used_computed_values @ used_extra_params in
     let handler : Return_cont_handler.t =
-      { computed_values = used_computed_values @ used_extra_params;
+      { computed_values;
         static_structure;
       }
     in
@@ -484,7 +487,7 @@ let simplify_return_continuation_handler dacc
         ~used_extra_params:(KP.Set.of_list used_extra_params)
     in
     let uenv = UE.add_apply_cont_rewrite UE.empty cont rewrite in
-    handler, used_computed_values, uenv
+    handler, computed_values, uenv
   in
   let uacc = UA.create uenv (DA.r result_dacc) in
   (* CR mshinwell: It would be easier to avoid returning [result_dacc].

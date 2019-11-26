@@ -212,7 +212,22 @@ and lift_expression
       static_structure = S [Singleton symbol, static_part];
     }
   in
+  (* Note that [simplify_definition] may change the symbol bound by
+     [definition], in the event that reifying and lifting of computed
+     values occurs. *)
   let definition, dacc = Simplify_static.simplify_definition dacc definition in
+  let symbol =
+    let being_defined =
+      Flambda_static.Program_body.Static_structure.being_defined
+        definition.static_structure
+    in
+    match Symbol.Set.get_singleton being_defined with
+    | Some symbol -> symbol
+    | None -> assert false  (* See above; we only create [Singleton]s. *)
+  in
+Format.eprintf "New definition (new symbol %a)@ %a\ndacc:@ %a\n%!"
+  Symbol.print symbol
+  Flambda_static.Program_body.Definition.print definition DA.print dacc;
   let dacc =
     DA.map_denv dacc ~f:(fun denv ->
       DE.add_lifted_constants denv
