@@ -355,44 +355,85 @@ let simplify_return_continuation_handler dacc
   in
   Format.eprintf "Static structure starts as:@ %a\n%!"
     Static_structure.print return_cont_handler.static_structure;
-  let result_dacc, static_structure =
-    let result_dacc, dacc =
-      List.fold_left (fun (result_dacc, dacc) param ->
-          let var = KP.var param in
-          let typing_env = DE.typing_env (DA.denv dacc) in
-          let ty = TE.find typing_env (Name.var var) in
-          Format.eprintf "CV %a type %a\n%!" Variable.print var T.print ty;
-          match
-            T.reify ~allowed_free_vars typing_env ~min_name_mode:NM.normal ty
-          with
-          | Lift to_lift ->
-            let static_part = Reification.create_static_part to_lift in
-            let symbol =
-              Symbol.create (Compilation_unit.get_current_exn ())
-                (Linkage_name.create (Variable.unique_name var))
-            in
-            Format.eprintf "...can be reified:@ %a\n%!"
-              Flambda_static.Static_part.print static_part;
-            let result_dacc =
-              DA.map_denv result_dacc ~f:(fun denv ->
-                DE.define_symbol denv symbol K.value)
-            in
-            let dacc =
-              DA.map_denv dacc ~f:(fun denv ->
-                DE.add_equation_on_name
-                  (DE.define_symbol denv symbol K.value)
-                  (Name.var var)
-                  (T.alias_type_of K.value (Simple.symbol symbol)))
-            in
-            result_dacc, dacc
-          | Simple _ | Cannot_reify | Invalid -> result_dacc, dacc)
-        (result_dacc, dacc)
-        original_computed_values
+  let result_dacc, static_structure, replacement_definition =
+    let result_dacc, dacc, replacement_definition =
+      match original_computed_values with
+      | [param] ->
+        let var = KP.var param in
+        let typing_env = DE.typing_env (DA.denv dacc) in
+        let ty = TE.find typing_env (Name.var var) in
+(*
+        Format.eprintf "CV %a type %a\n%!" Variable.print var T.print ty;
+*)
+        begin match
+          T.reify ~allowed_free_vars typing_env ~min_name_mode:NM.normal ty
+        with
+        | Lift to_lift ->
+          let static_part = Reification.create_static_part to_lift in
+          let symbol =
+            Symbol.create (Compilation_unit.get_current_exn ())
+              (Linkage_name.create (Variable.unique_name var))
+          in
+(*
+          Format.eprintf "...can be reified:@ %a\n%!"
+            Flambda_static.Static_part.print static_part;
+*)
+          let result_dacc =
+            DA.map_denv result_dacc ~f:(fun denv ->
+              DE.define_symbol denv symbol K.value)
+          in
+          let dacc =
+            DA.map_denv dacc ~f:(fun denv ->
+              DE.add_equation_on_name
+                (DE.define_symbol denv symbol K.value)
+                (Name.var var)
+                (T.alias_type_of K.value (Simple.symbol symbol)))
+          in
+          result_dacc, dacc, Some (symbol, static_part)
+        | Simple _ | Cannot_reify | Invalid -> result_dacc, dacc, None
+        end
+      | [] | _::_ -> result_dacc, dacc, None
     in
-    simplify_static_structure dacc ~result_dacc
-      return_cont_handler.static_structure
+    let result_dacc, static_structure =
+      simplify_static_structure dacc ~result_dacc
+        return_cont_handler.static_structure
+    in
+    result_dacc, static_structure, replacement_definition
   in
-  Format.eprintf "Static structure is now:@ %a\n%!"
+  let static_structure, result_dacc =
+    match replacement_definition with
+    | None -> static_structure, result_dacc
+    | Some (symbol, static_part) ->
+      let free_names = Static_structure.free_names static_structure in
+      assert (Variable.Set.is_empty (Name_occurrences.variables free_names));
+      let new_definition : Definition.t =
+        { computation = None;
+          static_structure;
+        }
+      in
+      let typing_env = DE.typing_env (DA.denv result_dacc) in
+      let symbol_types =
+        Symbol.Set.fold (fun sym symbol_types ->
+            let ty = TE.find typing_env (Name.symbol sym) in
+            Symbol.Map.add sym ty symbol_types)
+          (Static_structure.being_defined static_structure)
+          Symbol.Map.empty
+      in
+      let lifted_constant =
+        Lifted_constant.create_from_definition typing_env
+          symbol_types new_definition
+      in
+      Format.eprintf "New lifted constant (replacing existing) is:@ %a\n%!"
+        Lifted_constant.print lifted_constant;
+      let result_dacc =
+        (* This lifted constant will get inserted in the program before the
+           current [Define_symbol] (see [simplify_program_body0], below). *)
+        DA.map_r result_dacc ~f:(fun r ->
+          R.new_lifted_constant r lifted_constant)
+      in
+      Static_structure.S [Singleton symbol, static_part], result_dacc
+  in
+  Format.eprintf "Static structure for fresh symbol is now:@ %a\n%!"
     Static_structure.print static_structure;
   let handler, used_computed_values, uenv =
     let free_variables =
@@ -425,6 +466,8 @@ let simplify_return_continuation_handler dacc
     handler, used_computed_values, uenv
   in
   let uacc = UA.create uenv (DA.r result_dacc) in
+  (* CR mshinwell: It would be easier to avoid returning [result_dacc].
+     This would also match [Simplify_expr]. *)
   handler, (used_computed_values, static_structure, result_dacc), uacc
 
 let simplify_exn_continuation_handler dacc
@@ -513,6 +556,7 @@ let simplify_definition dacc (defn : Program_body.Definition.t) =
             computed_values;
           })
       in
+Format.eprintf "dacc for next defn:@ %a\n%!" DA.print dacc;
       dacc, computation, static_structure
   in
   let definition : Program_body.Definition.t =
