@@ -948,7 +948,7 @@ let args_kind_of_ternary_primitive p =
       Block_access_kind.element_kind block_access_kind
   | Bytes_or_bigstring_set (Bytes, (Eight | Sixteen)) ->
     string_or_bytes_kind, array_like_thing_index_kind,
-      K.value
+      K.naked_immediate
   | Bytes_or_bigstring_set (Bytes, Thirty_two) ->
     string_or_bytes_kind, array_like_thing_index_kind,
       K.naked_int32

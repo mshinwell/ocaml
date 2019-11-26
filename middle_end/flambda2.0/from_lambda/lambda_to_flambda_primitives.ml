@@ -305,18 +305,18 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
   (* CR mshinwell: Change [Lambda] to have a [Safe] / [Unsafe] variant *)
   | Pbytes_set_16 true, [bytes; index; new_value] ->
     Ternary (Bytes_or_bigstring_set (Bytes, Sixteen),
-      bytes, index, new_value)
+      bytes, index, untag_int new_value)
   | Pbytes_set_32 true, [bytes; index; new_value] ->
     Ternary (Bytes_or_bigstring_set (Bytes, Thirty_two),
-      bytes, index, new_value)
+      bytes, index, Prim (Unary (Unbox_number Naked_int32, new_value)))
   | Pbytes_set_64 true, [bytes; index; new_value] ->
     Ternary (Bytes_or_bigstring_set (Bytes, Sixty_four),
-      bytes, index, new_value)
+      bytes, index, Prim (Unary (Unbox_number Naked_int64, new_value)))
   | Pbytes_set_16 false, [bytes; index; new_value] ->
     Checked {
       primitive =
         Ternary (Bytes_or_bigstring_set (Bytes, Sixteen),
-          bytes, index, new_value);
+          bytes, index, untag_int new_value);
       validity_conditions = [
         string_or_bytes_access_validity_condition bytes Bytes index;
       ];
@@ -327,7 +327,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
     Checked {
       primitive =
         Ternary (Bytes_or_bigstring_set (Bytes, Thirty_two),
-          bytes, index, new_value);
+          bytes, index, Prim (Unary (Unbox_number Naked_int32, new_value)));
       validity_conditions = [
         string_or_bytes_access_validity_condition bytes Bytes index;
       ];
@@ -338,7 +338,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
     Checked {
       primitive =
         Ternary (Bytes_or_bigstring_set (Bytes, Sixty_four),
-          bytes, index, new_value);
+          bytes, index, Prim (Unary (Unbox_number Naked_int64, new_value)));
       validity_conditions = [
         string_or_bytes_access_validity_condition bytes Bytes index;
       ];
@@ -628,12 +628,13 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
       dbg;
     }
   | Pbytessetu, [bytes; index; new_value] ->
-    Ternary (Bytes_or_bigstring_set (Bytes, Eight), bytes, index, new_value)
+    Ternary (Bytes_or_bigstring_set (Bytes, Eight), bytes, index,
+             untag_int new_value)
   | Pbytessets, [bytes; index; new_value] ->
     Checked {
       primitive =
         Ternary (Bytes_or_bigstring_set (Bytes, Eight),
-          bytes, index, new_value);
+          bytes, index, untag_int new_value);
       validity_conditions = [
         string_or_bytes_access_validity_condition bytes Bytes index;
       ];

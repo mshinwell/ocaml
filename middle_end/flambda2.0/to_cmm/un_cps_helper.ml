@@ -293,8 +293,10 @@ let string_like_load_aux ~dbg kind width block ptr idx =
             extcall ~alloc:false
               "caml_ba_uint8_get64" typ_int64 [block; idx]
         end
-      else
+      else begin
+        let idx = untag_int idx dbg in
         unaligned_load_64 ptr idx dbg
+      end
 
 let string_like_load ?(dbg=Debuginfo.none) kind width block index =
   match (kind : Flambda_primitive.string_like_value) with
@@ -310,10 +312,13 @@ let string_like_load ?(dbg=Debuginfo.none) kind width block index =
 let bytes_like_set_aux ~dbg kind width block ptr idx value =
   begin match (width : Flambda_primitive.string_accessor_width) with
   | Eight ->
+      let idx = untag_int idx dbg in
       store ~dbg Cmm.Byte_unsigned Lambda.Assignment (add_int ptr idx dbg) value
   | Sixteen ->
+      let idx = untag_int idx dbg in
       unaligned_set_16 ptr idx value dbg
   | Thirty_two ->
+      let idx = untag_int idx dbg in
       unaligned_set_32 ptr idx value dbg
   | Sixty_four ->
       if arch32 then
@@ -325,8 +330,10 @@ let bytes_like_set_aux ~dbg kind width block ptr idx value =
             extcall ~alloc:false
               "caml_ba_uint8_set64" typ_int64 [block; idx; value]
         end
-      else
+      else begin
+        let idx = untag_int idx dbg in
         unaligned_set_64 ptr idx value dbg
+      end
   end
 
 let bytes_like_set ?(dbg=Debuginfo.none) kind width block index value =
