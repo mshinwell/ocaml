@@ -357,6 +357,15 @@ let simplify_return_continuation_handler dacc
     Static_structure.print return_cont_handler.static_structure;
   let result_dacc, static_structure, replacement_definition =
     let result_dacc, dacc, replacement_definition =
+      (* If there is a single computed value and the type of that computed
+         value can be reified (to a term possibly involving any extra
+         params and args that are present, from unboxing), then lift that
+         computed value to its own [Define_symbol].
+
+         We cannot currently handle the case where there is more than one
+         computed value since there exists no construct (except for the
+         set-of-closures case) that binds multiple symbols based on the
+         result of one computation. *)
       match original_computed_values with
       | [param] ->
         let var = KP.var param in
@@ -568,7 +577,6 @@ let simplify_definition dacc (defn : Program_body.Definition.t) =
             computed_values;
           })
       in
-Format.eprintf "dacc for next defn:@ %a\n%!" DA.print dacc;
       dacc, computation, static_structure
   in
   let definition : Program_body.Definition.t =

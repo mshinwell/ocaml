@@ -269,22 +269,6 @@ Format.eprintf "Symbol's type:@ %a\n%!"
     in
     simplify_expr dacc expr k)
 
-(* Having done that, the lifted body should be applying the extra args to the
-   toplevel_return cont. Then we should look at the used computed values in the
-   static structure and check for each one whether its type shows that it is
-   eligible for unboxing. If one is eligible then we should produce a new
-   Define_symbol. This seems like a version of [reify] that produces
-   [Static_part]s with free variables (which will be bound by the corresponding
-   computation).
-
-   To cope with the fact that there may be unboxable things nested within the
-   returned value, we will need to recurse during [reify]. This should return a
-   whole list of liftable items.
-
-   If the unboxing algorithm is then augmented to recognise closures, and to
-   unbox the closure vars, then lifting of non-constant closures should just
-   work. *)
-
 and simplify_non_recursive_let_cont_handler
   : 'a. DA.t -> Non_recursive_let_cont_handler.t -> 'a k -> Expr.t * 'a * UA.t
 = fun dacc non_rec_handler k ->
