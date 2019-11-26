@@ -98,6 +98,14 @@ let sequence x y =
 
 (* Boxing/unboxing *)
 
+let primitive_boxed_int_of_standard_int b =
+  match (b : Flambda_kind.Standard_int.t) with
+  | Naked_int32 -> Primitive.Pint32
+  | Naked_int64 -> Primitive.Pint64
+  | Naked_nativeint -> Primitive.Pnativeint
+  | Naked_immediate
+  | Tagged_immediate -> assert false
+
 let primitive_boxed_int_of_boxable_number b =
   match (b : Flambda_kind.Boxable_number.t) with
   | Naked_float | Untagged_immediate -> assert false

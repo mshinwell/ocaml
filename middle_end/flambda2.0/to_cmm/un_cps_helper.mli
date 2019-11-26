@@ -253,6 +253,13 @@ val ccatch :
 (** Enclose a body with some static handlers. *)
 
 
+(** {2 Arithmetic/Logic helpers} *)
+
+val primitive_boxed_int_of_standard_int :
+  Flambda_kind.Standard_int.t -> Primitive.boxed_integer
+(** Conversion function. *)
+
+
 (** {2 Arithmetic/Logic operations} *)
 
 val and_ : ?dbg:Debuginfo.t -> Cmm.expression -> Cmm.expression -> Cmm.expression

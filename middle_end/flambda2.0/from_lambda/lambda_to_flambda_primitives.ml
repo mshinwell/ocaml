@@ -528,7 +528,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
     Checked {
       primitive =
         box_bint Pnativeint
-          (Binary (Int_arith (I.Naked_nativeint, Mod),
+          (Binary (Int_arith (I.Naked_nativeint, Div),
             unbox_bint Pnativeint arg1, unbox_bint Pnativeint arg2));
       validity_conditions = [
         Binary (Phys_equal (K.naked_nativeint, Neq), unbox_bint Pnativeint arg2,

@@ -331,16 +331,19 @@ let binary_int_arith_primitive _env dbg kind op x y =
       C.sub_int x y dbg
   | (Naked_int32 | Naked_int64 | Naked_nativeint | Naked_immediate), Mul ->
       C.mul_int x y dbg
-  | (Naked_int32 | Naked_int64 | Naked_nativeint | Naked_immediate), Div ->
-      C.div_int x y Lambda.Unsafe dbg
-  | (Naked_int32 | Naked_int64 | Naked_nativeint | Naked_immediate), Mod ->
-      C.mod_int x y Lambda.Unsafe dbg
   | (Naked_int32 | Naked_int64 | Naked_nativeint | Naked_immediate), And ->
       C.and_ ~dbg x y
   | (Naked_int32 | Naked_int64 | Naked_nativeint | Naked_immediate), Or ->
       C.or_ ~dbg x y
   | (Naked_int32 | Naked_int64 | Naked_nativeint | Naked_immediate), Xor ->
       C.xor_ ~dbg x y
+  (* Division and modulo need some extra care *)
+  | (Naked_int32 | Naked_int64 | Naked_nativeint | Naked_immediate), Div ->
+      let bi = C.primitive_boxed_int_of_standard_int kind in
+      C.safe_div_bi Lambda.Unsafe x y bi dbg
+  | (Naked_int32 | Naked_int64 | Naked_nativeint | Naked_immediate), Mod ->
+      let bi = C.primitive_boxed_int_of_standard_int kind in
+      C.safe_mod_bi Lambda.Unsafe x y bi dbg
 
 let binary_int_shift_primitive _env dbg kind op x y =
   match (kind : Flambda_kind.Standard_int.t),
