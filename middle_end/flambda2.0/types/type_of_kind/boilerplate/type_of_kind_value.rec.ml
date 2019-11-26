@@ -17,5 +17,3 @@
 [@@@ocaml.warning "+a-30-40-41-42"]
 
 include Type_descr.Make (Type_of_kind_value0)
-
-module Variant = Type_of_kind_value0.Variant

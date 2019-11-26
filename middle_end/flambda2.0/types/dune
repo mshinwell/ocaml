@@ -5,6 +5,7 @@
     flambda_type0.templ.ml
     type_descr.rec.ml
     type_grammar.rec.ml
+    type_of_kind/variant.rec.ml
     type_of_kind/boilerplate/type_of_kind_value.rec.ml
     type_of_kind/type_of_kind_value0.rec.ml
     type_of_kind/boilerplate/type_of_kind_naked_immediate.rec.ml
@@ -29,6 +30,7 @@
     structures/row_like.rec.ml
     type_descr.rec.mli
     type_grammar.rec.mli
+    type_of_kind/variant.rec.mli
     type_of_kind/boilerplate/type_of_kind_value.rec.mli
     type_of_kind/type_of_kind_value0.rec.mli
     type_of_kind/boilerplate/type_of_kind_naked_immediate.rec.mli

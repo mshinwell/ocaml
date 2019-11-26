@@ -374,7 +374,7 @@ let box_nativeint (t : t) : t =
       print t
 
 let any_tagged_immediate () : t =
-  Value (T_V.create_no_alias (Ok (Variant (T_V.Variant.create
+  Value (T_V.create_no_alias (Ok (Variant (Variant.create
     ~immediates:Unknown
     ~blocks:(Known (Row_like.For_blocks.create_bottom ()))))))
 
@@ -387,7 +387,7 @@ let these_tagged_immediates0 ~no_alias imms : t =
   | _ ->
     if Immediate.Set.is_empty imms then bottom K.value
     else
-      Value (T_V.create_no_alias (Ok (Variant (T_V.Variant.create
+      Value (T_V.create_no_alias (Ok (Variant (Variant.create
         ~immediates:(Known (these_naked_immediates imms))
         ~blocks:(Known (Row_like.For_blocks.create_bottom ()))))))
 
@@ -400,7 +400,7 @@ let this_tagged_immediate_without_alias imm =
 let tag_immediate t : t =
   match t with
   | Naked_immediate _ ->
-    Value (T_V.create_no_alias (Ok (Variant (T_V.Variant.create
+    Value (T_V.create_no_alias (Ok (Variant (Variant.create
       ~immediates:(Known t)
       ~blocks:(Known (Row_like.For_blocks.create_bottom ()))))))
   | Value _ | Naked_float _ | Naked_int32 _ | Naked_int64 _
@@ -413,7 +413,7 @@ let tagged_immediate_alias_to ~naked_immediate : t =
     T_NI.create_equals (Simple.var naked_immediate)))
 
 let any_block () : t =
-  Value (T_V.create_no_alias (Ok (Variant (T_V.Variant.create
+  Value (T_V.create_no_alias (Ok (Variant (Variant.create
     ~immediates:(Known (bottom K.naked_immediate))
     ~blocks:Unknown))))
 
@@ -452,7 +452,7 @@ let blocks_with_these_tags tags =
   let blocks =
     Row_like.For_blocks.create_blocks_with_these_tags tags
   in
-  Value (T_V.create_no_alias (Ok (Variant (T_V.Variant.create
+  Value (T_V.create_no_alias (Ok (Variant (Variant.create
     ~immediates:(Known (bottom K.naked_immediate))
     ~blocks:(Known blocks)))))
 
@@ -462,7 +462,7 @@ let immutable_block tag ~field_kind ~fields =
     (* CR mshinwell: This should be a special kind of error. *)
     Misc.fatal_error "Block too long for target"
   | Some _size ->
-    Value (T_V.create_no_alias (Ok (Variant (T_V.Variant.create
+    Value (T_V.create_no_alias (Ok (Variant (Variant.create
       ~immediates:(Known (bottom K.naked_immediate))
       ~blocks:(Known (Row_like.For_blocks.create ~field_kind
         ~field_tys:fields (Closed tag)))))))
@@ -474,7 +474,7 @@ let immutable_block_with_size_at_least ~n ~field_kind ~field_n_minus_one =
         if index < n - 1 then unknown field_kind
         else alias_type_of field_kind (Simple.var field_n_minus_one))
   in
-  Value (T_V.create_no_alias (Ok (Variant (T_V.Variant.create
+  Value (T_V.create_no_alias (Ok (Variant (Variant.create
     ~immediates:(Known (bottom K.naked_immediate))
     ~blocks:(Known (Row_like.For_blocks.create ~field_kind
       ~field_tys (Open Unknown)))))))

@@ -16,20 +16,6 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
-module Variant : sig
-  type t = private {
-    immediates : Type_grammar.t Or_unknown.t;
-    (** For [Known immediates], then [immediates] is of kind
-        [Naked_immediate]. *)
-    blocks : Row_like.For_blocks.t Or_unknown.t;
-  }
-
-  val create
-     : immediates:Type_grammar.t Or_unknown.t
-    -> blocks:Row_like.For_blocks.t Or_unknown.t
-    -> t
-end
-
 type t =
   | Variant of Variant.t
   | Boxed_float of Type_grammar.t

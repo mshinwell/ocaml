@@ -1,6 +1,7 @@
 resolved_type.rec.ml
 type_descr.rec.ml
 type_grammar.rec.ml
+type_of_kind/variant.rec.ml
 type_of_kind/boilerplate/type_of_kind_value.rec.ml
 type_of_kind/type_of_kind_value0.rec.ml
 type_of_kind/boilerplate/type_of_kind_naked_immediate.rec.ml
