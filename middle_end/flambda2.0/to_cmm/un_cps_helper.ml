@@ -198,18 +198,13 @@ let unreachable =
 
 (* Block creation *)
 
-let float_tag = function
-  | [] -> assert false
-  | [_] -> Tag.double_tag
-  | _ -> Tag.double_array_tag
-
 let make_block ?(dbg=Debuginfo.none) kind args =
   match (kind : Flambda_primitive.make_block_kind) with
   | Full_of_values (tag, _) ->
       make_alloc dbg (Tag.Scannable.to_int tag) args
   | Full_of_naked_floats
   | Generic_array Full_of_naked_floats ->
-      make_float_alloc dbg (Tag.to_int (float_tag args)) args
+      make_float_alloc dbg (Tag.to_int Tag.double_array_tag) args
   | Generic_array No_specialisation ->
       extcall ~dbg ~alloc:true
         "caml_make_array" Cmm.typ_val
