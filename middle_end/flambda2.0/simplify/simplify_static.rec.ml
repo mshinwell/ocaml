@@ -380,7 +380,19 @@ let simplify_return_continuation_handler dacc
 *)
           let result_dacc =
             DA.map_denv result_dacc ~f:(fun denv ->
-              DE.define_symbol denv symbol K.value)
+              let suitable_for =
+                TE.add_definition (DE.typing_env denv)
+                  (Name_in_binding_pos.symbol symbol)
+                  K.value
+              in
+              let env_extension =
+                T.make_suitable_for_environment ty
+                  typing_env
+                  ~suitable_for
+                  ~bind_to:(Name.symbol symbol)
+              in
+              DE.with_typing_env denv
+                (TE.add_env_extension suitable_for ~env_extension))
           in
           let dacc =
             DA.map_denv dacc ~f:(fun denv ->
