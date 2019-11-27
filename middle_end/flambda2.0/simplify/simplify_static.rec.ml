@@ -422,12 +422,6 @@ let rec simplify_return_continuation_handler dacc
     match replacement_definitions with
     | [] -> static_structure, result_dacc, None
     | _::_ ->
-      let static_structure_parts =
-        List.map (fun (symbol, reified_static_part) ->
-            Bound_symbols.Singleton symbol, reified_static_part)
-          replacement_definitions
-      in
-      let static_structure : Static_structure.t = S static_structure_parts in
       let new_definition : Definition.t =
         { computation = None;
           static_structure;
@@ -453,13 +447,19 @@ let rec simplify_return_continuation_handler dacc
         DA.map_r result_dacc ~f:(fun r ->
           R.new_lifted_constant r lifted_constant)
       in
+      let static_structure_parts =
+        List.map (fun (symbol, reified_static_part) ->
+            Bound_symbols.Singleton symbol, reified_static_part)
+          replacement_definitions
+      in
+      let static_structure : Static_structure.t = S static_structure_parts in
       static_structure, result_dacc, Some lifted_constant
   in
   Format.eprintf "Static structure for fresh symbol (orig CVs %a,@ EPs %a)@ is now:@ %a\n%!"
     KP.List.print original_computed_values
     Continuation_extra_params_and_args.print extra_params_and_args
     Static_structure.print static_structure;
-  let handler, used_computed_values, result_dacc, uacc =
+  let handler, result_dacc, uacc =
     let free_variables =
       Name_occurrences.variables
         (Static_structure.free_names static_structure)
@@ -480,7 +480,7 @@ let rec simplify_return_continuation_handler dacc
         static_structure;
       }
     in
-    let handler, result_dacc, computed_values, uacc =
+    let handler, result_dacc, uacc =
       match lifted_constant with
       | Some lifted_constant ->
         Format.eprintf "Have generated another Define_symbol that could maybe be \
@@ -494,7 +494,16 @@ let rec simplify_return_continuation_handler dacc
           DA.map_denv starting_result_dacc ~f:(fun denv ->
             DE.add_lifted_constants denv ~lifted:[lifted_constant])
         in
-        let handler, (computed_values, _static_structure, result_dacc), uacc =
+        let extra_params_and_args =
+          List.combine extra_params_and_args.extra_params
+        in
+        let extra_params, extra_args = List.split extra_params_and_args in
+        let extra_params_and_args : Continuation_extra_params_and_args.t =
+          { extra_params;
+            extra_args;
+          }
+        in
+        let handler, (_computed_values, _static_structure, result_dacc), uacc =
           simplify_return_continuation_handler starting_dacc
             ~extra_params_and_args cont handler ~user_data:result_dacc _k
         in
@@ -503,10 +512,9 @@ let rec simplify_return_continuation_handler dacc
         in
         Format.eprintf "New handler after recursive call:@ %a\n%!"
           Return_cont_handler.print handler;
-        handler, result_dacc, computed_values, uacc
+        handler, result_dacc, uacc
       | None ->
-        handler, result_dacc, computed_values,
-          UA.create UE.empty (DA.r result_dacc)
+        handler, result_dacc, UA.create UE.empty (DA.r result_dacc)
     in
     let rewrite =
       Apply_cont_rewrite.create ~original_params:original_computed_values
@@ -525,14 +533,16 @@ let rec simplify_return_continuation_handler dacc
       | None -> UE.add_apply_cont_rewrite UE.empty cont rewrite
       | Some _ -> uenv
     in
-    handler, computed_values, result_dacc, UA.with_uenv uacc uenv
+    handler, result_dacc, UA.with_uenv uacc uenv
   in
   (* CR mshinwell: It would maybe be easier to avoid returning [result_dacc].
      This would also match [Simplify_expr]. *)
-  (* CR mshinwell: Returning [static_structure] is redundant, it's in
-     [handler]. *)
-  handler, (used_computed_values, handler.Return_cont_handler.static_structure,
-    result_dacc), uacc
+  (* CR mshinwell: Returning [computed_values] and [static_structure] is
+     redundant, they're in [handler]. *)
+  handler,
+    (handler.Return_cont_handler.computed_values,
+     handler.Return_cont_handler.static_structure,
+     result_dacc), uacc
 
 let simplify_exn_continuation_handler dacc
       ~extra_params_and_args:_ _cont
