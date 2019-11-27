@@ -212,22 +212,18 @@ and lift_expression
       static_structure = S [Singleton symbol, static_part];
     }
   in
-  (* Note that [simplify_definition] may change the symbol bound by
-     [definition], in the event that reifying and lifting of computed
-     values occurs. *)
+  (* Note that [simplify_definition] may change or augment the symbol(s) bound
+     by [definition], in the event that reifying and lifting of computed values
+     occurs. *)
   let definition, dacc = Simplify_static.simplify_definition dacc definition in
-  let symbol =
-    let being_defined =
-      Flambda_static.Program_body.Static_structure.being_defined
-        definition.static_structure
-    in
-    match Symbol.Set.get_singleton being_defined with
-    | Some symbol -> symbol
-    | None -> assert false  (* See above; we only create [Singleton]s. *)
+  let symbols =
+    Flambda_static.Program_body.Static_structure.being_defined
+      definition.static_structure
   in
-Format.eprintf "New definition (new symbol %a)@ %a\ndacc:@ %a\n%!"
-  Symbol.print symbol
+Format.eprintf "New definition (new symbols %a)@ %a\ndacc:@ %a\n%!"
+  Symbol.Set.print symbols
   Flambda_static.Program_body.Definition.print definition DA.print dacc;
+  assert (not (Symbol.Set.is_empty symbols));
   let dacc =
     DA.map_denv dacc ~f:(fun denv ->
       DE.add_lifted_constants denv
@@ -239,16 +235,18 @@ Format.eprintf "New definition@ %a\n%!"
 Format.eprintf "Symbol's type:@ %a\n%!"
   T.print (TE.find (DE.typing_env (DA.denv dacc)) (Name.symbol symbol));
 *)
-  let lifted_constant =
-    (* CR mshinwell: Can we do without this? *)
-    let typing_env = DE.typing_env (DA.denv dacc) in
-    let ty = TE.find typing_env (Name.symbol symbol) in
-    Lifted_constant.create_from_definition typing_env
-      (Symbol.Map.singleton symbol ty)
-      definition
-  in
   let dacc =
-    DA.map_r dacc ~f:(fun r -> R.new_lifted_constant r lifted_constant)
+    Symbol.Set.fold (fun symbol dacc ->
+        let lifted_constant =
+          let typing_env = DE.typing_env (DA.denv dacc) in
+          let ty = TE.find typing_env (Name.symbol symbol) in
+          Lifted_constant.create_from_definition typing_env
+            (Symbol.Map.singleton symbol ty)
+            definition
+        in
+        DA.map_r dacc ~f:(fun r -> R.new_lifted_constant r lifted_constant))
+      symbols
+      dacc
   in
   Continuation_handler.pattern_match cont_handler ~f:(fun handler ->
     let args =

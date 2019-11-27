@@ -18,6 +18,7 @@
 
 open! Simplify_import
 
+module Bound_symbols = Flambda_static.Program_body.Bound_symbols
 module Definition = Flambda_static.Program_body.Definition
 module Of_kind_value = Flambda_static.Of_kind_value
 module Program = Flambda_static.Program
@@ -357,89 +358,90 @@ let rec simplify_return_continuation_handler dacc
     Static_structure.print return_cont_handler.static_structure;
   let starting_dacc = dacc in
   let starting_result_dacc = result_dacc in
-  let static_structure, result_dacc, did_reify =
-    let result_dacc, dacc, replacement_definition =
-      (* If there is a single computed value and the type of that computed
-         value can be reified (to a term possibly involving any extra
-         params and args that are present, from unboxing), then lift that
-         computed value to its own [Define_symbol].
-
-         We cannot currently handle the case where there is more than one
-         computed value since there exists no construct (except for the
-         set-of-closures case) that binds multiple symbols based on the
-         result of one computation. *)
-      match original_computed_values with
-      | [param] ->
-        let var = KP.var param in
-        let typing_env = DE.typing_env (DA.denv dacc) in
-        let ty = TE.find typing_env (Name.var var) in
-        Format.eprintf "CV %a type %a\n%!" Variable.print var T.print ty;
-        Format.eprintf "allowed_free_vars %a\n%!"
-          Variable.Set.print allowed_free_vars;
-        begin match
-          T.reify ~allowed_free_vars typing_env ~min_name_mode:NM.normal ty
-        with
-        | Lift to_lift ->
-          let static_part = Reification.create_static_part to_lift in
-          let symbol =
-            Symbol.create (Compilation_unit.get_current_exn ())
-              (Linkage_name.create (Variable.unique_name var))
-          in
-          Format.eprintf "...can be reified:@ %a\n%!"
-            Flambda_static.Static_part.print static_part;
-          let result_dacc =
-            DA.map_denv result_dacc ~f:(fun denv ->
-              let suitable_for =
-                TE.add_definition (DE.typing_env denv)
-                  (Name_in_binding_pos.symbol symbol)
-                  K.value
-              in
-              let env_extension =
-                T.make_suitable_for_environment ty
-                  typing_env
-                  ~suitable_for
-                  ~bind_to:(Name.symbol symbol)
-              in
-              DE.with_typing_env denv
-                (TE.add_env_extension suitable_for ~env_extension))
-          in
-          let dacc =
-            DA.map_denv dacc ~f:(fun denv ->
-              DE.add_equation_on_name
-                (DE.define_symbol denv symbol K.value)
-                (Name.var var)
-                (T.alias_type_of K.value (Simple.symbol symbol)))
-          in
-          result_dacc, dacc, Some (symbol, static_part)
-        | Simple _ | Cannot_reify | Invalid ->
-          Format.eprintf "...cannot be reified.\n%!";
-          result_dacc, dacc, None
-        end
-      | [] | _::_ -> result_dacc, dacc, None
+  let static_structure, result_dacc, lifted_constant =
+    let result_dacc, dacc, replacement_definitions =
+      (* If the type of a computed value can be reified (to a term possibly
+         involving any extra params and args that are present, from unboxing),
+         then lift that computed value to its own [Static_part]. *)
+      List.fold_left
+        (fun (result_dacc, dacc, replacement_definitions) param ->
+          let var = KP.var param in
+          let typing_env = DE.typing_env (DA.denv dacc) in
+          let ty = TE.find typing_env (Name.var var) in
+          Format.eprintf "CV %a type %a\n%!" Variable.print var T.print ty;
+          Format.eprintf "allowed_free_vars %a\n%!"
+            Variable.Set.print allowed_free_vars;
+          begin match
+            T.reify ~allowed_free_vars typing_env ~min_name_mode:NM.normal ty
+          with
+          | Lift to_lift ->
+            let static_part = Reification.create_static_part to_lift in
+            let symbol =
+              Symbol.create (Compilation_unit.get_current_exn ())
+                (Linkage_name.create (Variable.unique_name var))
+            in
+            Format.eprintf "...can be reified:@ %a\n%!"
+              Flambda_static.Static_part.print static_part;
+            let result_dacc =
+              DA.map_denv result_dacc ~f:(fun denv ->
+                let suitable_for =
+                  TE.add_definition (DE.typing_env denv)
+                    (Name_in_binding_pos.symbol symbol)
+                    K.value
+                in
+                let env_extension =
+                  T.make_suitable_for_environment ty
+                    typing_env
+                    ~suitable_for
+                    ~bind_to:(Name.symbol symbol)
+                in
+                DE.with_typing_env denv
+                  (TE.add_env_extension suitable_for ~env_extension))
+            in
+            let dacc =
+              DA.map_denv dacc ~f:(fun denv ->
+                DE.add_equation_on_name
+                  (DE.define_symbol denv symbol K.value)
+                  (Name.var var)
+                  (T.alias_type_of K.value (Simple.symbol symbol)))
+            in
+            result_dacc, dacc, (symbol, static_part) :: replacement_definitions
+          | Simple _ | Cannot_reify | Invalid ->
+            Format.eprintf "...cannot be reified.\n%!";
+            result_dacc, dacc, replacement_definitions
+          end)
+        (result_dacc, dacc, [])
+        original_computed_values
     in
     let result_dacc, static_structure =
       simplify_static_structure dacc ~result_dacc
         return_cont_handler.static_structure
     in
-    match replacement_definition with
-    | None -> static_structure, result_dacc, None
-    | Some (symbol, reified_static_part) ->
-      let free_names = Static_structure.free_names static_structure in
-      assert (Variable.Set.is_empty (Name_occurrences.variables free_names));
+    Format.eprintf "Simplified static structure is:@ %a\n%!"
+      Static_structure.print static_structure;
+    match replacement_definitions with
+    | [] -> static_structure, result_dacc, None
+    | _::_ ->
+      let static_structure_parts =
+        List.map (fun (symbol, reified_static_part) ->
+            Bound_symbols.Singleton symbol, reified_static_part)
+          replacement_definitions
+      in
+      let static_structure : Static_structure.t = S static_structure_parts in
       let new_definition : Definition.t =
         { computation = None;
           static_structure;
         }
       in
-      let typing_env = DE.typing_env (DA.denv result_dacc) in
-      let symbol_types =
-        Symbol.Set.fold (fun sym symbol_types ->
-            let ty = TE.find typing_env (Name.symbol sym) in
-            Symbol.Map.add sym ty symbol_types)
-          (Static_structure.being_defined static_structure)
-          Symbol.Map.empty
-      in
       let lifted_constant =
+        let typing_env = DE.typing_env (DA.denv result_dacc) in
+        let symbol_types =
+          Symbol.Set.fold (fun sym symbol_types ->
+              let ty = TE.find typing_env (Name.symbol sym) in
+              Symbol.Map.add sym ty symbol_types)
+            (Static_structure.being_defined static_structure)
+            Symbol.Map.empty
+        in
         Lifted_constant.create_from_definition typing_env
           symbol_types new_definition
       in
@@ -450,9 +452,6 @@ let rec simplify_return_continuation_handler dacc
            current [Define_symbol] (see [simplify_program_body0], below). *)
         DA.map_r result_dacc ~f:(fun r ->
           R.new_lifted_constant r lifted_constant)
-      in
-      let static_structure : Static_structure.t =
-        S [Singleton symbol, reified_static_part]
       in
       static_structure, result_dacc, Some lifted_constant
   in
@@ -482,41 +481,30 @@ let rec simplify_return_continuation_handler dacc
       }
     in
     let handler, result_dacc, computed_values, uacc =
-      match did_reify with
-      | Some lifted_constant when List.length computed_values = 1 ->
+      match lifted_constant with
+      | Some lifted_constant ->
         Format.eprintf "Have generated another Define_symbol that could maybe be \
           reified.@ Trying to simplify:@ %a\n%!"
           Return_cont_handler.print handler;
-(*
-        let bound_symbols = Static_structure.being_defined static_structure in
-        let result_dacc =
-          DA.map_denv result_dacc ~f:(fun denv ->
-            DE.map_typing_env denv ~f:(fun typing_env ->
-
-          Symbol.Set.fold (fun symbol 
-        in
-*)
-        (* We need to go back to the [result_dacc] which doesn't have
-           [symbol] defined---since we're about to simplify a binding of
-           the same symbol again.  However we must account for any lifted
-           constant produced above as a result of reification. *)
+        (* We need to go back to the [result_dacc] which doesn't have the
+           fresh symbol(s) defined---since we're about to simplify a binding of
+           those same symbols again.  However we must account for any lifted
+           constants produced above as a result of reification. *)
         let result_dacc =
           DA.map_denv starting_result_dacc ~f:(fun denv ->
             DE.add_lifted_constants denv ~lifted:[lifted_constant])
         in
         let handler, (computed_values, _static_structure, result_dacc), uacc =
           simplify_return_continuation_handler starting_dacc
-            ~extra_params_and_args
-            cont handler ~user_data:result_dacc _k
+            ~extra_params_and_args cont handler ~user_data:result_dacc _k
         in
         let uacc =
-          UA.map_r uacc ~f:(fun r ->
-            R.new_lifted_constant r lifted_constant)
+          UA.map_r uacc ~f:(fun r -> R.new_lifted_constant r lifted_constant)
         in
         Format.eprintf "New handler after recursive call:@ %a\n%!"
           Return_cont_handler.print handler;
         handler, result_dacc, computed_values, uacc
-      | _ ->
+      | None ->
         handler, result_dacc, computed_values,
           UA.create UE.empty (DA.r result_dacc)
     in
