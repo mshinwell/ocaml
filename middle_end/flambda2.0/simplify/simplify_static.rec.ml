@@ -495,10 +495,19 @@ let rec simplify_return_continuation_handler dacc
           Symbol.Set.fold (fun symbol 
         in
 *)
+        (* We need to go back to the [result_dacc] which doesn't have
+           [symbol] defined---since we're about to simplify a binding of
+           the same symbol again.  However we must account for any lifted
+           constant produced above as a result of reification. *)
+        let result_dacc =
+          DA.map_denv starting_result_dacc ~f:(fun denv ->
+            DE.add_lifted_constants denv
+              ~lifted:(R.get_lifted_constants (DA.r result_dacc)))
+        in
         let handler, (computed_values, _static_structure, result_dacc), uacc =
           simplify_return_continuation_handler starting_dacc
             ~extra_params_and_args
-            cont handler ~user_data:starting_result_dacc _k
+            cont handler ~user_data:result_dacc _k
         in
         Format.eprintf "New handler after recursive call:@ %a\n%!"
           Return_cont_handler.print handler;
