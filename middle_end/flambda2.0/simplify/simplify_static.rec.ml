@@ -355,7 +355,7 @@ let simplify_return_continuation_handler dacc
   in
   Format.eprintf "Static structure starts as:@ %a\n%!"
     Static_structure.print return_cont_handler.static_structure;
-  let result_dacc, static_structure, replacement_definition =
+  let static_structure, result_dacc =
     let result_dacc, dacc, replacement_definition =
       (* If there is a single computed value and the type of that computed
          value can be reified (to a term possibly involving any extra
@@ -419,9 +419,6 @@ let simplify_return_continuation_handler dacc
       simplify_static_structure dacc ~result_dacc
         return_cont_handler.static_structure
     in
-    result_dacc, static_structure, replacement_definition
-  in
-  let static_structure, result_dacc =
     match replacement_definition with
     | None -> static_structure, result_dacc
     | Some (symbol, static_part) ->
@@ -452,7 +449,10 @@ let simplify_return_continuation_handler dacc
         DA.map_r result_dacc ~f:(fun r ->
           R.new_lifted_constant r lifted_constant)
       in
-      Static_structure.S [Singleton symbol, static_part], result_dacc
+      let static_structure : Static_structure.t =
+        S [Singleton symbol, static_part]
+      in
+      static_structure, result_dacc
   in
   Format.eprintf "Static structure for fresh symbol (orig CVs %a, EPs %a) is now:@ %a\n%!"
     KP.List.print original_computed_values
