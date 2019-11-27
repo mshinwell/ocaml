@@ -340,7 +340,7 @@ let simplify_static_structure dacc ~result_dacc
   in
   next_dacc, S (List.rev str_rev)
 
-let simplify_return_continuation_handler dacc
+let rec simplify_return_continuation_handler dacc
       ~(extra_params_and_args : Continuation_extra_params_and_args.t)
       cont (return_cont_handler : Return_cont_handler.Opened.t)
       ~user_data:result_dacc _k =
@@ -355,7 +355,9 @@ let simplify_return_continuation_handler dacc
   in
   Format.eprintf "Static structure starts as:@ %a\n%!"
     Static_structure.print return_cont_handler.static_structure;
-  let static_structure, result_dacc =
+  let starting_dacc = dacc in
+  let starting_result_dacc = result_dacc in
+  let static_structure, result_dacc, did_reify =
     let result_dacc, dacc, replacement_definition =
       (* If there is a single computed value and the type of that computed
          value can be reified (to a term possibly involving any extra
@@ -371,9 +373,9 @@ let simplify_return_continuation_handler dacc
         let var = KP.var param in
         let typing_env = DE.typing_env (DA.denv dacc) in
         let ty = TE.find typing_env (Name.var var) in
-(*
         Format.eprintf "CV %a type %a\n%!" Variable.print var T.print ty;
-*)
+        Format.eprintf "allowed_free_vars %a\n%!"
+          Variable.Set.print allowed_free_vars;
         begin match
           T.reify ~allowed_free_vars typing_env ~min_name_mode:NM.normal ty
         with
@@ -383,10 +385,8 @@ let simplify_return_continuation_handler dacc
             Symbol.create (Compilation_unit.get_current_exn ())
               (Linkage_name.create (Variable.unique_name var))
           in
-(*
           Format.eprintf "...can be reified:@ %a\n%!"
             Flambda_static.Static_part.print static_part;
-*)
           let result_dacc =
             DA.map_denv result_dacc ~f:(fun denv ->
               let suitable_for =
@@ -411,7 +411,9 @@ let simplify_return_continuation_handler dacc
                 (T.alias_type_of K.value (Simple.symbol symbol)))
           in
           result_dacc, dacc, Some (symbol, static_part)
-        | Simple _ | Cannot_reify | Invalid -> result_dacc, dacc, None
+        | Simple _ | Cannot_reify | Invalid ->
+          Format.eprintf "...cannot be reified.\n%!";
+          result_dacc, dacc, None
         end
       | [] | _::_ -> result_dacc, dacc, None
     in
@@ -420,8 +422,8 @@ let simplify_return_continuation_handler dacc
         return_cont_handler.static_structure
     in
     match replacement_definition with
-    | None -> static_structure, result_dacc
-    | Some (symbol, static_part) ->
+    | None -> static_structure, result_dacc, false
+    | Some (symbol, reified_static_part) ->
       let free_names = Static_structure.free_names static_structure in
       assert (Variable.Set.is_empty (Name_occurrences.variables free_names));
       let new_definition : Definition.t =
@@ -450,15 +452,15 @@ let simplify_return_continuation_handler dacc
           R.new_lifted_constant r lifted_constant)
       in
       let static_structure : Static_structure.t =
-        S [Singleton symbol, static_part]
+        S [Singleton symbol, reified_static_part]
       in
-      static_structure, result_dacc
+      static_structure, result_dacc, true
   in
-  Format.eprintf "Static structure for fresh symbol (orig CVs %a, EPs %a) is now:@ %a\n%!"
+  Format.eprintf "Static structure for fresh symbol (orig CVs %a,@ EPs %a)@ is now:@ %a\n%!"
     KP.List.print original_computed_values
     Continuation_extra_params_and_args.print extra_params_and_args
     Static_structure.print static_structure;
-  let handler, used_computed_values, uenv =
+  let handler, used_computed_values, result_dacc, uacc =
     let free_variables =
       Name_occurrences.variables
         (Static_structure.free_names static_structure)
@@ -479,6 +481,33 @@ let simplify_return_continuation_handler dacc
         static_structure;
       }
     in
+    let handler, result_dacc, computed_values, uacc =
+      if did_reify && List.length computed_values = 1 then begin
+        Format.eprintf "Have generated another Define_symbol that could maybe be \
+          reified.@ Trying to simplify:@ %a\n%!"
+          Return_cont_handler.print handler;
+(*
+        let bound_symbols = Static_structure.being_defined static_structure in
+        let result_dacc =
+          DA.map_denv result_dacc ~f:(fun denv ->
+            DE.map_typing_env denv ~f:(fun typing_env ->
+
+          Symbol.Set.fold (fun symbol 
+        in
+*)
+        let handler, (computed_values, _static_structure, result_dacc), uacc =
+          simplify_return_continuation_handler starting_dacc
+            ~extra_params_and_args
+            cont handler ~user_data:starting_result_dacc _k
+        in
+        Format.eprintf "New handler after recursive call:@ %a\n%!"
+          Return_cont_handler.print handler;
+        handler, result_dacc, computed_values, uacc
+      end else begin
+        handler, result_dacc, computed_values,
+          UA.create UE.empty (DA.r result_dacc)
+      end
+    in
     let rewrite =
       Apply_cont_rewrite.create ~original_params:original_computed_values
         ~used_params:(KP.Set.of_list used_computed_values)
@@ -486,13 +515,24 @@ let simplify_return_continuation_handler dacc
         ~extra_args:extra_params_and_args.extra_args
         ~used_extra_params:(KP.Set.of_list used_extra_params)
     in
-    let uenv = UE.add_apply_cont_rewrite UE.empty cont rewrite in
-    handler, computed_values, uenv
+    let uenv =
+      let uenv = UA.uenv uacc in
+      (* The rewrite we ultimately need is the one deepest down the
+         recursion.  So on the way back up the recursion here we should
+         never replace the rewrite if it already exists. *)
+      let existing_rewrite = UE.find_apply_cont_rewrite uenv cont in
+      match existing_rewrite with
+      | None -> UE.add_apply_cont_rewrite UE.empty cont rewrite
+      | Some _ -> uenv
+    in
+    handler, computed_values, result_dacc, UA.with_uenv uacc uenv
   in
-  let uacc = UA.create uenv (DA.r result_dacc) in
-  (* CR mshinwell: It would be easier to avoid returning [result_dacc].
+  (* CR mshinwell: It would maybe be easier to avoid returning [result_dacc].
      This would also match [Simplify_expr]. *)
-  handler, (used_computed_values, static_structure, result_dacc), uacc
+  (* CR mshinwell: Returning [static_structure] is redundant, it's in
+     [handler]. *)
+  handler, (used_computed_values, handler.Return_cont_handler.static_structure,
+    result_dacc), uacc
 
 let simplify_exn_continuation_handler dacc
       ~extra_params_and_args:_ _cont
