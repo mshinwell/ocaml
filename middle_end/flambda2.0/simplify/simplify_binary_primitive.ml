@@ -394,7 +394,7 @@ end = struct
   let ok_to_evaluate _env = true
 
   let prover_lhs = I.unboxed_prover
-  let prover_rhs = T.prove_equals_tagged_immediates
+  let prover_rhs = T.prove_naked_immediates
 
   let unknown =
     match kind with

@@ -851,7 +851,7 @@ let args_kind_of_binary_primitive p =
     let kind = K.Standard_int.to_kind kind in
     kind, kind
   | Int_shift (kind, _) ->
-    K.Standard_int.to_kind kind, K.value
+    K.Standard_int.to_kind kind, K.naked_immediate
   | Int_comp (kind, _, _) ->
     let kind = K.Standard_int.to_kind kind in
     kind, kind

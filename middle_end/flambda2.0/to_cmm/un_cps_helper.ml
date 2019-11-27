@@ -19,6 +19,7 @@ open Cmm_helpers
 
 (* Are we compiling on/for a 32-bit architecture ? *)
 let arch32 = Arch.size_int = 4
+let arch64 = Arch.size_int = 8
 
 (* Useful shortcut *)
 let typ_int64 =

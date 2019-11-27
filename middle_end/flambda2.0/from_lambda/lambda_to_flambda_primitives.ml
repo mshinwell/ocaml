@@ -50,7 +50,7 @@ let bint_binary_prim bi prim arg1 arg2 =
 let bint_shift bi prim arg1 arg2 =
   box_bint bi
     (Binary (Int_shift (C.standard_int_of_boxed_integer bi, prim),
-             unbox_bint bi arg1, arg2))
+             unbox_bint bi arg1, untag_int arg2))
 
 let string_or_bytes_access_validity_condition str kind index : H.expr_primitive =
   Binary (Int_comp (I.Naked_immediate, Unsigned, Lt),
@@ -141,11 +141,11 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
   | Pxorint, [arg1; arg2] ->
     Binary (Int_arith (I.Tagged_immediate, Xor), arg1, arg2)
   | Plslint, [arg1; arg2] ->
-    Binary (Int_shift (I.Tagged_immediate, Lsl), arg1, arg2)
+    Binary (Int_shift (I.Tagged_immediate, Lsl), arg1, untag_int arg2)
   | Plsrint, [arg1; arg2] ->
-    Binary (Int_shift (I.Tagged_immediate, Lsr), arg1, arg2)
+    Binary (Int_shift (I.Tagged_immediate, Lsr), arg1, untag_int arg2)
   | Pasrint, [arg1; arg2] ->
-    Binary (Int_shift (I.Tagged_immediate, Asr), arg1, arg2)
+    Binary (Int_shift (I.Tagged_immediate, Asr), arg1, untag_int arg2)
   | Pnot, [arg] ->
     Unary (Boolean_not, arg)
   | Pintcomp comp, [arg1; arg2] ->

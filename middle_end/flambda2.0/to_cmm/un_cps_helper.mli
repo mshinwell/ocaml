@@ -21,6 +21,9 @@ open Flambda2
 val arch32 : bool
 (** [arch32] is [true] iff we are compiling for a 32-bit target. *)
 
+val arch64 : bool
+(** [arch64] is [true] iff we are compiling for a 64-bit target. *)
+
 val typ_int64 : Cmm.machtype
 (** An adequate Cmm machtype for an int64 (including on a 32-bit target). *)
 
