@@ -40,6 +40,13 @@ val map_uenv
     -> Simplify_env_and_result.Upwards_env.t)
   -> t
 
+(** Map the result structure of the given upwards accumulator. *)
+val map_r
+   : t
+  -> f:(Simplify_env_and_result.Result.t
+    -> Simplify_env_and_result.Result.t)
+  -> t
+
 (** Replace the environment component of the given upwards accumulator. *)
 val with_uenv : t -> Simplify_env_and_result.Upwards_env.t -> t
 

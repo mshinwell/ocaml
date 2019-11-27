@@ -509,6 +509,10 @@ let rec simplify_return_continuation_handler dacc
             ~extra_params_and_args
             cont handler ~user_data:result_dacc _k
         in
+        let uacc =
+          UA.map_r uacc ~f:(fun r ->
+            R.new_lifted_constant r lifted_constant)
+        in
         Format.eprintf "New handler after recursive call:@ %a\n%!"
           Return_cont_handler.print handler;
         handler, result_dacc, computed_values, uacc
