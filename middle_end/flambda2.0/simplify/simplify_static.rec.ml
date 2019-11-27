@@ -422,7 +422,7 @@ let rec simplify_return_continuation_handler dacc
         return_cont_handler.static_structure
     in
     match replacement_definition with
-    | None -> static_structure, result_dacc, false
+    | None -> static_structure, result_dacc, None
     | Some (symbol, reified_static_part) ->
       let free_names = Static_structure.free_names static_structure in
       assert (Variable.Set.is_empty (Name_occurrences.variables free_names));
@@ -454,7 +454,7 @@ let rec simplify_return_continuation_handler dacc
       let static_structure : Static_structure.t =
         S [Singleton symbol, reified_static_part]
       in
-      static_structure, result_dacc, true
+      static_structure, result_dacc, Some lifted_constant
   in
   Format.eprintf "Static structure for fresh symbol (orig CVs %a,@ EPs %a)@ is now:@ %a\n%!"
     KP.List.print original_computed_values
@@ -482,7 +482,8 @@ let rec simplify_return_continuation_handler dacc
       }
     in
     let handler, result_dacc, computed_values, uacc =
-      if did_reify && List.length computed_values = 1 then begin
+      match did_reify with
+      | Some lifted_constant when List.length computed_values = 1 ->
         Format.eprintf "Have generated another Define_symbol that could maybe be \
           reified.@ Trying to simplify:@ %a\n%!"
           Return_cont_handler.print handler;
@@ -501,8 +502,7 @@ let rec simplify_return_continuation_handler dacc
            constant produced above as a result of reification. *)
         let result_dacc =
           DA.map_denv starting_result_dacc ~f:(fun denv ->
-            DE.add_lifted_constants denv
-              ~lifted:(R.get_lifted_constants (DA.r result_dacc)))
+            DE.add_lifted_constants denv ~lifted:[lifted_constant])
         in
         let handler, (computed_values, _static_structure, result_dacc), uacc =
           simplify_return_continuation_handler starting_dacc
@@ -512,10 +512,9 @@ let rec simplify_return_continuation_handler dacc
         Format.eprintf "New handler after recursive call:@ %a\n%!"
           Return_cont_handler.print handler;
         handler, result_dacc, computed_values, uacc
-      end else begin
+      | _ ->
         handler, result_dacc, computed_values,
           UA.create UE.empty (DA.r result_dacc)
-      end
     in
     let rewrite =
       Apply_cont_rewrite.create ~original_params:original_computed_values
