@@ -54,7 +54,8 @@
    ;; UTILS
    config build_path_prefix_map misc identifiable numbers arg_helper clflags
    profile terminfo ccomp warnings consistbl strongly_connected_components
-   targetint load_path int_replace_polymorphic_compare printing_cache
+   one_bit_fewer targetint_intf targetint load_path
+   int_replace_polymorphic_compare printing_cache
 
    ;; PARSING
    location longident docstrings syntaxerr ast_helper camlinternalMenhirLib

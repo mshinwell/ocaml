@@ -182,7 +182,6 @@ let map_value2' f t i =
 
 let get_least_significant_16_bits_then_byte_swap
   = map_value1 TO.get_least_significant_16_bits_then_byte_swap
-let swap_byte_endianness = map_value1 TO.swap_byte_endianness
 let shift_right_logical = map_value2' TO.shift_right_logical
 let shift_right = map_value2' TO.shift_right
 let shift_left = map_value2' TO.shift_left

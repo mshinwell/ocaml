@@ -73,7 +73,6 @@ val xor : t -> t -> t
 val shift_left : t -> int -> t
 val shift_right : t -> int -> t
 val shift_right_logical : t -> int -> t
-val swap_byte_endianness : t -> t
 
 val get_least_significant_16_bits_then_byte_swap : t -> t
 
