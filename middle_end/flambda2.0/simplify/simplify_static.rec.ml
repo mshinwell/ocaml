@@ -494,58 +494,6 @@ let simplify_return_continuation_handler dacc
       Static_structure.print static_structure;
     static_structure, result_dacc
   in
-(*
-    match reified_definitions with
-    | [] -> static_structure, result_dacc, None
-    | _::_ ->
-      (* The static structure for the current [Define_symbol] binding being
-         simplified is changed to:
-         1. Define fresh symbol(s), bound to the static part(s) determined by
-            reification of the types of the computed value(s).
-         2. Have a replacement binding, in place of the existing binding for
-            the current symbol (whose static structure we were simplifying),
-            referencing some combination of un-reifiable computed values and
-            the fresh symbols. *)
-      let static_structure_parts =
-        List.map (fun (symbol, reified_static_part) ->
-            Bound_symbols.Singleton symbol, reified_static_part)
-          reified_definitions
-      in
-      let static_structure : Static_structure.t =
-        S static_structure_parts
-      in
-      let replacement_binding =
-        let definition : Definition.t =
-          { computation = None;
-            static_structure;
-          }
-        in
-        let typing_env = DE.typing_env (DA.denv result_dacc) in
-        let symbol_types =
-          Symbol.Set.fold (fun sym symbol_types ->
-              let ty = TE.find typing_env (Name.symbol sym) in
-              Symbol.Map.add sym ty symbol_types)
-            (Static_structure.being_defined static_structure)
-            Symbol.Map.empty
-        in
-        Lifted_constant.create_from_definition typing_env
-          symbol_types definition
-      in
-      Format.eprintf "New lifted constant (replacing existing) is:@ %a\n%!"
-        Lifted_constant.print replacement_binding;
-      let result_dacc =
-        (* The definition(s) in this lifted constant will get inserted in the
-           program _after_ the current [Define_symbol]. *)
-        DA.map_r result_dacc ~f:(fun r ->
-          R.new_lifted_constant r replacement_binding)
-      in
-      static_structure, result_dacc, Some replacement_definition
-  in
-  Format.eprintf "Static structure for fresh symbol (orig CVs %a,@ EPs %a)@ is now:@ %a\n%!"
-    KP.List.print original_computed_values
-    Continuation_extra_params_and_args.print extra_params_and_args
-    Static_structure.print static_structure;
-*)
   let handler, result_dacc, uacc =
     let free_variables =
       Name_occurrences.variables
@@ -567,44 +515,6 @@ let simplify_return_continuation_handler dacc
         static_structure;
       }
     in
-(*
-    let handler, result_dacc, uacc =
-      match lifted_constant with
-      | Some lifted_constant ->
-        Format.eprintf "Have generated another Define_symbol that could maybe be \
-          reified.@ Trying to simplify:@ %a\n%!"
-          Return_cont_handler.print handler;
-        (* We need to go back to the [result_dacc] which doesn't have the
-           fresh symbol(s) defined---since we're about to simplify a binding of
-           those same symbols again.  However we must account for any lifted
-           constants produced above as a result of reification. *)
-        let result_dacc =
-          DA.map_denv starting_result_dacc ~f:(fun denv ->
-            DE.add_lifted_constants denv ~lifted:[lifted_constant])
-        in
-        let extra_params_and_args =
-          List.combine extra_params_and_args.extra_params
-        in
-        let extra_params, extra_args = List.split extra_params_and_args in
-        let extra_params_and_args : Continuation_extra_params_and_args.t =
-          { extra_params;
-            extra_args;
-          }
-        in
-        let handler, (_computed_values, _static_structure, result_dacc), uacc =
-          simplify_return_continuation_handler starting_dacc
-            ~extra_params_and_args cont handler ~user_data:result_dacc _k
-        in
-        let uacc =
-          UA.map_r uacc ~f:(fun r -> R.new_lifted_constant r lifted_constant)
-        in
-        Format.eprintf "New handler after recursive call:@ %a\n%!"
-          Return_cont_handler.print handler;
-        handler, result_dacc, uacc
-      | None ->
-        handler, result_dacc, UA.create UE.empty (DA.r result_dacc)
-    in
-*)
     let rewrite =
       Apply_cont_rewrite.create
         ~original_params:return_cont_handler.computed_values
@@ -613,17 +523,7 @@ let simplify_return_continuation_handler dacc
         ~extra_args:extra_params_and_args.extra_args
         ~used_extra_params:(KP.Set.of_list used_extra_params)
     in
-    let uenv =
-(*
-      (* The rewrite we ultimately need is the one deepest down the
-         recursion.  So on the way back up the recursion here we should
-         never replace the rewrite if it already exists. *)
-      let existing_rewrite = UE.find_apply_cont_rewrite uenv cont in
-      match existing_rewrite with
-      | Some _ -> uenv
-      | None -> *) UE.add_apply_cont_rewrite UE.empty cont rewrite
-    in
-    (* handler, result_dacc, UA.with_uenv uacc uenv *)
+    let uenv = UE.add_apply_cont_rewrite UE.empty cont rewrite in
     handler, result_dacc, UA.create uenv (DA.r result_dacc)
   in
   (* CR mshinwell: It would maybe be easier to avoid returning [result_dacc].
