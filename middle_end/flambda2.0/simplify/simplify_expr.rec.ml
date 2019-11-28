@@ -220,17 +220,12 @@ and lift_expression
     Flambda_static.Program_body.Static_structure.being_defined
       definition.static_structure
   in
-Format.eprintf "New definition (new symbols %a)@ %a\ndacc:@ %a\n%!"
-  Symbol.Set.print symbols
-  Flambda_static.Program_body.Definition.print definition DA.print dacc;
   assert (not (Symbol.Set.is_empty symbols));
   let dacc =
     DA.map_denv dacc ~f:(fun denv ->
       DE.add_lifted_constants denv
         ~lifted:(R.get_lifted_constants (DA.r dacc)))
   in
-Format.eprintf "New definition@ %a\n%!"
-  Flambda_static.Program_body.Definition.print definition;
   let dacc =
     let typing_env = DE.typing_env (DA.denv dacc) in
     let symbol_types =

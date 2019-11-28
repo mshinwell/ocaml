@@ -352,13 +352,13 @@ module Program_body = struct
     let print (type k) ppf (t : k t) =
       match t with
       | Singleton sym ->
-        Format.fprintf ppf "@[<hov 1>(singleton@ @[(%a@ \u{2237}@ %a)@])@]"
+        Format.fprintf ppf "@[<hov 1>@[%a@ \u{2237}@ %a@ @<0>%s=@<0>%s@ @]"
           Symbol.print sym
           K.print K.value
+          (Flambda_colours.elide ())
+          (Flambda_colours.normal ())
       | Set_of_closures { closure_symbols; } ->
-        Format.fprintf ppf "@[<hov 1>(\
-            @[<hov 1>(closure_symbols@ %a)@]\
-            )@]"
+        Format.fprintf ppf "@[<hov 1>(closure_symbols@ %a)@]"
           (Format.pp_print_list ~pp_sep:Format.pp_print_space
             print_closure_binding)
           (Closure_id.Map.bindings closure_symbols)
@@ -380,8 +380,8 @@ module Program_body = struct
       | S : 'k Bound_symbols.t * 'k Static_part.t -> t0
 
     let print_t0_with_cache ~cache ppf (S (bound_symbols, static_part)) =
-      Format.fprintf ppf "@[<hov 1>(\
-          @[<hov 1>(%a)@]@ \
+      Format.fprintf ppf "@[<hov 0>(\
+          @[<hov 1>%a@]@ \
           @[<hov 1>(%a)@]\
           )@]"
         Bound_symbols.print bound_symbols

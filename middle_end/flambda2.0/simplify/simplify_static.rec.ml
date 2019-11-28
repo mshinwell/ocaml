@@ -377,7 +377,6 @@ let reify_types_of_computed_values dacc ~result_dacc computed_values =
     (fun var (result_dacc, dacc, reified_definitions) ->
       let typing_env = DE.typing_env (DA.denv dacc) in
       let ty = TE.find typing_env (Name.var var) in
-      Format.eprintf "CV %a type %a\n%!" Variable.print var T.print ty;
       begin match
         T.reify ~allowed_free_vars:computed_values typing_env
           ~min_name_mode:NM.normal ty
@@ -388,8 +387,6 @@ let reify_types_of_computed_values dacc ~result_dacc computed_values =
           Symbol.create (Compilation_unit.get_current_exn ())
             (Linkage_name.create (Variable.unique_name var))
         in
-        Format.eprintf "...can be reified:@ %a\n%!"
-          Flambda_static.Static_part.print static_part;
         let result_dacc =
           DA.map_denv result_dacc ~f:(fun denv ->
             let suitable_for =
@@ -415,7 +412,6 @@ let reify_types_of_computed_values dacc ~result_dacc computed_values =
         in
         result_dacc, dacc, (symbol, static_part) :: reified_definitions
       | Simple _ | Cannot_reify | Invalid ->
-        Format.eprintf "...cannot be reified.\n%!";
         result_dacc, dacc, reified_definitions
       end)
     computed_values
@@ -448,8 +444,6 @@ let simplify_return_continuation_handler dacc
       (Variable.Set.of_list
         (List.map KP.var extra_params_and_args.extra_params))
   in
-  Format.eprintf "Static structure starts as:@ %a\n%!"
-    Static_structure.print return_cont_handler.static_structure;
   let static_structure, result_dacc =
     let result_dacc, dacc, reified_definitions =
       (* If the type of a computed value can be reified (to a term possibly
@@ -490,8 +484,6 @@ let simplify_return_continuation_handler dacc
     let result_dacc, static_structure =
       simplify_static_structure dacc ~result_dacc static_structure
     in
-    Format.eprintf "Simplified static structure is:@ %a\n%!"
-      Static_structure.print static_structure;
     static_structure, result_dacc
   in
   let handler, result_dacc, uacc =
