@@ -414,13 +414,16 @@ module Make
            there is the possibility of the type representing a tagged
            immediate? *)
         | Unknown -> Unknown
-        | Known _ ->
-          match blocks_imms.blocks with
-          | Unknown -> Unknown
-          | Known blocks ->
-            match Row_like.For_blocks.all_tags_and_sizes blocks with
+        | Known immediates ->
+          if is_bottom env immediates then
+            match blocks_imms.blocks with
             | Unknown -> Unknown
-            | Known tags_and_sizes -> Proved tags_and_sizes
+            | Known blocks ->
+              match Row_like.For_blocks.all_tags_and_sizes blocks with
+              | Unknown -> Unknown
+              | Known tags_and_sizes -> Proved tags_and_sizes
+          else
+            Unknown
         end
       | Value (Ok _) -> Invalid
       | Value Unknown -> Unknown
