@@ -209,11 +209,11 @@ and lift_expression
         exn_continuation;
         computed_values;
       };
-      static_structure = S [Singleton symbol, static_part];
+      static_structure = [S (Singleton symbol, static_part)];
     }
   in
-  (* Note that [simplify_definition] may change or augment the symbol(s) bound
-     by [definition], in the event that reifying and lifting of computed values
+  (* Note that [simplify_definition] may augment the symbol(s) bound by
+     [definition], in the event that reifying and lifting of computed values
      occurs. *)
   let definition, dacc = Simplify_static.simplify_definition dacc definition in
   let symbols =

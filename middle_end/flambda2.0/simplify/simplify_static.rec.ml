@@ -178,7 +178,7 @@ let simplify_set_of_closures0 dacc ~result_dacc set_of_closures
     let bound_symbols : K.fabricated Program_body.Bound_symbols.t =
       Set_of_closures { closure_symbols; }
     in
-    S [bound_symbols, static_part]
+    [S (bound_symbols, static_part)]
   in
   let static_structure_types =
     Name_in_binding_pos.Map.fold
@@ -205,20 +205,50 @@ let simplify_set_of_closures dacc ~result_dacc set_of_closures
 
 let simplify_static_part_of_kind_value dacc ~result_dacc
       (static_part : K.value Static_part.t) ~result_sym
-      : K.value Static_part.t * DA.t =
+      : K.value Static_part.t * DA.t * DA.t =
+  (* [dacc] holds the environment for simplifying the [Static_part]; it contains
+     bindings for any computed values in addition to the types of everything
+     prior to the current [Define_symbol].
+
+     [result_dacc] holds the environment, which we are computing, that will be
+     in effect immediately after the current [Define_symbol].
+
+     We have to return both a new [dacc] and a new [result_dacc] since there may
+     be multiple (ordered) symbol bindings in any given [Static_structure]. For
+     simplifying the (N+1)th of those, we need the starting [dacc], plus the
+     types for the (0..N)th bindings too. We can't just use [result_dacc] as it
+     doesn't contain the bindings for the computed values. *)
   let bind_result_sym typ =
-    DA.map_denv result_dacc ~f:(fun result_denv ->
-      let suitable_for =
-        DE.typing_env (DE.define_symbol result_denv result_sym K.value)
-      in
-      let env_extension =
-        T.make_suitable_for_environment typ
-          (DE.typing_env (DA.denv dacc))
-          ~suitable_for
-          ~bind_to:(Name.symbol result_sym)
-      in
-      DE.with_typing_env result_denv
-        (TE.add_env_extension suitable_for ~env_extension))
+    (* CR mshinwell: tidy up. *)
+    let dacc =
+      DA.map_denv dacc ~f:(fun denv ->
+        let suitable_for =
+          DE.typing_env (DE.define_symbol denv result_sym K.value)
+        in
+        let env_extension =
+          T.make_suitable_for_environment typ
+            (DE.typing_env (DA.denv dacc))
+            ~suitable_for
+            ~bind_to:(Name.symbol result_sym)
+        in
+        DE.with_typing_env denv
+          (TE.add_env_extension suitable_for ~env_extension))
+    in
+    let result_dacc =
+      DA.map_denv result_dacc ~f:(fun result_denv ->
+        let suitable_for =
+          DE.typing_env (DE.define_symbol result_denv result_sym K.value)
+        in
+        let env_extension =
+          T.make_suitable_for_environment typ
+            (DE.typing_env (DA.denv dacc))
+            ~suitable_for
+            ~bind_to:(Name.symbol result_sym)
+        in
+        DE.with_typing_env result_denv
+          (TE.add_env_extension suitable_for ~env_extension))
+    in
+    dacc, result_dacc
   in
   match static_part with
   | Block (tag, is_mutable, fields) ->
@@ -232,37 +262,37 @@ let simplify_static_part_of_kind_value dacc ~result_dacc
       T.immutable_block (Tag.Scannable.to_tag tag) ~field_kind:K.value
         ~fields:field_tys
     in
-    let result_dacc = bind_result_sym ty in
-    Block (tag, is_mutable, fields), result_dacc
+    let dacc, result_dacc = bind_result_sym ty in
+    Block (tag, is_mutable, fields), dacc, result_dacc
   | Fabricated_block var ->
     DE.check_variable_is_bound (DA.denv dacc) var;
-    let result_dacc = bind_result_sym (T.any_value ()) in
-    static_part, result_dacc
+    let dacc, result_dacc = bind_result_sym (T.any_value ()) in
+    static_part, dacc, result_dacc
   (* CR mshinwell: Need to reify to change Equals types into new terms *)
   | Boxed_float or_var ->
     let or_var, ty =
       simplify_or_variable dacc (fun f -> T.this_boxed_float f) or_var
     in
-    let result_dacc = bind_result_sym ty in
-    Boxed_float or_var, result_dacc
+    let dacc, result_dacc = bind_result_sym ty in
+    Boxed_float or_var, dacc, result_dacc
   | Boxed_int32 or_var ->
     let or_var, ty =
       simplify_or_variable dacc (fun f -> T.this_boxed_int32 f) or_var
     in
-    let result_dacc = bind_result_sym ty in
-    Boxed_int32 or_var, result_dacc
+    let dacc, result_dacc = bind_result_sym ty in
+    Boxed_int32 or_var, dacc, result_dacc
   | Boxed_int64 or_var ->
     let or_var, ty =
       simplify_or_variable dacc (fun f -> T.this_boxed_int64 f) or_var
     in
-    let result_dacc = bind_result_sym ty in
-    Boxed_int64 or_var, result_dacc
+    let dacc, result_dacc = bind_result_sym ty in
+    Boxed_int64 or_var, dacc, result_dacc
   | Boxed_nativeint or_var ->
     let or_var, ty =
       simplify_or_variable dacc (fun f -> T.this_boxed_nativeint f) or_var
     in
-    let result_dacc = bind_result_sym ty in
-    Boxed_nativeint or_var, result_dacc
+    let dacc, result_dacc = bind_result_sym ty in
+    Boxed_nativeint or_var, dacc, result_dacc
   | Immutable_float_array fields ->
     let fields_with_tys =
       List.map (fun field ->
@@ -272,8 +302,8 @@ let simplify_static_part_of_kind_value dacc ~result_dacc
         fields
     in
     let fields, _field_tys = List.split fields_with_tys in
-    let result_dacc = bind_result_sym (T.any_value ()) in
-    Immutable_float_array fields, result_dacc
+    let dacc, result_dacc = bind_result_sym (T.any_value ()) in
+    Immutable_float_array fields, dacc, result_dacc
   | Mutable_string { initial_value; } ->
     let initial_value, str_ty =
       simplify_or_variable dacc (fun initial_value ->
@@ -285,32 +315,32 @@ let simplify_static_part_of_kind_value dacc ~result_dacc
         initial_value;
       }
     in
-    let result_dacc = bind_result_sym str_ty in
-    static_part, result_dacc
+    let dacc, result_dacc = bind_result_sym str_ty in
+    static_part, dacc, result_dacc
   | Immutable_string or_var ->
     let or_var, ty =
       simplify_or_variable dacc (fun str -> T.this_immutable_string str)
         or_var
     in
-    let result_dacc = bind_result_sym ty in
-    Immutable_string or_var, result_dacc
+    let dacc, result_dacc = bind_result_sym ty in
+    Immutable_string or_var, dacc, result_dacc
 
 let simplify_static_part_of_kind_fabricated dacc ~result_dacc
       (static_part : K.fabricated Static_part.t)
       ~closure_symbols
-    : K.fabricated Static_part.t * DA.t =
+    : K.fabricated Static_part.t * DA.t * DA.t =
   match static_part with
   | Set_of_closures set_of_closures ->
      let set_of_closures, dacc, _static_structure_types, _static_structure =
        simplify_set_of_closures dacc ~result_dacc set_of_closures
          ~closure_symbols
      in
-     Set_of_closures set_of_closures, dacc
+     Set_of_closures set_of_closures, dacc, dacc
 
 let simplify_piece_of_static_structure (type k) dacc ~result_dacc
       (bound_syms : k Program_body.Bound_symbols.t)
       (static_part : k Static_part.t)
-      : k Static_part.t * DA.t =
+      : k Static_part.t * DA.t * DA.t =
   match bound_syms with
   | Singleton result_sym ->
     simplify_static_part_of_kind_value dacc ~result_dacc static_part
@@ -319,34 +349,95 @@ let simplify_piece_of_static_structure (type k) dacc ~result_dacc
     simplify_static_part_of_kind_fabricated dacc ~result_dacc static_part
       ~closure_symbols
 
-let simplify_static_structure dacc ~result_dacc
-      ((S pieces) : Program_body.Static_structure.t)
+let simplify_static_structure dacc ~result_dacc pieces
       : DA.t * Program_body.Static_structure.t =
-  let str_rev, next_dacc =
-    (* The bindings in the individual pieces of the [Static_structure] are
-       simultaneous, so we keep a [result_dacc] accumulating the final
-       environment, but always use [dacc] for the simplification of the
-       pieces. *)
-    (* CR mshinwell: note in comment that [result_dacc] doesn't have the
-       [computed_values] bound in it *)
-    List.fold_left (fun (str_rev, result_dacc) (bound_syms, static_part) ->
-        let static_part, result_dacc =
+  let str_rev, _dacc, result_dacc =
+    List.fold_left
+      (fun (str_rev, dacc, result_dacc)
+           (Static_structure.S (bound_syms, static_part)) ->
+        let static_part, dacc, result_dacc =
           simplify_piece_of_static_structure dacc ~result_dacc
             bound_syms static_part
         in
-        let str_rev = (bound_syms, static_part) :: str_rev in
-        str_rev, result_dacc)
-      ([], result_dacc)
+        let binding : Program_body.Static_structure.t0 =
+          S (bound_syms, static_part)
+        in
+        let str_rev = binding :: str_rev in
+        str_rev, dacc, result_dacc)
+      ([], dacc, result_dacc)
       pieces
   in
-  next_dacc, S (List.rev str_rev)
+  result_dacc, List.rev str_rev
 
-let rec simplify_return_continuation_handler dacc
+let reify_types_of_computed_values dacc ~result_dacc computed_values =
+  Variable.Set.fold
+    (fun var (result_dacc, dacc, reified_definitions) ->
+      let typing_env = DE.typing_env (DA.denv dacc) in
+      let ty = TE.find typing_env (Name.var var) in
+      Format.eprintf "CV %a type %a\n%!" Variable.print var T.print ty;
+      begin match
+        T.reify ~allowed_free_vars:computed_values typing_env
+          ~min_name_mode:NM.normal ty
+      with
+      | Lift to_lift ->
+        let static_part = Reification.create_static_part to_lift in
+        let symbol =
+          Symbol.create (Compilation_unit.get_current_exn ())
+            (Linkage_name.create (Variable.unique_name var))
+        in
+        Format.eprintf "...can be reified:@ %a\n%!"
+          Flambda_static.Static_part.print static_part;
+        let result_dacc =
+          DA.map_denv result_dacc ~f:(fun denv ->
+            let suitable_for =
+              TE.add_definition (DE.typing_env denv)
+                (Name_in_binding_pos.symbol symbol)
+                K.value
+            in
+            let env_extension =
+              T.make_suitable_for_environment ty
+                typing_env
+                ~suitable_for
+                ~bind_to:(Name.symbol symbol)
+            in
+            DE.with_typing_env denv
+              (TE.add_env_extension suitable_for ~env_extension))
+        in
+        let dacc =
+          DA.map_denv dacc ~f:(fun denv ->
+            DE.add_equation_on_name
+              (DE.define_symbol denv symbol K.value)
+              (Name.var var)
+              (T.alias_type_of K.value (Simple.symbol symbol)))
+        in
+        result_dacc, dacc, (symbol, static_part) :: reified_definitions
+      | Simple _ | Cannot_reify | Invalid ->
+        Format.eprintf "...cannot be reified.\n%!";
+        result_dacc, dacc, reified_definitions
+      end)
+    computed_values
+    (result_dacc, dacc, [])
+
+module Bindings_top_sort =
+  Top_closure.Make
+    (struct
+      type t = Symbol.Set.t
+      type elt = Symbol.t
+      let empty = Symbol.Set.empty
+      let add t elt = Symbol.Set.add elt t
+      let mem t elt = Symbol.Set.mem elt t
+    end)
+    (struct
+      type 'a t = 'a
+      let return t = t
+      let (>>=) t f = f t
+    end)
+
+let simplify_return_continuation_handler dacc
       ~(extra_params_and_args : Continuation_extra_params_and_args.t)
       cont (return_cont_handler : Return_cont_handler.Opened.t)
       ~user_data:result_dacc _k =
   let result_dacc = DA.with_r result_dacc (DA.r dacc) in
-  let original_computed_values = return_cont_handler.computed_values in
   let allowed_free_vars =
     Variable.Set.union
       (Variable.Set.of_list
@@ -356,78 +447,76 @@ let rec simplify_return_continuation_handler dacc
   in
   Format.eprintf "Static structure starts as:@ %a\n%!"
     Static_structure.print return_cont_handler.static_structure;
-  let starting_dacc = dacc in
-  let starting_result_dacc = result_dacc in
-  let static_structure, result_dacc, lifted_constant =
-    let result_dacc, dacc, replacement_definitions =
+  let static_structure, result_dacc =
+    let result_dacc, dacc, reified_definitions =
       (* If the type of a computed value can be reified (to a term possibly
-         involving any extra params and args that are present, from unboxing),
-         then lift that computed value to its own [Static_part]. *)
-      List.fold_left
-        (fun (result_dacc, dacc, replacement_definitions) param ->
-          let var = KP.var param in
-          let typing_env = DE.typing_env (DA.denv dacc) in
-          let ty = TE.find typing_env (Name.var var) in
-          Format.eprintf "CV %a type %a\n%!" Variable.print var T.print ty;
-          Format.eprintf "allowed_free_vars %a\n%!"
-            Variable.Set.print allowed_free_vars;
-          begin match
-            T.reify ~allowed_free_vars typing_env ~min_name_mode:NM.normal ty
-          with
-          | Lift to_lift ->
-            let static_part = Reification.create_static_part to_lift in
-            let symbol =
-              Symbol.create (Compilation_unit.get_current_exn ())
-                (Linkage_name.create (Variable.unique_name var))
+         involving any extra params and args that are present, from unboxing
+         etc.) then lift that computed value to its own [Static_part]. *)
+      reify_types_of_computed_values dacc ~result_dacc allowed_free_vars
+    in
+    let top_sorted_reified_definitions =
+      let reified_symbols =
+        Symbol.Set.of_list
+          (List.map (fun (symbol, _) -> symbol) reified_definitions)
+      in
+      match
+        Bindings_top_sort.top_closure reified_definitions
+          ~key:(fun (symbol, _static_part) -> symbol)
+          ~deps:(fun (_symbol, static_part) ->
+            let symbol_deps =
+              static_part
+              |> Static_part.free_names
+              |> Name_occurrences.symbols
+              |> Symbol.Set.inter reified_symbols
+              |> Symbol.Set.elements
             in
-            Format.eprintf "...can be reified:@ %a\n%!"
-              Flambda_static.Static_part.print static_part;
-            let result_dacc =
-              DA.map_denv result_dacc ~f:(fun denv ->
-                let suitable_for =
-                  TE.add_definition (DE.typing_env denv)
-                    (Name_in_binding_pos.symbol symbol)
-                    K.value
-                in
-                let env_extension =
-                  T.make_suitable_for_environment ty
-                    typing_env
-                    ~suitable_for
-                    ~bind_to:(Name.symbol symbol)
-                in
-                DE.with_typing_env denv
-                  (TE.add_env_extension suitable_for ~env_extension))
-            in
-            let dacc =
-              DA.map_denv dacc ~f:(fun denv ->
-                DE.add_equation_on_name
-                  (DE.define_symbol denv symbol K.value)
-                  (Name.var var)
-                  (T.alias_type_of K.value (Simple.symbol symbol)))
-            in
-            result_dacc, dacc, (symbol, static_part) :: replacement_definitions
-          | Simple _ | Cannot_reify | Invalid ->
-            Format.eprintf "...cannot be reified.\n%!";
-            result_dacc, dacc, replacement_definitions
-          end)
-        (result_dacc, dacc, [])
-        original_computed_values
+            (* The [static_part]s here will be ignored. *)
+            List.map (fun symbol -> symbol, static_part) symbol_deps)
+      with
+      | Ok sorted -> sorted
+      | Error _ -> assert false
+    in
+    let static_structure : Static_structure.t =
+      let top_sorted_reified_definitions =
+        List.map (fun (symbol, static_part) : Static_structure.t0 ->
+            S( Bound_symbols.Singleton symbol, static_part))
+          top_sorted_reified_definitions
+      in
+      top_sorted_reified_definitions @ return_cont_handler.static_structure
     in
     let result_dacc, static_structure =
-      simplify_static_structure dacc ~result_dacc
-        return_cont_handler.static_structure
+      simplify_static_structure dacc ~result_dacc static_structure
     in
     Format.eprintf "Simplified static structure is:@ %a\n%!"
       Static_structure.print static_structure;
-    match replacement_definitions with
+    static_structure, result_dacc
+  in
+(*
+    match reified_definitions with
     | [] -> static_structure, result_dacc, None
     | _::_ ->
-      let new_definition : Definition.t =
-        { computation = None;
-          static_structure;
-        }
+      (* The static structure for the current [Define_symbol] binding being
+         simplified is changed to:
+         1. Define fresh symbol(s), bound to the static part(s) determined by
+            reification of the types of the computed value(s).
+         2. Have a replacement binding, in place of the existing binding for
+            the current symbol (whose static structure we were simplifying),
+            referencing some combination of un-reifiable computed values and
+            the fresh symbols. *)
+      let static_structure_parts =
+        List.map (fun (symbol, reified_static_part) ->
+            Bound_symbols.Singleton symbol, reified_static_part)
+          reified_definitions
       in
-      let lifted_constant =
+      let static_structure : Static_structure.t =
+        S static_structure_parts
+      in
+      let replacement_binding =
+        let definition : Definition.t =
+          { computation = None;
+            static_structure;
+          }
+        in
         let typing_env = DE.typing_env (DA.denv result_dacc) in
         let symbol_types =
           Symbol.Set.fold (fun sym symbol_types ->
@@ -437,28 +526,23 @@ let rec simplify_return_continuation_handler dacc
             Symbol.Map.empty
         in
         Lifted_constant.create_from_definition typing_env
-          symbol_types new_definition
+          symbol_types definition
       in
       Format.eprintf "New lifted constant (replacing existing) is:@ %a\n%!"
-        Lifted_constant.print lifted_constant;
+        Lifted_constant.print replacement_binding;
       let result_dacc =
-        (* This lifted constant will get inserted in the program before the
-           current [Define_symbol] (see [simplify_program_body0], below). *)
+        (* The definition(s) in this lifted constant will get inserted in the
+           program _after_ the current [Define_symbol]. *)
         DA.map_r result_dacc ~f:(fun r ->
-          R.new_lifted_constant r lifted_constant)
+          R.new_lifted_constant r replacement_binding)
       in
-      let static_structure_parts =
-        List.map (fun (symbol, reified_static_part) ->
-            Bound_symbols.Singleton symbol, reified_static_part)
-          replacement_definitions
-      in
-      let static_structure : Static_structure.t = S static_structure_parts in
-      static_structure, result_dacc, Some lifted_constant
+      static_structure, result_dacc, Some replacement_definition
   in
   Format.eprintf "Static structure for fresh symbol (orig CVs %a,@ EPs %a)@ is now:@ %a\n%!"
     KP.List.print original_computed_values
     Continuation_extra_params_and_args.print extra_params_and_args
     Static_structure.print static_structure;
+*)
   let handler, result_dacc, uacc =
     let free_variables =
       Name_occurrences.variables
@@ -467,7 +551,7 @@ let rec simplify_return_continuation_handler dacc
     let used_computed_values =
       List.filter (fun param ->
           Variable.Set.mem (KP.var param) free_variables)
-        original_computed_values
+        return_cont_handler.computed_values
     in
     let used_extra_params =
       List.filter (fun extra_param ->
@@ -480,6 +564,7 @@ let rec simplify_return_continuation_handler dacc
         static_structure;
       }
     in
+(*
     let handler, result_dacc, uacc =
       match lifted_constant with
       | Some lifted_constant ->
@@ -516,24 +601,27 @@ let rec simplify_return_continuation_handler dacc
       | None ->
         handler, result_dacc, UA.create UE.empty (DA.r result_dacc)
     in
+*)
     let rewrite =
-      Apply_cont_rewrite.create ~original_params:original_computed_values
+      Apply_cont_rewrite.create
+        ~original_params:return_cont_handler.computed_values
         ~used_params:(KP.Set.of_list used_computed_values)
         ~extra_params:extra_params_and_args.extra_params
         ~extra_args:extra_params_and_args.extra_args
         ~used_extra_params:(KP.Set.of_list used_extra_params)
     in
     let uenv =
-      let uenv = UA.uenv uacc in
+(*
       (* The rewrite we ultimately need is the one deepest down the
          recursion.  So on the way back up the recursion here we should
          never replace the rewrite if it already exists. *)
       let existing_rewrite = UE.find_apply_cont_rewrite uenv cont in
       match existing_rewrite with
-      | None -> UE.add_apply_cont_rewrite UE.empty cont rewrite
       | Some _ -> uenv
+      | None -> *) UE.add_apply_cont_rewrite UE.empty cont rewrite
     in
-    handler, result_dacc, UA.with_uenv uacc uenv
+    (* handler, result_dacc, UA.with_uenv uacc uenv *)
+    handler, result_dacc, UA.create uenv (DA.r result_dacc)
   in
   (* CR mshinwell: It would maybe be easier to avoid returning [result_dacc].
      This would also match [Simplify_expr]. *)

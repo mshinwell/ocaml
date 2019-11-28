@@ -117,9 +117,15 @@ module Program_body : sig
   end
 
   module Static_structure : sig
-    type t =
-      | S : ('k Bound_symbols.t * 'k Static_part.t) list -> t
-      [@@unboxed]
+    (** The bindings in a [Static_structure] are ordered: symbols bound later
+        in the list cannot be referred to by [Static_part]s earlier in the
+        list.
+        Allowing multiple bindings here enables several static parts to use
+        the same results from a given [computation]. *)
+    type t0 =
+      | S : 'k Bound_symbols.t * 'k Static_part.t -> t0
+
+    type t = t0 list
 
     (* CR mshinwell: Add a creation function *)
     (* CR mshinwell: make [t] abstract *)

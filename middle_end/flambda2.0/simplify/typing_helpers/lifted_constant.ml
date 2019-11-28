@@ -47,7 +47,7 @@ let create ?computation env types bound_symbols static_part =
   end;
   let definition : Definition.t =
     { computation;
-      static_structure = S [bound_symbols, static_part];
+      static_structure = [S (bound_symbols, static_part)];
     }
   in
   { env;
@@ -55,9 +55,9 @@ let create ?computation env types bound_symbols static_part =
     definition;
   }
 
-let create_from_static_structure env types
-      ((S pieces) : Program_body.Static_structure.t) =
-  List.map (fun (bound_symbols, static_part) ->
+let create_from_static_structure env types pieces =
+  List.map
+    (fun (Program_body.Static_structure.S (bound_symbols, static_part)) ->
       create env types bound_symbols static_part)
     pieces
 
