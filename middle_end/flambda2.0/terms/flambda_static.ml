@@ -380,7 +380,7 @@ module Program_body = struct
       | S : 'k Bound_symbols.t * 'k Static_part.t -> t0
 
     let print_t0_with_cache ~cache ppf (S (bound_symbols, static_part)) =
-      Format.fprintf ppf "@[<hov 0>(\
+      Format.fprintf ppf "@[<hov 1>(\
           @[<hov 1>%a@]@ \
           @[<hov 1>(%a)@]\
           )@]"
