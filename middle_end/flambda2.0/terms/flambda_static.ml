@@ -352,7 +352,7 @@ module Program_body = struct
     let print (type k) ppf (t : k t) =
       match t with
       | Singleton sym ->
-        Format.fprintf ppf "@[<hov 1>@[%a@ \u{2237}@ %a@ @<0>%s=@<0>%s@ @]"
+        Format.fprintf ppf "@[%a@ \u{2237}@ %a@ @<0>%s=@<0>%s@ @]"
           Symbol.print sym
           K.print K.value
           (Flambda_colours.elide ())
