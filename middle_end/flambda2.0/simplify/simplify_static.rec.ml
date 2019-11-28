@@ -223,7 +223,9 @@ let simplify_static_part_of_kind_value dacc ~result_dacc
     let dacc =
       DA.map_denv dacc ~f:(fun denv ->
         let suitable_for =
-          DE.typing_env (DE.define_symbol denv result_sym K.value)
+          (* [result_sym] will already be defined when we are lifting
+             reified computed values (see below). *)
+          DE.typing_env (DE.define_symbol_if_undefined denv result_sym K.value)
         in
         let env_extension =
           T.make_suitable_for_environment typ
@@ -237,7 +239,8 @@ let simplify_static_part_of_kind_value dacc ~result_dacc
     let result_dacc =
       DA.map_denv result_dacc ~f:(fun result_denv ->
         let suitable_for =
-          DE.typing_env (DE.define_symbol result_denv result_sym K.value)
+          DE.typing_env
+            (DE.define_symbol_if_undefined result_denv result_sym K.value)
         in
         let env_extension =
           T.make_suitable_for_environment typ
@@ -479,7 +482,7 @@ let simplify_return_continuation_handler dacc
     let static_structure : Static_structure.t =
       let top_sorted_reified_definitions =
         List.map (fun (symbol, static_part) : Static_structure.t0 ->
-            S( Bound_symbols.Singleton symbol, static_part))
+            S (Bound_symbols.Singleton symbol, static_part))
           top_sorted_reified_definitions
       in
       top_sorted_reified_definitions @ return_cont_handler.static_structure

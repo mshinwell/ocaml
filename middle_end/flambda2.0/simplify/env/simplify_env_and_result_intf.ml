@@ -76,6 +76,8 @@ module type Downwards_env = sig
 
   val define_symbol : t -> Symbol.t -> Flambda_kind.t -> t
 
+  val define_symbol_if_undefined : t -> Symbol.t -> Flambda_kind.t -> t
+
   val find_symbol : t -> Symbol.t -> Flambda_type.t
 
   val add_equation_on_symbol : t -> Symbol.t -> Flambda_type.t -> t

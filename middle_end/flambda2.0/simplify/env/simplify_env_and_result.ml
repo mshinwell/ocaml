@@ -172,6 +172,10 @@ end = struct
     in
     { t with typing_env; }
 
+  let define_symbol_if_undefined t sym kind =
+    if TE.mem t.typing_env (Name.symbol sym) then t
+    else define_symbol t sym kind
+
   let add_symbol t sym ty =
     let typing_env =
       let sym = Name.symbol sym in
