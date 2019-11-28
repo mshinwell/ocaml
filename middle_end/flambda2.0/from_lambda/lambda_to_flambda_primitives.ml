@@ -642,12 +642,12 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
       dbg;
     }
   | Poffsetref n, [block] ->
-    Ternary (Block_set (Block (Value Anything), Assignment),
+    Ternary (Block_set (Block (Value Definitely_immediate), Assignment),
       block,
       Simple Simple.const_zero,
       Prim (Binary (Int_arith (Tagged_immediate, Add),
         Simple (Simple.const_int (Targetint.OCaml.of_int n)),
-        Prim (Binary (Block_load (Block (Value Anything), Immutable),
+        Prim (Binary (Block_load (Block (Value Definitely_immediate), Mutable),
           block,
           Simple Simple.const_zero)))))
   | Pctconst const, _ ->
