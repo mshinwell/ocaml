@@ -411,6 +411,7 @@ let reify_types_of_computed_values dacc ~result_dacc computed_values =
               (T.alias_type_of K.value (Simple.symbol symbol)))
         in
         result_dacc, dacc, (symbol, static_part) :: reified_definitions
+      | Lift_set_of_closures _
       | Simple _ | Cannot_reify | Invalid ->
         result_dacc, dacc, reified_definitions
       end)

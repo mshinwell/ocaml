@@ -473,7 +473,7 @@ module type S = sig
 
   type reification_result = private
     | Lift of to_lift  (* CR mshinwell: rename? *)
-    | Set_of_closures of {
+    | Lift_set_of_closures of {
         function_decls : term_language_function_declaration Closure_id.Map.t;
         closure_vars : Simple.t Var_within_closure.Map.t;
       }

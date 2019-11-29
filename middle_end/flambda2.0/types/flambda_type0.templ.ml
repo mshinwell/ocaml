@@ -626,8 +626,8 @@ module Make
 
   type reification_result =
     | Lift of to_lift
-    | Set_of_closures of {
-        function_decls : term_language_function_declaration Closure_id.Map.t;
+    | Lift_set_of_closures of {
+        function_decls : Term_language_function_declaration.t Closure_id.Map.t;
         closure_vars : Simple.t Var_within_closure.Map.t;
       }
     | Simple of Simple.t
@@ -748,7 +748,8 @@ Format.eprintf "reifying %a\n%!" print t;
           | Unknown -> try_canonical_simple ()
           | Known by_closure_id ->
             let function_decls_with_closure_vars =
-              Closure_id.Map.filter_map (fun closure_id closures_entry ->
+              Closure_id.Map.filter_map by_closure_id
+                ~f:(fun closure_id closures_entry ->
                   match
                     Closures_entry.find_function_declaration closures_entry
                       closure_id
@@ -763,8 +764,8 @@ Format.eprintf "reifying %a\n%!" print t;
                         Closures_entry.closure_var_types closures_entry
                       in
                       let closure_var_simples =
-                        Var_within_closure.Map.filter_map
-                          (fun closure_var closure_var_type ->
+                        Var_within_closure.Map.filter_map closure_var_types
+                          ~f:(fun _closure_var closure_var_type ->
                             match
                               prove_equals_to_var_or_symbol_or_tagged_immediate
                                 env closure_var_type
@@ -776,14 +777,13 @@ Format.eprintf "reifying %a\n%!" print t;
                                 None
                             | Proved (Symbol sym) -> Some (Simple.symbol sym)
                             | Proved (Tagged_immediate imm) ->
-                              Some (Simple.const (Tagged_immediate imm)))
-                          closure_var_types
+                              Some (Simple.const (Tagged_immediate imm))
+                            | Unknown | Invalid -> None)
                       in
                       if Var_within_closure.Map.cardinal closure_var_types
                         <> Var_within_closure.Map.cardinal closure_var_simples
                       then None
                       else Some (function_decl, closure_var_simples))
-                by_closure_id
             in
             if Closure_id.Map.cardinal by_closure_id
               <> Closure_id.Map.cardinal function_decls_with_closure_vars
@@ -813,10 +813,11 @@ Format.eprintf "reifying %a\n%!" print t;
                               Simple.print simple
                               Simple.print existing_simple
                               Var_within_closure.print closure_var
-                              T.print t
-                          end;
-                          Var_within_closure.Map.add closure_var simple
-                            all_closure_vars)
+                              print t
+                          end
+                        end;
+                        Var_within_closure.Map.add closure_var simple
+                          all_closure_vars)
                      closure_var_simples
                      all_closure_vars)
                   function_decls_with_closure_vars

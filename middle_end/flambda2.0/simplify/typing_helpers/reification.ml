@@ -24,7 +24,7 @@ module K = Flambda_kind
 module R = Simplify_env_and_result.Result
 module T = Flambda_type
 
-let create_static_structure (to_lift : T.to_lift)
+let create_static_part (to_lift : T.to_lift)
     : K.value Flambda_static.Static_part.t =
   match to_lift with
   | Immutable_block (tag, fields) ->
@@ -119,6 +119,7 @@ let try_to_reify dacc (term : Reachable.t) ~bound_to =
       in
       if Simple.equal (Simple.var bound_to) simple then term, dacc, ty
       else Reachable.reachable (Named.create_simple simple), dacc, ty
+    | Lift_set_of_closures _  (* already dealt with in [Simplify_named] *)
     | Cannot_reify -> term, dacc, ty
     | Invalid ->
       let ty = T.bottom_like ty in
