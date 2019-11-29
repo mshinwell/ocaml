@@ -160,6 +160,12 @@ val closure_with_at_least_this_closure_var
   -> closure_element_var:Variable.t
   -> t
 
+val closure_with_at_least_these_closure_vars
+   : Var_within_closure.Set.t
+  -> closure_element:Var_within_closure.t
+  -> closure_element_var:Variable.t
+  -> t
+
 val array_of_length : length:t -> t
 
 val make_suitable_for_environment0

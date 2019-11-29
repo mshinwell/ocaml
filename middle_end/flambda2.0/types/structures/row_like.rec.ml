@@ -427,4 +427,17 @@ module For_closures_entry_by_set_of_closures_contents = struct
   let map_function_decl_types t ~f =
     map_maps_to t ~f:(fun closures_entry ->
       Closures_entry.map_function_decl_types closures_entry ~f)
+
+  let all_closures t : _ Or_unknown.t =
+    match all_tags_and_indexes t with
+    | Unknown -> Unknown
+    | Known tags_and_indexes ->
+      let result =
+        Set_of_closures_contents.With_closure_id.Map.fold
+          (fun (closure_id, _set_of_closures_contents) closures_entry result ->
+            Closure_id.Map.add closure_id closures_entry result)
+          tags_and_indexes
+          Closure_id.Map.empty
+      in
+      Known rseult
 end

@@ -24,7 +24,7 @@ module K = Flambda_kind
 module R = Simplify_env_and_result.Result
 module T = Flambda_type
 
-let create_static_part (to_lift : T.to_lift)
+let create_static_structure (to_lift : T.to_lift)
     : K.value Flambda_static.Static_part.t =
   match to_lift with
   | Immutable_block (tag, fields) ->

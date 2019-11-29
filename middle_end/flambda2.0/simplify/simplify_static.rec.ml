@@ -457,6 +457,7 @@ let simplify_return_continuation_handler dacc
           (List.map (fun (symbol, _) -> symbol) reified_definitions)
       in
       match
+        (* XXX On variables, not symbols. + Handle cycles by picking. *)
         Bindings_top_sort.top_closure reified_definitions
           ~key:(fun (symbol, _static_part) -> symbol)
           ~deps:(fun (_symbol, static_part) ->

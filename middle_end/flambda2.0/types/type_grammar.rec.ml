@@ -579,13 +579,22 @@ let at_least_the_closures_with_ids ~this_closure closure_ids_and_bindings =
   in
   Value (T_V.create (Closures { by_closure_id; }))
 
-let closure_with_at_least_this_closure_var closure_var ~closure_element_var =
+let closure_with_at_least_these_closure_vars closure_vars ~closure_element
+      ~closure_element_var =
   let closure_var_types =
-    let closure_var_type =
-      alias_type_of K.value (Simple.var closure_element_var)
+    let closure_var_types =
+      Var_within_closure.Set.fold (fun closure_var closure_var_types ->
+          let ty =
+            if Var_within_closure.equal closure_var closure_element then
+              alias_type_of K.value (Simple.var closure_element_var)
+            else
+              any_value ()
+          in
+          Var_within_closure.Map.add closure_var ty closure_var_types)
+        closure_vars
+        Var_within_closure.Map.empty
     in
-    Product.Var_within_closure_indexed.create
-      (Var_within_closure.Map.singleton closure_var closure_var_type)
+    Product.Var_within_closure_indexed.create closure_var_types
   in
   let closures_entry =
     Closures_entry.create ~function_decls:Closure_id.Map.empty
@@ -596,7 +605,7 @@ let closure_with_at_least_this_closure_var closure_var ~closure_element_var =
     let set_of_closures_contents =
       Set_of_closures_contents.create
         Closure_id.Set.empty
-        (Var_within_closure.Set.singleton closure_var)
+        closure_vars
     in
     let set_of_closures_contents_to_closures_entry =
       Set_of_closures_contents.With_closure_id_or_unknown.Map.singleton
@@ -608,6 +617,12 @@ let closure_with_at_least_this_closure_var closure_var ~closure_element_var =
         set_of_closures_contents_to_closures_entry
   in
   Value (T_V.create (Closures { by_closure_id; }))
+
+let closure_with_at_least_this_closure_var closure_var ~closure_element_var =
+  closure_with_at_least_these_closure_vars
+    (Var_within_closure.Set.singleton closure_var)
+    ~closure_element:closure_var
+    ~closure_element_var
 
 let array_of_length ~length =
   Value (T_V.create (Array { length; }))

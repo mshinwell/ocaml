@@ -22,7 +22,11 @@ open! Simplify_import
 let max_unboxing_depth = 1
 
 module type Unboxing_spec = sig
-  module Index : Identifiable.S
+  module Index : sig
+    include Identifiable.S
+    val to_string : t -> string
+  end
+
   module Info : sig type t end
 
   val var_name : string
@@ -36,7 +40,7 @@ module type Unboxing_spec = sig
     -> index_var:Variable.t
     -> T.t
 
-  val project_field : block:Simple.t -> index:Index.t -> P.t
+  val project_field : Info.t -> block:Simple.t -> index:Index.t -> P.t
 end
 
 module Make (U : Unboxing_spec) = struct
@@ -161,7 +165,9 @@ module Make (U : Unboxing_spec) = struct
         extra_params_and_args ~unbox_value info indexes kind =
     let new_param_vars =
       Index.Set.fold (fun index new_param_vars ->
-          let name = Format.asprintf "%s%a" U.var_name Index.print index in
+          let name =
+            Format.asprintf "%s_%s" U.var_name (Index.to_string index)
+          in
           let var = Variable.create name in
           let param = KP.create (Parameter.wrap var) kind in
           Index.Map.add index param new_param_vars)
@@ -232,7 +238,7 @@ struct
       ~field_kind:Flambda_kind.value
       ~field_n_minus_one:index_var
 
-  let project_field ~block ~index =
+  let project_field _tag ~block ~index =
     let index = Simple.const_int index in
     P.Binary (Block_load (Block (Value Anything), Immutable), block, index)
 end
@@ -257,21 +263,25 @@ struct
       ~field_kind:Flambda_kind.naked_float
       ~field_n_minus_one:index_var
 
-  let project_field ~block ~index =
+  let project_field _tag ~block ~index =
     let index = Simple.const_int index in
     P.Binary (Block_load (Block Naked_float, Immutable), block, index)
 end
-(*
-module Closures_spec : Unboxing_spec = struct
-  module Index = Var_within_closure
 
-  module Info = struct
-    type t = {
-      closure_id : Closure_id.t;
-      func_decl_type : Function_declaration_type.t;
-      closure_type : T.t;
-    }
-  end
+module Closures_info = struct
+  type t = {
+    closure_id : Closure_id.t;
+    func_decl_type : T.Function_declaration_type.t;
+    closure_type : T.t;
+  }
+end
+
+module Closures_spec : Unboxing_spec
+  with module Info = Closures_info
+  with module Index = Var_within_closure =
+struct
+  module Index = Var_within_closure
+  module Info = Closures_info
 
   let var_name = "unboxed_clos_var"
 
@@ -287,18 +297,26 @@ module Closures_spec : Unboxing_spec = struct
       ~all_closures_in_set
       ~all_closure_vars_in_set:closure_vars
 
-  let make_boxed_value_accommodating info closure_vars ~highest_index_var =
+  let make_boxed_value_accommodating _info closure_var ~index_var =
+    T.closure_with_at_least_this_closure_var closure_var
+      ~closure_element_var:index_var
+
+(*
     match Var_within_closure.Set.max_elt_opt closure_vars with
     | None -> make_boxed_value info ~fields:Var_within_closure.Map.empty
     | Some closure_element ->
       T.closure_with_at_least_these_closure_vars closure_vars
         ~closure_element
         ~closure_element_var:highest_index_var
-
-  let project_field ~block:closure ~index:closure_var =
-    P.Unary (Project_var closure_var, closure)
-end
 *)
+
+  let project_field (info : Info.t) ~block:closure ~index:closure_var =
+    P.Unary (Project_var {
+        project_from = info.closure_id;
+        var = closure_var;
+        },
+      closure)
+end
 
 module Make_unboxed_number_spec (N : sig
   val name : string
@@ -330,7 +348,7 @@ end) = struct
     end;
     N.box (T.alias_type_of N.unboxed_kind (Simple.var index_var))
 
-  let project_field ~block ~index:_ =
+  let project_field _tag ~block ~index:_ =
     P.Unary (Unbox_number N.boxable_number_kind, block)
 end
 
@@ -396,7 +414,7 @@ end)
 
 module Blocks_of_values = Make (Block_of_values_spec)
 module Blocks_of_naked_floats = Make (Block_of_naked_floats_spec)
-(*module Closures = Make (Closures_spec)*)
+module Closures = Make (Closures_spec)
 module Immediates = Make (Immediate_spec)
 module Floats = Make (Float_spec)
 module Int32s = Make (Int32_spec)
@@ -448,20 +466,22 @@ let rec make_unboxing_decision typing_env ~depth ~arg_types_by_use_id
         end
     | Wrong_kind | Invalid | Unknown ->
       (* CR-someday mshinwell: We could support more than a unique closure. *)
-(*
       match T.prove_single_closures_entry' typing_env param_type with
-      | Proved (closure_id, closures_entry, Known func_type) ->
+      | Proved (closure_id, closures_entry, Known func_decl_type) ->
         let closure_var_types =
           T.Closures_entry.closure_var_types closures_entry
         in
-        let info =
-          ...
+        let info : Closures_spec.Info.t =
+          { closure_id;
+            func_decl_type;
+            closure_type = param_type;
+          }
         in
+        let closure_vars = Var_within_closure.Map.keys closure_var_types in
         Closures.unbox_one_parameter typing_env ~depth
           ~arg_types_by_use_id ~param_type extra_params_and_args
-          ~unbox_value:make_unboxing_decision info
+          ~unbox_value:make_unboxing_decision info closure_vars K.value
       | Proved (_, _, Unknown) | Wrong_kind | Invalid | Unknown ->
-*)
         let rec try_unboxing = function
           | [] -> typing_env, param_type, extra_params_and_args
           | (prover, unboxer, tag, kind) :: decisions ->

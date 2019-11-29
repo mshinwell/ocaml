@@ -322,6 +322,13 @@ module type S = sig
      : Var_within_closure.t
     -> closure_element_var:Variable.t
     -> flambda_type
+
+  val closure_with_at_least_these_closure_vars
+     : Var_within_closure.Set.t
+    -> closure_element:Var_within_closure.t
+    -> closure_element_var:Variable.t
+    -> flambda_type
+
 (*
   val closure_with_at_least_these_closure_vars
      : Var_within_closure.Set.t
@@ -465,7 +472,11 @@ module type S = sig
     | Boxed_nativeint of Targetint.t
 
   type reification_result = private
-    | Lift of to_lift
+    | Lift of to_lift  (* CR mshinwell: rename? *)
+    | Set_of_closures of {
+        function_decls : term_language_function_declaration Closure_id.Map.t;
+        closure_vars : Simple.t Var_within_closure.Map.t;
+      }
     | Simple of Simple.t
     | Cannot_reify
     | Invalid

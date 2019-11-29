@@ -133,6 +133,7 @@ module type S = sig
     val max : t -> t -> t
 
     include Identifiable.S with type t := t
+    val to_string : t -> string
 
     val set_of_targetint_set : Targetint_set.t -> Set.t
 
@@ -329,6 +330,8 @@ module Int32 = struct
 
     let set_of_targetint_set set = set
 
+    let to_string t = Format.asprintf "%a" print t
+
     module Or_unknown = struct
       type nonrec t =
         | Ok of t
@@ -515,6 +518,8 @@ module Int64 = struct
     let cross_product = cross_product
 
     let set_of_targetint_set set = set
+
+    let to_string t = Format.asprintf "%a" print t
 
     (* CR mshinwell: share code with 32-bit version above *)
     module Or_unknown = struct
