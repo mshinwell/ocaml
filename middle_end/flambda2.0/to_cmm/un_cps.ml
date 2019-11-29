@@ -359,9 +359,9 @@ let binary_int_shift_primitive _env dbg kind op x y =
   | Naked_int32, Lsr when C.arch64 ->
       C.asr_int (C.zero_extend_32 dbg x) y dbg
   (* Tagged integers *)
-  | Tagged_immediate, Lsl -> C.lsl_int_caml x (C.tag_int y dbg) dbg
-  | Tagged_immediate, Lsr -> C.lsr_int_caml x (C.tag_int y dbg) dbg
-  | Tagged_immediate, Asr -> C.asr_int_caml x (C.tag_int y dbg) dbg
+  | Tagged_immediate, Lsl -> C.lsl_int_caml_raw ~dbg x y
+  | Tagged_immediate, Lsr -> C.lsr_int_caml_raw ~dbg x y
+  | Tagged_immediate, Asr -> C.asr_int_caml_raw ~dbg x y
   (* Naked ints *)
   | (Naked_int32 | Naked_int64 | Naked_nativeint | Naked_immediate), Lsl ->
       C.lsl_int x y dbg

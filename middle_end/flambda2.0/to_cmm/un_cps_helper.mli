@@ -267,6 +267,16 @@ val or_ : ?dbg:Debuginfo.t -> Cmm.expression -> Cmm.expression -> Cmm.expression
 val xor_ : ?dbg:Debuginfo.t -> Cmm.expression -> Cmm.expression -> Cmm.expression
 (** Logical operations. *)
 
+val lsl_int_caml_raw :
+  ?dbg:Debuginfo.t -> Cmm.expression -> Cmm.expression -> Cmm.expression
+val lsr_int_caml_raw :
+  ?dbg:Debuginfo.t -> Cmm.expression -> Cmm.expression -> Cmm.expression
+val asr_int_caml_raw :
+  ?dbg:Debuginfo.t -> Cmm.expression -> Cmm.expression -> Cmm.expression
+(** Shift operations. take as first argument a tagged caml integer, and as
+    second argument an untagged machine intger which is the amount to shift
+    the first argument by. *)
+
 val eq : ?dbg:Debuginfo.t -> Cmm.expression -> Cmm.expression -> Cmm.expression
 val neq : ?dbg:Debuginfo.t -> Cmm.expression -> Cmm.expression -> Cmm.expression
 (** Integer arithmetic (dis)equality of cmm expressions. Returns an untagged integer
