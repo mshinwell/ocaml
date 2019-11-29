@@ -410,7 +410,7 @@ let reify_types_of_computed_values dacc ~result_dacc computed_values =
               (Name.var var)
               (T.alias_type_of K.value (Simple.symbol symbol)))
         in
-        result_dacc, dacc, (symbol, static_part) :: reified_definitions
+        result_dacc, dacc, (var, symbol, static_part) :: reified_definitions
       | Lift_set_of_closures _
       | Simple _ | Cannot_reify | Invalid ->
         result_dacc, dacc, reified_definitions
@@ -421,11 +421,11 @@ let reify_types_of_computed_values dacc ~result_dacc computed_values =
 module Bindings_top_sort =
   Top_closure.Make
     (struct
-      type t = Symbol.Set.t
-      type elt = Symbol.t
-      let empty = Symbol.Set.empty
-      let add t elt = Symbol.Set.add elt t
-      let mem t elt = Symbol.Set.mem elt t
+      type t = Variable.Set.t
+      type elt = Variable.t
+      let empty = Variable.Set.empty
+      let add t elt = Variable.Set.add elt t
+      let mem t elt = Variable.Set.mem elt t
     end)
     (struct
       type 'a t = 'a
@@ -453,31 +453,31 @@ let simplify_return_continuation_handler dacc
       reify_types_of_computed_values dacc ~result_dacc allowed_free_vars
     in
     let top_sorted_reified_definitions =
-      let reified_symbols =
-        Symbol.Set.of_list
-          (List.map (fun (symbol, _) -> symbol) reified_definitions)
-      in
+      (* Use a topological sort to try to order the bindings so that as many
+         computed value variables can be changed into symbols as possible.
+         If there is a cycle, we just pick an order.  The worst that will happen
+         is that some variables won't simplify to symbols (and will remain
+         as computed values). *)
       match
-        (* XXX On variables, not symbols. + Handle cycles by picking. *)
         Bindings_top_sort.top_closure reified_definitions
-          ~key:(fun (symbol, _static_part) -> symbol)
-          ~deps:(fun (_symbol, static_part) ->
-            let symbol_deps =
+          ~key:(fun (var, _symbol, _static_part) -> var)
+          ~deps:(fun (_var, symbol, static_part) ->
+            let var_deps =
               static_part
               |> Static_part.free_names
-              |> Name_occurrences.symbols
-              |> Symbol.Set.inter reified_symbols
-              |> Symbol.Set.elements
+              |> Name_occurrences.variables
+              |> Variable.Set.elements
             in
-            (* The [static_part]s here will be ignored. *)
-            List.map (fun symbol -> symbol, static_part) symbol_deps)
+            (* Everything except the [var] in the following list will be
+               ignored. *)
+            List.map (fun var -> var, symbol, static_part) var_deps)
       with
       | Ok sorted -> sorted
-      | Error _ -> assert false
+      | Error _ -> reified_definitions
     in
     let static_structure : Static_structure.t =
       let top_sorted_reified_definitions =
-        List.map (fun (symbol, static_part) : Static_structure.t0 ->
+        List.map (fun (_var, symbol, static_part) : Static_structure.t0 ->
             S (Bound_symbols.Singleton symbol, static_part))
           top_sorted_reified_definitions
       in
