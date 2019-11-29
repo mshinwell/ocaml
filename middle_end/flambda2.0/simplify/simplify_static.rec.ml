@@ -167,7 +167,7 @@ let simplify_set_of_closures0 dacc ~result_dacc set_of_closures
   let closure_bound_names =
     Closure_id.Map.map Name_in_binding_pos.symbol closure_symbols
   in
-  let set_of_closures, closure_types_by_bound_name, result_dacc =
+  let set_of_closures, closure_types_by_bound_name, dacc, result_dacc =
     Simplify_named.simplify_set_of_closures0 dacc ~result_dacc set_of_closures
       ~closure_bound_names ~closure_elements ~closure_element_types
   in
@@ -188,18 +188,14 @@ let simplify_set_of_closures0 dacc ~result_dacc set_of_closures
       closure_types_by_bound_name
       Symbol.Map.empty
   in
-  set_of_closures, result_dacc, static_structure_types, static_structure
+  set_of_closures, dacc, result_dacc, static_structure_types, static_structure
 
 let simplify_set_of_closures dacc ~result_dacc set_of_closures
       ~closure_symbols =
-  let can_lift, closure_elements, closure_element_types =
+  let _can_lift, closure_elements, closure_element_types =
     Simplify_named.type_closure_elements_and_make_lifting_decision dacc
       ~min_name_mode:Name_mode.normal set_of_closures
   in
-  if not can_lift then begin
-    Misc.fatal_errorf "Set of closures cannot be statically allocated:@ %a"
-      Set_of_closures.print set_of_closures
-  end;
   simplify_set_of_closures0 dacc ~result_dacc set_of_closures
     ~closure_symbols ~closure_elements ~closure_element_types
 
@@ -220,6 +216,7 @@ let simplify_static_part_of_kind_value dacc ~result_dacc
      doesn't contain the bindings for the computed values. *)
   let bind_result_sym typ =
     (* CR mshinwell: tidy up. *)
+    let existing_typing_env = DE.typing_env (DA.denv dacc) in
     let dacc =
       DA.map_denv dacc ~f:(fun denv ->
         let suitable_for =
@@ -229,7 +226,7 @@ let simplify_static_part_of_kind_value dacc ~result_dacc
         in
         let env_extension =
           T.make_suitable_for_environment typ
-            (DE.typing_env (DA.denv dacc))
+            existing_typing_env
             ~suitable_for
             ~bind_to:(Name.symbol result_sym)
         in
@@ -244,7 +241,7 @@ let simplify_static_part_of_kind_value dacc ~result_dacc
         in
         let env_extension =
           T.make_suitable_for_environment typ
-            (DE.typing_env (DA.denv dacc))
+            existing_typing_env
             ~suitable_for
             ~bind_to:(Name.symbol result_sym)
         in
@@ -334,11 +331,12 @@ let simplify_static_part_of_kind_fabricated dacc ~result_dacc
     : K.fabricated Static_part.t * DA.t * DA.t =
   match static_part with
   | Set_of_closures set_of_closures ->
-     let set_of_closures, dacc, _static_structure_types, _static_structure =
+     let set_of_closures, dacc, result_dacc, _static_structure_types,
+         _static_structure =
        simplify_set_of_closures dacc ~result_dacc set_of_closures
          ~closure_symbols
      in
-     Set_of_closures set_of_closures, dacc, dacc
+     Set_of_closures set_of_closures, dacc, result_dacc
 
 let simplify_piece_of_static_structure (type k) dacc ~result_dacc
       (bound_syms : k Program_body.Bound_symbols.t)
@@ -387,22 +385,6 @@ let reify_types_of_computed_values dacc ~result_dacc computed_values =
           Symbol.create (Compilation_unit.get_current_exn ())
             (Linkage_name.create (Variable.unique_name var))
         in
-        let result_dacc =
-          DA.map_denv result_dacc ~f:(fun denv ->
-            let suitable_for =
-              TE.add_definition (DE.typing_env denv)
-                (Name_in_binding_pos.symbol symbol)
-                K.value
-            in
-            let env_extension =
-              T.make_suitable_for_environment ty
-                typing_env
-                ~suitable_for
-                ~bind_to:(Name.symbol symbol)
-            in
-            DE.with_typing_env denv
-              (TE.add_env_extension suitable_for ~env_extension))
-        in
         let dacc =
           DA.map_denv dacc ~f:(fun denv ->
             DE.add_equation_on_name
@@ -414,10 +396,7 @@ let reify_types_of_computed_values dacc ~result_dacc computed_values =
           S (Singleton symbol, static_part)
         in
         result_dacc, dacc, (var, static_structure_part) :: reified_definitions
-      | Lift_set_of_closures _ -> (*{ closure_id; function_decls; closure_vars; } ->
-        let set_of_closures =
-          Set_of_closures.create function_decls ~closure_elements:closure_vars
-        in
+      | Lift_set_of_closures { closure_id; function_decls; closure_vars; } ->
         let closure_symbols =
           Closure_id.Map.mapi (fun closure_id _function_decl ->
               (* CR mshinwell: share name computation with [Simplify_named] *)
@@ -430,22 +409,6 @@ let reify_types_of_computed_values dacc ~result_dacc computed_values =
               Symbol.create (Compilation_unit.get_current_exn ()) name)
             function_decls
         in
-        let result_dacc =
-          DA.map_denv result_dacc ~f:(fun denv ->
-            let denv =
-              Closure_id.Map.fold (fun _closure_id symbol denv ->
-                  DE.define_symbol denv symbol K.value)
-                closure_symbols
-                denv
-            in
-
-            let suitable_for =
-              TE.add_definition (DE.typing_env denv)
-                (Name_in_binding_pos.symbol symbol)
-                K.value
-            in
-          )
-        in
         let dacc =
           DA.map_denv dacc ~f:(fun denv ->
             let denv =
@@ -456,7 +419,7 @@ let reify_types_of_computed_values dacc ~result_dacc computed_values =
             in
             match Closure_id.Map.find closure_id closure_symbols with
             | exception Not_found ->
-              Misc.fatal_error "Variable %a claimed to hold closure with \
+              Misc.fatal_errorf "Variable %a claimed to hold closure with \
                   closure ID %a, but no symbol was found for that closure ID"
                 Variable.print var
                 Closure_id.print closure_id
@@ -465,12 +428,15 @@ let reify_types_of_computed_values dacc ~result_dacc computed_values =
                 (Name.var var)
                 (T.alias_type_of K.value (Simple.symbol symbol)))
         in
+        let function_decls = Function_declarations.create function_decls in
+        let set_of_closures =
+          Set_of_closures.create function_decls ~closure_elements:closure_vars
+        in
         let static_structure_part : Static_structure.t0 =
-          Set_of_closures { closure_symbols; }, Set_of_closures set_of_closures
+          S (Set_of_closures { closure_symbols; },
+             Set_of_closures set_of_closures)
         in
         result_dacc, dacc, (var, static_structure_part) :: reified_definitions
-*)
-        result_dacc, dacc, reified_definitions
       | Simple _ | Cannot_reify | Invalid ->
         result_dacc, dacc, reified_definitions
       end)

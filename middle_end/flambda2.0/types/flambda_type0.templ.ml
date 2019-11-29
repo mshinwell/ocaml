@@ -748,6 +748,10 @@ Format.eprintf "reifying %a\n%!" print t;
           with
           | None -> try_canonical_simple ()
           | Some ((closure_id, contents), closures_entry) ->
+            (* CR mshinwell: What about if there were multiple entries in the
+               row-like structure for the same closure ID?  This is ruled out
+               by [get_singleton] at the moment.  We should probably choose
+               the best entry from the [Row_like] structure. *)
             let closure_ids = Set_of_closures_contents.closures contents in
             (* CR mshinwell: Should probably check
                [Set_of_closures_contents.closure_vars contents]? *)

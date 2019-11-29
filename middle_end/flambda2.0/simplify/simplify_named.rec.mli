@@ -35,7 +35,7 @@ val simplify_set_of_closures0
   -> closure_element_types:Flambda_type.t Var_within_closure.Map.t
   -> Flambda.Set_of_closures.t
        * Flambda_type.t Name_in_binding_pos.Map.t
-       * Downwards_acc.t
+       * Downwards_acc.t * Downwards_acc.t
 
 val type_closure_elements_and_make_lifting_decision
    : Downwards_acc.t
