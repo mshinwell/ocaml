@@ -286,18 +286,31 @@ Format.eprintf "Free names %a for new let expr:@ %a\n%!"
 
 let create_set_of_closures_let ~closure_vars defining_expr body
       : t * let_creation_result =
-  (* CR mshinwell: Think about when these kinds of [Let]s can be
-     phantomised / removed *)
+  (* CR-someday mshinwell: Think about how to phantomise these [Let]s. *)
   let bound_vars = Bindable_let_bound.set_of_closures ~closure_vars in
-  let let_expr = Let_expr.create ~bound_vars ~defining_expr ~body in
-  let free_names = Let_expr.free_names let_expr in
-  let t =
-    { descr = Let let_expr;
-      delayed_permutation = Name_permutation.empty;
-      free_names = Ok free_names;
-    }
+  let free_names_of_body = free_names body in
+  let free_names_of_bound_vars = Bindable_let_bound.free_names bound_vars in
+  let unused_free_names_of_bound_vars =
+    Name_occurrences.diff free_names_of_bound_vars free_names_of_body
   in
-  t, Nothing_deleted
+  if Name_occurrences.equal free_names_of_bound_vars
+       unused_free_names_of_bound_vars
+  then
+    body, Have_deleted defining_expr
+  else
+    let let_expr = Let_expr.create ~bound_vars ~defining_expr ~body in
+    let free_names =
+      let from_defining_expr = Named.free_names defining_expr in
+      Name_occurrences.union from_defining_expr
+        (Name_occurrences.diff free_names_of_body free_names_of_bound_vars)
+    in
+    let t =
+      { descr = Let let_expr;
+        delayed_permutation = Name_permutation.empty;
+        free_names = Ok free_names;
+      }
+    in
+    t, Nothing_deleted
 
 let create_pattern_let0 (bound_vars : Bindable_let_bound.t) defining_expr body
       : t * let_creation_result =
