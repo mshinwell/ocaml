@@ -410,8 +410,52 @@ let reify_types_of_computed_values dacc ~result_dacc computed_values =
               (Name.var var)
               (T.alias_type_of K.value (Simple.symbol symbol)))
         in
-        result_dacc, dacc, (var, symbol, static_part) :: reified_definitions
-      | Lift_set_of_closures _
+        let static_structure_part : Static_structure.t0 =
+          Singleton symbol, static_part
+        in
+        result_dacc, dacc, (var, static_structure_part) :: reified_definitions
+      | Lift_set_of_closures { closure_id; function_decls; closure_vars; } ->
+        let set_of_closures =
+          Set_of_closures.create function_decls ~closure_elements:closure_vars
+        in
+        let closure_symbols =
+          Closure_id.Map.mapi (fun closure_id _function_decl ->
+              (* CR mshinwell: share name computation with [Simplify_named] *)
+              let name =
+                closure_id
+                |> Closure_id.rename
+                |> Closure_id.to_string
+                |> Linkage_name.create 
+              in
+              Symbol.create (Compilation_unit.get_current_exn ()) name)
+            function_decls
+        in
+        let result_dacc =
+
+        in
+        let dacc =
+          DA.map_denv dacc ~f:(fun denv ->
+              let denv =
+                Closure_id.Map.fold (fun _closure_id symbol denv ->
+                    DE.define_symbol denv symbol K.value)
+                  closure_symbols
+                  denv
+              in
+              match Closure_id.Map.find closure_id closure_symbols with
+              | exception Not_found ->
+                Misc.fatal_error "Variable %a claimed to hold closure with \
+                    closure ID %a, but no symbol was found for that closure ID"
+                  Variable.print var
+                  Closure_id.print closure_id
+              | symbol ->
+                DE.add_equation_on_name denv
+                  (Name.var var)
+                  (T.alias_type_of K.value (Simple.symbol symbol)))
+        in
+        let static_structure_part : Static_structure.t0 =
+          Set_of_closures { closure_symbols; }, Set_of_closures set_of_closures
+        in
+        result_dacc, dacc, (var, static_structure_part) :: reified_definitions
       | Simple _ | Cannot_reify | Invalid ->
         result_dacc, dacc, reified_definitions
       end)

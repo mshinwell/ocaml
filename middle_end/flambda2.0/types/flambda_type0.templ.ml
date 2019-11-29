@@ -627,6 +627,7 @@ module Make
   type reification_result =
     | Lift of to_lift
     | Lift_set_of_closures of {
+        closure_id : Closure_id.t;
         function_decls : Term_language_function_declaration.t Closure_id.Map.t;
         closure_vars : Simple.t Var_within_closure.Map.t;
       }
