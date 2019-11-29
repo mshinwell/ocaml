@@ -743,22 +743,31 @@ Format.eprintf "reifying %a\n%!" print t;
         | Value (Ok (Closures closures)) ->
           (* CR mshinwell: Here and above, move to separate function. *)
           begin match
-            Row_like.For_closures_entry_by_set_of_closures_contents.all_closures
-              closures.by_closure_id
+            Row_like.For_closures_entry_by_set_of_closures_contents.
+              get_singleton closures.by_closure_id
           with
-          | Unknown -> try_canonical_simple ()
-          | Known by_closure_id ->
+          | None -> try_canonical_simple ()
+          | Some ((closure_id, contents), closures_entry) ->
+            let closure_ids = Set_of_closures_contents.closures contents in
+            (* CR mshinwell: Should probably check
+               [Set_of_closures_contents.closure_vars contents]? *)
+            if not (Closure_id.Set.mem closure_id closure_ids) then begin
+              Misc.fatal_errorf "Closure ID %a expected in \
+                  set-of-closures-contents in closure type@ %a"
+                Closure_id.print closure_id
+                print t
+            end;
             let function_decls_with_closure_vars =
-              Closure_id.Map.filter_map by_closure_id
-                ~f:(fun closure_id closures_entry ->
+              Closure_id.Set.fold
+                (fun closure_id function_decls_with_closure_vars ->
                   match
                     Closures_entry.find_function_declaration closures_entry
                       closure_id
                   with
-                  | Unknown -> None
+                  | Unknown -> function_decls_with_closure_vars
                   | Known function_decl ->
                     match function_decl with
-                    | Non_inlinable _ -> None
+                    | Non_inlinable _ -> function_decls_with_closure_vars
                     | Inlinable { function_decl; rec_info = _ } ->
                       (* CR mshinwell: We're ignoring [rec_info] *)
                       let closure_var_types =
@@ -783,10 +792,15 @@ Format.eprintf "reifying %a\n%!" print t;
                       in
                       if Var_within_closure.Map.cardinal closure_var_types
                         <> Var_within_closure.Map.cardinal closure_var_simples
-                      then None
-                      else Some (function_decl, closure_var_simples))
+                      then function_decls_with_closure_vars
+                      else 
+                        Closure_id.Map.add closure_id
+                          (function_decl, closure_var_simples)
+                          function_decls_with_closure_vars)
+                closure_ids
+                Closure_id.Map.empty
             in
-            if Closure_id.Map.cardinal by_closure_id
+            if Closure_id.Set.cardinal closure_ids
               <> Closure_id.Map.cardinal function_decls_with_closure_vars
             then try_canonical_simple ()
             else
@@ -825,6 +839,7 @@ Format.eprintf "reifying %a\n%!" print t;
                   Var_within_closure.Map.empty
               in
               Lift_set_of_closures {
+                closure_id;
                 function_decls;
                 closure_vars;
               }

@@ -411,10 +411,10 @@ let reify_types_of_computed_values dacc ~result_dacc computed_values =
               (T.alias_type_of K.value (Simple.symbol symbol)))
         in
         let static_structure_part : Static_structure.t0 =
-          Singleton symbol, static_part
+          S (Singleton symbol, static_part)
         in
         result_dacc, dacc, (var, static_structure_part) :: reified_definitions
-      | Lift_set_of_closures { closure_id; function_decls; closure_vars; } ->
+      | Lift_set_of_closures _ -> (*{ closure_id; function_decls; closure_vars; } ->
         let set_of_closures =
           Set_of_closures.create function_decls ~closure_elements:closure_vars
         in
@@ -431,31 +431,46 @@ let reify_types_of_computed_values dacc ~result_dacc computed_values =
             function_decls
         in
         let result_dacc =
+          DA.map_denv result_dacc ~f:(fun denv ->
+            let denv =
+              Closure_id.Map.fold (fun _closure_id symbol denv ->
+                  DE.define_symbol denv symbol K.value)
+                closure_symbols
+                denv
+            in
 
+            let suitable_for =
+              TE.add_definition (DE.typing_env denv)
+                (Name_in_binding_pos.symbol symbol)
+                K.value
+            in
+          )
         in
         let dacc =
           DA.map_denv dacc ~f:(fun denv ->
-              let denv =
-                Closure_id.Map.fold (fun _closure_id symbol denv ->
-                    DE.define_symbol denv symbol K.value)
-                  closure_symbols
-                  denv
-              in
-              match Closure_id.Map.find closure_id closure_symbols with
-              | exception Not_found ->
-                Misc.fatal_error "Variable %a claimed to hold closure with \
-                    closure ID %a, but no symbol was found for that closure ID"
-                  Variable.print var
-                  Closure_id.print closure_id
-              | symbol ->
-                DE.add_equation_on_name denv
-                  (Name.var var)
-                  (T.alias_type_of K.value (Simple.symbol symbol)))
+            let denv =
+              Closure_id.Map.fold (fun _closure_id symbol denv ->
+                  DE.define_symbol denv symbol K.value)
+                closure_symbols
+                denv
+            in
+            match Closure_id.Map.find closure_id closure_symbols with
+            | exception Not_found ->
+              Misc.fatal_error "Variable %a claimed to hold closure with \
+                  closure ID %a, but no symbol was found for that closure ID"
+                Variable.print var
+                Closure_id.print closure_id
+            | symbol ->
+              DE.add_equation_on_name denv
+                (Name.var var)
+                (T.alias_type_of K.value (Simple.symbol symbol)))
         in
         let static_structure_part : Static_structure.t0 =
           Set_of_closures { closure_symbols; }, Set_of_closures set_of_closures
         in
         result_dacc, dacc, (var, static_structure_part) :: reified_definitions
+*)
+        result_dacc, dacc, reified_definitions
       | Simple _ | Cannot_reify | Invalid ->
         result_dacc, dacc, reified_definitions
       end)
@@ -504,8 +519,8 @@ let simplify_return_continuation_handler dacc
          as computed values). *)
       match
         Bindings_top_sort.top_closure reified_definitions
-          ~key:(fun (var, _symbol, _static_part) -> var)
-          ~deps:(fun (_var, symbol, static_part) ->
+          ~key:(fun (var, Static_structure.S (_symbols, _static_part)) -> var)
+          ~deps:(fun (_var, Static_structure.S (symbols, static_part)) ->
             let var_deps =
               static_part
               |> Static_part.free_names
@@ -514,15 +529,15 @@ let simplify_return_continuation_handler dacc
             in
             (* Everything except the [var] in the following list will be
                ignored. *)
-            List.map (fun var -> var, symbol, static_part) var_deps)
+            List.map (fun var -> var, Static_structure.S (symbols, static_part))
+              var_deps)
       with
       | Ok sorted -> sorted
       | Error _ -> reified_definitions
     in
     let static_structure : Static_structure.t =
       let top_sorted_reified_definitions =
-        List.map (fun (_var, symbol, static_part) : Static_structure.t0 ->
-            S (Bound_symbols.Singleton symbol, static_part))
+        List.map (fun (_var, static_structure_part) -> static_structure_part)
           top_sorted_reified_definitions
       in
       top_sorted_reified_definitions @ return_cont_handler.static_structure

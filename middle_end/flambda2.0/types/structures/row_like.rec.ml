@@ -247,10 +247,6 @@ Format.eprintf "RL meet is returning bottom\n%!";
     if not (Tag_or_unknown_and_index.Map.is_empty at_least) then Unknown
     else Known (Tag_and_index.Map.keys known)
 
-  let all_tags_and_indexes_map { known; at_least; } : _ Or_unknown.t =
-    if not (Tag_or_unknown_and_index.Map.is_empty at_least) then Unknown
-    else Known known
-
   let free_names { known; at_least; } =
     let from_known =
       Tag_and_index.Map.fold (fun _tag_and_index maps_to free_names ->
@@ -431,17 +427,4 @@ module For_closures_entry_by_set_of_closures_contents = struct
   let map_function_decl_types t ~f =
     map_maps_to t ~f:(fun closures_entry ->
       Closures_entry.map_function_decl_types closures_entry ~f)
-
-  let all_closures t : _ Or_unknown.t =
-    match all_tags_and_indexes_map t with
-    | Unknown -> Unknown
-    | Known tags_and_indexes ->
-      let result =
-        Set_of_closures_contents.With_closure_id.Map.fold
-          (fun (closure_id, _set_of_closures_contents) closures_entry result ->
-            Closure_id.Map.add closure_id closures_entry result)
-          tags_and_indexes
-          Closure_id.Map.empty
-      in
-      Known result
 end
