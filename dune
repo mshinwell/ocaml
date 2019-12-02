@@ -174,7 +174,7 @@
  (modules main))
 
 (rule
- (copy main.exe ocamlc.byte))
+ (copy main.exe ocamlc))
 
 ;;;;;;;;;;;;;;;;;;;;
 ;;; ilambda test ;;;
@@ -210,7 +210,7 @@
 ; not built correctly.
 (alias
  (name world)
- (deps ocamlc.byte
+ (deps ocamlc
        ocamlopt.opt
 ;       debugger/ocamldebug.byte
 ;       ocamldoc/ocamldoc.byte
@@ -237,5 +237,5 @@
  (section bin)
  (package ocaml)
  (files
-  (ocamlc.byte as ocamlc)
+  (ocamlc as ocamlc)
   (ocamlopt.opt as ocamlopt)))

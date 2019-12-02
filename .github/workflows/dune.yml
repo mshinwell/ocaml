@@ -1,0 +1,86 @@
+# Dune tests
+# ==========
+# Build the compiler using dune
+name: dune
+
+# Configure when to run the workflows. Currently only when
+# it affects the `flambda2.0` branch (either pushes to the branch, or pull request against it).
+on:
+  push:
+    branches:
+      - flambda2.0-stable
+  pull_request:
+    branches:
+      - flambda2.0-stable
+
+jobs:
+  # Dune-base: compile only
+  # =======================
+  build:
+    runs-on: ${{ matrix.os }}
+
+    # Build Matrix
+    # ------------
+    strategy:
+      matrix:
+        # Operating system to run tests on. TODO: add macos-latest and windows-latest
+        # os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest]
+        # Configure arguments. TODO: add a non-flambda build
+        config_args: ["--enable-flambda"]
+        # ocaml version (for dune)
+        ocaml_version: ["4.10.0+trunk"]
+
+    # Build ENV
+    # ---------
+    env:
+      # Prevent opam from asking questions that would stop the build
+      OPAMYES: "true"
+      # disable flambda invariants else everything takes forever to compile
+      OCAMLPARAM: "_,flambda-invariants=0"
+
+    # Build/test steps
+    # ----------------
+    steps:
+    # checkout the repo (shallow clone, currently)
+    - name: Checkout the repo
+      uses: actions/checkout@master
+    # Apply ocaml test patch
+    - name: Patch the repo
+      run: git apply .github/workflows/dune.patch
+    # Cache opam directory (for faster switch/dune install)
+    - name: Cache opam directory
+      uses: actions/cache@v1
+      with:
+        path: ~/.opam
+        key: ${{ matrix.os }}-opam-cache-${{ matrix.ocaml_version }}
+    # Install opam
+    - name: Install opam with system switch
+      uses: avsm/setup-ocaml@master
+      with:
+        ocaml-version: "4.05.0" # default ubuntu system version to avoid building a useless compiler
+    # Create a 4.10 switch
+    - name: Install 4.10.0+trunk switch
+      run: opam switch create ${{ matrix.ocaml_version }} --repo=default,beta=git+https://github.com/ocaml/ocaml-beta-repository.git
+    # Install the specific version of dune that allows to compile the compiler
+    - name: Install dune
+      run: opam install dune.2.0.0
+    # Configure the compiler
+    - name: Configure the compiler
+      run: ./configure ${{ matrix.config_args }}
+    # Build ocamlc, ocamlopt.opt using dune
+    - name: Build the compiler
+      run: opam exec -- dune build --display quiet @world || (cat _build/log; exit 1)
+    # Setup test env (copy artefacts built by dune).
+    #- name: Set up testing env
+    #  run: |
+    #    opam exec -- dune build ocamltest/ocamltest.byte
+    #    cp -r _build/default/runtime/*                      runtime/
+    #    cp    _build/default/stdlib/stdlib.*                stdlib/
+    #    cp    _build/default/stdlib/.stdlib.objs/byte/*     stdlib/
+    #    cp    _build/default/stdlib/.stdlib.objs/native/*   stdlib/
+    # Run some part of the testsuite
+    #- name: Running the testsuite
+    #  run: ./.github/workflows/dune.sh ./.github/workflows/dune.list
+
+

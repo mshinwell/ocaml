@@ -1,0 +1,71 @@
+# Main tests
+# ==========
+# Build the compiler with makefiles and run the testsuite
+name: main
+
+# Configure when to run the workflows. Currently only when
+# it affects the `flambda2.0` branch (either pushes to the branch, or pull request against it).
+on:
+  push:
+    branches:
+      - flambda2.0-stable
+  pull_request:
+    branches:
+      - flambda2.0-stable
+
+jobs:
+  # Makefile-based: compile & run the testsuite
+  # ===========================================
+  build:
+
+    runs-on: ${{ matrix.os }}
+
+    # Build Matrix
+    # --------------
+    strategy:
+      matrix:
+        # Operating system to run tests on. TODO: add macos-latest and windows-latest
+        # os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest]
+        # Paralellism for builds
+        j: ["1"]
+        # Configure arguments. TODO: add a non-flambda build
+        config_args: ["--enable-flambda"]
+
+    # Build ENV
+    # ---------
+    env:
+      OCAMLPARAM: "_,flambda-invariants=0"
+
+    # Build/test steps
+    # ----------------
+    steps:
+    # checkout the repo (shallow clone, currently)
+    - name: Checkout the repo
+      uses: actions/checkout@master
+    # Apply ocamltest patch
+    - name: Patch the repo
+      run: git apply .github/workflows/main.patch
+    # Configure the compiler
+    - name: configure
+      run: ./configure ${{ matrix.config_args }}
+    # Build ocamlc, ocamlopt and just enough to run the testsuite
+    - name: Build the compiler
+      run: |
+        make -j ${{ matrix.j }} world
+        make -j ${{ matrix.j }} ocamlopt
+        make -j ${{ matrix.j }} runtimeopt
+        make -j ${{ matrix.j }} libraryopt
+        make -j ${{ matrix.j }} compilerlibs/ocamlcommon.cmxa
+        make -j ${{ matrix.j }} -C otherlibs/str allopt
+        make -j ${{ matrix.j }} -C otherlibs/unix allopt
+        make -j ${{ matrix.j }} -C otherlibs/bigarray allopt
+        make -j ${{ matrix.j }} -C otherlibs/systhreads allopt
+        make                    -C testsuite tools lib
+    # Generate list of tests to run
+    - name: Generate test list
+      run: grep -v '#' .github/workflows/test-list > .github/workflows/main.list
+    # Run some part of the testsuite
+    - name: Running the testsuite
+      run: cd testsuite && make list FILE=../.github/workflows/main.list
+

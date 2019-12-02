@@ -41,4 +41,4 @@
      (with-stdout-to %{targets}
        (progn
          (bash "echo \\# 1 \\\"`cat contains-input-name`\\\"")
-         (bash "cvt_emit < `cat contains-input-name`"))))))
+         (bash "%{dep:../tools/cvt_emit.exe} < `cat contains-input-name`"))))))

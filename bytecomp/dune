@@ -17,4 +17,4 @@
  (mode    fallback)
  (deps    (:instr (file ../runtime/caml/instruct.h)))
  (action
-  (bash "make_opcodes -opcodes < %{instr} > %{targets}")))
+  (bash "%{dep:../tools/make_opcodes.exe} -opcodes < %{instr} > %{targets}")))

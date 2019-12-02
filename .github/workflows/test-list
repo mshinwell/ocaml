@@ -1,0 +1,183 @@
+# commented test                 | status      | reason for not running / failure
+# ------------------------------------------------------------------------------------------------
+# tests/afl-instrumentation         -             not relevant yet
+# tests/arch-power                  -             not relevant yet
+  tests/array-functions
+# tests/asmcomp                     -             not relevant yet
+# tests/asmgen                      -             not relevant yet
+# tests/ast-invariants              -             not relevant yet
+# tests/backtrace                   FAIL (FIXME)  there is practically no backtrace info
+# tests/basic                       FAIL (FIXME)  Map.remove (see flambdatest/mlexamples/map_remove.ml)
+  tests/basic-float
+  tests/basic-io
+  tests/basic-io-2
+  tests/basic-manyargs
+# tests/basic-modules               FAIL (FIXME)  PR#8948 not merged yet in trunk
+# tests/basic-more                  TIMEOUT       'pr1271.ml'
+  tests/basic-multdef
+  tests/basic-private
+  tests/callback
+# tests/compatibility               -             not relevant yet
+# tests/compiler-libs               -             not relevant yet
+# tests/c-api                       -             not relevant yet
+# tests/embedded                    -             not relevant yet
+# tests/ephe-c-api                  -             not relevant yet
+# tests/exotic-syntax               -             not relevant yet
+  tests/extension-constructor
+  tests/flambda
+# tests/float-unboxing              FAIL (FIXME)  'float_subst_boxed_number.ml' see flambdatest/mlexamples/float_unboxing.ml for a simplified error example
+# tests/fma                         TIMEOUT       'fma.ml'
+  tests/formats-transition
+  tests/formatting
+# tests/functors                    -             only runs bytecode tests
+  tests/gc-roots
+  tests/generalized-open
+# tests/int64-unboxing              FAIL (FIXME)  'test.ml'
+  tests/lazy
+  tests/letrec-check
+  tests/letrec-compilation
+  tests/let-syntax
+  tests/lexing
+  tests/lib-arg
+  tests/lib-array
+# tests/lib-bigarray                FAIL (FIXME)  (everything) flambda2 internal errors during compilation
+  tests/lib-bigarray-2
+# tests/lib-bigarray-file           FAIL (FIXME)  'mapfile.ml': >> Fatal error: Kind mismatch upon meet: (Naked_float (= Pbigarrayref/1205)) versus (Val (Boxed_float (Naked_float (= prim/1207))))
+  tests/lib-bool
+  tests/lib-buffer
+# tests/lib-bytes                   FAIL (FIXME)  'binary.ml'
+  tests/lib-digest
+# tests/lib-dynlink-bytecode        -             not relevant
+# tests/lib-dynlink-csharp          -             skipped without C# compiler
+# tests/lib-dynlink-initializers    FAIL          dynlink doesn't compile yet
+# tests/lib-dynlink-native          FAIL          dynlink doesn't compile yet
+# tests/lib-dynlink-packed          FAIL          dynlink doesn't compile yet
+# tests/lib-dynlink-pr4229          FAIL          dynlink doesn't compile yet
+# tests/lib-dynlink-pr4839          FAIL          dynlink doesn't compile yet
+# tests/lib-dynlink-pr6950          FAIL          dynlink doesn't compile yet
+# tests/lib-dynlink-private         FAIL          dynlink doesn't compile yet
+  tests/lib-filename                FAIL          build native Unix with makefiles
+# tests/lib-float                   TIMEOUT       'test.ml'
+  tests/lib-floatarray
+  tests/lib-format
+  tests/lib-fun
+# tests/lib-hashtbl                 FAIL (FIXME)  'htbl.ml'/Fatal error: exception Invalid_argument("Map.remove_min_elt")
+  tests/lib-int
+  tests/lib-int64
+  tests/lib-internalformat
+  tests/lib-list
+  tests/lib-marshal
+  tests/lib-obj
+  tests/lib-option
+  tests/lib-printf
+# tests/lib-queue                   TIMEOUT       'test.ml' (>5 min compilation time)
+  tests/lib-random
+  tests/lib-result
+  tests/lib-scanf
+  tests/lib-scanf-2
+  tests/lib-seq
+# tests/lib-set                     FAIL (FIXME)  'testmap.ml'/Sefmentation fault (core dumped) (most likely related to Map.remove failure)
+  tests/lib-stack
+  tests/lib-stdlabels
+  tests/lib-stdlib
+  tests/lib-str
+  tests/lib-stream
+  tests/lib-string
+  tests/lib-sys
+  tests/lib-systhreads
+  tests/lib-threads
+  tests/lib-uchar
+  tests/lib-unix
+# tests/link-test                   FAIL (FIXME)  'test.ml' : problems with pack (assertion failure in compilenv)
+  tests/locale
+  tests/local-functions
+  tests/manual-intf-c
+# tests/match-exception             FAIL (FIXME)  'streams.ml': Fatal error: exception Assert_failure("streams.ml", 39, 4)
+#                                                 'match_failure.ml': >> Fatal error: Continuation k43 not found in env
+  tests/match-exception-warnings
+  tests/messages
+# tests/misc                        FAIL (FIXME)  'sorts.ml', 'taku.ml', 'weaklifetime2.ml'
+# tests/misc-kb                     FAIL (FIXME)  'kbmain.ml': Fatal error: exception Failure("kb_completion")
+  tests/misc-unsafe
+  tests/no-alias-deps
+# tests/opaque                      FAIL          'test.ml' (compilation error: test.cmx not found)
+  tests/output-complete-obj
+# tests/parsetree                   FAIL          'test.ml': Segmentation fault (core dumped)
+  tests/parse-errors
+  tests/parsing
+  tests/ppx-attributes
+  tests/ppx-contexts
+# tests/prim-bigstring              FAIL (FIXME)  'bigstring_access.ml', 'string_access.ml'
+  tests/prim-bswap
+  tests/prim-revapply
+  tests/printing-types
+  tests/raise-counts
+# tests/regression                  FAIL          'pr8769.ml' (probably a build error not finding cmx files)
+  tests/required-external
+  tests/runtime-C-exceptions
+  tests/runtime-errors
+  tests/runtime-objects
+  tests/self-contained-toplevel
+  tests/shadow_include
+# tests/tool-caml-tex               -             not relevant yet
+# tests/tool-command-line           -             not relevant yet
+# tests/tool-debugger               -             not relevant yet
+  tests/tool-expect-test
+# tests/tool-lexyacc                -             not relevant yet (all of the tool-* tests technically pass but
+# tests/tool-ocaml                  -             not relevant yet  require external dependencies which are annoying to
+# tests/tool-ocamlc-compat32        -             not relevant yet  setup on CI VMs, so they are all disabled)
+# tests/tool-ocamlc-error-cleanup   -             not relevant yet
+# tests/tool-ocamlc-open            -             not relevant yet
+# tests/tool-ocamlc-stop-after      -             not relevant yet
+# tests/tool-ocamldep-modalias      -             not relevant yet
+# tests/tool-ocamldep-shadowing     -             not relevant yet
+# tests/tool-ocamldoc               -             not relevant yet
+# tests/tool-ocamldoc-open          -             not relevant yet
+# tests/tool-ocamlobjinfo           -             not relevant yet
+# tests/tool-ocaml-annot            -             not relevant yet
+# tests/tool-toplevel               -             not relevant yet
+# tests/tool-toplevel-invocation    -             not relevant yet
+  tests/translprim
+# tests/typing-core-bugs            -             not relevant yet (at least until ocamlopt.opt is tested)
+# tests/typing-deprecated           -             not relevant yet (at least until ocamlopt.opt is tested)
+# tests/typing-extensions           -             not relevant yet (at least until ocamlopt.opt is tested)
+# tests/typing-extension-constructor  -           not relevant yet (at least until ocamlopt.opt is tested)
+# tests/typing-fstclassmod          -             not relevant yet (at least until ocamlopt.opt is tested)
+# tests/typing-gadts                -             not relevant yet (at least until ocamlopt.opt is tested)
+# tests/typing-immediate            -             not relevant yet (at least until ocamlopt.opt is tested)
+# tests/typing-implicit_unpack      -             not relevant yet (at least until ocamlopt.opt is tested)
+# tests/typing-labels               -             not relevant yet (at least until ocamlopt.opt is tested)
+# tests/typing-misc                 -             not relevant yet (at least until ocamlopt.opt is tested)
+# tests/typing-misc-bugs            -             not relevant yet (at least until ocamlopt.opt is tested)
+# tests/typing-missing-cmi          -             not relevant yet (at least until ocamlopt.opt is tested)
+# tests/typing-missing-cmi-2        -             not relevant yet (at least until ocamlopt.opt is tested)
+# tests/typing-missing-cmi-3        -             not relevant yet (at least until ocamlopt.opt is tested)
+# tests/typing-modules              -             not relevant yet (at least until ocamlopt.opt is tested)
+# tests/typing-modules-bugs         -             not relevant yet (at least until ocamlopt.opt is tested)
+# tests/typing-multifile            -             not relevant yet (at least until ocamlopt.opt is tested)
+# tests/typing-objects              -             not relevant yet (at least until ocamlopt.opt is tested)
+# tests/typing-objects-bugs         -             not relevant yet (at least until ocamlopt.opt is tested)
+# tests/typing-ocamlc-i             -             not relevant yet (at least until ocamlopt.opt is tested)
+# tests/typing-poly                 -             not relevant yet (at least until ocamlopt.opt is tested)
+# tests/typing-polyvariants-bugs    -             not relevant yet (at least until ocamlopt.opt is tested)
+# tests/typing-polyvariants-bugs-2  -             not relevant yet (at least until ocamlopt.opt is tested)
+# tests/typing-poly-bugs            -             not relevant yet (at least until ocamlopt.opt is tested)
+# tests/typing-private              -             not relevant yet (at least until ocamlopt.opt is tested)
+# tests/typing-private-bugs         -             not relevant yet (at least until ocamlopt.opt is tested)
+# tests/typing-recmod               -             not relevant yet (at least until ocamlopt.opt is tested)
+# tests/typing-recordarg            -             not relevant yet (at least until ocamlopt.opt is tested)
+# tests/typing-rectypes-bugs        -             not relevant yet (at least until ocamlopt.opt is tested)
+# tests/typing-safe-linking         -             not relevant yet (at least until ocamlopt.opt is tested)
+# tests/typing-shadowing-of-pervasives-submodules - not relevant yet
+# tests/typing-short-paths          -             not relevant yet (at least until ocamlopt.opt is tested)
+# tests/typing-signatures           -             not relevant yet (at least until ocamlopt.opt is tested)
+# tests/typing-sigsubst             -             not relevant yet (at least until ocamlopt.opt is tested)
+# tests/typing-typeparam            -             not relevant yet (at least until ocamlopt.opt is tested)
+# tests/typing-unboxed              -             not relevant yet (at least until ocamlopt.opt is tested)
+# tests/typing-unboxed-types        -             not relevant yet (at least until ocamlopt.opt is tested)
+# tests/typing-warnings             -             not relevant yet (at least until ocamlopt.opt is tested)
+  tests/unboxed-primitive-args
+  tests/unwind
+  tests/utils
+# tests/warnings                      FAIL        'w55.ml' (@inline attribute), 'w59.ml' (missing warnings when using Obj functions)
+  tests/win-unicode
