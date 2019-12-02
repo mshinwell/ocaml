@@ -29,9 +29,10 @@ let create_static_part (to_lift : T.to_lift)
   match to_lift with
   | Immutable_block (tag, fields) ->
     let of_kind_values =
-      List.map (fun (field : T.symbol_or_tagged_immediate)
+      List.map (fun (field : T.var_or_symbol_or_tagged_immediate)
               : Flambda_static.Of_kind_value.t ->
           match field with
+          | Var var -> Dynamically_computed var
           | Symbol sym -> Symbol sym
           | Tagged_immediate imm -> Tagged_immediate imm)
         fields
@@ -118,6 +119,7 @@ let try_to_reify dacc (term : Reachable.t) ~bound_to =
       in
       if Simple.equal (Simple.var bound_to) simple then term, dacc, ty
       else Reachable.reachable (Named.create_simple simple), dacc, ty
+    | Lift_set_of_closures _  (* already dealt with in [Simplify_named] *)
     | Cannot_reify -> term, dacc, ty
     | Invalid ->
       let ty = T.bottom_like ty in

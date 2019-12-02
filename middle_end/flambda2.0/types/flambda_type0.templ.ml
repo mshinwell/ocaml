@@ -92,12 +92,13 @@ module Make
     | Invalid
     | Wrong_kind
 
-  type symbol_or_tagged_immediate =
+  type var_or_symbol_or_tagged_immediate =
+    | Var of Variable.t
     | Symbol of Symbol.t
     | Tagged_immediate of Immediate.t
 
-  let prove_equals_to_symbol_or_tagged_immediate env t
-        : symbol_or_tagged_immediate proof =
+  let prove_equals_to_var_or_symbol_or_tagged_immediate env t
+        : var_or_symbol_or_tagged_immediate proof =
     let original_kind = kind t in
     if not (K.equal original_kind K.value) then begin
       Misc.fatal_errorf "Type %a is not of kind value"
@@ -129,7 +130,7 @@ module Make
              it will be canonical *)
           match Simple.descr simple with
           | Name (Symbol sym) -> Proved (Symbol sym)
-          | Name (Var _) -> Unknown
+          | Name (Var var) -> Proved (Var var)
           | Const (Tagged_immediate imm) -> Proved (Tagged_immediate imm)
           | Const _ ->
             let kind = kind t in
@@ -613,7 +614,8 @@ module Make
       | Naked_nativeint _ -> wrong_kind ()
 
   type to_lift =
-    | Immutable_block of Tag.Scannable.t * (symbol_or_tagged_immediate list)
+    | Immutable_block of Tag.Scannable.t
+        * (var_or_symbol_or_tagged_immediate list)
     | Boxed_float of Float.t
     | Boxed_int32 of Int32.t
     | Boxed_int64 of Int64.t
@@ -621,13 +623,21 @@ module Make
 
   type reification_result =
     | Lift of to_lift
+    | Lift_set_of_closures of {
+        closure_id : Closure_id.t;
+        function_decls : Term_language_function_declaration.t Closure_id.Map.t;
+        closure_vars : Simple.t Var_within_closure.Map.t;
+      }
     | Simple of Simple.t
     | Cannot_reify
     | Invalid
 
   (* CR mshinwell: Think more to identify all the cases that should be
      in this function. *)
-  let reify env ~min_name_mode t : reification_result =
+  let reify ?allowed_free_vars env ~min_name_mode t : reification_result =
+    let allowed_free_vars =
+      Option.value allowed_free_vars ~default:Variable.Set.empty
+    in
 (*
 Format.eprintf "reifying %a\n%!" print t;
 *)
@@ -668,26 +678,35 @@ Format.eprintf "reifying %a\n%!" print t;
                 let field_types =
                   Product.Int_indexed.components field_types
                 in
-                let symbols_or_tagged_immediates =
+                let vars_or_symbols_or_tagged_immediates =
                   List.filter_map
-                    (fun field_type : symbol_or_tagged_immediate option ->
+                    (fun field_type
+                           : var_or_symbol_or_tagged_immediate option ->
                       match
-                        prove_equals_to_symbol_or_tagged_immediate env
+                        (* CR mshinwell: Change this to a function
+                           [prove_equals_to_simple]? *)
+                        prove_equals_to_var_or_symbol_or_tagged_immediate env
                           field_type
                       with
+                      | Proved (Var var) ->
+                        if Variable.Set.mem var allowed_free_vars then
+                          Some (Var var)
+                        else
+                          None
                       | Proved (Symbol sym) -> Some (Symbol sym)
-                      | Proved (Tagged_immediate sym) ->
-                        Some (Tagged_immediate sym)
+                      | Proved (Tagged_immediate imm) ->
+                        Some (Tagged_immediate imm)
                       (* CR mshinwell: [Invalid] should propagate up *)
                       | Unknown | Invalid -> None)
                     field_types
                 in
-                if List.compare_lengths field_types symbols_or_tagged_immediates
-                  = 0
+                if List.compare_lengths field_types
+                     vars_or_symbols_or_tagged_immediates = 0
                 then
                   match Tag.Scannable.of_tag tag with
                   | Some tag ->
-                    Lift (Immutable_block (tag, symbols_or_tagged_immediates))
+                    Lift (Immutable_block (
+                      tag, vars_or_symbols_or_tagged_immediates))
                   | None -> try_canonical_simple ()
                 else
                   try_canonical_simple ()
@@ -698,10 +717,6 @@ Format.eprintf "reifying %a\n%!" print t;
                 begin match Immediate.Set.get_singleton imms with
                 | None -> try_canonical_simple ()
                 | Some imm ->
-                (*
-                  Format.eprintf "Type %a reifies to tagged imm %a\n%!"
-                    print t Immediate.print imm;
-                    *)
                   Simple (Simple.const (Tagged_immediate imm))
                 end
               | Unknown -> try_canonical_simple ()
@@ -709,6 +724,114 @@ Format.eprintf "reifying %a\n%!" print t;
             else
               try_canonical_simple ()
           | _, _ -> try_canonical_simple ()
+          end
+        | Value (Ok (Closures closures)) ->
+          (* CR mshinwell: Here and above, move to separate function. *)
+          begin match
+            Row_like.For_closures_entry_by_set_of_closures_contents.
+              get_singleton closures.by_closure_id
+          with
+          | None -> try_canonical_simple ()
+          | Some ((closure_id, contents), closures_entry) ->
+            (* CR mshinwell: What about if there were multiple entries in the
+               row-like structure for the same closure ID?  This is ruled out
+               by [get_singleton] at the moment.  We should probably choose
+               the best entry from the [Row_like] structure. *)
+            let closure_ids = Set_of_closures_contents.closures contents in
+            (* CR mshinwell: Should probably check
+               [Set_of_closures_contents.closure_vars contents]? *)
+            if not (Closure_id.Set.mem closure_id closure_ids) then begin
+              Misc.fatal_errorf "Closure ID %a expected in \
+                  set-of-closures-contents in closure type@ %a"
+                Closure_id.print closure_id
+                print t
+            end;
+            let function_decls_with_closure_vars =
+              Closure_id.Set.fold
+                (fun closure_id function_decls_with_closure_vars ->
+                  match
+                    Closures_entry.find_function_declaration closures_entry
+                      closure_id
+                  with
+                  | Unknown -> function_decls_with_closure_vars
+                  | Known function_decl ->
+                    match function_decl with
+                    | Non_inlinable _ -> function_decls_with_closure_vars
+                    | Inlinable { function_decl; rec_info = _ } ->
+                      (* CR mshinwell: We're ignoring [rec_info] *)
+                      let closure_var_types =
+                        Closures_entry.closure_var_types closures_entry
+                      in
+                      let closure_var_simples =
+                        Var_within_closure.Map.filter_map closure_var_types
+                          ~f:(fun _closure_var closure_var_type ->
+                            match
+                              prove_equals_to_var_or_symbol_or_tagged_immediate
+                                env closure_var_type
+                            with
+                            | Proved (Var var) ->
+                              if Variable.Set.mem var allowed_free_vars then
+                                Some (Simple.var var)
+                              else
+                                None
+                            | Proved (Symbol sym) -> Some (Simple.symbol sym)
+                            | Proved (Tagged_immediate imm) ->
+                              Some (Simple.const (Tagged_immediate imm))
+                            | Unknown | Invalid -> None)
+                      in
+                      if Var_within_closure.Map.cardinal closure_var_types
+                        <> Var_within_closure.Map.cardinal closure_var_simples
+                      then function_decls_with_closure_vars
+                      else
+                        Closure_id.Map.add closure_id
+                          (function_decl, closure_var_simples)
+                          function_decls_with_closure_vars)
+                closure_ids
+                Closure_id.Map.empty
+            in
+            if Closure_id.Set.cardinal closure_ids
+              <> Closure_id.Map.cardinal function_decls_with_closure_vars
+            then try_canonical_simple ()
+            else
+              let function_decls =
+                Closure_id.Map.map (fun (function_decl, _) -> function_decl)
+                  function_decls_with_closure_vars
+              in
+              let closure_vars =
+                Closure_id.Map.fold
+                  (fun _closure_id (_function_decl, closure_var_simples)
+                       all_closure_vars ->
+                    Var_within_closure.Map.fold
+                      (fun closure_var simple all_closure_vars ->
+                        begin match
+                          Var_within_closure.Map.find closure_var
+                            all_closure_vars
+                        with
+                        | exception Not_found -> ()
+                        | existing_simple ->
+                          if not (Simple.equal simple existing_simple)
+                          then begin
+                            Misc.fatal_errorf "Disagreement on %a and %a \
+                                (closure var %a)@ \
+                                whilst reifying set-of-closures from:@ %a"
+                              Simple.print simple
+                              Simple.print existing_simple
+                              Var_within_closure.print closure_var
+                              print t
+                          end
+                        end;
+                        Var_within_closure.Map.add closure_var simple
+                          all_closure_vars)
+                     closure_var_simples
+                     all_closure_vars)
+                  function_decls_with_closure_vars
+                  Var_within_closure.Map.empty
+              in
+              Lift_set_of_closures {
+                closure_id;
+                function_decls;
+                closure_vars;
+              }
           end
         (* CR mshinwell: share code with [prove_equals_tagged_immediates],
            above *)

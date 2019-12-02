@@ -430,25 +430,33 @@ module type S = sig
 
   val prove_strings : Typing_env.t -> t -> String_info.Set.t proof
 
-  type symbol_or_tagged_immediate = private
+  type var_or_symbol_or_tagged_immediate = private
+    | Var of Variable.t
     | Symbol of Symbol.t
     | Tagged_immediate of Immediate.t
 
   type to_lift = (* private *) (* CR mshinwell: resurrect *)
-    | Immutable_block of Tag.Scannable.t * (symbol_or_tagged_immediate list)
+    | Immutable_block of
+        Tag.Scannable.t * (var_or_symbol_or_tagged_immediate list)
     | Boxed_float of Float.t
     | Boxed_int32 of Int32.t
     | Boxed_int64 of Int64.t
     | Boxed_nativeint of Targetint.t
 
   type reification_result = private
-    | Lift of to_lift
+    | Lift of to_lift  (* CR mshinwell: rename? *)
+    | Lift_set_of_closures of {
+        closure_id : Closure_id.t;
+        function_decls : term_language_function_declaration Closure_id.Map.t;
+        closure_vars : Simple.t Var_within_closure.Map.t;
+      }
     | Simple of Simple.t
     | Cannot_reify
     | Invalid
 
   val reify
-     : Typing_env.t
+     : ?allowed_free_vars:Variable.Set.t
+    -> Typing_env.t
     -> min_name_mode:Name_mode.t
     -> t
     -> reification_result

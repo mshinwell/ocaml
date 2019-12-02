@@ -257,6 +257,9 @@ let map_function_decl_types
     in
     Ok t
 
+let closure_var_types t =
+  Product.Var_within_closure_indexed.to_map t.closure_var_types
+
 let find_function_declaration t closure_id =
   match Closure_id.Map.find closure_id t.function_decls with
   | exception Not_found ->

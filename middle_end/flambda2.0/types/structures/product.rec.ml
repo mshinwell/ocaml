@@ -135,6 +135,8 @@ module Make (Index : Identifiable.S) = struct
     if !found_bottom then Bottom
     else if components_by_index == components_by_index' then Ok t
     else Ok { components_by_index = components_by_index'; }
+
+  let to_map t = t.components_by_index
 end
 
 module Int_indexed = Make (Numbers.Int)
