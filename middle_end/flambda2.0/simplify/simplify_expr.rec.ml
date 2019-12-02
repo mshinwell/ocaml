@@ -40,7 +40,6 @@ module Continuation_handler = struct
 
     let create ~params ~handler original = { params; handler; original; }
     let params t = t.params
-    let handler t = t.handler
     let original t = t.original
   end
 
@@ -154,238 +153,24 @@ Continuation.print cont;
   in
   handler, user_data, uacc
 
-and lift_expression
-  : 'a. DA.t
-    -> Continuation.t
-    -> Continuation_handler.t
-    -> body:Expr.t
-    -> free_names_of_body:Name_occurrences.t
-    -> toplevel_exn_cont:Continuation.t
-    -> 'a k 
-    -> Expr.t * 'a * UA.t
-= fun dacc cont cont_handler ~body ~free_names_of_body ~toplevel_exn_cont k ->
-  assert (Variable.Set.is_empty
-    (Name_occurrences.variables free_names_of_body));
-  let symbol =
-    let var = Variable.create "lifted_expr" in
-    Symbol.create (Compilation_unit.get_current_exn ())
-      (Linkage_name.create (Variable.unique_name var))
-  in
-  let block = Simple.symbol symbol in
-  let arity = Continuation_handler.arity cont_handler in
-  let tag = Tag.Scannable.zero in
-  let computed_values_vars_with_kinds =
-    List.mapi (fun index kind ->
-        Variable.create (Printf.sprintf "lifted_cv%d" index), kind)
-      arity
-  in
-  let static_part : K.value Flambda_static.Static_part.t =
-    let computed_values =
-      List.map (fun (var, _kind) : Flambda_static.Of_kind_value.t ->
-          Dynamically_computed var)
-        computed_values_vars_with_kinds
-    in
-    Block (tag, Immutable, computed_values)
-  in
-  let return_continuation = Continuation.create ~sort:Toplevel_return () in
-  let exn_cont = Continuation.create ~sort:Exn () in
-  let exn_continuation =
-    Exn_continuation.create ~exn_handler:exn_cont ~extra_args:[]
-  in
-  let perm =
-    Name_permutation.add_continuation
-      (Name_permutation.add_continuation Name_permutation.empty
-        cont return_continuation)
-      toplevel_exn_cont exn_cont
-  in
-  let definition : Flambda_static.Program_body.Definition.t =
-    let computed_values =
-      List.map (fun (var, kind) -> KP.create (Parameter.wrap var) kind)
-        computed_values_vars_with_kinds
-    in
-    { computation = Some {
-        expr = Expr.apply_name_permutation body perm;
-        return_continuation;
-        exn_continuation;
-        computed_values;
-      };
-      static_structure = [S (Singleton symbol, static_part)];
-    }
-  in
-  (* Note that [simplify_definition] may augment the symbol(s) bound by
-     [definition], in the event that reifying and lifting of computed values
-     occurs. *)
-  let definition, dacc = Simplify_static.simplify_definition dacc definition in
-  let symbols =
-    Flambda_static.Program_body.Static_structure.being_defined
-      definition.static_structure
-  in
-  assert (not (Symbol.Set.is_empty symbols));
-  let dacc_with_symbols =
-    DA.map_denv dacc ~f:(fun denv ->
-      DE.add_lifted_constants denv
-        ~lifted:(R.get_lifted_constants (DA.r dacc)))
-  in
-  let dacc_with_symbols, lifted_constant =
-    let typing_env = DE.typing_env (DA.denv dacc) in
-    let symbol_types =
-      Symbol.Set.fold (fun symbol symbol_types ->
-          let ty = TE.find typing_env (Name.symbol symbol) in
-          Symbol.Map.add symbol ty symbol_types)
-        symbols
-        Symbol.Map.empty
-    in
-    let lifted_constant =
-      Lifted_constant.create_from_definition typing_env symbol_types definition
-    in
-    let dacc_with_symbols =
-      DA.map_r dacc_with_symbols
-        ~f:(fun r -> R.new_lifted_constant r lifted_constant)
-    in
-    dacc_with_symbols, lifted_constant
-  in
-  Continuation_handler.pattern_match cont_handler ~f:(fun handler ->
-    (* We can't let the handler expression see the new symbols, in case we
-       need to abort the lifting.  Instead make the symbol's type appropriate
-       for the current environment and directly bind the parameters of the
-       continuation, extracting their types using [meet]. *)
-    let params = Continuation_handler.Opened.params handler in
-    let symbol_ty =
-      TE.find (DE.typing_env (DA.denv dacc_with_symbols)) (Name.symbol symbol)
-    in
-    let var = Variable.create "sym_type" in
-    let dacc =
-      DA.map_denv dacc ~f:(fun denv ->
-        DE.define_variable denv
-          (Var_in_binding_pos.create var NM.in_types) K.value)
-    in
-    let env_extension =
-      T.make_suitable_for_environment symbol_ty
-        (DE.typing_env (DA.denv dacc_with_symbols))
-        ~suitable_for:(DE.typing_env (DA.denv dacc))
-        ~bind_to:(Name.var var)
-    in
-    let dacc =
-      DA.map_denv dacc ~f:(fun denv ->
-        let denv = DE.extend_typing_environment denv env_extension in
-        DE.define_parameters denv ~params)
-    in
-    let var_ty = TE.find (DE.typing_env (DA.denv dacc)) (Name.var var) in
-    let shape_ty =
-      let fields =
-        List.map (fun param ->
-            T.alias_type_of (KP.kind param) (KP.simple param))
-          params
-      in
-      let field_kind =
-        match params with
-        | [] -> K.value
-        | param::_ -> KP.kind param
-      in
-      T.immutable_block (Tag.Scannable.to_tag tag) ~field_kind ~fields
-    in
-    match T.meet (DE.typing_env (DA.denv dacc)) var_ty shape_ty with
-    | Bottom -> assert false  (* We always created a block -- see above. *)
-    | Ok (_meet_ty, env_extension) ->
-      let dacc =
-        DA.map_denv dacc ~f:(fun denv ->
-          DE.extend_typing_environment denv env_extension)
-      in
-      let expr = Continuation_handler.Opened.handler handler in
-      let expr, user_data, uacc = simplify_expr dacc expr k in
-      let abort_lifting = false in
-      if not abort_lifting then
-        let args =
-          List.mapi (fun index _kind ->
-              index, Variable.create (Printf.sprintf "arg%d" index))
-            arity
-        in
-        let handler =
-          let params = Continuation_handler.Opened.params handler in
-          let args =
-            List.map (fun (_index, arg) ->
-                Named.create_simple (Simple.var arg))
-              args
-          in
-          assert (List.compare_lengths params args = 0);
-          Expr.bind_parameters ~bindings:(List.combine params args)
-            ~body:expr
-        in
-        let expr =
-          List.fold_left (fun expr (index, arg) ->
-              let index =
-                Simple.const (Tagged_immediate (Immediate.int (
-                  Targetint.OCaml.of_int index)))
-              in
-              let read_field =
-                Named.create_prim (Binary (Block_load (
-                    Block (Value Anything), Immutable), block, index))
-                  Debuginfo.none
-              in
-              Expr.create_let (VB.create arg NM.normal) read_field expr)
-            handler
-            (List.rev args)
-        in
-        let uacc =
-          UA.map_r uacc ~f:(fun r -> R.new_lifted_constant r lifted_constant)
-        in
-        expr, user_data, uacc
-      else
-        assert false)
-
 and simplify_non_recursive_let_cont_handler
   : 'a. DA.t -> Non_recursive_let_cont_handler.t -> 'a k -> Expr.t * 'a * UA.t
 = fun dacc non_rec_handler k ->
   let cont_handler = Non_recursive_let_cont_handler.handler non_rec_handler in
   Non_recursive_let_cont_handler.pattern_match non_rec_handler
     ~f:(fun cont ~body ->
-      let free_names_of_body = Expr.free_names body in
-      let denv = DA.denv dacc in
-      let toplevel_exn_cont =
-        Exn_continuation.exn_handler (DE.toplevel_exn_continuation denv)
+      let simplify_body : _ Simplify_let_cont.simplify_body =
+        { simplify_body = simplify_expr; }
       in
-      let can_lift =
-        (* We try to show that [handler] postdominates [body] (which is done by
-           showing that [body] can only return through [cont]) and that if
-           [body] raises any exceptions then it only does so to toplevel. If
-           this can be shown, then [body] can be lifted, so long as the
-           expression does not have any free variables. Lifting is never
-           performed if we are under a continuation handler or a lambda. *)
-        (* CR mshinwell: When can the expression have free vars? *)
-        DE.still_at_toplevel denv
-          && (not (Continuation_handler.is_exn_handler cont_handler))
-          && Variable.Set.is_empty
-               (Name_occurrences.variables free_names_of_body)
-          && Continuation.Set.subset
-               (Name_occurrences.continuations free_names_of_body)
-               (Continuation.Set.of_list [cont; toplevel_exn_cont])
+      let body, handler, user_data, uacc =
+        Simplify_let_cont.simplify_body_of_non_recursive_let_cont dacc
+          cont cont_handler ~simplify_body ~body
+          ~simplify_continuation_handler_like:
+            simplify_one_continuation_handler
+          ~user_data:()
+          k
       in
-(*
-Format.eprintf "Can lift %b: still at toplevel %b, free names of body:@ %a,@\
-    expected return cont %a, expected exn cont %a, body:@ %a\n%!"
-  can_lift
-  (DE.still_at_toplevel denv)
-  Name_occurrences.print free_names_of_body
-  Continuation.print cont
-  Continuation.print toplevel_exn_cont
-  Expr.print body;
-*)
-      if not can_lift then
-        let simplify_body : _ Simplify_let_cont.simplify_body =
-          { simplify_body = simplify_expr; }
-        in
-        let body, handler, user_data, uacc =
-          Simplify_let_cont.simplify_body_of_non_recursive_let_cont dacc
-            cont cont_handler ~simplify_body ~body
-            ~simplify_continuation_handler_like:
-              simplify_one_continuation_handler
-            ~user_data:()
-            k
-        in
-        Let_cont.create_non_recursive cont handler ~body, user_data, uacc
-      else
-        lift_expression dacc cont cont_handler ~body ~free_names_of_body
-          ~toplevel_exn_cont k)
+      Let_cont.create_non_recursive cont handler ~body, user_data, uacc)
 
 (* CR mshinwell: We should not simplify recursive continuations with no
    entry point -- could loop forever.  (Need to think about this again.) *)
