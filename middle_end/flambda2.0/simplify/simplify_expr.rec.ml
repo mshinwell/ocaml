@@ -869,11 +869,21 @@ and simplify_apply_cont
 (* CR mshinwell: Resurrect arity checks
     let args_arity = T.arity_of_list arg_types in
 *)
+    let use_kind : Continuation_use_kind.t =
+      (* CR mshinwell: Is [Continuation.sort] reliable enough to detect
+         the toplevel continuation?  Probably not -- we should store it in
+         the environment, just as we do for the current toplevel exception
+         continuation. *)
+      match Continuation.sort (AC.continuation apply_cont) with
+      | Normal ->
+        if Option.is_none (Apply_cont.trap_action apply_cont) then Inlinable
+        else Non_inlinable
+      | Return | Toplevel_return | Exn -> Non_inlinable
+    in
     let dacc, rewrite_id =
       DA.record_continuation_use dacc
         (AC.continuation apply_cont)
-        (if Option.is_none (Apply_cont.trap_action apply_cont) then Inlinable
-          else Non_inlinable)
+        use_kind
         ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
         ~arg_types
     in
