@@ -408,6 +408,8 @@ module OCaml : sig
 
   include Identifiable.S with type t := t
 
+  val to_string : t -> string
+
   val set_of_targetint_set : Targetint_set.t -> Set.t
 
   module Pair : sig

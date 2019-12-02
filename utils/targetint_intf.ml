@@ -22,6 +22,8 @@ module type Common = sig
 
   include Identifiable.S with type t := t
 
+  val to_string : t -> string
+
   val zero : t
   val one : t
   val minus_one : t
