@@ -327,7 +327,8 @@ let simplify_static_structure dacc
 
 let simplify_return_continuation_handler dacc
       ~extra_params_and_args:_ cont
-      (return_cont_handler : Return_cont_handler.Opened.t) _k =
+      (return_cont_handler : Return_cont_handler.Opened.t)
+      ~user_data:_ _k =
   let dacc, static_structure =
     simplify_static_structure dacc return_cont_handler.static_structure
   in
@@ -362,7 +363,7 @@ let simplify_return_continuation_handler dacc
 
 let simplify_exn_continuation_handler dacc
       ~extra_params_and_args:_ _cont
-      (_handler : Exn_cont_handler.Opened.t) k =
+      (_handler : Exn_cont_handler.Opened.t) ~user_data:_ k =
   let handler : Exn_cont_handler.t = () in
   let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
   handler, user_data, uacc
@@ -393,6 +394,7 @@ let simplify_definition dacc (defn : Program_body.Definition.t) =
             Simplify_exn_cont.simplify_body_of_non_recursive_let_cont dacc
               (Exn_continuation.exn_handler exn_continuation)
               exn_cont_handler
+              ~user_data:()
               ~simplify_body
               ~body:expr
               ~simplify_continuation_handler_like:
@@ -407,6 +409,7 @@ let simplify_definition dacc (defn : Program_body.Definition.t) =
         Simplify_return_cont.simplify_body_of_non_recursive_let_cont dacc
           return_continuation
           return_cont_handler
+          ~user_data:()
           ~simplify_body
           ~body:computation.expr
           ~simplify_continuation_handler_like:

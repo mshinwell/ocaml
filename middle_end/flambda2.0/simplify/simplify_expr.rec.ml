@@ -67,10 +67,11 @@ and simplify_one_continuation_handler
     -> extra_params_and_args:Continuation_extra_params_and_args.t
     -> Continuation.t
     -> Continuation_handler.Opened.t
+    -> user_data:unit
     -> 'a k 
     -> Continuation_handler.t * 'a * UA.t
 = fun dacc ~(extra_params_and_args : EPA.t)
-      cont (cont_handler : Continuation_handler.Opened.t) k ->
+      cont (cont_handler : Continuation_handler.Opened.t) ~user_data:() k ->
   let module CH = Continuation_handler in
   let module CPH = Continuation_params_and_handler in
   (* 
@@ -163,7 +164,9 @@ and simplify_non_recursive_let_cont_handler
       let body, handler, user_data, uacc =
         Simplify_let_cont.simplify_body_of_non_recursive_let_cont dacc
           cont cont_handler ~simplify_body ~body
-          ~simplify_continuation_handler_like:simplify_one_continuation_handler
+          ~simplify_continuation_handler_like:
+            simplify_one_continuation_handler
+          ~user_data:()
           k
       in
       Let_cont.create_non_recursive cont handler ~body, user_data, uacc)
@@ -234,6 +237,7 @@ and simplify_recursive_let_cont_handlers
                     Continuation_extra_params_and_args.empty
                   cont
                   cont_handler
+                  ~user_data:()
                   (fun cont_uses_env r ->
                     let user_data, uacc = k cont_uses_env r in
                     let uacc =
