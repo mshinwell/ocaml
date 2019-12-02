@@ -151,6 +151,10 @@ end = struct
     in
     { t with typing_env; }
 
+  let define_symbol_if_undefined t sym kind =
+    if TE.mem t.typing_env (Name.symbol sym) then t
+    else define_symbol t sym kind
+
   let add_symbol t sym ty =
     let typing_env =
       let sym = Name.symbol sym in
@@ -175,6 +179,14 @@ end = struct
       TE.add_definition t.typing_env name kind
     in
     { t with typing_env; }
+
+  let define_name_if_undefined t name kind =
+    if TE.mem t.typing_env (Name_in_binding_pos.to_name name) then t
+    else
+      let typing_env =
+        TE.add_definition t.typing_env name kind
+      in
+      { t with typing_env; }
 
   let add_equation_on_name t name ty =
     let typing_env = TE.add_equation t.typing_env name ty in
