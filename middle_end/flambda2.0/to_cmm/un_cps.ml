@@ -1263,9 +1263,9 @@ and fill_static_up_to j acc i =
   if i = j then acc
   else fill_static_up_to j (C.cint 1n :: acc) (i + 1)
 
-let static_structure_item (type a) env r (symb, st) =
-  match (symb : a Flambda_static.Program_body.Bound_symbols.t),
-        (st : a Flambda_static.Static_part.t) with
+let static_structure_item env r
+      ((S (symb, st)) : Flambda_static.Program_body.Static_structure.t0) =
+  match symb, st with
   | Singleton s, Block (tag, _mut, fields) ->
       let name = symbol s in
       let tag = Tag.Scannable.to_int tag in
@@ -1322,8 +1322,7 @@ let static_structure_item (type a) env r (symb, st) =
       end
 
 let static_structure env s =
-  let S l = (s : Flambda_static.Program_body.Static_structure.t) in
-  List.fold_left (static_structure_item env) R.empty l
+  List.fold_left (static_structure_item env) R.empty s
 
 (* Definition *)
 

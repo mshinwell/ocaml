@@ -507,7 +507,7 @@ let rec conv_top ~backend (func_env:func_env) (prog : Fexpr.program) : Program_b
     let body = conv_top ~backend func_env tail in
     Program_body.define_symbol ~body {
       computation = Some computation;
-      static_structure = S [];
+      static_structure = [];
     }
   | Define_symbol
       (Nonrecursive,
@@ -559,8 +559,8 @@ let rec conv_top ~backend (func_env:func_env) (prog : Fexpr.program) : Program_b
             (tag, mutability,
              List.map (of_kind_value prev_env) args)
         in
-        let def =
-          Program_body.Bound_symbols.Singleton symbol, static_structure
+        let def : Program_body.Static_structure.t0 =
+          S (Program_body.Bound_symbols.Singleton symbol, static_structure)
         in
         func_env, def :: acc
       (* | _ ->
@@ -573,7 +573,7 @@ let rec conv_top ~backend (func_env:func_env) (prog : Fexpr.program) : Program_b
     let body = conv_top ~backend func_env tail in
     Program_body.define_symbol ~body {
       computation;
-      static_structure = S structure;
+      static_structure = structure;
     }
 
   | Let_code code :: tail ->

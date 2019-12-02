@@ -644,17 +644,16 @@ module Iter_on_sets_of_closures = struct
   let computation f c =
     Flambda_static.Program_body.Computation.iter_expr c ~f:(expr f)
 
-  let static_structure_aux (type a) f (symbs, st) =
-    match (symbs : a Flambda_static.Program_body.Bound_symbols.t),
-          (st : a Flambda_static.Static_part.t) with
+  let static_structure_aux f
+      ((S (symbs, st)) : Flambda_static.Program_body.Static_structure.t0) =
+    match symbs, st with
     | Set_of_closures r, Set_of_closures s ->
         f (Some r.closure_symbols) s;
         set_of_closures f s
     | _ -> ()
 
   let static_structure f s =
-    match (s : Flambda_static.Program_body.Static_structure.t) with
-    | S l -> List.iter (static_structure_aux f) l
+    List.iter (static_structure_aux f) s
 
   let definition f (d : Flambda_static.Program_body.Definition.t) =
     Flambda_static.Program_body.Definition.iter_computation d ~f:(computation f);

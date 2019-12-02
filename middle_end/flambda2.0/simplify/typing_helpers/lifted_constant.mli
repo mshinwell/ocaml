@@ -28,7 +28,8 @@ type t
 val print : Format.formatter -> t -> unit
 
 val create
-   : Flambda_type.Typing_env.t
+   : ?computation:Flambda_static.Program_body.Computation.t
+  -> Flambda_type.Typing_env.t
   -> Flambda_type.t Symbol.Map.t
   -> 'k Flambda_static.Program_body.Bound_symbols.t
   -> 'k Flambda_static.Static_part.t
@@ -40,6 +41,12 @@ val create_from_static_structure
   -> Flambda_static.Program_body.Static_structure.t
   -> t list
 
+val create_from_definition
+   : Flambda_type.Typing_env.t
+  -> Flambda_type.t Symbol.Map.t
+  -> Flambda_static.Program_body.Definition.t
+  -> t
+
 (* CR mshinwell: Add comment that this doesn't introduce anything if the
    symbols are defined.  Is this the best semantics?  It comes from not wanting
    to diff lifted constants in [r] *)
@@ -48,4 +55,4 @@ val introduce
   -> Flambda_type.Typing_env.t
   -> Flambda_type.Typing_env.t
 
-val static_structure : t -> Flambda_static.Program_body.Static_structure.t
+val definition : t -> Flambda_static.Program_body.Definition.t

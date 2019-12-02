@@ -46,6 +46,7 @@ module Static_part : sig
     | Block : Tag.Scannable.t * mutable_or_immutable
         * (Of_kind_value.t list) -> Flambda_kind.value t
     | Fabricated_block : Variable.t -> Flambda_kind.value t
+    (* CR mshinwell: Check the free names of the set of closures *)
     | Set_of_closures : Flambda.Set_of_closures.t -> Flambda_kind.fabricated t
     | Boxed_float : Numbers.Float_by_bit_pattern.t or_variable
         -> Flambda_kind.value t
@@ -93,6 +94,8 @@ module Program_body : sig
           [computed_values] variables are not treated up to alpha conversion. *)
     }
 
+    val print : Format.formatter -> t -> unit
+
     val iter_expr : t -> f:(Flambda.Expr.t -> unit) -> unit
 
     val map_expr : t -> f:(Flambda.Expr.t -> Flambda.Expr.t) -> t
@@ -114,9 +117,15 @@ module Program_body : sig
   end
 
   module Static_structure : sig
-    type t =
-      | S : ('k Bound_symbols.t * 'k Static_part.t) list -> t
-      [@@unboxed]
+    (** The bindings in a [Static_structure] are ordered: symbols bound later
+        in the list cannot be referred to by [Static_part]s earlier in the
+        list.
+        Allowing multiple bindings here enables several static parts to use
+        the same results from a given [computation]. *)
+    type t0 =
+      | S : 'k Bound_symbols.t * 'k Static_part.t -> t0
+
+    type t = t0 list
 
     (* CR mshinwell: Add a creation function *)
     (* CR mshinwell: make [t] abstract *)
@@ -144,6 +153,8 @@ module Program_body : sig
           Bindings of symbols in each element of a list comprising a
           [static_structure] are simultaneous, not ordered, or recursive. *)
     }
+
+    val print : Format.formatter -> t -> unit
 
     val iter_computation : t -> f:(Computation.t -> unit) -> unit
 

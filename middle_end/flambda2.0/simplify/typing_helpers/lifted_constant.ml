@@ -21,48 +21,56 @@ module TE = Flambda_type.Typing_env
 
 (* CR mshinwell: Add [Flambda_static.Import] *)
 module Bound_symbols = Flambda_static.Program_body.Bound_symbols
+module Definition = Flambda_static.Program_body.Definition
 module Program_body = Flambda_static.Program_body
-module Static_part = Flambda_static.Static_part
 
-type t =
-  | T : {
-    env : TE.t;
-    types : T.t Symbol.Map.t;
-    bound_symbols : 'k Bound_symbols.t;
-    static_part : 'k Static_part.t;
-  } -> t
+type t = {
+  env : TE.t;
+  types : T.t Symbol.Map.t;
+  definition : Definition.t;
+}
 
-let print ppf (T { env = _ ; types; bound_symbols; static_part; }) =
+let print ppf { env = _ ; types; definition; } =
   Format.fprintf ppf "@[<hov 1>(\
       @[<hov 1>(types@ %a)@]@ \
-      @[<hov 1>(bound_symbols@ %a)@]@ \
-      @[<hov 1>(static_part@ %a)@]\
+      @[<hov 1>(definition@ %a)@]\
       )@]"
     (Symbol.Map.print T.print) types
-    Bound_symbols.print bound_symbols
-    Static_part.print static_part
+    Definition.print definition
 
-let create env types bound_symbols static_part =
+let create ?computation env types bound_symbols static_part =
   let being_defined = Bound_symbols.being_defined bound_symbols in
   if not (Symbol.Set.subset (Symbol.Map.keys types) being_defined) then begin
     Misc.fatal_errorf "[types]:@ %a@ does not cover [bound_symbols]:@ %a"
       (Symbol.Map.print T.print) types
       Bound_symbols.print bound_symbols
   end;
-  T {
-    env;
+  let definition : Definition.t =
+    { computation;
+      static_structure = [S (bound_symbols, static_part)];
+    }
+  in
+  { env;
     types;
-    bound_symbols;
-    static_part;
+    definition;
   }
 
-let create_from_static_structure env types
-      ((S pieces) : Program_body.Static_structure.t) =
-  List.map (fun (bound_symbols, static_part) ->
+let create_from_static_structure env types pieces =
+  List.map
+    (fun (Program_body.Static_structure.S (bound_symbols, static_part)) ->
       create env types bound_symbols static_part)
     pieces
 
-let introduce (T { env = orig_typing_env; types; _ }) typing_env =
+let create_from_definition env types definition =
+  { env;
+    types;
+    definition;
+  }
+
+let introduce { env = orig_typing_env; types; _ } typing_env =
+  (* CR mshinwell: Can't we use [Simplify_static] to give the type of the
+     definition? *)
+  let typing_env_before = typing_env in
   let typing_env =
     Symbol.Map.fold (fun sym typ typing_env ->
         let sym = Name.symbol sym in
@@ -77,29 +85,17 @@ let introduce (T { env = orig_typing_env; types; _ }) typing_env =
   in
   Symbol.Map.fold (fun sym typ typing_env ->
       let sym = Name.symbol sym in
-      if not (TE.mem typing_env sym) then
-        let var = Variable.create "lifted" in
-        let kind = Flambda_kind.value in
-        let typing_env =
-          let name =
-            Name_in_binding_pos.create (Name.var var)
-              Name_mode.in_types
-          in
-          TE.add_definition typing_env name kind
-        in
+      if not (TE.mem typing_env_before sym) then begin
         let env_extension =
           T.make_suitable_for_environment typ orig_typing_env
             ~suitable_for:typing_env
-            ~bind_to:(Name.var var)
+            ~bind_to:sym
         in
-        let typing_env = TE.add_env_extension typing_env ~env_extension in
-        let typ = T.alias_type_of kind (Simple.var var) in
-        TE.add_equation typing_env sym typ
-      else
-        typing_env)
+        TE.add_env_extension typing_env ~env_extension
+      end else begin
+        typing_env
+      end)
     types
     typing_env
 
-let static_structure (T { bound_symbols; static_part; _ })
-      : Program_body.Static_structure.t =
-  S [bound_symbols, static_part]
+let definition t = t.definition

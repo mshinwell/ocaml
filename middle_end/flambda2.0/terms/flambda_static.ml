@@ -352,13 +352,13 @@ module Program_body = struct
     let print (type k) ppf (t : k t) =
       match t with
       | Singleton sym ->
-        Format.fprintf ppf "@[<hov 1>(singleton@ @[(%a@ \u{2237}@ %a)@])@]"
+        Format.fprintf ppf "@[%a@ \u{2237}@ %a@ @<0>%s=@<0>%s@ @]"
           Symbol.print sym
           K.print K.value
+          (Flambda_colours.elide ())
+          (Flambda_colours.normal ())
       | Set_of_closures { closure_symbols; } ->
-        Format.fprintf ppf "@[<hov 1>(\
-            @[<hov 1>(closure_symbols@ %a)@]\
-            )@]"
+        Format.fprintf ppf "@[<hov 1>(closure_symbols@ %a)@]"
           (Format.pp_print_list ~pp_sep:Format.pp_print_space
             print_closure_binding)
           (Closure_id.Map.bindings closure_symbols)
@@ -376,65 +376,61 @@ module Program_body = struct
   end
 
   module Static_structure = struct
-    type t =
-      | S : ('k Bound_symbols.t * 'k Static_part.t) list -> t
-      [@@unboxed]
+    type t0 =
+      | S : 'k Bound_symbols.t * 'k Static_part.t -> t0
 
-    let print_with_cache ~cache ppf (S pieces) =
+    let print_t0_with_cache ~cache ppf (S (bound_symbols, static_part)) =
+      Format.fprintf ppf "@[<hov 1>(\
+          @[<hov 1>%a@]@ \
+          @[<hov 1>(%a)@]\
+          )@]"
+        Bound_symbols.print bound_symbols
+        (Static_part.print_with_cache ~cache) static_part
+
+    type t = t0 list
+
+    let print_with_cache ~cache ppf t =
       Format.pp_print_list ~pp_sep:Format.pp_print_space
-        (fun ppf (bound_symbols, static_part) ->
-          Format.fprintf ppf "@[<hov 1>(\
-              @[<hov 1>(%a)@]@ \
-              @[<hov 1>(%a)@]\
-              )@]"
-            Bound_symbols.print bound_symbols
-            (Static_part.print_with_cache ~cache) static_part)
-        ppf pieces
+        (print_t0_with_cache ~cache) ppf t
 
     let print ppf t =
       print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
-    let is_empty (S pieces) =
-      match pieces with
+    let is_empty t =
+      match t with
       | [] -> true
       | _::_ -> false
 
-    let being_defined (S pieces) =
-      List.fold_left (fun being_defined (bound_syms, _static_part) ->
+    let being_defined t =
+      List.fold_left (fun being_defined (S (bound_syms, _static_part)) ->
           Symbol.Set.union (Bound_symbols.being_defined bound_syms)
             being_defined)
         Symbol.Set.empty
-        pieces
+        t
 
-    let free_names (S pieces) =
-      List.fold_left (fun free_names (_bound_syms, static_part) ->
+    let free_names t =
+      List.fold_left (fun free_names (S (_bound_syms, static_part)) ->
           Name_occurrences.union free_names
             (Static_part.free_names static_part))
         Name_occurrences.empty
-        pieces
+        t
 
-    let delete_bindings (S pieces) ~allowed =
-      let pieces =
-        List.filter (fun (bound_syms, _static_part) ->
-            not (Symbol.Set.is_empty (
-              Symbol.Set.inter (Bound_symbols.being_defined bound_syms)
-                allowed)))
-          pieces
-      in
-      S pieces
+    let delete_bindings t ~allowed =
+      List.filter (fun (S (bound_syms, _static_part)) ->
+          not (Symbol.Set.is_empty (
+            Symbol.Set.inter (Bound_symbols.being_defined bound_syms)
+              allowed)))
+        t
 
-    let iter_static_parts (S pieces) (iter : static_part_iterator) =
-      List.iter (fun (_bound_syms, static_part) ->
+    let iter_static_parts t (iter : static_part_iterator) =
+      List.iter (fun (S (_bound_syms, static_part)) ->
           iter.f static_part)
-        pieces
+        t
 
-    let map_static_parts (S pieces) (mapper : static_part_mapper) =
-      let pieces =
-        List.map (fun (bound_syms, static_part) ->
-            bound_syms, mapper.f static_part)
-          pieces
-      in
-      S pieces
+    let map_static_parts t (mapper : static_part_mapper) =
+      List.map (fun (S (bound_syms, static_part)) ->
+          S (bound_syms, mapper.f static_part))
+        t
   end
 
   module Definition = struct
@@ -453,6 +449,9 @@ module Program_body = struct
         (Misc.Stdlib.Option.print Computation.print) computation
         (Flambda_colours.normal ())
         (Static_structure.print_with_cache ~cache) static_structure
+
+    let print ppf t =
+      print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
     let free_names t =
       let free_in_computation =

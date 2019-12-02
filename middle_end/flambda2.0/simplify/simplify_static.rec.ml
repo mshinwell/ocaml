@@ -176,7 +176,7 @@ let simplify_set_of_closures0 dacc ~result_dacc set_of_closures
     let bound_symbols : K.fabricated Program_body.Bound_symbols.t =
       Set_of_closures { closure_symbols; }
     in
-    S [bound_symbols, static_part]
+    [S (bound_symbols, static_part)]
   in
   let static_structure_types =
     Name_in_binding_pos.Map.fold
@@ -305,25 +305,29 @@ let simplify_piece_of_static_structure (type k) dacc ~result_dacc
     simplify_static_part_of_kind_fabricated dacc ~result_dacc static_part
       ~closure_symbols
 
-let simplify_static_structure dacc
-      ((S pieces) : Program_body.Static_structure.t)
+let simplify_static_structure dacc pieces
       : DA.t * Program_body.Static_structure.t =
   let str_rev, next_dacc =
     (* The bindings in the individual pieces of the [Static_structure] are
        simultaneous, so we keep a [result_dacc] accumulating the final
        environment, but always use [dacc] for the simplification of the
        pieces. *)
-    List.fold_left (fun (str_rev, result_dacc) (bound_syms, static_part) ->
+    List.fold_left
+      (fun (str_rev, result_dacc)
+           ((S (bound_syms, static_part)) : Program_body.Static_structure.t0) ->
         let static_part, result_dacc =
           simplify_piece_of_static_structure dacc ~result_dacc
             bound_syms static_part
         in
-        let str_rev = (bound_syms, static_part) :: str_rev in
+        let binding : Program_body.Static_structure.t0 =
+          S (bound_syms, static_part)
+        in
+        let str_rev = binding :: str_rev in
         str_rev, result_dacc)
       ([], dacc)
       pieces
   in
-  next_dacc, S (List.rev str_rev)
+  next_dacc, List.rev str_rev
 
 let simplify_return_continuation_handler dacc
       ~extra_params_and_args:_ cont
@@ -450,17 +454,17 @@ let simplify_definition dacc (defn : Program_body.Definition.t) =
 
 let define_lifted_constants lifted_constants (body : Program_body.t) =
   List.fold_left (fun body lifted_constant : Program_body.t ->
+      let definition = Lifted_constant.definition lifted_constant in
       let static_structure =
         (* CR mshinwell: We should have deletion of unused symbols
            automatically -- needs to be done for non-lifted constants too *)
-        Static_structure.delete_bindings
-          (Lifted_constant.static_structure lifted_constant)
+        Static_structure.delete_bindings definition.static_structure
           ~allowed:(Name_occurrences.symbols (Program_body.free_names body))
       in
       if Static_structure.is_empty static_structure then body
       else
         let definition : Program_body.Definition.t =
-          { computation = None;
+          { computation = definition.computation;
             static_structure;
           }
         in
