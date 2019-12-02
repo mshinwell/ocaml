@@ -34,7 +34,7 @@ let compute_closure_element_types_inside_function ~env_outside_function
         T.make_suitable_for_environment type_outside_function
           env_outside_function
           ~suitable_for:env_inside_function
-          ~bind_to:var
+          ~bind_to:(Name.var var)
       in
       let env_inside_function =
         TE.add_env_extension env_inside_function ~env_extension

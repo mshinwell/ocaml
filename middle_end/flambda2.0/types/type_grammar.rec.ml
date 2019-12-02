@@ -16,7 +16,9 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
+module TE = Typing_env
 module TEE = Typing_env_extension
+module TEL = Typing_env_level
 
 module T_V = Type_of_kind_value
 module T_NI = Type_of_kind_naked_immediate
@@ -621,67 +623,6 @@ let type_for_const (const : Simple.Const.t) =
 
 let kind_for_const const = kind (type_for_const const)
 
-(* CR mshinwell: Having to have this here is a bit of a nuisance. *)
-let make_suitable_for_environment0 t env ~suitable_for level =
-  match t with
-  | Value ty ->
-    let level, ty' =
-      T_V.make_suitable_for_environment0 ty env ~suitable_for level
-    in
-    if ty == ty' then level, t
-    else level, Value ty'
-  | Naked_immediate ty ->
-    let level, ty' =
-      T_NI.make_suitable_for_environment0 ty env ~suitable_for level
-    in
-    if ty == ty' then level, t
-    else level, Naked_immediate ty'
-  | Naked_float ty ->
-    let level, ty' =
-      T_Nf.make_suitable_for_environment0 ty env ~suitable_for level
-    in
-    if ty == ty' then level, t
-    else level, Naked_float ty'
-  | Naked_int32 ty ->
-    let level, ty' =
-      T_N32.make_suitable_for_environment0 ty env ~suitable_for level
-    in
-    if ty == ty' then level, t
-    else level, Naked_int32 ty'
-  | Naked_int64 ty ->
-    let level, ty' =
-      T_N64.make_suitable_for_environment0 ty env ~suitable_for level
-    in
-    if ty == ty' then level, t
-    else level, Naked_int64 ty'
-  | Naked_nativeint ty ->
-    let level, ty' =
-      T_NN.make_suitable_for_environment0 ty env ~suitable_for level
-    in
-    if ty == ty' then level, t
-    else level, Naked_nativeint ty'
-
-let make_suitable_for_environment t env ~suitable_for ~bind_to =
-  match t with
-  | Value ty ->
-    T_V.make_suitable_for_environment ty env ~suitable_for ~bind_to
-      ~to_type:(fun ty -> Value ty)
-  | Naked_immediate ty ->
-    T_NI.make_suitable_for_environment ty env ~suitable_for ~bind_to
-      ~to_type:(fun ty -> Naked_immediate ty)
-  | Naked_float ty ->
-    T_Nf.make_suitable_for_environment ty env ~suitable_for ~bind_to
-      ~to_type:(fun ty -> Naked_float ty)
-  | Naked_int32 ty ->
-    T_N32.make_suitable_for_environment ty env ~suitable_for ~bind_to
-      ~to_type:(fun ty -> Naked_int32 ty)
-  | Naked_int64 ty ->
-    T_N64.make_suitable_for_environment ty env ~suitable_for ~bind_to
-      ~to_type:(fun ty -> Naked_int64 ty)
-  | Naked_nativeint ty ->
-    T_NN.make_suitable_for_environment ty env ~suitable_for ~bind_to
-      ~to_type:(fun ty -> Naked_nativeint ty)
-
 let expand_head t env : Resolved_type.t =
   match t with
   | Value ty ->
@@ -714,6 +655,109 @@ let expand_head t env : Resolved_type.t =
       T_NN.expand_head ~force_to_kind:force_to_kind_naked_nativeint ty env
     in
     Resolved (Naked_nativeint head)
+
+let expand_head' t env : t =
+  match t with
+  | Value ty ->
+    Value (T_V.expand_head' ~force_to_kind:force_to_kind_value ty env)
+  | Naked_immediate ty ->
+    Naked_immediate (
+      T_NI.expand_head' ~force_to_kind:force_to_kind_naked_immediate ty env)
+  | Naked_float ty ->
+    Naked_float (
+      T_Nf.expand_head' ~force_to_kind:force_to_kind_naked_float ty env)
+  | Naked_int32 ty ->
+    Naked_int32 (
+      T_N32.expand_head' ~force_to_kind:force_to_kind_naked_int32 ty env)
+  | Naked_int64 ty ->
+    Naked_int64 (
+      T_N64.expand_head' ~force_to_kind:force_to_kind_naked_int64 ty env)
+  | Naked_nativeint ty ->
+    Naked_nativeint (
+      T_NN.expand_head' ~force_to_kind:force_to_kind_naked_nativeint ty env)
+
+let rec make_suitable_for_environment0_core t env ~depth ~suitable_for level =
+  let free_vars = Name_occurrences.variables (free_names t) in
+  if Variable.Set.is_empty free_vars then level, t
+  else
+    let allowed = TE.var_domain suitable_for in
+    let to_erase = Variable.Set.diff free_vars allowed in
+    if Variable.Set.is_empty to_erase then level, t
+    else if depth > 1 then level, unknown (kind t)
+    else
+      let result_level, perm, _binding_time =
+        (* To avoid writing an erasure operation, we define irrelevant fresh
+           variables in the returned [Typing_env_level], and swap them with
+           the variables that we wish to erase throughout the type. *)
+        Variable.Set.fold (fun to_erase (result_level, perm, binding_time) ->
+            let kind = kind (TE.find env (Name.var to_erase)) in
+            let fresh_var = Variable.rename to_erase in
+            let fresh_var_name = Name.var fresh_var in
+            let result_level =
+              TEL.add_definition result_level fresh_var kind binding_time
+            in
+            let canonical_simple =
+              TE.get_canonical_simple env
+                ~min_name_mode:Name_mode.in_types
+                (Simple.var to_erase)
+            in
+            let result_level =
+              let level, ty =
+                match canonical_simple with
+                | Bottom -> None, bottom kind
+                | Ok None -> None, unknown kind
+                | Ok (Some canonical_simple) ->
+                  if TE.mem_simple suitable_for canonical_simple then
+                    None, alias_type_of kind canonical_simple
+                  else
+                    let t = TE.find env (Name.var to_erase) in
+                    let t = expand_head' t env in
+                    let level, t =
+                      make_suitable_for_environment0_core t env
+                        ~depth:(depth + 1) ~suitable_for level
+                    in
+                    Some level, t
+              in
+              let result_level =
+                match level with
+                | None -> result_level
+                | Some level ->
+                  TEL.meet (Meet_env.create suitable_for) level result_level
+              in
+              TEL.add_or_replace_equation result_level fresh_var_name ty
+            in
+            let perm =
+              Name_permutation.add_variable perm to_erase fresh_var
+            in
+            result_level, perm, Binding_time.succ binding_time)
+          to_erase
+          (level, Name_permutation.empty, Binding_time.earliest_var)
+      in
+      result_level, apply_name_permutation t perm
+
+  let make_suitable_for_environment0 t env ~suitable_for level =
+    make_suitable_for_environment0_core t env ~depth:0 ~suitable_for level
+
+  let make_suitable_for_environment t env ~suitable_for ~bind_to =
+(*
+    if TE.mem env bind_to then begin
+      Misc.fatal_errorf "[bind_to] %a must not be bound in the \
+          source environment:@ %a"
+        Name.print bind_to
+        TE.print env
+    end;
+*)
+    if not (TE.mem suitable_for bind_to) then begin
+      Misc.fatal_errorf "[bind_to] %a is expected to be bound in the \
+          [suitable_for] environment:@ %a"
+        Name.print bind_to
+        TE.print suitable_for
+    end;
+    let level, t =
+      make_suitable_for_environment0 t env ~suitable_for (TEL.empty ())
+    in
+    let level = TEL.add_or_replace_equation level bind_to t in
+    TEE.create level
 
 module Make_meet_or_join
   (E : Lattice_ops_intf.S

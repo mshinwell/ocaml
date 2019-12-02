@@ -90,7 +90,7 @@ let introduce (T { env = orig_typing_env; types; _ }) typing_env =
         let env_extension =
           T.make_suitable_for_environment typ orig_typing_env
             ~suitable_for:typing_env
-            ~bind_to:var
+            ~bind_to:(Name.var var)
         in
         let typing_env = TE.add_env_extension typing_env ~env_extension in
         let typ = T.alias_type_of kind (Simple.var var) in
