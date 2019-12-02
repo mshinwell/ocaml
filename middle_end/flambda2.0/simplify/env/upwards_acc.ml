@@ -61,3 +61,6 @@ let with_r t r =
   { t with
     r;
   }
+
+let map_r t ~f =
+  with_r t (f t.r)
