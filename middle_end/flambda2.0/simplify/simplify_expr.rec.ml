@@ -221,12 +221,12 @@ and lift_expression
       definition.static_structure
   in
   assert (not (Symbol.Set.is_empty symbols));
-  let dacc =
+  let dacc_with_symbols =
     DA.map_denv dacc ~f:(fun denv ->
       DE.add_lifted_constants denv
         ~lifted:(R.get_lifted_constants (DA.r dacc)))
   in
-  let dacc =
+  let dacc_with_symbols, lifted_constant =
     let typing_env = DE.typing_env (DA.denv dacc) in
     let symbol_types =
       Symbol.Set.fold (fun symbol symbol_types ->
@@ -238,41 +238,100 @@ and lift_expression
     let lifted_constant =
       Lifted_constant.create_from_definition typing_env symbol_types definition
     in
-    DA.map_r dacc ~f:(fun r -> R.new_lifted_constant r lifted_constant)
+    let dacc_with_symbols =
+      DA.map_r dacc_with_symbols
+        ~f:(fun r -> R.new_lifted_constant r lifted_constant)
+    in
+    dacc_with_symbols, lifted_constant
   in
   Continuation_handler.pattern_match cont_handler ~f:(fun handler ->
-    let args =
-      List.mapi (fun index _kind ->
-          index, Variable.create (Printf.sprintf "arg%d" index))
-        arity
+    (* We can't let the handler expression see the new symbols, in case we
+       need to abort the lifting.  Instead make the symbol's type appropriate
+       for the current environment and directly bind the parameters of the
+       continuation, extracting their types using [meet]. *)
+    let params = Continuation_handler.Opened.params handler in
+    let symbol_ty =
+      TE.find (DE.typing_env (DA.denv dacc_with_symbols)) (Name.symbol symbol)
     in
-    let handler =
-      let params = Continuation_handler.Opened.params handler in
-      let args =
-        List.map (fun (_index, arg) ->
-            Named.create_simple (Simple.var arg))
-          args
+    let var = Variable.create "sym_type" in
+    let dacc =
+      DA.map_denv dacc ~f:(fun denv ->
+        DE.define_variable denv
+          (Var_in_binding_pos.create var NM.in_types) K.value)
+    in
+    let env_extension =
+      T.make_suitable_for_environment symbol_ty
+        (DE.typing_env (DA.denv dacc_with_symbols))
+        ~suitable_for:(DE.typing_env (DA.denv dacc))
+        ~bind_to:(Name.var var)
+    in
+    let dacc =
+      DA.map_denv dacc ~f:(fun denv ->
+        let denv = DE.extend_typing_environment denv env_extension in
+        DE.define_parameters denv ~params)
+    in
+    let var_ty = TE.find (DE.typing_env (DA.denv dacc)) (Name.var var) in
+    let shape_ty =
+      let fields =
+        List.map (fun param ->
+            T.alias_type_of (KP.kind param) (KP.simple param))
+          params
       in
-      assert (List.compare_lengths params args = 0);
-      Expr.bind_parameters ~bindings:(List.combine params args)
-        ~body:(Continuation_handler.Opened.handler handler)
+      let field_kind =
+        match params with
+        | [] -> K.value
+        | param::_ -> KP.kind param
+      in
+      T.immutable_block (Tag.Scannable.to_tag tag) ~field_kind ~fields
     in
-    let expr =
-      List.fold_left (fun expr (index, arg) ->
-          let index =
-            Simple.const (Tagged_immediate (Immediate.int (
-              Targetint.OCaml.of_int index)))
+    match T.meet (DE.typing_env (DA.denv dacc)) var_ty shape_ty with
+    | Bottom -> assert false  (* We always created a block -- see above. *)
+    | Ok (_meet_ty, env_extension) ->
+      let dacc =
+        DA.map_denv dacc ~f:(fun denv ->
+          DE.extend_typing_environment denv env_extension)
+      in
+      let expr = Continuation_handler.Opened.handler handler in
+      let expr, user_data, uacc = simplify_expr dacc expr k in
+      let abort_lifting = false in
+      if not abort_lifting then
+        let args =
+          List.mapi (fun index _kind ->
+              index, Variable.create (Printf.sprintf "arg%d" index))
+            arity
+        in
+        let handler =
+          let params = Continuation_handler.Opened.params handler in
+          let args =
+            List.map (fun (_index, arg) ->
+                Named.create_simple (Simple.var arg))
+              args
           in
-          let read_field =
-            Named.create_prim (Binary (Block_load (
-                Block (Value Anything), Immutable), block, index))
-              Debuginfo.none
-          in
-          Expr.create_let (VB.create arg NM.normal) read_field expr)
-        handler
-        (List.rev args)
-    in
-    simplify_expr dacc expr k)
+          assert (List.compare_lengths params args = 0);
+          Expr.bind_parameters ~bindings:(List.combine params args)
+            ~body:expr
+        in
+        let expr =
+          List.fold_left (fun expr (index, arg) ->
+              let index =
+                Simple.const (Tagged_immediate (Immediate.int (
+                  Targetint.OCaml.of_int index)))
+              in
+              let read_field =
+                Named.create_prim (Binary (Block_load (
+                    Block (Value Anything), Immutable), block, index))
+                  Debuginfo.none
+              in
+              Expr.create_let (VB.create arg NM.normal) read_field expr)
+            handler
+            (List.rev args)
+        in
+        let uacc =
+          UA.map_r uacc ~f:(fun r -> R.new_lifted_constant r lifted_constant)
+        in
+        expr, user_data, uacc
+      else
+        assert false)
 
 and simplify_non_recursive_let_cont_handler
   : 'a. DA.t -> Non_recursive_let_cont_handler.t -> 'a k -> Expr.t * 'a * UA.t
