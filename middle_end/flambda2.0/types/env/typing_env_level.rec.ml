@@ -59,6 +59,8 @@ let print_with_cache ~cache ppf { defined_vars; equations; cse; } =
         ppf equations;
       Format.pp_print_string ppf ")"
   in
+  (* CR mshinwell: Print [defined_vars] when not called from
+     [Typing_env.print] *)
   if Variable.Map.is_empty defined_vars then
     if Flambda_primitive.Eligible_for_cse.Map.is_empty cse then
       Format.fprintf ppf
@@ -309,12 +311,17 @@ let meet0 env (t1 : t) (t2 : t) =
         match data1, data2 with
         | None, None -> None
         | Some data, None | None, Some data -> Some data
-        | Some _, _ ->
-          Misc.fatal_errorf "Cannot meet levels that have overlapping \
-              defined variables (e.g. %a):@ %a@ and@ %a"
-            Variable.print var
-            print t1
-            print t2)
+        | Some (kind1, binding_time1), Some (kind2, binding_time2) ->
+          if Flambda_kind.equal kind1 kind2
+            && Binding_time.equal binding_time1 binding_time2
+          then Some (kind1, binding_time1)
+          else
+            Misc.fatal_errorf "Cannot meet levels that have overlapping \
+                defined variables (e.g. %a) that disagree on kind and/or \
+                binding time:@ %a@ and@ %a"
+              Variable.print var
+              print t1
+              print t2)
       t1.defined_vars
       t2.defined_vars
   in
@@ -330,10 +337,15 @@ let meet0 env (t1 : t) (t2 : t) =
         defined_vars
         typing_env)
   in
+  let t =
+    { (empty ()) with
+      defined_vars;
+    }
+  in
   let t, env =
     Name.Map.fold (fun name ty (t, env) -> meet_equation env t name ty)
       t1.equations
-      (empty (), env)
+      (t, env)
   in
   let t, _env =
     Name.Map.fold (fun name ty (t, env) -> meet_equation env t name ty)
