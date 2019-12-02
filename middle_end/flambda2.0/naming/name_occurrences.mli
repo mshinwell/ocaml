@@ -40,6 +40,8 @@ val empty : t
 
 val print : Format.formatter -> t -> unit
 
+val equal : t -> t -> bool
+
 val apply_name_permutation : t -> Name_permutation.t -> t
 
 val singleton_continuation : Continuation.t -> t
@@ -87,6 +89,8 @@ val variables : t -> Variable.Set.t
 val symbols : t -> Symbol.Set.t
 
 val names : t -> Name.Set.t
+
+val continuations : t -> Continuation.Set.t
 
 val closure_vars : t -> Var_within_closure.Set.t
 

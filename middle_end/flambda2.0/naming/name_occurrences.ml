@@ -46,6 +46,8 @@ end) : sig
 
   val print : Format.formatter -> t -> unit
 
+  val equal : t -> t -> bool
+
   val invariant : t -> unit
 
   val empty : t
@@ -83,6 +85,8 @@ end = struct
 
     val invariant : t -> unit
 
+    val equal : t -> t -> bool
+
     val one_occurrence : Kind.t -> t
 
     val add : t -> Kind.t -> t
@@ -116,6 +120,8 @@ end = struct
       then begin
         Misc.fatal_errorf "[For_one_name] invariant failed:@ %a" print t
       end
+
+    let equal t1 t2 = Stdlib.compare t1 t2 = 0
 
     let num_occurrences t =
       Array.fold_left (fun total num_occs -> num_occs + total) 0 t
@@ -180,6 +186,8 @@ end = struct
           For_one_name.invariant for_one_name)
         t
     end
+
+  let equal t1 t2 = N.Map.equal For_one_name.equal t1 t2
 
   let empty = N.Map.empty
 
@@ -456,6 +464,13 @@ let union t1 t2 =
     ~for_closure_vars:For_closure_vars.union
     t1 t2
 
+let equal t1 t2 =
+  binary_predicate ~for_variables:For_variables.equal
+    ~for_continuations:For_continuations.equal
+    ~for_symbols:For_symbols.equal
+    ~for_closure_vars:For_closure_vars.equal
+    t1 t2
+
 let subset_domain t1 t2 =
   binary_predicate ~for_variables:For_variables.subset_domain
     ~for_continuations:For_continuations.subset_domain
@@ -471,6 +486,7 @@ let rec union_list ts =
 let variables t = For_variables.keys t.variables
 let symbols t = For_symbols.keys t.symbols
 let closure_vars t = For_closure_vars.keys t.closure_vars
+let continuations t = For_continuations.keys t.continuations
 
 let names t =
   Name.Set.union (Name.set_of_var_set (variables t))
