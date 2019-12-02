@@ -62,6 +62,9 @@ module Make
   let unknown_types_from_arity arity =
     List.map (fun kind -> unknown kind) arity
 
+  let bottom_types_from_arity arity =
+    List.map (fun kind -> bottom kind) arity
+
   let is_bottom env t =
     match expand_head t env with
     | Resolved (Value Bottom)

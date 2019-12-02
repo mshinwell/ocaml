@@ -329,6 +329,9 @@ module type S = sig
   (** For each of the kinds in an arity, create an "unknown" type. *)
   val unknown_types_from_arity : Flambda_arity.t -> t list
 
+  (** For each of the kinds in an arity, create an "bottom" type. *)
+  val bottom_types_from_arity : Flambda_arity.t -> t list
+
   (** Whether the given type says that a term of that type can never be
       constructed (in other words, it is [Invalid]). *)
   val is_bottom : (t -> bool) type_accessor
