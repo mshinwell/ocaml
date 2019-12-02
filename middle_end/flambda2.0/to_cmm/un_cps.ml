@@ -1190,7 +1190,25 @@ let static_boxed_number kind env s default emit transl v r =
   in
   R.wrap_init wrapper (R.update_data (or_variable aux default v) r)
 
+let get_whole_closure_symbol =
+  let whole_closure_symb_count = ref 0 in
+  (fun r ->
+     match !r with
+     | Some s -> s
+     | None ->
+         incr whole_closure_symb_count;
+         let comp_unit = Compilation_unit.get_current_exn () in
+         let linkage_name =
+           Linkage_name.create @@
+           Printf.sprintf ".clos_%d" !whole_closure_symb_count
+         in
+         let s = Symbol.create comp_unit linkage_name in
+         r := Some s;
+         s
+  )
+
 let rec static_set_of_closures env symbs set =
+  let clos_symb = ref None in
   let fun_decls = Set_of_closures.function_decls set in
   let decls = Function_declarations.funs fun_decls in
   let elts = filter_closure_vars env (Set_of_closures.closure_elements set) in
@@ -1199,20 +1217,25 @@ let rec static_set_of_closures env symbs set =
       (List.map fst (Var_within_closure.Map.bindings elts))
   in
   let l, updates, length =
-    fill_static_layout symbs decls elts env [] C.void 0 layout
+    fill_static_layout clos_symb symbs decls elts env [] C.void 0 layout
   in
-  C.cint (C.black_closure_header length) :: l, updates
+  let header = C.cint (C.black_closure_header length) in
+  let sdef = match !clos_symb with
+    | None -> []
+    | Some s -> C.define_symbol ~global:false (symbol s)
+  in
+  header :: sdef @ l, updates
 
-and fill_static_layout symbs decls elts env acc updates i = function
+and fill_static_layout s symbs decls elts env acc updates i = function
   | [] -> List.rev acc, updates, i
   | (j, slot) :: r ->
       let acc = fill_static_up_to j acc i in
       let acc, offset, updates =
-        fill_static_slot symbs decls elts env acc j updates slot
+        fill_static_slot s symbs decls elts env acc j updates slot
       in
-      fill_static_layout symbs decls elts env acc updates offset r
+      fill_static_layout s symbs decls elts env acc updates offset r
 
-and fill_static_slot symbs decls elts env acc offset updates slot =
+and fill_static_slot s symbs decls elts env acc offset updates slot =
   match (slot : Un_cps_closure.layout_slot) with
   | Infix_header ->
       let field = C.cint (C.infix_header (offset + 1)) in
@@ -1222,13 +1245,11 @@ and fill_static_slot symbs decls elts env acc offset updates slot =
         match simple_static env (Var_within_closure.Map.find v elts) with
         | `Data fields -> fields, updates
         | `Var v ->
-            (* Since whole sets of closures no longer have a dedicated symbol,
-               there should not be updates to them. If really necessary, it *could*
-               be possible to use the symbol of the first closure instead (which has
-               a defined symbol), but this seems like an unneeded hack. *)
-            Misc.fatal_errorf
-              "Invalid variable '%a' in static set of closures."
-              Variable.print v
+            let s = get_whole_closure_symbol s in
+            let update =
+              make_update env Cmm.Word_val (C.symbol (symbol s)) v offset
+            in
+            [C.cint 1n], C.sequence update updates
       in
       List.rev fields @ acc, offset + 1, updates
   | Closure c ->
