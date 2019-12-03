@@ -22,14 +22,14 @@
 (executable
  (name topstart)
  (modes byte)
- (flags (:standard -principal -nostdlib))
+ (flags (:standard -principal -nostdlib -cclib "-I runtime"))
  (libraries ocamlbytecomp ocamlcommon ocamltoplevel runtime stdlib)
  (modules topstart))
 
 (executable
  (name expunge)
  (modes byte)
- (flags (:standard -principal -nostdlib))
+ (flags (:standard -principal -nostdlib -cclib "-I runtime"))
  (libraries ocamlbytecomp ocamlcommon runtime stdlib)
  (modules expunge))
 

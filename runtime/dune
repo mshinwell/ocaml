@@ -67,10 +67,10 @@
   (wrapped false)
   (modules runtime)
   (flags (-nostdlib -nopervasives))
-  (self_build_stubs_archive (runtime)))
+  (foreign_archives runtime))
 
 (rule
-  (targets libruntime_stubs.a)
+  (targets libruntime.a)
   (action (copy libcamlrun.a %{targets})))
 
 (rule
@@ -84,10 +84,10 @@
  (wrapped false)
  (modules runtimeopt)
  (flags (-nostdlib -nopervasives))
- (self_build_stubs_archive (runtimeopt)))
+ (foreign_archives runtimeopt))
 
 (rule
- (targets libruntimeopt_stubs.a)
+ (targets libruntimeopt.a)
  (action (copy libasmrun.a %{targets})))
 
 (rule

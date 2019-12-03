@@ -193,7 +193,7 @@
 (executable
  (name main)
  (modes byte)
- (flags (:standard -principal -nostdlib))
+ (flags (:standard -principal -nostdlib -cclib "-I runtime"))
  (libraries ocamlbytecomp ocamlcommon runtime stdlib)
  (modules main))
 
@@ -207,7 +207,7 @@
 (executable
  (name ilambdac)
  (modes byte)
- (flags (:standard -principal -nostdlib))
+ (flags (:standard -principal -nostdlib -cclib "-I runtime"))
  (libraries ocamloptcommon ocamloptcomp ocamlmiddleend flambda2 ocamlcommon runtime stdlib)
  (modules ilambdac))
 
@@ -219,7 +219,7 @@
  (name optmain)
  ;;(link_flags (-cclib -lunwind))
  (modes native)
- (flags (:standard -principal -nostdlib))
+ (flags (:standard -principal -nostdlib -cclib "-I runtime"))
  (libraries ocamloptcomp ocamloptcommon ocamlmiddleend flambda2 ocamlcommon runtimeopt stdlib)
  (modules optmain))
 
