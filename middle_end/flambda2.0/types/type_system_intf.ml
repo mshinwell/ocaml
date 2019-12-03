@@ -177,6 +177,12 @@ module type S = sig
       | Inlinable of inlinable
   end
 
+  module Closures_entry : sig
+    type t
+
+    val closure_var_types : t -> flambda_type Var_within_closure.Map.t
+  end
+
   (** This function takes a type [t] and an environment [env] that assigns types
       to all the free names of [t].  It also takes an environment, called
       [suitable_for], in which we would like to use [t].  The function
@@ -426,7 +432,15 @@ module type S = sig
   val prove_single_closures_entry
      : Typing_env.t
     -> t
-    -> (Closure_id.t * Function_declaration_type.t Or_unknown.t) proof
+    -> (Closure_id.t * Closures_entry.t
+         * Function_declaration_type.t Or_unknown.t) proof
+
+  val prove_single_closures_entry'
+     : Typing_env.t
+    -> t
+    -> (Closure_id.t * Closures_entry.t
+         * Function_declaration_type.t Or_unknown.t)
+         proof_allowing_kind_mismatch
 
   val prove_strings : Typing_env.t -> t -> String_info.Set.t proof
 

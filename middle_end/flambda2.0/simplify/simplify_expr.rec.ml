@@ -648,7 +648,7 @@ and simplify_function_call
   (* CR mshinwell: Should this be using [meet_shape], like for primitives? *)
   let denv = DA.denv dacc in
   match T.prove_single_closures_entry (DE.typing_env denv) callee_ty with
-  | Proved (callee's_closure_id, func_decl_type) ->
+  | Proved (callee's_closure_id, _closures_entry, func_decl_type) ->
     (* CR mshinwell: We should check that the [set_of_closures] in the
        [closures_entry] structure in the type does indeed contain the
        closure in question. *)

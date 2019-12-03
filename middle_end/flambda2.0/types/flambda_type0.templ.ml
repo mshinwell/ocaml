@@ -140,8 +140,7 @@ module Make
               Simple.print simple
               print t
 
-  let prove_single_closures_entry env t : _ proof =
-    let wrong_kind () = Misc.fatal_errorf "Type has wrong kind: %a" print t in
+  let prove_single_closures_entry' env t : _ proof_allowing_kind_mismatch =
     match expand_head t env with
     | Const _ -> Invalid
     | Resolved resolved ->
@@ -156,16 +155,23 @@ module Make
           let function_decl =
             Closures_entry.find_function_declaration closures_entry closure_id
           in
-          Proved (closure_id, function_decl)
+          Proved (closure_id, closures_entry, function_decl)
         end
       | Value (Ok _) -> Invalid
       | Value Unknown -> Unknown
       | Value Bottom -> Invalid
-      | Naked_immediate _ -> wrong_kind ()
-      | Naked_float _ -> wrong_kind ()
-      | Naked_int32 _ -> wrong_kind ()
-      | Naked_int64 _ -> wrong_kind ()
-      | Naked_nativeint _ -> wrong_kind ()
+      | Naked_immediate _ -> Wrong_kind
+      | Naked_float _ -> Wrong_kind
+      | Naked_int32 _ -> Wrong_kind
+      | Naked_int64 _ -> Wrong_kind
+      | Naked_nativeint _ -> Wrong_kind
+
+  let prove_single_closures_entry env t : _ proof =
+    match prove_single_closures_entry' env t with
+    | Proved proof -> Proved proof
+    | Unknown -> Unknown
+    | Invalid -> Invalid
+    | Wrong_kind -> Misc.fatal_errorf "Type has wrong kind: %a" print t
 
   (* CR mshinwell: Try to functorise or otherwise factor out across the
      various number kinds. *)

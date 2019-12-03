@@ -268,6 +268,56 @@ struct
     P.Binary (Block_load (Block Naked_float, Immutable), block, index)
 end
 
+module Closures_info = struct
+  type t = {
+    closure_id : Closure_id.t;
+    func_decl_type : T.Function_declaration_type.t;
+    closure_type : T.t;
+  }
+end
+
+module Closures_spec : Unboxing_spec
+  with module Info = Closures_info
+  with module Index = Var_within_closure =
+struct
+  module Index = Var_within_closure
+  module Info = Closures_info
+
+  let var_name = "unboxed_clos_var"
+
+  let make_boxed_value (info : Info.t) ~fields:closure_vars =
+    let all_function_decls_in_set =
+      Closure_id.Map.singleton info.closure_id info.func_decl_type
+    in
+    let all_closures_in_set =
+      Closure_id.Map.singleton info.closure_id info.closure_type
+    in
+    T.exactly_this_closure info.closure_id
+      ~all_function_decls_in_set
+      ~all_closures_in_set
+      ~all_closure_vars_in_set:closure_vars
+
+  let make_boxed_value_accommodating _info closure_var ~index_var =
+    T.closure_with_at_least_this_closure_var closure_var
+      ~closure_element_var:index_var
+
+(*
+    match Var_within_closure.Set.max_elt_opt closure_vars with
+    | None -> make_boxed_value info ~fields:Var_within_closure.Map.empty
+    | Some closure_element ->
+      T.closure_with_at_least_these_closure_vars closure_vars
+        ~closure_element
+        ~closure_element_var:highest_index_var
+*)
+
+  let project_field (info : Info.t) ~block:closure ~index:closure_var =
+    P.Unary (Project_var {
+        project_from = info.closure_id;
+        var = closure_var;
+        },
+      closure)
+end
+
 module Make_unboxed_number_spec (N : sig
   val name : string
   val var_name : string
@@ -364,6 +414,7 @@ end)
 
 module Blocks_of_values = Make (Block_of_values_spec)
 module Blocks_of_naked_floats = Make (Block_of_naked_floats_spec)
+module Closures = Make (Closures_spec)
 module Immediates = Make (Immediate_spec)
 module Floats = Make (Float_spec)
 module Int32s = Make (Int32_spec)
@@ -414,23 +465,40 @@ let rec make_unboxing_decision typing_env ~depth ~arg_types_by_use_id
             TE.print typing_env
         end
     | Wrong_kind | Invalid | Unknown ->
-      let rec try_unboxing = function
-        | [] -> typing_env, param_type, extra_params_and_args
-        | (prover, unboxer, tag, kind) :: decisions ->
-          let proof : _ T.proof_allowing_kind_mismatch =
-            prover typing_env param_type
-          in
-          match proof with
-          | Proved () ->
-            let indexes =
-              Targetint.OCaml.Set.singleton Targetint.OCaml.zero
+      (* CR-someday mshinwell: We could support more than a unique closure. *)
+      match T.prove_single_closures_entry' typing_env param_type with
+      | Proved (closure_id, closures_entry, Known func_decl_type) ->
+        let closure_var_types =
+          T.Closures_entry.closure_var_types closures_entry
+        in
+        let info : Closures_spec.Info.t =
+          { closure_id;
+            func_decl_type;
+            closure_type = param_type;
+          }
+        in
+        let closure_vars = Var_within_closure.Map.keys closure_var_types in
+        Closures.unbox_one_parameter typing_env ~depth
+          ~arg_types_by_use_id ~param_type extra_params_and_args
+          ~unbox_value:make_unboxing_decision info closure_vars K.value
+      | Proved (_, _, Unknown) | Wrong_kind | Invalid | Unknown ->
+        let rec try_unboxing = function
+          | [] -> typing_env, param_type, extra_params_and_args
+          | (prover, unboxer, tag, kind) :: decisions ->
+            let proof : _ T.proof_allowing_kind_mismatch =
+              prover typing_env param_type
             in
-            unboxer typing_env ~depth ~arg_types_by_use_id ~param_type
-              extra_params_and_args ~unbox_value:make_unboxing_decision
-              tag indexes kind
-          | Wrong_kind | Invalid | Unknown -> try_unboxing decisions
-      in
-      try_unboxing unboxed_number_decisions
+            match proof with
+            | Proved () ->
+              let indexes =
+                Targetint.OCaml.Set.singleton Targetint.OCaml.zero
+              in
+              unboxer typing_env ~depth ~arg_types_by_use_id ~param_type
+                extra_params_and_args ~unbox_value:make_unboxing_decision
+                tag indexes kind
+            | Wrong_kind | Invalid | Unknown -> try_unboxing decisions
+        in
+        try_unboxing unboxed_number_decisions
 
 let make_unboxing_decisions typing_env ~arg_types_by_use_id ~params ~param_types
       extra_params_and_args =
