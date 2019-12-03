@@ -265,6 +265,9 @@ let simplify_set_of_closures0 dacc ~result_dacc set_of_closures
   (* CR mshinwell: Try to tidy up (cf. simplify_static_part_of_kind_value). *)
   let dacc =
     DA.map_denv (DA.with_r dacc r) ~f:(fun denv ->
+      let denv =
+        DE.add_lifted_constants denv ~lifted:(R.get_lifted_constants r)
+      in
       let suitable_for_denv =
         Closure_id.Map.fold (fun _closure_id bound_name denv ->
             DE.define_name_if_undefined denv bound_name K.value)
@@ -286,6 +289,9 @@ let simplify_set_of_closures0 dacc ~result_dacc set_of_closures
   in
   let result_dacc =
     DA.map_denv (DA.with_r result_dacc r) ~f:(fun denv ->
+      let denv =
+        DE.add_lifted_constants denv ~lifted:(R.get_lifted_constants r)
+      in
       let suitable_for_denv =
         Closure_id.Map.fold (fun _closure_id bound_name denv ->
             DE.define_name denv bound_name K.value)
