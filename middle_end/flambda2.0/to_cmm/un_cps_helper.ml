@@ -211,21 +211,43 @@ let unreachable =
 
 (* Block creation *)
 
+let static_atom_table = symbol "caml_atom_table"
+
+let static_atom ?(dbg=Debuginfo.none) tag =
+  if tag = 0 then
+    static_atom_table
+  else
+    Cmm.Cop (Cmm.Caddv, [static_atom_table;
+                         int ~dbg (tag * Arch.size_addr)], dbg)
+
+let make_alloc_safe ?(dbg=Debuginfo.none) tag = function
+  | [] -> static_atom ~dbg tag
+  | args -> make_alloc dbg tag args
+
+let make_float_alloc_safe ?(dbg=Debuginfo.none) tag = function
+  | [] -> static_atom ~dbg tag
+  | args -> make_float_alloc dbg tag args
+
 let make_block ?(dbg=Debuginfo.none) kind args =
   match (kind : Flambda_primitive.make_block_kind) with
   | Full_of_values (tag, _) ->
-      make_alloc dbg (Tag.Scannable.to_int tag) args
+      make_alloc_safe ~dbg (Tag.Scannable.to_int tag) args
   | Full_of_naked_floats
   | Generic_array Full_of_naked_floats ->
-      make_float_alloc dbg (Tag.to_int Tag.double_array_tag) args
+      make_float_alloc_safe ~dbg (Tag.to_int Tag.double_array_tag) args
   | Generic_array No_specialisation ->
-      extcall ~dbg ~alloc:true
-        "caml_make_array" Cmm.typ_val
-        [make_alloc dbg 0 args]
+      begin match args with
+      | [] -> static_atom ~dbg 0
+      | _ ->
+          extcall ~dbg ~alloc:true
+            "caml_make_array" Cmm.typ_val
+            [make_alloc dbg 0 args]
+      end
   | _ ->
-      make_alloc dbg 0 args
+      make_alloc_safe ~dbg 0 args
 
 let make_closure_block ?(dbg=Debuginfo.none) l =
+  assert (List.compare_length_with l 0 > 0);
   let tag = Tag.(to_int closure_tag) in
   make_alloc dbg tag l
 

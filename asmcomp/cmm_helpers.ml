@@ -751,6 +751,8 @@ let call_cached_method obj tag cache pos args dbg =
 (* Allocation *)
 
 let make_alloc_generic set_fn dbg tag wordsize args =
+  (* allocs of size 0 must be statically allocated else the Gc will bug *)
+  assert (List.compare_length_with args 0 > 0);
   if wordsize <= Config.max_young_wosize then
     Cop(Calloc, Cblockheader(block_header tag wordsize, dbg) :: args, dbg)
   else begin
