@@ -185,9 +185,11 @@ module Make (U : Unboxing_spec) = struct
     in
     match T.meet typing_env block_type param_type with
     | Bottom ->
-      Misc.fatal_errorf "[meet] between %a and %a should not have failed"
+      Misc.fatal_errorf "[meet] between %a and %a should not have \
+         failed.  Typing env:@ %a"
         T.print block_type
         T.print param_type
+        TE.print typing_env
     | Ok (param_type, env_extension) ->
       (* CR mshinwell: We can remove [New_let_binding] if we are always going to
          restrict ourselves to types where the field components are known

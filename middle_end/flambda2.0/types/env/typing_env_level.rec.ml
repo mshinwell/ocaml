@@ -278,7 +278,8 @@ let concat (t1 : t) (t2 : t) =
     cse;
   }
 
-let meet_equation env t name typ =
+let meet_equation0 env t name typ =
+  check_equation t name typ;
   let meet_typ, env_extension =
     match Name.Map.find name t.equations with
     | exception Not_found -> typ, Typing_env_extension.empty ()
@@ -290,6 +291,7 @@ let meet_equation env t name typ =
         (Typing_env.add_env_extension typing_env ~env_extension)
         name typ)
   in
+  check_equation t name meet_typ;
   let equations = Name.Map.add (* replace *) name meet_typ t.equations in
   let equations =
     Typing_env_extension.pattern_match env_extension ~f:(fun t_from_meet ->
@@ -298,12 +300,28 @@ let meet_equation env t name typ =
           print t_from_meet
       end;
       Name.Map.fold (fun name typ equations ->
+          check_equation t name typ;
           Name.Map.add (* replace *) name typ equations)
         t_from_meet.equations
         equations)
   in
   let t = { t with equations; } in
   t, env
+
+let meet_equation env t name typ =
+  try meet_equation0 env t name typ
+  with Misc.Fatal_error ->
+    if !Clflags.flambda2_context_on_error then begin
+      Format.eprintf "\n%sContext is:%s meeting equation %a : %a@ in \
+          level@ %a@ and environment@ %a\n"
+        (Flambda_colours.error ())
+        (Flambda_colours.normal ())
+        print t
+        Name.print name
+        Type_grammar.print typ
+        Typing_env.print (Meet_env.env env)
+    end;
+    raise Misc.Fatal_error
 
 let meet0 env (t1 : t) (t2 : t) =
   let defined_vars =

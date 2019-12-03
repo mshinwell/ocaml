@@ -151,11 +151,19 @@ module Make
             get_singleton closures.by_closure_id
         with
         | None -> Unknown
-        | Some ((closure_id, _set_of_closures_contents), closures_entry) ->
-          let function_decl =
-            Closures_entry.find_function_declaration closures_entry closure_id
+        | Some ((closure_id, set_of_closures_contents), closures_entry) ->
+          let closure_id' =
+            Set_of_closures_contents.closures set_of_closures_contents
+            |> Closure_id.Set.get_singleton
           in
-          Proved (closure_id, closures_entry, function_decl)
+          match closure_id' with
+          | None -> Unknown
+          | Some closure_id' ->
+            assert (Closure_id.equal closure_id closure_id');
+            let function_decl =
+              Closures_entry.find_function_declaration closures_entry closure_id
+            in
+            Proved (closure_id, closures_entry, function_decl)
         end
       | Value (Ok _) -> Invalid
       | Value Unknown -> Unknown

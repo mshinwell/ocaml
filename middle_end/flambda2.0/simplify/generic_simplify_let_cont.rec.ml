@@ -69,13 +69,13 @@ module Make (CHL : Continuation_handler_like_intf.S) = struct
                 | Normal when is_single_inlinable_use ->
                   assert (not is_exn_handler);
                   handler_typing_env, extra_params_and_args
-                | Normal ->
+                | Normal | Toplevel_return ->
                   assert (not is_exn_handler);
                   let param_types = TE.find_params handler_typing_env params in
                   Unbox_continuation_params.make_unboxing_decisions
                     handler_typing_env ~arg_types_by_use_id ~params
                     ~param_types extra_params_and_args
-                | Return | Toplevel_return ->
+                | Return ->
                   assert (not is_exn_handler);
                   handler_typing_env, extra_params_and_args
                 | Exn ->

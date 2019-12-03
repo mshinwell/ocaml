@@ -18,6 +18,10 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+val create_static_part
+   : Flambda_type.to_lift
+  -> Flambda_kind.value Flambda_static.Static_part.t
+
 val try_to_reify
    : Downwards_acc.t
   -> Reachable.t

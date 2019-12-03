@@ -316,6 +316,7 @@ module Make (Head : Type_head_intf.S
           | Ok head -> create head, env_extension
         end
       | Ok (Some (simple1, Name _)), Ok (Some (simple2, Name _)) ->
+        assert (not (Simple.equal simple1 simple2));
         let env = Meet_env.now_meeting env simple1 simple2 in
         (* In the following cases we may generate equations "pointing the
            wrong way", for example "y : =x" when [y] is the canonical element.

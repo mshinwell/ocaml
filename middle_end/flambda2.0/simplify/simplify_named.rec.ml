@@ -106,7 +106,10 @@ let bind_closure_types_inside_function ~denv_outside_function
           Name_in_binding_pos.create name
             (if irrelevant then NM.in_types else NM.normal)
         in
-        DE.define_name denv bound_name K.value)
+        (* The name may be bound already when reifying computed values
+           at toplevel (see
+           [Flambda_static.simplify_return_continuation_handler]). *)
+        DE.define_name_if_undefined denv bound_name K.value)
       closure_bound_names_inside
       denv
   in
@@ -255,18 +258,50 @@ let simplify_set_of_closures0 dacc ~result_dacc set_of_closures
       fun_types
       Name_in_binding_pos.Map.empty
   in
-  (* XXX Maybe [my_closure] is missing here... *)
+  (* We have to compute [dacc] and [result_dacc] for the same reasons as
+     described in [Simplify_static.simplify_static_part_of_kind_value]. *)
+  (* CR mshinwell: Maybe [my_closure] is missing here... *)
+  let existing_typing_env = DE.typing_env (DA.denv dacc) in
+  (* CR mshinwell: Try to tidy up (cf. simplify_static_part_of_kind_value). *)
   let dacc =
+    DA.map_denv (DA.with_r dacc r) ~f:(fun denv ->
+      let suitable_for_denv =
+        Closure_id.Map.fold (fun _closure_id bound_name denv ->
+            DE.define_name_if_undefined denv bound_name K.value)
+          closure_bound_names
+          denv
+      in
+      let suitable_for = DE.typing_env suitable_for_denv in
+      Name_in_binding_pos.Map.fold (fun bound_name closure_type denv ->
+          let env_extension =
+            T.make_suitable_for_environment closure_type
+              existing_typing_env
+              ~suitable_for
+              ~bind_to:(Name_in_binding_pos.to_name bound_name)
+          in
+          DE.with_typing_env denv
+            (TE.add_env_extension suitable_for ~env_extension))
+        closure_types_by_bound_name
+        denv)
+  in
+  let result_dacc =
     DA.map_denv (DA.with_r result_dacc r) ~f:(fun denv ->
-      let denv =
+      let suitable_for_denv =
         Closure_id.Map.fold (fun _closure_id bound_name denv ->
             DE.define_name denv bound_name K.value)
           closure_bound_names
           denv
       in
+      let suitable_for = DE.typing_env suitable_for_denv in
       Name_in_binding_pos.Map.fold (fun bound_name closure_type denv ->
-          DE.add_equation_on_name denv (Name_in_binding_pos.to_name bound_name)
-            closure_type)
+          let env_extension =
+            T.make_suitable_for_environment closure_type
+              existing_typing_env
+              ~suitable_for
+              ~bind_to:(Name_in_binding_pos.to_name bound_name)
+          in
+          DE.with_typing_env denv
+            (TE.add_env_extension suitable_for ~env_extension))
         closure_types_by_bound_name
         denv)
   in
@@ -275,7 +310,7 @@ let simplify_set_of_closures0 dacc ~result_dacc set_of_closures
       (Function_declarations.create all_function_decls_in_set)
       ~closure_elements
   in
-  set_of_closures, closure_types_by_bound_name, dacc
+  set_of_closures, closure_types_by_bound_name, dacc, result_dacc
 
 let simplify_and_lift_set_of_closures dacc ~closure_bound_vars
       set_of_closures ~closure_elements ~closure_element_types =
@@ -291,10 +326,12 @@ let simplify_and_lift_set_of_closures dacc ~closure_bound_vars
         Symbol.create (Compilation_unit.get_current_exn ()) name)
       (Function_declarations.funs function_decls)
   in
-  let _set_of_closures, dacc, static_structure_types, static_structure =
+  let _set_of_closures, _dacc, result_dacc, static_structure_types,
+      static_structure =
     Simplify_static.simplify_set_of_closures0 dacc ~result_dacc:dacc
       set_of_closures ~closure_symbols ~closure_elements ~closure_element_types
   in
+  let dacc = result_dacc in
   let r =
     let lifted_constants =  (* CR mshinwell: Add "s" to "Lifted_constant" *)
       Lifted_constant.create_from_static_structure
@@ -332,18 +369,19 @@ let simplify_non_lifted_set_of_closures dacc ~bound_vars ~closure_bound_vars
   let closure_bound_names =
     Closure_id.Map.map Name_in_binding_pos.var closure_bound_vars
   in
-  let set_of_closures, _closure_types_by_bound_name, dacc =
+  let set_of_closures, _closure_types_by_bound_name, _dacc, result_dacc =
     simplify_set_of_closures0 dacc ~result_dacc:dacc set_of_closures
       ~closure_bound_names ~closure_elements ~closure_element_types
   in
   let defining_expr =
     Reachable.reachable (Named.create_set_of_closures set_of_closures)
   in
-  let dacc =
-    DA.map_denv dacc ~f:(fun denv ->
-      DE.add_lifted_constants denv ~lifted:(R.get_lifted_constants (DA.r dacc)))
+  let result_dacc =
+    DA.map_denv result_dacc ~f:(fun denv ->
+      DE.add_lifted_constants denv
+        ~lifted:(R.get_lifted_constants (DA.r result_dacc)))
   in
-  [bound_vars, defining_expr], dacc
+  [bound_vars, defining_expr], result_dacc
 
 let type_closure_elements_and_make_lifting_decision dacc ~min_name_mode
       set_of_closures =
