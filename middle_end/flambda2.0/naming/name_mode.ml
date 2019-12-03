@@ -35,18 +35,23 @@ let normal = Normal
 let in_types = In_types
 let phantom = Phantom
 
+(* The integer ordering is used by [Name_occurrences] and must agree with the
+   partial ordering below. *)
+(* CR mshinwell: add unit test for this, and also that the total ordering
+   below is a linear extension of the partial ordering. *)
+
 let of_int i =
   match i with
-  | 0 -> Normal
-  | 1 -> Phantom
-  | 2 -> In_types
+  | 0 -> Phantom
+  | 1 -> In_types
+  | 2 -> Normal
   | _ -> Misc.fatal_errorf "Name_mode.of_int %d" i
 
 let to_int t =
   match t with
-  | Normal -> 0
-  | Phantom -> 1
-  | In_types -> 2
+  | Phantom -> 0
+  | In_types -> 1
+  | Normal -> 2
 
 let max_to_int = 2
 
@@ -95,7 +100,8 @@ include Identifiable.Make (struct
   let hash _ = Misc.fatal_error "Name_mode.hash not yet implemented"
 
   let compare t1 t2 =
-    (* We explicitly make this agree with [compare_partial_order], above. *)
+    (* This is a linear extension of the ordering used by
+       [compare_partial_order], above. *)
     match t1, t2 with
     | Normal, Normal
     | Phantom, Phantom
