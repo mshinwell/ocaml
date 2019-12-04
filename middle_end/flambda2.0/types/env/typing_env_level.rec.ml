@@ -201,20 +201,22 @@ let add_definition t var kind binding_time =
     defined_vars = Variable.Map.add var (kind, binding_time) t.defined_vars
   }
 
-let check_equation t name ty =
+let equation_is_directly_recursive name ty =
   match Type_grammar.get_alias ty with
-  | None -> ()
+  | None -> false
   | Some simple ->
     match Simple.descr simple with
-    | Name name' ->
-      if Name.equal name name' then begin
-        Misc.fatal_errorf "Directly recursive equation@ %a = %a@ \
-            disallowed (Typing_env_level):@ %a"
-          Name.print name
-          Type_grammar.print ty
-          print t
-      end
-    | Const _ -> ()
+    | Name name' -> Name.equal name name'
+    | Const _ -> false
+
+let check_equation t name ty =
+  if equation_is_directly_recursive name ty then begin
+    Misc.fatal_errorf "Directly recursive equation@ %a = %a@ \
+        disallowed (Typing_env_level):@ %a"
+      Name.print name
+      Type_grammar.print ty
+      print t
+  end
 
 let one_equation name ty =
   check_equation (empty ()) name ty;
@@ -291,8 +293,13 @@ let meet_equation0 env t name typ =
         (Typing_env.add_env_extension typing_env ~env_extension)
         name typ)
   in
-  check_equation t name meet_typ;
-  let equations = Name.Map.add (* replace *) name meet_typ t.equations in
+  (* CR mshinwell: This special case needs further thinking about *)
+  (* When meeting recursive types we can end up attempting to add
+     equations "x : =x". *)
+  let equations =
+    if equation_is_directly_recursive name meet_typ then t.equations
+    else Name.Map.add (* replace *) name meet_typ t.equations
+  in
   let equations =
     Typing_env_extension.pattern_match env_extension ~f:(fun t_from_meet ->
       if not (Variable.Map.is_empty t_from_meet.defined_vars) then begin
