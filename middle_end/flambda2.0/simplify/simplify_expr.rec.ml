@@ -872,8 +872,7 @@ and simplify_apply_cont
     let use_kind : Continuation_use_kind.t =
       (* CR mshinwell: Is [Continuation.sort] reliable enough to detect
          the toplevel continuation?  Probably not -- we should store it in
-         the environment, just as we do for the current toplevel exception
-         continuation. *)
+         the environment. *)
       match Continuation.sort (AC.continuation apply_cont) with
       | Normal ->
         if Option.is_none (Apply_cont.trap_action apply_cont) then Inlinable
