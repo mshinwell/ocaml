@@ -150,16 +150,13 @@ module Make (Head : Type_head_intf.S
     | Type _export_id -> Misc.fatal_error ".cmx loading not yet implemented"
     | Equals simple ->
       let min_name_mode = Name_mode.min_in_types in
-      (* We must get the canonical simple with the least occurrence kind,
-         since that's the one that is guaranteed not to have an [Equals]
-         type. *)
       match TE.get_canonical_simple env simple ~min_name_mode with
       | Bottom -> Bottom
       | Ok None ->
-        Misc.fatal_errorf "There should always be a canonical simple for %a \
-            in environment:@ %a"
-          Simple.print simple
-          TE.print env
+        (* This can happen when [simple] is of [Phantom] name mode.
+           We're not interested in propagating types for phantom variables,
+           so [Unknown] is fine here. *)
+        Unknown
       | Ok (Some simple) ->
         match Simple.descr simple with
         | Const const ->
