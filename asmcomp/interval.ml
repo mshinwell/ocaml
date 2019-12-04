@@ -136,7 +136,7 @@ let build_intervals fd =
     | Iop _ ->
         insert_destroyed_at_oper intervals i !pos;
         walk_instruction i.next
-    | Ireturn ->
+    | Ireturn _ ->
         insert_destroyed_at_oper intervals i !pos;
         walk_instruction i.next
     | Iifthenelse(_, ifso, ifnot) ->

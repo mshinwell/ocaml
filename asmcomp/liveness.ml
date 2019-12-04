@@ -62,7 +62,7 @@ let rec live env i finally =
     Iend ->
       i.live <- finally;
       finally
-  | Ireturn | Iop(Itailcall_ind _) | Iop(Itailcall_imm _) ->
+  | Ireturn _ | Iop(Itailcall_ind _) | Iop(Itailcall_imm _) ->
       i.live <- Reg.Set.empty; (* no regs are live across *)
       Reg.set_of_array arg
   | Iop op ->

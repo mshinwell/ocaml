@@ -95,6 +95,10 @@ let phantom_defining_expr_opt ppf defining_expr =
   | None -> Format.pp_print_string ppf "()"
   | Some defining_expr -> phantom_defining_expr ppf defining_expr
 
+let exit_label ppf = function
+  | Return_lbl -> fprintf ppf "*return*"
+  | Lbl lbl -> fprintf ppf "%d" lbl
+
 let trap_action ppf ta =
   match ta with
   | Push i -> fprintf ppf "push(%d)" i
@@ -262,7 +266,7 @@ let rec expr ppf = function
         sequence e1
         print_handlers handlers
   | Cexit (i, el, traps) ->
-      fprintf ppf "@[<2>(exit%a %d" trap_action_list traps i;
+      fprintf ppf "@[<2>(exit%a %a" trap_action_list traps exit_label i;
       List.iter (fun e -> fprintf ppf "@ %a" expr e) el;
       fprintf ppf ")@]"
   | Ctrywith(e1, kind, id, e2, _dbg) ->

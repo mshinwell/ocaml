@@ -86,7 +86,7 @@ let build_graph fundecl =
     if Array.length destroyed > 0 then add_interf_set destroyed i.live;
     match i.desc with
       Iend -> ()
-    | Ireturn -> ()
+    | Ireturn _ -> ()
     | Iop(Imove | Ispill | Ireload) ->
         add_interf_move i.arg.(0) i.res.(0) i.live;
         interf i.next
@@ -152,7 +152,7 @@ let build_graph fundecl =
     add_spill_cost weight i.res;
     match i.desc with
       Iend -> ()
-    | Ireturn -> ()
+    | Ireturn _ -> ()
     | Iop(Imove) ->
         add_mutual_pref weight i.arg.(0) i.res.(0);
         prefer weight i.next

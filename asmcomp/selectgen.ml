@@ -926,27 +926,40 @@ method emit_expr (env:environment) exp =
       self#insert env (Icatch (rec_flag, List.map aux l, s_body#extract))
         [||] [||];
       r
-  | Cexit (nfail,args,traps) ->
+  | Cexit (lbl,args,traps) ->
       begin match self#emit_parts_list env args with
         None -> None
       | Some (simple_list, ext_env) ->
-          let src = self#emit_tuple ext_env simple_list in
-          let dest_args, trap_stack =
-            try env_find_static_exception nfail env
-            with Not_found ->
-              Misc.fatal_error ("Selection.emit_expr: unbound label "^
-                                Stdlib.Int.to_string nfail)
-          in
-          (* Intermediate registers to handle cases where some
-             registers from src are present in dest *)
-          let tmp_regs = Reg.createv_like src in
-          (* Ccatch registers must not contain out of heap pointers *)
-          Array.iter (fun reg -> assert(reg.typ <> Addr)) src;
-          self#insert_moves env src tmp_regs ;
-          self#insert_moves env tmp_regs (Array.concat dest_args) ;
-          self#insert env (Iexit (nfail, traps)) [||] [||];
-          set_traps nfail trap_stack env.trap_stack traps;
-          None
+          begin match lbl with
+          | Lbl nfail ->
+              let src = self#emit_tuple ext_env simple_list in
+              let dest_args, trap_stack =
+                try env_find_static_exception nfail env
+                with Not_found ->
+                  Misc.fatal_error ("Selection.emit_expr: unbound label "^
+                                    Stdlib.Int.to_string nfail)
+              in
+              (* Intermediate registers to handle cases where some
+                 registers from src are present in dest *)
+              let tmp_regs = Reg.createv_like src in
+              (* Ccatch registers must not contain out of heap pointers *)
+              Array.iter (fun reg -> assert(reg.typ <> Addr)) src;
+              self#insert_moves env src tmp_regs ;
+              self#insert_moves env tmp_regs (Array.concat dest_args) ;
+              self#insert env (Iexit (nfail, traps)) [||] [||];
+              set_traps nfail trap_stack env.trap_stack traps;
+              None
+          | Return_lbl ->
+              begin match simple_list with
+              | [expr] -> self#emit_return env expr traps; None
+              | [] ->
+                  Misc.fatal_error
+                    "Selection.emit_expr: Return without arguments"
+              | _ :: _ :: _ ->
+                   Misc.fatal_error
+                     "Selection.emit_expr: Return with too many arguments"
+              end
+          end
       end
   | Ctrywith(e1, kind, v, e2, _dbg) ->
       let env_body = env_enter_trywith env kind in
@@ -1121,13 +1134,13 @@ method emit_stores env data regs_addr =
 
 (* Same, but in tail position *)
 
-method private emit_return (env:environment) exp =
+method private emit_return (env:environment) exp (traps:trap_action list) =
   match self#emit_expr env exp with
     None -> ()
   | Some r ->
       let loc = Proc.loc_results r in
       self#insert_moves env r loc;
-      self#insert env Ireturn loc [||]
+      self#insert env (Ireturn traps) loc [||]
 
 method emit_tail (env:environment) exp =
   match exp with
@@ -1168,7 +1181,7 @@ method emit_tail (env:environment) exp =
                 self#insert_debug env (Iop new_op) dbg
                             (Array.append [|r1.(0)|] loc_arg) loc_res;
                 self#insert env (Iop(Istackoffset(-stack_ofs))) [||] [||];
-                self#insert env Ireturn loc_res [||]
+                self#insert env (Ireturn []) loc_res [||]
               end
           | Icall_imm { func; label_after; } ->
               let r1 = self#emit_tuple env new_args in
@@ -1200,7 +1213,7 @@ method emit_tail (env:environment) exp =
                 self#maybe_emit_spacetime_move env ~spacetime_reg;
                 self#insert_debug env (Iop new_op) dbg loc_arg loc_res;
                 self#insert env (Iop(Istackoffset(-stack_ofs))) [||] [||];
-                self#insert env Ireturn loc_res [||]
+                self#insert env (Ireturn []) loc_res [||]
               end
           | _ -> Misc.fatal_error "Selection.emit_tail"
       end
@@ -1296,10 +1309,10 @@ method emit_tail (env:environment) exp =
       | Some r1 ->
           let loc = Proc.loc_results r1 in
           self#insert_moves env r1 loc;
-          self#insert env Ireturn loc [||]
+          self#insert env (Ireturn []) loc [||]
       end
   | _ ->
-      self#emit_return env exp
+      self#emit_return env exp []
 
 method private emit_tail_sequence env exp =
   let s = {< instr_seq = dummy_instr >} in

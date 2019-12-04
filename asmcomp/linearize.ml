@@ -138,6 +138,15 @@ let is_next_catch env n = match env.exit_label with
 | (n0,_)::_  when n0=n -> true
 | _ -> false
 
+let rec add_traps env i traps =
+  match traps with
+  | [] -> i
+  | Cmm.Pop :: traps ->
+      add_traps env (cons_instr Lpoptrap i) traps
+  | Cmm.Push handler :: traps ->
+      let lbl_handler = find_exit_label env handler in
+      add_traps env (cons_instr (Lpushtrap { lbl_handler; }) i) traps
+
 (* Linearize an instruction [i]: add it in front of the continuation [n] *)
 let linear i n contains_calls =
   let rec linear env i n =
@@ -153,11 +162,14 @@ let linear i n contains_calls =
         linear env i.Mach.next n
     | Iop op ->
         copy_instr (Lop op) i (linear env i.Mach.next n)
-    | Ireturn ->
+    | Ireturn traps ->
         let n1 = copy_instr Lreturn i (discard_dead_code n) in
-        if contains_calls
-        then cons_instr Lreloadretaddr n1
-        else n1
+        let n2 =
+          if contains_calls
+          then cons_instr Lreloadretaddr n1
+          else n1
+        in
+        add_traps env n2 traps
     | Iifthenelse(test, ifso, ifnot) ->
         let n1 = linear env i.Mach.next n in
         begin match (ifso.Mach.desc, ifnot.Mach.desc, n1.desc) with
@@ -258,16 +270,7 @@ let linear i n contains_calls =
             0 traps
         in
         let n1 = adjust_trap_depth (-delta_traps) n in
-        let rec loop i traps =
-          match traps with
-          | [] -> i
-          | Cmm.Pop :: traps ->
-              loop (cons_instr Lpoptrap i) traps
-          | Cmm.Push handler :: traps ->
-              let lbl_handler = find_exit_label env handler in
-              loop (cons_instr (Lpushtrap { lbl_handler; }) i) traps
-        in
-        loop (add_branch lbl n1) traps
+        add_traps env (add_branch lbl n1) traps
     | Itrywith(body, Regular, handler) ->
         let (lbl_join, n1) = get_label (linear env i.Mach.next n) in
         let (lbl_handler, n2) =

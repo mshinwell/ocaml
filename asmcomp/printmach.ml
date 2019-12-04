@@ -186,8 +186,8 @@ let rec instr ppf i =
   | Iend -> ()
   | Iop op ->
       operation op i.arg ppf i.res
-  | Ireturn ->
-      fprintf ppf "return %a" regs i.arg
+  | Ireturn traps ->
+      fprintf ppf "return%a %a" Printcmm.trap_action_list traps regs i.arg
   | Iifthenelse(tst, ifso, ifnot) ->
       fprintf ppf "@[<v 2>if %a then@,%a" (test tst) i.arg instr ifso;
       begin match ifnot.desc with

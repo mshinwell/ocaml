@@ -620,7 +620,7 @@ let rec transl env e =
       let cargs = List.map (transl env) args in
       notify_catch nfail env cargs;
       let traps = mk_traps env nfail in
-      Cexit (nfail, cargs, traps)
+      Cexit (Lbl nfail, cargs, traps)
   | Ucatch(nfail, [], body, handler) ->
       let dbg = Debuginfo.none in
       let env_body = enter_catch_body env nfail in
@@ -648,7 +648,7 @@ let rec transl env e =
            (raise_num, [],
             create_loop(transl_if env Unknown dbg cond
                     dbg (remove_unit(transl env body))
-                    dbg (Cexit (raise_num,[],[])))
+                    dbg (Cexit (Lbl raise_num,[],[])))
               dbg,
             Ctuple [],
             dbg))
@@ -667,7 +667,7 @@ let rec transl env e =
                  Cifthenelse
                    (Cop(Ccmpi tst, [Cvar (VP.var id); high], dbg),
                     dbg,
-                    Cexit (raise_num, [], []),
+                    Cexit (Lbl raise_num, [], []),
                     dbg,
                     create_loop
                       (Csequence
@@ -680,7 +680,7 @@ let rec transl env e =
                              Cifthenelse
                                (Cop(Ccmpi Ceq, [Cvar (VP.var id_prev); high],
                                   dbg),
-                                dbg, Cexit (raise_num,[],[]),
+                                dbg, Cexit (Lbl raise_num,[],[]),
                                 dbg, Ctuple [],
                                 dbg)))))
                       dbg,
@@ -750,8 +750,8 @@ and transl_catch env nfail ids body handler dbg =
       (* Rewrite the body to unbox the call sites *)
       let rec aux e =
         match Cmm.map_shallow aux e with
-        | Cexit (n, el, traps) when n = nfail ->
-            Cexit (new_nfail, List.map2 (fun f e -> f e) rewrite el, traps)
+        | Cexit (Lbl n, el, traps) when n = nfail ->
+            Cexit (Lbl new_nfail, List.map2 (fun f e -> f e) rewrite el, traps)
         | c -> c
       in
       aux body
@@ -1175,7 +1175,7 @@ and transl_let env str kind id exp body =
       end
 
 and make_catch ncatch body handler dbg = match body with
-| Cexit (nexit,[],[]) when nexit=ncatch -> handler
+| Cexit (Lbl nexit,[],[]) when nexit=ncatch -> handler
 | _ ->  ccatch (ncatch, [], body, handler, dbg)
 
 and is_shareable_cont exp =
@@ -1189,7 +1189,7 @@ and make_shareable_cont dbg mk exp =
     let nfail = next_raise_count () in
     make_catch
       nfail
-      (mk (Cexit (nfail,[],[])))
+      (mk (Cexit (Lbl nfail,[],[])))
       exp
       dbg
   end

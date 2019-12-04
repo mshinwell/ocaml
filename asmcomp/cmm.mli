@@ -99,6 +99,10 @@ val new_label: unit -> label
 val set_label: label -> unit
 val cur_label: unit -> label
 
+type exit_label =
+  | Return_lbl
+  | Lbl of label
+
 type rec_flag = Nonrecursive | Recursive
 
 type phantom_defining_expr =
@@ -208,10 +212,10 @@ and expression =
       * Debuginfo.t
   | Ccatch of
       rec_flag
-        * (int * (Backend_var.With_provenance.t * machtype) list
+        * (label * (Backend_var.With_provenance.t * machtype) list
           * expression * Debuginfo.t) list
         * expression
-  | Cexit of int * expression list * trap_action list
+  | Cexit of exit_label * expression list * trap_action list
   | Ctrywith of expression * trywith_kind * Backend_var.With_provenance.t
       * expression * Debuginfo.t
 
@@ -246,7 +250,7 @@ type phrase =
   | Cdata of data_item list
 
 val ccatch :
-     int * (Backend_var.With_provenance.t * machtype) list
+     label * (Backend_var.With_provenance.t * machtype) list
        * expression * expression * Debuginfo.t
   -> expression
 

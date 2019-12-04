@@ -128,6 +128,10 @@ let set_label l =
 
 let cur_label () = !label_counter
 
+type exit_label =
+  | Return_lbl
+  | Lbl of label
+
 let new_label() = incr label_counter; !label_counter
 
 type rec_flag = Nonrecursive | Recursive
@@ -208,10 +212,10 @@ type expression =
       * Debuginfo.t
   | Ccatch of
       rec_flag
-        * (int * (Backend_var.With_provenance.t * machtype) list
+        * (label * (Backend_var.With_provenance.t * machtype) list
           * expression * Debuginfo.t) list
         * expression
-  | Cexit of int * expression list * trap_action list
+  | Cexit of exit_label * expression list * trap_action list
   | Ctrywith of expression * trywith_kind * Backend_var.With_provenance.t
       * expression * Debuginfo.t
 

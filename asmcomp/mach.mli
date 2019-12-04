@@ -102,7 +102,7 @@ type instruction =
 and instruction_desc =
     Iend
   | Iop of operation
-  | Ireturn
+  | Ireturn of Cmm.trap_action list
   | Iifthenelse of test * instruction * instruction
   | Iswitch of int array * instruction array
   | Icatch of Cmm.rec_flag * (int * trap_stack * instruction) list * instruction

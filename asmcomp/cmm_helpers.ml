@@ -276,7 +276,7 @@ let mk_not dbg cmm =
 
 let create_loop body dbg =
   let cont = Lambda.next_raise_count () in
-  let call_cont = Cexit (cont, [], []) in
+  let call_cont = Cexit (Lbl cont, [], []) in
   let body = Csequence (body, call_cont) in
   Ccatch (Recursive, [cont, [], body, dbg], call_cont)
 
@@ -1478,7 +1478,7 @@ struct
   let bind arg body = bind "switcher" arg body
 
   let make_catch handler = match handler with
-  | Cexit (i,[],[]) -> i,fun e -> e
+  | Cexit (Lbl i,[],[]) -> i,fun e -> e
   | _ ->
       let dbg = Debuginfo.none in
       let i = Lambda.next_raise_count () in
@@ -1490,11 +1490,11 @@ struct
       i,
       (fun body -> match body with
       | Cexit (j,_,_) ->
-          if i=j then handler
+          if Lbl i = j then handler
           else body
       | _ ->  ccatch (i,[],body,handler, dbg))
 
-  let make_exit i = Cexit (i,[],[])
+  let make_exit i = Cexit (Lbl i,[],[])
 
 end
 
@@ -1513,7 +1513,7 @@ module StoreExpForSwitch =
       let make_key index expr =
         let continuation =
           match expr with
-          | Cexit (i,[],[]) -> Some i
+          | Cexit (Lbl i,[],[]) -> Some i
           | _ -> None
         in
         Some (continuation, index)
@@ -1530,7 +1530,7 @@ module StoreExp =
       type t = expression
       type key = int
       let make_key = function
-        | Cexit (i,[],[]) -> Some i
+        | Cexit (Lbl i,[],[]) -> Some i
         | _ -> None
       let compare_key = Stdlib.compare
     end)
@@ -1715,7 +1715,7 @@ let cache_public_method meths tag cache dbg =
            dbg),
         Cifthenelse
           (Cop(Ccmpi Cge, [Cvar li; Cvar hi], dbg),
-           dbg, Cexit (raise_num, [], []),
+           dbg, Cexit (Lbl raise_num, [], []),
            dbg, Ctuple [],
            dbg))))
        dbg,

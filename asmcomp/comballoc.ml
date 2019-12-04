@@ -28,7 +28,7 @@ type allocation_state =
 
 let rec combine i allocstate =
   match i.desc with
-    Iend | Ireturn | Iexit _ | Iraise _ ->
+    Iend | Ireturn _ | Iexit _ | Iraise _ ->
       (i, allocstate)
   | Iop(Ialloc { bytes = sz; dbginfo; _ }) ->
       assert (List.length dbginfo = 1);

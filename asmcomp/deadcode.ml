@@ -44,7 +44,7 @@ let rec deadcode i =
     else i.arg
   in
   match i.desc with
-  | Iend | Ireturn | Iop(Itailcall_ind _) | Iop(Itailcall_imm _) | Iraise _ ->
+  | Iend | Ireturn _ | Iop(Itailcall_ind _) | Iop(Itailcall_imm _) | Iraise _ ->
       let regs = Reg.add_set_array i.live arg in
       { i; regs; exits = Int.Set.empty; }
   | Iop op ->

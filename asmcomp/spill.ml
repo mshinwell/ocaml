@@ -139,7 +139,7 @@ let rec reload i before =
   match i.desc with
     Iend ->
       (i, before)
-  | Ireturn | Iop(Itailcall_ind _) | Iop(Itailcall_imm _) ->
+  | Ireturn _ | Iop(Itailcall_ind _) | Iop(Itailcall_imm _) ->
       (add_reloads (Reg.inter_set_array before i.arg) i,
        Reg.Set.empty)
   | Iop(Icall_ind _ | Icall_imm _ | Iextcall { alloc = true; }) ->
@@ -312,7 +312,7 @@ let rec spill env i finally =
   match i.desc with
     Iend ->
       (i, finally)
-  | Ireturn | Iop(Itailcall_ind _) | Iop(Itailcall_imm _) ->
+  | Ireturn _ | Iop(Itailcall_ind _) | Iop(Itailcall_imm _) ->
       (i, Reg.Set.empty)
   | Iop Ireload ->
       let (new_next, after) = spill env i.next finally in

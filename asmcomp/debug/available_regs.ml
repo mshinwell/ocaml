@@ -94,7 +94,7 @@ let rec available_regs (instr : M.instruction)
     | Ok avail_before ->
       match instr.desc with
       | Iend -> None, ok avail_before
-      | Ireturn -> None, unreachable
+      | Ireturn _ -> None, unreachable
       | Iop (Itailcall_ind _) | Iop (Itailcall_imm _) ->
         Some (ok Reg_with_debug_info.Set.empty), unreachable
       | Iop (Iname_for_debugger { ident; which_parameter; provenance;
