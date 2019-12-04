@@ -239,8 +239,8 @@
 ;       debugger/ocamldebug.byte
 ;       ocamldoc/ocamldoc.byte
 ;       ocamltest/ocamltest.byte
-       toplevel/ocaml.byte
-       toplevel/expunge.exe
+;       toplevel/ocaml.byte
+;       toplevel/expunge.exe
        ))
 
 
