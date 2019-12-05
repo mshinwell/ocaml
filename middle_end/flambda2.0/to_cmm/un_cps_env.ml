@@ -72,7 +72,7 @@ type stage =
 (* Translation environment *)
 
 type t = {
-  k     : Continuation.t;
+  k_return : Continuation.t;
   (* The continuation of the current context
        (used to determine which calls are tail-calls) *)
   k_exn : Continuation.t;
@@ -99,8 +99,8 @@ type t = {
   (* archived stages, in reverse chronological order. *)
 }
 
-let mk offsets k k_exn used_closure_vars = {
-  k; k_exn; used_closure_vars; offsets;
+let mk offsets k_return k_exn used_closure_vars = {
+  k_return; k_exn; used_closure_vars; offsets;
   stages = [];
   pures = Variable.Map.empty;
   vars = Variable.Map.empty;
@@ -115,7 +115,7 @@ let dummy offsets used_closure_vars =
     (Continuation.create ())
     used_closure_vars
 
-let return_cont env = env.k
+let return_cont env = env.k_return
 let exn_cont env = env.k_exn
 
 (* Variables *)

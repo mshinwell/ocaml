@@ -941,8 +941,7 @@ and apply_cont env e =
   let args = Apply_cont_expr.args e in
   if Continuation.is_exn k then
     apply_cont_exn env e k args
-  else if Continuation.equal (Env.return_cont env) k
-       && Apply_cont_expr.trap_action e = None then
+  else if Continuation.equal (Env.return_cont env) k then
     apply_cont_ret env e k args
   else
     apply_cont_regular env e k args
@@ -1469,8 +1468,6 @@ let function_flags () =
 let function_decl offsets used_closure_vars fun_name _ d =
   Profile.record_call ~accumulate:true fun_name (fun () ->
     let fun_dbg = Function_declaration.dbg d in
-    let result_arity = Function_declaration.result_arity d in
-    let ret_machtype = machtype_of_return_arity result_arity in
     let p = Function_declaration.params_and_body d in
     Function_params_and_body.pattern_match p
       ~f:(fun ~return_continuation:k k_exn vars ~body ~my_closure ->
@@ -1480,22 +1477,9 @@ let function_decl offsets used_closure_vars fun_name _ d =
             (* Init the env and create a jump id for the ret closure
                in case a trap action is attached to one of tis call *)
             let env = Env.mk offsets k k_exn used_closure_vars in
-            let id, env = Env.add_jump_cont env [ret_machtype] k in
-            let fun_handle_var = Backend_var.create_local "*fun_res*" in
-            let fun_handler = C.var fun_handle_var in
-            let fun_handle_vars = [
-              Backend_var.With_provenance.create fun_handle_var,
-              ret_machtype
-            ] in
-            (* translate the arg list and body, inserting a catch for the
-               return continuation. *)
+            (* translate the arg list and body *)
             let env, fun_args = var_list env args in
-            let fun_body =
-              C.ccatch
-                ~rec_flag:false
-                ~body:(expr env body)
-                ~handlers:[C.handler id fun_handle_vars fun_handler]
-            in
+            let fun_body = expr env body in
             let fun_flags = function_flags () in
             C.fundecl fun_name fun_args fun_body fun_flags fun_dbg
           with Misc.Fatal_error ->
