@@ -462,7 +462,10 @@ let handler ?(dbg=Debuginfo.none) id vars body =
   (id, vars, body, dbg)
 
 let cexit id args trap_actions =
-  Cmm.Cexit (id, args, trap_actions)
+  Cmm.Cexit (Cmm.Lbl id, args, trap_actions)
+
+let trap_return arg trap_actions =
+  Cmm.Cexit (Cmm.Return_lbl, [arg], trap_actions)
 
 let ccatch ~rec_flag ~handlers ~body =
   let rec_flag = if rec_flag then Cmm.Recursive else Cmm.Nonrecursive in

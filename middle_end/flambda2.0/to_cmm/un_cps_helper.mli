@@ -246,6 +246,10 @@ val cexit : int -> Cmm.expression list -> Cmm.trap_action list -> Cmm.expression
 (** [cexit id args] creates the cmm expression for static to a static handler with
     exit number [id], with arguments [args]. *)
 
+val trap_return : Cmm.expression -> Cmm.trap_action list -> Cmm.expression
+(** [trap_return res traps] creates the cmm expression for returning [res] after
+    applying the trap actions in [traps]. *)
+
 val ccatch :
   rec_flag:bool ->
   handlers:static_handler list ->

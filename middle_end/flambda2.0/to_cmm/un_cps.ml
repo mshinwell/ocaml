@@ -982,15 +982,24 @@ and apply_cont_exn env e k = function
 (* A call to the return continuation of the current block simply is the return value
    for the current block being translated. *)
 and apply_cont_ret env e k = function
-  | [] ->
-      assert (Apply_cont_expr.trap_action e = None);
-      let wrap, _ = Env.flush_delayed_lets env in
-      wrap C.void
+  (* CR vlaviron: Cmm functions should not return nothing *)
+  (* | [] ->
+   *     assert (Apply_cont_expr.trap_action e = None);
+   *     let wrap, _ = Env.flush_delayed_lets env in
+   *     wrap C.void *)
   | [res] ->
-      assert (Apply_cont_expr.trap_action e = None);
       let res, env, _ = simple env res in
       let wrap, _ = Env.flush_delayed_lets env in
-      wrap res
+      begin match Apply_cont_expr.trap_action e with
+      | None ->
+          wrap res
+      | Some (Pop _) ->
+          wrap (C.trap_return res [Cmm.Pop])
+      | Some (Push _) ->
+          Misc.fatal_errorf
+            "Continuation %a (return cont) should not be applied with a push trap action"
+            Continuation.print k
+      end
   | _ ->
       (* TODO: add support using unboxed tuples *)
       Misc.fatal_errorf

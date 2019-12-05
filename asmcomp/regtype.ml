@@ -215,7 +215,7 @@ let test env i arg _res = function
 let rec instruction_desc env i args res = function
   | Iend -> assert false
   | Iop op -> infer_op env i args res op
-  | Ireturn -> env
+  | Ireturn _ -> env
   | Iifthenelse (t, then_branch, else_branch) ->
       let env = test env i args res t in
       let env = instruction env then_branch in
