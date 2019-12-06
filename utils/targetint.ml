@@ -193,8 +193,8 @@ module Int32 = struct
         let to_targetint t = t
         let of_targetint t = t
 
-        let of_float t = of_int64 (Int64.bits_of_float t)
-        let to_float t = Int64.float_of_bits (to_int64 t)
+        let of_float = Int32.of_float
+        let to_float = Int32.to_float
 
         let of_int_option i =
           let t = of_int i in
@@ -391,8 +391,8 @@ module Int64 = struct
         let of_int64 t = t
         let to_int64 t = t
 
-        let of_float t = Int64.bits_of_float t
-        let to_float t = Int64.float_of_bits t
+        let of_float = Int64.of_float
+        let to_float = Int64.to_float
 
         let to_targetint t = t
         let of_targetint t = t
