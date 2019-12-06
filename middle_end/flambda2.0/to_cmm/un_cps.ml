@@ -54,12 +54,14 @@ module R = struct
     init : Cmm.expression;
     current_data : Cmm.data_item list;
     other_data : Cmm.data_item list list;
+    gc_roots : Symbol.t list;
   }
 
   let empty = {
     init = C.void;
     current_data = [];
     other_data = [];
+    gc_roots = [];
   }
 
   let add_if_not_empty x l =
@@ -74,7 +76,12 @@ module R = struct
       add_if_not_empty r.current_data (
         add_if_not_empty t.current_data (
           (r.other_data @ t.other_data)));
+    gc_roots = r.gc_roots @ t.gc_roots;
   }
+
+  let archive_data r =
+    { r with current_data = [];
+             other_data = add_if_not_empty r.current_data r.other_data; }
 
   let wrap_init f r =
     { r with init = f r.init; }
@@ -84,6 +91,9 @@ module R = struct
 
   let update_data f r =
     { r with current_data = f r.current_data; }
+
+  let add_gc_roots l r =
+    { r with gc_roots = l @ r.gc_roots; }
 
   let to_cmm r =
     let entry =
@@ -101,7 +111,7 @@ module R = struct
     in
     let data_list = add_if_not_empty r.current_data r.other_data in
     let data = List.map C.cdata data_list in
-    data, entry
+    data, entry, r.gc_roots
 
 end
 
@@ -1342,18 +1352,34 @@ let static_structure_item env r
           R.update_data data r
       end
 
-let static_structure env s =
-  List.fold_left (static_structure_item env) R.empty s
+let static_structure env is_fully_static s =
+  (* Gc roots: statically allocated blocks themselves do not need to be scanned,
+     however if statically allocated blocks contain dynamically allocated contents,
+     then that block has to be registered as Gc roots for the Gc to correctly patch
+     it if/when it moves some of the dynamically allocated blocks. As a safe
+     over-approximation, we thus register as gc_roots all symbols who have an
+     associated computation (and thus are not fully_static). *)
+  let roots =
+    if is_fully_static then []
+    else Symbol.Set.elements
+        (Flambda_static.Program_body.Static_structure.being_defined s)
+  in
+  let r = R.add_gc_roots roots R.empty in
+  List.fold_left (fun acc item ->
+      (* Archive_data helps keep definitions of separate symbols in different
+         data_item lists and this increases readability of the generated cmm. *)
+      R.archive_data (static_structure_item env acc item)
+    ) r s
 
 (* Definition *)
 
 let computation_wrapper offsets used_closure_vars c =
   match c with
   | None ->
-      Env.dummy offsets used_closure_vars, (fun x -> x)
+      Env.dummy offsets used_closure_vars, (fun x -> x), true
   | Some (c : Flambda_static.Program_body.Computation.t) ->
       (* The env for the computation is given a dummy continuation,
-         since the return continuation will be explictly bound to a
+         since the return continuation will be explicitly bound to a
          jump before translating the computation. *)
       let dummy_k = Continuation.create () in
       let k_exn = Exn_continuation.exn_handler c.exn_continuation in
@@ -1383,14 +1409,14 @@ let computation_wrapper offsets used_closure_vars c =
          code to move assignments closer to the variable definitions
          Or better: add traps to the env to insert assignemnts after
          the variable definitions. *)
-      s_env, wrap
+      s_env, wrap, false
 
 let definition offsets ~used_closure_vars
       (d : Flambda_static.Program_body.Definition.t) =
-  let env, wrapper =
+  let env, wrapper, is_fully_static =
     computation_wrapper offsets used_closure_vars d.computation
   in
-  let r = static_structure env d.static_structure in
+  let r = static_structure env is_fully_static d.static_structure in
   R.wrap_init wrapper r
 
 
@@ -1401,7 +1427,7 @@ let is_var_used v e =
   let occurrence = Name_occurrences.greatest_name_mode_var free_names v in
   match (occurrence : Name_mode.Or_absent.t) with
   | Absent -> false
-  | Present _k -> 
+  | Present _k ->
     (* CR mshinwell: I think this should always be [true].  Even if the
        variable is only used by phantom bindings, it still needs to be
        there.  This may only arise in unusual cases (e.g. [my_closure]
@@ -1468,8 +1494,12 @@ let function_decl offsets used_closure_vars fun_name _ d =
 
 let rec program_body offsets ~used_closure_vars acc body =
   match Flambda_static.Program_body.descr body with
-  | Flambda_static.Program_body.Root sym ->
-      sym, List.fold_left (fun acc r -> R.combine r acc) R.empty acc
+  | Flambda_static.Program_body.Root _sym ->
+      (* The root symbol does not really deserve any particular treatment.
+         Concerning gc_roots, it's like any other statically allocated symbol:
+         if if has an associated computation, then it will already be included
+         in the list of gc_roots, else it does not *have*  to be a root. *)
+      List.fold_left (fun acc r -> R.combine r acc) R.empty acc
   | Flambda_static.Program_body.Define_symbol (def, rest) ->
       let r = definition offsets ~used_closure_vars def in
       program_body offsets ~used_closure_vars (r :: acc) rest
@@ -1492,9 +1522,10 @@ let program (p : Flambda_static.Program.t) =
         Name_occurrences.closure_vars (Flambda_static.Program.free_names p)
       in
       let functions = program_functions offsets used_closure_vars p in
-      let sym, res = program_body ~used_closure_vars offsets [] p.body in
-      let data, entry = R.to_cmm res in
+      let res = program_body ~used_closure_vars offsets [] p.body in
+      let data, entry, gc_roots = R.to_cmm res in
       let cmm_data = C.flush_cmmgen_state () in
-      (C.gc_root_table [symbol sym]) :: data @ cmm_data @ functions @ [entry]
+      let roots = List.map symbol gc_roots in
+      (C.gc_root_table roots) :: data @ cmm_data @ functions @ [entry]
     )
 
