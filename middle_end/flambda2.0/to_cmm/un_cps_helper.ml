@@ -470,8 +470,8 @@ let direct_call ?(dbg=Debuginfo.none) ty f_code_sym args f =
 
 let indirect_call ?(dbg=Debuginfo.none) ty f = function
   | [arg] ->
-      (* Use a variable to avoid duplicating the cmm code of [f]. *)
-      let v = Backend_var.create_local "*code*" in
+      (* Use a variable to avoid duplicating the cmm code of the closure [f]. *)
+      let v = Backend_var.create_local "*closure*" in
       let v' = Backend_var.With_provenance.create v in
       letin v' f @@
       Cmm.Cop (Cmm.Capply ty,
