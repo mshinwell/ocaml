@@ -77,8 +77,7 @@ CAMLC = $(BOOT_OCAMLC) -g -nostdlib -I $(ROOTDIR)/boot \
 CAMLOPT = $(CAMLRUN) $(ROOTDIR)/ocamlopt -g -nostdlib -I $(ROOTDIR)/stdlib
 CAMLLEX = $(CAMLRUN) $(ROOTDIR)/boot/ocamllex
 INCLUDES = $(addprefix -I $(ROOTDIR)/,utils parsing typing bytecomp \
-                       middle_end middle_end/closure middle_end/flambda \
-                       middle_end/flambda/base_types driver toplevel \
+                       middle_end middle_end/closure driver toplevel \
                        file_formats lambda)
 COMPFLAGS = -absname -w +a-4-9-41-42-44-45-48 -strict-sequence -warn-error A \
  -principal -safe-string -strict-formats -bin-annot $(INCLUDES)

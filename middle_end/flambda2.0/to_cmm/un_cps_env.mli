@@ -14,8 +14,6 @@
 
 (* Environment for flambda2 to cmm translation *)
 
-open Flambda2
-
 (** {1 Translation environment} *)
 
 type t

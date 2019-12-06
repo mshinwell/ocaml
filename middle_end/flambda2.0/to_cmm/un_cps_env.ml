@@ -14,8 +14,6 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-open! Flambda2
-
 (* Continuation use. A continuation can be translated one of two ways:
    - by a static jump (Cmm jump, using a unique integer)
    - by inlining the continuation's body at the call site. *)

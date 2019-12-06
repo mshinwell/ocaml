@@ -14,7 +14,6 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-open! Flambda2
 open Cmm_helpers
 
 (* Are we compiling on/for a 32-bit architecture ? *)

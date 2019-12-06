@@ -240,12 +240,12 @@ let compile_implementation ?toplevel ~backend ~filename ~prefixname ~middle_end
 type middle_end2 =
      ppf_dump:Format.formatter
   -> prefixname:string
-  -> backend:(module Flambda2.Flambda2_backend_intf.S)
+  -> backend:(module Flambda2_backend_intf.S)
   -> size:int
   -> filename:string
   -> module_ident:Ident.t
   -> module_initializer:Lambda.lambda
-  -> Flambda2.Flambda_static.Program.t
+  -> Flambda_static.Program.t
 
 let compile_implementation2 ?toplevel ~backend ~filename ~prefixname ~size
     ~module_ident ~module_initializer ~middle_end ~ppf_dump required_globals =
@@ -261,7 +261,7 @@ let compile_implementation2 ?toplevel ~backend ~filename ~prefixname ~size
         (middle_end : middle_end2) ~backend ~size ~filename ~prefixname
           ~ppf_dump ~module_ident ~module_initializer
       in
-      end_gen_implementation ?toplevel ~ppf_dump Flambda2_to_cmm.Un_cps.program
+      end_gen_implementation ?toplevel ~ppf_dump Un_cps.program
         translated_program)
 
 let linear_gen_implementation filename =
@@ -293,7 +293,7 @@ let compile_implementation_flambda ?toplevel ~prefixname
     (fun () ->
       Ident.Set.iter Compilenv.require_global required_globals;
       end_gen_implementation ?toplevel ~ppf_dump
-        Flambda2_to_cmm.Un_cps.program program)
+        Un_cps.program program)
 
 (* Error report *)
 

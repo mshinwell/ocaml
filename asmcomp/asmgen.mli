@@ -42,17 +42,17 @@ val compile_implementation_linear :
 type middle_end2 =
      ppf_dump:Format.formatter
   -> prefixname:string
-  -> backend:(module Flambda2.Flambda2_backend_intf.S)
+  -> backend:(module Flambda2_backend_intf.S)
   -> size:int
   -> filename:string
   -> module_ident:Ident.t
   -> module_initializer:Lambda.lambda
-  -> Flambda2.Flambda_static.Program.t
+  -> Flambda_static.Program.t
 
 (** Compile an implementation from Lambda using the given middle end. *)
 val compile_implementation2
    : ?toplevel:(string -> bool)
-  -> backend:(module Flambda2.Flambda2_backend_intf.S)
+  -> backend:(module Flambda2_backend_intf.S)
   -> filename:string
   -> prefixname:string
   -> size:int
@@ -69,7 +69,7 @@ val compile_implementation_flambda
   -> prefixname:string
   -> ppf_dump:Format.formatter
   -> required_globals:Ident.Set.t
-  -> Flambda2.Flambda_static.Program.t
+  -> Flambda_static.Program.t
   -> unit
 
 val compile_phrase :

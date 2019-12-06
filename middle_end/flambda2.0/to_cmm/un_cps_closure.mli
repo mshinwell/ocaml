@@ -14,8 +14,6 @@
 
 (* Compute offsets for elements in sets of closures *)
 
-open Flambda2
-
 type env
 (** Type for accumulating information about offsets of
     closure ids and var within closures. *)

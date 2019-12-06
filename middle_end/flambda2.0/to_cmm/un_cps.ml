@@ -14,7 +14,6 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-open! Flambda2
 open! Flambda.Import
 
 module Env = Un_cps_env

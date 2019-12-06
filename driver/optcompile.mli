@@ -30,11 +30,3 @@ val clambda :
 (** [clambda info typed] applies the regular compilation pipeline to the
     given typechecked implementation and outputs the resulting files.
 *)
-
-val flambda :
-  Compile_common.info ->
-  (module Backend_intf.S) ->
-  Typedtree.structure * Typedtree.module_coercion -> unit
-(** [flambda info backend typed] applies the Flambda compilation pipeline to the
-    given typechecked implementation and outputs the resulting files.
-*)

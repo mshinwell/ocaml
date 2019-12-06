@@ -41,10 +41,28 @@ CAMLOPT=$(CAMLRUN) ./ocamlopt -g -nostdlib -I stdlib -I otherlibs/dynlink
 ARCHES=amd64 i386 arm arm64 power s390x
 INCLUDES=-I utils -I parsing -I typing -I bytecomp -I file_formats \
         -I lambda -I middle_end -I middle_end/closure \
-        -I middle_end/flambda -I middle_end/flambda/base_types \
+        -I middle_end/flambda2.0/compilenv_deps \
         -I middle_end/flambda2.0 \
+        -I middle_end/flambda2.0/basic \
         -I middle_end/flambda2.0/from_lambda \
-        -I middle_end/flambda2.0/language \
+        -I middle_end/flambda2.0/inlining \
+        -I middle_end/flambda2.0/naming \
+        -I middle_end/flambda2.0/parser \
+        -I middle_end/flambda2.0/simplify \
+        -I middle_end/flambda2.0/simplify/basic \
+        -I middle_end/flambda2.0/simplify/env \
+        -I middle_end/flambda2.0/simplify/typing_helpers \
+        -I middle_end/flambda2.0/terms \
+        -I middle_end/flambda2.0/to_cmm \
+        -I middle_end/flambda2.0/types \
+        -I middle_end/flambda2.0/types/basic \
+        -I middle_end/flambda2.0/types/env \
+        -I middle_end/flambda2.0/types/kinds \
+        -I middle_end/flambda2.0/types/structures \
+        -I middle_end/flambda2.0/types/type_of_kind \
+        -I middle_end/flambda2.0/types/type_of_kind/boilerplate \
+        -I middle_end/flambda2.0/unboxing \
+        -I middle_end/flambda2.0/utils \
         -I asmcomp -I asmcomp/debug \
         -I driver -I toplevel
 
@@ -77,8 +95,9 @@ UTILS=utils/config.cmo utils/build_path_prefix_map.cmo utils/misc.cmo \
 	utils/clflags.cmo utils/profile.cmo utils/load_path.cmo \
 	utils/terminfo.cmo utils/ccomp.cmo utils/warnings.cmo \
 	utils/consistbl.cmo utils/strongly_connected_components.cmo \
+	utils/one_bit_fewer.cmo \
 	utils/targetint.cmo utils/int_replace_polymorphic_compare.cmo \
-	utils/domainstate.cmo
+	utils/domainstate.cmo utils/printing_cache.cmo
 
 PARSING=parsing/location.cmo parsing/longident.cmo \
   parsing/docstrings.cmo parsing/syntaxerr.cmo \
@@ -108,7 +127,7 @@ TYPING=typing/ident.cmo typing/path.cmo \
   typing/rec_check.cmo typing/typecore.cmo typing/typeclass.cmo \
   typing/typemod.cmo
 
-LAMBDA=lambda/lambda.cmo \
+LAMBDA=lambda/tag.cmo lambda/lambda.cmo \
   lambda/debuginfo.cmo lambda/printlambda.cmo \
   lambda/switch.cmo lambda/matching.cmo \
   lambda/translobj.cmo lambda/translattribute.cmo \
@@ -150,6 +169,12 @@ ifeq ($(ARCH),amd64)
 ARCH_SPECIFIC_ASMCOMP=$(INTEL_ASM)
 endif
 
+ASMCOMP_FLAMBDA2=\
+  middle_end/flambda2.0/to_cmm/un_cps_helper.cmo \
+  middle_end/flambda2.0/to_cmm/un_cps_closure.cmo \
+  middle_end/flambda2.0/to_cmm/un_cps_env.cmo \
+  middle_end/flambda2.0/to_cmm/un_cps.cmo
+
 ASMCOMP=\
   $(ARCH_SPECIFIC_ASMCOMP) \
   asmcomp/arch.cmo \
@@ -162,6 +187,7 @@ ASMCOMP=\
   asmcomp/cmmgen_state.cmo \
   asmcomp/cmm_helpers.cmo \
   asmcomp/cmmgen.cmo \
+  $(ASMCOMP_FLAMBDA2) \
   asmcomp/interval.cmo \
   asmcomp/printmach.cmo asmcomp/selectgen.cmo \
   asmcomp/regtype.cmo \
@@ -194,120 +220,171 @@ MIDDLE_END_CLOSURE=\
   middle_end/closure/closure.cmo \
   middle_end/closure/closure_middle_end.cmo
 
-# Owing to dependencies through [Compilenv], which would be
-# difficult to remove, some of the lower parts of Flambda (anything that is
-# saved in a .cmx file) have to be included in the [MIDDLE_END] stanza, below.
-MIDDLE_END_FLAMBDA=\
-  middle_end/flambda/import_approx.cmo \
-  middle_end/flambda/lift_code.cmo \
-  middle_end/flambda/closure_conversion_aux.cmo \
-  middle_end/flambda/closure_conversion.cmo \
-  middle_end/flambda/initialize_symbol_to_let_symbol.cmo \
-  middle_end/flambda/lift_let_to_initialize_symbol.cmo \
-  middle_end/flambda/find_recursive_functions.cmo \
-  middle_end/flambda/invariant_params.cmo \
-  middle_end/flambda/inconstant_idents.cmo \
-  middle_end/flambda/alias_analysis.cmo \
-  middle_end/flambda/lift_constants.cmo \
-  middle_end/flambda/share_constants.cmo \
-  middle_end/flambda/simplify_common.cmo \
-  middle_end/flambda/remove_unused_arguments.cmo \
-  middle_end/flambda/remove_unused_closure_vars.cmo \
-  middle_end/flambda/remove_unused_program_constructs.cmo \
-  middle_end/flambda/simplify_boxed_integer_ops.cmo \
-  middle_end/flambda/simplify_primitives.cmo \
-  middle_end/flambda/inlining_stats_types.cmo \
-  middle_end/flambda/inlining_stats.cmo \
-  middle_end/flambda/inline_and_simplify_aux.cmo \
-  middle_end/flambda/remove_free_vars_equal_to_args.cmo \
-  middle_end/flambda/extract_projections.cmo \
-  middle_end/flambda/augment_specialised_args.cmo \
-  middle_end/flambda/unbox_free_vars_of_closures.cmo \
-  middle_end/flambda/unbox_specialised_args.cmo \
-  middle_end/flambda/unbox_closures.cmo \
-  middle_end/flambda/inlining_transforms.cmo \
-  middle_end/flambda/inlining_decision.cmo \
-  middle_end/flambda/inline_and_simplify.cmo \
-  middle_end/flambda/ref_to_variables.cmo \
-  middle_end/flambda/flambda_invariants.cmo \
-  middle_end/flambda/traverse_for_exported_symbols.cmo \
-  middle_end/flambda/build_export_info.cmo \
-  middle_end/flambda/closure_offsets.cmo \
-  middle_end/flambda/un_anf.cmo \
-  middle_end/flambda/flambda_to_clambda.cmo \
-  middle_end/flambda/flambda_middle_end.cmo
+MIDDLE_END_FLAMBDA2_COMPILENV_DEPS=\
+  middle_end/flambda2.0/compilenv_deps/flambda_colours.cmo \
+  middle_end/flambda2.0/compilenv_deps/linkage_name.cmo \
+  middle_end/flambda2.0/compilenv_deps/compilation_unit.cmo \
+  middle_end/flambda2.0/compilenv_deps/variable.cmo \
+  middle_end/flambda2.0/compilenv_deps/symbol.cmo
 
-MIDDLE_END_FLAMBDA2_LANGUAGE=\
-  middle_end/flambda2.0/language/allocated_const.cmo \
-  middle_end/flambda2.0/language/closure_element.cmo \
-  middle_end/flambda2.0/language/closure_id.cmo \
-  middle_end/flambda2.0/language/closure_origin.cmo \
-  middle_end/flambda2.0/language/code_id.cmo \
-  middle_end/flambda2.0/language/compilation_unit.cmo \
-  middle_end/flambda2.0/language/continuation.cmo \
-  middle_end/flambda2.0/language/discriminant.cmo \
-  middle_end/flambda2.0/language/export_id.cmo \
-  middle_end/flambda2.0/language/id_types.cmo \
-  middle_end/flambda2.0/language/immediate.cmo \
-  middle_end/flambda2.0/language/inline_attribute.cmo \
-  middle_end/flambda2.0/language/invalid_term_semantics.cmo \
-  middle_end/flambda2.0/language/kinded_parameter.cmo \
-  middle_end/flambda2.0/language/linkage_name.cmo \
-  middle_end/flambda2.0/language/num_continuation_uses.cmo \
-  middle_end/flambda2.0/language/parameter.cmo \
-  middle_end/flambda2.0/language/recursive.cmo \
-  middle_end/flambda2.0/language/scope_level.cmo \
-  middle_end/flambda2.0/language/set_of_closures_origin.cmo \
-  middle_end/flambda2.0/language/specialise_attribute.cmo \
-  middle_end/flambda2.0/language/tag.cmo \
-  middle_end/flambda2.0/language/var_within_closure.cmo \
-  middle_end/flambda2.0/language/symbol.cmo \
-  middle_end/flambda2.0/language/variable.cmo \
-  middle_end/flambda2.0/language/name.cmo \
-  middle_end/flambda2.0/language/simple.cmo \
-  middle_end/flambda2.0/language/bindable_name.cmo \
-  middle_end/flambda2.0/language/name_permutation.cmo \
-  middle_end/flambda2.0/language/name_occurrences.cmo \
-  middle_end/flambda2.0/language/name_abstraction.cmo \
-  middle_end/flambda2.0/language/continuation_counts.cmo \
-  middle_end/flambda2.0/language/number_adjuncts.cmo \
-  middle_end/flambda2.0/language/flambda_primitive.cmo \
-  middle_end/flambda2.0/language/invariant_env.cmo \
-  middle_end/flambda2.0/language/exn_continuation.cmo \
-  middle_end/flambda2.0/language/expr_std.cmo \
-  middle_end/flambda2.0/language/call_kind.cmo \
-  middle_end/flambda2.0/language/trap_action.cmo \
-  middle_end/flambda2.0/language/apply_cont_expr.cmo \
-  middle_end/flambda2.0/language/apply_expr.cmo \
-  middle_end/flambda2.0/language/switch_expr.cmo \
-  middle_end/flambda2.0/language/flambda.cmo \
-  middle_end/flambda2.0/language/flambda_static.cmo \
-  middle_end/flambda2.0/language/flambda_utils.cmo
+MIDDLE_END_FLAMBDA2_BASIC=\
+  middle_end/flambda2.0/basic/closure_element.cmo \
+  middle_end/flambda2.0/basic/continuation.cmo \
+  middle_end/flambda2.0/basic/name.cmo \
+  middle_end/flambda2.0/basic/var_within_closure.cmo \
+  middle_end/flambda2.0/naming/name_mode.cmo \
+  middle_end/flambda2.0/naming/permutation.cmo \
+  middle_end/flambda2.0/naming/name_permutation.cmo \
+  middle_end/flambda2.0/naming/name_occurrences.cmo \
+  middle_end/flambda2.0/basic/immediate.cmo \
+  middle_end/flambda2.0/types/kinds/flambda_kind.cmo \
+  middle_end/flambda2.0/inlining/rec_info.cmo \
+  middle_end/flambda2.0/basic/simple.cmo \
+  middle_end/flambda2.0/basic/closure_id.cmo \
+  middle_end/flambda2.0/basic/parameter.cmo \
+  middle_end/flambda2.0/basic/kinded_parameter.cmo \
+  middle_end/flambda2.0/basic/invariant_env.cmo \
+  middle_end/flambda2.0/basic/expr_std.cmo \
+  middle_end/flambda2.0/basic/trap_action.cmo \
+  middle_end/flambda2.0/basic/exn_continuation.cmo \
+  middle_end/flambda2.0/basic/inline_attribute.cmo \
+  middle_end/flambda2.0/basic/id_types.cmo \
+  middle_end/flambda2.0/basic/code_id.cmo \
+  middle_end/flambda2.0/basic/coeffects.cmo \
+  middle_end/flambda2.0/basic/effects.cmo \
+  middle_end/flambda2.0/basic/export_id.cmo \
+  middle_end/flambda2.0/terms/flambda_primitive.cmo \
+  middle_end/flambda2.0/basic/recursive.cmo \
+  middle_end/flambda2.0/basic/scope.cmo \
+  middle_end/flambda2.0/basic/invalid_term_semantics.cmo \
+  middle_end/flambda2.0/basic/set_of_closures_origin.cmo \
+  middle_end/flambda2.0/basic/num_continuation_uses.cmo \
+  middle_end/flambda2.0/basic/function_decl_intf.cmo \
+  middle_end/flambda2.0/basic/effects_and_coeffects.cmo \
+  middle_end/flambda2.0/basic/continuation_counts.cmo \
+  middle_end/flambda2.0/basic/closure_origin.cmo \
+  middle_end/flambda2.0/basic/apply_cont_rewrite_id.cmo \
+  middle_end/flambda2.0/basic/continuation_extra_params_and_args.cmo
+
+MIDDLE_END_FLAMBDA2_NAMING=\
+  middle_end/flambda2.0/naming/contains_names.cmo \
+  middle_end/flambda2.0/naming/with_delayed_permutation.cmo \
+  middle_end/flambda2.0/naming/var_in_binding_pos.cmo \
+  middle_end/flambda2.0/naming/bindable.cmo \
+  middle_end/flambda2.0/naming/bindable_let_bound.cmo \
+  middle_end/flambda2.0/naming/bindable_continuation.cmo \
+  middle_end/flambda2.0/naming/bindable_exn_continuation.cmo \
+  middle_end/flambda2.0/naming/bindable_variable_in_types.cmo \
+  middle_end/flambda2.0/naming/name_abstraction.cmo \
+  middle_end/flambda2.0/naming/name_in_binding_pos.cmo \
+  middle_end/flambda2.0/naming/bindable_variable_in_terms.cmo
+
+MIDDLE_END_FLAMBDA2_TYPES=\
+  middle_end/flambda2.0/types/basic/var_within_closure_set.cmo \
+  middle_end/flambda2.0/types/kinds/flambda_arity.cmo \
+  middle_end/flambda2.0/types/env/binding_time.cmo \
+  middle_end/flambda2.0/types/env/alias.cmo \
+  middle_end/flambda2.0/types/env/aliases.cmo \
+  middle_end/flambda2.0/types/basic/meet_or_join_op.cmo \
+  middle_end/flambda2.0/types/basic/or_bottom.cmo \
+  middle_end/flambda2.0/types/basic/string_info.cmo \
+  middle_end/flambda2.0/types/structures/lattice_ops_intf.cmo \
+  middle_end/flambda2.0/types/basic/or_bottom_or_absorbing.cmo \
+  middle_end/flambda2.0/types/basic/or_unknown.cmo \
+  middle_end/flambda2.0/types/basic/or_unknown_or_bottom.cmo \
+  middle_end/flambda2.0/types/structures/type_structure_intf.cmo \
+  middle_end/flambda2.0/types/structures/product_intf.cmo \
+  middle_end/flambda2.0/types/structures/row_like_maps_to_intf.cmo \
+  middle_end/flambda2.0/types/structures/set_of_closures_contents.cmo \
+  middle_end/flambda2.0/types/basic/tag_and_size.cmo \
+  middle_end/flambda2.0/types/basic/tag_or_unknown_and_size.cmo \
+  middle_end/flambda2.0/types/basic/term_language_function_declaration.cmo \
+  middle_end/flambda2.0/types/type_descr_intf.cmo \
+  middle_end/flambda2.0/types/type_head_intf.cmo \
+  middle_end/flambda2.0/types/flambda_type0.cmo \
+  middle_end/flambda2.0/types/type_system_intf.cmo \
+  middle_end/flambda2.0/types/basic/unit.cmo \
+  middle_end/flambda2.0/types/basic/or_absorbing.cmo \
+  middle_end/flambda2.0/types/basic/closure_id_set.cmo \
+  middle_end/flambda2.0/types/basic/closure_id_or_unknown_and_var_within_closure_set.cmo \
+  middle_end/flambda2.0/types/basic/closure_id_and_var_within_closure_set.cmo
+
+MIDDLE_END_FLAMBDA2_TERMS=\
+  middle_end/flambda2.0/terms/apply_cont_expr.cmo \
+  middle_end/flambda2.0/terms/call_kind.cmo \
+  middle_end/flambda2.0/terms/apply_expr.cmo \
+  middle_end/flambda2.0/terms/switch_expr.cmo \
+  middle_end/flambda2.0/terms/flambda.cmo \
+  middle_end/flambda2.0/terms/flambda_static.cmo \
+  middle_end/flambda2.0/types/flambda_type.cmo
+
+MIDDLE_END_FLAMBDA2_SIMPLIFY=\
+  middle_end/flambda2.0/simplify/env/continuation_use_kind.cmo \
+  middle_end/flambda2.0/simplify/basic/apply_cont_rewrite.cmo \
+  middle_end/flambda2.0/simplify/env/continuation_env_and_param_types.cmo \
+  middle_end/flambda2.0/simplify/basic/continuation_in_env.cmo \
+  middle_end/flambda2.0/simplify/typing_helpers/one_continuation_use.cmo \
+  middle_end/flambda2.0/simplify/typing_helpers/continuation_uses.cmo \
+  middle_end/flambda2.0/simplify/env/continuation_uses_env.cmo \
+  middle_end/flambda2.0/simplify/env/continuation_uses_env_intf.cmo \
+  middle_end/flambda2.0/simplify/typing_helpers/lifted_constant.cmo \
+  middle_end/flambda2.0/simplify/env/simplify_env_and_result_intf.cmo \
+  middle_end/flambda2.0/simplify/env/simplify_env_and_result.cmo \
+  middle_end/flambda2.0/simplify/env/downwards_acc.cmo \
+  middle_end/flambda2.0/simplify/env/upwards_acc.cmo \
+  middle_end/flambda2.0/inlining/inlining_cost.cmo \
+  middle_end/flambda2.0/inlining/inlining_decision.cmo \
+  middle_end/flambda2.0/inlining/inlining_transforms.cmo \
+  middle_end/flambda2.0/simplify/simplify_simple.cmo \
+  middle_end/flambda2.0/simplify/simplify_import.cmo \
+  middle_end/flambda2.0/unboxing/unbox_continuation_params.cmo \
+  middle_end/flambda2.0/simplify/basic/reachable.cmo \
+  middle_end/flambda2.0/simplify/simplify_common.cmo \
+  middle_end/flambda2.0/simplify/simplify_variadic_primitive.cmo \
+  middle_end/flambda2.0/simplify/typing_helpers/number_adjuncts.cmo \
+  middle_end/flambda2.0/simplify/simplify_unary_primitive.cmo \
+  middle_end/flambda2.0/simplify/simplify_ternary_primitive.cmo \
+  middle_end/flambda2.0/simplify/simplify_binary_primitive.cmo \
+  middle_end/flambda2.0/simplify/simplify_primitive.cmo \
+  middle_end/flambda2.0/simplify/typing_helpers/continuation_handler_like_intf.cmo \
+  middle_end/flambda2.0/simplify/typing_helpers/reification.cmo \
+  middle_end/flambda2.0/utils/monad.cmo \
+  middle_end/flambda2.0/utils/top_closure.cmo \
+  middle_end/flambda2.0/simplify/simplify.cmo
 
 MIDDLE_END_FLAMBDA2_FROM_LAMBDA=\
   middle_end/flambda2.0/from_lambda/prepare_lambda.cmo \
   middle_end/flambda2.0/from_lambda/ilambda.cmo \
-  middle_end/flambda2.0/from_lambda/cps_conversion.cmo \
-  middle_end/flambda2.0/from_lambda/eliminate_mutable_vars.cmo \
-  middle_end/flambda2.0/from_lambda/lambda_to_flambda_primitives.cmo \
   middle_end/flambda2.0/from_lambda/closure_conversion_aux.cmo \
-  middle_end/flambda2.0/from_lambda/closure_conversion.cmo
+  middle_end/flambda2.0/from_lambda/lambda_conversions.cmo \
+  middle_end/flambda2.0/from_lambda/lambda_to_flambda_primitives_helpers.cmo \
+  middle_end/flambda2.0/from_lambda/lambda_to_flambda_primitives.cmo \
+  middle_end/flambda2.0/from_lambda/closure_conversion.cmo \
+  middle_end/flambda2.0/from_lambda/cps_conversion.cmo \
+  middle_end/flambda2.0/from_lambda/eliminate_mutable_vars.cmo
+
+
+MIDDLE_END_FLAMBDA2_PARSER=\
+  middle_end/flambda2.0/parser/fexpr.cmo \
+  middle_end/flambda2.0/parser/print_fexpr.cmo \
+  middle_end/flambda2.0/parser/fexpr_to_flambda.cmo \
+  middle_end/flambda2.0/parser/fexpr_to_ilambda.cmo \
+  middle_end/flambda2.0/parser/flambda_parser.cmo \
+  middle_end/flambda2.0/parser/flambda_lex.cmo \
+  middle_end/flambda2.0/parser/parse_ilambda.cmo
 
 MIDDLE_END_FLAMBDA2=\
-  $(MIDDLE_END_FLAMBDA2_LANGUAGE) \
+  $(MIDDLE_END_FLAMBDA2_BASIC) \
+  $(MIDDLE_END_FLAMBDA2_NAMING) \
+  $(MIDDLE_END_FLAMBDA2_TYPES) \
+  $(MIDDLE_END_FLAMBDA2_TERMS) \
+  $(MIDDLE_END_FLAMBDA2_SIMPLIFY) \
   $(MIDDLE_END_FLAMBDA2_FROM_LAMBDA) \
+  $(MIDDLE_END_FLAMBDA2_PARSER) \
   middle_end/flambda2.0/flambda2_middle_end.cmo
-
-#  middle_end/flambda2.0/language/function_decl_intf.cmo
 
 MIDDLE_END=\
   middle_end/internal_variable_names.cmo \
-  middle_end/linkage_name.cmo \
-  middle_end/compilation_unit.cmo \
-  middle_end/variable.cmo \
-  middle_end/flambda/base_types/closure_element.cmo \
-  middle_end/flambda/base_types/closure_id.cmo \
-  middle_end/symbol.cmo \
   middle_end/backend_var.cmo \
   middle_end/clambda_primitives.cmo \
   middle_end/printclambda_primitives.cmo \
@@ -315,31 +392,9 @@ MIDDLE_END=\
   middle_end/printclambda.cmo \
   middle_end/semantics_of_primitives.cmo \
   middle_end/convert_primitives.cmo \
-  middle_end/flambda/base_types/id_types.cmo \
-  middle_end/flambda/base_types/export_id.cmo \
-  middle_end/flambda/base_types/tag.cmo \
-  middle_end/flambda/base_types/mutable_variable.cmo \
-  middle_end/flambda/base_types/set_of_closures_id.cmo \
-  middle_end/flambda/base_types/set_of_closures_origin.cmo \
-  middle_end/flambda/base_types/closure_origin.cmo \
-  middle_end/flambda/base_types/var_within_closure.cmo \
-  middle_end/flambda/base_types/static_exception.cmo \
-  middle_end/flambda/pass_wrapper.cmo \
-  middle_end/flambda/allocated_const.cmo \
-  middle_end/flambda/parameter.cmo \
-  middle_end/flambda/projection.cmo \
-  middle_end/flambda/flambda.cmo \
-  middle_end/flambda/flambda_iterators.cmo \
-  middle_end/flambda/flambda_utils.cmo \
-  middle_end/flambda/freshening.cmo \
-  middle_end/flambda/effect_analysis.cmo \
-  middle_end/flambda/inlining_cost.cmo \
-  middle_end/flambda/simple_value_approx.cmo \
-  middle_end/flambda/export_info.cmo \
-  middle_end/flambda/export_info_for_pack.cmo \
+  $(MIDDLE_END_FLAMBDA2_COMPILENV_DEPS) \
   middle_end/compilenv.cmo \
   $(MIDDLE_END_CLOSURE) \
-  $(MIDDLE_END_FLAMBDA) \
   $(MIDDLE_END_FLAMBDA2)
 
 OPTCOMP=$(MIDDLE_END) $(ASMCOMP)
@@ -352,6 +407,8 @@ OPTTOPLEVEL=toplevel/genprintval.cmo toplevel/opttoploop.cmo \
 BYTESTART=driver/main.cmo
 
 OPTSTART=driver/optmain.cmo
+
+ILAMBDASTART=driver/ilambdac.cmo
 
 TOPLEVELSTART=toplevel/topstart.cmo
 
@@ -823,13 +880,10 @@ installoptopt:
            middle_end/closure/*.cmx \
            middle_end/flambda/*.cmx \
            middle_end/flambda/base_types/*.cmx \
-<<<<<<< HEAD
 	   asmcomp/debug/*.cmx \
-=======
            middle_end/flambda2.0/*.cmx \
 	   middle_end/flambda2.0/from_lambda/*.cmx \
 	   middle_end/flambda2.0/language/*.cmx \
->>>>>>> 9f33c8389a... Flambda 2.0 (4.10 rebase 2019-10-15)
           "$(INSTALL_COMPLIBDIR)"
 	$(INSTALL_DATA) \
 	   compilerlibs/*.cmxa compilerlibs/*.$(A) \
@@ -861,14 +915,11 @@ ifeq "$(INSTALL_SOURCE_ARTIFACTS)" "true"
            lambda/*.ml \
 	   toplevel/*.ml middle_end/*.ml middle_end/closure/*.ml \
      middle_end/flambda/*.ml middle_end/flambda/base_types/*.ml \
-<<<<<<< HEAD
 	   asmcomp/*.ml \
 	   asmcmp/debug/*.ml \
-=======
-	   asmcomp/*.ml middle_end/flambda2.0/*.ml \
+	   middle_end/flambda2.0/*.ml \
 	   middle_end/flambda2.0/from_lambda/*.ml \
 	   middle_end/flambda2.0/language/*.ml \
->>>>>>> 9f33c8389a... Flambda 2.0 (4.10 rebase 2019-10-15)
 	   "$(INSTALL_COMPLIBDIR)"
 endif
 
@@ -923,6 +974,10 @@ partialclean::
 
 ocamlopt: compilerlibs/ocamlcommon.cma compilerlibs/ocamloptcomp.cma \
           $(OPTSTART)
+	$(CAMLC) $(LINKFLAGS) -o $@ $^
+
+ilambdac: compilerlibs/ocamlcommon.cma compilerlibs/ocamloptcomp.cma \
+          $(ILAMBDASTART)
 	$(CAMLC) $(LINKFLAGS) -o $@ $^
 
 partialclean::
@@ -1012,6 +1067,10 @@ partialclean::
 
 ocamlopt.opt: compilerlibs/ocamlcommon.cmxa compilerlibs/ocamloptcomp.cmxa \
               $(OPTSTART:.cmo=.cmx)
+	$(CAMLOPT_CMD) $(LINKFLAGS) -o $@ $^
+
+ilambdac.opt: compilerlibs/ocamlcommon.cmxa compilerlibs/ocamloptcomp.cmxa \
+              $(ILAMBDASTART:.cmo=.cmx)
 	$(CAMLOPT_CMD) $(LINKFLAGS) -o $@ $^
 
 partialclean::
@@ -1202,7 +1261,6 @@ beforedepend:: parsing/camlinternalMenhirLib.ml \
 
 partialclean:: partialclean-menhir
 
-
 # OCamldoc
 
 .PHONY: ocamldoc
@@ -1222,6 +1280,35 @@ ocamltest.opt: ocamlc.opt ocamlyacc ocamllex
 
 partialclean::
 	$(MAKE) -C ocamltest clean
+
+# Flambda2 recursive modules black magic
+
+middle_end/flambda2.0/types/flambda_type0.ml: \
+  middle_end/flambda2.0/types/template/flambda_type0.templ.ml \
+  middle_end/flambda2.0/types/rec_modules
+	cd middle_end/flambda2.0/types && \
+	  ../scripts/assemble_rec_modules.sh template/flambda_type0.templ.ml \
+	    rec_modules flambda_type0.ml
+
+middle_end/flambda2.0/terms/flambda.ml: \
+  middle_end/flambda2.0/terms/template/flambda.templ.ml \
+  middle_end/flambda2.0/terms/rec_modules
+	cd middle_end/flambda2.0/terms && \
+	  ../scripts/assemble_rec_modules.sh template/flambda.templ.ml \
+	    rec_modules flambda.ml
+
+middle_end/flambda2.0/simplify/simplify.ml: \
+  middle_end/flambda2.0/simplify/template/simplify.templ.ml \
+  middle_end/flambda2.0/simplify/rec_modules
+	cd middle_end/flambda2.0/simplify && \
+	  ../scripts/assemble_rec_modules.sh template/simplify.templ.ml \
+	    rec_modules simplify.ml
+
+beforedepend:: \
+  middle_end/flambda2.0/types/flambda_type0.ml \
+  middle_end/flambda2.0/terms/flambda.ml \
+  middle_end/flambda2.0/simplify/simplify.ml
+
 
 # Documentation
 
@@ -1417,9 +1504,28 @@ partialclean::
 	for d in utils parsing typing bytecomp asmcomp middle_end file_formats \
            lambda middle_end/closure middle_end/flambda \
            middle_end/flambda/base_types asmcomp/debug \
+           middle_end/flambda2.0/compilenv_deps \
            middle_end/flambda2.0 \
-	   middle_end/flambda2.0/from_lambda \
-	   middle_end/flambda2.0/language \
+           middle_end/flambda2.0/basic \
+           middle_end/flambda2.0/from_lambda \
+           middle_end/flambda2.0/inlining \
+           middle_end/flambda2.0/naming \
+           middle_end/flambda2.0/parser \
+           middle_end/flambda2.0/simplify \
+           middle_end/flambda2.0/simplify/basic \
+           middle_end/flambda2.0/simplify/env \
+           middle_end/flambda2.0/simplify/typing_helpers \
+           middle_end/flambda2.0/terms \
+           middle_end/flambda2.0/to_cmm \
+           middle_end/flambda2.0/types \
+           middle_end/flambda2.0/types/basic \
+           middle_end/flambda2.0/types/env \
+           middle_end/flambda2.0/types/kinds \
+           middle_end/flambda2.0/types/structures \
+           middle_end/flambda2.0/types/type_of_kind \
+           middle_end/flambda2.0/types/type_of_kind/boilerplate \
+           middle_end/flambda2.0/unboxing \
+           middle_end/flambda2.0/utils \
            driver toplevel tools; do \
 	  rm -f $$d/*.cm[ioxt] $$d/*.cmti $$d/*.annot $$d/*.$(S) \
 	    $$d/*.$(O) $$d/*.$(SO); \
@@ -1430,9 +1536,28 @@ depend: beforedepend
 	(for d in utils parsing typing bytecomp asmcomp middle_end \
          lambda file_formats middle_end/closure middle_end/flambda \
          middle_end/flambda/base_types asmcomp/debug \
+         middle_end/flambda2.0/compilenv_deps \
          middle_end/flambda2.0 \
+         middle_end/flambda2.0/basic \
          middle_end/flambda2.0/from_lambda \
-         middle_end/flambda2.0/language \
+         middle_end/flambda2.0/inlining \
+         middle_end/flambda2.0/naming \
+         middle_end/flambda2.0/parser \
+         middle_end/flambda2.0/simplify \
+         middle_end/flambda2.0/simplify/basic \
+         middle_end/flambda2.0/simplify/env \
+         middle_end/flambda2.0/simplify/typing_helpers \
+         middle_end/flambda2.0/terms \
+         middle_end/flambda2.0/to_cmm \
+         middle_end/flambda2.0/types \
+         middle_end/flambda2.0/types/basic \
+         middle_end/flambda2.0/types/env \
+         middle_end/flambda2.0/types/kinds \
+         middle_end/flambda2.0/types/structures \
+         middle_end/flambda2.0/types/type_of_kind \
+         middle_end/flambda2.0/types/type_of_kind/boilerplate \
+         middle_end/flambda2.0/unboxing \
+         middle_end/flambda2.0/utils \
          driver toplevel; \
          do $(CAMLDEP) $(DEPFLAGS) $(DEPINCLUDES) $$d/*.mli $$d/*.ml || exit; \
          done) > .depend

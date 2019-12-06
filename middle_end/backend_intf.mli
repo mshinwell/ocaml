@@ -26,11 +26,11 @@ module type S = sig
       external (Value_extern), attempt to find a more informative
       approximation from a previously-written compilation artifact.  In the
       native code backend, for example, this might consult a .cmx file. *)
-  val really_import_approx : Simple_value_approx.t -> Simple_value_approx.t
+  (* val really_import_approx : Simple_value_approx.t -> Simple_value_approx.t *)
 
-  val import_symbol : Symbol.t -> Simple_value_approx.t
+  (* val import_symbol : Symbol.t -> Simple_value_approx.t *)
 
-  val closure_symbol : Closure_id.t -> Symbol.t
+  (* val closure_symbol : Closure_id.t -> Symbol.t *)
 
   (** The natural size of an integer on the target architecture
       (cf. [Arch.size_int] in the native code backend). *)

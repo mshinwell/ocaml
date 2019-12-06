@@ -25,8 +25,8 @@ open Cmx_format
    mshinwell: deferred CR, this has been addressed in the export info
    improvement feature.
 *)
-val imported_sets_of_closures_table
-  : Simple_value_approx.function_declarations option Set_of_closures_id.Tbl.t
+(* val imported_sets_of_closures_table
+ *   : Simple_value_approx.function_declarations option Set_of_closures_id.Tbl.t *)
         (* flambda-only *)
 
 val reset: ?packname:string -> string -> unit
@@ -85,13 +85,13 @@ val record_global_approx_toplevel: unit -> unit
         (* Record the current approximation for the current toplevel phrase
            clambda-only *)
 
-val set_export_info: Export_info.t -> unit
+(* val set_export_info: Export_info.t -> unit *)
         (* Record the information of the unit being compiled
            flambda-only *)
-val approx_env: unit -> Export_info.t
+(* val approx_env: unit -> Export_info.t *)
         (* Returns all the information loaded from external compilation units
            flambda-only *)
-val approx_for_global: Compilation_unit.t -> Export_info.t option
+(* val approx_for_global: Compilation_unit.t -> Export_info.t option *)
         (* Loads the exported information declaring the compilation_unit
            flambda-only *)
 
@@ -102,13 +102,6 @@ val need_send_fun: int -> unit
            message sending) function with the given arity *)
 
 val new_const_symbol : unit -> string
-val closure_symbol : Closure_id.t -> Symbol.t
-        (* Symbol of a function if the function is
-           closed (statically allocated)
-           flambda-only *)
-val function_label : Closure_id.t -> string
-        (* linkage name of the code of a function
-           flambda-only *)
 
 val new_structured_constant:
   Clambda.ustructured_constant ->

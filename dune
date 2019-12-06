@@ -40,8 +40,6 @@
 (copy_files# lambda/*.ml{,i})
 (copy_files# middle_end/*.ml{,i})
 (copy_files# middle_end/closure/*.ml{,i})
-(copy_files# middle_end/flambda/*.ml{,i})
-(copy_files# middle_end/flambda/base_types/*.ml{,i})
 
 (library
  (name ocamlcommon)
@@ -49,13 +47,15 @@
  (flags (:standard -principal -nostdlib))
  (libraries stdlib)
  (modules_without_implementation
-   annot asttypes cmo_format outcometree parsetree)
+   annot asttypes cmo_format outcometree parsetree targetint_intf)
  (modules
    ;; UTILS
    config build_path_prefix_map misc identifiable numbers arg_helper clflags
    profile terminfo ccomp warnings consistbl strongly_connected_components
-   one_bit_fewer targetint_intf targetint load_path
+   one_bit_fewer targetint load_path
    int_replace_polymorphic_compare printing_cache
+   ; manual update: mli only files
+   targetint_intf
 
    ;; PARSING
    location longident docstrings syntaxerr ast_helper camlinternalMenhirLib
@@ -107,44 +107,20 @@
  (name ocamlmiddleend)
  (wrapped false)
  (flags (:standard -principal -nostdlib))
- (libraries stdlib ocamlcommon flambda2)
+ (libraries stdlib ocamlcommon flambda2deps flambda2)
  (modules_without_implementation
-   cmx_format cmxs_format backend_intf inlining_decision_intf
-   simplify_boxed_integer_ops_intf)
+   cmx_format cmxs_format backend_intf)
  (modules
    ;; file_formats/
    cmx_format cmxs_format
 
    ;; middle_end/
-   backend_intf backend_var backend_var clambda clambda_primitives
-   compilation_unit compilenv convert_primitives internal_variable_names
-   linkage_name printclambda printclambda_primitives semantics_of_primitives
-   symbol variable
+   backend_intf backend_var clambda clambda_primitives
+   compilenv convert_primitives internal_variable_names
+   printclambda printclambda_primitives semantics_of_primitives
 
    ;; middle_end/closure/
    closure closure_middle_end
-
-   ;; middle_end/flambda/base_types/
-   closure_element closure_id closure_origin export_id id_types mutable_variable
-   set_of_closures_id set_of_closures_origin static_exception
-   var_within_closure
-
-   ;; middle_end/flambda/
-   alias_analysis allocated_const augment_specialised_args build_export_info
-   closure_conversion closure_conversion_aux closure_offsets effect_analysis
-   export_info export_info_for_pack extract_projections find_recursive_functions
-   flambda flambda_invariants flambda_iterators flambda_middle_end
-   flambda_to_clambda flambda_utils freshening import_approx inconstant_idents
-   initialize_symbol_to_let_symbol inline_and_simplify inline_and_simplify_aux
-   inlining_cost inlining_decision inlining_decision_intf inlining_stats
-   inlining_stats_types inlining_transforms invariant_params lift_code
-   lift_constants lift_let_to_initialize_symbol parameter pass_wrapper
-   projection ref_to_variables remove_free_vars_equal_to_args
-   remove_unused_arguments remove_unused_closure_vars
-   remove_unused_program_constructs share_constants simple_value_approx
-   simplify_boxed_integer_ops simplify_boxed_integer_ops_intf simplify_common
-   simplify_primitives traverse_for_exported_symbols un_anf unbox_closures
-   unbox_free_vars_of_closures unbox_specialised_args
  )
 )
 
@@ -166,9 +142,9 @@
 (library
  (name ocamloptcomp)
  (wrapped false)
- (flags (:standard -principal -nostdlib))
- (libraries stdlib ocamlcommon ocamlmiddleend ocamloptcommon flambda2
-            flambda2_to_cmm)
+ (flags (:standard -principal -nostdlib -open Flambda2 -open Flambda2_to_cmm))
+ (libraries stdlib ocamlcommon ocamlmiddleend ocamloptcommon flambda2deps
+            flambda2 flambda2_to_cmm)
  (modules
    ;; asmcomp/
    afl_instrument asmgen asmlibrarian asmlink asmpackager branch_relaxation
@@ -207,7 +183,7 @@
 (executable
  (name ilambdac)
  (modes byte)
- (flags (:standard -principal -nostdlib -cclib "-I runtime"))
+ (flags (:standard -principal -nostdlib -cclib "-I runtime" -open Flambda2))
  (libraries ocamloptcommon ocamloptcomp ocamlmiddleend flambda2 ocamlcommon runtime stdlib)
  (modules ilambdac))
 

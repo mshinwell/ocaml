@@ -2,7 +2,7 @@
   (targets flambda.ml)
   (deps
     rec_modules
-    flambda.templ.ml
+    template/flambda.templ.ml
     continuation_handler.rec.ml
     continuation_handler.rec.mli
     continuation_handlers.rec.ml
@@ -31,7 +31,7 @@
     set_of_closures.rec.mli
   )
   (action (run ../scripts/assemble_rec_modules.sh
-               flambda.templ.ml
+               template/flambda.templ.ml
                rec_modules
                flambda.ml))
 )

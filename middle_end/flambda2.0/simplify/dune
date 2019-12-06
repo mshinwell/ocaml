@@ -4,7 +4,7 @@
     rec_modules
     generic_simplify_let_cont.rec.ml
     generic_simplify_let_cont.rec.mli
-    simplify.templ.ml
+    template/simplify.templ.ml
     simplify_expr.rec.ml
     simplify_named.rec.ml
     simplify_static.rec.ml
@@ -15,7 +15,7 @@
     simplify_toplevel.rec.mli
   )
   (action (run ../scripts/assemble_rec_modules.sh
-               simplify.templ.ml
+               template/simplify.templ.ml
                rec_modules
                simplify.ml))
 )

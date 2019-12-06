@@ -101,35 +101,20 @@ let make_package_object ~ppf_dump members targetobj targetname coercion
     let prefixname = Filename.remove_extension objtemp in
     let required_globals = Ident.Set.empty in
     let program, middle_end =
-      if Config.flambda then
-        let main_module_block_size, code =
-          Translmod.transl_package_flambda components coercion
-        in
-        let code = Simplif.simplify_lambda code in
-        let program =
-          { Lambda.
-            code;
-            main_module_block_size;
-            module_ident;
-            required_globals;
-          }
-        in
-        program, Flambda_middle_end.lambda_to_clambda
-      else
-        let main_module_block_size, code =
-          Translmod.transl_store_package components
-            (Ident.create_persistent targetname) coercion
-        in
-        let code = Simplif.simplify_lambda code in
-        let program =
-          { Lambda.
-            code;
-            main_module_block_size;
-            module_ident;
-            required_globals;
-          }
-        in
-        program, Closure_middle_end.lambda_to_clambda
+      let main_module_block_size, code =
+        Translmod.transl_store_package components
+          (Ident.create_persistent targetname) coercion
+      in
+      let code = Simplif.simplify_lambda code in
+      let program =
+        { Lambda.
+          code;
+          main_module_block_size;
+          module_ident;
+          required_globals;
+        }
+      in
+      program, Closure_middle_end.lambda_to_clambda
     in
     Asmgen.compile_implementation ~backend
       ~filename:targetname
@@ -150,16 +135,9 @@ let make_package_object ~ppf_dump members targetobj targetname coercion
 
 (* Make the .cmx file for the package *)
 
-let get_export_info ui =
-  assert(Config.flambda);
-  match ui.ui_export_info with
-  | Clambda _ -> assert false
-  | Flambda info -> info
-
 let get_approx ui =
   assert(not Config.flambda);
   match ui.ui_export_info with
-  | Flambda _ -> assert false
   | Clambda info -> info
 
 let build_package_cmx members cmxfile =
@@ -177,42 +155,10 @@ let build_package_cmx members cmxfile =
       (fun m accu ->
         match m.pm_kind with PM_intf -> accu | PM_impl info -> info :: accu)
       members [] in
-  let pack_units =
-    List.fold_left
-      (fun set info ->
-         let unit_id = Compilenv.unit_id_from_name info.ui_name in
-         Compilation_unit.Set.add
-           (Compilenv.unit_for_global unit_id) set)
-      Compilation_unit.Set.empty units in
-  let units =
-    if Config.flambda then
-      List.map (fun info ->
-          { info with
-            ui_export_info =
-              Flambda
-                (Export_info_for_pack.import_for_pack ~pack_units
-                   ~pack:(Compilenv.current_unit ())
-                   (get_export_info info)) })
-        units
-    else
-      units
-  in
   let ui = Compilenv.current_unit_infos() in
   let ui_export_info =
-    if Config.flambda then
-      let ui_export_info =
-        List.fold_left (fun acc info ->
-            Export_info.merge acc (get_export_info info))
-          (Export_info_for_pack.import_for_pack ~pack_units
-             ~pack:(Compilenv.current_unit ())
-             (get_export_info ui))
-          units
-      in
-      Flambda ui_export_info
-    else
-      Clambda (get_approx ui)
+    Clambda (get_approx ui)
   in
-  Export_info_for_pack.clear_import_state ();
   let pkg_infos =
     { ui_name = ui.ui_name;
       ui_symbol = ui.ui_symbol;

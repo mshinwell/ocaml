@@ -144,28 +144,6 @@ let print_cmx_infos (ui, crc) =
       Format.fprintf Format.std_formatter "  %a@." Printclambda.approx approx
     end else
       Format.printf "Clambda unit@.";
-  | Flambda export ->
-    if not !no_approx || not !no_code then
-      printf "Flambda export information:\n"
-    else
-      printf "Flambda unit\n";
-    if not !no_approx then begin
-      let cu =
-        Compilation_unit.create (Ident.create_persistent ui.ui_name)
-          (Linkage_name.create "__dummy__")
-      in
-      Compilation_unit.set_current cu;
-      let root_symbols =
-        List.map (fun s ->
-            Symbol.of_global_linkage cu (Linkage_name.create ("caml"^s)))
-          ui.ui_defines
-      in
-      Format.printf "approximations@ %a@.@."
-        Export_info.print_approx (export, root_symbols)
-    end;
-    if not !no_code then
-      Format.printf "functions@ %a@.@."
-        Export_info.print_functions export
   end;
   let pr_funs _ fns =
     List.iter (fun arity -> printf " %d" arity) fns in
