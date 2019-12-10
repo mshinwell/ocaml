@@ -315,7 +315,7 @@ let rec expr env (e : Fexpr.expr) : E.t =
     if List.length args <> arity then
       Misc.fatal_errorf "wrong continuation arity %a" C.print cont;
     let args = List.map (simple env) args in
-    let apply_cont = Flambda.Apply_cont.create c ~args in
+    let apply_cont = Flambda.Apply_cont.create c ~args ~dbg:Debuginfo.none in
     E.create_apply_cont apply_cont
 
   | Switch { scrutinee; cases } ->

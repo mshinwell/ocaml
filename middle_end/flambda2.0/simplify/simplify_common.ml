@@ -91,7 +91,7 @@ let add_wrapper_for_fixed_arity_continuation0 uacc cont ~use_id arity =
     let args = List.map (fun param -> Simple.var param) params in
     let apply_cont_expr, _apply_cont, _extra_args =
       Apply_cont_rewrite.rewrite_use rewrite use_id
-        (Apply_cont.create cont ~args)
+        (Apply_cont.create cont ~args ~dbg:Debuginfo.none)
     in
     let new_cont = Continuation.create () in
     let new_handler =

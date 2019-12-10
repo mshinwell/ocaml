@@ -109,7 +109,10 @@ let inline dacc ~callee ~args function_decl
                   Expr.create_apply_cont (Apply_cont.create
                     ~trap_action
                     (Exn_continuation.exn_handler apply_exn_continuation)
-                    ~args:((Simple.var param) :: (List.map fst extra_args)))
+                    ~args:((Simple.var param) :: (List.map fst extra_args))
+                    ~dbg:Debuginfo.none) (* Backtrace building functions expect
+                                            compiler-generated raises not to
+                                            have any debug info *)
                 in
                 let params_and_handler =
                   Continuation_params_and_handler.create kinded_params ~handler

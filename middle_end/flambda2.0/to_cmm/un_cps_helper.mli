@@ -225,6 +225,9 @@ val trywith :
 (** Create a try_with structure. The [exn_var] is the variable bound to the catched
     exception in the handler. *)
 
+val raise_kind : Trap_action.raise_kind option -> Lambda.raise_kind
+(** Translate the raise kind found on Pop trap actions into a Cmm raise kind *)
+
 
 (** {2 Static jumps} *)
 

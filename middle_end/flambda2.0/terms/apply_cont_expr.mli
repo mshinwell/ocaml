@@ -28,6 +28,7 @@ val create
    : ?trap_action:Trap_action.t
   -> Continuation.t
   -> args:Simple.t list
+  -> dbg:Debuginfo.t
   -> t
 
 val goto : Continuation.t -> t
@@ -37,6 +38,8 @@ val continuation : t -> Continuation.t
 val args : t -> Simple.t list
 
 val trap_action : t -> Trap_action.t option
+
+val debuginfo : t -> Debuginfo.t
 
 val update_continuation : t -> Continuation.t -> t
 

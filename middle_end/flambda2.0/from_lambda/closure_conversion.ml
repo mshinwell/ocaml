@@ -390,7 +390,9 @@ let close_primitive t env ~let_bound_var named (prim : Lambda.primitive) ~args
     in
     let raise_kind = Some (LC.raise_kind raise_kind) in
     let trap_action = Trap_action.Pop { exn_handler; raise_kind; } in
-    let apply_cont = Flambda.Apply_cont.create ~trap_action exn_handler ~args in
+    let apply_cont =
+      Flambda.Apply_cont.create ~trap_action exn_handler ~args ~dbg
+    in
     (* Since raising of an exception doesn't terminate, we don't call [k]. *)
     Flambda.Expr.create_apply_cont apply_cont
   | prim, args ->
@@ -502,7 +504,9 @@ let rec close t env (ilam : Ilambda.t) : Expr.t =
             Pop { exn_handler; raise_kind = None; })
         trap_action
     in
-    let apply_cont = Flambda.Apply_cont.create ?trap_action cont ~args in
+    let apply_cont =
+      Flambda.Apply_cont.create ?trap_action cont ~args ~dbg:Debuginfo.none
+    in
     Flambda.Expr.create_apply_cont apply_cont
   | Switch (scrutinee, sw) ->
       let arms =
@@ -848,7 +852,9 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
     in
     let body : Expr.t =
       let fields = List.map (fun (_, var) -> Simple.var var) field_vars in
-      let apply_cont = Flambda.Apply_cont.create return_cont ~args:fields in
+      let apply_cont =
+        Flambda.Apply_cont.create return_cont ~args:fields ~dbg:Debuginfo.none
+      in
       Flambda.Expr.create_apply_cont apply_cont
     in
     List.fold_left (fun body (pos, var) ->

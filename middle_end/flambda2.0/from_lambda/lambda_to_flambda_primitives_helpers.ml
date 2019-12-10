@@ -137,7 +137,8 @@ let expression_for_failure ~backend exn_cont ~register_const_string
     [exn_bucket] @ extra_args
   in
   let apply_cont =
-    Expr.create_apply_cont (Apply_cont.create ~trap_action exn_handler ~args)
+    Expr.create_apply_cont
+      (Apply_cont.create ~trap_action exn_handler ~args ~dbg)
   in
   match extra_let_binding with
   | None -> apply_cont
@@ -238,7 +239,8 @@ let rec bind_rec ~backend exn_cont
                       Immediate.bool_true, condition_passed_cont;
                       Immediate.bool_false, failure_cont;
                     ])))))
-        (Expr.create_apply_cont (Apply_cont.create primitive_cont ~args:[]))
+        (Expr.create_apply_cont
+           (Apply_cont.create primitive_cont ~args:[] ~dbg:Debuginfo.none))
         validity_conditions
     in
     Let_cont.create_non_recursive primitive_cont

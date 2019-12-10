@@ -456,7 +456,7 @@ and simplify_direct_partial_application
   in
   let apply_cont =
     Apply_cont.create (Apply.continuation apply)
-      ~args:[Simple.var wrapper_var]
+      ~args:[Simple.var wrapper_var] ~dbg
   in
   let expr =
     let wrapper_var = VB.create wrapper_var Name_mode.normal in
@@ -1162,7 +1162,9 @@ and simplify_switch
       match switch_is_identity with
       | Some dest ->
         create_tagged_scrutinee (fun ~tagged_scrutinee ->
-          let apply_cont = Apply_cont.create dest ~args:[tagged_scrutinee] in
+          let apply_cont =
+            Apply_cont.create dest ~args:[tagged_scrutinee] ~dbg:Debuginfo.none
+          in
           Expr.create_apply_cont apply_cont)
       | None ->
         match switch_is_boolean_not with
@@ -1171,6 +1173,7 @@ and simplify_switch
             let not_scrutinee = Variable.create "not_scrutinee" in
             let apply_cont =
               Apply_cont.create dest ~args:[Simple.var not_scrutinee]
+                ~dbg:Debuginfo.none
             in
             Expr.create_let (VB.create not_scrutinee NM.normal)
               (Named.create_prim (P.Unary (Boolean_not, tagged_scrutinee))

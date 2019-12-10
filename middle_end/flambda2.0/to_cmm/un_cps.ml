@@ -953,13 +953,22 @@ and apply_cont env e =
    spilled on the stack). *)
 and apply_cont_exn env e k = function
   | res :: extra ->
-      assert (match Apply_cont_expr.trap_action e with
-          | Some Pop _ -> true| _ -> false);
+      let raise_kind =
+        match Apply_cont_expr.trap_action e with
+        | Some Pop {raise_kind; _} -> C.raise_kind raise_kind
+        | _ ->
+            Misc.fatal_errorf
+              "Apply cont %a calls an exception cont without a Pop trap action"
+              Apply_cont.print e
+      in
       let exn, env, _ = simple env res in
       let extra, env, _ = arg_list env extra in
       let mut_vars = Env.get_exn_extra_args env k in
       let wrap, _ = Env.flush_delayed_lets env in
-      let expr = C.raise_prim Raise_regular exn Debuginfo.none in
+      let expr =
+        C.raise_prim raise_kind exn
+          (Apply_cont_expr.debuginfo e)
+      in
       let expr =
         List.fold_left2
           (fun expr arg v -> C.sequence (C.assign v arg) expr)

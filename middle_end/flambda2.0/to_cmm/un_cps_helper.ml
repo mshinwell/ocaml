@@ -441,6 +441,13 @@ let bigarray_store ?(dbg=Debuginfo.none) (is_safe : Flambda_primitive.is_safe)
 let trywith ?(dbg=Debuginfo.none) ~kind ~body ~exn_var ~handler =
   Cmm.Ctrywith (body, kind, exn_var, handler, dbg)
 
+let raise_kind (kind : Trap_action.raise_kind option) : Lambda.raise_kind =
+  match kind with
+  | Some Regular -> Raise_regular
+  | Some Reraise -> Raise_reraise
+  | Some No_trace -> Raise_notrace
+  | None -> Raise_notrace
+
 
 (* Static jumps *)
 

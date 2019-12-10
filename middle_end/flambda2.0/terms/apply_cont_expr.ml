@@ -22,9 +22,10 @@ type t = {
   k : Continuation.t;
   args : Simple.t list;
   trap_action : Trap_action.Option.t;
+  dbg : Debuginfo.t;
 }
 
-let print ppf { k; args; trap_action; } =
+let print ppf { k; args; trap_action; dbg; } =
   let name, trap_action =
     match Continuation.sort k, trap_action, args with
     | Normal, None, [] -> "goto", None
@@ -56,11 +57,12 @@ let print ppf { k; args; trap_action; } =
   | args ->
     Format.fprintf ppf " %a" Simple.List.print args
   end;
+  Format.fprintf ppf "%a" Debuginfo.print_or_elide dbg;
   Format.fprintf ppf "@]"
 
 let print_with_cache ~cache:_ ppf t = print ppf t
 
-let invariant env ({ k; args; trap_action; } as t) =
+let invariant env ({ k; args; trap_action; dbg=_; } as t) =
   let module E = Invariant_env in
   let unbound_continuation cont reason =
     Misc.fatal_errorf "Unbound continuation %a in %s: %a"
@@ -157,19 +159,21 @@ let invariant env ({ k; args; trap_action; } as t) =
   *)
 
 (* CR mshinwell: Check the sort of [k]. *)
-let create ?trap_action k ~args = { k; args; trap_action; }
+let create ?trap_action k ~args ~dbg = { k; args; trap_action; dbg; }
 
 let goto k =
   { k;
     args = [];
     trap_action = None;
+    dbg = Debuginfo.none;
   }
 
 let continuation t = t.k
 let args t = t.args
 let trap_action t = t.trap_action
+let debuginfo t = t.dbg
 
-let free_names { k; args; trap_action; } =
+let free_names { k; args; trap_action; dbg=_; } =
   (* Continuations in the trap action don't count as free occurrences, since
      they're not actually "uses". *)
   let default =
@@ -178,7 +182,7 @@ let free_names { k; args; trap_action; } =
   if Option.is_some trap_action then Name_occurrences.add_continuation default k
   else default
 
-let apply_name_permutation ({ k; args; trap_action; } as t) perm =
+let apply_name_permutation ({ k; args; trap_action; dbg; } as t) perm =
   let k' = Name_permutation.apply_continuation perm k in
   let args' = Simple.List.apply_name_permutation args perm in
   let trap_action' =
@@ -192,7 +196,7 @@ let apply_name_permutation ({ k; args; trap_action; } as t) perm =
       else Some new_trap_action'
   in
   if k == k' && args == args' && trap_action == trap_action' then t
-  else { k = k'; args = args'; trap_action = trap_action'; }
+  else { k = k'; args = args'; trap_action = trap_action'; dbg; }
 
 let update_continuation t continuation =
   { t with k = continuation; }
