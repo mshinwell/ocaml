@@ -51,11 +51,12 @@ module Make (CHL : Continuation_handler_like_intf.S) = struct
           let denv =
             DE.add_lifted_constants denv ~lifted:(R.get_lifted_constants r)
           in
+          let uses =
+            CUE.compute_handler_env cont_uses_env cont ~params
+              ~definition_typing_env_with_params_defined:(DE.typing_env denv)
+          in
           let handler, user_data, uacc, is_single_inlinable_use =
-            match
-              CUE.compute_handler_env cont_uses_env cont ~params
-                ~definition_typing_env_with_params_defined:(DE.typing_env denv)
-            with
+            match uses with
             | No_uses ->
               (* Don't simplify the handler if there aren't any uses: otherwise,
                  its code will be deleted but any continuation usage information
@@ -111,26 +112,29 @@ module Make (CHL : Continuation_handler_like_intf.S) = struct
           let uenv = UA.uenv uacc in
           let uenv_to_return = uenv in
           let uenv =
-            match CHL.behaviour handler with
-            | Unreachable { arity; } ->
-              UE.add_unreachable_continuation uenv cont scope arity
-            | Alias_for { arity; alias_for; } ->
-              UE.add_continuation_alias uenv cont arity ~alias_for
-            | Apply_cont_with_constant_arg
-                { cont = destination_cont; arg = destination_arg; arity; } ->
-              UE.add_continuation_apply_cont_with_constant_arg uenv cont
-                scope arity ~destination_cont ~destination_arg
-            | Unknown { arity; } ->
-              let can_inline =
-                if is_single_inlinable_use && (not is_exn_handler) then
-                  CHL.real_handler handler
-                else
-                  None
-              in
-              match can_inline with
-              | None -> UE.add_continuation uenv cont scope arity
-              | Some handler ->
-                UE.add_continuation_to_inline uenv cont scope arity handler
+            match uses with
+            | No_uses -> uenv
+            | Uses _ ->
+              match CHL.behaviour handler with
+              | Unreachable { arity; } ->
+                UE.add_unreachable_continuation uenv cont scope arity
+              | Alias_for { arity; alias_for; } ->
+                UE.add_continuation_alias uenv cont arity ~alias_for
+              | Apply_cont_with_constant_arg
+                  { cont = destination_cont; arg = destination_arg; arity; } ->
+                UE.add_continuation_apply_cont_with_constant_arg uenv cont
+                  scope arity ~destination_cont ~destination_arg
+              | Unknown { arity; } ->
+                let can_inline =
+                  if is_single_inlinable_use && (not is_exn_handler) then
+                    CHL.real_handler handler
+                  else
+                    None
+                in
+                match can_inline with
+                | None -> UE.add_continuation uenv cont scope arity
+                | Some handler ->
+                  UE.add_continuation_to_inline uenv cont scope arity handler
           in
           let uacc = UA.with_uenv uacc uenv in
           (handler, uenv_to_return, user_data), uacc))
