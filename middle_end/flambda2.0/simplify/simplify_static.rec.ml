@@ -371,31 +371,49 @@ let simplify_static_structure dacc ~result_dacc pieces
   result_dacc, List.rev str_rev
 
 let reify_types_of_computed_values dacc ~result_dacc computed_values =
+  let typing_env = DE.typing_env (DA.denv dacc) in
   Variable.Set.fold
     (fun var (result_dacc, dacc, reified_definitions) ->
-      let typing_env = DE.typing_env (DA.denv dacc) in
       let ty = TE.find typing_env (Name.var var) in
-      begin match
-        T.reify ~allowed_free_vars:computed_values typing_env
-          ~min_name_mode:NM.normal ty
-      with
-      | Lift to_lift ->
-        let static_part = Reification.create_static_part to_lift in
-        let symbol =
-          Symbol.create (Compilation_unit.get_current_exn ())
-            (Linkage_name.create (Variable.unique_name var))
-        in
-        let dacc =
-          DA.map_denv dacc ~f:(fun denv ->
-            DE.add_equation_on_name
-              (DE.define_symbol denv symbol K.value)
-              (Name.var var)
-              (T.alias_type_of K.value (Simple.symbol symbol)))
-        in
-        let static_structure_part : Static_structure.t0 =
-          S (Singleton symbol, static_part)
-        in
-        result_dacc, dacc, (var, static_structure_part) :: reified_definitions
+      let existing_symbol =
+        (* We must avoid attempting to create aliases between symbols or
+           (equivalently) defining static parts that already have symbols.
+           This could happen if [var] is actually equal to another of the
+           computed value variables. *)
+        let typing_env = DE.typing_env (DA.denv dacc) in
+        match
+          TE.get_canonical_simple typing_env ~min_name_mode:NM.normal
+            (Simple.var var)
+        with
+        | Bottom | Ok None -> None
+        | Ok (Some simple) ->
+          match Simple.descr simple with
+          | Name (Symbol symbol) -> Some symbol
+          | Name (Var _) | Const _ -> None
+      in
+      match existing_symbol with
+      | Some _ -> result_dacc, dacc, reified_definitions
+      | None ->
+        begin match
+          T.reify ~allowed_free_vars:computed_values typing_env
+            ~min_name_mode:NM.normal ty
+        with
+        | Lift to_lift ->
+          let static_part = Reification.create_static_part to_lift in
+          let symbol =
+            Symbol.create (Compilation_unit.get_current_exn ())
+              (Linkage_name.create (Variable.unique_name var))
+          in
+          let dacc =
+            DA.map_denv dacc ~f:(fun denv ->
+              DE.add_equation_on_name (DE.define_symbol denv symbol K.value)
+                (Name.var var)
+                (T.alias_type_of K.value (Simple.symbol symbol)))
+          in
+          let static_structure_part : Static_structure.t0 =
+            S (Singleton symbol, static_part)
+          in
+          result_dacc, dacc, (var, static_structure_part) :: reified_definitions
       | Lift_set_of_closures { closure_id; function_decls; closure_vars; } ->
         let closure_symbols =
           Closure_id.Map.mapi (fun closure_id _function_decl ->
@@ -409,6 +427,12 @@ let reify_types_of_computed_values dacc ~result_dacc computed_values =
               Symbol.create (Compilation_unit.get_current_exn ()) name)
             function_decls
         in
+        (*
+        Format.eprintf "Var %a: set of closures:@ %a@ vars:@ %a\n%!"
+          Variable.print var
+          (Closure_id.Map.print Symbol.print) closure_symbols
+          (Var_within_closure.Map.print Simple.print) closure_vars;
+        *)
         let dacc =
           DA.map_denv dacc ~f:(fun denv ->
             let denv =
@@ -483,6 +507,11 @@ let simplify_return_continuation_handler dacc
          If there is a cycle, we just pick an order.  The worst that will happen
          is that some variables won't simplify to symbols (and will remain
          as computed values). *)
+      (* CR mshinwell: I'm a bit concerned that if the top-sort fails, then
+         we could end up with symbols being defined after they are used,
+         in the list of static parts.  Should we completely abort in this
+         case and fall back to the original environment that doesn't have the
+         equalities to symbols in it? *)
       match
         Bindings_top_sort.top_closure reified_definitions
           ~key:(fun (var, Static_structure.S (_symbols, _static_part)) -> var)
@@ -493,6 +522,11 @@ let simplify_return_continuation_handler dacc
               |> Name_occurrences.variables
               |> Variable.Set.elements
             in
+            (*
+            Format.eprintf "Deps for %a are %a\n%!"
+              Variable.print var
+              Variable.Set.print (Variable.Set.of_list var_deps);
+            *)
             (* Everything except the [var] in the following list will be
                ignored. *)
             List.map (fun var -> var, Static_structure.S (symbols, static_part))
@@ -503,9 +537,19 @@ let simplify_return_continuation_handler dacc
     in
     let static_structure : Static_structure.t =
       let top_sorted_reified_definitions =
+        (* The [List.rev] relies on the following property:
+             Let the list L be a topological sort of a directed graph G.
+             Then the reverse of L is a topological sort of the transpose of G.
+        *)
         List.map (fun (_var, static_structure_part) -> static_structure_part)
-          top_sorted_reified_definitions
+          (List.rev top_sorted_reified_definitions)
       in
+      (*
+      Format.eprintf "New defs:@ %a\n"
+        Static_structure.print top_sorted_reified_definitions;
+      Format.eprintf "Existing defs:@ %a\n"
+        Static_structure.print return_cont_handler.static_structure;
+      *)
       top_sorted_reified_definitions @ return_cont_handler.static_structure
     in
     let result_dacc, static_structure =

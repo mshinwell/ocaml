@@ -470,6 +470,10 @@ and simplify_direct_partial_application
   in
   simplify_expr dacc expr k
 
+(* CR mshinwell: Should it be an error to encounter a non-direct application
+   of a symbol after [Simplify]? This shouldn't usually happen, but I'm not 100%
+   sure it cannot in every case. *)
+
 and simplify_direct_over_application
   : 'a. DA.t -> Apply.t -> param_arity:Flambda_arity.t
     -> result_arity:Flambda_arity.t -> 'a k
