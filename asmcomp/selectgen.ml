@@ -89,6 +89,19 @@ let set_traps nfail traps_ref base_traps exit_traps =
         Misc.fatal_errorf "Mismatching trap stacks for continuation %d" nfail
       else ()
 
+let trap_stack_is_empty env =
+  match env.trap_stack with
+  | Uncaught -> true
+  | Generic_trap _ | Specific_trap _ -> false
+
+let pop_all_traps env =
+  let rec pop_all acc = function
+    | Uncaught -> acc
+    | Generic_trap t
+    | Specific_trap (_, t) -> pop_all (Cmm.Pop :: acc) t
+  in
+  pop_all [] env.trap_stack
+
 let env_empty = {
   vars = V.Map.empty;
   static_exceptions = Int.Map.empty;
@@ -951,7 +964,7 @@ method emit_expr (env:environment) exp =
               None
           | Return_lbl ->
               begin match simple_list with
-              | [expr] -> self#emit_return env expr traps; None
+              | [expr] -> self#emit_return ext_env expr traps; None
               | [] ->
                   Misc.fatal_error
                     "Selection.emit_expr: Return without arguments"
@@ -1161,7 +1174,7 @@ method emit_tail (env:environment) exp =
               let r1 = self#emit_tuple env new_args in
               let rarg = Array.sub r1 1 (Array.length r1 - 1) in
               let (loc_arg, stack_ofs) = Proc.loc_arguments rarg in
-              if stack_ofs = 0 then begin
+              if stack_ofs = 0 && trap_stack_is_empty env then begin
                 let call = Iop (Itailcall_ind { label_after; }) in
                 let spacetime_reg =
                   self#about_to_emit_call env call [| r1.(0) |] dbg
@@ -1181,12 +1194,12 @@ method emit_tail (env:environment) exp =
                 self#insert_debug env (Iop new_op) dbg
                             (Array.append [|r1.(0)|] loc_arg) loc_res;
                 self#insert env (Iop(Istackoffset(-stack_ofs))) [||] [||];
-                self#insert env (Ireturn []) loc_res [||]
+                self#insert env (Ireturn (pop_all_traps env)) loc_res [||]
               end
           | Icall_imm { func; label_after; } ->
               let r1 = self#emit_tuple env new_args in
               let (loc_arg, stack_ofs) = Proc.loc_arguments r1 in
-              if stack_ofs = 0 then begin
+              if stack_ofs = 0 && trap_stack_is_empty env then begin
                 let call = Iop (Itailcall_imm { func; label_after; }) in
                 let spacetime_reg =
                   self#about_to_emit_call env call [| |] dbg
@@ -1213,7 +1226,7 @@ method emit_tail (env:environment) exp =
                 self#maybe_emit_spacetime_move env ~spacetime_reg;
                 self#insert_debug env (Iop new_op) dbg loc_arg loc_res;
                 self#insert env (Iop(Istackoffset(-stack_ofs))) [||] [||];
-                self#insert env (Ireturn []) loc_res [||]
+                self#insert env (Ireturn (pop_all_traps env)) loc_res [||]
               end
           | _ -> Misc.fatal_error "Selection.emit_tail"
       end
@@ -1297,22 +1310,15 @@ method emit_tail (env:environment) exp =
         [||] [||]
   | Ctrywith(e1, kind, v, e2, _dbg) ->
       let env_body = env_enter_trywith env kind in
-      let (opt_r1, s1) = self#emit_sequence env_body e1 in
+      let s1 = self#emit_tail_sequence env_body e1 in
       let rv = self#regs_for typ_val in
       let s2 = self#emit_tail_sequence (env_add v rv env) e2 in
       self#insert env
-        (Itrywith(s1#extract, kind,
+        (Itrywith(s1, kind,
                   instr_cons (Iop Imove) [|Proc.loc_exn_bucket|] rv s2))
-        [||] [||];
-      begin match opt_r1 with
-        None -> ()
-      | Some r1 ->
-          let loc = Proc.loc_results r1 in
-          self#insert_moves env r1 loc;
-          self#insert env (Ireturn []) loc [||]
-      end
+        [||] [||]
   | _ ->
-      self#emit_return env exp []
+      self#emit_return env exp (pop_all_traps env)
 
 method private emit_tail_sequence env exp =
   let s = {< instr_seq = dummy_instr >} in

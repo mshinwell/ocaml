@@ -163,6 +163,15 @@ let linear i n contains_calls =
     | Iop op ->
         copy_instr (Lop op) i (linear env i.Mach.next n)
     | Ireturn traps ->
+        let delta_traps =
+          List.fold_left
+            (fun delta trap ->
+               match trap with
+               | Cmm.Pop -> delta - 1
+               | Cmm.Push _ -> delta + 1)
+            0 traps
+        in
+        let n = adjust_trap_depth (-delta_traps) n in
         let n1 = copy_instr Lreturn i (discard_dead_code n) in
         let n2 =
           if contains_calls
