@@ -92,8 +92,7 @@
   tests/locale
   tests/local-functions
   tests/manual-intf-c
-# tests/match-exception             FAIL (FIXME)  'streams.ml': Fatal error: exception Assert_failure("streams.ml", 39, 4)
-#                                                 'match_failure.ml': >> Fatal error: Continuation k43 not found in env
+  tests/match-exception
   tests/match-exception-warnings
   tests/messages
 # tests/misc                        FAIL (FIXME)  'sorts.ml', 'taku.ml', 'weaklifetime2.ml'
