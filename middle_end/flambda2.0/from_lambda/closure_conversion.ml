@@ -688,10 +688,10 @@ and close_one_function t ~external_env ~by_closure_id decl
     Closure_id.wrap compilation_unit (Variable.create (
       Ident.name (Function_decl.let_rec_ident decl)))
   in
-  let my_closure_id =
+  let my_closure_id, is_curried =
     match Function_decl.kind decl with
-    | Curried -> closure_id
-    | Tupled -> unboxed_version
+    | Curried -> closure_id, true
+    | Tupled -> unboxed_version, false
   in
   (* The free variables are:
      - The parameters: direct substitution by [Variable]s
@@ -717,7 +717,7 @@ and close_one_function t ~external_env ~by_closure_id decl
     List.fold_left (fun (to_bind, vars_for_idents) function_decl ->
         let let_rec_ident = Function_decl.let_rec_ident function_decl in
         let to_bind, var =
-          if Ident.same our_let_rec_ident let_rec_ident then
+          if Ident.same our_let_rec_ident let_rec_ident && is_curried then
             to_bind, my_closure  (* my_closure is already bound *)
           else
             let variable =
