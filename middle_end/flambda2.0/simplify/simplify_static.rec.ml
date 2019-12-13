@@ -342,6 +342,12 @@ let simplify_piece_of_static_structure (type k) dacc ~result_dacc
       (bound_syms : k Program_body.Bound_symbols.t)
       (static_part : k Static_part.t)
       : k Static_part.t * DA.t * DA.t =
+  (*
+  Format.eprintf "Piece: dacc:@ %a@ result_dacc:@ %a@ %a\n%!"
+    DA.print dacc
+    DA.print result_dacc
+    Static_part.print static_part;
+  *)
   match bound_syms with
   | Singleton result_sym ->
     simplify_static_part_of_kind_value dacc ~result_dacc static_part
@@ -486,7 +492,13 @@ let simplify_return_continuation_handler dacc
       ~(extra_params_and_args : Continuation_extra_params_and_args.t)
       cont (return_cont_handler : Return_cont_handler.Opened.t)
       ~user_data:result_dacc _k =
-  let result_dacc = DA.with_r result_dacc (DA.r dacc) in
+  let result_dacc =
+    (* [DA.r dacc] contains the lifted constants etc. arising from the
+       simplification of any associated [computation]. *)
+    let r = DA.r dacc in
+    DA.map_denv (DA.with_r result_dacc r) ~f:(fun denv ->
+      DE.add_lifted_constants denv ~lifted:(R.get_lifted_constants r))
+  in
   let allowed_free_vars =
     Variable.Set.union
       (Variable.Set.of_list

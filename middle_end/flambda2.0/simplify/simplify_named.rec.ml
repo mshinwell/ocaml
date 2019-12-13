@@ -285,7 +285,7 @@ let simplify_set_of_closures0 dacc ~result_dacc set_of_closures
           DE.with_typing_env denv
             (TE.add_env_extension suitable_for ~env_extension))
         closure_types_by_bound_name
-        denv)
+        suitable_for_denv)
   in
   let result_dacc =
     DA.map_denv (DA.with_r result_dacc r) ~f:(fun denv ->
@@ -309,7 +309,7 @@ let simplify_set_of_closures0 dacc ~result_dacc set_of_closures
           DE.with_typing_env denv
             (TE.add_env_extension suitable_for ~env_extension))
         closure_types_by_bound_name
-        denv)
+        suitable_for_denv)
   in
   let set_of_closures =
     Set_of_closures.create

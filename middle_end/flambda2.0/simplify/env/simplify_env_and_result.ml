@@ -282,12 +282,18 @@ end = struct
       can_inline = false;
     }
 
+  (* CR mshinwell: The label should state what order is expected. *)
   let add_lifted_constants t ~lifted =
+    (*
+    Format.eprintf "Adding lifted:@ %a\n%!"
+      (Format.pp_print_list ~pp_sep:Format.pp_print_space
+        Lifted_constant.print) lifted;
+    *)
     let typing_env =
       List.fold_left (fun typing_env lifted_constant ->
           Lifted_constant.introduce lifted_constant typing_env)
         (typing_env t)
-        lifted
+        (List.rev lifted)
     in
     with_typing_env t typing_env
 
@@ -481,47 +487,38 @@ end = struct
   type t =
     { resolver : (Export_id.t -> Flambda_type.t option);
       imported_symbols : Flambda_kind.t Symbol.Map.t;
-      lifted_constants_innermost_first : Lifted_constant.t list;
+      lifted_constants_innermost_last : Lifted_constant.t list;
     }
 
   let print ppf { resolver = _; imported_symbols;
-                  lifted_constants_innermost_first;
+                  lifted_constants_innermost_last;
                 } =
     Format.fprintf ppf "@[<hov 1>(\
         @[<hov 1>(imported_symbols@ %a)@]@ \
-        @[<hov 1>(lifted_constants_innermost_first@ %a)@]\
+        @[<hov 1>(lifted_constants_innermost_last@ %a)@]\
         )@]"
       (Symbol.Map.print Flambda_kind.print) imported_symbols
       (Format.pp_print_list ~pp_sep:Format.pp_print_space Lifted_constant.print)
-        lifted_constants_innermost_first
+        lifted_constants_innermost_last
 
   let create ~resolver =
     { resolver;
       imported_symbols = Symbol.Map.empty;
-      lifted_constants_innermost_first = [];
+      lifted_constants_innermost_last = [];
     }
 
   let imported_symbols t = t.imported_symbols
 
   let new_lifted_constant t lifted_constant =
     { t with
-      lifted_constants_innermost_first =
-        lifted_constant :: t.lifted_constants_innermost_first;
+      lifted_constants_innermost_last =
+        lifted_constant :: t.lifted_constants_innermost_last;
     }
 
-(*
-  let add_lifted_constants t ~from =
-    { t with
-      lifted_constants_innermost_first =
-        from.lifted_constants_innermost_first
-          @ t.lifted_constants_innermost_first;
-    }
-*)
-
-  let get_lifted_constants t = t.lifted_constants_innermost_first
+  let get_lifted_constants t = t.lifted_constants_innermost_last
 
   let clear_lifted_constants t =
     { t with
-      lifted_constants_innermost_first = [];
+      lifted_constants_innermost_last = [];
     }
 end
