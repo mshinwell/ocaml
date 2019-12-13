@@ -40,9 +40,9 @@
   tests/lexing
   tests/lib-arg
   tests/lib-array
-# tests/lib-bigarray                FAIL (FIXME)  (everything) flambda2 internal errors during compilation
+# tests/lib-bigarray                TIMEOUT       `bigarrays.ml` >5min of compilation time (else the tests should pass)
   tests/lib-bigarray-2
-# tests/lib-bigarray-file           FAIL (FIXME)  'mapfile.ml': >> Fatal error: Kind mismatch upon meet: (Naked_float (= Pbigarrayref/1205)) versus (Val (Boxed_float (Naked_float (= prim/1207))))
+  tests/lib-bigarray-file
   tests/lib-bool
   tests/lib-buffer
 # tests/lib-bytes                   FAIL (FIXME)  'binary.ml'
@@ -106,7 +106,7 @@
   tests/parsing
   tests/ppx-attributes
   tests/ppx-contexts
-# tests/prim-bigstring              FAIL (FIXME)  'bigstring_access.ml', 'string_access.ml'
+  tests/prim-bigstring
   tests/prim-bswap
   tests/prim-revapply
   tests/printing-types
