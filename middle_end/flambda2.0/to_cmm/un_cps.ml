@@ -1482,14 +1482,14 @@ let function_decl offsets used_closure_vars fun_name _ d =
             let fun_body = expr env body in
             let fun_flags = function_flags () in
             C.fundecl fun_name fun_args fun_body fun_flags fun_dbg
-          with Misc.Fatal_error ->
+          with Misc.Fatal_error as e ->
             Format.eprintf "\n%sContext is:%s translating function %s to Cmm \
                 with body@ %a\n"
               (Flambda_colours.error ())
               (Flambda_colours.normal ())
               fun_name
               Expr.print body;
-            raise Misc.Fatal_error))
+            raise e))
 
 (* Programs *)
 

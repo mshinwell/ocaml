@@ -63,14 +63,14 @@ let rec simplify_let
     Simplify_common.bind_let_bound ~bindings ~body, user_data, uacc)
 
 and simplify_one_continuation_handler
-  : 'a. DA.t
+  : 'a. bool -> DA.t
     -> extra_params_and_args:Continuation_extra_params_and_args.t
     -> Continuation.t
     -> Continuation_handler.Opened.t
     -> user_data:unit
     -> 'a k 
     -> Continuation_handler.t * 'a * UA.t
-= fun dacc ~(extra_params_and_args : EPA.t)
+= fun is_recursive dacc ~(extra_params_and_args : EPA.t)
       cont (cont_handler : Continuation_handler.Opened.t) ~user_data:() k ->
   let module CH = Continuation_handler in
   let module CPH = Continuation_params_and_handler in
@@ -95,6 +95,7 @@ Format.eprintf "About to simplify handler %a, params %a, EPA %a\n%!"
     *)
     let free_names = Expr.free_names handler in
     let used_params =
+      if is_recursive then params else
       let first = ref true in
       List.filter (fun param ->
           (* CR mshinwell: We should have a robust means of propagating which
@@ -165,7 +166,7 @@ and simplify_non_recursive_let_cont_handler
         Simplify_let_cont.simplify_body_of_non_recursive_let_cont dacc
           cont cont_handler ~simplify_body ~body
           ~simplify_continuation_handler_like:
-            simplify_one_continuation_handler
+            (simplify_one_continuation_handler false)
           ~user_data:()
           k
       in
@@ -232,7 +233,7 @@ and simplify_recursive_let_cont_handlers
               in
               let dacc = DA.create denv cont_uses_env r in
               let handler, user_data, uacc =
-                simplify_one_continuation_handler dacc
+                simplify_one_continuation_handler true dacc
                   ~extra_params_and_args:
                     Continuation_extra_params_and_args.empty
                   cont

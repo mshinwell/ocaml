@@ -291,7 +291,7 @@ and transform_named env id user_visible kind (named : Ilambda.named) k
     normal_case (Prim { prim; args; loc; exn_continuation; })
   | Assign { being_assigned; new_value; } ->
     let env, new_id, new_kind = Env.new_id_for_mutable env being_assigned in
-    Let (new_id, User_visible, new_kind, Var new_value,
+    Let (new_id, User_visible, new_kind, Var (Env.rename_variable env new_value),
       Let (id, Not_user_visible, kind, Const (Const_base (Const_int 0)), k env))
 
 and transform_let_mutable env
