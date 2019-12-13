@@ -718,6 +718,11 @@ and close_one_function t ~external_env ~by_closure_id decl
         let let_rec_ident = Function_decl.let_rec_ident function_decl in
         let to_bind, var =
           if Ident.same our_let_rec_ident let_rec_ident && is_curried then
+            (* When the function being compiled is tupled, my_closure
+               points to the curried version but let_rec_ident is called
+               with tuple arguments, so the correct closure to bind
+               is the one in the closure_ids_from_idents map.
+            *)
             to_bind, my_closure  (* my_closure is already bound *)
           else
             let variable =
