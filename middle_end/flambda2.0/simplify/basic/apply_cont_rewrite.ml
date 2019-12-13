@@ -75,6 +75,11 @@ let create ~original_params ~used_params ~extra_params ~extra_args
           extra_params_and_args)
       extra_args
   in
+  let extra_args =
+    if Id.Map.for_all (fun _ l -> l = []) extra_args
+    then Id.Map.empty
+    else extra_args
+  in
   let used_extra_params =
     List.filter (fun extra_param -> KP.Set.mem extra_param used_extra_params)
       extra_params
