@@ -295,10 +295,10 @@ let element_kind_of_bigarray_kind k =
   | Sint8
   | Uint8
   | Sint16
-  | Uint16 -> K.naked_nativeint
+  | Uint16 -> K.naked_immediate
   | Int32 -> K.naked_int32
   | Int64 -> K.naked_int64
-  | Int_width_int -> K.naked_nativeint
+  | Int_width_int -> K.naked_immediate
   | Targetint_width_int -> K.naked_nativeint
   | Complex32
   | Complex64 ->
@@ -957,7 +957,7 @@ let args_kind_of_ternary_primitive p =
       K.naked_int64
   | Bytes_or_bigstring_set (Bigstring, (Eight | Sixteen)) ->
     bigstring_kind, array_like_thing_index_kind,
-      K.value
+      K.naked_immediate
   | Bytes_or_bigstring_set (Bigstring, Thirty_two) ->
     bigstring_kind, array_like_thing_index_kind,
       K.naked_int32
