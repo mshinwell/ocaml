@@ -339,17 +339,19 @@ let simplify_and_lift_set_of_closures dacc ~closure_bound_vars
   in
   let dacc = result_dacc in
   let r =
-    let lifted_constants =  (* CR mshinwell: Add "s" to "Lifted_constant" *)
-      Lifted_constant.create_from_static_structure
-        (DE.typing_env (DA.denv dacc))
-        static_structure_types
-        static_structure
+    let definition : Definition.t =
+      { computation = None;
+        static_structure;
+      }
     in
-    List.fold_left R.new_lifted_constant (DA.r dacc) lifted_constants
+    let lifted_constant =
+      Lifted_constant.create (DA.denv dacc) definition
+        ~types_of_symbols:static_structure_types
+        ~pieces_of_code:Code_id.Map.empty
+    in
+    R.new_lifted_constant (DA.r dacc) lifted_constant
   in
   let denv =
-    (* CR mshinwell: Isn't this line redundant?  The fold just above adds
-       the constants. *)
     DE.add_lifted_constants (DA.denv dacc) ~lifted:(R.get_lifted_constants r)
   in
   let denv, bindings =
@@ -383,6 +385,9 @@ let simplify_non_lifted_set_of_closures dacc ~bound_vars ~closure_bound_vars
     Reachable.reachable (Named.create_set_of_closures set_of_closures)
   in
   let result_dacc =
+    (* CR mshinwell: This seems weird.  Should there ever be lifted constants
+       in the [r] component of a [dacc] that are not in the [denv] component
+       of a dacc?  If not maybe we could enforce that via a check. *)
     DA.map_denv result_dacc ~f:(fun denv ->
       DE.add_lifted_constants denv
         ~lifted:(R.get_lifted_constants (DA.r result_dacc)))

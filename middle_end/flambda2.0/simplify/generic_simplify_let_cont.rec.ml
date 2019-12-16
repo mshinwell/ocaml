@@ -39,8 +39,7 @@ module Make (CHL : Continuation_handler_like_intf.S) = struct
         let params = CHL.Opened.params handler in
         let denv = DE.define_parameters (DA.denv dacc) ~params in
         let dacc =
-          DA.map_denv dacc ~f:(fun _denv ->
-            DE.increment_continuation_scope_level denv)
+          DA.with_denv dacc (DE.increment_continuation_scope_level denv)
         in
         simplify_body.simplify_body dacc body (fun cont_uses_env r ->
 (*

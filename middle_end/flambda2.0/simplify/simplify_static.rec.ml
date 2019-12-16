@@ -236,8 +236,7 @@ let simplify_static_part_of_kind_value dacc ~result_dacc
     let result_dacc =
       DA.map_denv result_dacc ~f:(fun result_denv ->
         let suitable_for =
-          DE.typing_env
-            (DE.define_symbol_if_undefined result_denv result_sym K.value)
+          DE.typing_env (DE.define_symbol result_denv result_sym K.value)
         in
         let env_extension =
           T.make_suitable_for_environment typ

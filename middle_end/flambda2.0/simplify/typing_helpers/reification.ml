@@ -16,13 +16,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-open! Flambda.Import
-
-module DA = Downwards_acc
-module DE = Simplify_env_and_result.Downwards_env
-module K = Flambda_kind
-module R = Simplify_env_and_result.Result
-module T = Flambda_type
+open! Simplify_import
 
 let create_static_part (to_lift : T.to_lift)
     : K.value Flambda_static.Static_part.t =
@@ -44,12 +38,6 @@ let create_static_part (to_lift : T.to_lift)
   | Boxed_nativeint i -> Boxed_nativeint (Const i)
 
 let lift dacc ty ~bound_to static_part =
-(*
-Format.eprintf "Lifting something bound to %a, type:@ %a@ backtrace:%s\n%!"
-  Variable.print bound_to
-  T.print ty
-  (Printexc.raw_backtrace_to_string (Printexc.get_callstack 15));
-*)
   let symbol =
     Symbol.create (Compilation_unit.get_current_exn ())
       (Linkage_name.create (Variable.unique_name bound_to))
@@ -60,30 +48,22 @@ Format.eprintf "Lifting something bound to %a, type:@ %a@ backtrace:%s\n%!"
     Misc.fatal_errorf "Cannot lift non-[Value] variable: %a"
       Variable.print bound_to
   end;
-  let lifted_constant =
-    Lifted_constant.create (DE.typing_env (DA.denv dacc))
-      (Symbol.Map.singleton symbol ty)
-      (Singleton symbol)
-      static_part
-  in
   let dacc =
-    DA.map_r dacc ~f:(fun r -> R.new_lifted_constant r lifted_constant)
+    DA.map_r dacc ~f:(fun r ->
+      Definition.singleton_symbol symbol static_part
+      |> Lifted_constant.create (DA.denv dacc)
+           ~types_of_symbols:(Symbol.Map.singleton symbol ty)
+           ~pieces_of_code:Code_id.Map.empty
+      |> R.new_lifted_constant r)
   in
   let symbol' = Simple.symbol symbol in
   let term = Named.create_simple symbol' in
   let var_ty = T.alias_type_of (T.kind ty) symbol' in
   let dacc =
     DA.map_denv dacc ~f:(fun denv ->
-(*
-Format.eprintf "Equation for lifted constant: %a = %a\n%!"
-  Variable.print bound_to T.print ty;
-*)
       let denv = DE.add_symbol denv symbol ty in
       DE.add_equation_on_variable denv bound_to var_ty)
   in
-(*
-Format.eprintf "New DA:@ %a\n%!" DA.print dacc;
-*)
   Reachable.reachable term, dacc, var_ty
 
 let try_to_reify dacc (term : Reachable.t) ~bound_to =

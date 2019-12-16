@@ -16,6 +16,8 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+open! Flambda.Import
+
 module KP = Kinded_parameter
 module T = Flambda_type
 module TE = Flambda_type.Typing_env
@@ -23,6 +25,7 @@ module TE = Flambda_type.Typing_env
 module rec Downwards_env : sig
   include Simplify_env_and_result_intf.Downwards_env
     with type result := Result.t
+    with type lifted_constant := Lifted_constant.t
 end = struct
   type t = {
     backend : (module Flambda2_backend_intf.S);
@@ -32,11 +35,13 @@ end = struct
     can_inline : bool;
     inlining_depth_increment : int;
     float_const_prop : bool;
+    code : Function_params_and_body.t Code_id.Map.t;
   }
 
   let print ppf { backend = _; round; typing_env;
                   inlined_debuginfo; can_inline;
                   inlining_depth_increment; float_const_prop;
+                  code;
                 } =
     Format.fprintf ppf "@[<hov 1>(\
         @[<hov 1>(round@ %d)@]@ \
@@ -44,7 +49,8 @@ end = struct
         @[<hov 1>(inlined_debuginfo@ %a)@]@ \
         @[<hov 1>(can_inline@ %b)@]@ \
         @[<hov 1>(inlining_depth_increment@ %d)@]@ \
-        @[<hov 1>(float_const_prop@ %b)@]\
+        @[<hov 1>(float_const_prop@ %b)@] \
+        @[<hov 1>(code@ %a)@]\
         )@]"
       round
       TE.print typing_env
@@ -52,6 +58,7 @@ end = struct
       can_inline
       inlining_depth_increment
       float_const_prop
+      (Code_id.Map.print Function_params_and_body.print) code
 
   let invariant _t = ()
 
@@ -65,6 +72,7 @@ end = struct
       can_inline = true;
       inlining_depth_increment = 0;
       float_const_prop;
+      code = Code_id.Map.empty;
     }
 
   let resolver t = TE.resolver t.typing_env
@@ -92,7 +100,7 @@ end = struct
   let enter_closure { backend; round; typing_env;
                       inlined_debuginfo = _; can_inline;
                       inlining_depth_increment = _;
-                      float_const_prop;
+                      float_const_prop; code;
                     } =
     { backend;
       round;
@@ -101,6 +109,7 @@ end = struct
       can_inline;
       inlining_depth_increment = 0;
       float_const_prop;
+      code;
     }
 
   let define_variable t var kind =
@@ -130,6 +139,8 @@ end = struct
   let add_equation_on_variable t var ty =
     let typing_env = TE.add_equation t.typing_env (Name.var var) ty in
     { t with typing_env; }
+
+  let mem_name t name = TE.mem t.typing_env name
 
   let find_name t name =
     match TE.find t.typing_env name with
@@ -171,6 +182,8 @@ end = struct
       TE.add_equation t.typing_env sym ty
     in
     { t with typing_env; }
+
+  let mem_symbol t sym = mem_name t (Name.symbol sym)
 
   let find_symbol t sym = find_name t (Name.symbol sym)
 
@@ -269,6 +282,81 @@ end = struct
     (* CR mshinwell: Convert [Typing_env] to map from [Simple]s. *)
     | Const _ -> ()
 
+  let define_code t id code =
+    if Code_id.Map.mem id t.code then begin
+      Misc.fatal_errorf "Code ID %a is already defined, cannot redefine to@ %a"
+        Code_id.print id
+        Function_params_and_body.print code
+    end;
+    { t with
+      code = Code_id.Map.add id code t.code;
+    }
+
+  let find_code t id =
+    match Code_id.Map.find id t.code with
+    | exception Not_found ->
+      Misc.fatal_errorf "Code ID %a not bound" Code_id.print id
+    | code -> code
+
+  (* CR mshinwell: The label should state what order is expected. *)
+  let add_lifted_constants t ~lifted =
+    (*
+    Format.eprintf "Adding lifted:@ %a\n%!"
+      (Format.pp_print_list ~pp_sep:Format.pp_print_space
+        Lifted_constant.print) lifted;
+    *)
+    let module LC = Lifted_constant in
+    List.fold_left (fun denv lifted_constant ->
+        let denv_at_definition = LC.denv_at_definition lifted_constant in
+        let types_of_symbols = LC.types_of_symbols lifted_constant in
+        let definition = LC.definition lifted_constant in
+        let being_defined =
+          Flambda_static.Program_body.Definition.being_defined definition
+        in
+        let already_bound =
+          Symbol.Set.filter (fun sym -> mem_symbol denv sym)
+            being_defined
+        in
+        if Symbol.Set.equal being_defined already_bound then denv
+        else if not (Symbol.Set.is_empty already_bound) then
+          Misc.fatal_errorf "Expected all or none of the following symbols \
+              to be found:@ %a@ denv:@ %a"
+            LC.print lifted_constant
+            print denv
+        else
+          let typing_env =
+            Symbol.Map.fold (fun sym typ typing_env ->
+                let sym =
+                  Name_in_binding_pos.create (Name.symbol sym) Name_mode.normal
+                in
+                TE.add_definition typing_env sym (T.kind typ))
+              types_of_symbols
+              denv.typing_env
+          in
+          let typing_env =
+            Symbol.Map.fold (fun sym typ typing_env ->
+                let sym = Name.symbol sym in
+                let env_extension =
+                  T.make_suitable_for_environment typ
+                    denv_at_definition.typing_env
+                    ~suitable_for:typing_env
+                    ~bind_to:sym
+                in
+                TE.add_env_extension typing_env ~env_extension)
+              types_of_symbols
+              typing_env
+          in
+          Code_id.Map.fold (fun code_id params_and_body denv ->
+              define_code denv code_id params_and_body)
+            (LC.pieces_of_code lifted_constant)
+            (with_typing_env denv typing_env))
+      t
+      (List.rev lifted)
+
+  (* CR mshinwell: Think more about this -- may be re-traversing long lists *)
+  let add_lifted_constants_from_r t r =
+    add_lifted_constants t ~lifted:(Result.get_lifted_constants r)
+
   let add_inlined_debuginfo' t dbg =
     Debuginfo.concat t.inlined_debuginfo dbg
 
@@ -282,24 +370,6 @@ end = struct
       can_inline = false;
     }
 
-  (* CR mshinwell: The label should state what order is expected. *)
-  let add_lifted_constants t ~lifted =
-    (*
-    Format.eprintf "Adding lifted:@ %a\n%!"
-      (Format.pp_print_list ~pp_sep:Format.pp_print_space
-        Lifted_constant.print) lifted;
-    *)
-    let typing_env =
-      List.fold_left (fun typing_env lifted_constant ->
-          Lifted_constant.introduce lifted_constant typing_env)
-        (typing_env t)
-        (List.rev lifted)
-    in
-    with_typing_env t typing_env
-
-  (* CR mshinwell: Think more about this -- may be re-traversing long lists *)
-  let add_lifted_constants_from_r t r =
-    add_lifted_constants t ~lifted:(Result.get_lifted_constants r)
 end and Upwards_env : sig
   include Simplify_env_and_result_intf.Upwards_env
     with type downwards_env := Downwards_env.t
@@ -483,6 +553,7 @@ end = struct
     | rewrite -> Some rewrite
 end and Result : sig
   include Simplify_env_and_result_intf.Result
+    with type lifted_constant := Lifted_constant.t
 end = struct
   type t =
     { resolver : (Export_id.t -> Flambda_type.t option);
@@ -521,4 +592,52 @@ end = struct
     { t with
       lifted_constants_innermost_last = [];
     }
+end and Lifted_constant : sig
+  include Simplify_env_and_result_intf.Lifted_constant
+    with type downwards_env := Downwards_env.t
+end = struct
+  module Definition = Flambda_static.Program_body.Definition
+
+  type t = {
+    denv : Downwards_env.t;
+    definition : Definition.t;
+    types_of_symbols : Flambda_type.t Symbol.Map.t;
+    pieces_of_code : Function_params_and_body.t Code_id.Map.t;
+  }
+
+  let print ppf
+        { denv = _ ; definition; types_of_symbols = _; pieces_of_code = _; } =
+    Format.fprintf ppf "@[<hov 1>(\
+        @[<hov 1>(definition@ %a)@]\
+        )@]"
+      Definition.print definition
+
+  let create denv definition ~types_of_symbols ~pieces_of_code =
+    let being_defined = Definition.being_defined definition in
+    if not (Symbol.Set.subset (Symbol.Map.keys types_of_symbols) being_defined)
+    then begin
+      Misc.fatal_errorf "[types_of_symbols]:@ %a@ does not cover all symbols \
+          in the [Definition]:@ %a"
+        (Symbol.Map.print T.print) types_of_symbols
+        Definition.print definition
+    end;
+    let code_being_defined = Definition.code_being_defined definition in
+    if not (Code_id.Set.subset (Code_id.Map.keys pieces_of_code)
+      code_being_defined)
+    then begin
+      Misc.fatal_errorf "[pieces_of_code]:@ %a@ does not cover all code IDs \
+          in the [Definition]:@ %a"
+        (Code_id.Map.print Function_params_and_body.print) pieces_of_code
+        Definition.print definition
+    end;
+    { denv;
+      definition;
+      types_of_symbols;
+      pieces_of_code;
+    }
+
+  let denv_at_definition t = t.denv
+  let definition t = t.definition
+  let types_of_symbols t = t.types_of_symbols
+  let pieces_of_code t = t.pieces_of_code
 end

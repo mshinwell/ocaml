@@ -372,6 +372,13 @@ module Program_body = struct
       | Set_of_closures { closure_symbols; } ->
         Symbol.Set.of_list (Closure_id.Map.data closure_symbols)
 
+    let code_being_defined (type k) (t : k t) =
+      match t with
+      | Singleton _ -> Code_id.Set.empty
+      | Set_of_closures { closure_symbols = _; } ->
+        (* To be continued... *)
+        Code_id.Set.empty
+
     let _gc_roots (type k) (_t : k t) = Misc.fatal_error "NYI"
   end
 
@@ -406,6 +413,13 @@ module Program_body = struct
           Symbol.Set.union (Bound_symbols.being_defined bound_syms)
             being_defined)
         Symbol.Set.empty
+        t
+
+    let code_being_defined t =
+      List.fold_left (fun code_being_defined (S (bound_syms, _static_part)) ->
+          Code_id.Set.union (Bound_symbols.code_being_defined bound_syms)
+            code_being_defined)
+        Code_id.Set.empty
         t
 
     let free_names t =
@@ -464,6 +478,11 @@ module Program_body = struct
       in
       Name_occurrences.union free_in_computation free_in_static_structure
 
+    let singleton_symbol symbol static_part =
+      { computation = None;
+        static_structure = [S (Singleton symbol, static_part)];
+      }
+
     let iter_computation t ~f =
       match t.computation with
       | None -> ()
@@ -488,6 +507,9 @@ module Program_body = struct
       }
 
     let being_defined t = Static_structure.being_defined t.static_structure
+
+    let code_being_defined t =
+      Static_structure.code_being_defined t.static_structure
   end
 
   type t =

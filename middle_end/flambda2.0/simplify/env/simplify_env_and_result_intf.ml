@@ -22,6 +22,7 @@ module type Downwards_env = sig
   type t
 
   type result
+  type lifted_constant
 
   val invariant : t -> unit
 
@@ -69,6 +70,8 @@ module type Downwards_env = sig
 
   val define_symbol_if_undefined : t -> Symbol.t -> Flambda_kind.t -> t
 
+  val mem_symbol : t -> Symbol.t -> bool
+
   val find_symbol : t -> Symbol.t -> Flambda_type.t
 
   val add_equation_on_symbol : t -> Symbol.t -> Flambda_type.t -> t
@@ -110,6 +113,20 @@ module type Downwards_env = sig
 
   val check_simple_is_bound : t -> Simple.t -> unit
 
+  (** Add the given lifted constants to the given environment.  Symbols
+      defined in the lifted constants but already defined in the given
+      environment are ignored.
+  *)
+  val add_lifted_constants : t -> lifted:lifted_constant list -> t
+
+  (** Like [add_lifted_constants], but takes the constants from the given
+      result structure. *)
+  val add_lifted_constants_from_r : t -> result -> t
+
+  val define_code : t -> Code_id.t -> Function_params_and_body.t -> t
+
+  val find_code : t -> Code_id.t -> Function_params_and_body.t
+
   (** Appends the locations of inlined call-sites to the given debuginfo
       and sets the resulting debuginfo as the current one in the
       environment. *)
@@ -121,14 +138,6 @@ module type Downwards_env = sig
 
   (** Prevent function inlining from occurring in the given environment. *)
   val disable_function_inlining : t -> t
-
-  (** Add the given lifted constants to the environment.  Symbols that are
-      already defined in the environment are ignored. *)
-  val add_lifted_constants : t -> lifted:Lifted_constant.t list -> t
-
-  (** Like [add_lifted_constants], but takes the constants from the given
-      result structure. *)
-  val add_lifted_constants_from_r : t -> result -> t
 
   val can_inline : t -> bool
 
@@ -222,13 +231,15 @@ module type Upwards_env = sig
 end
 
 module type Result = sig
+  type lifted_constant
+
   type t
 
   val print : Format.formatter -> t -> unit
 
   val create : resolver:(Export_id.t -> Flambda_type.t option) -> t
 
-  val new_lifted_constant : t -> Lifted_constant.t -> t
+  val new_lifted_constant : t -> lifted_constant -> t
 
 (* can cause duplicates
   val add_lifted_constants : t -> from:t -> t
@@ -237,9 +248,33 @@ module type Result = sig
   (** Retrieve constants lifted to toplevel.  The constants must be defined
       in the order returned (first element of the list defined first). *)
   (* CR mshinwell: Update name to reflect this *)
-  val get_lifted_constants : t -> Lifted_constant.t list
+  val get_lifted_constants : t -> lifted_constant list
 
   val imported_symbols : t -> Flambda_kind.t Symbol.Map.t
 
   val clear_lifted_constants : t -> t
+end
+
+module type Lifted_constant = sig
+  (** Description of a statically-allocated constant discovered during
+      simplification. *)
+
+  type downwards_env
+
+  type t
+
+  val print : Format.formatter -> t -> unit
+
+  (** [create] takes the types of symbols to avoid re-inferring them. *)
+  val create
+     : downwards_env
+    -> Flambda_static.Program_body.Definition.t
+    -> types_of_symbols:Flambda_type.t Symbol.Map.t
+    -> pieces_of_code:Function_params_and_body.t Code_id.Map.t
+    -> t
+
+  val denv_at_definition : t -> downwards_env
+  val definition : t -> Flambda_static.Program_body.Definition.t
+  val types_of_symbols : t -> Flambda_type.t Symbol.Map.t
+  val pieces_of_code : t -> Function_params_and_body.t Code_id.Map.t
 end

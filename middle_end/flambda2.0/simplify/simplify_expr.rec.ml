@@ -202,13 +202,6 @@ and simplify_recursive_let_cont_handlers
           (* let set = Continuation_handlers.domain rec_handlers in *)
           let body, (handlers, user_data), uacc =
             simplify_expr dacc body (fun cont_uses_env r ->
-              let definition_denv =
-                (* Probably useless as the arguments types are cleaned
-                    of any information, hence can't refer to lifted
-                    constants from the body *)
-                DE.add_lifted_constants definition_denv
-                  ~lifted:(R.get_lifted_constants r)
-              in
               let arg_types =
                 (* We can't know a good type from the call types *)
                 List.map T.unknown arity

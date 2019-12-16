@@ -156,6 +156,12 @@ module Program_body : sig
 
     val print : Format.formatter -> t -> unit
 
+    val singleton_symbol : Symbol.t -> Flambda_kind.value Static_part.t -> t
+
+    val being_defined : t -> Symbol.Set.t
+
+    val code_being_defined : t -> Code_id.Set.t
+
     val iter_computation : t -> f:(Computation.t -> unit) -> unit
 
     val map_computation : t -> f:(Computation.t -> Computation.t) -> t
