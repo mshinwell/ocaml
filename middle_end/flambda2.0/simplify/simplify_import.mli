@@ -31,6 +31,7 @@ module Let = Flambda.Let
 module Lifted_constant = Simplify_env_and_result.Lifted_constant
 module Named = Flambda.Named
 module Non_recursive_let_cont_handler = Flambda.Non_recursive_let_cont_handler
+module Program_body = Flambda_static.Program_body
 module Recursive_let_cont_handlers = Flambda.Recursive_let_cont_handlers
 module Set_of_closures = Flambda.Set_of_closures
 module Switch = Flambda.Switch

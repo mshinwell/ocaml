@@ -508,6 +508,26 @@ module Program_body = struct
         static_structure = [S (Singleton symbol, static_part)];
       }
 
+    let piece_of_code code_id params_and_body =
+      let static_structure : Static_structure.t =
+        let static_part : K.fabricated Static_part.t =
+          Code_and_set_of_closures {
+            code;
+            set_of_closures = None;
+          }
+        in
+        let bound_symbols : K.fabricated Bound_symbols.t =
+          Code_and_set_of_closures {
+            code_ids = Code.Map.keys code;
+            closure_symbols = Closure_id.Map.empty;
+          }
+        in
+        [S (bound_symbols, static_part)]
+      in
+      { computation = None;
+        static_structure;
+      }
+
     let iter_computation t ~f =
       match t.computation with
       | None -> ()

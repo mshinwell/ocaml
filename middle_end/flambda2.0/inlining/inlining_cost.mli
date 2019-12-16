@@ -37,7 +37,8 @@ end
    cost so as to fit under the given [inlining_threshold].  The [bonus] is
    added to the threshold before evaluation. *)
 val can_inline
-   : Expr.t
+   : Downwards_acc.t
+  -> Expr.t
   -> Threshold.t
   -> bonus:int
   -> bool

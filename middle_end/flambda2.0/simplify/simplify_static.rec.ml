@@ -167,16 +167,22 @@ let simplify_set_of_closures0 dacc ~result_dacc set_of_closures
   let closure_bound_names =
     Closure_id.Map.map Name_in_binding_pos.symbol closure_symbols
   in
-  let set_of_closures, closure_types_by_bound_name, dacc, result_dacc =
+  let set_of_closures, closure_types_by_bound_name, code, dacc, result_dacc =
     Simplify_named.simplify_set_of_closures0 dacc ~result_dacc set_of_closures
       ~closure_bound_names ~closure_elements ~closure_element_types
   in
   let static_structure : Program_body.Static_structure.t =
     let static_part : K.fabricated Static_part.t =
-      Set_of_closures set_of_closures
+      Code_and_set_of_closures {
+        code;
+        set_of_closures = Some set_of_closures;
+      }
     in
     let bound_symbols : K.fabricated Program_body.Bound_symbols.t =
-      Set_of_closures { closure_symbols; }
+      Code_and_set_of_closures {
+        code_ids = Code.Map.keys code;
+        closure_symbols;
+      }
     in
     [S (bound_symbols, static_part)]
   in

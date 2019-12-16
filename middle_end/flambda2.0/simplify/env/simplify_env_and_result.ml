@@ -602,17 +602,15 @@ end = struct
     denv : Downwards_env.t;
     definition : Definition.t;
     types_of_symbols : Flambda_type.t Symbol.Map.t;
-    pieces_of_code : Function_params_and_body.t Code_id.Map.t;
   }
 
-  let print ppf
-        { denv = _ ; definition; types_of_symbols = _; pieces_of_code = _; } =
+  let print ppf { denv = _ ; definition; types_of_symbols = _; } =
     Format.fprintf ppf "@[<hov 1>(\
         @[<hov 1>(definition@ %a)@]\
         )@]"
       Definition.print definition
 
-  let create denv definition ~types_of_symbols ~pieces_of_code =
+  let create denv definition ~types_of_symbols =
     let being_defined = Definition.being_defined definition in
     if not (Symbol.Set.subset (Symbol.Map.keys types_of_symbols) being_defined)
     then begin
@@ -621,23 +619,18 @@ end = struct
         (Symbol.Map.print T.print) types_of_symbols
         Definition.print definition
     end;
-    let code_being_defined = Definition.code_being_defined definition in
-    if not (Code_id.Set.subset (Code_id.Map.keys pieces_of_code)
-      code_being_defined)
-    then begin
-      Misc.fatal_errorf "[pieces_of_code]:@ %a@ does not cover all code IDs \
-          in the [Definition]:@ %a"
-        (Code_id.Map.print Function_params_and_body.print) pieces_of_code
-        Definition.print definition
-    end;
     { denv;
       definition;
       types_of_symbols;
-      pieces_of_code;
+    }
+
+  let create_pieces_of_code denv code =
+    { denv;
+      definition = Definition.pieces_of_code code;
+      types_of_symbols = Symbol.Map.empty;
     }
 
   let denv_at_definition t = t.denv
   let definition t = t.definition
   let types_of_symbols t = t.types_of_symbols
-  let pieces_of_code t = t.pieces_of_code
 end

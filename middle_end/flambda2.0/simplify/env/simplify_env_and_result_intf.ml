@@ -270,11 +270,14 @@ module type Lifted_constant = sig
      : downwards_env
     -> Flambda_static.Program_body.Definition.t
     -> types_of_symbols:Flambda_type.t Symbol.Map.t
-    -> pieces_of_code:Function_params_and_body.t Code_id.Map.t
+    -> t
+
+  val create_pieces_of_code
+     : downwards_env
+    -> Flambda.Function_params_and_body.t Code_id.Map.t
     -> t
 
   val denv_at_definition : t -> downwards_env
   val definition : t -> Flambda_static.Program_body.Definition.t
   val types_of_symbols : t -> Flambda_type.t Symbol.Map.t
-  val pieces_of_code : t -> Function_params_and_body.t Code_id.Map.t
 end

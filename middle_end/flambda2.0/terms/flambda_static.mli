@@ -40,9 +40,10 @@ module Static_part : sig
   (** The mutability status of a block field. *)
   type mutable_or_immutable = Mutable | Immutable
 
-  type set_of_closures = {
+  type code_and_set_of_closures = {
     code : Flambda.Function_params_and_body.t Code_id.Map.t;
-    closures : Flambda.Set_of_closures.t;
+    (* CR mshinwell: Check the free names of the set of closures *)
+    set_of_closures : Flambda.Set_of_closures.t option;
   }
 
   (** The static structure of a symbol, possibly with holes, ready to be
@@ -51,8 +52,8 @@ module Static_part : sig
     | Block : Tag.Scannable.t * mutable_or_immutable
         * (Of_kind_value.t list) -> Flambda_kind.value t
     | Fabricated_block : Variable.t -> Flambda_kind.value t
-    (* CR mshinwell: Check the free names of the set of closures *)
-    | Set_of_closures : set_of_closures -> Flambda_kind.fabricated t
+    | Code_and_set_of_closures : code_and_set_of_closures
+        -> Flambda_kind.fabricated t
     | Boxed_float : Numbers.Float_by_bit_pattern.t or_variable
         -> Flambda_kind.value t
     | Boxed_int32 : Int32.t or_variable -> Flambda_kind.value t
@@ -110,13 +111,13 @@ module Program_body : sig
     type 'k t =
       | Singleton : Symbol.t -> Flambda_kind.value t
         (** A binding of a single symbol of kind [Value]. *)
-      | Set_of_closures : {
+      | Code_and_set_of_closures : {
           code_ids : Code_id.Set.t;
           closure_symbols : Symbol.t Closure_id.Map.t;
         } -> Flambda_kind.fabricated t
         (** A recursive binding of possibly multiple symbols to the individual
-            closures within a set of closures; together with bindings of code
-            to code IDs. *)
+            closures within a set of closures; and/or bindings of code to
+            code IDs. *)
 
     val print : Format.formatter -> _ t -> unit
 
@@ -165,6 +166,10 @@ module Program_body : sig
 
     val singleton_symbol : Symbol.t -> Flambda_kind.value Static_part.t -> t
 
+    val pieces_of_code
+       : Flambda.Function_params_and_body.t Code_id.Map.t
+      -> t
+
     val being_defined : t -> Symbol.Set.t
 
     val code_being_defined : t -> Code_id.Set.t
@@ -196,6 +201,8 @@ module Program_body : sig
   val iter_definitions : t -> f:(Definition.t -> unit) -> unit
 
   type descr = private
+    (* CR mshinwell: Rename [Define_symbol] to [Definition].  It doesn't
+       always define a symbol now. *)
     | Define_symbol of Definition.t * t
     | Root of Symbol.t
 
