@@ -29,9 +29,6 @@ module Switch = Switch_expr
 let fprintf = Format.fprintf
 
 (* -- module rec binding here -- *)
-and Flambda_type : Type_system_intf.S
-    with type term_language_function_declaration := Function_declaration.t
-  = Flambda_type0.Make (Function_declaration)
 
 (* CR mshinwell: Consider counting numbers of names in Name_occurrences *)
 (* CR mshinwell: Check that apply_cont is well-formed when there is a

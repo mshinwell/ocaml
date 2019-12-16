@@ -31,12 +31,8 @@ let funs t = t.funs
 let find ({ funs; } : t) closure_id =
   Closure_id.Map.find closure_id funs
 
-let update _function_decls ~funs =
-  { funs;
-  }
-
 let print_with_cache ~cache ppf { funs; } =
-  fprintf ppf "@[<hov 1>(%a)@]"
+  Format.fprintf ppf "@[<hov 1>(%a)@]"
     (Closure_id.Map.print (Function_declaration.print_with_cache ~cache)) funs
 
 let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t

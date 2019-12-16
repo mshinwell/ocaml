@@ -48,7 +48,7 @@ let print_with_cache ~cache ppf
       { function_decls; 
         closure_elements;
       } =
-  fprintf ppf "@[<hov 1>(%sset_of_closures%s@ \
+  Format.fprintf ppf "@[<hov 1>(%sset_of_closures%s@ \
       @[<hov 1>(function_decls@ %a)@]@ \
       @[<hov 1>(closure_elements@ %a)@]\
       )@]"

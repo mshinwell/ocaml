@@ -422,8 +422,7 @@ end and Function_params_and_body : sig
       -> my_closure:Variable.t
       -> 'a)
     -> 'a
-end and Flambda_type : Type_system_intf.S
-  with type term_language_code := Function_params_and_body.t
+end
 
 module Let = Let_expr
 module Let_cont = Let_cont_expr

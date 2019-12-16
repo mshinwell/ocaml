@@ -497,6 +497,7 @@ let equal t1 t2 =
     ~for_continuations:For_continuations.equal
     ~for_symbols:For_symbols.equal
     ~for_closure_vars:For_closure_vars.equal
+    ~for_code_ids:For_code_ids.equal
     t1 t2
 
 let subset_domain t1 t2 =

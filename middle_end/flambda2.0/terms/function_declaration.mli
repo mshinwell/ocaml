@@ -21,9 +21,6 @@ type t
 (** Printing, invariant checks, name manipulation, etc. *)
 include Expr_std.S with type t := t
 
-(** Compact printer for use when printing types. *)
-val print_compact : Format.formatter -> t -> unit
-
 (** Create a function declaration. *)
 val create
    : code_id:Code_id.t
@@ -64,7 +61,8 @@ val inline : t -> Inline_attribute.t
 (** Whether the function is known definitively to be a functor. *)
 val is_a_functor : t -> bool
 
-(** Change the code ID of a function declaration. *)
+(** Return a function declaration that is like the supplied one except
+    that it has a new code ID. *)
 val update_code_id : t -> Code_id.t -> t
 
 (** Whether the function is recursive, in the sense of the syntactic analysis
