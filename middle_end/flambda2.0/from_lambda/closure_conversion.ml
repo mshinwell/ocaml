@@ -22,6 +22,7 @@ module Env = Closure_conversion_aux.Env
 module Expr = Flambda.Expr
 module Function_decls = Closure_conversion_aux.Function_decls
 module Function_decl = Function_decls.Function_decl
+module Function_params_and_body = Flambda.Function_params_and_body
 module Named = Flambda.Named
 module Program_body = Flambda_static.Program_body
 module Static_part = Flambda_static.Static_part
@@ -40,6 +41,7 @@ type t = {
   mutable imported_symbols : Symbol.Set.t;
   (* All symbols in [imported_symbols] are to be of kind [Value]. *)
   mutable declared_symbols : (Symbol.t * K.value Static_part.t) list;
+  mutable code : Function_params_and_body.t Code_id.Map.t;
 }
 
 let symbol_for_ident t id =
@@ -836,6 +838,7 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
       filename;
       imported_symbols = Symbol.Set.empty;
       declared_symbols = [];
+      code = Code_id.Map.empty;
     }
   in
   let module_symbol = Backend.symbol_for_global' module_ident in
