@@ -240,6 +240,14 @@ module Boxable_number = struct
     | Naked_nativeint -> Naked_number Naked_nativeint
     | Untagged_immediate -> Naked_number Naked_immediate
 
+  let of_naked_number_kind k : t =
+    match (k : Naked_number_kind.t) with
+    | Naked_immediate -> Untagged_immediate
+    | Naked_float -> Naked_float
+    | Naked_int32 -> Naked_int32
+    | Naked_int64 -> Naked_int64
+    | Naked_nativeint -> Naked_nativeint
+
   include Identifiable.Make (struct
     type nonrec t = t
 

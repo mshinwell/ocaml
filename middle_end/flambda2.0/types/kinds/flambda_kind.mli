@@ -130,6 +130,8 @@ module Boxable_number : sig
   (** The kind of the _unboxed_ representation of the given [t]. *)
   val to_kind : t -> kind
 
+  val of_naked_number_kind : Naked_number_kind.t -> t
+
   val print_lowercase : Format.formatter -> t -> unit
 
   val print_lowercase_short : Format.formatter -> t -> unit
