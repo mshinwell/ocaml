@@ -344,15 +344,18 @@ let simplify_static_part_of_kind_fabricated dacc ~result_dacc
         Static_part.print static_part
     end; 
     let dacc, result_dacc =
-      Code_id.Map.fold (fun code_id params_and_body (dacc, result_dacc) ->
+      Code_id.Map.fold
+        (fun code_id ({ params_and_body; newer_version_of; } : Static_part.code)
+             (dacc, result_dacc) ->
           let dacc =
-            DA.map_denv dacc
-              (fun denv -> DE.define_code t code_id params_and_body)
+            DA.map_denv dacc (fun denv ->
+              DE.define_code t ?newer_version_of code_id params_and_body)
           in
           let result_dacc =
-            DA.map_denv result_dacc
-              (fun denv -> DE.define_code t code_id params_and_body)
+            DA.map_denv result_dacc (fun denv ->
+              DE.define_code t ?newer_version_of code_id params_and_body)
           in
+          dacc, result_dacc)
         code
         (dacc, result_dacc)
     in

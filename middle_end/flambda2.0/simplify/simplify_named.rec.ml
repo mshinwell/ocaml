@@ -207,23 +207,24 @@ let simplify_function dacc closure_id function_decl ~all_function_decls_in_set
             end;
             raise Misc.Fatal_error)
     in
+    let old_code_id = code_id in
     let code_id = Code_id.rename code_id in
     let function_decl = FD.update_code_id function_decl code_id in
     let ty =
       function_decl_type ~denv_outside_function:(DA.denv dacc) function_decl
         Rec_info.initial
     in
-    function_decl, code_id, params_and_body, ty, r)
+    function_decl, old_code_id, code_id, params_and_body, ty, r)
 
 let simplify_set_of_closures0 dacc ~result_dacc set_of_closures
       ~closure_bound_names ~closure_elements ~closure_element_types =
   let function_decls = Set_of_closures.function_decls set_of_closures in
   let all_function_decls_in_set = Function_declarations.funs function_decls in
-  let all_function_decls_in_set, code, fun_types, r =
+  let all_function_decls_in_set, old_code_ids, code, fun_types, r =
     Closure_id.Map.fold
       (fun closure_id function_decl
            (result_function_decls_in_set, code, fun_types, r) ->
-        let function_decl, code_id, params_and_body, ty, r =
+        let function_decl, old_code_id, code_id, params_and_body, ty, r =
           simplify_function (DA.with_r dacc r) closure_id function_decl
             ~all_function_decls_in_set ~closure_bound_names
             ~closure_element_types
@@ -232,11 +233,13 @@ let simplify_set_of_closures0 dacc ~result_dacc set_of_closures
           Closure_id.Map.add closure_id function_decl
             result_function_decls_in_set
         in
+        let old_code_ids = Code_id.Map.add code_id old_code_id old_code_ids in
         let code = Code_id.Map.add code_id params_and_body code in
         let fun_types = Closure_id.Map.add closure_id ty fun_types in
-        result_function_decls_in_set, code, fun_types, r)
+        result_function_decls_in_set, old_code_ids, code, fun_types, r)
       all_function_decls_in_set
-      (Closure_id.Map.empty, Code_id.Map.empty, Closure_id.Map.empty, DA.r dacc)
+      (Closure_id.Map.empty, Code_id.Map.empty, Code_id.Map.empty,
+        Closure_id.Map.empty, DA.r dacc)
   in
   let closure_types_by_bound_name =
     let closure_types_via_aliases =
@@ -318,7 +321,8 @@ let simplify_set_of_closures0 dacc ~result_dacc set_of_closures
       (Function_declarations.create all_function_decls_in_set)
       ~closure_elements
   in
-  set_of_closures, closure_types_by_bound_name, code, dacc, result_dacc
+  set_of_closures, closure_types_by_bound_name, old_code_ids, code,
+    dacc, result_dacc
 
 let simplify_and_lift_set_of_closures dacc ~closure_bound_vars
       set_of_closures ~closure_elements ~closure_element_types =
@@ -378,7 +382,8 @@ let simplify_non_lifted_set_of_closures dacc ~bound_vars ~closure_bound_vars
   let closure_bound_names =
     Closure_id.Map.map Name_in_binding_pos.var closure_bound_vars
   in
-  let set_of_closures, _closure_types_by_bound_name, code, _dacc, result_dacc =
+  let set_of_closures, _closure_types_by_bound_name, old_code_ids, code,
+      _dacc, result_dacc =
     simplify_set_of_closures0 dacc ~result_dacc:dacc set_of_closures
       ~closure_bound_names ~closure_elements ~closure_element_types
   in
@@ -388,7 +393,8 @@ let simplify_non_lifted_set_of_closures dacc ~bound_vars ~closure_bound_vars
   let result_dacc =
     DA.map_r result_dacc ~f:(fun r ->
       R.add_lifted_constant r
-        (Lifted_constant.create_pieces_of_code (DA.denv result_dacc code)))
+        (Lifted_constant.create_pieces_of_code (DA.denv result_dacc code)
+          ~newer_version_of:old_code_ids))
   in
   let result_dacc =
     (* CR mshinwell: This seems weird.  Should there ever be lifted constants

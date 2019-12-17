@@ -279,12 +279,14 @@ module type Lifted_constant = sig
 
   val create_piece_of_code
      : downwards_env
+    -> ?newer_version_of:Code_id.t
     -> Code_id.t
     -> Flambda.Function_params_and_body.t
     -> t
 
   val create_pieces_of_code
      : downwards_env
+    -> ?newer_versions_of:Code_id.t Code_id.Map.t
     -> Flambda.Function_params_and_body.t Code_id.Map.t
     -> t
 
