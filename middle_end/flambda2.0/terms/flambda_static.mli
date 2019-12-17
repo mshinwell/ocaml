@@ -40,11 +40,17 @@ module Static_part : sig
   (** The mutability status of a block field. *)
   type mutable_or_immutable = Mutable | Immutable
 
+  (** A piece of code, comprising of the parameters and body of a function,
+      together with a field indicating whether the piece of code is a newer
+      version of one that existed previously (and may still exist), for
+      example after a round of simplification. *)
   type code = {
     params_and_body : Flambda.Function_params_and_body.t;
     newer_version_of : Code_id.t option;
   }
 
+  (** The possibly-recursive declaration of pieces of code and any associated
+      set of closures. *)
   type code_and_set_of_closures = {
     code : code Code_id.Map.t;
     (* CR mshinwell: Check the free names of the set of closures *)

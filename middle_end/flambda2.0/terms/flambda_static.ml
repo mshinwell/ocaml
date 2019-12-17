@@ -194,6 +194,15 @@ module Static_part = struct
         (Name_occurrences.empty)
         fields
 
+  let print_code_with_cache ~cache ppf { params_and_body; newer_version_of; } =
+    (* CR mshinwell: elide "newer_version_of" when None *)
+    Format.fprintf ppf "@[<hov 1>(\
+        @[(newer_version_of@ %a)@]@ \
+        %a\
+        )@]"
+      (Misc.Stdlib.Option.print Code_id.print) newer_version_of
+      Flambda.Function_params_and_body.print params_and_body
+
   let print_with_cache (type k) ~cache ppf (t : k t) =
     let print_float_array_field ppf = function
       | Const f -> fprintf ppf "%a" Numbers.Float_by_bit_pattern.print f
@@ -214,35 +223,16 @@ module Static_part = struct
         (Flambda_colours.normal ())
         Variable.print field
     | Code_and_set_of_closures { code; set_of_closures; } ->
-(* From Function_declaration:
-
-  Function_params_and_body.pattern_match params_and_body
-    ~f:(fun ~return_continuation exn_continuation params ~body ~my_closure ->
-      let my_closure =
-        Kinded_parameter.create (Parameter.wrap my_closure) Flambda_kind.value
-      in
-      if compact then begin
-        fprintf ppf "@[<hov 1>(params_and_body@ <elided>)@])@]"
-      end else begin
-        fprintf ppf
-          "@[<hov 1>(@<0>%s@<1>\u{03bb}@<0>%s@[<hov 1>\
-           @<1>\u{3008}%a@<1>\u{3009}@<1>\u{300a}%a@<1>\u{300b}\
-           %a %a @<0>%s.@<0>%s@]@ %a)@])@]"
-          (Flambda_colours.lambda ())
-          (Flambda_colours.normal ())
-          Continuation.print return_continuation
-          Exn_continuation.print exn_continuation
-          Kinded_parameter.List.print params
-          Kinded_parameter.print my_closure
-          (Flambda_colours.elide ())
-          (Flambda_colours.normal ())
-          (Expr.print_with_cache ~cache) body
-      end)
-*)
-      fprintf ppf "@[<hov 1>(@<0>%sCode_and_set_of_closures@<0>%s@ (%a))@]"
+      fprintf ppf "@[<hov 1>(@<0>%sCode_and_set_of_closures@<0>%s@ (\
+          @[<hov 1>(code@ (%a))%a@]@ \
+          @[<hov 1>(set_of_closures@ (%a))%a@]\
+          ))@]"
         (Flambda_colours.static_part ())
         (Flambda_colours.normal ())
-        (Flambda.Set_of_closures.print_with_cache ~cache) set_of_closures
+        (Code_id.Map.print (print_code_with_cache ~cache)) code
+        (Misc.Stdlib.Option.print
+          (Flambda.Set_of_closures.print_with_cache ~cache))
+          set_of_closures
     | Boxed_float (Const f) ->
       fprintf ppf "@[@<0>%sBoxed_float@<0>%s %a)@]"
         (Flambda_colours.static_part ())
