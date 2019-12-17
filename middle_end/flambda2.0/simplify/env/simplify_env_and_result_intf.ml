@@ -123,7 +123,12 @@ module type Downwards_env = sig
       result structure. *)
   val add_lifted_constants_from_r : t -> result -> t
 
-  val define_code : t -> Code_id.t -> Function_params_and_body.t -> t
+  val define_code
+     : t
+    -> ?newer_version_of:Code_id.t
+    -> Code_id.t
+    -> Function_params_and_body.t
+    -> t
 
   val find_code : t -> Code_id.t -> Function_params_and_body.t
 

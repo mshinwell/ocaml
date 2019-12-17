@@ -133,6 +133,8 @@ module Typing_env : sig
     -> Simple.t
     -> Simple.t option Or_bottom.t * Flambda_kind.t
 
+  val add_to_code_age_relation : t -> newer:Code_id.t -> older:Code_id.t -> t
+
   val cut_and_n_way_join
      : t
     -> (t * Apply_cont_rewrite_id.t * Continuation_use_kind.t

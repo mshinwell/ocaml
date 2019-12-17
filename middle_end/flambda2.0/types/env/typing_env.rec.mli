@@ -118,7 +118,7 @@ val earliest_alias_of_simple_satisfying
   -> Simple.t
   -> Simple.t option
 
-val add_code_age_relation : t -> newer:Code_id.t -> older:Code_id.t -> t
+val add_to_code_age_relation : t -> newer:Code_id.t -> older:Code_id.t -> t
 
 val code_age_relation : t -> Code_age_relation.t
 

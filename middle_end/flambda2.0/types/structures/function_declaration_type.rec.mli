@@ -17,7 +17,7 @@
 [@@@ocaml.warning "+a-30-40-41-42"]
 
 type inlinable = {
-  code : Type_grammar.t;
+  code_id : Code_id.t;
   param_arity : Flambda_arity.t;
   result_arity : Flambda_arity.t;
   stub : bool;

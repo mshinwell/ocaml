@@ -27,34 +27,6 @@ module rec Downwards_env : sig
     with type result := Result.t
     with type lifted_constant := Lifted_constant.t
 end = struct
-(*
-  module Code = struct
-    type t = {
-      params_and_body : Function_params_and_body.t;
-      replaces : Code_id.t option;
-    }
-
-    let print ppf { params_and_body; replaces; } =
-      Format.fprintf ppf "@[<hov 1>(\
-          @[<hov 1>(params_and_body@ %a)@]@ \
-          @[<hov 1>(replaces@ %a)@]\
-          )@]"
-        Function_params_and_body.print params_and_body
-        (Misc.Stdlib.Option.print Code_id.print) replaces
-
-    type 'a incomparable =
-      | Less
-      | Equal
-      | Greater
-      | Incomparable
-
-    let compare_replaces
-          { params_and_body = _; replaces = replaces1; }
-          { params_and_body = _; replaces = replaces2; } =
-
-  end
-*)
-
   type t = {
     backend : (module Flambda2_backend_intf.S);
     round : int;
@@ -63,7 +35,7 @@ end = struct
     can_inline : bool;
     inlining_depth_increment : int;
     float_const_prop : bool;
-    code : Code.t Code_id.Map.t;
+    code : Function_params_and_body.t Code_id.Map.t;
   }
 
   let print ppf { backend = _; round; typing_env;
@@ -310,13 +282,20 @@ end = struct
     (* CR mshinwell: Convert [Typing_env] to map from [Simple]s. *)
     | Const _ -> ()
 
-  let define_code t id code =
+  let define_code t ?newer_version_of id code =
     if Code_id.Map.mem id t.code then begin
       Misc.fatal_errorf "Code ID %a is already defined, cannot redefine to@ %a"
         Code_id.print id
         Function_params_and_body.print code
     end;
+    let typing_env =
+      match newer_version_of with
+      | None -> t.typing_env
+      | Some older ->
+        TE.add_to_code_age_relation t.typing_env ~newer:id ~older
+    in
     { t with
+      typing_env;
       code = Code_id.Map.add id code t.code;
     }
 

@@ -743,7 +743,7 @@ let meet_equations_on_params t ~params ~param_types =
     t
     params param_types
 
-let add_code_age_relation t ~newer ~older =
+let add_to_code_age_relation t ~newer ~older =
   let code_age_relation =
     Code_age_relation.add t.code_age_relation newer older
   in

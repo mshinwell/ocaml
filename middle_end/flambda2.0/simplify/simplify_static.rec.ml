@@ -332,16 +332,36 @@ let simplify_static_part_of_kind_value dacc ~result_dacc
 
 let simplify_static_part_of_kind_fabricated dacc ~result_dacc
       (static_part : K.fabricated Static_part.t)
-      ~closure_symbols
+      ~code_ids ~closure_symbols
     : K.fabricated Static_part.t * DA.t * DA.t =
   match static_part with
-  | Set_of_closures set_of_closures ->
-     let set_of_closures, dacc, result_dacc, _static_structure_types,
-         _static_structure =
-       simplify_set_of_closures dacc ~result_dacc set_of_closures
-         ~closure_symbols
-     in
-     Set_of_closures set_of_closures, dacc, result_dacc
+  | Code_and_set_of_closures { code; set_of_closures; } ->
+    let code_ids' = Code_id.Map.keys code in
+    if not (Code_id.Set.equal code_ids code_ids') then begin
+      Misc.fatal_errorf "Mismatch on declared code IDs (%a and %a):@ %a"
+        Code_id.Set.print code_ids
+        Code_id.Set.print code_ids'
+        Static_part.print static_part
+    end; 
+    let dacc, result_dacc =
+      Code_id.Map.fold (fun code_id params_and_body (dacc, result_dacc) ->
+          let dacc =
+            DA.map_denv dacc
+              (fun denv -> DE.define_code t code_id params_and_body)
+          in
+          let result_dacc =
+            DA.map_denv result_dacc
+              (fun denv -> DE.define_code t code_id params_and_body)
+          in
+        code
+        (dacc, result_dacc)
+    in
+    let set_of_closures, dacc, result_dacc, _static_structure_types,
+        _static_structure =
+      simplify_set_of_closures dacc ~result_dacc set_of_closures
+        ~closure_symbols
+    in
+    Code_and_set_of_closures { code; set_of_closures; }, dacc, result_dacc
 
 let simplify_piece_of_static_structure (type k) dacc ~result_dacc
       (bound_syms : k Program_body.Bound_symbols.t)
@@ -357,9 +377,9 @@ let simplify_piece_of_static_structure (type k) dacc ~result_dacc
   | Singleton result_sym ->
     simplify_static_part_of_kind_value dacc ~result_dacc static_part
       ~result_sym
-  | Set_of_closures { closure_symbols; } ->
+  | Code_and_set_of_closures { code_ids; closure_symbols; } ->
     simplify_static_part_of_kind_fabricated dacc ~result_dacc static_part
-      ~closure_symbols
+      ~code_ids ~closure_symbols
 
 let simplify_static_structure dacc ~result_dacc pieces
       : DA.t * Program_body.Static_structure.t =
