@@ -27,6 +27,34 @@ module rec Downwards_env : sig
     with type result := Result.t
     with type lifted_constant := Lifted_constant.t
 end = struct
+(*
+  module Code = struct
+    type t = {
+      params_and_body : Function_params_and_body.t;
+      replaces : Code_id.t option;
+    }
+
+    let print ppf { params_and_body; replaces; } =
+      Format.fprintf ppf "@[<hov 1>(\
+          @[<hov 1>(params_and_body@ %a)@]@ \
+          @[<hov 1>(replaces@ %a)@]\
+          )@]"
+        Function_params_and_body.print params_and_body
+        (Misc.Stdlib.Option.print Code_id.print) replaces
+
+    type 'a incomparable =
+      | Less
+      | Equal
+      | Greater
+      | Incomparable
+
+    let compare_replaces
+          { params_and_body = _; replaces = replaces1; }
+          { params_and_body = _; replaces = replaces2; } =
+
+  end
+*)
+
   type t = {
     backend : (module Flambda2_backend_intf.S);
     round : int;
@@ -35,7 +63,7 @@ end = struct
     can_inline : bool;
     inlining_depth_increment : int;
     float_const_prop : bool;
-    code : Function_params_and_body.t Code_id.Map.t;
+    code : Code.t Code_id.Map.t;
   }
 
   let print ppf { backend = _; round; typing_env;
@@ -58,7 +86,7 @@ end = struct
       can_inline
       inlining_depth_increment
       float_const_prop
-      (Code_id.Map.print Function_params_and_body.print) code
+      (Code_id.Map.print Code.print) code
 
   let invariant _t = ()
 

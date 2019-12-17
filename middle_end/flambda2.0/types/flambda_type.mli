@@ -161,7 +161,7 @@ type 'a type_accessor = Typing_env.t -> 'a
 (* CR mshinwell: The function declaration types should be abstract *)
 module Function_declaration_type : sig
   type inlinable = private {
-    code : Type_grammar.t;
+    code : Code_id.t;
     param_arity : Flambda_arity.t;
     result_arity : Flambda_arity.t;
     stub : bool;

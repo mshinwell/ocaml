@@ -16,10 +16,18 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
+module TE = Typing_env
 module TEE = Typing_env_extension
 
 type inlinable = {
-  code : Type_grammar.t;
+  code_id : Code_id.t;
+  param_arity : Flambda_arity.t;
+  result_arity : Flambda_arity.t;
+  stub : bool;
+  dbg : Debuginfo.t;
+  inline : Inline_attribute.t;
+  is_a_functor : bool;
+  recursive : Recursive.t;
   rec_info : Rec_info.t;
 }
 
@@ -103,12 +111,61 @@ struct
       (* CR mshinwell: This should presumably return [Non_inlinable] if
          the arities match. *)
       Ok (Unknown, TEE.empty ())
-    | Known (Inlinable { code = code1; rec_info = rec_info1; }),
-        Known (Inlinable { code = code2; rec_info = _rec_info2; }) ->
+    | Known (Inlinable {
+        code_id = code_id1;
+        param_arity = param_arity1;
+        result_arity = result_arity1;
+        stub = stub1;
+        dbg = dbg1;
+        inline = inline1;
+        is_a_functor = is_a_functor1;
+        recursive = recursive1;
+        rec_info = _rec_info1;
+      }),
+      Known (Inlinable {
+        code_id = code_id2;
+        param_arity = param_arity2;
+        result_arity = result_arity2;
+        stub = stub2;
+        dbg = dbg2;
+        inline = inline2;
+        is_a_functor = is_a_functor2;
+        recursive = recursive2;
+        rec_info = _rec_info2;
+      }),
+      let typing_env = Meet_env.env env in
+      let code_age_rel = TE.code_age_relation typing_env in
+      let check_other_things code_id : _ Or_bottom.t =
+        assert (Flambda_arity.equal param_arity1 param_arity2);
+        assert (Flambda_arity.equal result_arity1 result_arity2);
+        assert (Bool.equal stub1 stub2);
+        assert (Int.equal (Debuginfo.compare dbg1 dbg2) 0);
+        assert (Inline_attribute.equal inline1 inline2);
+        assert (Bool.equal is_a_functor1 is_a_functor2);
+        assert (Recursive.equal recursive1 recursive2);
+        Ok (Known (Inlinable {
+            code_id;
+            param_arity = param_arity1;
+            result_arity = result_arity1;
+            stub = stub1;
+            dbg = dbg1;
+            inline = inline1;
+            is_a_functor = is_a_functor1;
+            recursive = recursive1;
+            rec_info = _rec_info1;
+          }),
+          TEE.empty)
+      in
       (* CR mshinwell: What about [rec_info]? *)
-      (* CR mshinwell: This function should be able to return bottom,
-          presumably?  What does bottom mean here? *)
-      Or_bottom.map (E.switch Type_grammar.meet Type_grammar.join code1 code2)
-        ~f:(fun code ->
-          Known (Inlinable { code; rec_info = rec_info1; (* XXX *) }))
+      match E.op with
+      | Meet ->
+        begin match Code_age_relation.meet code_age_rel code_id1 code_id2 with
+        | Ok code_id -> check_other_things_and_return code_id
+        | Bottom -> Bottom
+        end
+      | Join ->
+        begin match Code_age_relation.join code_age_rel code_id1 code_id2 with
+        | Known code_id -> check_other_things_and_return code_id
+        | Unknown -> Ok (Unknown, TEE.empty ())
+        end
 end
