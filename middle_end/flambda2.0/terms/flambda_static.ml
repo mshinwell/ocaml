@@ -90,13 +90,24 @@ module Static_part = struct
 
   type mutable_or_immutable = Mutable | Immutable
 
+  type code = {
+    params_and_body : Flambda.Function_params_and_body.t;
+    newer_version_of : Code_id.t option;
+  }
+
+  type code_and_set_of_closures = {
+    code : code Code_id.Map.t;
+    set_of_closures : Flambda.Set_of_closures.t option;
+  }
+
   type 'k t =
     | Block : Tag.Scannable.t * mutable_or_immutable
               * (Of_kind_value.t list) -> K.value t
     | Fabricated_block : Variable.t -> K.value t
       (* CR mshinwell: This used to say K.fabricated.  Use a different
          index from [K.t]? *)
-    | Set_of_closures : Flambda.Set_of_closures.t -> K.fabricated t
+    | Code_and_set_of_closures : code_and_set_of_closures
+        -> Flambda_kind.fabricated t
     | Boxed_float : Numbers.Float_by_bit_pattern.t or_variable
                     -> K.value t
     | Boxed_int32 : Int32.t or_variable -> K.value t
@@ -138,7 +149,29 @@ module Static_part = struct
         fields
     | Fabricated_block v ->
       Name_occurrences.singleton_variable v Name_mode.normal
-    | Set_of_closures set -> Flambda.Set_of_closures.free_names set
+    | Code_and_set_of_closures { code; set_of_closures; } ->
+      let from_set_of_closures =
+        match set_of_closures with
+        | None -> Name_occurrences.empty
+        | Some set -> Flambda.Set_of_closures.free_names set
+      in
+      Code_id.Map.fold
+        (fun code_id { params_and_body; newer_version_of; } free_names ->
+          let from_newer_version_of =
+            match newer_version_of with
+            | None -> Name_occurrences.empty
+            | Some older ->
+              Name_occurrences.add_newer_version_of_code_id
+                Name_occurrences.empty older Name_mode.normal
+          in
+          assert (Name_occurrences.is_empty
+            (Flambda.Function_params_and_body.free_names params_and_body));
+          Name_occurrences.union
+            (Name_occurrences.add_code_id Name_occurrences.empty
+              code_id Name_mode.normal)
+            from_newer_version_of)
+        code
+        from_set_of_closures
     | Boxed_float (Var v)
     | Boxed_int32 (Var v)
     | Boxed_int64 (Var v)

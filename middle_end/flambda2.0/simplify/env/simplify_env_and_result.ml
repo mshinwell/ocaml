@@ -353,8 +353,9 @@ end = struct
               types_of_symbols
               typing_env
           in
-          Code_id.Map.fold (fun code_id params_and_body denv ->
-              define_code denv code_id params_and_body)
+          Code_id.Map.fold
+            (fun code_id (newer_version_of, params_and_body) denv ->
+              define_code denv ?newer_version_of code_id params_and_body)
             (LC.pieces_of_code lifted_constant)
             (with_typing_env denv typing_env))
       t
@@ -631,14 +632,19 @@ end = struct
       types_of_symbols;
     }
 
-  let create_pieces_of_code denv code =
+  let create_pieces_of_code denv ?newer_versions_of code =
     { denv;
-      definition = Definition.pieces_of_code code;
+      definition = Definition.pieces_of_code ?newer_versions_of code;
       types_of_symbols = Symbol.Map.empty;
     }
 
-  let create_piece_of_code denv code_id params_and_body =
-    create_pieces_of_code denv
+  let create_piece_of_code denv ?newer_versions_of code_id params_and_body =
+    let newer_versions_of =
+      match newer_versions_of with
+      | None -> None
+      | Some older -> Some (Code_id.Map.singleton code_id older)
+    in
+    create_pieces_of_code denv ?newer_versions_of
       (Code_id.Map.singleton code_id params_and_body)
 
   let denv_at_definition t = t.denv

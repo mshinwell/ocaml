@@ -46,7 +46,7 @@ module Static_part : sig
   }
 
   type code_and_set_of_closures = {
-    code : Flambda.Function_params_and_body.t Code_id.Map.t;
+    code : code Code_id.Map.t;
     (* CR mshinwell: Check the free names of the set of closures *)
     set_of_closures : Flambda.Set_of_closures.t option;
   }
