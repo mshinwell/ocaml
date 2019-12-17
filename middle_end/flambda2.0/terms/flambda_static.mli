@@ -171,8 +171,11 @@ module Program_body : sig
 
     val singleton_symbol : Symbol.t -> Flambda_kind.value Static_part.t -> t
 
+    (** If [newer_versions_of] maps [id1] to [id2] then [id1] is a newer
+        version of [id2]. *)
     val pieces_of_code
-       : Flambda.Function_params_and_body.t Code_id.Map.t
+       : ?newer_versions_of:Code_id.t Code_id.Map.t
+      -> Flambda.Function_params_and_body.t Code_id.Map.t
       -> t
 
     val being_defined : t -> Symbol.Set.t

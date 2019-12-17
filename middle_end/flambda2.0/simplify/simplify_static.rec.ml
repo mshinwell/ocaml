@@ -528,11 +528,8 @@ let simplify_return_continuation_handler dacc
       DE.add_lifted_constants denv ~lifted:(R.get_lifted_constants r))
   in
   let allowed_free_vars =
-    Variable.Set.union
-      (Variable.Set.of_list
-        (List.map KP.var return_cont_handler.computed_values))
-      (Variable.Set.of_list
-        (List.map KP.var extra_params_and_args.extra_params))
+    Variable.Set.union (KP.var_set return_cont_handler.computed_values)
+      (KP.var_set extra_params_and_args.extra_params)
   in
   let static_structure, result_dacc =
     let result_dacc, dacc, reified_definitions =
@@ -728,6 +725,8 @@ let simplify_definition dacc (defn : Program_body.Definition.t) =
     }
   in
   definition, dacc
+
+(* CR mshinwell: Need to delete unused code bindings. *)
 
 let define_lifted_constants lifted_constants (body : Program_body.t) =
   List.fold_left (fun body lifted_constant : Program_body.t ->

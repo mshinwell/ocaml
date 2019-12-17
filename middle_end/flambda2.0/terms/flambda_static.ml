@@ -213,7 +213,7 @@ module Static_part = struct
         (Flambda_colours.static_part ())
         (Flambda_colours.normal ())
         Variable.print field
-    | Set_of_closures set_of_closures ->
+    | Code_and_set_of_closures { code; set_of_closures; } ->
 (* From Function_declaration:
 
   Function_params_and_body.pattern_match params_and_body
@@ -239,7 +239,7 @@ module Static_part = struct
           (Expr.print_with_cache ~cache) body
       end)
 *)
-      fprintf ppf "@[<hov 1>(@<0>%sSet_of_closures@<0>%s@ (%a))@]"
+      fprintf ppf "@[<hov 1>(@<0>%sCode_and_set_of_closures@<0>%s@ (%a))@]"
         (Flambda_colours.static_part ())
         (Flambda_colours.normal ())
         (Flambda.Set_of_closures.print_with_cache ~cache) set_of_closures
@@ -541,8 +541,16 @@ module Program_body = struct
         static_structure = [S (Singleton symbol, static_part)];
       }
 
-    let piece_of_code code_id params_and_body =
+    let pieces_of_code ?newer_versions_of code =
       let static_structure : Static_structure.t =
+        let code =
+          let newer_version_of = Code_id.Map.find_opt code newer_versions_of in
+          Code_id.Map.map (fun id params_and_body : code ->
+              { params_and_body;
+                newer_version_of;
+              })
+            code
+        in
         let static_part : K.fabricated Static_part.t =
           Code_and_set_of_closures {
             code;
