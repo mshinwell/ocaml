@@ -393,7 +393,9 @@ let simplify_non_lifted_set_of_closures dacc ~bound_vars ~closure_bound_vars
   let result_dacc =
     (* CR mshinwell: This seems weird.  Should there ever be lifted constants
        in the [r] component of a [dacc] that are not in the [denv] component
-       of a dacc?  If not maybe we could enforce that via a check. *)
+       of a dacc?  If not maybe we could enforce that via a check.
+       (This comment predates the addition of the code to [result_dacc]
+       just above.) *)
     DA.map_denv result_dacc ~f:(fun denv ->
       DE.add_lifted_constants denv
         ~lifted:(R.get_lifted_constants (DA.r result_dacc)))

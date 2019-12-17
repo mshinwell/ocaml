@@ -18,6 +18,13 @@
 
 type inlinable = {
   code : Type_grammar.t;
+  param_arity : Flambda_arity.t;
+  result_arity : Flambda_arity.t;
+  stub : bool;
+  dbg : Debuginfo.t;
+  inline : Inline_attribute.t;
+  is_a_functor : bool;
+  recursive : Recursive.t;
   rec_info : Rec_info.t;
 }
 

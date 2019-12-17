@@ -26,10 +26,11 @@ module VB = Var_in_binding_pos
 let inline dacc ~callee ~args function_decl
       ~apply_return_continuation ~apply_exn_continuation
       ~apply_inlining_depth ~unroll_to dbg =
-  Function_params_and_body.pattern_match
-    (Function_declaration.params_and_body function_decl)
+  let denv = DA.denv dacc in
+  let code_id = Function_declaration.code_id function_decl in
+  let params_and_body = DE.find_code denv code_id in
+  Function_params_and_body.pattern_match params_and_body
     ~f:(fun ~return_continuation exn_continuation params ~body ~my_closure ->
-      let denv = DA.denv dacc in
       let typing_env = DE.typing_env denv in
       (* XXX The following is a hack until we work out more of the theory
          about [Rec_info] *)

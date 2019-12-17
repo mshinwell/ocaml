@@ -270,7 +270,7 @@ and simplify_direct_full_application
     | Some (function_decl, function_decl_rec_info) ->
       let apply_inlining_depth = Apply.inlining_depth apply in
       let decision =
-        Inlining_decision.make_decision_for_call_site (DA.denv dacc)
+        Inlining_decision.make_decision_for_call_site dacc
           ~function_decl_rec_info
           ~apply_inlining_depth
           (Apply.inline apply)
@@ -374,7 +374,7 @@ and simplify_direct_partial_application
   let wrapper_closure_id =
     Closure_id.wrap compilation_unit (Variable.create "closure")
   in
-  let wrapper_taking_remaining_args =
+  let wrapper_taking_remaining_args, dacc =
     let return_continuation = Continuation.create () in
     let remaining_params =
       List.map (fun kind ->
@@ -430,8 +430,14 @@ and simplify_direct_partial_application
         ~body
         ~my_closure
     in
+    let code_id =
+      Code_id.create
+        ~name:(Closure_id.to_string callee's_closure_id ^ "_partial")
+        (Compilation_unit.get_current_exn ())
+    in
     let function_decl =
-      Function_declaration.create ~params_and_body
+      Function_declaration.create ~code_id
+        ~params_arity:(KP.List.arity remaining_params)
         ~result_arity
         ~stub:true
         ~dbg
@@ -446,7 +452,18 @@ and simplify_direct_partial_application
     let closure_elements =
       Var_within_closure.Map.of_list applied_args_with_closure_vars
     in
-    Set_of_closures.create function_decls ~closure_elements
+    (* CR mshinwell: Factor out this next part into a helper function *)
+    let code =
+      Lifted_constant.create_piece_of_code (DA.denv dacc) code_id
+        params_and_body
+    in
+    let dacc =
+      dacc
+      |> DA.map_r ~f:(fun r -> R.new_lifted_constant r code)
+      |> DA.map_denv ~f:(fun denv ->
+        DE.add_lifted_constants denv ~lifted:[code])
+    in
+    Set_of_closures.create function_decls ~closure_elements, dacc
   in
   let apply_cont =
     Apply_cont.create (Apply.continuation apply)

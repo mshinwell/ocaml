@@ -630,6 +630,10 @@ end = struct
       types_of_symbols = Symbol.Map.empty;
     }
 
+  let create_piece_of_code denv code_id params_and_body =
+    create_pieces_of_code denv
+      (Code_id.Map.singleton code_id params_and_body)
+
   let denv_at_definition t = t.denv
   let definition t = t.definition
   let types_of_symbols t = t.types_of_symbols

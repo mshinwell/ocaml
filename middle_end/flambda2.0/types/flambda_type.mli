@@ -26,8 +26,6 @@ module Float = Numbers.Float_by_bit_pattern
 module Int32 = Numbers.Int32
 module Int64 = Numbers.Int64
 
-type term_language_function_declaration
-
 type t
 type flambda_type = t
 
@@ -163,7 +161,14 @@ type 'a type_accessor = Typing_env.t -> 'a
 (* CR mshinwell: The function declaration types should be abstract *)
 module Function_declaration_type : sig
   type inlinable = private {
-    function_decl : term_language_function_declaration;
+    code : Type_grammar.t;
+    param_arity : Flambda_arity.t;
+    result_arity : Flambda_arity.t;
+    stub : bool;
+    dbg : Debuginfo.t;
+    inline : Inline_attribute.t;
+    is_a_functor : bool;
+    recursive : Recursive.t;
     rec_info : Rec_info.t;
   }
 

@@ -66,7 +66,7 @@ module Benefit : sig
   val remove_branch : t -> t
   val direct_call_of_indirect_unknown_arity : t -> t
   val direct_call_of_indirect_known_arity : t -> t
-  val requested_inline : t -> size_of:Expr.t -> t
+  val requested_inline : Downwards_acc.t -> t -> size_of:Expr.t -> t
 
   val print : Format.formatter -> t -> unit
 end

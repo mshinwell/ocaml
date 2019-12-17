@@ -131,9 +131,13 @@ let tupled_function_call_stub
       ~body
       ~my_closure
   in
+  let code_id =
+    Code_id.create ~name:((Closure_id.to_string closure_id) ^ "_tuple_stub")
+      (Compilation_unit.get_current_exn ())
+  in
   let func_decl =
-    Flambda.Function_declaration.create
-      ~params_and_body
+    Flambda.Function_declaration.create ~code_id
+      ~params_arity:[K.value]
       ~result_arity:[K.value]
       ~stub:true
       ~dbg
@@ -141,7 +145,7 @@ let tupled_function_call_stub
       ~is_a_functor:false
       ~recursive
   in
-  func_decl, params_and_body
+  func_decl, code_id, params_and_body
 
 let register_const0 t (constant : K.value Static_part.t) name =
   let current_compilation_unit = Compilation_unit.get_current_exn () in
@@ -690,7 +694,7 @@ and close_one_function t ~external_env ~by_closure_id decl
   let our_let_rec_ident = Function_decl.let_rec_ident decl in
   let compilation_unit = Compilation_unit.get_current_exn () in
   let code_id =
-    Code_id.create (Closure_id.to_string closure_id) compilation_unit
+    Code_id.create ~name:(Closure_id.to_string closure_id) compilation_unit
   in
   let unboxed_version =
     Closure_id.wrap compilation_unit (Variable.create (
@@ -805,16 +809,16 @@ and close_one_function t ~external_env ~by_closure_id decl
       var_within_closures_to_bind
       body
   in
+  let exn_continuation =
+    close_exn_continuation external_env (Function_decl.exn_continuation decl)
+  in
+  let inline = LC.inline_attribute (Function_decl.inline decl) in
+  let params_and_body =
+    Flambda.Function_params_and_body.create
+      ~return_continuation:(Function_decl.return_continuation decl)
+      exn_continuation params ~body ~my_closure
+  in
   let fun_decl =
-    let exn_continuation =
-      close_exn_continuation external_env (Function_decl.exn_continuation decl)
-    in
-    let inline = LC.inline_attribute (Function_decl.inline decl) in
-    let params_and_body =
-      Flambda.Function_params_and_body.create
-        ~return_continuation:(Function_decl.return_continuation decl)
-        exn_continuation params ~body ~my_closure
-    in
     Flambda.Function_declaration.create ~code_id
       ~params_arity:(Kinded_parameter.List.arity params)
       ~result_arity:[LC.value_kind return]
@@ -828,13 +832,9 @@ and close_one_function t ~external_env ~by_closure_id decl
   match Function_decl.kind decl with
   | Curried -> Closure_id.Map.add my_closure_id fun_decl by_closure_id
   | Tupled ->
-    let generic_function_stub, params_and_body =
+    let generic_function_stub, code_id, params_and_body =
       tupled_function_call_stub param_vars unboxed_version ~closure_id
         recursive
-    in
-    let code_id =
-      Code_id.create ((Closure_id.to_string closure_id) ^ "_tuple_stub")
-        compilation_unit
     in
     t.code <- Code_id.Map.add code_id params_and_body t.code;
     Closure_id.Map.add unboxed_version fun_decl
@@ -975,7 +975,8 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
       t.declared_symbols
   in
   let program_body =
-    Code_id.Map.fold (fun code_id params_and_body : Program_body.t ->
+    Code_id.Map.fold
+      (fun code_id params_and_body program_body : Program_body.t ->
         let bound_symbols : K.fabricated Program_body.Bound_symbols.t =
           Code_and_set_of_closures {
             code_ids = Code_id.Set.singleton code_id;
@@ -996,9 +997,9 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
             static_structure;
           }
         in
-        Program_body.define_symbol definition ~body)
-      program_body
+        Program_body.define_symbol definition ~body:program_body)
       t.code
+      program_body
   in
   let imported_symbols =
     Symbol.Set.fold (fun symbol imported_symbols ->

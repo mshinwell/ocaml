@@ -21,7 +21,9 @@ module TEE = Typing_env_extension
 
 type t =
   | Code of {
-      code : Term_language_code.t;
+      code_id : Code_id.t;
+      (* In future, more information would go here, e.g. function return
+         types. *)
     }
 
 let print_with_cache ~cache ppf t =

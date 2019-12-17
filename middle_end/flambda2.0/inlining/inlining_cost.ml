@@ -19,6 +19,7 @@
 open! Flambda.Import
 
 module DA = Downwards_acc
+module DE = Simplify_env_and_result.Downwards_env
 
 (* Simple approximation of the space cost of a primitive. *)
 let prim_size (_prim : Flambda_primitive.t) = 1
@@ -77,7 +78,7 @@ let _project_size = 1
 
 let smaller' dacc expr ~than:threshold =
   let size = ref 0 in
-  let rec expr_size expr =
+  let rec expr_size dacc expr =
     if !size > threshold then raise Exit;
     match Expr.descr expr with
     | Let let_expr ->
@@ -124,7 +125,7 @@ let smaller' dacc expr ~than:threshold =
       let funs = Function_declarations.funs func_decls in
       Closure_id.Map.iter (fun _ func_decl ->
           let code_id = Function_declaration.code_id func_decl in
-          let params_and_body = DA.find_code dacc code_id in
+          let params_and_body = DE.find_code (DA.denv dacc) code_id in
           Function_params_and_body.pattern_match params_and_body
             ~f:(fun ~return_continuation:_ _exn_continuation _params
                     ~body ~my_closure:_ ->
@@ -242,8 +243,8 @@ module Benefit = struct
   let direct_call_of_indirect_unknown_arity t =
     { t with direct_call_of_indirect = t.direct_call_of_indirect + 1; }
 
-  let requested_inline t ~size_of =
-    let size = size size_of in
+  let requested_inline dacc t ~size_of =
+    let size = size dacc size_of in
     { t with requested_inline = t.requested_inline + size; }
 
   let print ppf b =
