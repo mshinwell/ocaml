@@ -64,14 +64,14 @@ let force_to_kind_value t =
   match t with
   | Value ty -> ty
   | Naked_immediate _ | Naked_float _ | Naked_int32 _ | Naked_int64 _
-  | Naked_nativeint _ | Fabricated _ ->
+  | Naked_nativeint _ ->
     Misc.fatal_errorf "Type has wrong kind (expected [Value]):@ %a" print t
 
 let force_to_kind_naked_immediate t =
   match t with
   | Naked_immediate ty -> ty
   | Value _ | Naked_float _ | Naked_int32 _ | Naked_int64 _
-  | Naked_nativeint _ | Fabricated _ ->
+  | Naked_nativeint _ ->
     Misc.fatal_errorf
       "Type has wrong kind (expected [Naked_immediate]):@ %a"
       print t
@@ -80,7 +80,7 @@ let force_to_kind_naked_float t =
   match t with
   | Naked_float ty -> ty
   | Value _ | Naked_immediate _ | Naked_int32 _ | Naked_int64 _
-  | Naked_nativeint _ | Fabricated _ ->
+  | Naked_nativeint _ ->
     Misc.fatal_errorf
       "Type has wrong kind (expected [Naked_float]):@ %a"
       print t
@@ -89,7 +89,7 @@ let force_to_kind_naked_int32 t =
   match t with
   | Naked_int32 ty -> ty
   | Value _ | Naked_immediate _ | Naked_float _ | Naked_int64 _
-  | Naked_nativeint _ | Fabricated _ ->
+  | Naked_nativeint _ ->
     Misc.fatal_errorf
       "Type has wrong kind (expected [Naked_int32]):@ %a"
       print t
@@ -98,7 +98,7 @@ let force_to_kind_naked_int64 t =
   match t with
   | Naked_int64 ty -> ty
   | Value _ | Naked_immediate _ | Naked_float _ | Naked_int32 _
-  | Naked_nativeint _ | Fabricated _ ->
+  | Naked_nativeint _ ->
     Misc.fatal_errorf
       "Type has wrong kind (expected [Naked_number Int64]):@ %a"
       print t
@@ -107,7 +107,7 @@ let force_to_kind_naked_nativeint t =
   match t with
   | Naked_nativeint ty -> ty
   | Value _ | Naked_immediate _ | Naked_float _ | Naked_int32 _
-  | Naked_int64 _ | Fabricated _ ->
+  | Naked_int64 _ ->
     Misc.fatal_errorf
       "Type has wrong kind (expected [Naked_number Nativeint]):@ %a"
       print t
@@ -189,7 +189,6 @@ let kind t =
   | Naked_int32 _ -> K.naked_int32
   | Naked_int64 _ -> K.naked_int64
   | Naked_nativeint _ -> K.naked_nativeint
-  | Fabricated _ -> K.fabricated
 
 let get_alias t =
   match t with
@@ -233,6 +232,7 @@ let alias_type_of (kind : K.t) name : t =
   | Naked_number Naked_int32 -> Naked_int32 (T_N32.create_equals name)
   | Naked_number Naked_int64 -> Naked_int64 (T_N64.create_equals name)
   | Naked_number Naked_nativeint -> Naked_nativeint (T_NN.create_equals name)
+  | Fabricated -> Misc.fatal_error "Only used in [Flambda_static] now"
 
 let bottom_value () = Value (T_V.bottom ())
 let bottom_naked_immediate () = Naked_immediate (T_NI.bottom ())
@@ -249,7 +249,7 @@ let bottom (kind : K.t) =
   | Naked_number Naked_int32 -> bottom_naked_int32 ()
   | Naked_number Naked_int64 -> bottom_naked_int64 ()
   | Naked_number Naked_nativeint -> bottom_naked_nativeint ()
-  | Fabricated -> bottom_fabricated ()
+  | Fabricated -> Misc.fatal_error "Only used in [Flambda_static] now"
 
 let bottom_like t = bottom (kind t)
 
@@ -268,7 +268,7 @@ let unknown (kind : K.t) =
   | Naked_number Naked_int32 -> any_naked_int32 ()
   | Naked_number Naked_int64 -> any_naked_int64 ()
   | Naked_number Naked_nativeint -> any_naked_nativeint ()
-  | Fabricated -> any_fabricated ()
+  | Fabricated -> Misc.fatal_error "Only used in [Flambda_static] now"
 
 let unknown_like t = unknown (kind t)
 
@@ -347,7 +347,7 @@ let box_float (t : t) : t =
   match t with
   | Naked_float _ -> Value (T_V.create (Boxed_float t))
   | Value _ | Naked_immediate _ | Naked_int32 _ | Naked_int64 _
-  | Naked_nativeint _ | Fabricated ->
+  | Naked_nativeint _ ->
     Misc.fatal_errorf "Type of wrong kind for [box_float]: %a"
       print t
 
@@ -355,7 +355,7 @@ let box_int32 (t : t) : t =
   match t with
   | Naked_int32 _ -> Value (T_V.create (Boxed_int32 t))
   | Value _ | Naked_immediate _ | Naked_float _ | Naked_int64 _
-  | Naked_nativeint _ | Fabricated ->
+  | Naked_nativeint _ ->
     Misc.fatal_errorf "Type of wrong kind for [box_int32]: %a"
       print t
 
@@ -363,7 +363,7 @@ let box_int64 (t : t) : t =
   match t with
   | Naked_int64 _ -> Value (T_V.create (Boxed_int64 t))
   | Value _ | Naked_immediate _ | Naked_float _ | Naked_int32 _
-  | Naked_nativeint _ | Fabricated ->
+  | Naked_nativeint _ ->
     Misc.fatal_errorf "Type of wrong kind for [box_int64]: %a"
       print t
 
@@ -371,7 +371,7 @@ let box_nativeint (t : t) : t =
   match t with
   | Naked_nativeint _ -> Value (T_V.create (Boxed_nativeint t))
   | Value _ | Naked_immediate _ | Naked_float _ | Naked_int32 _
-  | Naked_int64 _ | Fabricated ->
+  | Naked_int64 _ ->
     Misc.fatal_errorf "Type of wrong kind for [box_nativeint]: %a"
       print t
 
@@ -406,7 +406,7 @@ let tag_immediate t : t =
       ~immediates:(Known t)
       ~blocks:(Known (Row_like.For_blocks.create_bottom ()))))))
   | Value _ | Naked_float _ | Naked_int32 _ | Naked_int64 _
-  | Naked_nativeint _ | Fabricated ->
+  | Naked_nativeint _ ->
     Misc.fatal_errorf "Type of wrong kind for [tag_immediate]: %a"
       print t
 
@@ -503,20 +503,18 @@ let any_boxed_int32 () = box_int32 (any_naked_int32 ())
 let any_boxed_int64 () = box_int64 (any_naked_int64 ())
 let any_boxed_nativeint () = box_nativeint (any_naked_nativeint ())
 
-let create_inlinable_function_declaration function_decl rec_info
+let create_inlinable_function_declaration ~code_id ~param_arity ~result_arity
+      ~stub ~dbg ~inline ~is_a_functor ~recursive ~rec_info
       : Function_declaration_type.t =
-  Inlinable {
-    function_decl;
-    rec_info;
-  }
+  Ok (Inlinable (
+    Function_declaration_type.Inlinable.create ~code_id ~param_arity
+      ~result_arity ~stub ~dbg ~inline ~is_a_functor ~recursive ~rec_info))
 
 let create_non_inlinable_function_declaration ~param_arity ~result_arity
       ~recursive : Function_declaration_type.t =
-  Non_inlinable {
-    param_arity;
-    result_arity;
-    recursive;
-  }
+  Ok (Non_inlinable (
+    Function_declaration_type.Non_inlinable.create ~param_arity
+      ~result_arity ~recursive))
 
 let exactly_this_closure closure_id ~all_function_decls_in_set:function_decls
       ~all_closures_in_set:closure_types
@@ -525,10 +523,6 @@ let exactly_this_closure closure_id ~all_function_decls_in_set:function_decls
   let closures_entry =
     let closure_var_types =
       Product.Var_within_closure_indexed.create closure_var_types
-    in
-    let function_decls =
-      Closure_id.Map.map (fun func_decl -> Or_unknown.Known func_decl)
-        function_decls
     in
     Closures_entry.create ~function_decls ~closure_types ~closure_var_types
   in
@@ -554,7 +548,7 @@ let at_least_the_closures_with_ids ~this_closure closure_ids_and_bindings =
       closure_ids_and_bindings
   in
   let function_decls =
-    Closure_id.Map.map (fun _ -> Or_unknown.Unknown)
+    Closure_id.Map.map (fun _ -> Or_unknown_or_bottom.Unknown)
       closure_ids_and_bindings
   in
   let closure_types = Product.Closure_id_indexed.create closure_ids_and_types in

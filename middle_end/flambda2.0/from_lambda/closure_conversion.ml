@@ -984,8 +984,13 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
           }
         in
         let static_part : K.fabricated Static_part.t =
+          let code : Static_part.code =
+            { params_and_body = Present params_and_body;
+              newer_version_of = None;
+            }
+          in
           Code_and_set_of_closures {
-            code = Code_id.Map.singleton code_id params_and_body;
+            code = Code_id.Map.singleton code_id code;
             set_of_closures = None; 
           }
         in

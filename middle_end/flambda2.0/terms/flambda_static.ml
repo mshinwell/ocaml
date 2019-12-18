@@ -91,9 +91,12 @@ module Static_part = struct
   type mutable_or_immutable = Mutable | Immutable
 
   type code = {
-    params_and_body : Flambda.Function_params_and_body.t;
+    params_and_body : Flambda.Function_params_and_body.t or_deleted;
     newer_version_of : Code_id.t option;
   }
+  and 'a or_deleted =
+    | Present of 'a
+    | Deleted
 
   type code_and_set_of_closures = {
     code : code Code_id.Map.t;

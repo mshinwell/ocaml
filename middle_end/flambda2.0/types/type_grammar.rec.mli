@@ -26,7 +26,6 @@ type t = private
   | Naked_int32 of Type_of_kind_naked_int32.t
   | Naked_int64 of Type_of_kind_naked_int64.t
   | Naked_nativeint of Type_of_kind_naked_nativeint.t
-  | Fabricated of Type_of_kind_fabricated.t
 
 val print : Format.formatter -> t -> unit
 
@@ -134,8 +133,15 @@ val type_for_const : Simple.Const.t -> t
 val kind_for_const : Simple.Const.t -> Flambda_kind.t
 
 val create_inlinable_function_declaration
-   : Term_language_function_declaration.t
-  -> Rec_info.t
+   : code_id:Code_id.t
+  -> param_arity:Flambda_arity.t
+  -> result_arity:Flambda_arity.t
+  -> stub:bool
+  -> dbg:Debuginfo.t
+  -> inline:Inline_attribute.t
+  -> is_a_functor:bool
+  -> recursive:Recursive.t
+  -> rec_info:Rec_info.t
   -> Function_declaration_type.t
 
 val create_non_inlinable_function_declaration

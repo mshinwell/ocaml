@@ -489,7 +489,7 @@ let binary_op ~for_variables ~for_continuations ~for_symbols ~for_closure_vars
   let closure_vars = for_closure_vars closure_vars1 closure_vars2 in
   let code_ids = for_code_ids code_ids1 code_ids2 in
   let newer_version_of_code_ids =
-    for_code_ids newer_version_of_code_ids1 newer_version_of_code_ids
+    for_code_ids newer_version_of_code_ids1 newer_version_of_code_ids2
   in
   { variables;
     continuations;

@@ -45,9 +45,15 @@ module Static_part : sig
       version of one that existed previously (and may still exist), for
       example after a round of simplification. *)
   type code = {
-    params_and_body : Flambda.Function_params_and_body.t;
+    params_and_body : Flambda.Function_params_and_body.t or_deleted;
     newer_version_of : Code_id.t option;
   }
+  and 'a or_deleted =
+    | Present of 'a
+    | Deleted
+
+  (* CR mshinwell: Code_id.t to Symbol.t needs to be doable without any
+     state *)
 
   (** The possibly-recursive declaration of pieces of code and any associated
       set of closures. *)

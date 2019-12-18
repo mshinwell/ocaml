@@ -23,6 +23,9 @@ let print ppf t = Code_id.Map.print Code_id.print ppf t
 
 let empty = Code_id.Map.empty
 
+(* CR mshinwell: There should be a well-formedness check on the graph, most
+   likely, or the functions below may not work correctly. *)
+
 let add t ~newer ~older = Code_id.Map.add newer older t
 
 let rec all_ids_up_to_root t id =
@@ -30,22 +33,25 @@ let rec all_ids_up_to_root t id =
   | exception Not_found -> Code_id.Set.empty
   | older -> Code_id.Set.add older (all_ids_up_to_root t older)
 
+let num_ids_up_to_root t id =
+  Code_id.Set.cardinal (all_ids_up_to_root t id)
+
 (* CR mshinwell: There are no doubt better implementations than the below. *)
 
 let meet t id1 id2 : _ Or_bottom.t =
-  (* Whichever of [id1] and [id2] is older (or the same as the other one),
+  (* Whichever of [id1] and [id2] is newer (or the same as the other one),
      in the case where they are comparable; otherwise bottom. *)
   if Code_id.equal id1 id2 then Ok id1
   else
     let id1_to_root = all_ids_up_to_root t id1 in
     let id2_to_root = all_ids_up_to_root t id2 in
-    if Code_id.Set.mem id1 id2_to_root then Ok id1
-    else if Code_id.Set.mem id2 id1_to_root then Ok id2
+    if Code_id.Set.mem id1 id2_to_root then Ok id2
+    else if Code_id.Set.mem id2 id1_to_root then Ok id1
     else Bottom
 
 let join t id1 id2 : _ Or_unknown.t =
   (* Lowest ("newest") common ancestor, if such exists. *)
-  if Code_id.equal id1 id2 then Ok id1
+  if Code_id.equal id1 id2 then Known id1
   else
     let id1_to_root = all_ids_up_to_root t id1 in
     let id2_to_root = all_ids_up_to_root t id2 in
@@ -55,7 +61,7 @@ let join t id1 id2 : _ Or_unknown.t =
       let newest_shared_id, _ =
         shared_ids
         |> Code_id.Set.elements
-        |> List.map (fun id -> id, List.length (all_ids_up_to_root t id))
+        |> List.map (fun id -> id, num_ids_up_to_root t id)
         |> List.sort (fun (_, len1) (_, len2) -> - (Int.compare len1 len2))
         |> List.hd
       in

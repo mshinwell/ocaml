@@ -46,6 +46,8 @@ module Make (Index : Identifiable.S) = struct
     { components_by_index = Index.Map.empty;
     }
 
+  let is_bottom t = Index.Map.is_empty t.components_by_index
+
   let indexes t = Index.Map.keys t.components_by_index
 
   let width t =

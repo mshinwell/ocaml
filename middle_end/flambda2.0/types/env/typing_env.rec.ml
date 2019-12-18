@@ -745,7 +745,7 @@ let meet_equations_on_params t ~params ~param_types =
 
 let add_to_code_age_relation t ~newer ~older =
   let code_age_relation =
-    Code_age_relation.add t.code_age_relation newer older
+    Code_age_relation.add t.code_age_relation ~newer ~older
   in
   { t with code_age_relation; }
 
@@ -789,6 +789,7 @@ let cut t ~unknown_if_defined_at_or_later_than:min_scope =
             current_level;
             next_binding_time = t.next_binding_time;
             defined_symbols = t.defined_symbols;
+            code_age_relation = t.code_age_relation;
           }
         in
         let symbols_still_defined =

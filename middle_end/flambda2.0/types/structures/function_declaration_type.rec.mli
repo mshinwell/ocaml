@@ -16,27 +16,51 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
-type inlinable = {
-  code_id : Code_id.t;
-  param_arity : Flambda_arity.t;
-  result_arity : Flambda_arity.t;
-  stub : bool;
-  dbg : Debuginfo.t;
-  inline : Inline_attribute.t;
-  is_a_functor : bool;
-  recursive : Recursive.t;
-  rec_info : Rec_info.t;
-}
+module Inlinable : sig
+  type t
+
+  val create
+     : code_id:Code_id.t
+    -> param_arity:Flambda_arity.t
+    -> result_arity:Flambda_arity.t
+    -> stub:bool
+    -> dbg:Debuginfo.t
+    -> inline:Inline_attribute.t
+    -> is_a_functor:bool
+    -> recursive:Recursive.t
+    -> rec_info:Rec_info.t
+    -> t
+
+  val code_id : t -> Code_id.t
+  val param_arity : t -> Flambda_arity.t
+  val result_arity : t -> Flambda_arity.t
+  val stub : t -> bool
+  val dbg : t -> Debuginfo.t
+  val inline : t -> Inline_attribute.t
+  val is_a_functor : t -> bool
+  val recursive : t -> Recursive.t
+  val rec_info : t -> Rec_info.t
+end
+
+module Non_inlinable : sig
+  type t
+
+  val create
+     : param_arity:Flambda_arity.t
+    -> result_arity:Flambda_arity.t
+    -> recursive:Recursive.t
+    -> t
+
+  val param_arity : t -> Flambda_arity.t
+  val result_arity : t -> Flambda_arity.t
+  val recursive : t -> Recursive.t
+end
 
 type t0 =
-  | Non_inlinable of {
-      param_arity : Flambda_arity.t;
-      result_arity : Flambda_arity.t;
-      recursive : Recursive.t;
-    }
-  | Inlinable of inlinable
+  | Inlinable of Inlinable.t
+  | Non_inlinable of Non_inlinable.t
 
-type t = t0 Or_unknown.t
+type t = t0 Or_unknown_or_bottom.t
 
 (* CR mshinwell: Add [create] and make [private]. *)
 

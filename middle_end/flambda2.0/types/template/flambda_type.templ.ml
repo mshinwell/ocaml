@@ -160,7 +160,10 @@ let prove_single_closures_entry' env t : _ proof_allowing_kind_mismatch =
           let function_decl =
             Closures_entry.find_function_declaration closures_entry closure_id
           in
-          Proved (closure_id, closures_entry, function_decl)
+          match function_decl with
+          | Bottom -> Invalid
+          | Ok function_decl ->
+            Proved (closure_id, closures_entry, function_decl)
       end
     | Value (Ok _) -> Invalid
     | Value Unknown -> Unknown
@@ -636,7 +639,7 @@ type reification_result =
   | Lift of to_lift
   | Lift_set_of_closures of {
       closure_id : Closure_id.t;
-      function_decls : Term_language_function_declaration.t Closure_id.Map.t;
+      function_decls : Function_declaration_type.Inlinable.t Closure_id.Map.t;
       closure_vars : Simple.t Var_within_closure.Map.t;
     }
   | Simple of Simple.t
@@ -764,11 +767,12 @@ Format.eprintf "reifying %a\n%!" print t;
                   Closures_entry.find_function_declaration closures_entry
                     closure_id
                 with
-                | Unknown -> function_decls_with_closure_vars
-                | Known function_decl ->
+                | Bottom -> function_decls_with_closure_vars
+                | Ok function_decl ->
                   match function_decl with
-                  | Non_inlinable _ -> function_decls_with_closure_vars
-                  | Inlinable { function_decl; rec_info = _ } ->
+                  | Bottom | Unknown | Ok (Non_inlinable _) ->
+                    function_decls_with_closure_vars
+                  | Ok (Inlinable inlinable_decl) ->
                     (* CR mshinwell: We're ignoring [rec_info] *)
                     let closure_var_types =
                       Closures_entry.closure_var_types closures_entry
@@ -795,7 +799,7 @@ Format.eprintf "reifying %a\n%!" print t;
                     then function_decls_with_closure_vars
                     else
                       Closure_id.Map.add closure_id
-                        (function_decl, closure_var_simples)
+                        (inlinable_decl, closure_var_simples)
                         function_decls_with_closure_vars)
               closure_ids
               Closure_id.Map.empty

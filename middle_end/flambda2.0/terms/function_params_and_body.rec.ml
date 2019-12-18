@@ -79,28 +79,24 @@ let pattern_match t ~f =
           ~my_closure)))
 
 let print_with_cache ~cache ppf t =
-  pattern_match params_and_body
+  pattern_match t
     ~f:(fun ~return_continuation exn_continuation params ~body ~my_closure ->
       let my_closure =
         Kinded_parameter.create (Parameter.wrap my_closure) Flambda_kind.value
       in
-      if compact then begin
-        fprintf ppf "@[<hov 1>(params_and_body@ <elided>)@])@]"
-      end else begin
-        fprintf ppf
-          "@[<hov 1>(@<0>%s@<1>\u{03bb}@<0>%s@[<hov 1>\
-           @<1>\u{3008}%a@<1>\u{3009}@<1>\u{300a}%a@<1>\u{300b}\
-           %a %a @<0>%s.@<0>%s@]@ %a)@])@]"
-          (Flambda_colours.lambda ())
-          (Flambda_colours.normal ())
-          Continuation.print return_continuation
-          Exn_continuation.print exn_continuation
-          Kinded_parameter.List.print params
-          Kinded_parameter.print my_closure
-          (Flambda_colours.elide ())
-          (Flambda_colours.normal ())
-          (Expr.print_with_cache ~cache) body
-      end)
+      fprintf ppf
+        "@[<hov 1>(@<0>%s@<1>\u{03bb}@<0>%s@[<hov 1>\
+         @<1>\u{3008}%a@<1>\u{3009}@<1>\u{300a}%a@<1>\u{300b}\
+         %a %a @<0>%s.@<0>%s@]@ %a)@])@]"
+        (Flambda_colours.lambda ())
+        (Flambda_colours.normal ())
+        Continuation.print return_continuation
+        Exn_continuation.print exn_continuation
+        Kinded_parameter.List.print params
+        Kinded_parameter.print my_closure
+        (Flambda_colours.elide ())
+        (Flambda_colours.normal ())
+        (Expr.print_with_cache ~cache) body)
 
 let print ppf t =
   print_with_cache ~cache:(Printing_cache.create ()) ppf t

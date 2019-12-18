@@ -160,27 +160,34 @@ val join : Typing_env.t -> t -> t -> t
 (* CR mshinwell: Substitute out this alias once it's finalised *)
 type 'a type_accessor = Typing_env.t -> 'a
 
-(* CR mshinwell: The function declaration types should be abstract *)
 module Function_declaration_type : sig
-  type inlinable = private {
-    code : Code_id.t;
-    param_arity : Flambda_arity.t;
-    result_arity : Flambda_arity.t;
-    stub : bool;
-    dbg : Debuginfo.t;
-    inline : Inline_attribute.t;
-    is_a_functor : bool;
-    recursive : Recursive.t;
-    rec_info : Rec_info.t;
-  }
+  module Inlinable : sig
+    type t
 
-  type t = private
-    | Non_inlinable of {
-        param_arity : Flambda_arity.t;
-        result_arity : Flambda_arity.t;
-        recursive : Recursive.t;
-      }
-    | Inlinable of inlinable
+    val code_id : t -> Code_id.t
+    val param_arity : t -> Flambda_arity.t
+    val result_arity : t -> Flambda_arity.t
+    val stub : t -> bool
+    val dbg : t -> Debuginfo.t
+    val inline : t -> Inline_attribute.t
+    val is_a_functor : t -> bool
+    val recursive : t -> Recursive.t
+    val rec_info : t -> Rec_info.t
+  end
+
+  module Non_inlinable : sig
+    type t
+
+    val param_arity : t -> Flambda_arity.t
+    val result_arity : t -> Flambda_arity.t
+    val recursive : t -> Recursive.t
+  end
+
+  type t0 = private
+    | Inlinable of Inlinable.t
+    | Non_inlinable of Non_inlinable.t
+
+  type t = t0 Or_unknown_or_bottom.t
 end
 
 module Closures_entry : sig
@@ -300,8 +307,15 @@ val mutable_string : size:int -> t
 
 (** Create a description of a function declaration whose code is known. *)
 val create_inlinable_function_declaration
-   : term_language_function_declaration
-  -> Rec_info.t
+   : code_id:Code_id.t
+  -> param_arity:Flambda_arity.t
+  -> result_arity:Flambda_arity.t
+  -> stub:bool
+  -> dbg:Debuginfo.t
+  -> inline:Inline_attribute.t
+  -> is_a_functor:bool
+  -> recursive:Recursive.t
+  -> rec_info:Rec_info.t
   -> Function_declaration_type.t
 
 (** Create a description of a function declaration whose code is unknown.
@@ -432,20 +446,18 @@ val prove_unique_tag_and_size
 val prove_is_int : Typing_env.t -> t -> bool proof
 
 (** Prove that the given type, of kind [Value], is a closures type
-    describing exactly one closure.  The function declaration corresponding
+    describing exactly one closure.  The function declaration type corresponding
     to such closure is returned together with its closure ID, if it is
     known. *)
 val prove_single_closures_entry
    : Typing_env.t
   -> t
-  -> (Closure_id.t * Closures_entry.t
-       * Function_declaration_type.t Or_unknown.t) proof
+  -> (Closure_id.t * Closures_entry.t * Function_declaration_type.t) proof
 
 val prove_single_closures_entry'
    : Typing_env.t
   -> t
-  -> (Closure_id.t * Closures_entry.t
-       * Function_declaration_type.t Or_unknown.t)
+  -> (Closure_id.t * Closures_entry.t * Function_declaration_type.t)
        proof_allowing_kind_mismatch
 
 val prove_strings : Typing_env.t -> t -> String_info.Set.t proof
@@ -467,7 +479,7 @@ type reification_result = private
   | Lift of to_lift  (* CR mshinwell: rename? *)
   | Lift_set_of_closures of {
       closure_id : Closure_id.t;
-      function_decls : term_language_function_declaration Closure_id.Map.t;
+      function_decls : Function_declaration_type.Inlinable.t Closure_id.Map.t;
       closure_vars : Simple.t Var_within_closure.Map.t;
     }
   | Simple of Simple.t

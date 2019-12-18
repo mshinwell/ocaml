@@ -726,7 +726,12 @@ let simplify_definition dacc (defn : Program_body.Definition.t) =
   in
   definition, dacc
 
-(* CR mshinwell: Need to delete unused code bindings. *)
+(* CR mshinwell:
+   - Need to delete unused code bindings.
+   - We should only delete code if the corresponding code-age graph is
+     linear.  If it isn't linear then a subsequent join may need code that
+     is currently unused.
+   - We should simplify code on the way up if we don't delete it. *)
 
 let define_lifted_constants lifted_constants (body : Program_body.t) =
   List.fold_left (fun body lifted_constant : Program_body.t ->

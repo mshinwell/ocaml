@@ -19,7 +19,7 @@
 type t
 
 val create
-   : function_decls : Function_declaration_type.t Or_unknown.t Closure_id.Map.t
+   : function_decls : Function_declaration_type.t Closure_id.Map.t
   -> closure_types : Product.Closure_id_indexed.t
   -> closure_var_types : Product.Var_within_closure_indexed.t
   -> t
@@ -37,7 +37,7 @@ val map_function_decl_types
 val find_function_declaration
    : t
   -> Closure_id.t
-  -> Function_declaration_type.t Or_unknown.t
+  -> Function_declaration_type.t Or_bottom.t
 
 val closure_var_types : t -> Type_grammar.t Var_within_closure.Map.t
 
