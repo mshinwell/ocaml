@@ -161,15 +161,19 @@ module Static_part = struct
               Name_occurrences.add_newer_version_of_code_id
                 Name_occurrences.empty older Name_mode.normal
           in
-          assert (match params_and_body with
-            | Deleted -> true
+          let from_params_and_body =
+            match params_and_body with
+            | Deleted -> Name_occurrences.empty
             | Present params_and_body ->
-              Name_occurrences.is_empty
-                (Flambda.Function_params_and_body.free_names params_and_body));
-          Name_occurrences.union
+              Flambda.Function_params_and_body.free_names params_and_body
+          in
+          Name_occurrences.union_list [
             (Name_occurrences.add_code_id Name_occurrences.empty
-              code_id Name_mode.normal)
-            (Name_occurrences.union from_newer_version_of free_names))
+              code_id Name_mode.normal);
+            from_params_and_body;
+            from_newer_version_of;
+            free_names;
+          ])
         code
         from_set_of_closures
     | Boxed_float (Var v)
@@ -666,11 +670,13 @@ module Program_body = struct
 
   let define_symbol defn ~body =
     let being_defined = Definition.being_defined defn in
+    let code_being_defined = Definition.code_being_defined defn in
     let free_names_of_body = free_names body in
     let free_syms_of_body = Name_occurrences.symbols free_names_of_body in
     let can_delete =
       Symbol.Set.is_empty (Symbol.Set.inter being_defined free_syms_of_body)
         && Definition.only_generative_effects defn
+        && Code_id.Set.is_empty code_being_defined
     in
     if can_delete then body
     else
