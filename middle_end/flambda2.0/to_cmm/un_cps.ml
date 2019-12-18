@@ -14,6 +14,8 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+[@@@ocaml.warning "-32"] (* FIXME Let_code -- just remove this *)
+
 open! Flambda.Import
 
 module Env = Un_cps_env
@@ -1325,11 +1327,14 @@ let static_structure_item env r
   | Singleton _, Fabricated_block _ ->
       (* CR Gbury: What are those ? *)
       todo()
-  | Set_of_closures s, Set_of_closures set ->
+  | Code_and_set_of_closures _ (* s *), Code_and_set_of_closures _ (* set *) ->
+      assert false (* FIXME Let code *)
+(*
       let data, updates =
         static_set_of_closures env s.closure_symbols set
       in
       R.wrap_init (C.sequence updates) (R.add_data data r)
+*)
   | Singleton s, Boxed_float v ->
       let default = Numbers.Float_by_bit_pattern.zero in
       let transl = Numbers.Float_by_bit_pattern.to_float in
@@ -1465,9 +1470,11 @@ let function_flags () =
   else
     [ Cmm.Reduce_code_size ]
 
-let function_decl offsets used_closure_vars fun_name _ d =
+let function_decl _offsets _used_closure_vars fun_name _ d =
   Profile.record_call ~accumulate:true fun_name (fun () ->
-    let fun_dbg = Function_declaration.dbg d in
+    let _fun_dbg = Function_declaration.dbg d in
+    assert false  (* FIXME Let code *) )
+(*
     let p = Function_declaration.params_and_body d in
     Function_params_and_body.pattern_match p
       ~f:(fun ~return_continuation:k k_exn vars ~body ~my_closure ->
@@ -1490,6 +1497,7 @@ let function_decl offsets used_closure_vars fun_name _ d =
               fun_name
               Expr.print body;
             raise e))
+*)
 
 (* Programs *)
 

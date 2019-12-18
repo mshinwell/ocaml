@@ -633,23 +633,25 @@ module Iter_on_sets_of_closures = struct
     let map = Function_declarations.funs decls in
     Closure_id.Map.iter (fun_decl f) map
 
-  and fun_decl f _ decl =
+  and fun_decl _f _ _decl = assert false  (* FIXME Let code *)
+(*
     let t = Function_declaration.params_and_body decl in
     Function_params_and_body.pattern_match t
       ~f:(fun ~return_continuation:_ _exn_k _args ~body ~my_closure:_ ->
           expr f body
         )
+*)
 
   let computation f c =
     Flambda_static.Program_body.Computation.iter_expr c ~f:(expr f)
 
-  let static_structure_aux f
+  let static_structure_aux _ _ = assert false (* f
       ((S (symbs, st)) : Flambda_static.Program_body.Static_structure.t0) =
     match symbs, st with
     | Set_of_closures r, Set_of_closures s ->
         f (Some r.closure_symbols) s;
         set_of_closures f s
-    | _ -> ()
+    | _ -> () *) (* FIXME Let code *)
 
   let static_structure f s =
     List.iter (static_structure_aux f) s
