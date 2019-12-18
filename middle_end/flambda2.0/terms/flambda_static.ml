@@ -422,7 +422,7 @@ module Program_body = struct
       | Code_and_set_of_closures { code_ids; closure_symbols; } ->
         Format.fprintf ppf "@[<hov 1>\
             @[<hov 1>(code_ids@ %a)@]@ \
-            @[<hov 1>(closure_symbols@ %a)@]\
+            @[<hov 1>(closure_symbols@ {%a})@]\
             @]"
           Code_id.Set.print code_ids
           (Format.pp_print_list ~pp_sep:Format.pp_print_space
@@ -631,7 +631,7 @@ module Program_body = struct
   end
 
   type t =
-    | Define_symbol of {
+    | Definition of {
         free_names : Name_occurrences.t;
         defn : Definition.t;
         body : t;
@@ -640,8 +640,8 @@ module Program_body = struct
 
   let rec print_with_cache ~cache ppf t =
     match t with
-    | Define_symbol { free_names = _; defn; body; } ->
-      Format.fprintf ppf "@[<v 2>(@<0>%sDefine_symbol@<0>%s@ %a)@]@;"
+    | Definition { free_names = _; defn; body; } ->
+      Format.fprintf ppf "@[<v 2>(@<0>%sDefinition@<0>%s@ %a)@]@;"
         (Flambda_colours.static_keyword ())
         (Flambda_colours.normal ())
         (Definition.print_with_cache ~cache) defn;
@@ -659,12 +659,12 @@ module Program_body = struct
 
   let free_names t =
     match t with
-    | Define_symbol { free_names; _ } -> free_names
+    | Definition { free_names; _ } -> free_names
     | Root sym -> Name_occurrences.singleton_symbol sym Name_mode.normal
 
   let used_closure_vars t =
     match t with
-    | Define_symbol { free_names; _ } ->
+    | Definition { free_names; _ } ->
       Name_occurrences.closure_vars free_names
     | Root _ -> Var_within_closure.Set.empty
 
@@ -684,25 +684,25 @@ module Program_body = struct
         Name_occurrences.union (Definition.free_names defn)
           free_names_of_body
       in
-      Define_symbol { free_names; defn; body; }
+      Definition { free_names; defn; body; }
 
   let root sym = Root sym
 
   let rec iter_definitions t ~f =
     match t with
-    | Define_symbol { defn; body; _ } ->
+    | Definition { defn; body; _ } ->
       f defn;
       iter_definitions body ~f
     | Root _ -> ()
 
   type descr =
-    | Define_symbol of Definition.t * t
+    | Definition of Definition.t * t
     | Root of Symbol.t
 
   let descr (t : t) : descr =
     match t with
-    | Define_symbol { defn; body; free_names = _; } ->
-      Define_symbol (defn, body)
+    | Definition { defn; body; free_names = _; } ->
+      Definition (defn, body)
     | Root sym -> Root sym
 end
 
@@ -729,7 +729,7 @@ module Program = struct
   let root_symbol t =
     let rec loop (body : Program_body.t) =
       match body with
-      | Define_symbol { body; _ } -> loop body
+      | Definition { body; _ } -> loop body
       | Root root -> root
     in
     loop t.body

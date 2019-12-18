@@ -1509,7 +1509,7 @@ let rec program_body offsets ~used_closure_vars acc body =
          if if has an associated computation, then it will already be included
          in the list of gc_roots, else it does not *have*  to be a root. *)
       List.fold_left (fun acc r -> R.combine r acc) R.empty acc
-  | Flambda_static.Program_body.Define_symbol (def, rest) ->
+  | Flambda_static.Program_body.Definition (def, rest) ->
       let r = definition offsets ~used_closure_vars def in
       program_body offsets ~used_closure_vars (r :: acc) rest
 

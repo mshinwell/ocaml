@@ -218,10 +218,10 @@ let simplify_static_part_of_kind_value dacc ~result_dacc
       : K.value Static_part.t * DA.t * DA.t =
   (* [dacc] holds the environment for simplifying the [Static_part]; it contains
      bindings for any computed values in addition to the types of everything
-     prior to the current [Define_symbol].
+     prior to the current [Definition].
 
      [result_dacc] holds the environment, which we are computing, that will be
-     in effect immediately after the current [Define_symbol].
+     in effect immediately after the current [Definition].
 
      We have to return both a new [dacc] and a new [result_dacc] since there may
      be multiple (ordered) symbol bindings in any given [Static_structure]. For
@@ -809,7 +809,7 @@ let define_lifted_constants lifted_constants (body : Program_body.t) =
 
 let rec simplify_program_body0 dacc (body : Program_body.t) k =
   match Program_body.descr body with
-  | Define_symbol (defn, body) ->
+  | Definition (defn, body) ->
     let dacc = DA.map_r dacc ~f:(fun r -> R.clear_lifted_constants r) in
     let defn, dacc = simplify_definition dacc defn in
     let r = DA.r dacc in

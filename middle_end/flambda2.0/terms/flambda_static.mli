@@ -234,9 +234,9 @@ module Program_body : sig
   val iter_definitions : t -> f:(Definition.t -> unit) -> unit
 
   type descr = private
-    (* CR mshinwell: Rename [Define_symbol] to [Definition].  It doesn't
+    (* CR mshinwell: Rename [Definition] to [Definition].  It doesn't
        always define a symbol now. *)
-    | Define_symbol of Definition.t * t
+    | Definition of Definition.t * t
     | Root of Symbol.t
 
   val descr : t -> descr
