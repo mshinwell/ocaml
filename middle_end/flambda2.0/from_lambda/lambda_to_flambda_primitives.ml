@@ -52,7 +52,7 @@ let bint_shift bi prim arg1 arg2 =
     (Binary (Int_shift (C.standard_int_of_boxed_integer bi, prim),
              unbox_bint bi arg1, untag_int arg2))
 
-(* offset to substract from a string length depending
+(* offset to subtract from a string length depending
    on the size of the read/write *)
 let length_offset_of_size size =
   let offset =
@@ -66,7 +66,7 @@ let length_offset_of_size size =
 
 (* This computes the maximum of a given value [x] with zero,
    in an optimized way. It takes as named argument the size (in bytes)
-   of the registers of the target arhcitecture.
+   of an integer register on the target architecture.
    It is equivalent to the `max_or_zero` function in `cmm_helpers.ml` *)
 let max_with_zero ~size_int x =
   let register_bitsize_minus_one =
@@ -101,15 +101,13 @@ let actual_max_length ~size_int ~access_size length =
                       length, Simple (Simple.const (Naked_immediate offset))))
     in
     (* We need to convert the length into a naked_nativeint because the optimised
-       version of the max_with_zero function need to be on machine-width integers
+       version of the max_with_zero function needs to be on machine-width integers
        to work (or at least on an integer number of bytes to work). *)
     let reduced_length_nativeint =
       H.Prim (Unary (Num_conv { src = Naked_immediate; dst = Naked_nativeint },
                      reduced_length))
     in
     let nativeint_res = max_with_zero ~size_int reduced_length_nativeint in
-    (* We then need to convert back to a naked_immediate the result because the
-       comparison in the primitive check is done in naked_immediates. *)
     H.Prim (Unary (Num_conv { src = Naked_nativeint; dst = Naked_immediate },
                    nativeint_res))
 
@@ -161,9 +159,9 @@ let bigarray_box_raw_value_read kind =
     let bi = K.Boxable_number.of_naked_number_kind k in
     fun arg -> H.Unary (Box_number bi, Prim arg)
   | Fabricated ->
-      Misc.fatal_errorf
-        "Don't know how to unbox a fabricated expression to \
-         store it in a bigarray"
+    Misc.fatal_errorf
+      "Don't know how to unbox a fabricated expression to \
+       store it in a bigarray"
 
 let bigarray_unbox_value_to_store kind =
   match P.element_kind_of_bigarray_kind kind with
@@ -172,13 +170,15 @@ let bigarray_unbox_value_to_store kind =
     let bi = K.Boxable_number.of_naked_number_kind k in
     fun arg -> H.Prim (Unary (Unbox_number bi, arg))
   | Fabricated ->
-      Misc.fatal_errorf
-        "Don't know how to unbox a fabricated expression to \
-         store it in a bigarray"
+    Misc.fatal_errorf
+      "Don't know how to unbox a fabricated expression to \
+       store it in a bigarray"
 
 let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
       (dbg : Debuginfo.t) : H.expr_primitive =
   let args = List.map (fun arg : H.simple_or_prim -> Simple arg) args in
+  let module B = (val backend : Flambda2_backend_intf.S) in
+  let size_int = B.size_int in
   match prim, args with
   | Pmakeblock (tag, flag, shape), _ ->
     let flag = C.convert_mutable_flag flag in
@@ -307,11 +307,9 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
   | Pbytesrefu, [arg1; arg2] ->
     tag_int (Binary (String_or_bigstring_load (Bytes, Eight), arg1, arg2))
   | Pbytesrefs, [arg1; arg2] ->
-    let module B = (val backend : Flambda2_backend_intf.S) in
-    string_or_bytes_ref ~size_int:B.size_int Bytes arg1 arg2 dbg
+    string_or_bytes_ref ~size_int Bytes arg1 arg2 dbg
   | Pstringrefs, [arg1; arg2] ->
-    let module B = (val backend : Flambda2_backend_intf.S) in
-    string_or_bytes_ref ~size_int:B.size_int String arg1 arg2 dbg
+    string_or_bytes_ref ~size_int String arg1 arg2 dbg
   | Pstring_load_16 true (* unsafe *), [arg1; arg2]
   | Pbytes_load_16 true (* unsafe *), [arg1; arg2] ->
     tag_int (Binary (String_or_bigstring_load (String, Sixteen), arg1, arg2))
@@ -326,78 +324,72 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
       Prim (Binary (String_or_bigstring_load (String, Sixty_four),
         arg1, arg2)))
   | Pstring_load_16 false, [str; index] ->
-    let module B = (val backend : Flambda2_backend_intf.S) in
     Checked {
       primitive =
         tag_int
           (Binary (String_or_bigstring_load (String, Sixteen), str, index));
       validity_conditions = [
-        string_or_bytes_access_validity_condition ~size_int:B.size_int str String Sixteen index;
+        string_or_bytes_access_validity_condition ~size_int str String Sixteen index;
       ];
       failure = Index_out_of_bounds;
       dbg;
     }
   | Pstring_load_32 false, [str; index] ->
-    let module B = (val backend : Flambda2_backend_intf.S) in
     Checked {
       primitive =
         Unary (Box_number Naked_int32,
           Prim (Binary (String_or_bigstring_load (String, Thirty_two),
             str, index)));
       validity_conditions = [
-        string_or_bytes_access_validity_condition ~size_int:B.size_int str String Thirty_two index;
+        string_or_bytes_access_validity_condition ~size_int str String Thirty_two index;
       ];
       failure = Index_out_of_bounds;
       dbg;
     }
   | Pstring_load_64 false, [str; index] ->
-    let module B = (val backend : Flambda2_backend_intf.S) in
     Checked {
       primitive =
         Unary (Box_number Naked_int64,
           Prim (Binary (String_or_bigstring_load (String, Sixty_four),
             str, index)));
       validity_conditions = [
-        string_or_bytes_access_validity_condition ~size_int:B.size_int str String Sixty_four index;
+        string_or_bytes_access_validity_condition ~size_int str String Sixty_four index;
       ];
       failure = Index_out_of_bounds;
       dbg;
     }
   (* CR mshinwell: factor out *)
   | Pbytes_load_16 false, [bytes; index] ->
-    let module B = (val backend : Flambda2_backend_intf.S) in
     Checked {
       primitive =
         tag_int
           (Binary (String_or_bigstring_load (Bytes, Sixteen), bytes, index));
       validity_conditions = [
-        string_or_bytes_access_validity_condition ~size_int:B.size_int bytes Bytes Sixteen index;
+        string_or_bytes_access_validity_condition ~size_int bytes Bytes Sixteen index;
       ];
       failure = Index_out_of_bounds;
       dbg;
     }
   | Pbytes_load_32 false, [bytes; index] ->
-    let module B = (val backend : Flambda2_backend_intf.S) in
     Checked {
       primitive =
         Unary (Box_number Naked_int32,
           Prim (Binary (String_or_bigstring_load (Bytes, Thirty_two),
             bytes, index)));
       validity_conditions = [
-        string_or_bytes_access_validity_condition ~size_int:B.size_int bytes Bytes Thirty_two index;
+        string_or_bytes_access_validity_condition ~size_int bytes Bytes Thirty_two index;
       ];
       failure = Index_out_of_bounds;
       dbg;
     }
   | Pbytes_load_64 false, [bytes; index] ->
-    let module B = (val backend : Flambda2_backend_intf.S) in
     Checked {
       primitive =
         Unary (Box_number Naked_int64,
           Prim (Binary (String_or_bigstring_load (Bytes, Sixty_four),
             bytes, index)));
       validity_conditions = [
-        string_or_bytes_access_validity_condition ~size_int:B.size_int bytes Bytes Sixty_four index;
+        string_or_bytes_access_validity_condition ~size_int bytes Bytes Sixty_four index;
       ];
       failure = Index_out_of_bounds;
       dbg;
@@ -413,37 +405,34 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
     Ternary (Bytes_or_bigstring_set (Bytes, Sixty_four),
       bytes, index, Prim (Unary (Unbox_number Naked_int64, new_value)))
   | Pbytes_set_16 false, [bytes; index; new_value] ->
-    let module B = (val backend : Flambda2_backend_intf.S) in
     Checked {
       primitive =
         Ternary (Bytes_or_bigstring_set (Bytes, Sixteen),
           bytes, index, untag_int new_value);
       validity_conditions = [
-        string_or_bytes_access_validity_condition ~size_int:B.size_int bytes Bytes Sixteen index;
+        string_or_bytes_access_validity_condition ~size_int bytes Bytes Sixteen index;
       ];
       failure = Index_out_of_bounds;
       dbg;
     }
   | Pbytes_set_32 false, [bytes; index; new_value] ->
-    let module B = (val backend : Flambda2_backend_intf.S) in
     Checked {
       primitive =
         Ternary (Bytes_or_bigstring_set (Bytes, Thirty_two),
           bytes, index, Prim (Unary (Unbox_number Naked_int32, new_value)));
       validity_conditions = [
-        string_or_bytes_access_validity_condition ~size_int:B.size_int bytes Bytes Thirty_two index;
+        string_or_bytes_access_validity_condition ~size_int bytes Bytes Thirty_two index;
       ];
       failure = Index_out_of_bounds;
       dbg;
     }
   | Pbytes_set_64 false, [bytes; index; new_value] ->
-    let module B = (val backend : Flambda2_backend_intf.S) in
     Checked {
       primitive =
         Ternary (Bytes_or_bigstring_set (Bytes, Sixty_four),
           bytes, index, Prim (Unary (Unbox_number Naked_int64, new_value)));
       validity_conditions = [
-        string_or_bytes_access_validity_condition ~size_int:B.size_int bytes Bytes Sixty_four index;
+        string_or_bytes_access_validity_condition ~size_int bytes Bytes Sixty_four index;
       ];
       failure = Index_out_of_bounds;
       dbg;
@@ -734,13 +723,12 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
     Ternary (Bytes_or_bigstring_set (Bytes, Eight), bytes, index,
              untag_int new_value)
   | Pbytessets, [bytes; index; new_value] ->
-    let module B = (val backend : Flambda2_backend_intf.S) in
     Checked {
       primitive =
         Ternary (Bytes_or_bigstring_set (Bytes, Eight),
           bytes, index, untag_int new_value);
       validity_conditions = [
-        string_or_bytes_access_validity_condition ~size_int:B.size_int bytes Bytes Eight index;
+        string_or_bytes_access_validity_condition ~size_int bytes Bytes Eight index;
       ];
       failure = Index_out_of_bounds;
       dbg;
@@ -758,19 +746,18 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
     (* CR mshinwell: This doesn't seem to be zero-arity like it should be *)
     (* CR pchambart: It's not obvious when this one should be converted.
        mshinwell: Have put an implementation here for now. *)
-    let module B = (val backend : Flambda2_backend_intf.S) in
     begin match const with
     | Big_endian -> Simple (Simple.const_bool B.big_endian)
     | Word_size ->
-      Simple (Simple.const_int (Targetint.OCaml.of_int (8*B.size_int)))
+      Simple (Simple.const_int (Targetint.OCaml.of_int (8*size_int)))
     | Int_size ->
-      Simple (Simple.const_int (Targetint.OCaml.of_int (8*B.size_int - 1)))
+      Simple (Simple.const_int (Targetint.OCaml.of_int (8*size_int - 1)))
     | Max_wosize ->
       (* CR mshinwell: This depends on the number of bits in the header
          reserved for profinfo, no?  If this computation is wrong then
          the one in [Closure] (and maybe Flambda 1) is wrong. *)
       Simple (Simple.const_int (Targetint.OCaml.of_int
-        ((1 lsl ((8*B.size_int) - 10)) - 1)))
+        ((1 lsl ((8*size_int) - 10)) - 1)))
     | Ostype_unix -> Simple (Simple.const_bool (Sys.os_type = "Unix"))
     | Ostype_win32 -> Simple (Simple.const_bool (Sys.os_type = "Win32"))
     | Ostype_cygwin -> Simple (Simple.const_bool (Sys.os_type = "Cygwin"))
@@ -813,18 +800,15 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
   | Pbigstring_load_16 true, [arg1; arg2] ->
     Binary (String_or_bigstring_load (Bigstring, Sixteen), arg1, arg2)
   | Pbigstring_load_16 false, [arg1; arg2] ->
-    let module B = (val backend : Flambda2_backend_intf.S) in
-    bigstring_ref ~size_int:B.size_int Sixteen arg1 arg2 dbg
+    bigstring_ref ~size_int Sixteen arg1 arg2 dbg
   | Pbigstring_load_32 true, [arg1; arg2] ->
     Binary (String_or_bigstring_load (Bigstring, Thirty_two), arg1, arg2)
   | Pbigstring_load_32 false, [arg1; arg2] ->
-    let module B = (val backend : Flambda2_backend_intf.S) in
-    bigstring_ref ~size_int:B.size_int Thirty_two arg1 arg2 dbg
+    bigstring_ref ~size_int Thirty_two arg1 arg2 dbg
   | Pbigstring_load_64 true, [arg1; arg2] ->
     Binary (String_or_bigstring_load (Bigstring, Sixty_four), arg1, arg2)
   | Pbigstring_load_64 false, [arg1; arg2] ->
-    let module B = (val backend : Flambda2_backend_intf.S) in
-    bigstring_ref ~size_int:B.size_int Sixty_four arg1 arg2 dbg
+    bigstring_ref ~size_int Sixty_four arg1 arg2 dbg
   | Pbigstring_set_16 true, [bigstring; index; new_value] ->
     Ternary (Bytes_or_bigstring_set (Bigstring, Sixteen),
       bigstring, index, untag_int new_value)
@@ -835,37 +819,34 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
     Ternary (Bytes_or_bigstring_set (Bigstring, Sixty_four),
       bigstring, index, Prim (Unary (Unbox_number Naked_int64, new_value)))
   | Pbigstring_set_16 false, [bigstring; index; new_value] ->
-    let module B = (val backend : Flambda2_backend_intf.S) in
     Checked {
       primitive =
         Ternary (Bytes_or_bigstring_set (Bigstring, Sixteen),
           bigstring, index, untag_int new_value);
       validity_conditions = [
-        bigstring_access_validity_condition ~size_int:B.size_int bigstring Sixteen index;
+        bigstring_access_validity_condition ~size_int bigstring Sixteen index;
       ];
       failure = Index_out_of_bounds;
       dbg;
     }
   | Pbigstring_set_32 false, [bigstring; index; new_value] ->
-    let module B = (val backend : Flambda2_backend_intf.S) in
     Checked {
       primitive =
         Ternary (Bytes_or_bigstring_set (Bigstring, Thirty_two),
           bigstring, index, Prim (Unary (Unbox_number Naked_int32, new_value)));
       validity_conditions = [
-        bigstring_access_validity_condition ~size_int:B.size_int bigstring Thirty_two index;
+        bigstring_access_validity_condition ~size_int bigstring Thirty_two index;
       ];
       failure = Index_out_of_bounds;
       dbg;
     }
   | Pbigstring_set_64 false, [bigstring; index; new_value] ->
-    let module B = (val backend : Flambda2_backend_intf.S) in
     Checked {
       primitive =
         Ternary (Bytes_or_bigstring_set (Bigstring, Sixty_four),
           bigstring, index, Prim (Unary (Unbox_number Naked_int64, new_value)));
       validity_conditions = [
-        bigstring_access_validity_condition ~size_int:B.size_int bigstring Sixty_four index;
+        bigstring_access_validity_condition ~size_int bigstring Sixty_four index;
       ];
       failure = Index_out_of_bounds;
       dbg;
