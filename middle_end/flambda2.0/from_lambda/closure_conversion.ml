@@ -41,7 +41,7 @@ type t = {
   mutable imported_symbols : Symbol.Set.t;
   (* All symbols in [imported_symbols] are to be of kind [Value]. *)
   mutable declared_symbols : (Symbol.t * K.value Static_part.t) list;
-  mutable code : Function_params_and_body.t Code_id.Map.t;
+  mutable code : (Code_id.t * Function_params_and_body.t) list;
 }
 
 let symbol_for_ident t id =
@@ -828,7 +828,7 @@ and close_one_function t ~external_env ~by_closure_id decl
       ~is_a_functor:(Function_decl.is_a_functor decl)
       ~recursive
   in
-  t.code <- Code_id.Map.add code_id params_and_body t.code;
+  t.code <- (code_id, params_and_body) :: t.code;
   match Function_decl.kind decl with
   | Curried -> Closure_id.Map.add my_closure_id fun_decl by_closure_id
   | Tupled ->
@@ -836,7 +836,7 @@ and close_one_function t ~external_env ~by_closure_id decl
       tupled_function_call_stub param_vars unboxed_version ~closure_id
         recursive
     in
-    t.code <- Code_id.Map.add code_id params_and_body t.code;
+    t.code <- (code_id, params_and_body) :: t.code;
     Closure_id.Map.add unboxed_version fun_decl
       (Closure_id.Map.add closure_id generic_function_stub by_closure_id)
 
@@ -851,7 +851,7 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
       filename;
       imported_symbols = Symbol.Set.empty;
       declared_symbols = [];
-      code = Code_id.Map.empty;
+      code = [];
     }
   in
   let module_symbol = Backend.symbol_for_global' module_ident in
@@ -975,9 +975,8 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
       t.declared_symbols
   in
   let program_body =
-    (* CR mshinwell: These should be sorted by source location. *)
-    Code_id.Map.fold
-      (fun code_id params_and_body program_body : Program_body.t ->
+    List.fold_left
+      (fun program_body (code_id, params_and_body) : Program_body.t ->
         let bound_symbols : K.fabricated Program_body.Bound_symbols.t =
           Code_and_set_of_closures {
             code_ids = Code_id.Set.singleton code_id;
@@ -1004,8 +1003,8 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
           }
         in
         Program_body.define_symbol definition ~body:program_body)
-      t.code
       program_body
+      (List.rev t.code)  (* Keep in source file order. *)
   in
   let imported_symbols =
     Symbol.Set.fold (fun symbol imported_symbols ->
