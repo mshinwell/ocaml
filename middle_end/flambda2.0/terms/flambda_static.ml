@@ -61,11 +61,6 @@ module Of_kind_value = struct
       print (Format.formatter_of_out_channel chan) t
   end)
 
-  let needs_gc_root t =
-    match t with
-    | Symbol _ | Tagged_immediate _ -> false
-    | Dynamically_computed _ -> true
-
   let free_names t =
     match t with
     | Dynamically_computed var ->
@@ -74,6 +69,7 @@ module Of_kind_value = struct
       Name_occurrences.singleton_symbol sym Name_mode.normal
     | Tagged_immediate _ -> Name_occurrences.empty
 
+(*
   let invariant env t =
     let module E = Invariant_env in
     match t with
@@ -81,6 +77,7 @@ module Of_kind_value = struct
     | Tagged_immediate _ -> ()
     | Dynamically_computed var ->
       E.check_variable_is_bound_and_of_kind env var K.value
+*)
 end
 
 module Static_part = struct
@@ -126,7 +123,7 @@ module Static_part = struct
     match t with
     | Code_and_set_of_closures { code; set_of_closures = _; } ->
       Code_id.Map.filter_map code
-        ~f:(fun code_id { params_and_body; newer_version_of; } ->
+        ~f:(fun _code_id { params_and_body; newer_version_of; } ->
           match params_and_body with
           | Present params_and_body -> Some (params_and_body, newer_version_of)
           | Deleted -> None)
@@ -172,7 +169,7 @@ module Static_part = struct
           Name_occurrences.union
             (Name_occurrences.add_code_id Name_occurrences.empty
               code_id Name_mode.normal)
-            from_newer_version_of)
+            (Name_occurrences.union from_newer_version_of free_names))
         code
         from_set_of_closures
     | Boxed_float (Var v)
@@ -197,11 +194,12 @@ module Static_part = struct
         (Name_occurrences.empty)
         fields
 
-  let print_params_and_body ppf params_and_body =
+  let print_params_and_body_with_cache ~cache ppf params_and_body =
     match params_and_body with
     | Deleted -> Format.fprintf ppf "@[<hov 1>(params_and_body@ Deleted)@]"
     | Present params_and_body ->
-      Flambda.Function_params_and_body.print ppf params_and_body
+      Flambda.Function_params_and_body.print_with_cache ~cache ppf
+        params_and_body
 
   let print_code_with_cache ~cache ppf { params_and_body; newer_version_of; } =
     (* CR mshinwell: elide "newer_version_of" when None *)
@@ -210,7 +208,7 @@ module Static_part = struct
         %a\
         )@]"
       (Misc.Stdlib.Option.print Code_id.print) newer_version_of
-      print_params_and_body params_and_body
+      (print_params_and_body_with_cache ~cache) params_and_body
 
   let print_with_cache (type k) ~cache ppf (t : k t) =
     let print_float_array_field ppf = function
@@ -233,8 +231,8 @@ module Static_part = struct
         Variable.print field
     | Code_and_set_of_closures { code; set_of_closures; } ->
       fprintf ppf "@[<hov 1>(@<0>%sCode_and_set_of_closures@<0>%s@ (\
-          @[<hov 1>(code@ (%a))%a@]@ \
-          @[<hov 1>(set_of_closures@ (%a))%a@]\
+          @[<hov 1>(code@ (%a))@]@ \
+          @[<hov 1>(set_of_closures@ (%a))@]\
           ))@]"
         (Flambda_colours.static_part ())
         (Flambda_colours.normal ())
@@ -314,6 +312,7 @@ module Static_part = struct
   let print ppf t =
     print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
+(*
   let _invariant (type k) env (t : k t) =
     try
       let module E = Invariant_env in
@@ -351,6 +350,7 @@ module Static_part = struct
           fields
     with Misc.Fatal_error ->
       Misc.fatal_errorf "(during invariant checks) Context is:@ %a" print t
+*)
 end
 
 type static_part_iterator = {
@@ -396,7 +396,8 @@ module Program_body = struct
   module Bound_symbols = struct
     type 'k t =
       | Singleton : Symbol.t -> K.value t
-      | Set_of_closures : {
+      | Code_and_set_of_closures : {
+          code_ids : Code_id.Set.t;
           closure_symbols : Symbol.t Closure_id.Map.t;
         } -> K.fabricated t
 
@@ -414,8 +415,12 @@ module Program_body = struct
           K.print K.value
           (Flambda_colours.elide ())
           (Flambda_colours.normal ())
-      | Set_of_closures { closure_symbols; } ->
-        Format.fprintf ppf "@[<hov 1>(closure_symbols@ %a)@]"
+      | Code_and_set_of_closures { code_ids; closure_symbols; } ->
+        Format.fprintf ppf "@[<hov 1>\
+            @[<hov 1>(code_ids@ %a)@]@ \
+            @[<hov 1>(closure_symbols@ %a)@]\
+            @]"
+          Code_id.Set.print code_ids
           (Format.pp_print_list ~pp_sep:Format.pp_print_space
             print_closure_binding)
           (Closure_id.Map.bindings closure_symbols)
@@ -426,17 +431,13 @@ module Program_body = struct
     let being_defined (type k) (t : k t) =
       match t with
       | Singleton sym -> Symbol.Set.singleton sym
-      | Set_of_closures { closure_symbols; } ->
+      | Code_and_set_of_closures { code_ids = _; closure_symbols; } ->
         Symbol.Set.of_list (Closure_id.Map.data closure_symbols)
 
     let code_being_defined (type k) (t : k t) =
       match t with
       | Singleton _ -> Code_id.Set.empty
-      | Set_of_closures { closure_symbols = _; } ->
-        (* To be continued... *)
-        Code_id.Set.empty
-
-    let _gc_roots (type k) (_t : k t) = Misc.fatal_error "NYI"
+      | Code_and_set_of_closures { code_ids; closure_symbols = _; } -> code_ids
   end
 
   module Static_structure = struct
@@ -553,11 +554,16 @@ module Program_body = struct
       }
 
     let pieces_of_code ?newer_versions_of code =
+      let newer_versions_of =
+        Option.value newer_versions_of ~default:Code_id.Map.empty
+      in
       let static_structure : Static_structure.t =
         let code =
-          let newer_version_of = Code_id.Map.find_opt code newer_versions_of in
-          Code_id.Map.map (fun id params_and_body : code ->
-              { params_and_body;
+          Code_id.Map.mapi (fun id params_and_body : Static_part.code ->
+              let newer_version_of =
+                Code_id.Map.find_opt id newer_versions_of
+              in
+              { params_and_body = Present params_and_body;
                 newer_version_of;
               })
             code
@@ -570,7 +576,7 @@ module Program_body = struct
         in
         let bound_symbols : K.fabricated Bound_symbols.t =
           Code_and_set_of_closures {
-            code_ids = Code.Map.keys code;
+            code_ids = Code_id.Map.keys code;
             closure_symbols = Closure_id.Map.empty;
           }
         in
@@ -668,30 +674,6 @@ module Program_body = struct
 
   let root sym = Root sym
 
-(*
-  let gc_roots t =
-    let rec gc_roots t roots =
-      match t with
-      | Root _ -> roots
-      | Define_symbol { defn; body; _; } ->
-        let roots =
-          match defn.static_structure with
-          | S pieces ->
-            List.fold_left (fun roots (bound_symbols, static_part) ->
-                (* CR mshinwell: check [kind] against the result of
-                   [needs_gc_root] *)
-                if Static_part.needs_gc_root static_part then
-                  Symbol.Set.union (Bound_symbols.gc_roots bound_symbols) roots
-                else
-                  roots)
-              roots
-              pieces
-        in
-        gc_roots body roots
-    in
-    gc_roots t Symbol.Set.empty
-*)
-
   let rec iter_definitions t ~f =
     match t with
     | Define_symbol { defn; body; _ } ->
@@ -720,23 +702,6 @@ module Program = struct
     Format.fprintf ppf "@[(@[(imported_symbols %a)@]@ @[<1>(body@ %a)@])@]"
       (Symbol.Map.print K.print) t.imported_symbols
       Program_body.print t.body
-
-(*
-  let gc_roots t =
-    let syms = Program_body.gc_roots t.body in
-    if !Clflags.flambda_invariant_checks then begin
-      Symbol.Set.iter (fun sym ->
-          if not (Compilation_unit.equal (Compilation_unit.get_current_exn ())
-            (Symbol.compilation_unit sym))
-          then begin
-            Misc.fatal_errorf "Symbol %a deemed as needing a GC root yet it \
-                comes from another compilation unit"
-              Symbol.print sym
-          end)
-        syms;
-    end;
-    syms
-*)
 
   let free_names t =
     (* N.B. [imported_symbols] are not treated as free. *)

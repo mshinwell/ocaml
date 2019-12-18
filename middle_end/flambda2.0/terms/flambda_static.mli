@@ -247,12 +247,6 @@ module Program : sig
   (** Print a program to a formatter. *)
   val print : Format.formatter -> t -> unit
 
-(*
-  (** All symbols from the given program which must be registered as roots
-      with the GC.  (This does not count any imported symbols.) *)
-  val gc_roots : t -> Symbol.Set.t
-*)
-
   (** All free names in the given program.  Imported symbols are not treated
       as free. *)
   val free_names : t -> Name_occurrences.t
