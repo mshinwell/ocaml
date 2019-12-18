@@ -26,10 +26,7 @@ include Identifiable.Make (Unit_id)
 let create = Unit_id.create
 let get_compilation_unit = Unit_id.unit
 let name = Unit_id.name
+let rename = Unit_id.rename
 
 let in_compilation_unit t cu =
   Compilation_unit.equal (get_compilation_unit t) cu
-
-let rename t =
-  let name = Option.value (name t) ~default:"code_id" in
-  create ~name:(name ^ "_") (get_compilation_unit t)

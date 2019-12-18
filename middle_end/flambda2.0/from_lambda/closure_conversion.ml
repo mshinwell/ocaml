@@ -975,6 +975,7 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
       t.declared_symbols
   in
   let program_body =
+    (* CR mshinwell: These should be sorted by source location. *)
     Code_id.Map.fold
       (fun code_id params_and_body program_body : Program_body.t ->
         let bound_symbols : K.fabricated Program_body.Bound_symbols.t =
