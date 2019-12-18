@@ -258,7 +258,8 @@ and simplify_let_cont
     simplify_recursive_let_cont_handlers dacc handlers k
 
 and simplify_direct_full_application
-  : 'a. DA.t -> Apply.t -> (Function_declaration.t * Rec_info.t) option
+  : 'a. DA.t -> Apply.t
+    -> (T.Function_declaration_type.Inlinable.t * Rec_info.t) option
     -> result_arity:Flambda_arity.t
     -> 'a k -> Expr.t * 'a * UA.t
 = fun dacc apply function_decl_opt ~result_arity k ->
@@ -533,7 +534,7 @@ and simplify_direct_function_call
   : 'a. DA.t -> Apply.t -> callee's_closure_id:Closure_id.t
     -> param_arity:Flambda_arity.t -> result_arity:Flambda_arity.t
     -> recursive:Recursive.t -> arg_types:T.t list
-    -> (Function_declaration.t * Rec_info.t) option
+    -> (T.Function_declaration_type.Inlinable.t * Rec_info.t) option
     -> 'a k -> Expr.t * 'a * UA.t
 = fun dacc apply ~callee's_closure_id ~param_arity ~result_arity
       ~recursive ~arg_types:_ function_decl_opt k ->
@@ -668,7 +669,8 @@ and simplify_function_call
        [closures_entry] structure in the type does indeed contain the
        closure in question. *)
     begin match func_decl_type with
-    | Known (Inlinable { function_decl; rec_info; }) ->
+    | Ok (Inlinable inlinable) ->
+      let module I = T.Function_declaration_type.Inlinable in
       begin match call with
       | Direct { closure_id; _ } ->
         if not (Closure_id.equal closure_id callee's_closure_id) then begin
@@ -684,6 +686,7 @@ and simplify_function_call
       (* CR mshinwell: This should go in Typing_env (ditto logic for Rec_info
          in Simplify_simple *)
       let function_decl_rec_info =
+        let rec_info = I.rec_info inlinable in
         match Simple.rec_info (Apply.callee apply) with
         | None -> rec_info
         | Some newer -> Rec_info.merge rec_info ~newer
@@ -696,15 +699,21 @@ Format.eprintf "For call to %a: callee's rec info is %a, rec info from type of f
 *)
       simplify_direct_function_call dacc apply
         ~callee's_closure_id ~arg_types
-        ~param_arity:(Function_declaration.params_arity function_decl)
-        ~result_arity:(Function_declaration.result_arity function_decl)
-        ~recursive:(Function_declaration.recursive function_decl)
-        (Some (function_decl, function_decl_rec_info)) k
-    | Known (Non_inlinable { param_arity; result_arity; recursive; }) ->
+        ~param_arity:(I.param_arity inlinable)
+        ~result_arity:(I.result_arity inlinable)
+        ~recursive:(I.recursive inlinable)
+        (Some (inlinable, function_decl_rec_info)) k
+    | Ok (Non_inlinable non_inlinable) ->
+      let module N = T.Function_declaration_type.Non_inlinable in
       simplify_direct_function_call dacc apply
         ~callee's_closure_id ~arg_types
-        ~param_arity ~result_arity ~recursive
+        ~param_arity:(N.param_arity non_inlinable)
+        ~result_arity:(N.result_arity non_inlinable)
+        ~recursive:(N.recursive non_inlinable)
         None k
+    | Bottom ->
+      let user_data, uacc = k (DA.continuation_uses_env dacc) (DA.r dacc) in
+      Expr.create_invalid (), user_data, uacc
     | Unknown -> type_unavailable ()
     end
   | Unknown -> type_unavailable ()

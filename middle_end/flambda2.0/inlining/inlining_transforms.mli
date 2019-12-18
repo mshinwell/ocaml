@@ -22,7 +22,7 @@ val inline
    : Downwards_acc.t
   -> callee:Simple.t
   -> args:Simple.t list
-  -> Flambda.Function_declaration.t
+  -> Flambda_type.Function_declaration_type.Inlinable.t
   -> apply_return_continuation:Continuation.t
   -> apply_exn_continuation:Exn_continuation.t
   -> apply_inlining_depth:int

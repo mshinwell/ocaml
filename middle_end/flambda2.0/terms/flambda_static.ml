@@ -122,26 +122,23 @@ module Static_part = struct
                        -> K.value t
     | Immutable_string : string or_variable -> K.value t
 
-  let _needs_gc_root (type k) (t : k t) =
+  let get_pieces_of_code (type k) (t : k t) =
     match t with
-    | Block (_tag, mut, fields) ->
-      begin match mut with
-      | Mutable ->
-        (* CR mshinwell: The GC does not support this case yet.  There is an
-           old unfinished patch from Damien. *)
-        true
-      | Immutable -> List.exists Of_kind_value.needs_gc_root fields
-      end
-    | Fabricated_block _ -> true
-    | Set_of_closures set ->
-      not (Flambda.Set_of_closures.has_empty_environment set)
+    | Code_and_set_of_closures { code; set_of_closures = _; } ->
+      Code_id.Map.filter_map code
+        ~f:(fun code_id { params_and_body; newer_version_of; } ->
+          match params_and_body with
+          | Present params_and_body -> Some (params_and_body, newer_version_of)
+          | Deleted -> None)
+    | Block _
+    | Fabricated_block _
     | Boxed_float _
     | Boxed_int32 _
     | Boxed_int64 _
     | Boxed_nativeint _
     | Immutable_float_array _
     | Mutable_string _
-    | Immutable_string _ -> false
+    | Immutable_string _ -> Code_id.Map.empty
 
   let free_names (type k) (t : k t) =
     match t with
@@ -167,8 +164,11 @@ module Static_part = struct
               Name_occurrences.add_newer_version_of_code_id
                 Name_occurrences.empty older Name_mode.normal
           in
-          assert (Name_occurrences.is_empty
-            (Flambda.Function_params_and_body.free_names params_and_body));
+          assert (match params_and_body with
+            | Deleted -> true
+            | Present params_and_body ->
+              Name_occurrences.is_empty
+                (Flambda.Function_params_and_body.free_names params_and_body));
           Name_occurrences.union
             (Name_occurrences.add_code_id Name_occurrences.empty
               code_id Name_mode.normal)
@@ -197,6 +197,12 @@ module Static_part = struct
         (Name_occurrences.empty)
         fields
 
+  let print_params_and_body ppf params_and_body =
+    match params_and_body with
+    | Deleted -> Format.fprintf ppf "@[<hov 1>(params_and_body@ Deleted)@]"
+    | Present params_and_body ->
+      Flambda.Function_params_and_body.print ppf params_and_body
+
   let print_code_with_cache ~cache ppf { params_and_body; newer_version_of; } =
     (* CR mshinwell: elide "newer_version_of" when None *)
     Format.fprintf ppf "@[<hov 1>(\
@@ -204,7 +210,7 @@ module Static_part = struct
         %a\
         )@]"
       (Misc.Stdlib.Option.print Code_id.print) newer_version_of
-      Flambda.Function_params_and_body.print params_and_body
+      print_params_and_body params_and_body
 
   let print_with_cache (type k) ~cache ppf (t : k t) =
     let print_float_array_field ppf = function
@@ -496,6 +502,18 @@ module Program_body = struct
       List.map (fun (S (bound_syms, static_part)) ->
           S (bound_syms, mapper.f static_part))
         t
+
+    let get_pieces_of_code t =
+      let code =
+        List.fold_left (fun code (S (_bound_syms, static_part)) ->
+            Code_id.Map.disjoint_union code
+              (Static_part.get_pieces_of_code static_part))
+          Code_id.Map.empty
+          t
+      in
+      assert (Code_id.Set.equal (Code_id.Map.keys code)
+        (code_being_defined t));
+      code
   end
 
   module Definition = struct
@@ -589,6 +607,9 @@ module Program_body = struct
 
     let code_being_defined t =
       Static_structure.code_being_defined t.static_structure
+
+    let get_pieces_of_code t =
+      Static_structure.get_pieces_of_code t.static_structure
   end
 
   type t =

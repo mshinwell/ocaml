@@ -38,6 +38,8 @@ type t
 
 val empty : t
 
+val is_empty : t -> bool
+
 val print : Format.formatter -> t -> unit
 
 val equal : t -> t -> bool

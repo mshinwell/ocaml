@@ -53,7 +53,6 @@ let lift dacc ty ~bound_to static_part =
       Definition.singleton_symbol symbol static_part
       |> Lifted_constant.create (DA.denv dacc)
            ~types_of_symbols:(Symbol.Map.singleton symbol ty)
-           ~pieces_of_code:Code_id.Map.empty
       |> R.new_lifted_constant r)
   in
   let symbol' = Simple.symbol symbol in

@@ -190,6 +190,10 @@ module Program_body : sig
       -> Flambda.Function_params_and_body.t Code_id.Map.t
       -> t
 
+    val get_pieces_of_code
+       : t
+      -> (Flambda.Function_params_and_body.t * (Code_id.t option)) Code_id.Map.t
+
     val being_defined : t -> Symbol.Set.t
 
     val code_being_defined : t -> Code_id.Set.t

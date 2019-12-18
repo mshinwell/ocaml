@@ -273,7 +273,7 @@ end
 module Closures_info = struct
   type t = {
     closure_id : Closure_id.t;
-    func_decl_type : T.Function_declaration_type.t;
+    func_decl_type : T.Function_declaration_type.t0;
     closure_type : T.t;
   }
 end
@@ -289,7 +289,8 @@ struct
 
   let make_boxed_value (info : Info.t) ~fields:closure_vars =
     let all_function_decls_in_set =
-      Closure_id.Map.singleton info.closure_id info.func_decl_type
+      Closure_id.Map.singleton info.closure_id
+        (Or_unknown_or_bottom.Ok info.func_decl_type)
     in
     let all_closures_in_set =
       Closure_id.Map.singleton info.closure_id info.closure_type
@@ -469,7 +470,7 @@ let rec make_unboxing_decision typing_env ~depth ~arg_types_by_use_id
     | Wrong_kind | Invalid | Unknown ->
       (* CR-someday mshinwell: We could support more than a unique closure. *)
       match T.prove_single_closures_entry' typing_env param_type with
-      | Proved (closure_id, closures_entry, Known func_decl_type) ->
+      | Proved (closure_id, closures_entry, Ok func_decl_type) ->
         let closure_var_types =
           T.Closures_entry.closure_var_types closures_entry
         in
@@ -483,7 +484,7 @@ let rec make_unboxing_decision typing_env ~depth ~arg_types_by_use_id
         Closures.unbox_one_parameter typing_env ~depth
           ~arg_types_by_use_id ~param_type extra_params_and_args
           ~unbox_value:make_unboxing_decision info closure_vars K.value
-      | Proved (_, _, Unknown) | Wrong_kind | Invalid | Unknown ->
+      | Proved (_, _, (Unknown | Bottom)) | Wrong_kind | Invalid | Unknown ->
         let rec try_unboxing = function
           | [] -> typing_env, param_type, extra_params_and_args
           | (prover, unboxer, tag, kind) :: decisions ->

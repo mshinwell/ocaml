@@ -58,7 +58,7 @@ end = struct
       can_inline
       inlining_depth_increment
       float_const_prop
-      (Code_id.Map.print Code.print) code
+      (Code_id.Map.print Function_params_and_body.print) code
 
   let invariant _t = ()
 
@@ -354,9 +354,10 @@ end = struct
               typing_env
           in
           Code_id.Map.fold
-            (fun code_id (newer_version_of, params_and_body) denv ->
+            (fun code_id (params_and_body, newer_version_of) denv ->
               define_code denv ?newer_version_of code_id params_and_body)
-            (LC.pieces_of_code lifted_constant)
+            (Flambda_static.Program_body.Definition.get_pieces_of_code
+               definition)
             (with_typing_env denv typing_env))
       t
       (List.rev lifted)
@@ -638,9 +639,9 @@ end = struct
       types_of_symbols = Symbol.Map.empty;
     }
 
-  let create_piece_of_code denv ?newer_versions_of code_id params_and_body =
+  let create_piece_of_code denv ?newer_version_of code_id params_and_body =
     let newer_versions_of =
-      match newer_versions_of with
+      match newer_version_of with
       | None -> None
       | Some older -> Some (Code_id.Map.singleton code_id older)
     in

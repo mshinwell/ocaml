@@ -523,6 +523,8 @@ let equal t1 t2 =
     ~for_code_ids:For_code_ids.equal
     t1 t2
 
+let is_empty t = equal t empty
+
 let subset_domain t1 t2 =
   binary_predicate ~for_variables:For_variables.subset_domain
     ~for_continuations:For_continuations.subset_domain
