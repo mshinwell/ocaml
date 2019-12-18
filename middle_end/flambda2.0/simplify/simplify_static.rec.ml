@@ -172,6 +172,13 @@ let simplify_set_of_closures0 dacc ~result_dacc set_of_closures
       ~closure_bound_names ~closure_elements ~closure_element_types
   in
   let static_structure : Program_body.Static_structure.t =
+    let code =
+      List.map (fun params_and_body : Static_part.code ->
+          { params_and_body = Present params_and_body;
+            newer_version_of = ...;
+          })
+        code
+    in
     let static_part : K.fabricated Static_part.t =
       Code_and_set_of_closures {
         code;

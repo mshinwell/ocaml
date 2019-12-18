@@ -18,7 +18,6 @@
 
 open! Flambda.Import
 
-module DA = Downwards_acc
 module DE = Simplify_env_and_result.Downwards_env
 
 module Function_declaration_decision = struct
@@ -36,7 +35,7 @@ module Function_declaration_decision = struct
     | Inline -> true
 end
 
-let make_decision_for_function_declaration dacc function_decl
+let make_decision_for_function_declaration denv function_decl
       : Function_declaration_decision.t =
   (* At present, we follow Closure, taking inlining decisions without
      first examining call sites. *)
@@ -46,12 +45,12 @@ let make_decision_for_function_declaration dacc function_decl
     if Function_declaration.stub function_decl then Stub
     else
       let code_id = Function_declaration.code_id function_decl in
-      let params_and_body = DE.find_code (DA.denv dacc) code_id in
+      let params_and_body = DE.find_code denv code_id in
       Function_params_and_body.pattern_match params_and_body
         ~f:(fun ~return_continuation:_ _exn_continuation _params ~body
                 ~my_closure:_ : Function_declaration_decision.t ->
           let inlining_threshold : Inlining_cost.Threshold.t =
-            let round = DE.round (DA.denv dacc) in
+            let round = DE.round denv in
             let unscaled =
               Clflags.Float_arg_helper.get ~key:round !Clflags.inline_threshold
             in
@@ -62,7 +61,7 @@ let make_decision_for_function_declaration dacc function_decl
                 (unscaled *.
                   (float_of_int Inlining_cost.scale_inline_threshold_by)))
           in
-          if Inlining_cost.can_inline dacc body inlining_threshold ~bonus:0
+          if Inlining_cost.can_inline denv body inlining_threshold ~bonus:0
           then Inline
           else Function_body_too_large)
 
@@ -125,10 +124,10 @@ end
 let max_inlining_depth = 10
 let max_rec_depth = 1
 
-let make_decision_for_call_site dacc ~function_decl_rec_info
+let make_decision_for_call_site denv ~function_decl_rec_info
       ~apply_inlining_depth (inline : Inline_attribute.t)
       : Call_site_decision.t =
-  if (not (DE.can_inline (DA.denv dacc))) then
+  if (not (DE.can_inline denv)) then
     Environment_says_never_inline
   else
     match Rec_info.unroll_to function_decl_rec_info with

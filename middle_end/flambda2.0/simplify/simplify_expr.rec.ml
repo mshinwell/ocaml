@@ -271,7 +271,7 @@ and simplify_direct_full_application
     | Some (function_decl, function_decl_rec_info) ->
       let apply_inlining_depth = Apply.inlining_depth apply in
       let decision =
-        Inlining_decision.make_decision_for_call_site dacc
+        Inlining_decision.make_decision_for_call_site (DA.denv dacc)
           ~function_decl_rec_info
           ~apply_inlining_depth
           (Apply.inline apply)

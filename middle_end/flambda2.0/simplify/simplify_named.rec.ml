@@ -53,7 +53,16 @@ let function_decl_type ~denv_outside_function:denv function_decl rec_info =
     Inlining_decision.make_decision_for_function_declaration denv function_decl
   in
   if Inlining_decision.Function_declaration_decision.can_inline decision then
-    T.create_inlinable_function_declaration function_decl rec_info
+    T.create_inlinable_function_declaration
+      ~code_id:(FD.code_id function_decl)
+      ~param_arity:(FD.params_arity function_decl)
+      ~result_arity:(FD.result_arity function_decl)
+      ~stub:(FD.stub function_decl)
+      ~dbg:(FD.dbg function_decl)
+      ~inline:(FD.inline function_decl)
+      ~is_a_functor:(FD.is_a_functor function_decl)
+      ~recursive:(FD.recursive function_decl)
+      ~rec_info
   else
     T.create_non_inlinable_function_declaration
       ~param_arity:(FD.params_arity function_decl)
@@ -223,7 +232,7 @@ let simplify_set_of_closures0 dacc ~result_dacc set_of_closures
   let all_function_decls_in_set, old_code_ids, code, fun_types, r =
     Closure_id.Map.fold
       (fun closure_id function_decl
-           (result_function_decls_in_set, code, fun_types, r) ->
+           (result_function_decls_in_set, old_code_ids, code, fun_types, r) ->
         let function_decl, old_code_id, code_id, params_and_body, ty, r =
           simplify_function (DA.with_r dacc r) closure_id function_decl
             ~all_function_decls_in_set ~closure_bound_names
@@ -392,9 +401,9 @@ let simplify_non_lifted_set_of_closures dacc ~bound_vars ~closure_bound_vars
   in
   let result_dacc =
     DA.map_r result_dacc ~f:(fun r ->
-      R.add_lifted_constant r
-        (Lifted_constant.create_pieces_of_code (DA.denv result_dacc code)
-          ~newer_version_of:old_code_ids))
+      R.new_lifted_constant r
+        (Lifted_constant.create_pieces_of_code (DA.denv result_dacc)
+          code ~newer_versions_of:old_code_ids))
   in
   let result_dacc =
     (* CR mshinwell: This seems weird.  Should there ever be lifted constants

@@ -29,3 +29,7 @@ let name = Unit_id.name
 
 let in_compilation_unit t cu =
   Compilation_unit.equal (get_compilation_unit t) cu
+
+let rename t =
+  let name = Option.value (name t) ~default:"code_id" in
+  create ~name:(name ^ "_") (get_compilation_unit t)

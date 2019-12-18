@@ -22,3 +22,4 @@ val create : ?name:string -> Compilation_unit.t -> t
 val name : t -> string option
 val get_compilation_unit : t -> Compilation_unit.t
 val in_compilation_unit : t -> Compilation_unit.t -> bool
+val rename : t -> t
