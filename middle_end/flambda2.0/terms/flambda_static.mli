@@ -164,6 +164,15 @@ module Program_body : sig
     val delete_bindings : t -> allowed:Symbol.Set.t -> t
 
     val free_names : t -> Name_occurrences.t
+
+    (** If [newer_versions_of] maps [id1] to [id2] then [id1] is a newer
+        version of [id2]. *)
+    val pieces_of_code
+       : ?newer_versions_of:Code_id.t Code_id.Map.t
+      -> ?set_of_closures:
+           (Symbol.t Closure_id.Map.t * Flambda.Set_of_closures.t)
+      -> Flambda.Function_params_and_body.t Code_id.Map.t
+      -> t0
   end
 
   module Definition : sig

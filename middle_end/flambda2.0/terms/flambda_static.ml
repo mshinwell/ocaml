@@ -515,6 +515,39 @@ module Program_body = struct
       assert (Code_id.Set.equal (Code_id.Map.keys code)
         (code_being_defined t));
       code
+
+    let pieces_of_code ?newer_versions_of ?set_of_closures code =
+      let newer_versions_of =
+        Option.value newer_versions_of ~default:Code_id.Map.empty
+      in
+      let code =
+        Code_id.Map.mapi (fun id params_and_body : Static_part.code ->
+            let newer_version_of =
+              Code_id.Map.find_opt id newer_versions_of
+            in
+            { params_and_body = Present params_and_body;
+              newer_version_of;
+            })
+          code
+      in
+      let static_part : K.fabricated Static_part.t =
+        let set_of_closures = Option.map snd set_of_closures in
+        Code_and_set_of_closures {
+          code;
+          set_of_closures;
+        }
+      in
+      let bound_symbols : K.fabricated Bound_symbols.t =
+        let closure_symbols =
+          Option.value (Option.map fst set_of_closures)
+            ~default:Closure_id.Map.empty
+        in
+        Code_and_set_of_closures {
+          code_ids = Code_id.Map.keys code;
+          closure_symbols;
+        }
+      in
+      S (bound_symbols, static_part)
   end
 
   module Definition = struct
@@ -554,36 +587,11 @@ module Program_body = struct
       }
 
     let pieces_of_code ?newer_versions_of code =
-      let newer_versions_of =
-        Option.value newer_versions_of ~default:Code_id.Map.empty
-      in
-      let static_structure : Static_structure.t =
-        let code =
-          Code_id.Map.mapi (fun id params_and_body : Static_part.code ->
-              let newer_version_of =
-                Code_id.Map.find_opt id newer_versions_of
-              in
-              { params_and_body = Present params_and_body;
-                newer_version_of;
-              })
-            code
-        in
-        let static_part : K.fabricated Static_part.t =
-          Code_and_set_of_closures {
-            code;
-            set_of_closures = None;
-          }
-        in
-        let bound_symbols : K.fabricated Bound_symbols.t =
-          Code_and_set_of_closures {
-            code_ids = Code_id.Map.keys code;
-            closure_symbols = Closure_id.Map.empty;
-          }
-        in
-        [S (bound_symbols, static_part)]
+      let static_structure_part : Static_structure.t0 =
+        Static_structure.pieces_of_code ?newer_versions_of code
       in
       { computation = None;
-        static_structure;
+        static_structure = [static_structure_part];
       }
 
     let iter_computation t ~f =

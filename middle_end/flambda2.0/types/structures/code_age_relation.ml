@@ -23,8 +23,8 @@ let print ppf t = Code_id.Map.print Code_id.print ppf t
 
 let empty = Code_id.Map.empty
 
-(* CR mshinwell: There should be a well-formedness check on the graph, most
-   likely, or the functions below may not work correctly. *)
+(* CR mshinwell: There should be a well-formedness check during [add], otherwise
+   the functions below may not work correctly. *)
 
 let add t ~newer ~older = Code_id.Map.add newer older t
 

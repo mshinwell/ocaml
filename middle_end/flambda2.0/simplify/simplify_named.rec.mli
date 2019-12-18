@@ -35,6 +35,7 @@ val simplify_set_of_closures0
   -> closure_element_types:Flambda_type.t Var_within_closure.Map.t
   -> Flambda.Set_of_closures.t
        * Flambda_type.t Name_in_binding_pos.Map.t
+       * Code_id.t Code_id.Map.t
        * Flambda.Function_params_and_body.t Code_id.Map.t
        * Downwards_acc.t * Downwards_acc.t
 

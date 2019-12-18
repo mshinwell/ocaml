@@ -167,15 +167,16 @@ let simplify_set_of_closures0 dacc ~result_dacc set_of_closures
   let closure_bound_names =
     Closure_id.Map.map Name_in_binding_pos.symbol closure_symbols
   in
-  let set_of_closures, closure_types_by_bound_name, code, dacc, result_dacc =
+  let set_of_closures, closure_types_by_bound_name, old_code_ids, code, dacc,
+      result_dacc =
     Simplify_named.simplify_set_of_closures0 dacc ~result_dacc set_of_closures
       ~closure_bound_names ~closure_elements ~closure_element_types
   in
   let static_structure : Program_body.Static_structure.t =
     let code =
-      List.map (fun params_and_body : Static_part.code ->
+      Code_id.Map.mapi (fun code_id params_and_body : Static_part.code ->
           { params_and_body = Present params_and_body;
-            newer_version_of = ...;
+            newer_version_of = Code_id.Map.find_opt code_id old_code_ids;
           })
         code
     in
@@ -187,7 +188,7 @@ let simplify_set_of_closures0 dacc ~result_dacc set_of_closures
     in
     let bound_symbols : K.fabricated Program_body.Bound_symbols.t =
       Code_and_set_of_closures {
-        code_ids = Code.Map.keys code;
+        code_ids = Code_id.Map.keys code;
         closure_symbols;
       }
     in
@@ -354,22 +355,28 @@ let simplify_static_part_of_kind_fabricated dacc ~result_dacc
       Code_id.Map.fold
         (fun code_id ({ params_and_body; newer_version_of; } : Static_part.code)
              (dacc, result_dacc) ->
-          let dacc =
-            DA.map_denv dacc (fun denv ->
-              DE.define_code t ?newer_version_of code_id params_and_body)
+          let define_code denv =
+            match params_and_body with
+            | Deleted -> denv
+            | Present params_and_body ->
+              DE.define_code denv ?newer_version_of code_id params_and_body
           in
-          let result_dacc =
-            DA.map_denv result_dacc (fun denv ->
-              DE.define_code t ?newer_version_of code_id params_and_body)
-          in
+          let dacc = DA.map_denv dacc ~f:define_code in
+          let result_dacc = DA.map_denv result_dacc ~f:define_code in
           dacc, result_dacc)
         code
         (dacc, result_dacc)
     in
-    let set_of_closures, dacc, result_dacc, _static_structure_types,
-        _static_structure =
-      simplify_set_of_closures dacc ~result_dacc set_of_closures
-        ~closure_symbols
+    let set_of_closures, dacc, result_dacc =
+      match set_of_closures with
+      | None -> None, dacc, result_dacc
+      | Some set_of_closures ->
+        let set_of_closures, dacc, result_dacc, _static_structure_types,
+            _static_structure =
+          simplify_set_of_closures dacc ~result_dacc set_of_closures
+            ~closure_symbols
+        in
+        Some set_of_closures, dacc, result_dacc
     in
     Code_and_set_of_closures { code; set_of_closures; }, dacc, result_dacc
 
@@ -493,13 +500,53 @@ let reify_types_of_computed_values dacc ~result_dacc computed_values =
                 (Name.var var)
                 (T.alias_type_of K.value (Simple.symbol symbol)))
         in
-        let function_decls = Function_declarations.create function_decls in
+        let module I = T.Function_declaration_type.Inlinable in
+        (* The same code might be reified multiple times and we don't currently
+           dedup, so we must assign fresh code IDs. *)
+        let fresh_code_ids =
+          Closure_id.Map.map (fun inlinable ->
+              Code_id.rename (I.code_id inlinable))
+            function_decls
+        in
+        let newer_versions_of =
+          Closure_id.Map.fold (fun closure_id inlinable newer_versions_of ->
+              let code_id = I.code_id inlinable in
+              let fresh_code_id =
+                Closure_id.Map.find closure_id fresh_code_ids
+              in
+              Code_id.Map.add fresh_code_id code_id newer_versions_of)
+            function_decls
+            Code_id.Map.empty
+        in
         let set_of_closures =
+          let function_decls =
+            Closure_id.Map.mapi (fun closure_id inlinable ->
+              let code_id = Closure_id.Map.find closure_id fresh_code_ids in
+              Function_declaration.create ~code_id
+                ~params_arity:(I.param_arity inlinable)
+                ~result_arity:(I.result_arity inlinable)
+                ~stub:(I.stub inlinable)
+                ~dbg:(I.dbg inlinable)
+                ~inline:(I.inline inlinable)
+                ~is_a_functor:(I.is_a_functor inlinable)
+                ~recursive:(I.recursive inlinable))
+              function_decls
+            |> Function_declarations.create
+          in
           Set_of_closures.create function_decls ~closure_elements:closure_vars
         in
-        let static_structure_part : Static_structure.t0 =
-          S (Set_of_closures { closure_symbols; },
-             Set_of_closures set_of_closures)
+        let by_code_id =
+          Closure_id.Map.fold (fun closure_id _inlinable by_code_id ->
+              let code_id = Closure_id.Map.find closure_id fresh_code_ids in
+              let params_and_body = DE.find_code (DA.denv dacc) code_id in
+              Code_id.Map.add code_id params_and_body by_code_id)
+            function_decls
+            Code_id.Map.empty
+        in
+        let static_structure_part =
+          Static_structure.pieces_of_code ~newer_versions_of
+            ~set_of_closures:(closure_symbols, set_of_closures)
+            by_code_id
         in
         result_dacc, dacc, (var, static_structure_part) :: reified_definitions
       | Simple _ | Cannot_reify | Invalid ->
@@ -535,8 +582,8 @@ let simplify_return_continuation_handler dacc
       DE.add_lifted_constants denv ~lifted:(R.get_lifted_constants r))
   in
   let allowed_free_vars =
-    Variable.Set.union (KP.var_set return_cont_handler.computed_values)
-      (KP.var_set extra_params_and_args.extra_params)
+    Variable.Set.union (KP.List.var_set return_cont_handler.computed_values)
+      (KP.List.var_set extra_params_and_args.extra_params)
   in
   let static_structure, result_dacc =
     let result_dacc, dacc, reified_definitions =
