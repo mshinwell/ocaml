@@ -39,6 +39,7 @@ module type UnitId = sig
   include BaseId
   val create : ?name:string -> Compilation_unit.t -> t
   val unit : t -> Compilation_unit.t
+  val unique_name : t -> string
 end
 
 module Id(_:sig end) : Id = struct
@@ -84,6 +85,7 @@ module UnitId(Innerid:Id)(Compilation_unit:Identifiable.Thing) :
   let hash off = Hashtbl.hash off
   let equal o1 o2 = compare o1 o2 = 0
   let name o = Innerid.name o.id
+  let unique_name o = Innerid.to_string o.id
 
   let rename t =
     { id = Innerid.rename t.id;

@@ -45,6 +45,7 @@ sig
   include BaseId
   val create : ?name:string -> Compilation_unit.t -> t
   val unit : t -> Compilation_unit.t
+  val unique_name : t -> string
 end
 
 (** If applied generatively, i.e. [Id(struct end)], creates a new type

@@ -38,5 +38,5 @@ let in_compilation_unit t cu =
   Compilation_unit.equal (get_compilation_unit t) cu
 
 let code_symbol t =
-  let linkage_name = Linkage_name.create (name t ^ "_code") in
+  let linkage_name = Linkage_name.create (Unit_id.unique_name t ^ "_code") in
   Symbol.create (get_compilation_unit t) linkage_name
