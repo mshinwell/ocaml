@@ -161,7 +161,11 @@ module Program_body : sig
 
     val being_defined : t -> Symbol.Set.t
 
-    val delete_bindings : t -> allowed:Symbol.Set.t -> t
+    val delete_bindings
+       : t
+      -> allowed:Name_occurrences.t
+      -> Code_age_relation.t
+      -> t
 
     val free_names : t -> Name_occurrences.t
 

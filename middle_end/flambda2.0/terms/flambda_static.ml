@@ -491,11 +491,28 @@ module Program_body = struct
         Name_occurrences.empty
         t
 
-    let delete_bindings t ~allowed =
+    let delete_bindings t ~allowed code_age_relation =
+      let allowed_symbols = Name_occurrences.symbols allowed in
+      let allowed_code_ids = Name_occurrences.code_ids allowed in
       List.filter (fun (S (bound_syms, _static_part)) ->
-          not (Symbol.Set.is_empty (
-            Symbol.Set.inter (Bound_symbols.being_defined bound_syms)
-              allowed)))
+          let code_ids = Bound_symbols.code_being_defined bound_syms in
+          let code_unused =
+            Code_id.Set.is_empty (Code_id.Set.inter code_ids allowed_code_ids)
+          in
+          let can_delete_code =
+            code_unused
+              &&
+              Code_id.Set.for_all (fun code_id ->
+                  Code_age_relation.newer_versions_form_linear_chain
+                    code_age_relation code_id)
+                code_ids
+          in
+          let can_delete_symbols =
+            Symbol.Set.is_empty (
+              Symbol.Set.inter (Bound_symbols.being_defined bound_syms)
+                allowed_symbols)
+          in
+          (not can_delete_symbols) || (not can_delete_code))
         t
 
     let iter_static_parts t (iter : static_part_iterator) =
@@ -676,7 +693,7 @@ module Program_body = struct
     let can_delete =
       Symbol.Set.is_empty (Symbol.Set.inter being_defined free_syms_of_body)
         && Definition.only_generative_effects defn
-        && Code_id.Set.is_empty code_being_defined
+        && Code_id.Set.is_empty code_being_defined (* CR mshinwell: improve? *)
     in
     if can_delete then body
     else

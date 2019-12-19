@@ -66,3 +66,26 @@ let join t id1 id2 : _ Or_unknown.t =
         |> List.hd
       in
       Known newest_shared_id
+
+type at_most_one_newer =
+  | No_newer_version
+  | Exactly_one_newer_version of Code_id.t
+  | More_than_one_newer_version
+
+let has_at_most_one_newer_version t id =
+  let newer_to_id =
+    Code_id.Map.filter (fun _newer older -> Code_id.equal older id) t
+  in
+  if Code_id.Map.is_empty newer_to_id then No_newer_version
+  else
+    match Code_id.Map.get_singleton newer_to_id with
+    | Some (newer, id') ->
+      assert (Code_id.equal id id');
+      Exactly_one_newer_version newer
+    | None -> More_than_one_newer_version
+
+let rec newer_versions_form_linear_chain t id =
+  match has_at_most_one_newer_version t id with
+  | No_newer_version -> true
+  | Exactly_one_newer_version id -> newer_versions_form_linear_chain t id
+  | More_than_one_newer_version -> false

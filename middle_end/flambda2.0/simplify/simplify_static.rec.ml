@@ -787,14 +787,15 @@ let simplify_definition dacc (defn : Program_body.Definition.t) =
      is currently unused.
    - We should simplify code on the way up if we don't delete it. *)
 
-let define_lifted_constants lifted_constants (body : Program_body.t) =
+let define_lifted_constants dacc lifted_constants (body : Program_body.t) =
   List.fold_left (fun body lifted_constant : Program_body.t ->
       let definition = Lifted_constant.definition lifted_constant in
       let static_structure =
         (* CR mshinwell: We should have deletion of unused symbols
            automatically -- needs to be done for non-lifted constants too *)
         Static_structure.delete_bindings definition.static_structure
-          ~allowed:(Name_occurrences.symbols (Program_body.free_names body))
+          ~allowed:(Program_body.free_names body)
+          (TE.code_age_relation (DE.typing_env (DA.denv dacc)))
       in
       if Static_structure.is_empty static_structure then body
       else
@@ -815,7 +816,7 @@ let rec simplify_program_body0 dacc (body : Program_body.t) k =
     let r = DA.r dacc in
     simplify_program_body0 dacc body (fun body dacc ->
       let body = Program_body.define_symbol defn ~body in
-      let body = define_lifted_constants (R.get_lifted_constants r) body in
+      let body = define_lifted_constants dacc (R.get_lifted_constants r) body in
       k body dacc)
   | Root _ -> k body dacc
 
