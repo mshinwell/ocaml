@@ -334,9 +334,10 @@ val float_of_int : ?dbg:Debuginfo.t -> Cmm.expression -> Cmm.expression
 
 val direct_call :
   ?dbg:Debuginfo.t ->
-  Cmm.machtype -> Cmm.expression -> Cmm.expression list -> Cmm.expression -> Cmm.expression
-(** [direct_call ty f_code args f] creates a direct call to the function code [f_code] with
-    arguments [args], and closure [f], with a return value of type [ty]. *)
+  Cmm.machtype -> Cmm.expression -> Cmm.expression list -> Cmm.expression
+(** [direct_call ty f_code args] creates a direct call to the function code [f_code] with
+    arguments [args], with a return value of type [ty].
+    If a closure needs to be passed, it must be included in [args]. *)
 
 val indirect_call :
   ?dbg:Debuginfo.t ->

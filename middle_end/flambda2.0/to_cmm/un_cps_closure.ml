@@ -580,8 +580,7 @@ module Iter_on_sets_of_closures = struct
     match (n : Named.t) with
     | Simple _ | Prim _ -> ()
     | Set_of_closures s ->
-        let () = f None s in
-        set_of_closures f s
+        f None s
 
   and let_expr f t =
     Let.pattern_match t ~f:(fun ~bound_vars:_ ~body ->
@@ -628,12 +627,7 @@ module Iter_on_sets_of_closures = struct
 
   and invalid _ _ = ()
 
-  and set_of_closures f s =
-    let decls = Set_of_closures.function_decls s in
-    let map = Function_declarations.funs decls in
-    Closure_id.Map.iter (fun_decl f) map
-
-  and fun_decl _f _ _decl = assert false  (* FIXME Let code *)
+  (* and fun_decl _f _ _decl = assert false  (\* FIXME Let code *\) *)
 (*
     let t = Function_declaration.params_and_body decl in
     Function_params_and_body.pattern_match t
@@ -645,13 +639,22 @@ module Iter_on_sets_of_closures = struct
   let computation f c =
     Flambda_static.Program_body.Computation.iter_expr c ~f:(expr f)
 
-  let static_structure_aux _ _ = assert false (* f
+  let static_structure_aux f
       ((S (symbs, st)) : Flambda_static.Program_body.Static_structure.t0) =
     match symbs, st with
-    | Set_of_closures r, Set_of_closures s ->
-        f (Some r.closure_symbols) s;
-        set_of_closures f s
-    | _ -> () *) (* FIXME Let code *)
+    | Code_and_set_of_closures { code_ids = _; closure_symbols; },
+      Code_and_set_of_closures { code; set_of_closures = s; } ->
+        Option.iter (fun s -> f (Some closure_symbols) s) s;
+        Code_id.Map.iter (fun _ { Flambda_static.Static_part.params_and_body;
+                                  newer_version_of = _; } ->
+            match params_and_body with
+            | Deleted -> ()
+            | Present params_and_body ->
+                Function_params_and_body.pattern_match params_and_body
+                  ~f:(fun ~return_continuation:_ _ _ ~body ~my_closure:_ ->
+                      expr f body))
+          code
+    | _ -> ()
 
   let static_structure f s =
     List.iter (static_structure_aux f) s
@@ -692,10 +695,10 @@ let closure_name id =
   let name = Compilation_unit.get_linkage_name compunit in
   Format.asprintf "%a__%s" Linkage_name.print name (Closure_id.to_string id)
 
-let closure_id_name o id =
-  match o with
-  | None -> closure_name id
-  | Some _map -> closure_name id
+(* let closure_id_name o id =
+ *   match o with
+ *   | None -> closure_name id
+ *   | Some _map -> closure_name id *)
   (*
       (* CR Gbury: is this part really necessary ? why not always
                    return closure_name id ? *)
@@ -706,18 +709,17 @@ let closure_id_name o id =
 
 let closure_code s = Format.asprintf "%s_code" s
 
-let map_on_function_decl f program =
-  (* CR vlaviron: Why was this Code_id ? *)
-  let map = ref Closure_id.Map.empty in
-  let aux o s =
-    let decls = Set_of_closures.function_decls s in
-    let funs = Function_declarations.funs decls in
-    Closure_id.Map.iter (fun closure_id decl ->
-        let name = closure_code (closure_id_name o closure_id) in
-        if not (Closure_id.Map.mem closure_id !map) then
-          map := Closure_id.Map.add closure_id (f name closure_id decl) !map
-      ) funs
-  in
-  Iter_on_sets_of_closures.program aux program;
-  !map
+(* let map_on_function_decl f program =
+ *   let map = ref Code_id.Map.empty in
+ *   let aux o s =
+ *     let decls = Set_of_closures.function_decls s in
+ *     let funs = Function_declarations.funs decls in
+ *     Closure_id.Map.iter (fun closure_id decl ->
+ *         let name = closure_code (closure_id_name o closure_id) in
+ *         if not (Closure_id.Map.mem closure_id !map) then
+ *           map := Closure_id.Map.add closure_id (f name closure_id decl) !map
+ *       ) funs
+ *   in
+ *   Iter_on_sets_of_closures.program aux program;
+ *   !map *)
 

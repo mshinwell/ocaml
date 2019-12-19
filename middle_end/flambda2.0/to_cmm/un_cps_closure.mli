@@ -45,11 +45,11 @@ val closure_code : string -> string
 (** Returns the address for a function code from the global name of
     a closure. *)
 
-val map_on_function_decl :
-  (string -> Closure_id.t -> Flambda.Function_declaration.t -> 'a) ->
-  Flambda_static.Program.t -> 'a Closure_id.Map.t
-(** Map a function on each function body exactly once, and return the
-    resulting mapping. *)
+(* val map_on_function_decl :
+ *   (string -> Closure_id.t -> Flambda.Function_declaration.t -> 'a) ->
+ *   Flambda_static.Program.t -> 'a Closure_id.Map.t
+ * (\** Map a function on each function body exactly once, and return the
+ *     resulting mapping. *\) *)
 
 
 type layout_slot =

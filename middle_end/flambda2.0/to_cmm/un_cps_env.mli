@@ -27,6 +27,11 @@ val mk :
     translating a flambda2 expression, with return continuation [k], exception
     continuation [k_exn], and which uses the given closures variables. *)
 
+val enter_function_def : t -> Continuation.t -> Continuation.t -> t
+(** [enter_function_def env k k_exn] creates a local environment for
+    translating a flambda2 expression, with return continuation [k], exception
+    continuation [k_exn], preserving the global info from [env]. *)
+
 val dummy : Un_cps_closure.env -> Var_within_closure.Set.t -> t
 (** Create an environment with dummy return adn exception continuations. *)
 
@@ -39,6 +44,18 @@ val return_cont : t -> Continuation.t
 val exn_cont : t -> Continuation.t
 (** Returns the exception continuation of the environment. *)
 
+(** {2 Function info *)
+
+type function_info = {
+  needs_closure_arg : bool;
+  (* Whether direct calls need to provide a closure or can skip it *)
+}
+
+val add_function_info : t -> Code_id.t -> function_info -> t
+(** Add information on the given function *)
+
+val get_function_info : t -> Code_id.t -> function_info option
+(** Retrieve known information on the given function *)
 
 (** {2 Variable bindings} *)
 

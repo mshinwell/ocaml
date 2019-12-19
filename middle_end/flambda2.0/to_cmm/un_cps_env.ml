@@ -71,6 +71,11 @@ type stage =
 
 (* Translation environment *)
 
+type function_info = {
+  needs_closure_arg : bool;
+  (* Whether direct calls need to provide a closure or can skip it *)
+}
+
 type t = {
   k_return : Continuation.t;
   (* The continuation of the current context
@@ -81,6 +86,9 @@ type t = {
   used_closure_vars : Var_within_closure.Set.t;
   (* Closure variables that are used by the context begin translated.
      (used to remove unused closure variables). *)
+
+  functions_info: function_info Code_id.Map.t;
+  (* Information about known functions *)
 
   vars  : Cmm.expression Variable.Map.t;
   (* Map from flambda2 variables to backend_variables *)
@@ -101,6 +109,19 @@ type t = {
 
 let mk offsets k_return k_exn used_closure_vars = {
   k_return; k_exn; used_closure_vars; offsets;
+  functions_info = Code_id.Map.empty;
+  stages = [];
+  pures = Variable.Map.empty;
+  vars = Variable.Map.empty;
+  conts = Continuation.Map.empty;
+  exn_conts_extra_args = Continuation.Map.empty;
+}
+
+let enter_function_def env k_return k_exn = {
+  k_return; k_exn;
+  used_closure_vars = env.used_closure_vars;
+  offsets = env.offsets;
+  functions_info = env.functions_info;
   stages = [];
   pures = Variable.Map.empty;
   vars = Variable.Map.empty;
@@ -117,6 +138,17 @@ let dummy offsets used_closure_vars =
 
 let return_cont env = env.k_return
 let exn_cont env = env.k_exn
+
+(* Function info *)
+
+let add_function_info env code_id info =
+  let functions_info =
+    Code_id.Map.add code_id info env.functions_info
+  in
+  { env with functions_info; }
+
+let get_function_info env code_id =
+  Code_id.Map.find_opt code_id env.functions_info
 
 (* Variables *)
 
