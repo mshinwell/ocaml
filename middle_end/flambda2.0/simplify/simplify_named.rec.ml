@@ -220,8 +220,11 @@ let simplify_function dacc closure_id function_decl ~all_function_decls_in_set
     let code_id = Code_id.rename code_id in
     let function_decl = FD.update_code_id function_decl code_id in
     let ty =
-      function_decl_type ~denv_outside_function:(DA.denv dacc) function_decl
-        Rec_info.initial
+      let denv_outside_function =
+        DE.define_code (DA.denv dacc) ~newer_version_of:old_code_id
+          code_id params_and_body
+      in
+      function_decl_type ~denv_outside_function function_decl Rec_info.initial
     in
     function_decl, old_code_id, code_id, params_and_body, ty, r)
 

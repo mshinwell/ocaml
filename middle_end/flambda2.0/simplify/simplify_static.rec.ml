@@ -202,21 +202,6 @@ let simplify_set_of_closures0 dacc ~result_dacc set_of_closures
       closure_types_by_bound_name
       Symbol.Map.empty
   in
-(* Check if this is needed
-  let add_code_to_dacc dacc =
-    let dacc =
-      DA.map_r dacc ~f:(fun r ->
-        R.new_lifted_constant r
-          (Lifted_constant.create_pieces_of_code (DA.denv dacc)
-            code ~newer_versions_of:old_code_ids))
-    in
-    DA.map_denv dacc ~f:(fun denv ->
-      DE.add_lifted_constants denv
-        ~lifted:(R.get_lifted_constants (DA.r dacc)))
-  in
-  let dacc = add_code_to_dacc dacc in
-  let result_dacc = add_code_to_dacc result_dacc in
-*)
   set_of_closures, dacc, result_dacc, static_structure_types, static_structure
 
 let simplify_set_of_closures dacc ~result_dacc set_of_closures
