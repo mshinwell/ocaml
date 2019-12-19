@@ -959,24 +959,6 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
       Code_age_relation.empty
   in
   let program_body =
-    (* CR mshinwell: Share with [Simplify_program] *)
-    List.fold_left (fun body (symbol, static_part) : Program_body.t ->
-        let bound_symbols : K.value Program_body.Bound_symbols.t =
-          Singleton symbol
-        in
-        let static_structure : Program_body.Static_structure.t =
-          [S (bound_symbols, static_part)]
-        in
-        let definition : Program_body.Definition.t =
-          { computation = None;
-            static_structure;
-          }
-        in
-        Program_body.define_symbol definition ~body Code_age_relation.empty)
-      program_body
-      t.declared_symbols
-  in
-  let program_body =
     List.fold_left
       (fun program_body (code_id, params_and_body) : Program_body.t ->
         let bound_symbols : K.fabricated Program_body.Bound_symbols.t =
@@ -1008,6 +990,24 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
           Code_age_relation.empty)
       program_body
       (List.rev t.code)  (* Keep in source file order. *)
+  in
+  let program_body =
+    (* CR mshinwell: Share with [Simplify_program] *)
+    List.fold_left (fun body (symbol, static_part) : Program_body.t ->
+        let bound_symbols : K.value Program_body.Bound_symbols.t =
+          Singleton symbol
+        in
+        let static_structure : Program_body.Static_structure.t =
+          [S (bound_symbols, static_part)]
+        in
+        let definition : Program_body.Definition.t =
+          { computation = None;
+            static_structure;
+          }
+        in
+        Program_body.define_symbol definition ~body Code_age_relation.empty)
+      program_body
+      t.declared_symbols
   in
   let imported_symbols =
     Symbol.Set.fold (fun symbol imported_symbols ->

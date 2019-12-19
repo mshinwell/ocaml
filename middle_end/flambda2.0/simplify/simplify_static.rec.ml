@@ -355,6 +355,9 @@ let simplify_static_part_of_kind_fabricated dacc ~result_dacc
       Code_id.Map.fold
         (fun code_id ({ params_and_body; newer_version_of; } : Static_part.code)
              (dacc, result_dacc) ->
+          (* CR mshinwell: Add invariant check to ensure there are no
+             unbound names in the code, since we're not simplifying on the
+             way down. *)
           let define_code denv =
             match params_and_body with
             | Deleted -> denv
