@@ -513,10 +513,11 @@ let rec conv_top ~backend (func_env:func_env) (prog : Fexpr.program) : Program_b
       computed_values = [];
     } in
     let body = conv_top ~backend func_env tail in
-    Program_body.define_symbol ~body {
-      computation = Some computation;
-      static_structure = [];
-    }
+    Program_body.define_symbol ~body
+      { computation = Some computation;
+        static_structure = [];
+      }
+      Code_age_relation.empty
   | Define_symbol
       (Nonrecursive,
        { computation;
@@ -579,10 +580,11 @@ let rec conv_top ~backend (func_env:func_env) (prog : Fexpr.program) : Program_b
     in
     let structure = List.rev structure in
     let body = conv_top ~backend func_env tail in
-    Program_body.define_symbol ~body {
-      computation;
-      static_structure = structure;
-    }
+    Program_body.define_symbol ~body
+      { computation;
+        static_structure = structure;
+      }
+      Code_age_relation.empty
 
   | Let_code code :: tail ->
     let (name, _loc) = code.name in

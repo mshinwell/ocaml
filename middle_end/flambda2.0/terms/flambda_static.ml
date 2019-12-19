@@ -491,13 +491,24 @@ module Program_body = struct
         Name_occurrences.empty
         t
 
-    let delete_bindings t ~allowed code_age_relation =
-      let allowed_symbols = Name_occurrences.symbols allowed in
-      let allowed_code_ids = Name_occurrences.code_ids allowed in
-      List.filter (fun (S (bound_syms, _static_part)) ->
-          let code_ids = Bound_symbols.code_being_defined bound_syms in
+    let delete_bindings t ~free_names_after code_age_relation =
+      let rec delete t ~free_names_after ~result =
+        match t with
+        | [] -> result
+        | ((S (bound_syms, _static_part)) as part)::t ->
+          let symbols_after = Name_occurrences.symbols free_names_after in
+          let can_delete_symbols =
+            Symbol.Set.is_empty (
+              Symbol.Set.inter (Bound_symbols.being_defined bound_syms)
+                symbols_after)
+          in
+          let code_ids_being_defined =
+            Bound_symbols.code_being_defined bound_syms
+          in
+          let code_ids_after = Name_occurrences.code_ids free_names_after in
           let code_unused =
-            Code_id.Set.is_empty (Code_id.Set.inter code_ids allowed_code_ids)
+            Code_id.Set.is_empty
+              (Code_id.Set.inter code_ids_being_defined code_ids_after)
           in
           let can_delete_code =
             code_unused
@@ -505,15 +516,14 @@ module Program_body = struct
               Code_id.Set.for_all (fun code_id ->
                   Code_age_relation.newer_versions_form_linear_chain
                     code_age_relation code_id)
-                code_ids
+                code_ids_being_defined
           in
-          let can_delete_symbols =
-            Symbol.Set.is_empty (
-              Symbol.Set.inter (Bound_symbols.being_defined bound_syms)
-                allowed_symbols)
-          in
-          (not can_delete_symbols) || (not can_delete_code))
-        t
+          if can_delete_code && can_delete_symbols then
+            delete t ~free_names_after ~result
+          else
+            delete t ~free_names_after ~result:(part :: result)
+      in
+      delete (List.rev t) ~free_names_after ~result:[]
 
     let iter_static_parts t (iter : static_part_iterator) =
       List.iter (fun (S (_bound_syms, static_part)) ->
@@ -602,6 +612,8 @@ module Program_body = struct
       in
       Name_occurrences.union free_in_computation free_in_static_structure
 
+    let static_structure t = t.static_structure
+
     let singleton_symbol symbol static_part =
       { computation = None;
         static_structure = [S (Singleton symbol, static_part)];
@@ -645,6 +657,15 @@ module Program_body = struct
 
     let get_pieces_of_code t =
       Static_structure.get_pieces_of_code t.static_structure
+
+    let delete_bindings t ~free_names_after code_age_relation =
+      let static_structure =
+        Static_structure.delete_bindings t.static_structure ~free_names_after
+          code_age_relation
+      in
+      { computation = t.computation;
+        static_structure;
+      }
   end
 
   type t =
@@ -685,15 +706,15 @@ module Program_body = struct
       Name_occurrences.closure_vars free_names
     | Root _ -> Var_within_closure.Set.empty
 
-  let define_symbol defn ~body =
-    let being_defined = Definition.being_defined defn in
-    let code_being_defined = Definition.code_being_defined defn in
+  let define_symbol defn ~body code_age_relation =
     let free_names_of_body = free_names body in
-    let free_syms_of_body = Name_occurrences.symbols free_names_of_body in
+    let defn =
+      Definition.delete_bindings defn ~free_names_after:free_names_of_body
+        code_age_relation
+    in
     let can_delete =
-      Symbol.Set.is_empty (Symbol.Set.inter being_defined free_syms_of_body)
-        && Definition.only_generative_effects defn
-        && Code_id.Set.is_empty code_being_defined (* CR mshinwell: improve? *)
+      Definition.only_generative_effects defn
+        && Static_structure.is_empty (Definition.static_structure defn)
     in
     if can_delete then body
     else

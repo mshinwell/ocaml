@@ -163,7 +163,7 @@ module Program_body : sig
 
     val delete_bindings
        : t
-      -> allowed:Name_occurrences.t
+      -> free_names_after:Name_occurrences.t
       -> Code_age_relation.t
       -> t
 
@@ -228,7 +228,7 @@ module Program_body : sig
   (** Define the given symbol(s).  No symbol defined by the
       [definition] may be referenced by the same definition, only by
       subsequent [define_symbol] constructs. *)
-  val define_symbol : Definition.t -> body:t -> t
+  val define_symbol : Definition.t -> body:t -> Code_age_relation.t -> t
 
   (** The module block symbol for the compilation unit. *)
   val root : Symbol.t -> t

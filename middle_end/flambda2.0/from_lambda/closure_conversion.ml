@@ -955,6 +955,7 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
     in
     Program_body.define_symbol definition
       ~body:(Program_body.root module_symbol)
+      Code_age_relation.empty
   in
   let program_body =
     (* CR mshinwell: Share with [Simplify_program] *)
@@ -970,7 +971,7 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
             static_structure;
           }
         in
-        Program_body.define_symbol definition ~body)
+        Program_body.define_symbol definition ~body Code_age_relation.empty)
       program_body
       t.declared_symbols
   in
@@ -1002,7 +1003,8 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
             static_structure;
           }
         in
-        Program_body.define_symbol definition ~body:program_body)
+        Program_body.define_symbol definition ~body:program_body
+          Code_age_relation.empty)
       program_body
       (List.rev t.code)  (* Keep in source file order. *)
   in
