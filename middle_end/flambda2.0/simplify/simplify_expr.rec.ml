@@ -328,11 +328,12 @@ Format.eprintf "Simplifying inlined body with DE depth delta = %d\n%!"
     expr, user_data, uacc
 
 and simplify_direct_partial_application
-  : 'a. DA.t -> Apply.t -> callee's_closure_id:Closure_id.t
+  : 'a. DA.t -> Apply.t -> callee's_code_id:Code_id.t
+    -> callee's_closure_id:Closure_id.t
     -> param_arity:Flambda_arity.t -> result_arity:Flambda_arity.t
     -> recursive:Recursive.t -> 'a k -> Expr.t * 'a * UA.t
-= fun dacc apply ~callee's_closure_id ~param_arity ~result_arity
-      ~recursive k ->
+= fun dacc apply ~callee's_code_id ~callee's_closure_id
+      ~param_arity ~result_arity ~recursive k ->
   (* For simplicity, we disallow [@inline] attributes on partial
      applications.  The user may always write an explicit wrapper instead
      with such an attribute. *)
@@ -385,7 +386,7 @@ and simplify_direct_partial_application
     in
     let args = applied_args @ (List.map KP.simple remaining_params) in
     let call_kind =
-      Call_kind.direct_function_call callee's_closure_id
+      Call_kind.direct_function_call callee's_code_id callee's_closure_id
         ~return_arity:result_arity
     in
     let applied_args_with_closure_vars = (* CR mshinwell: rename *)
@@ -531,13 +532,14 @@ and simplify_direct_over_application
   simplify_expr dacc expr k
 
 and simplify_direct_function_call
-  : 'a. DA.t -> Apply.t -> callee's_closure_id:Closure_id.t
+  : 'a. DA.t -> Apply.t -> callee's_code_id:Code_id.t
+    -> callee's_closure_id:Closure_id.t
     -> param_arity:Flambda_arity.t -> result_arity:Flambda_arity.t
     -> recursive:Recursive.t -> arg_types:T.t list
     -> (T.Function_declaration_type.Inlinable.t * Rec_info.t) option
     -> 'a k -> Expr.t * 'a * UA.t
-= fun dacc apply ~callee's_closure_id ~param_arity ~result_arity
-      ~recursive ~arg_types:_ function_decl_opt k ->
+= fun dacc apply ~callee's_code_id ~callee's_closure_id
+      ~param_arity ~result_arity ~recursive ~arg_types:_ function_decl_opt k ->
   let result_arity_of_application =
     Call_kind.return_arity (Apply.call_kind apply)
   in
@@ -550,7 +552,7 @@ and simplify_direct_function_call
       Apply.print apply
   end;
   let call_kind =
-    Call_kind.direct_function_call callee's_closure_id
+    Call_kind.direct_function_call callee's_code_id callee's_closure_id
       ~return_arity:result_arity
   in
   let apply = Apply.with_call_kind apply call_kind in
@@ -563,7 +565,7 @@ and simplify_direct_function_call
   else if provided_num_args > num_params then
     simplify_direct_over_application dacc apply ~param_arity ~result_arity k
   else if provided_num_args > 0 && provided_num_args < num_params then
-    simplify_direct_partial_application dacc apply
+    simplify_direct_partial_application dacc apply ~callee's_code_id
       ~callee's_closure_id ~param_arity ~result_arity ~recursive k
   else
     Misc.fatal_errorf "Function with %d params when simplifying \
@@ -697,7 +699,8 @@ Format.eprintf "For call to %a: callee's rec info is %a, rec info from type of f
   (Misc.Stdlib.Option.print Rec_info.print) (Simple.rec_info (Apply.callee apply))
   Rec_info.print function_decl_rec_info;
 *)
-      simplify_direct_function_call dacc apply
+      let callee's_code_id = I.code_id inlinable in
+      simplify_direct_function_call dacc apply ~callee's_code_id
         ~callee's_closure_id ~arg_types
         ~param_arity:(I.param_arity inlinable)
         ~result_arity:(I.result_arity inlinable)
@@ -705,7 +708,8 @@ Format.eprintf "For call to %a: callee's rec info is %a, rec info from type of f
         (Some (inlinable, function_decl_rec_info)) k
     | Ok (Non_inlinable non_inlinable) ->
       let module N = T.Function_declaration_type.Non_inlinable in
-      simplify_direct_function_call dacc apply
+      let callee's_code_id = N.code_id non_inlinable in
+      simplify_direct_function_call dacc apply ~callee's_code_id
         ~callee's_closure_id ~arg_types
         ~param_arity:(N.param_arity non_inlinable)
         ~result_arity:(N.result_arity non_inlinable)

@@ -74,7 +74,7 @@ let invariant env
 *)
     E.check_simple_is_bound_and_of_kind env callee K.value;
     begin match call_kind with
-    | Function (Direct { closure_id = _; return_arity = _; }) ->
+    | Function (Direct { code_id = _; closure_id = _; return_arity = _; }) ->
       (* Note that [return_arity] is checked for all the cases below. *)
       E.check_simples_are_bound env args
     | Function Indirect_unknown_arity ->

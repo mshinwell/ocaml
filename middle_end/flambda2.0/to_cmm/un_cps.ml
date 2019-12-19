@@ -851,13 +851,16 @@ and apply_call env e =
   match Apply_expr.call_kind e with
   (* Effects from arguments are ignored since a function call will always be
      given arbitrary effects and coeffects. *)
-  | Call_kind.Function
-      Call_kind.Function_call.Direct { closure_id; return_arity; } ->
+  | Call_kind.Function (* FIXME Let code *)
+      Call_kind.Function_call.Direct { code_id = _; closure_id = _; return_arity = _; } ->
+      assert false
+(*
       let f_code = Un_cps_closure.(closure_code (closure_name closure_id)) in
       let f, env, _ = simple env f in
       let args, env, _ = arg_list env (Apply_expr.args e) in
       let ty = machtype_of_return_arity return_arity in
       C.direct_call ~dbg ty (C.symbol f_code) args f, env, effs
+*)
   | Call_kind.Function
       Call_kind.Function_call.Indirect_unknown_arity ->
       let f, env, _ = simple env f in

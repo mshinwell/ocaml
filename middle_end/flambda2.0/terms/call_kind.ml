@@ -30,6 +30,7 @@ let fprintf = Format.fprintf
 module Function_call = struct
   type t =
     | Direct of {
+        code_id : Code_id.t;
         closure_id : Closure_id.t;
         return_arity : Flambda_arity.t;
       }
@@ -41,8 +42,13 @@ module Function_call = struct
 
   let print ppf call =
     match call with
-    | Direct { closure_id; return_arity; } ->
-      fprintf ppf "@[(Direct %a %a)@]"
+    | Direct { code_id; closure_id; return_arity; } ->
+      fprintf ppf "@[<hov 1>(Direct@ \
+          @[<hov 1>(code_id@ %a)@]@ \
+          @[<hov 1>(closure_id@ %a)@]@ \
+          @[<hov 1>(return_arity@ %a)@]\
+          )@]"
+        Code_id.print code_id
         Closure_id.print closure_id
         Flambda_arity.print return_arity
     | Indirect_unknown_arity ->
@@ -54,7 +60,8 @@ module Function_call = struct
 
   let invariant t =
     match t with
-    | Direct { closure_id = _; return_arity; } -> check_arity return_arity
+    | Direct { code_id = _; closure_id = _; return_arity; } ->
+      check_arity return_arity
     | Indirect_unknown_arity -> ()
     | Indirect_known_arity { param_arity; return_arity; } ->
       check_arity param_arity;
@@ -112,8 +119,8 @@ let invariant0 t =
 
 let invariant _env t = invariant0 t
 
-let direct_function_call closure_id ~return_arity =
-  let t = Function (Direct { closure_id; return_arity; }) in
+let direct_function_call code_id closure_id ~return_arity =
+  let t = Function (Direct { code_id; closure_id; return_arity; }) in
   invariant0 t;
   t
 

@@ -180,6 +180,7 @@ module Function_declaration_type : sig
   module Non_inlinable : sig
     type t
 
+    val code_id : t -> Code_id.t
     val param_arity : t -> Flambda_arity.t
     val result_arity : t -> Flambda_arity.t
     val recursive : t -> Recursive.t
@@ -323,7 +324,8 @@ val create_inlinable_function_declaration
 (** Create a description of a function declaration whose code is unknown.
     Such declarations cannot be inlined, but can be direct called. *)
 val create_non_inlinable_function_declaration
-   : param_arity:Flambda_arity.t
+   : code_id:Code_id.t
+  -> param_arity:Flambda_arity.t
   -> result_arity:Flambda_arity.t
   -> recursive:Recursive.t
   -> Function_declaration_type.t

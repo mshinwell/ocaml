@@ -118,7 +118,18 @@ let inline t = t.inline
 let is_a_functor t = t.is_a_functor
 let recursive t = t.recursive
 
-let free_names _t = Name_occurrences.empty
+let free_names
+      { code_id;
+        params_arity = _;
+        result_arity = _;
+        stub = _;
+        dbg = _;
+        inline = _;
+        is_a_functor = _;
+        recursive = _;
+      } =
+  Name_occurrences.add_code_id Name_occurrences.empty code_id Name_mode.normal
+
 let apply_name_permutation t _perm = t
 
 let update_code_id t code_id = { t with code_id; }

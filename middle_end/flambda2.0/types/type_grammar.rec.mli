@@ -145,7 +145,8 @@ val create_inlinable_function_declaration
   -> Function_declaration_type.t
 
 val create_non_inlinable_function_declaration
-   : param_arity:Flambda_arity.t
+   : code_id:Code_id.t
+  -> param_arity:Flambda_arity.t
   -> result_arity:Flambda_arity.t
   -> recursive:Recursive.t
   -> Function_declaration_type.t

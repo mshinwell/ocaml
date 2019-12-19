@@ -510,10 +510,10 @@ let create_inlinable_function_declaration ~code_id ~param_arity ~result_arity
     Function_declaration_type.Inlinable.create ~code_id ~param_arity
       ~result_arity ~stub ~dbg ~inline ~is_a_functor ~recursive ~rec_info))
 
-let create_non_inlinable_function_declaration ~param_arity ~result_arity
-      ~recursive : Function_declaration_type.t =
+let create_non_inlinable_function_declaration ~code_id ~param_arity
+      ~result_arity ~recursive : Function_declaration_type.t =
   Ok (Non_inlinable (
-    Function_declaration_type.Non_inlinable.create ~param_arity
+    Function_declaration_type.Non_inlinable.create ~code_id ~param_arity
       ~result_arity ~recursive))
 
 let exactly_this_closure closure_id ~all_function_decls_in_set:function_decls

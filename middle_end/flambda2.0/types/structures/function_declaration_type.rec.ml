@@ -82,28 +82,33 @@ end
 
 module Non_inlinable = struct
   type t = {
+    code_id : Code_id.t;
     param_arity : Flambda_arity.t;
     result_arity : Flambda_arity.t;
     recursive : Recursive.t;
   }
 
-  let print ppf { param_arity; result_arity; recursive; } =
+  let print ppf { code_id; param_arity; result_arity; recursive; } =
     Format.fprintf ppf
       "@[<hov 1>(Non_inlinable@ \
+        @[<hov 1>(code_id@ %a)@]@ \
         @[<hov 1>(param_arity@ %a)@]@ \
         @[<hov 1>(result_arity@ %a)@] \
         @[<hov 1>(recursive@ %a)@]\
         )@]"
+      Code_id.print code_id
       Flambda_arity.print param_arity
       Flambda_arity.print result_arity
       Recursive.print recursive
 
-  let create ~param_arity ~result_arity ~recursive =
-    { param_arity;
+  let create ~code_id ~param_arity ~result_arity ~recursive =
+    { code_id;
+      param_arity;
       result_arity;
       recursive;
     }
 
+  let code_id t = t.code_id
   let param_arity t = t.param_arity
   let result_arity t = t.result_arity
   let recursive t = t.recursive
@@ -131,11 +136,11 @@ let free_names (t : t) =
   | Bottom | Unknown -> Name_occurrences.empty
   | Ok (Inlinable { code_id; param_arity = _; result_arity = _; stub = _;
                     dbg = _; inline = _; is_a_functor = _; recursive = _;
-                    rec_info = _; }) ->
+                    rec_info = _; })
+  | Ok (Non_inlinable { code_id; param_arity = _; result_arity = _;
+                        recursive = _; }) ->
     Name_occurrences.add_code_id Name_occurrences.empty code_id
       Name_mode.in_types
-  | Ok (Non_inlinable { param_arity = _; result_arity = _; recursive = _; }) ->
-    Name_occurrences.empty
 
 let apply_name_permutation t _perm = t
 
@@ -172,20 +177,40 @@ struct
       | Join -> Ok (Unknown, TEE.empty ())
       end
     | Ok (Non_inlinable {
+        code_id = code_id1;
         param_arity = param_arity1; result_arity = result_arity1;
         recursive = recursive1;
       }), Ok (Non_inlinable {
+        code_id = code_id2;
         param_arity = param_arity2; result_arity = result_arity2;
         recursive = recursive2;
       }) ->
-      (* CR mshinwell: Are fatal errors right here?  Given the arbitrary
-          choice below, it would seem so, but unsure.  Also, the error
-          message is currently poor. *)
-      if Flambda_arity.equal param_arity1 param_arity2
-        && Flambda_arity.equal result_arity1 result_arity2
-        && Recursive.equal recursive1 recursive2
-      then Ok (t1, TEE.empty ())
-      else Misc.fatal_error "Mismatched Non_inlinable arities"
+      let typing_env = Meet_env.env env in
+      let code_age_rel = TE.code_age_relation typing_env in
+      let check_other_things_and_return code_id : (t * TEE.t) Or_bottom.t =
+        assert (Flambda_arity.equal param_arity1 param_arity2);
+        assert (Flambda_arity.equal result_arity1 result_arity2);
+        assert (Recursive.equal recursive1 recursive2);
+        Ok (Ok (Non_inlinable {
+            code_id;
+            param_arity = param_arity1;
+            result_arity = result_arity1;
+            recursive = recursive1;
+          }),
+          TEE.empty ())
+      in
+      begin match E.op () with
+      | Meet ->
+        begin match Code_age_relation.meet code_age_rel code_id1 code_id2 with
+        | Ok code_id -> check_other_things_and_return code_id
+        | Bottom -> Bottom
+        end
+      | Join ->
+        begin match Code_age_relation.join code_age_rel code_id1 code_id2 with
+        | Known code_id -> check_other_things_and_return code_id
+        | Unknown -> Ok (Unknown, TEE.empty ())
+        end
+      end
     | Ok (Non_inlinable _), Ok (Inlinable _)
     | Ok (Inlinable _), Ok (Non_inlinable _) ->
       (* CR mshinwell: This should presumably return [Non_inlinable] if

@@ -65,6 +65,7 @@ let function_decl_type ~denv_outside_function:denv function_decl rec_info =
       ~rec_info
   else
     T.create_non_inlinable_function_declaration
+      ~code_id:(FD.code_id function_decl)
       ~param_arity:(FD.params_arity function_decl)
       ~result_arity:(FD.result_arity function_decl)
       ~recursive:(FD.recursive function_decl)

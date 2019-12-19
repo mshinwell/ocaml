@@ -46,11 +46,13 @@ module Non_inlinable : sig
   type t
 
   val create
-     : param_arity:Flambda_arity.t
+     : code_id:Code_id.t
+    -> param_arity:Flambda_arity.t
     -> result_arity:Flambda_arity.t
     -> recursive:Recursive.t
     -> t
 
+  val code_id : t -> Code_id.t
   val param_arity : t -> Flambda_arity.t
   val result_arity : t -> Flambda_arity.t
   val recursive : t -> Recursive.t

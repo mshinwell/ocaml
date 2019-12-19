@@ -55,7 +55,7 @@ let symbol_for_ident t id =
 let tupled_function_call_stub
       (original_params : (Variable.t * Lambda.value_kind) list)
       (unboxed_version : Closure_id.t)
-      ~(closure_id : Closure_id.t)
+      code_id ~(closure_id : Closure_id.t)
       recursive =
   let dbg = Debuginfo.none in
   let return_continuation = Continuation.create ~sort:Return () in
@@ -75,7 +75,8 @@ let tupled_function_call_stub
   let unboxed_version_var = Variable.create "unboxed_version" in
   let call =
     let call_kind =
-      Call_kind.direct_function_call unboxed_version ~return_arity:[K.value]
+      Call_kind.direct_function_call code_id unboxed_version
+        ~return_arity:[K.value]
     in
     let apply =
       Flambda.Apply.create ~callee:(Simple.var unboxed_version_var)
@@ -833,7 +834,7 @@ and close_one_function t ~external_env ~by_closure_id decl
   | Curried -> Closure_id.Map.add my_closure_id fun_decl by_closure_id
   | Tupled ->
     let generic_function_stub, code_id, params_and_body =
-      tupled_function_call_stub param_vars unboxed_version ~closure_id
+      tupled_function_call_stub param_vars unboxed_version code_id ~closure_id
         recursive
     in
     t.code <- (code_id, params_and_body) :: t.code;

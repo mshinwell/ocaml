@@ -495,7 +495,7 @@ module Program_body = struct
       let rec delete t ~free_names_after ~result =
         match t with
         | [] -> result
-        | ((S (bound_syms, _static_part)) as part)::t ->
+        | ((S (bound_syms, static_part)) as part)::t ->
           let symbols_after = Name_occurrences.symbols free_names_after in
           let can_delete_symbols =
             Symbol.Set.is_empty (
@@ -517,6 +517,10 @@ module Program_body = struct
                   Code_age_relation.newer_versions_form_linear_chain
                     code_age_relation code_id)
                 code_ids_being_defined
+          in
+          let free_names_after =
+            Name_occurrences.union free_names_after
+              (Static_part.free_names static_part)
           in
           if can_delete_code && can_delete_symbols then
             delete t ~free_names_after ~result
