@@ -14,7 +14,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-30-40-41-42"]
+[@@@ocaml.warning "+a-30-40-41-42"]
 
 (* CR-someday xclerc: we could add annotations to external declarations
    (akin to [@@noalloc]) in order to be able to refine the computation of
@@ -146,11 +146,13 @@ let return_arity t : Flambda_arity.t =
 
 let free_names t =
   match t with
-  | Function (Direct { code_id; _ }) ->
+  | Function (Direct { code_id; closure_id = _; return_arity = _; }) ->
     Name_occurrences.add_code_id Name_occurrences.empty code_id
       Name_mode.normal
-  | Function _
-  | C_call _ -> Name_occurrences.empty
+  | Function Indirect_unknown_arity
+  | Function (Indirect_known_arity { param_arity = _; return_arity = _; })
+  | C_call { alloc = _; param_arity = _; return_arity = _; } ->
+    Name_occurrences.empty
   | Method { kind = _; obj; } ->
     match Simple.descr obj with
     | Name obj ->
