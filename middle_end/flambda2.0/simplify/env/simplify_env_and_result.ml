@@ -299,6 +299,9 @@ end = struct
       code = Code_id.Map.add id code t.code;
     }
 
+  let mem_code t id =
+    Code_id.Map.mem id t.code
+
   let find_code t id =
     match Code_id.Map.find id t.code with
     | exception Not_found ->
@@ -306,6 +309,8 @@ end = struct
     | code -> code
 
   (* CR mshinwell: The label should state what order is expected. *)
+  (* CR mshinwell: Rework lifted constant handling so we don't try to add
+     lifted constants we already know about. *)
   let add_lifted_constants t ~lifted =
     (*
     Format.eprintf "Adding lifted:@ %a\n%!"
@@ -324,23 +329,24 @@ end = struct
           Symbol.Set.filter (fun sym -> mem_symbol denv sym)
             being_defined
         in
-        if Symbol.Set.equal being_defined already_bound then denv
-        else if not (Symbol.Set.is_empty already_bound) then
-          Misc.fatal_errorf "Expected all or none of the following symbols \
-              to be found:@ %a@ denv:@ %a"
-            LC.print lifted_constant
-            print denv
-        else
-          let typing_env =
-            Symbol.Map.fold (fun sym typ typing_env ->
-                let sym =
-                  Name_in_binding_pos.create (Name.symbol sym) Name_mode.normal
-                in
-                TE.add_definition typing_env sym (T.kind typ))
-              types_of_symbols
-              denv.typing_env
-          in
-          let typing_env =
+        let typing_env =
+          if Symbol.Set.equal being_defined already_bound then denv.typing_env
+          else if not (Symbol.Set.is_empty already_bound) then
+            Misc.fatal_errorf "Expected all or none of the following symbols \
+                to be found:@ %a@ denv:@ %a"
+              LC.print lifted_constant
+              print denv
+          else
+            let typing_env =
+              Symbol.Map.fold (fun sym typ typing_env ->
+                  let sym =
+                    Name_in_binding_pos.create (Name.symbol sym)
+                      Name_mode.normal
+                  in
+                  TE.add_definition typing_env sym (T.kind typ))
+                types_of_symbols
+                denv.typing_env
+            in
             Symbol.Map.fold (fun sym typ typing_env ->
                 let sym = Name.symbol sym in
                 let env_extension =
@@ -352,13 +358,14 @@ end = struct
                 TE.add_env_extension typing_env ~env_extension)
               types_of_symbols
               typing_env
-          in
-          Code_id.Map.fold
-            (fun code_id (params_and_body, newer_version_of) denv ->
-              define_code denv ?newer_version_of code_id params_and_body)
-            (Flambda_static.Program_body.Definition.get_pieces_of_code
-               definition)
-            (with_typing_env denv typing_env))
+        in
+        Code_id.Map.fold
+          (fun code_id (params_and_body, newer_version_of) denv ->
+            if mem_code denv code_id then denv
+            else define_code denv ?newer_version_of code_id params_and_body)
+          (Flambda_static.Program_body.Definition.get_pieces_of_code
+             definition)
+          (with_typing_env denv typing_env))
       t
       (List.rev lifted)
 
