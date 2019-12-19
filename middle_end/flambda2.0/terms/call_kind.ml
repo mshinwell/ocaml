@@ -146,7 +146,11 @@ let return_arity t : Flambda_arity.t =
 
 let free_names t =
   match t with
-  | Function _ | C_call _ -> Name_occurrences.empty
+  | Function (Direct { code_id; _ }) ->
+    Name_occurrences.add_code_id Name_occurrences.empty code_id
+      Name_mode.normal
+  | Function _
+  | C_call _ -> Name_occurrences.empty
   | Method { kind = _; obj; } ->
     match Simple.descr obj with
     | Name obj ->
