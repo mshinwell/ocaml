@@ -913,6 +913,19 @@ let define_lifted_constants lifted_constants ~current_definition =
       if no_overlap_with_current_definition then
         (* XXX This should add things to the current definition if there
            is recursion
+
+           - Where do they get added though?  They may need to go in some
+           particular set of closures, and there might be multiple of those
+           in a given definition.  Maybe this function is being called too
+           late, and we should add lifted constants after each static
+           structure _piece_ has been simplified?  Or record in the environment
+           which symbol's definition is currently being simplified (also
+           useful for reify, as below), and then record that also on each
+           lifted constant.  Then we can check here which symbol's
+           definition needs augmenting.  Seems like that might be quite easy.
+           (Do this first on Monday, plus the set-of-closures equiv class
+           stuff and revised top-sort.)
+
            - Also for normal reify (not computed values reify), we also need
            to check if we have symbols currently being defined in the reified
            type, and if so not lift (except for closures).
