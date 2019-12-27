@@ -339,8 +339,8 @@ let simplify_set_of_closures0 dacc ~result_dacc set_of_closures
           closure_bound_names
           denv
       in
-      let suitable_for = DE.typing_env suitable_for_denv in
       Name_in_binding_pos.Map.fold (fun bound_name closure_type denv ->
+          let suitable_for = DE.typing_env denv in
           let env_extension =
             T.make_suitable_for_environment closure_type
               existing_typing_env
@@ -363,8 +363,8 @@ let simplify_set_of_closures0 dacc ~result_dacc set_of_closures
           closure_bound_names
           denv
       in
-      let suitable_for = DE.typing_env suitable_for_denv in
       Name_in_binding_pos.Map.fold (fun bound_name closure_type denv ->
+          let suitable_for = DE.typing_env denv in
           let env_extension =
             T.make_suitable_for_environment closure_type
               existing_typing_env
