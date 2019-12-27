@@ -615,11 +615,34 @@ let simplify_return_continuation_handler dacc
       reify_types_of_computed_values dacc allowed_free_vars
     in
     let reified_definitions, dacc, symbol_placeholders =
+(* New approach
+   ============
+   1. Equivalence classes for sets of closures, deduping etc.
+   2. SCC analysis.
+      One set of closures becomes a single node.
+      Outcomes are:
+      (a) >=1 closure, recursive (as a single node)
+      (b) =1 non-recursive
+      (c) >1 closure/other things mixed, recursive
+      If (c) involves only closures it might be a bug (maybe?)
+   3. Translate to:
+      (a) is a normal set-of-closures binding
+      (b) is a normal non-set-of-closures binding
+      (c) uses the symbol placeholders (unusual case) -- this causes the
+          >1-node to be broken into 1-nodes.
+   4. Top sort these groups.
+
+   ..BUT: if the only recursion possible is for sets of closures, we don't
+   seem to either need SCC or the symbol placeholders.
+*)
+
       (* Use a topological sort to try to order the bindings.  If this succeeds
          then every reference to one of the reified computed values will
          turn directly into a symbol.  If the sort fails, then we turn the
          computed value variables into the [symbol_placeholder] variables,
          which will be substituted for symbols during the Cmm translation. *)
+      (* CR mshinwell: The above comment needs updating to reflect that
+         recursion is allowed between closures in the same set. *)
       match
         Bindings_top_sort.top_closure reified_definitions
           ~key:(fun (var, _, Static_structure.S (_syms, _static_part)) -> var)
@@ -657,7 +680,7 @@ let simplify_return_continuation_handler dacc
                  We get the new placeholder into the static structure (in
                  place of a computed value variable) using a permutation rather
                  than through the typing environment.  The reason is that, for
-                 the environment method to work, the placeholder would have to
+                 the environment approach to work, the placeholder would have to
                  have an earlier binding time than the computed values (i.e.
                  the parameters of the return continuation).  Insertion of
                  variables with earlier binding times than "now" is not
@@ -683,8 +706,6 @@ let simplify_return_continuation_handler dacc
             (dacc, symbol_placeholders, Name_permutation.empty)
             reified_definitions
         in
-        Format.eprintf "Top sort failed.  perm:@ %a\n%!"
-          Name_permutation.print perm;
         let reified_definitions =
           List.map (fun (_, _, Static_structure.S (bound_syms, static_part)) ->
               let static_part =
@@ -872,6 +893,10 @@ let define_lifted_constants lifted_constants ~current_definition =
       in
       let free_symbols = Name_occurrences.symbols free_names in
       let free_code_ids = Name_occurrences.code_ids free_names in
+      (* XXX When checking overlap, we need to take into account symbols that
+         we have lifted into the current definition, so that their dependencies
+         (which also need to come into the current definition) are handled
+         correctly. *)
       let no_overlap_with_current_definition =
         let no_overlap_with_symbols =
           Symbol.Set.is_empty
