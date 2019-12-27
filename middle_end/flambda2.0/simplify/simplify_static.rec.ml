@@ -559,7 +559,8 @@ let reify_types_of_computed_values dacc computed_values =
         let by_code_id =
           Closure_id.Map.fold (fun closure_id _inlinable by_code_id ->
               let code_id = Closure_id.Map.find closure_id fresh_code_ids in
-              let params_and_body = DE.find_code (DA.denv dacc) code_id in
+              let old_code_id = Code_id.Map.find code_id newer_versions_of in
+              let params_and_body = DE.find_code (DA.denv dacc) old_code_id in
               Code_id.Map.add code_id params_and_body by_code_id)
             function_decls
             Code_id.Map.empty
@@ -613,7 +614,7 @@ let simplify_return_continuation_handler dacc
          etc.) then lift that computed value to its own [Static_part]. *)
       reify_types_of_computed_values dacc allowed_free_vars
     in
-    let reified_definitions, dacc =
+    let reified_definitions, dacc, symbol_placeholders =
       (* Use a topological sort to try to order the bindings.  If this succeeds
          then every reference to one of the reified computed values will
          turn directly into a symbol.  If the sort fails, then we turn the
@@ -644,27 +645,42 @@ let simplify_return_continuation_handler dacc
           List.map (fun (_, _, static_structure_part) -> static_structure_part)
             (List.rev sorted)
         in
-        reified_definitions, dacc
+        reified_definitions, dacc, symbol_placeholders
       | Error _ ->
-        let dacc =
+        let dacc, symbol_placeholders =
           List.fold_left
-            (fun dacc (var, symbol, _static_structure_part) ->
-              match Symbol.Map.find symbol symbol_placeholders with
-              | exception Not_found ->
-                Misc.fatal_errorf "No symbol placeholder for %a"
-                  Symbol.print symbol
-              | symbol_placeholder ->
+            (fun (dacc, symbol_placeholders)
+                 (var, symbol, _static_structure_part) ->
+              (* A new symbol placeholder should always be needed, since
+                 [symbol] has just been created, to point at a newly-reified
+                 value. *)
+              assert (not (Symbol.Map.mem symbol symbol_placeholders));
+              let symbol_placeholder =
+                Variable.create (Linkage_name.to_string (
+                  Symbol.linkage_name symbol))
+              in
+              let symbol_placeholders =
+                Symbol.Map.add symbol symbol_placeholder symbol_placeholders
+              in
+              let dacc =
                 DA.map_denv dacc ~f:(fun denv ->
+                  let denv =
+                    DE.define_variable denv
+                      (Var_in_binding_pos.create symbol_placeholder NM.normal)
+                      K.value
+                  in
                   DE.add_equation_on_variable denv var
-                    (T.alias_type_of K.value (Simple.var symbol_placeholder))))
-            dacc
+                    (T.alias_type_of K.value (Simple.var symbol_placeholder)))
+              in
+              dacc, symbol_placeholders)
+            (dacc, symbol_placeholders)
             reified_definitions
         in
         let reified_definitions =
           List.map (fun (_, _, static_structure_part) -> static_structure_part)
             reified_definitions
         in
-        reified_definitions, dacc
+        reified_definitions, dacc, symbol_placeholders
     in
     let static_structure_pieces : Static_structure.t0 list =
       reified_definitions @
@@ -735,37 +751,20 @@ let simplify_definition dacc (defn : Program_body.Definition.t) =
       in
       dacc, None, static_structure
     | Some computation ->
-      (* We need to get the [symbol_placeholder]s in the environment earlier
-         than the parameters of the return continuation (i.e. the
-         [computed_value]s).  To start with, assume that every symbol will
-         need a placeholder, with existing placeholders preserved (as they
-         will occur in the [static_structure] bindings). *)
-      let dacc, symbol_placeholders =
-        let existing_symbol_placeholders =
-          Static_structure.symbol_placeholders defn.static_structure
-        in
-        Symbol.Set.fold (fun symbol (dacc, symbol_placeholders) ->
-            let symbol_placeholder, symbol_placeholders =
+      let symbol_placeholders =
+        Static_structure.symbol_placeholders defn.static_structure
+      in
+      let dacc =
+        DA.map_denv dacc ~f:(fun denv ->
+          Symbol.Set.fold (fun symbol denv ->
               match Symbol.Map.find symbol symbol_placeholders with
-              | exception Not_found ->
-                let symbol_placeholder =
-                  Variable.create (Linkage_name.to_string (
-                    Symbol.linkage_name symbol))
-                in
-                symbol_placeholder,
-                  Symbol.Map.add symbol symbol_placeholder symbol_placeholders
+              | exception Not_found -> denv
               | symbol_placeholder ->
-                symbol_placeholder, symbol_placeholders
-            in
-            let dacc =
-              DA.map_denv dacc ~f:(fun denv ->
                 DE.add_variable denv
                   (Var_in_binding_pos.create symbol_placeholder NM.normal)
                   (T.any_value ()))
-            in
-            dacc, symbol_placeholders)
-          (Static_structure.being_defined defn.static_structure)
-          (dacc, existing_symbol_placeholders)
+            (Static_structure.being_defined defn.static_structure)
+            denv)
       in
       let return_continuation = computation.return_continuation in
       let return_cont_handler : Return_cont_handler.t =
