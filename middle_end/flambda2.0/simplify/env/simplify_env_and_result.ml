@@ -49,7 +49,7 @@ end = struct
         @[<hov 1>(inlined_debuginfo@ %a)@]@ \
         @[<hov 1>(can_inline@ %b)@]@ \
         @[<hov 1>(inlining_depth_increment@ %d)@]@ \
-        @[<hov 1>(float_const_prop@ %b)@] \
+        @[<hov 1>(float_const_prop@ %b)@]@ \
         @[<hov 1>(code@ %a)@]\
         )@]"
       round

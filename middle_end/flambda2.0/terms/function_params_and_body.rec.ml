@@ -87,7 +87,7 @@ let print_with_cache ~cache ppf t =
       fprintf ppf
         "@[<hov 1>(@<0>%s@<1>\u{03bb}@<0>%s@[<hov 1>\
          @<1>\u{3008}%a@<1>\u{3009}@<1>\u{300a}%a@<1>\u{300b}\
-         %a %a @<0>%s.@<0>%s@]@ %a)@])@]"
+         %a %a @<0>%s.@<0>%s@]@ %a))@]"
         (Flambda_colours.lambda ())
         (Flambda_colours.normal ())
         Continuation.print return_continuation
