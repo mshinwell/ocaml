@@ -436,10 +436,10 @@ let simplify_static_structure dacc ~result_dacc static_structure
   in
   result_dacc, static_structure
 
-let reify_types_of_computed_values dacc ~result_dacc computed_values =
+let reify_types_of_computed_values dacc computed_values =
   let typing_env = DE.typing_env (DA.denv dacc) in
   Variable.Set.fold
-    (fun var (result_dacc, dacc, reified_definitions) ->
+    (fun var (dacc, reified_definitions) ->
       let ty = TE.find typing_env (Name.var var) in
       let existing_symbol =
         (* We must avoid attempting to create aliases between symbols or
@@ -458,7 +458,7 @@ let reify_types_of_computed_values dacc ~result_dacc computed_values =
           | Name (Var _) | Const _ -> None
       in
       match existing_symbol with
-      | Some _ -> result_dacc, dacc, reified_definitions
+      | Some _ -> dacc, reified_definitions
       | None ->
         begin match
           T.reify ~allowed_free_vars:computed_values typing_env
@@ -479,7 +479,7 @@ let reify_types_of_computed_values dacc ~result_dacc computed_values =
           let static_structure_part : Static_structure.t0 =
             S (Singleton symbol, static_part)
           in
-          result_dacc, dacc, (var, static_structure_part) :: reified_definitions
+          dacc, (var, symbol, static_structure_part) :: reified_definitions
       | Lift_set_of_closures { closure_id; function_decls; closure_vars; } ->
         let closure_symbols =
           Closure_id.Map.mapi (fun closure_id _function_decl ->
@@ -499,8 +499,8 @@ let reify_types_of_computed_values dacc ~result_dacc computed_values =
           (Closure_id.Map.print Symbol.print) closure_symbols
           (Var_within_closure.Map.print Simple.print) closure_vars;
         *)
-        let dacc =
-          DA.map_denv dacc ~f:(fun denv ->
+        let dacc, symbol =
+          DA.map_denv2 dacc ~f:(fun denv ->
             let denv =
               Closure_id.Map.fold (fun _closure_id symbol denv ->
                   DE.define_symbol denv symbol K.value)
@@ -514,9 +514,12 @@ let reify_types_of_computed_values dacc ~result_dacc computed_values =
                 Variable.print var
                 Closure_id.print closure_id
             | symbol ->
-              DE.add_equation_on_name denv
-                (Name.var var)
-                (T.alias_type_of K.value (Simple.symbol symbol)))
+              let denv =
+                DE.add_equation_on_name denv
+                  (Name.var var)
+                  (T.alias_type_of K.value (Simple.symbol symbol))
+              in
+              denv, symbol)
         in
         let module I = T.Function_declaration_type.Inlinable in
         (* The same code might be reified multiple times and we don't currently
@@ -566,12 +569,12 @@ let reify_types_of_computed_values dacc ~result_dacc computed_values =
             ~set_of_closures:(closure_symbols, set_of_closures)
             by_code_id
         in
-        result_dacc, dacc, (var, static_structure_part) :: reified_definitions
+        dacc, (var, symbol, static_structure_part) :: reified_definitions
       | Simple _ | Cannot_reify | Invalid ->
-        result_dacc, dacc, reified_definitions
+        dacc, reified_definitions
       end)
     computed_values
-    (result_dacc, dacc, [])
+    (dacc, [])
 
 module Bindings_top_sort =
   Top_closure.Make
@@ -591,7 +594,7 @@ module Bindings_top_sort =
 let simplify_return_continuation_handler dacc
       ~(extra_params_and_args : Continuation_extra_params_and_args.t)
       cont (return_cont_handler : Return_cont_handler.Opened.t)
-      ~user_data:result_dacc _k =
+      ~user_data:(result_dacc, symbol_placeholders) _k =
   let result_dacc =
     (* [DA.r dacc] contains the lifted constants etc. arising from the
        simplification of any associated [computation]. *)
@@ -604,71 +607,71 @@ let simplify_return_continuation_handler dacc
       (KP.List.var_set extra_params_and_args.extra_params)
   in
   let static_structure, result_dacc =
-    let result_dacc, dacc, reified_definitions =
+    let dacc, reified_definitions =
       (* If the type of a computed value can be reified (to a term possibly
          involving any extra params and args that are present, from unboxing
          etc.) then lift that computed value to its own [Static_part]. *)
-      reify_types_of_computed_values dacc ~result_dacc allowed_free_vars
+      reify_types_of_computed_values dacc allowed_free_vars
     in
-    let top_sorted_reified_definitions =
-      (* Use a topological sort to try to order the bindings so that as many
-         computed value variables can be changed into symbols as possible.
-         If there is a cycle, we just pick an order.  The worst that will happen
-         is that some variables won't simplify to symbols (and will remain
-         as computed values). *)
-      (* CR mshinwell: I'm a bit concerned that if the top-sort fails, then
-         we could end up with symbols being defined after they are used,
-         in the list of static parts.  Should we completely abort in this
-         case and fall back to the original environment that doesn't have the
-         equalities to symbols in it? *)
+    let reified_definitions, dacc =
+      (* Use a topological sort to try to order the bindings.  If this succeeds
+         then every reference to one of the reified computed values will
+         turn directly into a symbol.  If the sort fails, then we turn the
+         computed value variables into the [symbol_placeholder] variables,
+         which will be substituted for symbols during the Cmm translation. *)
       match
         Bindings_top_sort.top_closure reified_definitions
-          ~key:(fun (var, Static_structure.S (_symbols, _static_part)) -> var)
-          ~deps:(fun (_var, Static_structure.S (symbols, static_part)) ->
+          ~key:(fun (var, _, Static_structure.S (_syms, _static_part)) -> var)
+          ~deps:(fun (_var, sym, Static_structure.S (syms, static_part)) ->
             let var_deps =
               static_part
               |> Static_part.free_names
               |> Name_occurrences.variables
               |> Variable.Set.elements
             in
-            (*
-            Format.eprintf "Deps for %a are %a\n%!"
-              Variable.print var
-              Variable.Set.print (Variable.Set.of_list var_deps);
-            *)
             (* Everything except the [var] in the following list will be
                ignored. *)
-            List.map (fun var -> var, Static_structure.S (symbols, static_part))
+            List.map (fun var ->
+                var, sym, Static_structure.S (syms, static_part))
               var_deps)
       with
-      | Ok sorted -> sorted
-      | Error _ -> reified_definitions
-    in
-    (* XXX If top sort fails, change types of the variables involved to "=v"
-       where each v is another thing like a computed value variable, but will
-       assume the value of the symbol. *)
-    let static_structure_pieces : Static_structure.t0 list =
-      let top_sorted_reified_definitions =
+      | Ok sorted ->
         (* The [List.rev] relies on the following property:
              Let the list L be a topological sort of a directed graph G.
              Then the reverse of L is a topological sort of the transpose of G.
         *)
-        List.map (fun (_var, static_structure_part) -> static_structure_part)
-          (List.rev top_sorted_reified_definitions)
-      in
-      (*
-      Format.eprintf "New defs:@ %a\n"
-        Static_structure.print top_sorted_reified_definitions;
-      Format.eprintf "Existing defs:@ %a\n"
-        Static_structure.print return_cont_handler.static_structure;
-      *)
-      top_sorted_reified_definitions @
+        let reified_definitions =
+          List.map (fun (_, _, static_structure_part) -> static_structure_part)
+            (List.rev sorted)
+        in
+        reified_definitions, dacc
+      | Error _ ->
+        let dacc =
+          List.fold_left
+            (fun dacc (var, symbol, _static_structure_part) ->
+              match Symbol.Map.find symbol symbol_placeholders with
+              | exception Not_found ->
+                Misc.fatal_errorf "No symbol placeholder for %a"
+                  Symbol.print symbol
+              | symbol_placeholder ->
+                DA.map_denv dacc ~f:(fun denv ->
+                  DE.add_equation_on_variable denv var
+                    (T.alias_type_of K.value (Simple.var symbol_placeholder))))
+            dacc
+            reified_definitions
+        in
+        let reified_definitions =
+          List.map (fun (_, _, static_structure_part) -> static_structure_part)
+            reified_definitions
+        in
+        reified_definitions, dacc
+    in
+    let static_structure_pieces : Static_structure.t0 list =
+      reified_definitions @
         (Static_structure.bindings return_cont_handler.static_structure)
     in
     let static_structure =
-      Static_structure.create static_structure_pieces
-        ~symbol_placeholders:(Static_structure.symbol_placeholders
-          return_cont_handler.static_structure)
+      Static_structure.create static_structure_pieces ~symbol_placeholders
     in
     let result_dacc, static_structure =
       simplify_static_structure dacc ~result_dacc static_structure
@@ -732,6 +735,38 @@ let simplify_definition dacc (defn : Program_body.Definition.t) =
       in
       dacc, None, static_structure
     | Some computation ->
+      (* We need to get the [symbol_placeholder]s in the environment earlier
+         than the parameters of the return continuation (i.e. the
+         [computed_value]s).  To start with, assume that every symbol will
+         need a placeholder, with existing placeholders preserved (as they
+         will occur in the [static_structure] bindings). *)
+      let dacc, symbol_placeholders =
+        let existing_symbol_placeholders =
+          Static_structure.symbol_placeholders defn.static_structure
+        in
+        Symbol.Set.fold (fun symbol (dacc, symbol_placeholders) ->
+            let symbol_placeholder, symbol_placeholders =
+              match Symbol.Map.find symbol symbol_placeholders with
+              | exception Not_found ->
+                let symbol_placeholder =
+                  Variable.create (Linkage_name.to_string (
+                    Symbol.linkage_name symbol))
+                in
+                symbol_placeholder,
+                  Symbol.Map.add symbol symbol_placeholder symbol_placeholders
+              | symbol_placeholder ->
+                symbol_placeholder, symbol_placeholders
+            in
+            let dacc =
+              DA.map_denv dacc ~f:(fun denv ->
+                DE.add_variable denv
+                  (Var_in_binding_pos.create symbol_placeholder NM.normal)
+                  (T.any_value ()))
+            in
+            dacc, symbol_placeholders)
+          (Static_structure.being_defined defn.static_structure)
+          (dacc, existing_symbol_placeholders)
+      in
       let return_continuation = computation.return_continuation in
       let return_cont_handler : Return_cont_handler.t =
         { computed_values = computation.computed_values;
@@ -770,7 +805,7 @@ let simplify_definition dacc (defn : Program_body.Definition.t) =
           ~body:computation.expr
           ~simplify_continuation_handler_like:
             simplify_return_continuation_handler
-          ~user_data:result_dacc
+          ~user_data:(result_dacc, symbol_placeholders)
           (fun _cont_uses_env r ->
             let uacc = UA.create UE.empty r in
             (* CR mshinwell: This should return an "invalid" node. *)

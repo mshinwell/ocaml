@@ -38,6 +38,12 @@ val map_denv
     -> Simplify_env_and_result.Downwards_env.t)
   -> t
 
+val map_denv2
+   : t
+  -> f:(Simplify_env_and_result.Downwards_env.t
+    -> Simplify_env_and_result.Downwards_env.t * 'a)
+  -> t * 'a
+
 (** Replace the environment component of the given downwards accumulator. *)
 val with_denv : t -> Simplify_env_and_result.Downwards_env.t -> t
 
