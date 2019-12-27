@@ -456,17 +456,42 @@ module Program_body = struct
         Bound_symbols.print bound_symbols
         (Static_part.print_with_cache ~cache) static_part
 
-    type t = t0 list
+    type t = {
+      bindings : t0 list;
+      symbol_placeholders : Variable.t Symbol.Map.t;
+    }
 
-    let print_with_cache ~cache ppf t =
-      Format.pp_print_list ~pp_sep:Format.pp_print_space
-        (print_t0_with_cache ~cache) ppf t
+    let print_with_cache ~cache ppf { bindings; symbol_placeholders; } =
+      if Symbol.Map.is_empty symbol_placeholders then
+        Format.pp_print_list ~pp_sep:Format.pp_print_space
+          (print_t0_with_cache ~cache) ppf bindings
+      else
+        Format.fprintf ppf "@[<hov 1>(\
+            @[<hov 1>(bindings@ %a)@]@ \
+            @[<hov 1>(symbol_placeholders@ %a)@]\
+            @]"
+          (Format.pp_print_list ~pp_sep:Format.pp_print_space
+            (print_t0_with_cache ~cache)) bindings
+          (Symbol.Map.print Variable.print) symbol_placeholders
 
     let print ppf t =
       print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
-    let is_empty t =
-      match t with
+    let create bindings ~symbol_placeholders =
+      { bindings;
+        symbol_placeholders;
+      }
+
+    let empty =
+      { bindings = [];
+        symbol_placeholders = Symbol.Map.empty;
+      }
+
+    let bindings t = t.bindings
+    let symbol_placeholders t = t.symbol_placeholders
+
+    let has_no_bindings t =
+      match t.bindings with
       | [] -> true
       | _::_ -> false
 
@@ -475,27 +500,32 @@ module Program_body = struct
           Symbol.Set.union (Bound_symbols.being_defined bound_syms)
             being_defined)
         Symbol.Set.empty
-        t
+        t.bindings
 
     let code_being_defined t =
       List.fold_left (fun code_being_defined (S (bound_syms, _static_part)) ->
           Code_id.Set.union (Bound_symbols.code_being_defined bound_syms)
             code_being_defined)
         Code_id.Set.empty
-        t
+        t.bindings
 
-    let free_names t =
+    let free_names { bindings; symbol_placeholders = _; } =
       List.fold_left (fun free_names (S (_bound_syms, static_part)) ->
           Name_occurrences.union free_names
             (Static_part.free_names static_part))
         Name_occurrences.empty
-        t
+        bindings
+
+    let prepend_bindings t ~prepend =
+      { bindings = prepend @ t.bindings;
+        symbol_placeholders = t.symbol_placeholders;
+      }
 
     let delete_bindings t ~free_names_after code_age_relation =
-      let rec delete t ~free_names_after ~result =
-        match t with
-        | [] -> result
-        | ((S (bound_syms, static_part)) as part)::t ->
+      let rec delete bindings ~free_names_after ~result =
+        match bindings with
+        | [] -> result, free_names_after
+        | ((S (bound_syms, static_part)) as part)::bindings ->
           let symbols_after = Name_occurrences.symbols free_names_after in
           let can_delete_symbols =
             Symbol.Set.is_empty (
@@ -523,21 +553,39 @@ module Program_body = struct
               (Static_part.free_names static_part)
           in
           if can_delete_code && can_delete_symbols then
-            delete t ~free_names_after ~result
+            delete bindings ~free_names_after ~result
           else
-            delete t ~free_names_after ~result:(part :: result)
+            delete bindings ~free_names_after ~result:(part :: result)
       in
-      delete (List.rev t) ~free_names_after ~result:[]
+      let bindings, free_names =
+        delete (List.rev t.bindings) ~free_names_after ~result:[]
+      in
+      let being_defined = being_defined { t with bindings; } in
+      let free_vars = Name_occurrences.variables free_names in
+      let symbol_placeholders =
+        Symbol.Map.filter (fun symbol placeholder ->
+            Symbol.Set.mem symbol being_defined
+              && Variable.Set.mem placeholder free_vars)
+          t.symbol_placeholders
+      in
+      { bindings;
+        symbol_placeholders;
+      }
 
     let iter_static_parts t (iter : static_part_iterator) =
       List.iter (fun (S (_bound_syms, static_part)) ->
           iter.f static_part)
-        t
+        t.bindings
 
     let map_static_parts t (mapper : static_part_mapper) =
-      List.map (fun (S (bound_syms, static_part)) ->
-          S (bound_syms, mapper.f static_part))
-        t
+      let bindings =
+        List.map (fun (S (bound_syms, static_part)) ->
+            S (bound_syms, mapper.f static_part))
+          t.bindings
+      in
+      { bindings;
+        symbol_placeholders = t.symbol_placeholders;
+      }
 
     let get_pieces_of_code t =
       let code =
@@ -545,7 +593,7 @@ module Program_body = struct
             Code_id.Map.disjoint_union code
               (Static_part.get_pieces_of_code static_part))
           Code_id.Map.empty
-          t
+          t.bindings
       in
       assert (Code_id.Set.equal (Code_id.Map.keys code)
         (code_being_defined t));
@@ -620,7 +668,10 @@ module Program_body = struct
 
     let singleton_symbol symbol static_part =
       { computation = None;
-        static_structure = [S (Singleton symbol, static_part)];
+        static_structure = {
+          bindings = [S (Singleton symbol, static_part)];
+          symbol_placeholders = Symbol.Map.empty;
+        };
       }
 
     let pieces_of_code ?newer_versions_of code =
@@ -628,7 +679,10 @@ module Program_body = struct
         Static_structure.pieces_of_code ?newer_versions_of code
       in
       { computation = None;
-        static_structure = [static_structure_part];
+        static_structure = {
+          bindings = [static_structure_part];
+          symbol_placeholders = Symbol.Map.empty;
+        };
       }
 
     let iter_computation t ~f =
@@ -718,7 +772,7 @@ module Program_body = struct
     in
     let can_delete =
       Definition.only_generative_effects defn
-        && Static_structure.is_empty (Definition.static_structure defn)
+        && Static_structure.has_no_bindings (Definition.static_structure defn)
     in
     if can_delete then body
     else

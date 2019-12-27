@@ -515,7 +515,7 @@ let rec conv_top ~backend (func_env:func_env) (prog : Fexpr.program) : Program_b
     let body = conv_top ~backend func_env tail in
     Program_body.define_symbol ~body
       { computation = Some computation;
-        static_structure = [];
+        static_structure = Program_body.Static_structure.empty;
       }
       Code_age_relation.empty
   | Define_symbol
@@ -582,7 +582,9 @@ let rec conv_top ~backend (func_env:func_env) (prog : Fexpr.program) : Program_b
     let body = conv_top ~backend func_env tail in
     Program_body.define_symbol ~body
       { computation;
-        static_structure = structure;
+        static_structure =
+          Program_body.Static_structure.create structure
+            ~symbol_placeholders:Symbol.Map.empty;
       }
       Code_age_relation.empty
 

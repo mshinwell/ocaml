@@ -951,7 +951,9 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
     in
     let definition : Program_body.Definition.t =
       { computation = Some computation;
-        static_structure = [S (bound_symbols, static_part)];
+        static_structure =
+          Program_body.Static_structure.create [S (bound_symbols, static_part)]
+            ~symbol_placeholders:Symbol.Map.empty;
       }
     in
     Program_body.define_symbol definition
@@ -979,7 +981,8 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
           }
         in
         let static_structure : Program_body.Static_structure.t =
-          [S (bound_symbols, static_part)]
+          Program_body.Static_structure.create [S (bound_symbols, static_part)]
+            ~symbol_placeholders:Symbol.Map.empty
         in
         let definition : Program_body.Definition.t =
           { computation = None;
@@ -998,7 +1001,8 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
           Singleton symbol
         in
         let static_structure : Program_body.Static_structure.t =
-          [S (bound_symbols, static_part)]
+          Program_body.Static_structure.create [S (bound_symbols, static_part)]
+            ~symbol_placeholders:Symbol.Map.empty
         in
         let definition : Program_body.Definition.t =
           { computation = None;

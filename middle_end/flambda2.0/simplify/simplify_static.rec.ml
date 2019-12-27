@@ -24,7 +24,6 @@ module Of_kind_value = Flambda_static.Of_kind_value
 module Program = Flambda_static.Program
 module Program_body = Flambda_static.Program_body
 module Static_part = Flambda_static.Static_part
-module Static_structure = Flambda_static.Program_body.Static_structure
 
 module Return_cont_handler = struct
   type t = {
@@ -178,7 +177,7 @@ let simplify_set_of_closures0 dacc ~result_dacc set_of_closures
     Simplify_named.simplify_set_of_closures0 dacc ~result_dacc set_of_closures
       ~closure_bound_names ~closure_elements ~closure_element_types
   in
-  let static_structure : Program_body.Static_structure.t =
+  let static_structure : Static_structure.t =
     let code =
       Code_id.Map.mapi (fun code_id params_and_body : Static_part.code ->
           { params_and_body = Present params_and_body;
@@ -198,7 +197,8 @@ let simplify_set_of_closures0 dacc ~result_dacc set_of_closures
         closure_symbols;
       }
     in
-    [S (bound_symbols, static_part)]
+    Static_structure.create [S (bound_symbols, static_part)]
+      ~symbol_placeholders:Symbol.Map.empty
   in
   let static_structure_types =
     Name_in_binding_pos.Map.fold
@@ -411,8 +411,8 @@ let simplify_piece_of_static_structure (type k) dacc ~result_dacc
     simplify_static_part_of_kind_fabricated dacc ~result_dacc static_part
       ~code_ids ~closure_symbols
 
-let simplify_static_structure dacc ~result_dacc pieces
-      : DA.t * Program_body.Static_structure.t =
+let simplify_static_structure dacc ~result_dacc static_structure
+      : DA.t * Static_structure.t =
   let str_rev, _dacc, result_dacc =
     List.fold_left
       (fun (str_rev, dacc, result_dacc)
@@ -421,15 +421,20 @@ let simplify_static_structure dacc ~result_dacc pieces
           simplify_piece_of_static_structure dacc ~result_dacc
             bound_syms static_part
         in
-        let binding : Program_body.Static_structure.t0 =
+        let binding : Static_structure.t0 =
           S (bound_syms, static_part)
         in
         let str_rev = binding :: str_rev in
         str_rev, dacc, result_dacc)
       ([], dacc, result_dacc)
-      pieces
+      (Static_structure.bindings static_structure)
   in
-  result_dacc, List.rev str_rev
+  let static_structure =
+    Static_structure.create (List.rev str_rev)
+      ~symbol_placeholders:
+        (Static_structure.symbol_placeholders static_structure)
+  in
+  result_dacc, static_structure
 
 let reify_types_of_computed_values dacc ~result_dacc computed_values =
   let typing_env = DE.typing_env (DA.denv dacc) in
@@ -642,7 +647,7 @@ let simplify_return_continuation_handler dacc
     (* XXX If top sort fails, change types of the variables involved to "=v"
        where each v is another thing like a computed value variable, but will
        assume the value of the symbol. *)
-    let static_structure : Static_structure.t =
+    let static_structure_pieces : Static_structure.t0 list =
       let top_sorted_reified_definitions =
         (* The [List.rev] relies on the following property:
              Let the list L be a topological sort of a directed graph G.
@@ -657,7 +662,13 @@ let simplify_return_continuation_handler dacc
       Format.eprintf "Existing defs:@ %a\n"
         Static_structure.print return_cont_handler.static_structure;
       *)
-      top_sorted_reified_definitions @ return_cont_handler.static_structure
+      top_sorted_reified_definitions @
+        (Static_structure.bindings return_cont_handler.static_structure)
+    in
+    let static_structure =
+      Static_structure.create static_structure_pieces
+        ~symbol_placeholders:(Static_structure.symbol_placeholders
+          return_cont_handler.static_structure)
     in
     let result_dacc, static_structure =
       simplify_static_structure dacc ~result_dacc static_structure
@@ -834,14 +845,16 @@ let define_lifted_constants lifted_constants ~current_definition =
            to check if we have symbols currently being defined in the reified
            type, and if so not lift (except for closures).
            An alternative: add a computation that reads from the symbol
-           being defined and fills in the fields. *)
-        let add_around_body =
-          definition :: add_around_body
-        in
+           being defined and fills in the fields.
+           [ How does this relate to the new symbol_placeholders? ] *)
+        let add_around_body = definition :: add_around_body in
         add_to_current_definition, add_around_body
       else
         let add_to_current_definition =
-          List.flatten [definition.static_structure; add_to_current_definition]
+          List.flatten [
+            Static_structure.bindings definition.static_structure;
+            add_to_current_definition;
+          ]
         in
         add_to_current_definition, add_around_body)
     ([], [])
@@ -858,9 +871,13 @@ let rec simplify_program_body0 dacc (body : Program_body.t) k =
         define_lifted_constants (R.get_lifted_constants r)
           ~current_definition:defn
       in
+      let static_structure =
+        Static_structure.prepend_bindings defn.static_structure
+          ~prepend:add_to_current_definition;
+      in
       let defn =
         { defn with
-          static_structure = add_to_current_definition @ defn.static_structure;
+          static_structure;
         }
       in
       let body =
@@ -877,7 +894,7 @@ let rec simplify_program_body0 dacc (body : Program_body.t) k =
                 ~free_names_after:(Program_body.free_names body)
                 (TE.code_age_relation (DE.typing_env (DA.denv dacc)))
             in
-            if Static_structure.is_empty static_structure then body
+            if Static_structure.has_no_bindings static_structure then body
             else
               let defn : Program_body.Definition.t =
                 { computation = None;

@@ -147,24 +147,27 @@ module Program_body : sig
     type t0 =
       | S : 'k Bound_symbols.t * 'k Static_part.t -> t0
 
-    type t = t0 list
-
-    (* CR mshinwell: Add a creation function *)
-    (* CR mshinwell: make [t] abstract *)
+    type t
 
     val print : Format.formatter -> t -> unit
 
-    val is_empty : t -> bool
+    val create
+       : t0 list
+      -> symbol_placeholders:Variable.t Symbol.Map.t
+      -> t
+
+    val empty : t
+
+    val free_names : t -> Name_occurrences.t
 
     val being_defined : t -> Symbol.Set.t
 
-    val delete_bindings
-       : t
-      -> free_names_after:Name_occurrences.t
-      -> Code_age_relation.t
-      -> t
+    val has_no_bindings : t -> bool
 
-    val free_names : t -> Name_occurrences.t
+    (* CR mshinwell: Maybe call "pieces"? *)
+    val bindings : t -> t0 list
+
+    val symbol_placeholders : t -> Variable.t Symbol.Map.t
 
     (** If [newer_versions_of] maps [id1] to [id2] then [id1] is a newer
         version of [id2]. *)
@@ -174,6 +177,14 @@ module Program_body : sig
            (Symbol.t Closure_id.Map.t * Flambda.Set_of_closures.t)
       -> Flambda.Function_params_and_body.t Code_id.Map.t
       -> t0
+
+    val prepend_bindings : t -> prepend:t0 list -> t
+
+    val delete_bindings
+       : t
+      -> free_names_after:Name_occurrences.t
+      -> Code_age_relation.t
+      -> t
   end
 
   module Definition : sig

@@ -34,6 +34,7 @@ module Non_recursive_let_cont_handler = Flambda.Non_recursive_let_cont_handler
 module Program_body = Flambda_static.Program_body
 module Recursive_let_cont_handlers = Flambda.Recursive_let_cont_handlers
 module Set_of_closures = Flambda.Set_of_closures
+module Static_structure = Flambda_static.Program_body.Static_structure
 module Switch = Flambda.Switch
 
 module CUE = Continuation_uses_env

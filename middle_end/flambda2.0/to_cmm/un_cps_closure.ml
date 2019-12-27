@@ -657,7 +657,8 @@ module Iter_on_sets_of_closures = struct
     | _ -> ()
 
   let static_structure f s =
-    List.iter (static_structure_aux f) s
+    List.iter (static_structure_aux f)
+      (Flambda_static.Program_body.Static_structure.bindings s)
 
   let definition f (d : Flambda_static.Program_body.Definition.t) =
     Flambda_static.Program_body.Definition.iter_computation d ~f:(computation f);

@@ -1504,12 +1504,13 @@ let static_structure env is_fully_static s =
         (Flambda_static.Program_body.Static_structure.being_defined s)
   in
   let r = R.add_gc_roots roots R.empty in
+  (* XXX Add support for [symbol_placeholders] *)
   List.fold_left (fun (env_acc, r_acc) item ->
       let env, r = static_structure_item env_acc r_acc item in
       (* Archive_data helps keep definitions of separate symbols in different
          data_item lists and this increases readability of the generated cmm. *)
       env, R.archive_data r
-    ) (env, r) s
+    ) (env, r) (Flambda_static.Program_body.Static_structure.bindings s)
 
 (* Definition *)
 
