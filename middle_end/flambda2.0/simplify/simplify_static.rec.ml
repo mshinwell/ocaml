@@ -683,6 +683,8 @@ let simplify_return_continuation_handler dacc
             (dacc, symbol_placeholders, Name_permutation.empty)
             reified_definitions
         in
+        Format.eprintf "Top sort failed.  perm:@ %a\n%!"
+          Name_permutation.print perm;
         let reified_definitions =
           List.map (fun (_, _, Static_structure.S (bound_syms, static_part)) ->
               let static_part =

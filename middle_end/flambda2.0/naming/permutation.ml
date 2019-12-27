@@ -26,22 +26,19 @@ module Make (N : Identifiable.S) = struct
 
   let empty = Empty
 
-(*
-  let to_map t =
-    let rec collect t map =
-      match t with
-      | [] -> map
-      | n1::n2::t ->
-        let map = N.Map.add n1 n2 map in
-        collect t map
-      | _ -> assert false
-    in
-    collect t N.Map.empty
+  let rec print0 ppf t =
+    match t with
+    | Empty -> Format.fprintf ppf "Empty"
+    | Leaf_branch { n1; n2; older = Empty; } ->
+      Format.fprintf ppf "@[(%a %a)@]" N.print n1 N.print n2
+    | Leaf_branch { n1; n2; older; } ->
+      Format.fprintf ppf "@[(%a %a)@]@ %a" N.print n1 N.print n2 print0 older
+    | Branch { newer = Empty; older; } -> print0 ppf older
+    | Branch { newer; older = Empty; } -> print0 ppf newer
+    | Branch { newer; older; } ->
+      Format.fprintf ppf "%a@ %a" print0 newer print0 older
 
-  let print ppf t = N.Map.print N.print ppf (to_map t)
-*)
-
-  let print _ _ = Misc.fatal_error "To implement"
+  let print ppf t = Format.fprintf ppf "@[<hov 2>%a@]" print0 t
 
   let [@inline always] invariant _ = ()
 
