@@ -647,13 +647,21 @@ let simplify_return_continuation_handler dacc
         in
         reified_definitions, dacc, symbol_placeholders
       | Error _ ->
-        let dacc, symbol_placeholders =
+        let dacc, symbol_placeholders, perm =
           List.fold_left
-            (fun (dacc, symbol_placeholders)
+            (fun (dacc, symbol_placeholders, perm)
                  (var, symbol, _static_structure_part) ->
               (* A new symbol placeholder should always be needed, since
                  [symbol] has just been created, to point at a newly-reified
-                 value. *)
+                 value.
+                 We get the new placeholder into the static structure (in
+                 place of a computed value variable) using a permutation rather
+                 than through the typing environment.  The reason is that, for
+                 the environment method to work, the placeholder would have to
+                 have an earlier binding time than the computed values (i.e.
+                 the parameters of the return continuation).  Insertion of
+                 variables with earlier binding times than "now" is not
+                 supported. *)
               assert (not (Symbol.Map.mem symbol symbol_placeholders));
               let symbol_placeholder =
                 Variable.create (Linkage_name.to_string (
@@ -664,20 +672,23 @@ let simplify_return_continuation_handler dacc
               in
               let dacc =
                 DA.map_denv dacc ~f:(fun denv ->
-                  let denv =
-                    DE.define_variable denv
-                      (Var_in_binding_pos.create symbol_placeholder NM.normal)
-                      K.value
-                  in
-                  DE.add_equation_on_variable denv var
-                    (T.alias_type_of K.value (Simple.var symbol_placeholder)))
+                  DE.define_variable denv
+                    (Var_in_binding_pos.create symbol_placeholder NM.normal)
+                    K.value)
               in
-              dacc, symbol_placeholders)
-            (dacc, symbol_placeholders)
+              let perm =
+                Name_permutation.add_variable perm var symbol_placeholder
+              in
+              dacc, symbol_placeholders, perm)
+            (dacc, symbol_placeholders, Name_permutation.empty)
             reified_definitions
         in
         let reified_definitions =
-          List.map (fun (_, _, static_structure_part) -> static_structure_part)
+          List.map (fun (_, _, Static_structure.S (bound_syms, static_part)) ->
+              let static_part =
+                Static_part.apply_name_permutation static_part perm
+              in
+              Static_structure.S (bound_syms, static_part))
             reified_definitions
         in
         reified_definitions, dacc, symbol_placeholders

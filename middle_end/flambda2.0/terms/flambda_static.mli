@@ -85,6 +85,8 @@ module Static_part : sig
   (** All names free in the given static part.  (Note that this will
       descend into function bodies to find symbols.) *)
   val free_names : _ t -> Name_occurrences.t
+
+  val apply_name_permutation : 'k t -> Name_permutation.t -> 'k t
 end
 
 type static_part_iterator = {

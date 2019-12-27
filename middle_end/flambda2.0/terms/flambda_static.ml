@@ -61,6 +61,14 @@ module Of_kind_value = struct
       print (Format.formatter_of_out_channel chan) t
   end)
 
+  let apply_name_permutation t perm =
+    match t with
+    | Symbol _ | Tagged_immediate _ -> t
+    | Dynamically_computed var ->
+      let var' = Name_permutation.apply_variable perm var in
+      if var == var' then t
+      else Dynamically_computed var'
+
   let free_names t =
     match t with
     | Dynamically_computed var ->
@@ -355,6 +363,112 @@ module Static_part = struct
     with Misc.Fatal_error ->
       Misc.fatal_errorf "(during invariant checks) Context is:@ %a" print t
 *)
+
+  let apply_name_permutation (type k) (t : k t) perm : k t =
+    if Name_permutation.is_empty perm then t
+    else
+      match t with
+      | Block (tag, mut, fields) ->
+        let changed = ref false in
+        let fields =
+          List.map (fun field ->
+              let field' = Of_kind_value.apply_name_permutation field perm in
+              if not (field == field') then begin
+                changed := true
+              end;
+              field')
+            fields
+        in
+        if not !changed then t
+        else Block (tag, mut, fields)
+      | Fabricated_block _ -> Misc.fatal_error "To be removed"
+      | Code_and_set_of_closures { code; set_of_closures; } ->
+        let code' =
+          Code_id.Map.map_sharing
+            (fun ({ params_and_body; newer_version_of; } as code) ->
+              let params_and_body' =
+                match params_and_body with
+                | Deleted -> Deleted
+                | Present params_and_body_inner ->
+                  let params_and_body_inner' =
+                    Flambda.Function_params_and_body.apply_name_permutation
+                      params_and_body_inner perm
+                  in
+                  if params_and_body_inner == params_and_body_inner' then 
+                    params_and_body
+                  else
+                    Present params_and_body_inner'
+              in
+              if params_and_body == params_and_body' then code
+              else
+                { params_and_body = params_and_body';
+                  newer_version_of;
+                })
+            code
+        in
+        let set_of_closures' =
+          match set_of_closures with
+          | None -> None
+          | Some set ->
+            let set' =
+              Flambda.Set_of_closures.apply_name_permutation set perm
+            in
+            if set == set' then set_of_closures
+            else Some set'
+        in
+        if code == code' && set_of_closures == set_of_closures' then t
+        else
+          Code_and_set_of_closures {
+            code = code';
+            set_of_closures = set_of_closures';
+          }
+      | Boxed_float (Var v) ->
+        let v' = Name_permutation.apply_variable perm v in
+        if v == v' then t
+        else Boxed_float (Var v')
+      | Boxed_int32 (Var v) ->
+        let v' = Name_permutation.apply_variable perm v in
+        if v == v' then t
+        else Boxed_int32 (Var v')
+      | Boxed_int64 (Var v) ->
+        let v' = Name_permutation.apply_variable perm v in
+        if v == v' then t
+        else Boxed_int64 (Var v')
+      | Boxed_nativeint (Var v) ->
+        let v' = Name_permutation.apply_variable perm v in
+        if v == v' then t
+        else Boxed_nativeint (Var v')
+      | Mutable_string { initial_value = Var v; } ->
+        let v' = Name_permutation.apply_variable perm v in
+        if v == v' then t
+        else Mutable_string { initial_value = Var v'; }
+      | Immutable_string (Var v) ->
+        let v' = Name_permutation.apply_variable perm v in
+        if v == v' then t
+        else Immutable_string (Var v')
+      | Boxed_float (Const _)
+      | Boxed_int32 (Const _)
+      | Boxed_int64 (Const _)
+      | Boxed_nativeint (Const _)
+      | Mutable_string { initial_value = Const _; }
+      | Immutable_string (Const _) -> t
+      | Immutable_float_array fields ->
+        let changed = ref false in
+        let fields =
+          List.map (fun (field : _ or_variable) ->
+              let field' : _ or_variable =
+                match field with
+                | Var v -> Var (Name_permutation.apply_variable perm v)
+                | Const _ -> field
+              in
+              if not (field == field') then begin
+                changed := true
+              end;
+              field')
+            fields
+        in
+        if not !changed then t
+        else Immutable_float_array fields
 end
 
 type static_part_iterator = {
