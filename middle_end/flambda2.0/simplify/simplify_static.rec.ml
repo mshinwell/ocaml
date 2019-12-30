@@ -459,7 +459,9 @@ let reify_types_of_computed_values dacc computed_values =
           | Name (Var _) | Const _ -> None
       in
       match existing_symbol with
-      | Some _ -> dacc, reified_definitions
+      | Some _ ->
+        dacc, computed_value_vars_to_symbols, reified_definitions,
+          closure_symbols_by_set
       | None ->
         begin match
           T.reify ~allowed_free_vars:computed_values typing_env
@@ -489,6 +491,7 @@ let reify_types_of_computed_values dacc computed_values =
           dacc, computed_value_vars_to_symbols, reified_definitions,
             closure_symbols_by_set
       | Lift_set_of_closures { closure_id; function_decls; closure_vars; } ->
+        let module I = T.Function_declaration_type.Inlinable in
         let set_of_closures =
           let function_decls =
             Closure_id.Map.mapi (fun closure_id inlinable ->
@@ -505,8 +508,8 @@ let reify_types_of_computed_values dacc computed_values =
           in
           Set_of_closures.create function_decls ~closure_elements:closure_vars
         in
-        let bind_computed_value_var_to_symbol dacc =
-          let dacc =
+        let bind_computed_value_var_to_symbol dacc ~closure_symbols =
+          let dacc, symbol =
             DA.map_denv2 dacc ~f:(fun denv ->
               match Closure_id.Map.find closure_id closure_symbols with
               | exception Not_found ->
@@ -544,53 +547,11 @@ let reify_types_of_computed_values dacc computed_values =
                 Symbol.create (Compilation_unit.get_current_exn ()) name)
               function_decls
           in
-          let dacc =
-            DA.map_denv dacc ~f:(fun denv ->
-              Closure_id.Map.fold (fun _closure_id symbol denv ->
-                  DE.define_symbol denv symbol K.value)
-                closure_symbols
-                denv)
-          in
-          let module I = T.Function_declaration_type.Inlinable in
-          let fresh_code_ids =
-            Closure_id.Map.map (fun inlinable ->
-                Code_id.rename (I.code_id inlinable))
-              function_decls
-          in
-          let newer_versions_of =
-            Closure_id.Map.fold (fun closure_id inlinable newer_versions_of ->
-                let code_id = I.code_id inlinable in
-                let fresh_code_id =
-                  Closure_id.Map.find closure_id fresh_code_ids
-                in
-                Code_id.Map.add fresh_code_id code_id newer_versions_of)
-              function_decls
-              Code_id.Map.empty
-          in
-          let set_of_closures =
-            let function_decls =
-              Set_of_closures.function_decls set_of_closures
-              |> Function_declarations.funs
-              |> Closure_id.Map.mapi (fun closure_id function_decl ->
-                   Function_declaration.update_code_id function_decl
-                     (Closure_id.Map.find closure_id fresh_code_ids))
-              |> Function_declarations.create
-            in
-            Set_of_closures.create function_decls ~closure_elements:closure_vars
-          in
-          let by_code_id =
-            Closure_id.Map.fold (fun closure_id _inlinable by_code_id ->
-                let code_id = Closure_id.Map.find closure_id fresh_code_ids in
-                let old_code_id = Code_id.Map.find code_id newer_versions_of in
-                let params_and_body = DE.find_code (DA.denv dacc) old_code_id in
-                Code_id.Map.add code_id params_and_body by_code_id)
-              function_decls
-              Code_id.Map.empty
-          in
           let static_structure_part =
-            Static_structure.pieces_of_code ~newer_versions_of
+            Static_structure.pieces_of_code
+              ~newer_versions_of:Code_id.Map.empty
               ~set_of_closures:(closure_symbols, set_of_closures)
-              by_code_id
+              Code_id.Map.empty
           in
           let reified_definitions =
             static_structure_part :: reified_definitions
@@ -600,36 +561,36 @@ let reify_types_of_computed_values dacc computed_values =
               closure_symbols_by_set
           in
           let dacc, computed_value_vars_to_symbols =
-            bind_computed_value_var_to_symbol dacc
+            bind_computed_value_var_to_symbol dacc ~closure_symbols
           in
           dacc, computed_value_vars_to_symbols, reified_definitions,
             closure_symbols_by_set
         | closure_symbols ->
           let dacc, computed_value_vars_to_symbols =
-            bind_computed_value_var_to_symbol dacc
+            bind_computed_value_var_to_symbol dacc ~closure_symbols
           in
           dacc, computed_value_vars_to_symbols, reified_definitions,
             closure_symbols_by_set
         end
-
-
-
-        dacc, (var, symbol, static_structure_part) :: reified_definitions
       | Simple _ | Cannot_reify | Invalid ->
         dacc, computed_value_vars_to_symbols, reified_definitions,
           closure_symbols_by_set
       end)
     computed_values
-    (dacc, [], Set_of_closures.Map.empty)
+    (dacc, Variable.Map.empty, [], Set_of_closures.Map.empty)
 
 module Bindings_top_sort =
   Top_closure.Make
     (struct
-      type t = Variable.Set.t
-      type elt = Variable.t
-      let empty = Variable.Set.empty
-      let add t elt = Variable.Set.add elt t
-      let mem t elt = Variable.Set.mem elt t
+      type t = Symbol.Set.t
+      (* The following works because every binding that we will sort, either to
+         an individual non-closure value or to an individual closure forming
+         part of a set of closures (any recursion inside the latter being
+         invisible to the topological sort), has a different symbol. *)
+      type elt = Symbol.Set.t
+      let empty = Symbol.Set.empty
+      let add t elt = Symbol.Set.union elt t
+      let mem t elt = Symbol.Set.subset elt t
     end)
     (struct
       type 'a t = 'a
@@ -653,51 +614,45 @@ let simplify_return_continuation_handler dacc
       (KP.List.var_set extra_params_and_args.extra_params)
   in
   let static_structure, result_dacc =
-    let dacc, reified_definitions =
+    let dacc, computed_value_vars_to_symbols, reified_definitions,
+        closure_symbols_by_set =
       (* If the type of a computed value can be reified (to a term possibly
          involving any extra params and args that are present, from unboxing
          etc.) then lift that computed value to its own [Static_part]. *)
       reify_types_of_computed_values dacc allowed_free_vars
     in
+    (* CR mshinwell: If recursion extends beyond that which can be handled
+       by the set-of-closures cases, then we would need a strongly connected
+       components analysis, prior to the top sort.  Any set arising from SCC
+       that has more than one element must be a complicated recursive case,
+       which can be dealt with using the "symbol placeholder" approach
+       (variables that are substituted for the computed values, which are
+       in turn substituted for symbols at the Cmm translation phase).
+       (Any case containing >1 set of closures is maybe a bug?) *)
     let reified_definitions, dacc, symbol_placeholders =
-(* New approach
-   ============
-   1. Equivalence classes for sets of closures, deduping etc.
-   2. SCC analysis.
-      One set of closures becomes a single node.
-      Outcomes are:
-      (a) >=1 closure, recursive (as a single node)
-      (b) =1 non-recursive
-      (c) >1 closure/other things mixed, recursive
-      If (c) involves only closures it might be a bug (maybe?)
-   3. Translate to:
-      (a) is a normal set-of-closures binding
-      (b) is a normal non-set-of-closures binding
-      (c) uses the symbol placeholders (unusual case) -- this causes the
-          >1-node to be broken into 1-nodes.
-   4. Top sort these groups.
-
-   ..BUT: if the only recursion possible is for sets of closures, we don't
-   seem to either need SCC or the symbol placeholders.
-*)
-
-      (* Use a topological sort to try to order the bindings.  If this succeeds
-         then every reference to one of the reified computed values will
-         turn directly into a symbol.  If the sort fails, then we turn the
-         computed value variables into the [symbol_placeholder] variables,
-         which will be substituted for symbols during the Cmm translation. *)
-      (* CR mshinwell: The above comment needs updating to reflect that
-         recursion is allowed between closures in the same set. *)
       match
         Bindings_top_sort.top_closure reified_definitions
-          ~key:(fun (var, _, Static_structure.S (_syms, _static_part)) -> var)
-          ~deps:(fun (_var, sym, Static_structure.S (syms, static_part)) ->
+          ~key:(fun (Static_structure.S (_syms, _static_part)) -> var)
+          ~deps:(fun (Static_structure.S (syms, static_part)) ->
             let var_deps =
               static_part
               |> Static_part.free_names
               |> Name_occurrences.variables
               |> Variable.Set.elements
             in
+            let sym_deps =
+              Variable.Set.fold (fun var sym_deps ->
+                  match
+                    Variable.Map.find computed_value_vars_to_symbols var
+                  with
+                  | exception Not_found ->
+                    Misc.fatal_errorf "No symbol for computed value var %a"
+                      Variable.print var
+                  | symbol -> Symbol.Set.add symbol sym_deps)
+                var_deps
+                Symbol.Set.empty
+            in
+
             (* Everything except the [var] in the following list will be
                ignored. *)
             List.map (fun var ->
@@ -715,51 +670,11 @@ let simplify_return_continuation_handler dacc
         in
         reified_definitions, dacc, symbol_placeholders
       | Error _ ->
-        let dacc, symbol_placeholders, perm =
-          List.fold_left
-            (fun (dacc, symbol_placeholders, perm)
-                 (var, symbol, _static_structure_part) ->
-              (* A new symbol placeholder should always be needed, since
-                 [symbol] has just been created, to point at a newly-reified
-                 value.
-                 We get the new placeholder into the static structure (in
-                 place of a computed value variable) using a permutation rather
-                 than through the typing environment.  The reason is that, for
-                 the environment approach to work, the placeholder would have to
-                 have an earlier binding time than the computed values (i.e.
-                 the parameters of the return continuation).  Insertion of
-                 variables with earlier binding times than "now" is not
-                 supported. *)
-              assert (not (Symbol.Map.mem symbol symbol_placeholders));
-              let symbol_placeholder =
-                Variable.create (Linkage_name.to_string (
-                  Symbol.linkage_name symbol))
-              in
-              let symbol_placeholders =
-                Symbol.Map.add symbol symbol_placeholder symbol_placeholders
-              in
-              let dacc =
-                DA.map_denv dacc ~f:(fun denv ->
-                  DE.define_variable denv
-                    (Var_in_binding_pos.create symbol_placeholder NM.normal)
-                    K.value)
-              in
-              let perm =
-                Name_permutation.add_variable perm var symbol_placeholder
-              in
-              dacc, symbol_placeholders, perm)
-            (dacc, symbol_placeholders, Name_permutation.empty)
-            reified_definitions
-        in
-        let reified_definitions =
-          List.map (fun (_, _, Static_structure.S (bound_syms, static_part)) ->
-              let static_part =
-                Static_part.apply_name_permutation static_part perm
-              in
-              Static_structure.S (bound_syms, static_part))
-            reified_definitions
-        in
-        reified_definitions, dacc, symbol_placeholders
+        Misc.fatal_errorf "Static structure arising from reified \
+            computed values contains recursion that cannot be compiled:@ %a"
+          Static_structure.print
+          (Static_structure.create static_structure_pieces
+            ~symbol_placeholders)
     in
     let static_structure_pieces : Static_structure.t0 list =
       reified_definitions @
