@@ -56,3 +56,9 @@ val in_compilation_unit : t -> Compilation_unit.t -> bool
 val is_predefined_exception : t -> bool
 
 val rename : t -> t
+
+module Set : sig
+  include module type of struct include Set end
+  module Set : Stdlib.Set.S with type elt := t
+  module Map : Stdlib.Map.S with type key := t
+end

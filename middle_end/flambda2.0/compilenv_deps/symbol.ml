@@ -94,3 +94,11 @@ let is_predefined_exception t =
 let rename t =
   let linkage_name = Linkage_name.rename t.linkage_name in
   create t.compilation_unit linkage_name
+
+module Set = struct
+  module Set0 = Set
+  include Set
+
+  module Set = Stdlib.Set.Make (Set0)
+  module Map = Stdlib.Map.Make (Set0)
+end

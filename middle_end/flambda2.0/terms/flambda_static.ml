@@ -552,6 +552,12 @@ module Program_body = struct
       | Code_and_set_of_closures { code_ids = _; closure_symbols; } ->
         Symbol.Set.of_list (Closure_id.Map.data closure_symbols)
 
+    let closure_symbols_being_defined (type k) (t : k t) =
+      match t with
+      | Singleton _sym -> Symbol.Set.empty
+      | Code_and_set_of_closures { code_ids = _; closure_symbols; } ->
+        Symbol.Set.of_list (Closure_id.Map.data closure_symbols)
+
     let code_being_defined (type k) (t : k t) =
       match t with
       | Singleton _ -> Code_id.Set.empty

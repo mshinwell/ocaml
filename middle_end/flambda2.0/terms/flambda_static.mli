@@ -138,6 +138,8 @@ module Program_body : sig
     val print : Format.formatter -> _ t -> unit
 
     val being_defined : _ t -> Symbol.Set.t
+
+    val closure_symbols_being_defined : _ t -> Symbol.Set.t
   end
 
   module Static_structure : sig
