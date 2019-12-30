@@ -585,6 +585,10 @@ let simplify_named0 dacc ~(bound_vars : Bindable_let_bound.t)
     in
     (* CR mshinwell: Add check along the lines of: types are unknown
        whenever [not (P.With_fixed_value.eligible prim)] holds. *)
+    (* CR mshinwell: We should not lift things, except closures (which are
+       handled above in any case), if they reference symbols defined in the
+       current [Definition].  It isn't clear this could actually happen at
+       the moment though---but there should be a check. *)
     let defining_expr, dacc, ty =
       Reification.try_to_reify dacc term ~bound_to:bound_var
     in

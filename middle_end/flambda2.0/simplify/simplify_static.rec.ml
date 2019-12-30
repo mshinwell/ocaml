@@ -361,6 +361,8 @@ let simplify_static_part_of_kind_fabricated dacc ~result_dacc
         Code_id.Set.print code_ids'
         Static_part.print static_part
     end; 
+    (* CR mshinwell: We should simplify code on the way up if we don't
+       delete it. *)
     let dacc, result_dacc =
       Code_id.Map.fold
         (fun code_id ({ params_and_body; newer_version_of; } : Static_part.code)
@@ -411,19 +413,76 @@ let simplify_piece_of_static_structure (type k) dacc ~result_dacc
     simplify_static_part_of_kind_fabricated dacc ~result_dacc static_part
       ~code_ids ~closure_symbols
 
+let define_lifted_constants lifted_constants ~current_defn =
+  let defined_symbols_current_defn =
+    Definition.being_defined current_defn
+  in
+  let defined_code_ids_current_defn =
+    Definition.code_being_defined current_defn
+  in
+  List.fold_left
+    (fun (add_to_current_defn, add_before_current_defn) lifted_constant ->
+      let definition = Lifted_constant.definition lifted_constant in
+      assert (Option.is_none definition.computation);
+      let free_names =
+        Static_structure.free_names definition.static_structure
+      in
+      let free_symbols = Name_occurrences.symbols free_names in
+      let free_code_ids = Name_occurrences.code_ids free_names in
+      (* XXX When checking overlap, we need to take into account symbols that
+         we have lifted into the current definition, so that their dependencies
+         (which also need to come into the current definition) are handled
+         correctly. *)
+      let no_overlap_with_current_defn =
+        let no_overlap_with_symbols =
+          Symbol.Set.is_empty
+            (Symbol.Set.inter free_symbols
+              defined_symbols_current_defn)
+        in
+        let no_overlap_with_code_ids =
+          Code_id.Set.is_empty
+            (Code_id.Set.inter free_code_ids
+              defined_code_ids_current_defn)
+        in
+        no_overlap_with_symbols && no_overlap_with_code_ids
+      in
+      (* XXX There should never be any overlap for non-closure symbols *)
+      if no_overlap_with_current_defn then
+        let add_before_current_defn = definition :: add_before_current_defn in
+        add_to_current_defn, add_before_current_defn
+      else
+        let add_to_current_defn =
+          List.flatten [
+            Static_structure.bindings definition.static_structure;
+            add_to_current_defn;
+          ]
+        in
+        add_to_current_defn, add_before_current_defn)
+    ([], [])
+    lifted_constants
+
 let simplify_static_structure dacc ~result_dacc static_structure
       : DA.t * Static_structure.t =
   let str_rev, _dacc, result_dacc =
     List.fold_left
       (fun (str_rev, dacc, result_dacc)
            (Static_structure.S (bound_syms, static_part)) ->
+        let result_dacc =
+          DA.map_r result_dacc ~f:(fun r -> R.clear_lifted_constants r)
+        in
         let static_part, dacc, result_dacc =
           simplify_piece_of_static_structure dacc ~result_dacc
             bound_syms static_part
         in
-        let binding : Static_structure.t0 =
-          S (bound_syms, static_part)
+        let lifted_constants = R.get_lifted_constants (DA.r result_dacc) in
+        (* Lifted constants need to be dealt with now, as they may need to
+           be slotted into the current static structure, in the event they
+           reference closure symbols currently being defined. *)
+        let add_to_current_defn, add_before_current_defn =
+          add_lifted_constants ... lifted_constants
         in
+        (* add LCs here *)
+        let binding : Static_structure.t0 = S (bound_syms, static_part) in
         let str_rev = binding :: str_rev in
         str_rev, dacc, result_dacc)
       ([], dacc, result_dacc)
@@ -488,16 +547,12 @@ let lift_set_of_closures_discovered_via_computed_values dacc closure_id
             Closure_id.print closure_id
         | symbol ->
           let denv =
-            DE.add_equation_on_name denv
-              (Name.var var)
+            DE.add_equation_on_name denv (Name.var var)
               (T.alias_type_of K.value (Simple.symbol symbol))
           in
           denv, symbol)
     in
-    let computed_value_vars_to_symbols =
-      Variable.Map.add var symbol computed_value_vars_to_symbols
-    in
-    dacc, computed_value_vars_to_symbols
+    dacc, Variable.Map.add var symbol computed_value_vars_to_symbols
   in
   match Set_of_closures.Map.find set_of_closures closure_symbols_by_set with
   | exception Not_found ->
@@ -653,7 +708,7 @@ let lift_computed_values_via_reify dacc ~allowed_free_vars =
               match dep with
               | Some dep -> dep :: deps
               | None ->
-                Misc.fatal_error "Couldn't find definition for %a"
+                Misc.fatal_errorf "Couldn't find definition for %a"
                   Symbol.print sym)
             sym_deps
             [])
@@ -855,80 +910,9 @@ let simplify_definition dacc (defn : Program_body.Definition.t) =
   in
   definition, dacc
 
-(* CR mshinwell: We should simplify code on the way up if we don't delete it. *)
-
-let define_lifted_constants lifted_constants ~current_definition =
-  let defined_symbols_current_definition =
-    Definition.being_defined current_definition
-  in
-  let defined_code_ids_current_definition =
-    Definition.code_being_defined current_definition
-  in
-  List.fold_left
-    (fun (add_to_current_definition, add_around_body) lifted_constant ->
-      let definition = Lifted_constant.definition lifted_constant in
-      assert (Option.is_none definition.computation);
-      let free_names =
-        Static_structure.free_names definition.static_structure
-      in
-      let free_symbols = Name_occurrences.symbols free_names in
-      let free_code_ids = Name_occurrences.code_ids free_names in
-      (* XXX When checking overlap, we need to take into account symbols that
-         we have lifted into the current definition, so that their dependencies
-         (which also need to come into the current definition) are handled
-         correctly. *)
-      let no_overlap_with_current_definition =
-        let no_overlap_with_symbols =
-          Symbol.Set.is_empty
-            (Symbol.Set.inter free_symbols
-              defined_symbols_current_definition)
-        in
-        let no_overlap_with_code_ids =
-          Code_id.Set.is_empty
-            (Code_id.Set.inter free_code_ids
-              defined_code_ids_current_definition)
-        in
-        no_overlap_with_symbols && no_overlap_with_code_ids
-      in
-      if no_overlap_with_current_definition then
-        (* XXX This should add things to the current definition if there
-           is recursion
-
-           - Where do they get added though?  They may need to go in some
-           particular set of closures, and there might be multiple of those
-           in a given definition.  Maybe this function is being called too
-           late, and we should add lifted constants after each static
-           structure _piece_ has been simplified?  Or record in the environment
-           which symbol's definition is currently being simplified (also
-           useful for reify, as below), and then record that also on each
-           lifted constant.  Then we can check here which symbol's
-           definition needs augmenting.  Seems like that might be quite easy.
-           (Do this first on Monday, plus the set-of-closures equiv class
-           stuff and revised top-sort.)
-
-           - Also for normal reify (not computed values reify), we also need
-           to check if we have symbols currently being defined in the reified
-           type, and if so not lift (except for closures).
-           An alternative: add a computation that reads from the symbol
-           being defined and fills in the fields.
-           [ How does this relate to the new symbol_placeholders? ] *)
-        let add_around_body = definition :: add_around_body in
-        add_to_current_definition, add_around_body
-      else
-        let add_to_current_definition =
-          List.flatten [
-            Static_structure.bindings definition.static_structure;
-            add_to_current_definition;
-          ]
-        in
-        add_to_current_definition, add_around_body)
-    ([], [])
-    lifted_constants
-
 let rec simplify_program_body0 dacc (body : Program_body.t) k =
   match Program_body.descr body with
   | Definition (defn, body) ->
-    let dacc = DA.map_r dacc ~f:(fun r -> R.clear_lifted_constants r) in
     let defn, dacc = simplify_definition dacc defn in
     let r = DA.r dacc in
     simplify_program_body0 dacc body (fun body dacc ->
