@@ -195,6 +195,11 @@ let must_be_var t =
   | Name (Var var) | Rec_name (Var var, _) -> Some var
   | Name _ | Rec_name (_, _) | Const _ -> None
 
+let must_be_symbol t =
+  match t with
+  | Name (Symbol sym) | Rec_name (Symbol sym, _) -> Some sym
+  | Name _ | Rec_name (_, _) | Const _ -> None
+
 let allowed t ~allowed =
   match must_be_var t with
   | None -> true

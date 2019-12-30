@@ -436,146 +436,145 @@ let simplify_static_structure dacc ~result_dacc static_structure
   in
   result_dacc, static_structure
 
+let lift_non_closure_discovered_via_computed_values dacc to_lift =
+  let static_part = Reification.create_static_part to_lift in
+  let symbol =
+    Symbol.create (Compilation_unit.get_current_exn ())
+      (Linkage_name.create (Variable.unique_name var))
+  in
+  let dacc =
+    DA.map_denv dacc ~f:(fun denv ->
+      DE.add_equation_on_name (DE.define_symbol denv symbol K.value)
+        (Name.var var)
+        (T.alias_type_of K.value (Simple.symbol symbol)))
+  in
+  let static_structure_part : Static_structure.t0 =
+    S (Singleton symbol, static_part)
+  in
+  let reified_definitions = static_structure_part :: reified_definitions in
+  let computed_value_vars_to_symbols =
+    Variable.Map.add var symbol computed_value_vars_to_symbols
+  in
+  dacc, computed_value_vars_to_symbols, reified_definitions,
+    closure_symbols_by_set
+
+let lift_set_of_closures_discovered_via_computed_values dacc closure_id
+      function_decls ~closure_vars =
+  let module I = T.Function_declaration_type.Inlinable in
+  let set_of_closures =
+    let function_decls =
+      Closure_id.Map.mapi (fun closure_id inlinable ->
+        Function_declaration.create ~code_id:(I.code_id inlinable)
+          ~params_arity:(I.param_arity inlinable)
+          ~result_arity:(I.result_arity inlinable)
+          ~stub:(I.stub inlinable)
+          ~dbg:(I.dbg inlinable)
+          ~inline:(I.inline inlinable)
+          ~is_a_functor:(I.is_a_functor inlinable)
+          ~recursive:(I.recursive inlinable))
+        function_decls
+      |> Function_declarations.create
+    in
+    Set_of_closures.create function_decls ~closure_elements:closure_vars
+  in
+  let bind_computed_value_var_to_symbol dacc ~closure_symbols =
+    let dacc, symbol =
+      DA.map_denv2 dacc ~f:(fun denv ->
+        match Closure_id.Map.find closure_id closure_symbols with
+        | exception Not_found ->
+          Misc.fatal_errorf "Variable %a claimed to hold closure with \
+              closure ID %a, but no symbol was found for that closure ID"
+            Variable.print var
+            Closure_id.print closure_id
+        | symbol ->
+          let denv =
+            DE.add_equation_on_name denv
+              (Name.var var)
+              (T.alias_type_of K.value (Simple.symbol symbol))
+          in
+          denv, symbol)
+    in
+    let computed_value_vars_to_symbols =
+      Variable.Map.add var symbol computed_value_vars_to_symbols
+    in
+    dacc, computed_value_vars_to_symbols
+  in
+  match Set_of_closures.Map.find set_of_closures closure_symbols_by_set with
+  | exception Not_found ->
+    let closure_symbols =
+      Closure_id.Map.mapi (fun closure_id _function_decl ->
+          (* CR mshinwell: share name computation with
+             [Simplify_named] *)
+          let name =
+            closure_id
+            |> Closure_id.rename
+            |> Closure_id.to_string
+            |> Linkage_name.create 
+          in
+          Symbol.create (Compilation_unit.get_current_exn ()) name)
+        function_decls
+    in
+    let static_structure_part =
+      (* We don't need to assign new code IDs, since we're not changing the
+         code. The code will actually be re-simplified (during
+         [simplify_static_structure], see below)---at that point, new code IDs
+         may well be assigned.  (That is also the point at which references
+         to the closures being lifted, via the computed values variables,
+         will be changed to go via symbols.) *)
+      Static_structure.pieces_of_code
+        ~newer_versions_of:Code_id.Map.empty
+        ~set_of_closures:(closure_symbols, set_of_closures)
+        Code_id.Map.empty
+    in
+    let reified_definitions = static_structure_part :: reified_definitions in
+    let closure_symbols_by_set =
+      Set_of_closures.Map.add set_of_closures closure_symbols
+        closure_symbols_by_set
+    in
+    let dacc, computed_value_vars_to_symbols =
+      bind_computed_value_var_to_symbol dacc ~closure_symbols
+    in
+    dacc, computed_value_vars_to_symbols, reified_definitions,
+      closure_symbols_by_set
+  | closure_symbols ->
+    let dacc, computed_value_vars_to_symbols =
+      bind_computed_value_var_to_symbol dacc ~closure_symbols
+    in
+    dacc, computed_value_vars_to_symbols, reified_definitions,
+      closure_symbols_by_set
+
 let reify_types_of_computed_values dacc computed_values =
-  let typing_env = DE.typing_env (DA.denv dacc) in
+  let orig_typing_env = DE.typing_env (DA.denv dacc) in
   Variable.Set.fold
     (fun var (dacc, computed_value_vars_to_symbols, reified_definitions,
               closure_symbols_by_set) ->
-      let ty = TE.find typing_env (Name.var var) in
+      let ty = TE.find orig_typing_env (Name.var var) in
       let existing_symbol =
         (* We must avoid attempting to create aliases between symbols or
            (equivalently) defining static parts that already have symbols.
            This could happen if [var] is actually equal to another of the
            computed value variables. *)
-        let typing_env = DE.typing_env (DA.denv dacc) in
-        match
-          TE.get_canonical_simple typing_env ~min_name_mode:NM.normal
-            (Simple.var var)
-        with
-        | Bottom | Ok None -> None
-        | Ok (Some simple) ->
-          match Simple.descr simple with
-          | Name (Symbol symbol) -> Some symbol
-          | Name (Var _) | Const _ -> None
+        TE.get_canonical_simple (DE.typing_env (DA.denv dacc))
+          ~min_name_mode:NM.normal (Simple.var var)
+        |> Or_bottom.value_map ~bottom:None ~f:Simple.must_be_symbol
       in
       match existing_symbol with
       | Some _ ->
         dacc, computed_value_vars_to_symbols, reified_definitions,
           closure_symbols_by_set
       | None ->
-        begin match
+        match
           T.reify ~allowed_free_vars:computed_values typing_env
             ~min_name_mode:NM.normal ty
         with
         | Lift to_lift ->
-          let static_part = Reification.create_static_part to_lift in
-          let symbol =
-            Symbol.create (Compilation_unit.get_current_exn ())
-              (Linkage_name.create (Variable.unique_name var))
-          in
-          let dacc =
-            DA.map_denv dacc ~f:(fun denv ->
-              DE.add_equation_on_name (DE.define_symbol denv symbol K.value)
-                (Name.var var)
-                (T.alias_type_of K.value (Simple.symbol symbol)))
-          in
-          let static_structure_part : Static_structure.t0 =
-            S (Singleton symbol, static_part)
-          in
-          let reified_definitions =
-            static_structure_part :: reified_definitions
-          in
-          let computed_value_vars_to_symbols =
-            Variable.Map.add var symbol computed_value_vars_to_symbols
-          in
+          lift_non_closure_discovered_via_computed_values dacc to_lift
+        | Lift_set_of_closures { closure_id; function_decls; closure_vars; } ->
+          lift_set_of_closures_discovered_via_computed_values dacc closure_id
+            function_decls ~closure_vars
+        | Simple _ | Cannot_reify | Invalid ->
           dacc, computed_value_vars_to_symbols, reified_definitions,
-            closure_symbols_by_set
-      | Lift_set_of_closures { closure_id; function_decls; closure_vars; } ->
-        let module I = T.Function_declaration_type.Inlinable in
-        let set_of_closures =
-          let function_decls =
-            Closure_id.Map.mapi (fun closure_id inlinable ->
-              Function_declaration.create ~code_id:(I.code_id inlinable)
-                ~params_arity:(I.param_arity inlinable)
-                ~result_arity:(I.result_arity inlinable)
-                ~stub:(I.stub inlinable)
-                ~dbg:(I.dbg inlinable)
-                ~inline:(I.inline inlinable)
-                ~is_a_functor:(I.is_a_functor inlinable)
-                ~recursive:(I.recursive inlinable))
-              function_decls
-            |> Function_declarations.create
-          in
-          Set_of_closures.create function_decls ~closure_elements:closure_vars
-        in
-        let bind_computed_value_var_to_symbol dacc ~closure_symbols =
-          let dacc, symbol =
-            DA.map_denv2 dacc ~f:(fun denv ->
-              match Closure_id.Map.find closure_id closure_symbols with
-              | exception Not_found ->
-                Misc.fatal_errorf "Variable %a claimed to hold closure with \
-                    closure ID %a, but no symbol was found for that closure ID"
-                  Variable.print var
-                  Closure_id.print closure_id
-              | symbol ->
-                let denv =
-                  DE.add_equation_on_name denv
-                    (Name.var var)
-                    (T.alias_type_of K.value (Simple.symbol symbol))
-                in
-                denv, symbol)
-          in
-          let computed_value_vars_to_symbols =
-            Variable.Map.add var symbol computed_value_vars_to_symbols
-          in
-          dacc, computed_value_vars_to_symbols
-        in
-        begin match
-          Set_of_closures.Map.find set_of_closures closure_symbols_by_set
-        with
-        | exception Not_found ->
-          let closure_symbols =
-            Closure_id.Map.mapi (fun closure_id _function_decl ->
-                (* CR mshinwell: share name computation with
-                   [Simplify_named] *)
-                let name =
-                  closure_id
-                  |> Closure_id.rename
-                  |> Closure_id.to_string
-                  |> Linkage_name.create 
-                in
-                Symbol.create (Compilation_unit.get_current_exn ()) name)
-              function_decls
-          in
-          let static_structure_part =
-            Static_structure.pieces_of_code
-              ~newer_versions_of:Code_id.Map.empty
-              ~set_of_closures:(closure_symbols, set_of_closures)
-              Code_id.Map.empty
-          in
-          let reified_definitions =
-            static_structure_part :: reified_definitions
-          in
-          let closure_symbols_by_set =
-            Set_of_closures.Map.add set_of_closures closure_symbols
-              closure_symbols_by_set
-          in
-          let dacc, computed_value_vars_to_symbols =
-            bind_computed_value_var_to_symbol dacc ~closure_symbols
-          in
-          dacc, computed_value_vars_to_symbols, reified_definitions,
-            closure_symbols_by_set
-        | closure_symbols ->
-          let dacc, computed_value_vars_to_symbols =
-            bind_computed_value_var_to_symbol dacc ~closure_symbols
-          in
-          dacc, computed_value_vars_to_symbols, reified_definitions,
-            closure_symbols_by_set
-        end
-      | Simple _ | Cannot_reify | Invalid ->
-        dacc, computed_value_vars_to_symbols, reified_definitions,
-          closure_symbols_by_set
-      end)
+            closure_symbols_by_set)
     computed_values
     (dacc, Variable.Map.empty, [], Set_of_closures.Map.empty)
 
@@ -594,6 +593,94 @@ module Bindings_top_sort =
       let (>>=) t f = f t
     end)
 
+let lift_computed_values_via_reify dacc ~allowed_free_vars =
+      (return_cont_handler : Return_cont_handler.Opened.t) =
+  let dacc, computed_value_vars_to_symbols, reified_definitions,
+      closure_symbols_by_set =
+    reify_types_of_computed_values dacc allowed_free_vars
+  in
+  (* CR mshinwell: If recursion extends beyond that which can be handled
+     by the set-of-closures cases, then we would need a strongly connected
+     components analysis, prior to the top sort.  Any set arising from SCC
+     that has more than one element must be a complicated recursive case,
+     which can be dealt with using the "symbol placeholder" approach
+     (variables that are substituted for the computed values, which are
+     in turn substituted for symbols at the Cmm translation phase).
+     (Any case containing >1 set of closures is maybe a bug?) *)
+  let reified_definitions =
+    let sorted =
+      Bindings_top_sort.top_closure reified_definitions
+        ~key:(fun (Static_structure.S (syms, static_part)) ->
+          Bound_symbols.being_defined syms)
+        ~deps:(fun (Static_structure.S (syms, static_part)) ->
+          let var_deps =
+            static_part
+            |> Static_part.free_names
+            |> Name_occurrences.variables
+            |> Variable.Set.elements
+          in
+          let sym_deps =
+            List.fold_left (fun sym_deps var ->
+                match Variable.Map.find var computed_value_vars_to_symbols with
+                | exception Not_found ->
+                  Misc.fatal_errorf "No symbol for computed value var %a"
+                    Variable.print var
+                | symbol -> Symbol.Set.add symbol sym_deps)
+              Symbol.Set.empty
+              var_deps
+          in
+          let sym_deps =
+            let closure_symbols_being_defined =
+              (* Closure symbols are bound recursively within the same set. We
+                 need to remove them from the dependency sets to avoid the
+                 topological sort seeing cycles. We don't unilaterally remove
+                 all symbols in [Bound_symbols.being_defined syms] (as opposed
+                 to [closure_symbols_being_defined]) as, in the case where
+                 illegal recursion has been constructed, it could cause the
+                 topological sort to succeed and the fatal error below to be
+                 concealed. *)
+              Bound_symbols.closure_symbols_being_defined syms
+            in
+            Symbol.Set.diff sym_deps closure_symbols_being_defined
+          in
+          Symbol.Set.fold (fun sym deps ->
+              let dep =
+                List.find_opt (fun (Static_structure.S (syms, static_part)) ->
+                    Symbol.Set.mem sym (Bound_symbols.being_defined syms))
+                  reified_definitions
+                  sym
+              in
+              match dep with
+              | Some dep -> dep :: deps
+              | None ->
+                Misc.fatal_error "Couldn't find definition for %a"
+                  Symbol.print sym)
+            sym_deps
+            [])
+    in
+    match sorted with
+    | Ok sorted ->
+      (* The [List.rev] relies on the following property:
+           Let the list L be a topological sort of a directed graph G.
+           Then the reverse of L is a topological sort of the transpose of G.
+      *)
+      List.rev sorted
+    | Error _ ->
+      Misc.fatal_errorf "Static structure arising from reified \
+          computed values contains recursion that cannot be compiled:@ %a"
+        Static_structure.print
+        (Static_structure.create static_structure_pieces
+          ~symbol_placeholders)
+  in
+  let static_structure_pieces : Static_structure.t0 list =
+    reified_definitions @
+      (Static_structure.bindings return_cont_handler.static_structure)
+  in
+  let static_structure =
+    Static_structure.create static_structure_pieces ~symbol_placeholders
+  in
+  dacc, static_structure
+
 let simplify_return_continuation_handler dacc
       ~(extra_params_and_args : Continuation_extra_params_and_args.t)
       cont (return_cont_handler : Return_cont_handler.Opened.t)
@@ -610,94 +697,11 @@ let simplify_return_continuation_handler dacc
       (KP.List.var_set extra_params_and_args.extra_params)
   in
   let static_structure, result_dacc =
-    let dacc, computed_value_vars_to_symbols, reified_definitions,
-        closure_symbols_by_set =
+    let dacc, static_structure =
       (* If the type of a computed value can be reified (to a term possibly
          involving any extra params and args that are present, from unboxing
          etc.) then lift that computed value to its own [Static_part]. *)
-      reify_types_of_computed_values dacc allowed_free_vars
-    in
-    (* CR mshinwell: If recursion extends beyond that which can be handled
-       by the set-of-closures cases, then we would need a strongly connected
-       components analysis, prior to the top sort.  Any set arising from SCC
-       that has more than one element must be a complicated recursive case,
-       which can be dealt with using the "symbol placeholder" approach
-       (variables that are substituted for the computed values, which are
-       in turn substituted for symbols at the Cmm translation phase).
-       (Any case containing >1 set of closures is maybe a bug?) *)
-    let reified_definitions =
-      let sorted =
-        Bindings_top_sort.top_closure reified_definitions
-          ~key:(fun (Static_structure.S (syms, static_part)) ->
-            Bound_symbols.being_defined syms)
-          ~deps:(fun (Static_structure.S (syms, static_part)) ->
-            let var_deps =
-              static_part
-              |> Static_part.free_names
-              |> Name_occurrences.variables
-              |> Variable.Set.elements
-            in
-            let sym_deps =
-              List.fold_left (fun sym_deps var ->
-                  match
-                    Variable.Map.find var computed_value_vars_to_symbols
-                  with
-                  | exception Not_found ->
-                    Misc.fatal_errorf "No symbol for computed value var %a"
-                      Variable.print var
-                  | symbol -> Symbol.Set.add symbol sym_deps)
-                Symbol.Set.empty
-                var_deps
-            in
-            let sym_deps =
-              let closure_symbols_being_defined =
-                (* Closure symbols are bound recursively within the same set. We
-                   need to remove them from the dependency sets to avoid the
-                   topological sort seeing cycles. We don't unilaterally remove
-                   all symbols in [Bound_symbols.being_defined syms] (as opposed
-                   to [closure_symbols_being_defined]) as, in the case where
-                   illegal recursion has been constructed, it could cause the
-                   topological sort to succeed and the fatal error below to be
-                   concealed. *)
-                Bound_symbols.closure_symbols_being_defined syms
-              in
-              Symbol.Set.diff sym_deps closure_symbols_being_defined
-            in
-            Symbol.Set.fold (fun sym deps ->
-                let dep =
-                  List.find_opt (fun (Static_structure.S (syms, static_part)) ->
-                      Symbol.Set.mem sym (Bound_symbols.being_defined syms))
-                    reified_definitions
-                    sym
-                in
-                match dep with
-                | Some dep -> dep :: deps
-                | None ->
-                  Misc.fatal_error "Couldn't find definition for %a"
-                    Symbol.print sym)
-              sym_deps
-              [])
-      in
-      match sorted with
-      | Ok sorted ->
-        (* The [List.rev] relies on the following property:
-             Let the list L be a topological sort of a directed graph G.
-             Then the reverse of L is a topological sort of the transpose of G.
-        *)
-        List.rev sorted
-      | Error _ ->
-        Misc.fatal_errorf "Static structure arising from reified \
-            computed values contains recursion that cannot be compiled:@ %a"
-          Static_structure.print
-          (Static_structure.create static_structure_pieces
-            ~symbol_placeholders)
-    in
-    let static_structure_pieces : Static_structure.t0 list =
-      reified_definitions @
-        (Static_structure.bindings return_cont_handler.static_structure)
-    in
-    let static_structure =
-      Static_structure.create static_structure_pieces ~symbol_placeholders
+      lift_computed_values_via_reify dacc ~allowed_free_vars return_cont_handler
     in
     let result_dacc, static_structure =
       simplify_static_structure dacc ~result_dacc static_structure

@@ -65,6 +65,8 @@ val merge_rec_info : t -> newer_rec_info:Rec_info.t option -> t option
 
 val must_be_var : t -> Variable.t option
 
+val must_be_symbol : t -> Symbol.t option
+
 (** The constant representating the given number of type "int". *)
 val const_int : Targetint.OCaml.t -> t
 
