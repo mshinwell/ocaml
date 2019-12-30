@@ -582,14 +582,11 @@ let reify_types_of_computed_values dacc computed_values =
 module Bindings_top_sort =
   Top_closure.Make
     (struct
-      type t = Symbol.Set.t
-      (* The following works because every binding that we will sort has
-         a different symbol (including, for set-of-closures bindings,
-         different symbols for each closure). *)
+      type t = Symbol.Set.Set.t
       type elt = Symbol.Set.t
-      let empty = Symbol.Set.empty
-      let add t elt = Symbol.Set.union elt t
-      let mem t elt = Symbol.Set.subset elt t
+      let empty = Symbol.Set.Set.empty
+      let add t elt = Symbol.Set.Set.add elt t
+      let mem t elt = Symbol.Set.Set.mem elt t
     end)
     (struct
       type 'a t = 'a
@@ -629,10 +626,11 @@ let simplify_return_continuation_handler dacc
        in turn substituted for symbols at the Cmm translation phase).
        (Any case containing >1 set of closures is maybe a bug?) *)
     let reified_definitions =
-      let sym_dep_graph =
-        List.fold_left
-          (fun sym_dep_graph (Static_structure.S (syms, static_part)) ->
-            let being_defined = Bound_symbols.being_defined syms in
+      let sorted =
+        Bindings_top_sort.top_closure reified_definitions
+          ~key:(fun (Static_structure.S (syms, static_part)) ->
+            Bound_symbols.being_defined syms)
+          ~deps:(fun (Static_structure.S (syms, static_part)) ->
             let var_deps =
               static_part
               |> Static_part.free_names
@@ -653,11 +651,11 @@ let simplify_return_continuation_handler dacc
             in
             let sym_deps =
               let closure_symbols_being_defined =
-                (* Closure symbols are bound recursively within the same set.
-                   We need to remove them from the dependency sets to avoid
-                   the topological sort seeing cycles.  We don't unilaterally
-                   remove all of the symbols in [being_defined] (as opposed to
-                   [closure_symbols_being_defined]) as, in the case where
+                (* Closure symbols are bound recursively within the same set. We
+                   need to remove them from the dependency sets to avoid the
+                   topological sort seeing cycles. We don't unilaterally remove
+                   all symbols in [Bound_symbols.being_defined syms] (as opposed
+                   to [closure_symbols_being_defined]) as, in the case where
                    illegal recursion has been constructed, it could cause the
                    topological sort to succeed and the fatal error below to be
                    concealed. *)
@@ -665,28 +663,28 @@ let simplify_return_continuation_handler dacc
               in
               Symbol.Set.diff sym_deps closure_symbols_being_defined
             in
-            Symbol.Set.Map.add being_defined sym_deps sym_dep_graph)
-          Symbol.Set.Map.empty
-          reified_definitions
-      in
-      match
-        Bindings_top_sort.top_closure
-          (Symbol.Set.Set.elements (Symbol.Set.Map.keys sym_dep_graph))
-          ~key:Fun.id
-          ~deps:(fun key ->
-            let deps = Symbol.Set.Map.find key in
-            Symbol.Set.fold (fun sym result ->
-                (Symbol.Set.singleton sym) :: result)
-              deps
+            Symbol.Set.fold (fun sym deps ->
+                let dep =
+                  List.find_opt (fun (Static_structure.S (syms, static_part)) ->
+                      Symbol.Set.mem sym (Bound_symbols.being_defined syms))
+                    reified_definitions
+                    sym
+                in
+                match dep with
+                | Some dep -> dep :: deps
+                | None ->
+                  Misc.fatal_error "Couldn't find definition for %a"
+                    Symbol.print sym)
+              sym_deps
               [])
-      with
+      in
+      match sorted with
       | Ok sorted ->
         (* The [List.rev] relies on the following property:
              Let the list L be a topological sort of a directed graph G.
              Then the reverse of L is a topological sort of the transpose of G.
         *)
-        List.map (fun (_, _, static_structure_part) -> static_structure_part)
-          (List.rev sorted)
+        List.rev sorted
       | Error _ ->
         Misc.fatal_errorf "Static structure arising from reified \
             computed values contains recursion that cannot be compiled:@ %a"
