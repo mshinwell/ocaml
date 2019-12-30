@@ -439,7 +439,8 @@ let simplify_static_structure dacc ~result_dacc static_structure
 let reify_types_of_computed_values dacc computed_values =
   let typing_env = DE.typing_env (DA.denv dacc) in
   Variable.Set.fold
-    (fun var (dacc, reified_definitions) ->
+    (fun var (dacc, computed_value_vars_to_symbols, reified_definitions,
+              closure_symbols_by_set) ->
       let ty = TE.find typing_env (Name.var var) in
       let existing_symbol =
         (* We must avoid attempting to create aliases between symbols or
@@ -479,71 +480,19 @@ let reify_types_of_computed_values dacc computed_values =
           let static_structure_part : Static_structure.t0 =
             S (Singleton symbol, static_part)
           in
-          dacc, (var, symbol, static_structure_part) :: reified_definitions
+          let reified_definitions =
+            static_structure_part :: reified_definitions
+          in
+          let computed_value_vars_to_symbols =
+            Variable.Map.add var symbol computed_value_vars_to_symbols
+          in
+          dacc, computed_value_vars_to_symbols, reified_definitions,
+            closure_symbols_by_set
       | Lift_set_of_closures { closure_id; function_decls; closure_vars; } ->
-        let closure_symbols =
-          Closure_id.Map.mapi (fun closure_id _function_decl ->
-              (* CR mshinwell: share name computation with [Simplify_named] *)
-              let name =
-                closure_id
-                |> Closure_id.rename
-                |> Closure_id.to_string
-                |> Linkage_name.create 
-              in
-              Symbol.create (Compilation_unit.get_current_exn ()) name)
-            function_decls
-        in
-        (*
-        Format.eprintf "Var %a: set of closures:@ %a@ vars:@ %a\n%!"
-          Variable.print var
-          (Closure_id.Map.print Symbol.print) closure_symbols
-          (Var_within_closure.Map.print Simple.print) closure_vars;
-        *)
-        let dacc, symbol =
-          DA.map_denv2 dacc ~f:(fun denv ->
-            let denv =
-              Closure_id.Map.fold (fun _closure_id symbol denv ->
-                  DE.define_symbol denv symbol K.value)
-                closure_symbols
-                denv
-            in
-            match Closure_id.Map.find closure_id closure_symbols with
-            | exception Not_found ->
-              Misc.fatal_errorf "Variable %a claimed to hold closure with \
-                  closure ID %a, but no symbol was found for that closure ID"
-                Variable.print var
-                Closure_id.print closure_id
-            | symbol ->
-              let denv =
-                DE.add_equation_on_name denv
-                  (Name.var var)
-                  (T.alias_type_of K.value (Simple.symbol symbol))
-              in
-              denv, symbol)
-        in
-        let module I = T.Function_declaration_type.Inlinable in
-        (* The same code might be reified multiple times and we don't currently
-           dedup, so we must assign fresh code IDs. *)
-        let fresh_code_ids =
-          Closure_id.Map.map (fun inlinable ->
-              Code_id.rename (I.code_id inlinable))
-            function_decls
-        in
-        let newer_versions_of =
-          Closure_id.Map.fold (fun closure_id inlinable newer_versions_of ->
-              let code_id = I.code_id inlinable in
-              let fresh_code_id =
-                Closure_id.Map.find closure_id fresh_code_ids
-              in
-              Code_id.Map.add fresh_code_id code_id newer_versions_of)
-            function_decls
-            Code_id.Map.empty
-        in
         let set_of_closures =
           let function_decls =
             Closure_id.Map.mapi (fun closure_id inlinable ->
-              let code_id = Closure_id.Map.find closure_id fresh_code_ids in
-              Function_declaration.create ~code_id
+              Function_declaration.create ~code_id:(I.code_id inlinable)
                 ~params_arity:(I.param_arity inlinable)
                 ~result_arity:(I.result_arity inlinable)
                 ~stub:(I.stub inlinable)
@@ -556,26 +505,122 @@ let reify_types_of_computed_values dacc computed_values =
           in
           Set_of_closures.create function_decls ~closure_elements:closure_vars
         in
-        let by_code_id =
-          Closure_id.Map.fold (fun closure_id _inlinable by_code_id ->
-              let code_id = Closure_id.Map.find closure_id fresh_code_ids in
-              let old_code_id = Code_id.Map.find code_id newer_versions_of in
-              let params_and_body = DE.find_code (DA.denv dacc) old_code_id in
-              Code_id.Map.add code_id params_and_body by_code_id)
-            function_decls
-            Code_id.Map.empty
+        let bind_computed_value_var_to_symbol dacc =
+          let dacc =
+            DA.map_denv2 dacc ~f:(fun denv ->
+              match Closure_id.Map.find closure_id closure_symbols with
+              | exception Not_found ->
+                Misc.fatal_errorf "Variable %a claimed to hold closure with \
+                    closure ID %a, but no symbol was found for that closure ID"
+                  Variable.print var
+                  Closure_id.print closure_id
+              | symbol ->
+                let denv =
+                  DE.add_equation_on_name denv
+                    (Name.var var)
+                    (T.alias_type_of K.value (Simple.symbol symbol))
+                in
+                denv, symbol)
+          in
+          let computed_value_vars_to_symbols =
+            Variable.Map.add var symbol computed_value_vars_to_symbols
+          in
+          dacc, computed_value_vars_to_symbols
         in
-        let static_structure_part =
-          Static_structure.pieces_of_code ~newer_versions_of
-            ~set_of_closures:(closure_symbols, set_of_closures)
-            by_code_id
-        in
+        begin match
+          Set_of_closures.Map.find set_of_closures closure_symbols_by_set
+        with
+        | exception Not_found ->
+          let closure_symbols =
+            Closure_id.Map.mapi (fun closure_id _function_decl ->
+                (* CR mshinwell: share name computation with
+                   [Simplify_named] *)
+                let name =
+                  closure_id
+                  |> Closure_id.rename
+                  |> Closure_id.to_string
+                  |> Linkage_name.create 
+                in
+                Symbol.create (Compilation_unit.get_current_exn ()) name)
+              function_decls
+          in
+          let dacc =
+            DA.map_denv dacc ~f:(fun denv ->
+              Closure_id.Map.fold (fun _closure_id symbol denv ->
+                  DE.define_symbol denv symbol K.value)
+                closure_symbols
+                denv)
+          in
+          let module I = T.Function_declaration_type.Inlinable in
+          let fresh_code_ids =
+            Closure_id.Map.map (fun inlinable ->
+                Code_id.rename (I.code_id inlinable))
+              function_decls
+          in
+          let newer_versions_of =
+            Closure_id.Map.fold (fun closure_id inlinable newer_versions_of ->
+                let code_id = I.code_id inlinable in
+                let fresh_code_id =
+                  Closure_id.Map.find closure_id fresh_code_ids
+                in
+                Code_id.Map.add fresh_code_id code_id newer_versions_of)
+              function_decls
+              Code_id.Map.empty
+          in
+          let set_of_closures =
+            let function_decls =
+              Set_of_closures.function_decls set_of_closures
+              |> Function_declarations.funs
+              |> Closure_id.Map.mapi (fun closure_id function_decl ->
+                   Function_declaration.update_code_id function_decl
+                     (Closure_id.Map.find closure_id fresh_code_ids))
+              |> Function_declarations.create
+            in
+            Set_of_closures.create function_decls ~closure_elements:closure_vars
+          in
+          let by_code_id =
+            Closure_id.Map.fold (fun closure_id _inlinable by_code_id ->
+                let code_id = Closure_id.Map.find closure_id fresh_code_ids in
+                let old_code_id = Code_id.Map.find code_id newer_versions_of in
+                let params_and_body = DE.find_code (DA.denv dacc) old_code_id in
+                Code_id.Map.add code_id params_and_body by_code_id)
+              function_decls
+              Code_id.Map.empty
+          in
+          let static_structure_part =
+            Static_structure.pieces_of_code ~newer_versions_of
+              ~set_of_closures:(closure_symbols, set_of_closures)
+              by_code_id
+          in
+          let reified_definitions =
+            static_structure_part :: reified_definitions
+          in
+          let closure_symbols_by_set =
+            Set_of_closures.Map.add set_of_closures closure_symbols
+              closure_symbols_by_set
+          in
+          let dacc, computed_value_vars_to_symbols =
+            bind_computed_value_var_to_symbol dacc
+          in
+          dacc, computed_value_vars_to_symbols, reified_definitions,
+            closure_symbols_by_set
+        | closure_symbols ->
+          let dacc, computed_value_vars_to_symbols =
+            bind_computed_value_var_to_symbol dacc
+          in
+          dacc, computed_value_vars_to_symbols, reified_definitions,
+            closure_symbols_by_set
+        end
+
+
+
         dacc, (var, symbol, static_structure_part) :: reified_definitions
       | Simple _ | Cannot_reify | Invalid ->
-        dacc, reified_definitions
+        dacc, computed_value_vars_to_symbols, reified_definitions,
+          closure_symbols_by_set
       end)
     computed_values
-    (dacc, [])
+    (dacc, [], Set_of_closures.Map.empty)
 
 module Bindings_top_sort =
   Top_closure.Make

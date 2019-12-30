@@ -21,6 +21,44 @@ type t = {
   closure_elements : Simple.t Var_within_closure.Map.t;
 }
 
+let print_with_cache ~cache ppf
+      { function_decls; 
+        closure_elements;
+      } =
+  Format.fprintf ppf "@[<hov 1>(%sset_of_closures%s@ \
+      @[<hov 1>(function_decls@ %a)@]@ \
+      @[<hov 1>(closure_elements@ %a)@]\
+      )@]"
+    (Flambda_colours.prim_constructive ())
+    (Flambda_colours.normal ())
+    (Function_declarations.print_with_cache ~cache) function_decls
+    (Var_within_closure.Map.print Simple.print) closure_elements
+
+include Identifiable.Make (struct
+  type nonrec t = t
+
+  let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
+
+  let output _ _ = Misc.fatal_error "Not yet implemented"
+
+  let hash _ = Misc.fatal_error "Not yet implemented"
+
+  let compare
+        { function_decls = function_decls1;
+          closure_elements = closure_elements1;
+        }
+        { function_decls = function_decls2;
+          closure_elements = closure_elements2;
+        } =
+    let c = Function_declarations.compare function_decls1 function_decls2 in
+    if c <> 0 then c
+    else
+      Var_within_closure.Map.compare Simple.compare
+        closure_elements1 closure_elements2
+
+  let equal t1 t2 = (compare t1 t2 = 0)
+end)
+
 (* CR mshinwell: A sketch of code for the invariant check is on cps_types. *)
 let invariant _env _t = ()
 
@@ -43,21 +81,6 @@ let environment_doesn't_mention_variables t =
       | Name (Symbol _) -> true
       | _ -> false)
     t.closure_elements
-
-let print_with_cache ~cache ppf
-      { function_decls; 
-        closure_elements;
-      } =
-  Format.fprintf ppf "@[<hov 1>(%sset_of_closures%s@ \
-      @[<hov 1>(function_decls@ %a)@]@ \
-      @[<hov 1>(closure_elements@ %a)@]\
-      )@]"
-    (Flambda_colours.prim_constructive ())
-    (Flambda_colours.normal ())
-    (Function_declarations.print_with_cache ~cache) function_decls
-    (Var_within_closure.Map.print Simple.print) closure_elements
-
-let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
 let free_names
       { function_decls;

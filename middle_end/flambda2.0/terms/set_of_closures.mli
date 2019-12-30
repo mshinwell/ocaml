@@ -41,3 +41,5 @@ val has_empty_environment : t -> bool
     in its environment.  (If this condition is satisfied, a set of closures
     may be lifted.) *)
 val environment_doesn't_mention_variables : t -> bool
+
+include Identifiable.S with type t := t

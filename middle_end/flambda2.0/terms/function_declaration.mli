@@ -68,3 +68,5 @@ val update_code_id : t -> Code_id.t -> t
 (** Whether the function is recursive, in the sense of the syntactic analysis
     conducted during closure conversion. *)
 val recursive : t -> Recursive.t
+
+val compare : t -> t -> int

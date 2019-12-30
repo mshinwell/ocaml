@@ -133,3 +133,8 @@ let free_names
 let apply_name_permutation t _perm = t
 
 let update_code_id t code_id = { t with code_id; }
+
+(* CR mshinwell: In the "equal" case this should assert that all of the
+   other things in [t1] and [t2] are equal *)
+let compare t1 t2 =
+  Code_id.compare t1.code_id t2.code_id

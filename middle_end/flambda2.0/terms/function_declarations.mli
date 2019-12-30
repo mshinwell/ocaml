@@ -48,3 +48,5 @@ val funs : t -> Function_declaration.t Closure_id.Map.t
 
 (** [find f t] raises [Not_found] if [f] is not in [t]. *)
 val find : t -> Closure_id.t -> Function_declaration.t
+
+val compare : t -> t -> int

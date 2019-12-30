@@ -14,7 +14,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-30-40-41-42"]
+[@@@ocaml.warning "+a-30-40-41-42"]
 
 type t = {
   funs : Function_declaration.t Closure_id.Map.t;
@@ -52,3 +52,6 @@ let apply_name_permutation ({ funs; } as t) perm =
   in
   if funs == funs' then t
   else { funs = funs'; }
+
+let compare { funs = funs1; } { funs = funs2; } =
+  Closure_id.Map.compare Function_declaration.compare funs1 funs2
