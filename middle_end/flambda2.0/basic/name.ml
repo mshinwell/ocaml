@@ -160,6 +160,11 @@ let is_predefined_exception t =
   | Var _ -> false
   | Symbol sym -> Symbol.is_predefined_exception sym
 
+let compilation_unit t =
+  match t with
+  | Var var -> Variable.compilation_unit var
+  | Symbol sym -> Symbol.compilation_unit sym
+
 let rename t =
   match t with
   | Var var -> Var (Variable.rename var)

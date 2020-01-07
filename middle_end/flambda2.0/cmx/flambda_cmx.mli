@@ -2,9 +2,11 @@
 (*                                                                        *)
 (*                                 OCaml                                  *)
 (*                                                                        *)
-(*                   Mark Shinwell, Jane Street Europe                    *)
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2019 Jane Street Group LLC                                 *)
+(*   Copyright 2013--2020 OCamlPro SAS                                    *)
+(*   Copyright 2014--2020 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -14,16 +16,20 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-type t
+(** Dumping and restoring of simplification environment information to and
+    from .cmx files. *)
 
-include Identifiable.S with type t := t
+open! Simplify_import
 
-val consts_and_discriminants : t (* CR mshinwell: rename *)
-val symbols : t
-val imported_variables : t
+val load_cmx_file_contents
+   : (module Flambda2_backend_intf.S)
+  -> Compilation_unit.t
+  -> imported_names:Name.Set.t ref
+  -> imported_code:Function_params_and_body.t Code_id.Map.t ref
+  -> Flambda_type.Typing_env.t option
 
-val earliest_var : t
-val succ : t -> t
-
-val strictly_earlier : t -> than:t -> bool
-val equal : t -> t -> bool
+val prepare_cmx_file_contents
+   : return_cont_env:Continuation_uses_env.t
+  -> return_continuation:Continuation.t
+  -> Function_params_and_body.t Code_id.Map.t
+  -> Flambda_cmx_format.t option

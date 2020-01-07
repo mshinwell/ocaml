@@ -108,3 +108,6 @@ let with_code_age_relation t code_age_relation =
   with_denv t (DE.with_typing_env (denv t) typing_env)
 
 let typing_env t = DE.typing_env (denv t)
+
+let get_typing_env_no_more_than_one_use t k =
+  CUE.get_typing_env_no_more_than_one_use t.continuation_uses_env k

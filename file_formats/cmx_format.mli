@@ -33,6 +33,7 @@ open Misc
 
 type export_info =
   | Clambda of Clambda.value_approximation
+  | Flambda2 of Obj.t
 
 type unit_infos =
   { mutable ui_name: modname;             (* Name of unit implemented *)

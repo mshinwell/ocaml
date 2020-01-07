@@ -1189,7 +1189,8 @@ and params_and_body env fun_name fun_dbg p =
  *   in
  *   List.map (fun decl -> C.cfunction decl) sorted *)
 
-let unit (unit : Flambda_unit.t) =
+let unit (middle_end_result : Flambda2_middle_end.middle_end_result) =
+  let unit = middle_end_result.unit in
   result := R.empty;
   Profile.record_call "flambda2_to_cmm" (fun () ->
       let offsets = Un_cps_closure.compute_offsets unit in

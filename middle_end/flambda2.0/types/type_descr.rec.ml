@@ -32,7 +32,6 @@ module Make (Head : Type_head_intf.S
     type t =
       | No_alias of Head.t Or_unknown_or_bottom.t
       | Equals of Simple.t
-      | Type of Export_id.t
 
     let print_with_cache ~cache ppf t =
       let colour = Flambda_colours.top_or_bottom_type () in
@@ -55,11 +54,6 @@ module Make (Head : Type_head_intf.S
           (Flambda_colours.error ())
           (Flambda_colours.normal ())
           Simple.print simple
-      | Type export_id ->
-        Format.fprintf ppf "@[(@<0>%s=export_id@<0>%s %a)@]"
-          (Flambda_colours.error ())
-          (Flambda_colours.normal ())
-          Export_id.print export_id
 
     let print ppf t =
       print_with_cache ~cache:(Printing_cache.create ()) ppf t
@@ -77,7 +71,6 @@ module Make (Head : Type_head_intf.S
           let simple' = Simple.apply_name_permutation simple perm in
           if simple == simple' then t
           else Equals simple'
-        | Type _ -> t
 
     let free_names t =
       match t with
@@ -87,7 +80,6 @@ module Make (Head : Type_head_intf.S
         Name_occurrences.downgrade_occurrences_at_strictly_greater_kind
           (Simple.free_names simple)
           Name_mode.in_types
-      | Type _ -> Name_occurrences.empty
   end
 
   include With_delayed_permutation.Make (Descr)
@@ -100,7 +92,6 @@ module Make (Head : Type_head_intf.S
 
   let create_no_alias head = create (No_alias head)
   let create_equals simple = create (Equals simple)
-  let create_type export_id = create (Type export_id)
 
   let bottom () = create (No_alias Bottom)
   let unknown () = create (No_alias Unknown)
@@ -111,18 +102,18 @@ module Make (Head : Type_head_intf.S
     match descr t with
     | No_alias Bottom -> true
     | No_alias (Ok _ | Unknown)
-    | Equals _ | Type _ -> false
+    | Equals _ -> false
 
   let is_obviously_unknown t =
     match descr t with
     | No_alias Unknown -> true
     | No_alias (Ok _ | Bottom)
-    | Equals _ | Type _ -> false
+    | Equals _ -> false
 
   let get_alias t =
     match descr t with
     | Equals alias -> Some alias
-    | No_alias _ | Type _ -> None
+    | No_alias _ -> None
  
   let apply_rec_info t rec_info : _ Or_bottom.t =
     match descr t with
@@ -132,7 +123,6 @@ module Make (Head : Type_head_intf.S
       | None -> Bottom
       | Some simple -> Ok (create_equals simple)
       end
-    | Type _ -> Misc.fatal_error "Not yet implemented"
     | No_alias Unknown -> Ok t
     | No_alias Bottom -> Bottom
     | No_alias (Ok head) ->
@@ -142,13 +132,11 @@ module Make (Head : Type_head_intf.S
   let force_to_head ~force_to_kind t =
     match descr (force_to_kind t) with
     | No_alias head -> head
-    | Type _ | Equals _ ->
-      Misc.fatal_errorf "Expected [No_alias]:@ %a" T.print t
+    | Equals _ -> Misc.fatal_errorf "Expected [No_alias]:@ %a" T.print t
 
   let expand_head ~force_to_kind t env : _ Or_unknown_or_bottom.t =
     match descr t with
     | No_alias head -> head
-    | Type _export_id -> Misc.fatal_error ".cmx loading not yet implemented"
     | Equals simple ->
       let min_name_mode = Name_mode.min_in_types in
       match TE.get_canonical_simple env simple ~min_name_mode with
@@ -191,8 +179,6 @@ module Make (Head : Type_head_intf.S
               | Ok head -> Ok head
             end
             *)
-          | Type _export_id ->
-            Misc.fatal_error ".cmx loading not yet implemented"
           | Equals _ ->
             Misc.fatal_errorf "Canonical alias %a should never have \
                 [Equals] type:@ %a"

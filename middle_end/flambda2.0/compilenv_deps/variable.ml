@@ -19,16 +19,17 @@
 type t = {
   name : string;
   name_stamp : int;
-  (** [name_stamp]s are unique within any given compilation unit.
-      We don't need to store the compilation unit because no variables are
-      free in a complete program.  Any variables seen (which might e.g. have
-      come from another compilation unit) will always be freshened first. *)
+  (** [name_stamp]s are unique within any given compilation unit. *)
   user_visible : bool;
+  compilation_unit : Compilation_unit.t;
 }
 
 let compare0 t1 t2 =
-  if t1 == t2 then 0
-  else t1.name_stamp - t2.name_stamp
+  let c = Compilation_unit.compare t1.compilation_unit t2.compilation_unit in
+  if c <> 0 then c
+  else
+    if t1 == t2 then 0
+    else t1.name_stamp - t2.name_stamp
 
 let equal0 t1 t2 = (compare0 t1 t2 = 0)
 
@@ -41,7 +42,17 @@ module Self = Identifiable.Make (struct
 
   let hash t = t.name_stamp
 
-  let print ppf t = Format.fprintf ppf "%s/%d" t.name t.name_stamp
+  let print ppf t =
+    let print_unit =
+      match Compilation_unit.get_current () with
+      | None -> true
+      | Some current_unit ->
+        not (Compilation_unit.equal current_unit t.compilation_unit)
+    in
+    if print_unit then begin
+      Format.fprintf ppf "%a." Compilation_unit.print t.compilation_unit
+    end;
+    Format.fprintf ppf "%s/%d" t.name t.name_stamp
 
   let output chan t = print (Format.formatter_of_out_channel chan) t
 end)
@@ -55,14 +66,11 @@ let equal = equal0
 let previous_name_stamp = ref (-1)
 
 let create ?current_compilation_unit ?user_visible name =
-  ignore current_compilation_unit;
-(*
   let compilation_unit =
     match current_compilation_unit with
     | Some compilation_unit -> compilation_unit
     | None -> Compilation_unit.get_current_exn ()
   in
-*)
   let name_stamp =
     incr previous_name_stamp;
     !previous_name_stamp
@@ -76,6 +84,7 @@ end;
   { name;
     name_stamp;
     user_visible = Option.is_some user_visible;
+    compilation_unit;
   }
 
 let create_with_same_name_as_ident ?user_visible ident : t =
@@ -118,6 +127,8 @@ let debug_when_stamp_matches t ~stamp ~f =
 let print_opt ppf = function
   | None -> Format.fprintf ppf "<no var>"
   | Some t -> print ppf t
+
+let compilation_unit t = t.compilation_unit
 
 type pair = t * t
 module Pair = struct

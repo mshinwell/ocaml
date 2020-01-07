@@ -186,7 +186,7 @@ type middle_end2 =
   -> module_ident:Ident.t
   -> module_block_size_in_words:int
   -> module_initializer:Lambda.lambda
-  -> Flambda_unit.t
+  -> Flambda2_middle_end.middle_end_result
 
 let compile_implementation2 ?toplevel ~backend ~filename ~prefixname
     ~size:module_block_size_in_words ~module_ident ~module_initializer

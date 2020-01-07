@@ -96,12 +96,37 @@ let defined_earlier t ~than =
       let time1 = t.binding_time in
       let time2 = than.binding_time in
       if Binding_time.equal time1 time2 then begin
-        Misc.fatal_errorf "Unequal [Alias]es with same binding time: \
-            %a and %a"
-          print t
-          print than
-      end;
-      Binding_time.strictly_earlier time1 ~than:time2
+        (* CR mshinwell: We should think about this some more, it seems tricky.
+           Currently we assign all imported variables the same binding time
+           so we may need to break a tie here.  We just use [compare], but is
+           this ok? *)
+        let this_comp_unit = Compilation_unit.get_current_exn () in
+        let name1_is_imported_var =
+          match name1 with
+          | Var var ->
+            Compilation_unit.equal (Variable.compilation_unit var)
+              this_comp_unit
+          | Symbol _ -> false
+        in
+        let name2_is_imported_var =
+          match name2 with
+          | Var var ->
+            Compilation_unit.equal (Variable.compilation_unit var)
+              this_comp_unit
+          | Symbol _ -> false
+        in
+        match name1_is_imported_var, name2_is_imported_var with
+        | true, true -> Name.compare name1 name2 <= 0
+        | false, true -> false
+        | true, false -> true
+        | false, false ->
+          Misc.fatal_errorf "Unequal [Alias]es with same binding time: \
+              %a and %a"
+            print t
+            print than
+      end else begin
+        Binding_time.strictly_earlier time1 ~than:time2
+      end
 
 let simple t = t.simple
 let kind t = t.kind
@@ -115,7 +140,10 @@ let name t =
 let implicitly_bound_and_canonical t =
   match Simple.descr t.simple with
   | Const _ -> true
-  | Name _ -> false
+  | Name name ->
+    let comp_unit = Name.compilation_unit name in
+    let this_comp_unit = Compilation_unit.get_current_exn () in
+    not (Compilation_unit.equal comp_unit this_comp_unit)
 
 module Order_within_equiv_class = Name_mode
 

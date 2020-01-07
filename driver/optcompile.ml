@@ -89,6 +89,26 @@ module Flambda2_backend = struct
 
   let max_sensible_number_of_arguments =
     Proc.max_arguments_for_tailcalls - 1
+
+  let set_global_info info = Compilenv.set_global_info (Flambda2 info)
+
+  let get_global_info comp_unit =
+    let id =
+      (* CR mshinwell: Unsure how to construct this properly.  Also see CR
+         in Closure_conversion about the linkage names of module blocks *)
+      Compilation_unit.get_persistent_ident comp_unit
+    in
+    Format.eprintf "Importing unit %a, ident is %a\n%!"
+      Compilation_unit.print comp_unit
+      Ident.print id;
+    match Compilenv.get_global_info' id with
+    | None -> Format.eprintf ".cmx missing\n%!"; None
+    | Some (Flambda2 info) -> Format.eprintf ".cmx ok\n%!"; Some info
+    | Some (Clambda _) ->
+      (* CR mshinwell: This should be a user error, not a fatal error. *)
+      Misc.fatal_errorf "The .cmx file for unit %a was compiled with \
+          the Closure middle-end, not Flambda, and cannot be loaded"
+        Compilation_unit.print comp_unit
 end
 let flambda2_backend =
   (module Flambda2_backend : Flambda2_backend_intf.S)

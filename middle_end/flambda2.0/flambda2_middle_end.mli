@@ -18,6 +18,11 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+type middle_end_result = private {
+  cmx : Flambda_cmx_format.t option;
+  unit : Flambda_unit.t;
+}
+
 val middle_end
    : ppf_dump:Format.formatter
   -> prefixname:string
@@ -26,4 +31,4 @@ val middle_end
   -> module_ident:Ident.t
   -> module_block_size_in_words:int
   -> module_initializer:Lambda.lambda
-  -> Flambda_unit.t
+  -> middle_end_result

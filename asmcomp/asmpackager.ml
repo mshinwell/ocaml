@@ -139,6 +139,7 @@ let get_approx ui =
   assert(not Config.flambda);
   match ui.ui_export_info with
   | Clambda info -> info
+  | Flambda2 _ -> assert false
 
 let build_package_cmx members cmxfile =
   let unit_names =

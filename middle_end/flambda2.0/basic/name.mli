@@ -52,6 +52,8 @@ val is_predefined_exception : t -> bool
 
 val rename : t -> t
 
+val compilation_unit : t -> Compilation_unit.t
+
 module Pair : sig
   type nonrec t = t * t
 

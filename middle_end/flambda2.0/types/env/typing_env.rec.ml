@@ -206,7 +206,8 @@ module One_level = struct
 end
 
 type t = {
-  resolver : (Export_id.t -> Type_grammar.t option);
+  resolver : (Compilation_unit.t -> t option);
+  get_imported_names : (unit -> Name.Set.t);
   defined_symbols : Flambda_kind.t Symbol.Map.t;
   code_age_relation : Code_age_relation.t;
   prev_levels : One_level.t Scope.Map.t;
@@ -224,7 +225,8 @@ let is_empty t =
 (* CR mshinwell: Should print name occurrence kinds *)
 (* CR mshinwell: Add option to print [aliases] *)
 let print_with_cache ~cache ppf
-      ({ resolver = _; prev_levels; current_level; next_binding_time = _;
+      ({ resolver = _; get_imported_names = _;
+         prev_levels; current_level; next_binding_time = _;
          defined_symbols; code_age_relation;
        } as t) =
   if is_empty t then
@@ -296,8 +298,9 @@ let names_to_types t =
 let aliases t =
   Cached.aliases (One_level.just_after_level t.current_level)
 
-let create ~resolver =
+let create ~resolver ~get_imported_names =
   { resolver;
+    get_imported_names;
     prev_levels = Scope.Map.empty;
     current_level = One_level.create_empty Scope.initial;
     next_binding_time = Binding_time.earliest_var;
@@ -305,7 +308,8 @@ let create ~resolver =
     code_age_relation = Code_age_relation.empty;
   }
 
-let create_using_resolver_from t = create ~resolver:t.resolver
+let create_using_resolver_from t =
+  create ~resolver:t.resolver ~get_imported_names:t.get_imported_names
 
 let increment_scope t =
   let current_scope = current_scope t in
@@ -329,37 +333,62 @@ let var_domain t =
 
 let name_domain t = domain0 t
 
-let find t name =
+let mem t name =
+  Name.Map.mem name (names_to_types t)
+
+let find0 t (name : Name.t) =
   match Name.Map.find name (names_to_types t) with
   | exception Not_found ->
-    Misc.fatal_errorf "Name %a not bound in typing environment:@ %a"
-      Name.print name
-      print t
-  (* CR mshinwell: Should this resolve aliases? *)
-  | ty, _binding_time, _name_mode -> ty
+    let comp_unit = Name.compilation_unit name in
+    if Compilation_unit.equal comp_unit (Compilation_unit.get_current_exn ())
+    then
+      Misc.fatal_errorf "Name %a not bound in typing environment:@ %a"
+        Name.print name
+        print t
+    else
+      begin match (resolver t) comp_unit with
+      | None ->
+        begin match name with
+        | Symbol _ ->  (* .cmx file missing *)
+          Type_grammar.any_value (), Binding_time.symbols, Name_mode.normal
+        | Var _ ->
+          (* We only reach into external units via symbols to start with,
+             not via variables, so the lookup should have succeeded (as the
+             variable could only have come from a previously-imported
+             symbol's type). *)
+          Misc.fatal_errorf ".cmx file lookup has started failing for %a"
+            Name.print name
+        end
+      | Some t ->
+        match Name.Map.find name (names_to_types t) with
+        | exception Not_found ->
+          Misc.fatal_errorf "Name %a not bound in imported typing \
+              environment (maybe the wrong .cmx file is present?):@ %a"
+            Name.print name
+            print t
+        | ty, _binding_time, name_mode ->
+          (* Binding times for imported units are meaningless at present.
+             Also see [Alias.defined_earlier]. *)
+          ty, Binding_time.imported_variables, name_mode
+      end
+  | found -> found
+
+let find t name =
+  let ty, _binding_time, _name_mode = find0 t name in
+  ty
 
 let find_params t params =
   List.map (fun param -> find t (Kinded_parameter.name param)) params
 
 let find_with_name_mode t name =
-  match Name.Map.find name (names_to_types t) with
-  | exception Not_found ->
-    Misc.fatal_errorf "Name %a not bound in typing environment:@ %a"
-      Name.print name
-      print t
-  (* CR mshinwell: Should this resolve aliases? *)
-  | ty, _binding_time, name_mode -> ty, name_mode
+  let ty, _binding_time, name_mode = find0 t name in
+  ty, name_mode
 
-let find_with_binding_time_and_mode t name =
-  match Name.Map.find name (names_to_types t) with
-  | exception Not_found ->
-    Misc.fatal_errorf "Name %a not bound in typing environment:@ %a"
-      Name.print name
-      print t
-  | ty, binding_time, name_mode -> ty, binding_time, name_mode
+let find_with_binding_time_and_mode t name = find0 t name
 
-let mem t name =
-  Name.Map.mem name (names_to_types t)
+let find_binding_time t name =
+  let _ty, binding_time, _name_mode = find0 t name in
+  binding_time
 
 let mem_simple t simple =
   match Simple.descr simple with
@@ -380,6 +409,18 @@ let with_current_level_and_next_binding_time t ~current_level
 let cached t = One_level.just_after_level t.current_level
 
 let add_variable_definition t var kind name_mode =
+  (* We can add equations in our own compilation unit on variables and
+     symbols defined in another compilation unit. However we can't define other
+     compilation units' variables or symbols (except for predefined
+     symbols such as exceptions) in our own compilation unit. *)
+  let comp_unit = Variable.compilation_unit var in
+  let this_comp_unit = Compilation_unit.get_current_exn () in
+  if not (Compilation_unit.equal comp_unit this_comp_unit) then begin
+    Misc.fatal_errorf "Cannot define a variable that belongs to a different \
+        compilation unit: %a@ in environment:@ %a"
+      Variable.print var
+      print t
+  end;
   let name = Name.var var in
   if mem t name then begin
     Misc.fatal_errorf "Cannot rebind %a in environment:@ %a"
@@ -410,6 +451,19 @@ let add_variable_definition t var kind name_mode =
     (Binding_time.succ t.next_binding_time)
 
 let add_symbol_definition t sym kind =
+  let comp_unit = Symbol.compilation_unit sym in
+  let this_comp_unit = Compilation_unit.get_current_exn () in
+  if (not (Compilation_unit.equal comp_unit this_comp_unit))
+    && (not (Compilation_unit.is_predefined_exception comp_unit))
+  then begin
+    Misc.fatal_errorf "Cannot define symbol %a that belongs to a different \
+        compilation unit@ (%a, current unit: %a) %b@ in environment:@ %a"
+      Symbol.print sym
+      Compilation_unit.print comp_unit
+      Compilation_unit.print this_comp_unit
+      (Compilation_unit.equal comp_unit this_comp_unit)
+      print t
+  end;
   let name_mode = Name_mode.normal in
   let name = Name.symbol sym in
   let just_after_level =
@@ -463,7 +517,9 @@ let invariant_for_new_equation t name ty =
   if !Clflags.flambda_invariant_checks then begin
     (* CR mshinwell: This should check that precision is not decreasing. *)
     let defined_names =
-      Name_occurrences.create_names (domain0 t) Name_mode.in_types
+      Name_occurrences.create_names
+        (Name.Set.union (domain0 t) (t.get_imported_names ()))
+        Name_mode.in_types
     in
     (* CR mshinwell: It's a shame we can't check code IDs here. *)
     let free_names =
@@ -509,7 +565,7 @@ let add_equation0 t aliases name name_mode ty =
     in
     let just_after_level = One_level.just_after_level t.current_level in
     (* CR mshinwell: remove second lookup *)
-    let binding_time = Cached.binding_time just_after_level name in
+    let binding_time = find_binding_time t name in
     let just_after_level =
       Cached.add_or_replace_binding just_after_level
         name ty binding_time name_mode
@@ -777,7 +833,7 @@ let cut t ~unknown_if_defined_at_or_later_than:min_scope =
     in
     let t =
       if Scope.Map.is_empty strictly_less then
-        let t = create ~resolver:t.resolver in
+        let t = create_using_resolver_from t in
         Symbol.Map.fold (fun symbol kind t ->
             add_symbol_definition t symbol kind)
           original_t.defined_symbols
@@ -791,6 +847,7 @@ let cut t ~unknown_if_defined_at_or_later_than:min_scope =
         in
         let t =
           { resolver = t.resolver;
+            get_imported_names = t.get_imported_names;
             prev_levels;
             current_level;
             next_binding_time = t.next_binding_time;
@@ -1006,3 +1063,6 @@ let free_variables_transitive t typ =
     Variable.Set.print vars;
     *)
   vars
+
+(* CR mshinwell: to implement (for .cmx file saving) *)
+let make_vars_on_current_level_irrelevant t = t

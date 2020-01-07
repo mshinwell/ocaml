@@ -157,7 +157,7 @@ let bind_let_bound ~bindings ~body =
     body
     (List.rev bindings)
 
-let create_let_symbol code_age_relation (bound_symbols : Bound_symbols.t)
+let create_let_symbol r code_age_relation (bound_symbols : Bound_symbols.t)
       (static_const : Static_const.t) body =
   let bound_names = Bound_symbols.free_names bound_symbols in
   let free_names_after = Expr.free_names body in
@@ -181,12 +181,15 @@ let create_let_symbol code_age_relation (bound_symbols : Bound_symbols.t)
   if (not (Name_occurrences.overlap bound_names free_names_after))
     && Code_id.Set.is_empty (Code_id.Set.inter
       all_code_ids_bound_names all_code_ids_free_names_after)
-  then body
+  then body, r
   else
     match bound_symbols with
     | Singleton _ ->
-      Let_symbol.create bound_symbols static_const body
-      |> Expr.create_let_symbol
+      let expr =
+        Let_symbol.create bound_symbols static_const body
+        |> Expr.create_let_symbol
+      in
+      expr, r
     | Sets_of_closures _ ->
       (* Turn pieces of code that are only referenced in [newer_version_of]
          fields into [Deleted]. *)
@@ -222,5 +225,12 @@ let create_let_symbol code_age_relation (bound_symbols : Bound_symbols.t)
                 else code))
           (Static_const.must_be_sets_of_closures static_const)
       in
-      Let_symbol.create bound_symbols (Sets_of_closures sets) body
-      |> Expr.create_let_symbol
+      let expr =
+        Let_symbol.create bound_symbols (Sets_of_closures sets) body
+        |> Expr.create_let_symbol
+      in
+      let r =
+        R.remember_code_for_cmx r
+          (Static_const.get_pieces_of_code' static_const)
+      in
+      expr, r

@@ -21,7 +21,8 @@ let strictly_earlier t ~than =
 
 let consts_and_discriminants = 0
 let symbols = 1
-let earliest_var = 2
+let imported_variables = 2
+let earliest_var = 3
 
 let succ t =
   if t < earliest_var then

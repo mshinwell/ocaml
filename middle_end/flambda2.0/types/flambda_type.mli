@@ -67,13 +67,18 @@ module Typing_env : sig
 
   val print : Format.formatter -> t -> unit
 
-  val create : resolver:(Export_id.t -> flambda_type option) -> t
+  val create
+     : resolver:(Compilation_unit.t -> t option)
+    -> get_imported_names:(unit -> Name.Set.t)
+    -> t
 
   val create_using_resolver_and_symbol_bindings_from : t -> t
 
-  val resolver : t -> (Export_id.t -> flambda_type option)
+  val resolver : t -> (Compilation_unit.t -> t option)
 
   val var_domain : t -> Variable.Set.t
+
+  val name_domain : t -> Name.Set.t
 
   val current_scope : t -> Scope.t
 
@@ -147,6 +152,8 @@ module Typing_env : sig
     -> Typing_env_extension.t * Continuation_extra_params_and_args.t
 
   val free_variables_transitive : t -> flambda_type -> Variable.Set.t
+
+  val make_vars_on_current_level_irrelevant : t -> t
 end
 
 val meet : Typing_env.t -> t -> t -> (t * Typing_env_extension.t) Or_bottom.t

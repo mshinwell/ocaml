@@ -33,7 +33,6 @@ module type S = sig
             Bottom = "No value can flow to this point": the least element.
         *)
       | Equals of Simple.t
-      | Type of Export_id.t
   end
 
   type t
@@ -44,7 +43,6 @@ module type S = sig
 
   val create_no_alias : head Or_unknown_or_bottom.t -> t
   val create_equals : Simple.t -> t
-  val create_type : Export_id.t -> t
 
   val create : head -> t
 

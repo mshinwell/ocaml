@@ -386,6 +386,9 @@ let get_pieces_of_code t =
   | Mutable_string _
   | Immutable_string _ -> Code_id.Map.empty
 
+let get_pieces_of_code' t =
+  Code_id.Map.map (fun (code, _) -> code) (get_pieces_of_code t)
+
 let free_names t =
   match t with
   | Block (_tag, _mut, fields) ->

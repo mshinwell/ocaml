@@ -75,8 +75,9 @@ val bind_let_bound
   -> Flambda.Expr.t
 
 val create_let_symbol
-   : Code_age_relation.t
+   : Simplify_env_and_result.Result.t
+  -> Code_age_relation.t
   -> Flambda.Let_symbol_expr.Bound_symbols.t
   -> Flambda.Static_const.t
   -> Flambda.Expr.t
-  -> Flambda.Expr.t
+  -> Flambda.Expr.t * Simplify_env_and_result.Result.t
