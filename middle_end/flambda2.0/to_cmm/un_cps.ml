@@ -615,13 +615,17 @@ and let_expr env t =
 
 and let_symbol env let_sym =
   let body = Let_symbol.body let_sym in
-  let env, r =
+  let env, r, update_opt =
     Un_cps_static.static_const env ~params_and_body
       (Let_symbol.bound_symbols let_sym)
       (Let_symbol.defining_expr let_sym)
   in
   result := R.combine !result r;
-  expr env body
+  match update_opt with
+  | None -> expr env body (* trying to preserve tail calls whenever we can *)
+  | Some update ->
+    let wrap, env = Env.flush_delayed_lets env in
+    wrap (C.sequence update (expr env body))
 
 and let_set_of_closures env body closure_vars soc =
   (* First translate the set of closures, and bind it in the env *)
@@ -1193,23 +1197,30 @@ let unit (unit : Flambda_unit.t) =
             Flambda_kind.value;
         ]
       in
-      let _return_cont, env =
+      let return_cont, env =
         Env.add_jump_cont env (List.map snd return_cont_params)
           (Flambda_unit.return_continuation unit)
       in
-      (* let functions = program_functions offsets used_closure_vars unit in *)
-      let _body = expr env (Flambda_unit.body unit) in
-      Misc.fatal_error "To be continued"
-(*
+      let body = expr env (Flambda_unit.body unit) in
       let body =
         let unit_value = C.targetint Targetint.zero in
         C.ccatch
           ~rec_flag:false ~body
           ~handlers:[C.handler return_cont return_cont_params unit_value]
       in
-      let data, entry, gc_roots, functions = R.to_cmm !result in
+      let entry =
+        let dbg = Debuginfo.none in
+        let fun_name = Compilenv.make_symbol (Some "entry") in
+        let fun_codegen =
+          [ Cmm.Reduce_code_size;
+            Cmm.No_CSE ]
+        in
+        C.cfunction (C.fundecl fun_name [] body fun_codegen dbg)
+      in
+      let data, gc_roots, functions = R.to_cmm !result in
       let cmm_data = C.flush_cmmgen_state () in
       let roots = List.map symbol gc_roots in
       (C.gc_root_table roots) :: data @ cmm_data @ functions @ [entry]
-*)
+      (* Misc.fatal_error "To be continued" *)
+      (* let functions = program_functions offsets used_closure_vars unit in *)
     )

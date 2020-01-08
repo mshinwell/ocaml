@@ -93,45 +93,47 @@ let map_or_variable f default v =
   | Const c -> f c
   | Var _ -> default
 
-let make_update env kind symb var i =
+let make_update env kind symb var i prev_update =
   let e = Env.get_variable env var in
   let address = C.field_address symb i Debuginfo.none in
-  C.store kind Lambda.Root_initialization address e
+  let update = C.store kind Lambda.Root_initialization address e in
+  match prev_update with
+  | None -> Some update
+  | Some prev_update -> Some (C.sequence prev_update update)
 
 let rec static_block_updates symb env acc i = function
-  | [] -> List.fold_left C.sequence C.void acc
+  | [] -> acc
   | sv :: r ->
       begin match (sv : SC.Field_of_block.t) with
       | Symbol _
       | Tagged_immediate _ ->
           static_block_updates symb env acc (i + 1) r
       | Dynamically_computed var ->
-          let update = make_update env Cmm.Word_val symb var i in
-          static_block_updates symb env (update :: acc) (i + 1) r
+          let acc = make_update env Cmm.Word_val symb var i acc in
+          static_block_updates symb env acc (i + 1) r
       end
 
 let rec static_float_array_updates symb env acc i = function
-  | [] -> List.fold_left C.sequence C.void acc
+  | [] -> acc
   | sv :: r ->
       begin match (sv : _ SC.or_variable) with
       | Const _ ->
           static_float_array_updates symb env acc (i + 1) r
       | Var var ->
-          let update = make_update env Cmm.Double_u symb var i in
-          static_float_array_updates symb env (update :: acc) (i + 1) r
+          let acc = make_update env Cmm.Double_u symb var i acc in
+          static_float_array_updates symb env acc (i + 1) r
       end
 
 let static_boxed_number kind env s default emit transl v r =
   let name = symbol s in
   let aux x cont = emit (name, Cmmgen_state.Global) (transl x) cont in
-  let wrapper =
+  let updates =
     match (v : _ SC.or_variable) with
-    | Const _ -> Fun.id
+    | Const _ -> None
     | Var v ->
-        let update = make_update env kind (C.symbol name) v 0 in
-        C.sequence update
+        make_update env kind (C.symbol name) v 0 None
   in
-  R.wrap_init wrapper (R.update_data (or_variable aux default v) r)
+  R.update_data (or_variable aux default v) r, updates
 
 let get_whole_closure_symbol =
   let whole_closure_symb_count = ref 0 in
@@ -160,7 +162,7 @@ let rec static_set_of_closures env symbs set =
       (List.map fst (Var_within_closure.Map.bindings elts))
   in
   let l, updates, length =
-    fill_static_layout clos_symb symbs decls elts env [] C.void 0 layout
+    fill_static_layout clos_symb symbs decls elts env [] None 0 layout
   in
   let header = C.cint (C.black_closure_header length) in
   let sdef = match !clos_symb with
@@ -189,10 +191,10 @@ and fill_static_slot s symbs decls elts env acc offset updates slot =
         | `Data fields -> fields, updates
         | `Var v ->
             let s = get_whole_closure_symbol s in
-            let update =
-              make_update env Cmm.Word_val (C.symbol (symbol s)) v offset
+            let updates =
+              make_update env Cmm.Word_val (C.symbol (symbol s)) v offset updates
             in
-            [C.cint 1n], C.sequence update updates
+            [C.cint 1n], updates
       in
       List.rev fields @ acc, offset + 1, updates
   | Closure c ->
@@ -237,8 +239,8 @@ let static_const0 env r ~params_and_body (bound_symbols : Bound_symbols.t)
       let header = C.block_header tag (List.length fields) in
       let static_fields = List.map (static_value env) fields in
       let block = C.emit_block block_name header static_fields in
-      let e = static_block_updates (C.symbol name) env [] 0 fields in
-      env, R.wrap_init (C.sequence e) (R.add_data block r)
+      let updates = static_block_updates (C.symbol name) env None 0 fields in
+      env, R.add_data block r, updates
   | Code_and_set_of_closures { code_ids = _; closure_symbols; },
     Code_and_set_of_closures { code; set_of_closures; } ->
       (* We cannot both build the environment and compile the functions in
@@ -284,29 +286,41 @@ let static_const0 env r ~params_and_body (bound_symbols : Bound_symbols.t)
           r
       in
       begin match set_of_closures with
-      | None -> updated_env, r
+      | None -> updated_env, r, None
       | Some set ->
         let data, updates =
           static_set_of_closures env closure_symbols set
         in
-        updated_env, R.wrap_init (C.sequence updates) (R.add_data data r)
+        updated_env, R.add_data data r, updates
       end
   | Singleton s, Boxed_float v ->
       let default = Numbers.Float_by_bit_pattern.zero in
       let transl = Numbers.Float_by_bit_pattern.to_float in
-      env, static_boxed_number
-        Cmm.Double_u env s default C.emit_float_constant transl v r
+      let r, updates =
+        static_boxed_number
+          Cmm.Double_u env s default C.emit_float_constant transl v r
+      in
+      env, r, updates
   | Singleton s, Boxed_int32 v ->
-      env, static_boxed_number
-        Cmm.Word_int env s 0l C.emit_int32_constant Fun.id v r
+      let r, updates =
+        static_boxed_number
+          Cmm.Word_int env s 0l C.emit_int32_constant Fun.id v r
+      in
+      env, r, updates
   | Singleton s, Boxed_int64 v ->
-      env, static_boxed_number
-        Cmm.Word_int env s 0L C.emit_int64_constant Fun.id v r
+      let r, updates =
+        static_boxed_number
+          Cmm.Word_int env s 0L C.emit_int64_constant Fun.id v r
+      in
+      env, r, updates
   | Singleton s, Boxed_nativeint v ->
       let default = Targetint.zero in
       let transl = nativeint_of_targetint in
-      env, static_boxed_number
-        Cmm.Word_int env s default C.emit_nativeint_constant transl v r
+      let r, updates =
+        static_boxed_number
+          Cmm.Word_int env s default C.emit_nativeint_constant transl v r
+      in
+      env, r, updates
   | Singleton s, Immutable_float_array fields ->
       let name = symbol s in
       let aux = map_or_variable Numbers.Float_by_bit_pattern.to_float 0. in
@@ -314,13 +328,13 @@ let static_const0 env r ~params_and_body (bound_symbols : Bound_symbols.t)
       let float_array =
         C.emit_float_array_constant (name, Cmmgen_state.Global) static_fields
       in
-      let e = static_float_array_updates (C.symbol name) env [] 0 fields in
-      env, R.wrap_init (C.sequence e) (R.update_data float_array r)
+      let e = static_float_array_updates (C.symbol name) env None 0 fields in
+      env, R.update_data float_array r, e
   | Singleton s, Mutable_string { initial_value = str; }
   | Singleton s, Immutable_string str ->
       let name = symbol s in
       let data = C.emit_string_constant (name, Cmmgen_state.Global) str in
-      env, R.update_data data r
+      env, R.update_data data r, None
   | Singleton _, Code_and_set_of_closures _ ->
       Misc.fatal_errorf "[Code_and_set_of_closures] cannot be bound by a \
           [Singleton] binding:@ %a"
@@ -347,9 +361,9 @@ let static_const env ~params_and_body (bound_symbols : Bound_symbols.t)
     else Symbol.Set.elements (Bound_symbols.being_defined bound_symbols)
   in
   let r = R.add_gc_roots roots R.empty in
-  let env, r =
+  let env, r, update_opt =
     static_const0 env r ~params_and_body bound_symbols static_const
   in
   (* [R.archive_data] helps keep definitions of separate symbols in different
      [data_item] lists and this increases readability of the generated Cmm. *)
-  env, R.archive_data r
+  env, R.archive_data r, update_opt

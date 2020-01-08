@@ -26,8 +26,6 @@ val combine : t -> t -> t
 
 val archive_data : t -> t
 
-val wrap_init : (Cmm.expression -> Cmm.expression) -> t -> t
-
 val add_data : Cmm.data_item list -> t -> t
 
 val update_data : (Cmm.data_item list -> Cmm.data_item list) -> t -> t
@@ -39,4 +37,4 @@ val add_function : Cmm.phrase -> t -> t
 (* CR mshinwell: Use a "private" record for the return type of this. *)
 val to_cmm
    : t
-  -> Cmm.phrase list * Cmm.phrase * (Symbol.t list) * (Cmm.phrase list)
+  -> Cmm.phrase list * (Symbol.t list) * (Cmm.phrase list)

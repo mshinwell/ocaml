@@ -20,7 +20,6 @@ module C = struct
 end
 
 type t = {
-  init : Cmm.expression;
   current_data : Cmm.data_item list;
   other_data : Cmm.data_item list list;
   gc_roots : Symbol.t list;
@@ -28,7 +27,6 @@ type t = {
 }
 
 let empty = {
-  init = C.void;
   current_data = [];
   other_data = [];
   gc_roots = [];
@@ -42,7 +40,6 @@ let add_if_not_empty x l =
 
 (* CR mshinwell: Label the arguments so the evaluation order is clear *)
 let combine r t = {
-  init = C.sequence r.init t.init;
   current_data = [];
   other_data =
     add_if_not_empty r.current_data (
@@ -55,9 +52,6 @@ let combine r t = {
 let archive_data r =
   { r with current_data = [];
            other_data = add_if_not_empty r.current_data r.other_data; }
-
-let wrap_init f r =
-  { r with init = f r.init; }
 
 let add_data d r =
   { r with current_data = d @ r.current_data; }
@@ -72,19 +66,6 @@ let add_function f r =
   { r with functions = f :: r.functions; }
 
 let to_cmm r =
-  let entry =
-    let dbg = Debuginfo.none in
-    let fun_name = Compilenv.make_symbol (Some "entry") in
-    let fun_codegen =
-      if Config.flambda then
-        [ Cmm.Reduce_code_size;
-          Cmm.No_CSE ]
-      else
-        [ Cmm.Reduce_code_size ]
-    in
-    let init = C.sequence r.init (C.unit ~dbg) in
-    C.cfunction (C.fundecl fun_name [] init fun_codegen dbg)
-  in
   let data_list = add_if_not_empty r.current_data r.other_data in
   let data = List.map C.cdata data_list in
-  data, entry, r.gc_roots, r.functions
+  data, r.gc_roots, r.functions

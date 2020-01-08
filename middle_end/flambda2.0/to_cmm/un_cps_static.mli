@@ -28,4 +28,4 @@ val static_const
      -> Cmm.fundecl)
   -> Let_symbol.Bound_symbols.t
   -> Static_const.t
-  -> Un_cps_env.t * Un_cps_result.t
+  -> Un_cps_env.t * Un_cps_result.t * Cmm.expression option
