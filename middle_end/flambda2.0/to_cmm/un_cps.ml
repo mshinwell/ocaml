@@ -1202,6 +1202,8 @@ let unit (unit : Flambda_unit.t) =
           used_closure_vars
       in
       let _env, return_cont_params =
+        (* Note: the environment would be used if we needed to compile the
+           handler, but since it's constant we don't need it *)
         var_list env [
           Kinded_parameter.create (Parameter.wrap (Variable.create "*ret*"))
             Flambda_kind.value;
@@ -1213,7 +1215,7 @@ let unit (unit : Flambda_unit.t) =
       in
       let body = expr env (Flambda_unit.body unit) in
       let body =
-        let unit_value = C.targetint Targetint.zero in
+        let unit_value = C.targetint Targetint.one in
         C.ccatch
           ~rec_flag:false ~body
           ~handlers:[C.handler return_cont return_cont_params unit_value]
