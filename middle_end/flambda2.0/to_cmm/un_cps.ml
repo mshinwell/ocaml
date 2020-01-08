@@ -65,7 +65,9 @@ let symbol s =
 
 let name env = function
   | Name.Var v -> Env.inline_variable env v
-  | Name.Symbol s -> C.symbol (symbol s), env, Ece.pure
+  | Name.Symbol s ->
+    Env.check_scope env (Code_id_or_symbol.Symbol s);
+    C.symbol (symbol s), env, Ece.pure
 
 (* Constants *)
 
@@ -615,6 +617,13 @@ and let_expr env t =
 
 and let_symbol env let_sym =
   let body = Let_symbol.body let_sym in
+  let bound_symbols = Let_symbol.bound_symbols let_sym in
+  let env =
+    (* All bound symbols are allowed to appear in each other's definition,
+       so they're added to the environment first *)
+    Env.add_to_scope env
+      (Let_symbol.Bound_symbols.everything_being_defined bound_symbols)
+  in
   let env, r, update_opt =
     Un_cps_static.static_const env ~params_and_body
       (Let_symbol.bound_symbols let_sym)
@@ -807,6 +816,7 @@ and apply_call env e =
      given arbitrary effects and coeffects. *)
   | Call_kind.Function (* FIXME Let code *)
       Call_kind.Function_call.Direct { code_id; closure_id = _; return_arity; } ->
+      Env.check_scope env (Code_id_or_symbol.Code_id code_id);
       let info = Env.get_function_info env code_id in
       let ty = machtype_of_return_arity return_arity in
       let args, env, _ = arg_list env (Apply_expr.args e) in

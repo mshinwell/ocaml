@@ -105,6 +105,9 @@ type t = {
   (* pure bindings that can be inlined across stages. *)
   stages : stage list;
   (* archived stages, in reverse chronological order. *)
+
+  names_in_scope : Code_id_or_symbol.Set.t;
+  (* Code ids and symbols bound in this scope, for invariant checking *)
 }
 
 let mk offsets k_return k_exn used_closure_vars = {
@@ -115,6 +118,7 @@ let mk offsets k_return k_exn used_closure_vars = {
   vars = Variable.Map.empty;
   conts = Continuation.Map.empty;
   exn_conts_extra_args = Continuation.Map.empty;
+  names_in_scope = Code_id_or_symbol.Set.empty;
 }
 
 let enter_function_def env k_return k_exn = {
@@ -127,6 +131,7 @@ let enter_function_def env k_return k_exn = {
   vars = Variable.Map.empty;
   conts = Continuation.Map.empty;
   exn_conts_extra_args = Continuation.Map.empty;
+  names_in_scope = env.names_in_scope;
 }
 
 let dummy offsets used_closure_vars =
@@ -400,3 +405,14 @@ let flush_delayed_lets env =
 
 let used_closure_vars t = t.used_closure_vars
 
+let add_to_scope env names =
+  { env with
+    names_in_scope = Code_id_or_symbol.Set.union env.names_in_scope names;
+  }
+
+let check_scope env code_id_or_symbol =
+  if Code_id_or_symbol.Set.mem code_id_or_symbol env.names_in_scope then ()
+  else
+    Misc.fatal_errorf "Use out of scope of %a@.Known names:@.%a@."
+      Code_id_or_symbol.print code_id_or_symbol
+      Code_id_or_symbol.Set.print env.names_in_scope

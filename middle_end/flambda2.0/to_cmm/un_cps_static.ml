@@ -51,9 +51,11 @@ let filter_closure_vars env s =
 let todo () = failwith "Not yet implemented"
 (* ----- End of functions to share ----- *)
 
-let name_static _env = function
+let name_static env = function
   | Name.Var v -> `Var v
-  | Name.Symbol s -> `Data [C.symbol_address (symbol s)]
+  | Name.Symbol s ->
+    Env.check_scope env (Code_id_or_symbol.Symbol s);
+    `Data [C.symbol_address (symbol s)]
 
 let const_static _env c =
   match (c : Simple.Const.t) with

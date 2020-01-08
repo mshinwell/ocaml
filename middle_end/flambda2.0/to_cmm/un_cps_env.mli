@@ -139,3 +139,9 @@ val layout :
 val used_closure_vars : t -> Var_within_closure.Set.t
 (** All closure variables used in the whole program. *)
 
+val add_to_scope : t -> Code_id_or_symbol.Set.t -> t
+(* Add the given names to the current scope *)
+
+val check_scope : t -> Code_id_or_symbol.t -> unit
+(* Check that the given name is in scope *)
+
