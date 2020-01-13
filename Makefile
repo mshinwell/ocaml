@@ -1317,6 +1317,11 @@ beforedepend:: \
   middle_end/flambda2.0/terms/flambda.ml \
   middle_end/flambda2.0/simplify/simplify.ml
 
+clean::
+	rm -f middle_end/flambda2.0/types/flambda_type0.ml;
+	rm -f middle_end/flambda2.0/terms/flambda.ml;
+	rm -f middle_end/flambda2.0/simplify/simplify.ml
+
 
 # Documentation
 
