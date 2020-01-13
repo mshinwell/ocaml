@@ -29,10 +29,10 @@
 # tests/fma                         TIMEOUT       'fma.ml'
   tests/formats-transition
   tests/formatting
-# tests/functors                    -             only runs bytecode tests
+  tests/functors
   tests/gc-roots
   tests/generalized-open
-# tests/int64-unboxing              FAIL (FIXME)  'test.ml'
+# tests/int64-unboxing              FAIL (FIXME)  'test.ml' (unboxing of recursive continuation parameter)
   tests/lazy
   tests/letrec-check
   tests/letrec-compilation
@@ -45,7 +45,7 @@
   tests/lib-bigarray-file
   tests/lib-bool
   tests/lib-buffer
-# tests/lib-bytes                   FAIL (FIXME)  'binary.ml'
+  tests/lib-bytes
   tests/lib-digest
 # tests/lib-dynlink-bytecode        -             not relevant
 # tests/lib-dynlink-csharp          -             skipped without C# compiler
@@ -56,7 +56,7 @@
 # tests/lib-dynlink-pr4839          FAIL          dynlink doesn't compile yet
 # tests/lib-dynlink-pr6950          FAIL          dynlink doesn't compile yet
 # tests/lib-dynlink-private         FAIL          dynlink doesn't compile yet
-  tests/lib-filename                FAIL          build native Unix with makefiles
+  tests/lib-filename
 # tests/lib-float                   TIMEOUT       'test.ml'
   tests/lib-floatarray
   tests/lib-format
@@ -95,13 +95,13 @@
   tests/match-exception
   tests/match-exception-warnings
   tests/messages
-# tests/misc                        FAIL (FIXME)  'sorts.ml', 'taku.ml', 'weaklifetime2.ml'
-# tests/misc-kb                     FAIL (FIXME)  'kbmain.ml': Fatal error: exception Failure("kb_completion")
+  tests/misc
+  tests/misc-kb
   tests/misc-unsafe
   tests/no-alias-deps
-# tests/opaque                      FAIL          'test.ml' (compilation error: test.cmx not found)
+# tests/opaque                      FAIL          'test.ml' (cmx file loading)
   tests/output-complete-obj
-# tests/parsetree                   FAIL          'test.ml': Segmentation fault (core dumped)
+# tests/parsetree                   FAIL          'test.ml': Segmentation fault (in camlinternalFormat)
   tests/parse-errors
   tests/parsing
   tests/ppx-attributes
@@ -111,7 +111,7 @@
   tests/prim-revapply
   tests/printing-types
   tests/raise-counts
-# tests/regression                  FAIL          'pr8769.ml' (probably a build error not finding cmx files)
+# tests/regression                  FAIL          'pr8769.ml' (pack)
   tests/required-external
   tests/runtime-C-exceptions
   tests/runtime-errors
