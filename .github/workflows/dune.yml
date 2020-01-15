@@ -64,7 +64,7 @@ jobs:
       run: opam switch create ${{ matrix.ocaml_version }} --repo=default,beta=git+https://github.com/ocaml/ocaml-beta-repository.git
     # Install the specific version of dune that allows to compile the compiler
     - name: Install dune
-      run: opam install dune
+      run: opam install dune.2.0.1
     # Configure the compiler
     - name: Configure the compiler
       run: ./configure ${{ matrix.config_args }}
