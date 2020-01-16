@@ -203,9 +203,9 @@ and fill_static_slot s symbs decls elts env acc offset updates slot =
       let decl = Closure_id.Map.find c decls in
       let symb = Closure_id.Map.find c symbs in
       let external_name = symbol symb in
-      let code_name =
-        Un_cps_closure.closure_code (Un_cps_closure.closure_name c)
-      in
+      let code_id = Function_declaration.code_id decl in
+      let code_symbol = Code_id.code_symbol code_id in
+      let code_name = Linkage_name.to_string (Symbol.linkage_name code_symbol) in
       let acc = List.rev (C.define_symbol ~global:true external_name) @ acc in
       let arity = List.length (Function_declaration.params_arity decl) in
       let tagged_arity = arity * 2 + 1 in
