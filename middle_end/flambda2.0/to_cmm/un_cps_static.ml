@@ -154,7 +154,7 @@ let get_whole_closure_symbol =
          s
   )
 
-let rec static_set_of_closures env symbs set =
+let rec static_set_of_closures env symbs set prev_update =
   let clos_symb = ref None in
   let fun_decls = Set_of_closures.function_decls set in
   let decls = Function_declarations.funs fun_decls in
@@ -164,7 +164,7 @@ let rec static_set_of_closures env symbs set =
       (List.map fst (Var_within_closure.Map.bindings elts))
   in
   let l, updates, length =
-    fill_static_layout clos_symb symbs decls elts env [] None 0 layout
+    fill_static_layout clos_symb symbs decls elts env [] prev_update 0 layout
   in
   let header = C.cint (C.black_closure_header length) in
   let sdef = match !clos_symb with
@@ -243,16 +243,17 @@ let static_const0 env r ~params_and_body (bound_symbols : Bound_symbols.t)
       let block = C.emit_block block_name header static_fields in
       let updates = static_block_updates (C.symbol name) env None 0 fields in
       env, R.add_data block r, updates
-(* FIXME
-  | Code_and_set_of_closures { code_ids = _; closure_symbols; },
-    Code_and_set_of_closures { code; set_of_closures; } ->
+  | Sets_of_closures binders (*{ code_ids = _; closure_symbols; }*),
+    Sets_of_closures definitions (*{ code; set_of_closures; }*) ->
       (* We cannot both build the environment and compile the functions in
          one traversal, as the bodies may contain direct calls to the code ids
          being defined *)
-      let updated_env =
+      let module BSCSC = Bound_symbols.Code_and_set_of_closures in
+      let module SCCSC = Static_const.Code_and_set_of_closures in
+      let update_env env { SCCSC.code; set_of_closures = _; } =
         Code_id.Map.fold
-          (fun code_id SC.({ params_and_body = p; newer_version_of = _; }) env ->
-            match (p : _ SC.or_deleted) with
+          (fun code_id SC.Code.({ params_and_body = p; newer_version_of = _; }) env ->
+            match (p : _ SC.Code.or_deleted) with
             | Deleted -> env
             | Present p ->
                 Function_params_and_body.pattern_match p
@@ -269,10 +270,11 @@ let static_const0 env r ~params_and_body (bound_symbols : Bound_symbols.t)
           code
           env
       in
-      let r =
+      let updated_env = List.fold_left update_env env definitions in
+      let add_functions r { SCCSC.code; set_of_closures = _; }  =
         Code_id.Map.fold
-          (fun code_id SC.({ params_and_body = p; newer_version_of = _; }) r ->
-            match (p : _ SC.or_deleted) with
+          (fun code_id SC.Code.({ params_and_body = p; newer_version_of = _; }) r ->
+            match (p : _ SC.Code.or_deleted) with
             | Deleted -> r
             | Present p ->
               let fun_symbol = Code_id.code_symbol code_id in
@@ -288,15 +290,19 @@ let static_const0 env r ~params_and_body (bound_symbols : Bound_symbols.t)
           code
           r
       in
-      begin match set_of_closures with
-      | None -> updated_env, r, None
-      | Some set ->
+      let r = List.fold_left add_functions r definitions in
+      let preallocate (r, updates)
+          { BSCSC.code_ids = _; closure_symbols; }
+          { SCCSC.code = _; set_of_closures; } =
         let data, updates =
-          static_set_of_closures env closure_symbols set
+          static_set_of_closures env closure_symbols set_of_closures updates
         in
-        updated_env, R.add_data data r, updates
-      end
-*)
+        R.add_data data r, updates
+      in
+      let r, updates =
+        List.fold_left2 preallocate (r, None) binders definitions
+      in
+      updated_env, r, updates
   | Singleton s, Boxed_float v ->
       let default = Numbers.Float_by_bit_pattern.zero in
       let transl = Numbers.Float_by_bit_pattern.to_float in
@@ -342,20 +348,17 @@ let static_const0 env r ~params_and_body (bound_symbols : Bound_symbols.t)
       let name = symbol s in
       let data = C.emit_string_constant (name, Cmmgen_state.Global) str in
       env, R.update_data data r, None
-  | _, _ -> Misc.fatal_error "To be continued"
-(* FIXME
-  | Singleton _, Code_and_set_of_closures _ ->
+  | Singleton _, Sets_of_closures _ ->
       Misc.fatal_errorf "[Code_and_set_of_closures] cannot be bound by a \
           [Singleton] binding:@ %a"
         SC.print static_const
-  | Code_and_set_of_closures _,
+  | Sets_of_closures _,
     (Block _ | Boxed_float _ | Boxed_int32 _ | Boxed_int64 _
       | Boxed_nativeint _ | Immutable_float_array _ | Mutable_string _
       | Immutable_string _) ->
       Misc.fatal_errorf "Only [Code_and_set_of_closures] can be bound by a \
           [Code_and_set_of_closures] binding:@ %a"
         SC.print static_const
-*)
 
 let static_const env ~params_and_body (bound_symbols : Bound_symbols.t)
       (static_const : Static_const.t) =
