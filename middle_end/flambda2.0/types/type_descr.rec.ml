@@ -424,8 +424,6 @@ module Make (Head : Type_head_intf.S
           ~right_ty:t2
       in
       let choose_shared_alias ~shared_aliases =
-Format.eprintf "Before filtering, aliases:@ %a\n%!"
-  Simple.Set.print shared_aliases;
         let shared_aliases =
           Simple.Set.filter (fun simple ->
               match Simple.descr simple with
@@ -435,8 +433,6 @@ Format.eprintf "Before filtering, aliases:@ %a\n%!"
                   name)
             shared_aliases
         in
-Format.eprintf "After filtering, aliases:@ %a\n%!"
-  Simple.Set.print shared_aliases;
         match Simple.Set.choose_opt shared_aliases with
         | Some simple -> Some (create_equals simple)
         | None -> None
@@ -481,14 +477,13 @@ Format.eprintf "After filtering, aliases:@ %a\n%!"
             (all_aliases_of (Meet_or_join_env.right_join_env join_env)
               canonical_simple2)
         in
-Format.eprintf "last case\n%!";
         match choose_shared_alias ~shared_aliases with
-        | Some joined_ty -> Format.eprintf "returning type\n%!"; joined_ty
+        | Some joined_ty -> joined_ty
         | None ->
           match join_head_or_unknown_or_bottom join_env head1 head2 with
           | Bottom -> bottom ()
           | Unknown -> unknown ()
-          | Ok head -> Format.eprintf "C\n%!"; create head
+          | Ok head -> create head
 
     let meet_or_join ~force_to_kind ~to_type env t1 t2 : _ Or_bottom.t =
       let t, env_extension =
