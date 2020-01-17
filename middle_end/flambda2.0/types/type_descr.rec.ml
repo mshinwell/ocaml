@@ -483,10 +483,21 @@ module Make (Head : Type_head_intf.S
         match choose_shared_alias ~shared_aliases with
         | Some joined_ty -> joined_ty
         | None ->
-          match join_head_or_unknown_or_bottom join_env head1 head2 with
-          | Bottom -> bottom ()
-          | Unknown -> unknown ()
-          | Ok head -> create head
+          match canonical_simple1, canonical_simple2 with
+          | Some simple1, Some simple2
+              when Meet_or_join_env.already_joining join_env simple1 simple2 ->
+            unknown ()
+          | Some _, Some _ | Some _, None | None, Some _ | None, None ->
+            let join_env =
+              match canonical_simple1, canonical_simple2 with
+              | Some simple1, Some simple2 ->
+                Meet_or_join_env.now_joining join_env simple1 simple2
+              | Some _, None | None, Some _ | None, None -> join_env
+            in
+            match join_head_or_unknown_or_bottom join_env head1 head2 with
+            | Bottom -> bottom ()
+            | Unknown -> unknown ()
+            | Ok head -> create head
 
     let meet_or_join ~force_to_kind ~to_type env t1 t2 : _ Or_bottom.t =
       let t, env_extension =

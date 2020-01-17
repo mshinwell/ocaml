@@ -53,3 +53,14 @@ let flip_join_envs t =
     left_join_env = t.right_join_env;
     right_join_env = t.left_join_env;
   }
+
+(* CR mshinwell: fix naming, it's odd at the moment to be using
+   [already_meeting]... *)
+let now_joining t simple1 simple2 =
+  let central_env = Meet_env.now_meeting t.central_env simple1 simple2 in
+  { t with
+    central_env;
+  }
+
+let already_joining t simple1 simple2 =
+  Meet_env.already_meeting t.central_env simple1 simple2

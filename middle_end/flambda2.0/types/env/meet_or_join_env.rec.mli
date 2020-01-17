@@ -35,3 +35,7 @@ val left_join_env : t -> Typing_env.t
 val right_join_env : t -> Typing_env.t
 
 val flip_join_envs : t -> t
+
+val now_joining : t -> Simple.t -> Simple.t -> t
+
+val already_joining : t -> Simple.t -> Simple.t -> bool
