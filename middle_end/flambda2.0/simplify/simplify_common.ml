@@ -193,10 +193,8 @@ let create_let_symbol code_age_relation (bound_symbols : Bound_symbols.t)
       let code_ids_to_make_deleted =
         let code_ids_only_used_in_newer_version_of =
           Code_id.Set.inter (Name_occurrences.code_ids bound_names)
-            (Code_id.Set.union
-              (Name_occurrences.only_newer_version_of_code_ids
-                (Static_const.free_names static_const))
-              (Name_occurrences.only_newer_version_of_code_ids
+            (Name_occurrences.only_newer_version_of_code_ids
+              (Name_occurrences.union (Static_const.free_names static_const)
                 free_names_after))
         in
         (* We cannot delete code unless it is certain that a non-trivial join
