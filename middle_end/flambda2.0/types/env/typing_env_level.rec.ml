@@ -672,9 +672,8 @@ let non_trivial_join ~initial_env_at_join:env_at_join envs_with_levels =
     Name.Set.fold (fun name result_t ->
         assert (Typing_env.mem env_at_join name);
         assert (not (Name.Map.mem name result_t.equations));
-(*
-        Format.eprintf "JOIN for %a\n%!" Name.print name;
-*)
+        Format.eprintf "JOIN for %a@ env at join:@ %a\n%!" Name.print name
+          Typing_env.print env_at_join;
         match envs_with_levels with
         | (first_env_at_use, _id, _use_kind, _vars, _first_t) :: _ :: _ ->
           let kind =
@@ -684,11 +683,9 @@ let non_trivial_join ~initial_env_at_join:env_at_join envs_with_levels =
             List.fold_left
               (fun join_ty (env_at_use, _id, _use_kind, _vars, _t) ->
                 let use_ty = Typing_env.find env_at_use name in
-(*
                 Format.eprintf "Joining:@ %a@ and@ %a\n%!"
                   Type_grammar.print join_ty
                   Type_grammar.print use_ty;
-*)
                 let join_ty =
                   (* CR mshinwell: Should [left_env] be updated around the
                      loop? *)
@@ -696,10 +693,8 @@ let non_trivial_join ~initial_env_at_join:env_at_join envs_with_levels =
                     ~left_env:env_at_join ~left_ty:join_ty
                     ~right_env:env_at_use ~right_ty:use_ty
                 in
-(*
                 Format.eprintf "The joined type is:@ %a\n%!"
                   Type_grammar.print join_ty;
-*)
                 join_ty)
               (Type_grammar.bottom kind)
               envs_with_levels

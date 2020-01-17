@@ -270,8 +270,39 @@ module Make (Head : Type_head_intf.S
           (head2 : _ Or_unknown_or_bottom.t)
           : _ Or_unknown_or_bottom.t =
       match head1, head2 with
-      | _, Bottom -> head1
-      | Bottom, _ -> head2
+      | Bottom, Bottom -> Bottom
+      (* In these next two cases, we still need to traverse [head1] (or
+         [head2]), because they may contain names not bound in the target
+         join environment.  We force this by joining those types with
+         themselves. *)
+      | Ok head1, Bottom ->
+        let env =
+          Meet_or_join_env.create_for_join
+            (Meet_or_join_env.target_join_env env)
+            ~left_env:(Meet_or_join_env.left_join_env env)
+            ~right_env:(Meet_or_join_env.left_join_env env)
+        in
+        begin match Head_meet_or_join.meet_or_join env head1 head1 with
+        | Ok (head, env_extension) ->
+          assert (TEE.is_empty env_extension);
+          Ok head
+        | Bottom -> Bottom
+        | Absorbing -> Unknown
+        end
+      | Bottom, Ok head2 ->
+        let env =
+          Meet_or_join_env.create_for_join
+            (Meet_or_join_env.target_join_env env)
+            ~left_env:(Meet_or_join_env.right_join_env env)
+            ~right_env:(Meet_or_join_env.right_join_env env)
+        in
+        begin match Head_meet_or_join.meet_or_join env head2 head2 with
+        | Ok (head, env_extension) ->
+          assert (TEE.is_empty env_extension);
+          Ok head
+        | Bottom -> Bottom
+        | Absorbing -> Unknown
+        end
       | Unknown, _ -> Unknown
       | _, Unknown -> Unknown
       | Ok head1, Ok head2 ->
@@ -393,6 +424,8 @@ module Make (Head : Type_head_intf.S
           ~right_ty:t2
       in
       let choose_shared_alias ~shared_aliases =
+Format.eprintf "Before filtering, aliases:@ %a\n%!"
+  Simple.Set.print shared_aliases;
         let shared_aliases =
           Simple.Set.filter (fun simple ->
               match Simple.descr simple with
@@ -402,6 +435,8 @@ module Make (Head : Type_head_intf.S
                   name)
             shared_aliases
         in
+Format.eprintf "After filtering, aliases:@ %a\n%!"
+  Simple.Set.print shared_aliases;
         match Simple.Set.choose_opt shared_aliases with
         | Some simple -> Some (create_equals simple)
         | None -> None
@@ -446,13 +481,14 @@ module Make (Head : Type_head_intf.S
             (all_aliases_of (Meet_or_join_env.right_join_env join_env)
               canonical_simple2)
         in
+Format.eprintf "last case\n%!";
         match choose_shared_alias ~shared_aliases with
-        | Some joined_ty -> joined_ty
+        | Some joined_ty -> Format.eprintf "returning type\n%!"; joined_ty
         | None ->
           match join_head_or_unknown_or_bottom join_env head1 head2 with
           | Bottom -> bottom ()
           | Unknown -> unknown ()
-          | Ok head -> create head
+          | Ok head -> Format.eprintf "C\n%!"; create head
 
     let meet_or_join ~force_to_kind ~to_type env t1 t2 : _ Or_bottom.t =
       let t, env_extension =
