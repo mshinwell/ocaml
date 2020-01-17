@@ -49,11 +49,12 @@ jobs:
     - name: Patch the repo
       run: git apply .github/workflows/dune.patch
     # Cache opam directory (for faster switch/dune install)
-    - name: Cache opam directory
-      uses: actions/cache@v1
-      with:
-        path: ~/.opam
-        key: ${{ matrix.os }}-opam-cache-${{ matrix.ocaml_version }}
+    # Disabled for now, as it breaks the next scripts
+    # - name: Cache opam directory
+    #   uses: actions/cache@v1
+    #   with:
+    #     path: ~/.opam
+    #     key: ${{ matrix.os }}-opam-cache-${{ matrix.ocaml_version }}
     # Install opam
     - name: Install opam with system switch
       uses: avsm/setup-ocaml@master
