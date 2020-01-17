@@ -176,7 +176,7 @@ module With_subkind = struct
     | Value -> ()
     | Naked_number _ | Fabricated ->
       match subkind with
-      | Anything
+      | Anything -> ()
       | Boxed_float
       | Boxed_int32
       | Boxed_int64
