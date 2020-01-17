@@ -191,11 +191,18 @@ let create_let_symbol code_age_relation (bound_symbols : Bound_symbols.t)
       (* Turn pieces of code that are only referenced in [newer_version_of]
          fields into [Deleted]. *)
       let code_ids_to_make_deleted =
+        (* CR-someday mshinwell: This could be made more precise, but would
+           probably require a proper analysis. *)
+        let code_ids_only_used_in_newer_version_of_after =
+          Name_occurrences.only_newer_version_of_code_ids free_names_after
+        in
+        let code_ids_static_const =
+          Name_occurrences.code_ids (Static_const.free_names static_const)
+        in
         let code_ids_only_used_in_newer_version_of =
-          Code_id.Set.inter (Name_occurrences.code_ids bound_names)
-            (Name_occurrences.only_newer_version_of_code_ids
-              (Name_occurrences.union (Static_const.free_names static_const)
-                free_names_after))
+          Code_id.Set.inter all_code_ids_bound_names
+            (Code_id.Set.diff code_ids_only_used_in_newer_version_of_after
+              code_ids_static_const)
         in
         (* We cannot delete code unless it is certain that a non-trivial join
            operation between later versions of it cannot happen. *)

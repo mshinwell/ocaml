@@ -206,10 +206,9 @@ module Code_and_set_of_closures = struct
     else Set_of_closures.compare set1 set2
 
   let free_names { code; set_of_closures; } =
-    Code_id.Map.fold (fun code_id code free_names ->
+    Code_id.Map.fold (fun _code_id code free_names ->
         Name_occurrences.union_list [
-          (Name_occurrences.add_code_id Name_occurrences.empty
-            code_id Name_mode.normal);
+          (* [code_id] does not count as a free name. *)
           Code.free_names code;
           free_names;
         ])
