@@ -46,6 +46,7 @@ INCLUDES=-I utils -I parsing -I typing -I bytecomp -I file_formats \
         -I middle_end/flambda2.0/basic \
         -I middle_end/flambda2.0/from_lambda \
         -I middle_end/flambda2.0/inlining \
+        -I middle_end/flambda2.0/lifting \
         -I middle_end/flambda2.0/naming \
         -I middle_end/flambda2.0/parser \
         -I middle_end/flambda2.0/simplify \
@@ -171,8 +172,10 @@ endif
 
 ASMCOMP_FLAMBDA2=\
   middle_end/flambda2.0/to_cmm/un_cps_helper.cmo \
+  middle_end/flambda2.0/to_cmm/un_cps_result.cmo \
   middle_end/flambda2.0/to_cmm/un_cps_closure.cmo \
   middle_end/flambda2.0/to_cmm/un_cps_env.cmo \
+  middle_end/flambda2.0/to_cmm/un_cps_static.cmo \
   middle_end/flambda2.0/to_cmm/un_cps.cmo
 
 ASMCOMP=\
@@ -228,14 +231,18 @@ MIDDLE_END_FLAMBDA2_COMPILENV_DEPS=\
   middle_end/flambda2.0/compilenv_deps/symbol.cmo
 
 MIDDLE_END_FLAMBDA2_BASIC=\
-  middle_end/flambda2.0/basic/closure_element.cmo \
   middle_end/flambda2.0/basic/continuation.cmo \
   middle_end/flambda2.0/basic/name.cmo \
   middle_end/flambda2.0/basic/var_within_closure.cmo \
+  middle_end/flambda2.0/basic/id_types.cmo \
+  middle_end/flambda2.0/basic/code_id.cmo \
+  middle_end/flambda2.0/basic/code_id_or_symbol.cmo \
+  middle_end/flambda2.0/basic/mutable_or_immutable.cmo \
   middle_end/flambda2.0/naming/name_mode.cmo \
   middle_end/flambda2.0/naming/permutation.cmo \
   middle_end/flambda2.0/naming/name_permutation.cmo \
   middle_end/flambda2.0/naming/name_occurrences.cmo \
+  middle_end/flambda2.0/basic/or_variable.cmo \
   middle_end/flambda2.0/basic/immediate.cmo \
   middle_end/flambda2.0/types/kinds/flambda_kind.cmo \
   middle_end/flambda2.0/inlining/rec_info.cmo \
@@ -248,8 +255,6 @@ MIDDLE_END_FLAMBDA2_BASIC=\
   middle_end/flambda2.0/basic/trap_action.cmo \
   middle_end/flambda2.0/basic/exn_continuation.cmo \
   middle_end/flambda2.0/basic/inline_attribute.cmo \
-  middle_end/flambda2.0/basic/id_types.cmo \
-  middle_end/flambda2.0/basic/code_id.cmo \
   middle_end/flambda2.0/basic/coeffects.cmo \
   middle_end/flambda2.0/basic/effects.cmo \
   middle_end/flambda2.0/basic/export_id.cmo \
@@ -292,17 +297,16 @@ MIDDLE_END_FLAMBDA2_TYPES=\
   middle_end/flambda2.0/types/basic/or_bottom_or_absorbing.cmo \
   middle_end/flambda2.0/types/basic/or_unknown.cmo \
   middle_end/flambda2.0/types/basic/or_unknown_or_bottom.cmo \
+  middle_end/flambda2.0/types/structures/code_age_relation.cmo \
   middle_end/flambda2.0/types/structures/type_structure_intf.cmo \
   middle_end/flambda2.0/types/structures/product_intf.cmo \
   middle_end/flambda2.0/types/structures/row_like_maps_to_intf.cmo \
   middle_end/flambda2.0/types/structures/set_of_closures_contents.cmo \
   middle_end/flambda2.0/types/basic/tag_and_size.cmo \
   middle_end/flambda2.0/types/basic/tag_or_unknown_and_size.cmo \
-  middle_end/flambda2.0/types/basic/term_language_function_declaration.cmo \
   middle_end/flambda2.0/types/type_descr_intf.cmo \
   middle_end/flambda2.0/types/type_head_intf.cmo \
-  middle_end/flambda2.0/types/flambda_type0.cmo \
-  middle_end/flambda2.0/types/type_system_intf.cmo \
+  middle_end/flambda2.0/types/flambda_type.cmo \
   middle_end/flambda2.0/types/basic/unit.cmo \
   middle_end/flambda2.0/types/basic/or_absorbing.cmo \
   middle_end/flambda2.0/types/basic/closure_id_set.cmo \
@@ -314,15 +318,19 @@ MIDDLE_END_FLAMBDA2_TERMS=\
   middle_end/flambda2.0/terms/call_kind.cmo \
   middle_end/flambda2.0/terms/apply_expr.cmo \
   middle_end/flambda2.0/terms/switch_expr.cmo \
+  middle_end/flambda2.0/terms/function_declaration.cmo \
+  middle_end/flambda2.0/terms/function_declarations.cmo \
+  middle_end/flambda2.0/terms/set_of_closures.cmo \
   middle_end/flambda2.0/terms/flambda.cmo \
-  middle_end/flambda2.0/terms/flambda_static.cmo \
-  middle_end/flambda2.0/types/flambda_type.cmo
+  middle_end/flambda2.0/types/flambda_type.cmo \
+  middle_end/flambda2.0/terms/flambda_unit.cmo
 
 MIDDLE_END_FLAMBDA2_SIMPLIFY=\
   middle_end/flambda2.0/simplify/env/continuation_use_kind.cmo \
   middle_end/flambda2.0/simplify/basic/apply_cont_rewrite.cmo \
   middle_end/flambda2.0/simplify/env/continuation_env_and_param_types.cmo \
   middle_end/flambda2.0/simplify/basic/continuation_in_env.cmo \
+  middle_end/flambda2.0/simplify/basic/reachable.cmo \
   middle_end/flambda2.0/simplify/typing_helpers/one_continuation_use.cmo \
   middle_end/flambda2.0/simplify/typing_helpers/continuation_uses.cmo \
   middle_end/flambda2.0/simplify/env/continuation_uses_env.cmo \
@@ -337,6 +345,9 @@ MIDDLE_END_FLAMBDA2_SIMPLIFY=\
   middle_end/flambda2.0/simplify/simplify_simple.cmo \
   middle_end/flambda2.0/simplify/simplify_import.cmo \
   middle_end/flambda2.0/unboxing/unbox_continuation_params.cmo \
+  middle_end/flambda2.0/lifting/sort_lifted_constants.cmo \
+  middle_end/flambda2.0/lifting/reification.cmo \
+  middle_end/flambda2.0/lifting/reify_continuation_param_types.cmo \
   middle_end/flambda2.0/simplify/basic/reachable.cmo \
   middle_end/flambda2.0/simplify/simplify_common.cmo \
   middle_end/flambda2.0/simplify/simplify_variadic_primitive.cmo \
@@ -346,9 +357,7 @@ MIDDLE_END_FLAMBDA2_SIMPLIFY=\
   middle_end/flambda2.0/simplify/simplify_binary_primitive.cmo \
   middle_end/flambda2.0/simplify/simplify_primitive.cmo \
   middle_end/flambda2.0/simplify/typing_helpers/continuation_handler_like_intf.cmo \
-  middle_end/flambda2.0/simplify/typing_helpers/reification.cmo \
   middle_end/flambda2.0/utils/monad.cmo \
-  middle_end/flambda2.0/utils/top_closure.cmo \
   middle_end/flambda2.0/simplify/simplify.cmo
 
 MIDDLE_END_FLAMBDA2_FROM_LAMBDA=\
@@ -1284,13 +1293,13 @@ partialclean::
 
 FLAMBDA_TYPE0_DEPS=$(shell sed "s|^|middle_end/flambda2.0/types/|g" \
   middle_end/flambda2.0/types/rec_modules | tr '\n' ' ')
-middle_end/flambda2.0/types/flambda_type0.ml: \
-  middle_end/flambda2.0/types/template/flambda_type0.templ.ml \
+middle_end/flambda2.0/types/flambda_type.ml: \
+  middle_end/flambda2.0/types/template/flambda_type.templ.ml \
   middle_end/flambda2.0/types/rec_modules \
   $(FLAMBDA_TYPE0_DEPS)
 	cd middle_end/flambda2.0/types && \
-	  ../scripts/assemble_rec_modules.sh template/flambda_type0.templ.ml \
-	    rec_modules flambda_type0.ml
+	  ../scripts/assemble_rec_modules.sh template/flambda_type.templ.ml \
+	    rec_modules flambda_type.ml
 
 FLAMBDA_DEPS=$(shell sed "s|^|middle_end/flambda2.0/terms/|g" \
   middle_end/flambda2.0/terms/rec_modules | tr '\n' ' ')
@@ -1313,12 +1322,12 @@ middle_end/flambda2.0/simplify/simplify.ml: \
 	    rec_modules simplify.ml
 
 beforedepend:: \
-  middle_end/flambda2.0/types/flambda_type0.ml \
+  middle_end/flambda2.0/types/flambda_type.ml \
   middle_end/flambda2.0/terms/flambda.ml \
   middle_end/flambda2.0/simplify/simplify.ml
 
 clean::
-	rm -f middle_end/flambda2.0/types/flambda_type0.ml;
+	rm -f middle_end/flambda2.0/types/flambda_type.ml;
 	rm -f middle_end/flambda2.0/terms/flambda.ml;
 	rm -f middle_end/flambda2.0/simplify/simplify.ml
 
@@ -1554,6 +1563,7 @@ depend: beforedepend
          middle_end/flambda2.0/basic \
          middle_end/flambda2.0/from_lambda \
          middle_end/flambda2.0/inlining \
+         middle_end/flambda2.0/lifting \
          middle_end/flambda2.0/naming \
          middle_end/flambda2.0/parser \
          middle_end/flambda2.0/simplify \
