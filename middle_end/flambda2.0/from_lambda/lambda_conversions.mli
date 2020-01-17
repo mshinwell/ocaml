@@ -20,6 +20,8 @@
 
 val value_kind : Lambda.value_kind -> Flambda_kind.t
 
+val value_kind_with_subkind : Lambda.value_kind -> Flambda_kind.With_subkind.t
+
 val inline_attribute
    : Lambda.inline_attribute
   -> Inline_attribute.t

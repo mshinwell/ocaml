@@ -539,7 +539,8 @@ Format.eprintf "Extra param is needed\n%!";
           in
           let extra_param =
             let var = Variable.create "cse_param" in
-            Kinded_parameter.create (Parameter.wrap var) prim_result_kind
+            Kinded_parameter.create (Parameter.wrap var)
+              (K.With_subkind.create prim_result_kind Anything)
           in
           let bound_to =
             Apply_cont_rewrite_id.Map.map Rhs_kind.bound_to rhs_kinds

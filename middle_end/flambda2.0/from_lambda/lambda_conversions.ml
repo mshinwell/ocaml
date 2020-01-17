@@ -29,6 +29,16 @@ let value_kind (value_kind : L.value_kind) =
   | Pboxedintval Pnativeint
   | Pintval -> K.value
 
+let value_kind_with_subkind (value_kind : L.value_kind) =
+  let module W = K.With_subkind in
+  match value_kind with
+  | Pgenval -> W.create K.value Anything
+  | Pfloatval -> W.create K.value Boxed_float
+  | Pboxedintval Pint32 -> W.create K.value Boxed_int32
+  | Pboxedintval Pint64 -> W.create K.value Boxed_int64
+  | Pboxedintval Pnativeint -> W.create K.value Boxed_nativeint
+  | Pintval -> W.create K.value Immediate
+
 let inline_attribute (attr : L.inline_attribute) : Inline_attribute.t =
   match attr with
   | Always_inline -> Always_inline

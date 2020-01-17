@@ -171,7 +171,9 @@ module Make (U : Unboxing_spec) = struct
             Format.asprintf "%s_%s" U.var_name (Index.to_string index)
           in
           let var = Variable.create name in
-          let param = KP.create (Parameter.wrap var) kind in
+          let param =
+            KP.create (Parameter.wrap var) (K.With_subkind.create kind Anything)
+          in
           Index.Map.add index param new_param_vars)
         indexes
         Index.Map.empty

@@ -448,8 +448,22 @@ and simplify_recursive_let_cont_handlers
         let body, (handlers, user_data), uacc =
           simplify_expr dacc body (fun cont_uses_env _code_age_relation r ->
             let arg_types =
-              (* We can't know a good type from the call types *)
-              List.map T.unknown arity
+              let arity = KP.List.arity_with_subkinds params in
+              (* We only know limited type information from the call types *)
+              List.map (fun (kind : K.With_subkind.t) ->
+                  (* CR mshinwell: Move to [Flambda_type] *)
+                  match K.With_subkind.kind kind with
+                  | Value ->
+                    begin match K.With_subkind.subkind kind with
+                    | Anything -> T.any_value ()
+                    | Boxed_float -> T.any_boxed_float ()
+                    | Boxed_int32 -> T.any_boxed_int32 ()
+                    | Boxed_int64 -> T.any_boxed_int64 ()
+                    | Boxed_nativeint -> T.any_boxed_nativeint ()
+                    | Immediate -> T.any_tagged_immediate ()
+                    end
+                  | (Naked_number _ | Fabricated) as kind -> T.unknown kind)
+                arity
             in
             let (cont_uses_env, _apply_cont_rewrite_id) :
               Continuation_uses_env.t * Apply_cont_rewrite_id.t =
@@ -459,7 +473,8 @@ and simplify_recursive_let_cont_handlers
                 cont
                 Non_inlinable (* Maybe simpler ? *)
                 ~typing_env_at_use:(
-                  (* not useful as we will have only top *)
+                  (* not useful as parameter types will not involve any
+                     names *)
                   DE.typing_env definition_denv
                 )
                 ~arg_types
@@ -629,7 +644,7 @@ and simplify_direct_partial_application
     let remaining_params =
       List.map (fun kind ->
           let param = Parameter.wrap (Variable.create "param") in
-          Kinded_parameter.create param kind)
+          Kinded_parameter.create param (K.With_subkind.create kind Anything))
         remaining_param_arity
     in
     let args = applied_args @ (List.map KP.simple remaining_params) in
@@ -758,7 +773,9 @@ and simplify_direct_over_application
   let after_full_application = Continuation.create () in
   let after_full_application_handler =
     let params_and_handler =
-      let func_param = KP.create (Parameter.wrap func_var) K.value in
+      let func_param =
+        KP.create (Parameter.wrap func_var) K.With_subkind.any_value
+      in
       Continuation_params_and_handler.create [func_param]
         ~handler:(Expr.create_apply perform_over_application)
     in

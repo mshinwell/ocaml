@@ -56,7 +56,8 @@ let create ~return_continuation exn_continuation params ~body ~my_closure =
     }
   in
   let my_closure =
-    Kinded_parameter.create (Parameter.wrap my_closure) K.value
+    Kinded_parameter.create (Parameter.wrap my_closure)
+      K.With_subkind.any_value
   in
   let t1 = T1.create (params @ [my_closure]) t0 in
   let t2 = T2.create exn_continuation t1 in
@@ -82,7 +83,8 @@ let print_with_cache ~cache ppf t =
   pattern_match t
     ~f:(fun ~return_continuation exn_continuation params ~body ~my_closure ->
       let my_closure =
-        Kinded_parameter.create (Parameter.wrap my_closure) Flambda_kind.value
+        Kinded_parameter.create (Parameter.wrap my_closure)
+          Flambda_kind.With_subkind.any_value
       in
       fprintf ppf
         "@[<hov 1>(@<0>%s@<1>\u{03bb}@<0>%s@[<hov 1>\

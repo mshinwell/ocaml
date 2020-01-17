@@ -76,6 +76,37 @@ val unit : t
 
 include Identifiable.S with type t := t
 
+module With_subkind : sig
+  module Subkind : sig
+    type t =
+      | Anything
+      | Boxed_float
+      | Boxed_int32
+      | Boxed_int64
+      | Boxed_nativeint
+      | Immediate
+
+    include Identifiable.S with type t := t
+  end
+
+  type kind = t
+  type t
+
+  val create : kind -> Subkind.t -> t
+
+  val kind : t -> kind
+  val subkind : t -> Subkind.t
+
+  val any_value : t
+  val naked_immediate : t
+  val naked_float : t
+  val naked_int32 : t
+  val naked_int64 : t
+  val naked_nativeint : t
+
+  include Identifiable.S with type t := t
+end
+
 module Standard_int : sig
   (** These kinds are known as the "standard integer kinds".  They correspond
       to the usual representations of tagged immediates, 32-bit, 64-bit and

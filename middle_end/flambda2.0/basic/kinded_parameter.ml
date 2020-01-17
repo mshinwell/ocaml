@@ -18,7 +18,7 @@
 
 type t = {
   param : Parameter.t;
-  kind : Flambda_kind.t;
+  kind : Flambda_kind.With_subkind.t;
 }
 
 include Identifiable.Make (struct
@@ -29,19 +29,20 @@ include Identifiable.Make (struct
         { param = param2; kind = kind2; } =
     let c = Parameter.compare param1 param2 in
     if c <> 0 then c
-    else Flambda_kind.compare kind1 kind2
+    else Flambda_kind.With_subkind.compare kind1 kind2
 
   let equal t1 t2 = compare t1 t2 = 0
 
   let hash { param; kind; } =
-    Hashtbl.hash (Parameter.hash param, Flambda_kind.hash kind)
+    Hashtbl.hash (Parameter.hash param,
+      Flambda_kind.With_subkind.hash kind)
 
   let print ppf { param; kind; } =
     Format.fprintf ppf "@[(@<0>%s%a@<0>%s @<1>\u{2237} %a)@]"
       (Flambda_colours.parameter ())
       Parameter.print param
       (Flambda_colours.normal ())
-      Flambda_kind.print kind
+      Flambda_kind.With_subkind.print kind
 
   let output chan t =
     print (Format.formatter_of_out_channel chan) t
@@ -58,18 +59,15 @@ let param t = t.param
 let var t = Parameter.var t.param
 let name t = Name.var (var t)
 let simple t = Simple.var (var t)
-let kind t = t.kind
-
-let with_kind t kind = { t with kind; }
+let kind t = Flambda_kind.With_subkind.kind t.kind
+let kind_with_subkind t = t.kind
 
 let rename t = { t with param = Parameter.rename t.param; }
 
 let map_var t ~f = { t with param = Parameter.map_var f t.param; }
 
-let map_kind t ~f = { t with kind = f t.kind; }
-
 let equal_kinds t1 t2 =
-  Flambda_kind.equal t1.kind t2.kind
+  Flambda_kind.With_subkind.equal t1.kind t2.kind
 
 let free_names ({ param = _; kind = _; } as t) =
   Name_occurrences.singleton_variable (var t) Name_mode.normal
@@ -117,6 +115,8 @@ module List = struct
   let rename t = List.map (fun t -> rename t) t
 
   let arity t = List.map (fun t -> kind t) t
+
+  let arity_with_subkinds t = List.map (fun t -> kind_with_subkind t) t
 
   let equal t1 t2 =
     List.compare_lengths t1 t2 = 0

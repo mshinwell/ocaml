@@ -568,7 +568,9 @@ let is_var_used v e =
 let function_args vars my_closure body =
   if is_var_used my_closure body then begin
     let param = Parameter.wrap my_closure in
-    let last_arg = Kinded_parameter.create param Flambda_kind.value in
+    let last_arg =
+      Kinded_parameter.create param Flambda_kind.With_subkind.any_value
+     in
     vars @ [last_arg]
   end else
     vars
@@ -1208,7 +1210,7 @@ let unit (unit : Flambda_unit.t) =
            handler, but since it's constant we don't need it *)
         var_list env [
           Kinded_parameter.create (Parameter.wrap (Variable.create "*ret*"))
-            Flambda_kind.value;
+            Flambda_kind.With_subkind.any_value;
         ]
       in
       let return_cont, env =

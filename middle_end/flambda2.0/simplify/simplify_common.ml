@@ -85,7 +85,9 @@ let add_wrapper_for_fixed_arity_continuation0 uacc cont ~use_id arity =
   | Some rewrite ->
     let params = List.map (fun _kind -> Variable.create "param") arity in
     let kinded_params =
-      List.map2 (fun param kind -> KP.create (Parameter.wrap param) kind)
+      List.map2 (fun param kind ->
+          KP.create (Parameter.wrap param)
+            (K.With_subkind.create kind Anything))
         params arity
     in
     let args = List.map (fun param -> Simple.var param) params in

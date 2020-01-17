@@ -98,7 +98,7 @@ let inline dacc ~callee ~args function_decl
               let wrapper_handler =
                 let param = Variable.create "exn" in
                 let kinded_params =
-                  [KP.create (Parameter.wrap param) K.value]
+                  [KP.create (Parameter.wrap param) K.With_subkind.any_value]
                 in
                 let exn_handler =
                   Exn_continuation.exn_handler apply_exn_continuation

@@ -122,7 +122,8 @@ let tupled_function_call_stub
       params
   in
   let tuple_param =
-    Kinded_parameter.create (Parameter.wrap tuple_param_var) K.value
+    Kinded_parameter.create (Parameter.wrap tuple_param_var)
+      K.With_subkind.any_value
   in
   let params_and_body =
     Flambda.Function_params_and_body.create
@@ -337,7 +338,8 @@ let close_c_call t ~let_bound_var (prim : Primitive.description)
   else
     let after_call =
       let params =
-        [Kinded_parameter.create (Parameter.wrap handler_param) return_kind]
+        [Kinded_parameter.create (Parameter.wrap handler_param)
+           (K.With_subkind.create return_kind Anything)]
       in
       let params_and_handler =
         Flambda.Continuation_params_and_handler.create params
@@ -469,7 +471,8 @@ let rec close t env (ilam : Ilambda.t) : Expr.t =
             | Not_user_visible -> false
           in
           let param = Variable.with_user_visible param ~user_visible in
-          Kinded_parameter.create (Parameter.wrap param) (LC.value_kind kind))
+          Kinded_parameter.create (Parameter.wrap param)
+            (LC.value_kind_with_subkind kind))
         params
         params_with_kinds
     in
@@ -778,7 +781,8 @@ and close_one_function t ~external_env ~by_closure_id decl
   in
   let params =
     List.map (fun (var, kind) ->
-        Kinded_parameter.create (Parameter.wrap var) (LC.value_kind kind))
+        Kinded_parameter.create (Parameter.wrap var)
+          (LC.value_kind_with_subkind kind))
       param_vars
   in
   let body = close t closure_env body in
@@ -910,7 +914,8 @@ let ilambda_to_flambda ~backend ~module_ident ~module_block_size_in_words
   in
   let load_fields_cont_handler =
     let param =
-      Kinded_parameter.create (Parameter.wrap module_block_var) K.value
+      Kinded_parameter.create (Parameter.wrap module_block_var)
+        K.With_subkind.any_value
     in
     let params_and_handler =
       Flambda.Continuation_params_and_handler.create [param]

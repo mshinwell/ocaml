@@ -132,6 +132,100 @@ let is_naked_float t =
   | Naked_number _
   | Fabricated -> false
 
+module With_subkind = struct
+  module Subkind = struct
+    type t =
+      | Anything
+      | Boxed_float
+      | Boxed_int32
+      | Boxed_int64
+      | Boxed_nativeint
+      | Immediate
+
+    include Identifiable.Make (struct
+      type nonrec t = t
+
+      let print ppf t =
+        match t with
+        | Anything -> Format.fprintf ppf "Any"
+        | Boxed_float -> Format.fprintf ppf "Bf"
+        | Boxed_int32 -> Format.fprintf ppf "Bi32"
+        | Boxed_int64 -> Format.fprintf ppf "Bi64"
+        | Boxed_nativeint -> Format.fprintf ppf "Bn"
+        | Immediate -> Format.fprintf ppf "Imm"
+
+      let compare = Stdlib.compare
+
+      let equal t1 t2 = (compare t1 t2 = 0)
+
+      let hash = Hashtbl.hash
+
+      let output _ _ = Misc.fatal_error "Not yet implemented"
+    end)
+  end
+
+  type kind = t
+
+  type t = {
+    kind : kind;
+    subkind : Subkind.t;
+  }
+
+  let create (kind : kind) (subkind : Subkind.t) =
+    begin match kind with
+    | Value -> ()
+    | Naked_number _ | Fabricated ->
+      match subkind with
+      | Anything
+      | Boxed_float
+      | Boxed_int32
+      | Boxed_int64
+      | Boxed_nativeint
+      | Immediate ->
+        Misc.fatal_errorf "Only subkind %a is valid for kind %a"
+          Subkind.print subkind
+          print kind
+    end;
+    { kind; subkind; }
+
+  let kind t = t.kind
+  let subkind t = t.subkind
+
+  let any_value = create value Anything
+  let naked_immediate = create naked_immediate Anything
+  let naked_float = create naked_float Anything
+  let naked_int32 = create naked_int32 Anything
+  let naked_int64 = create naked_int64 Anything
+  let naked_nativeint = create naked_nativeint Anything
+
+  include Identifiable.Make (struct
+    type nonrec t = t
+
+    let print ppf { kind; subkind; } =
+      match kind, subkind with
+      | _, Anything -> print ppf kind
+      | Value, subkind ->
+        Format.fprintf ppf "@[%a|%a@]"
+          print kind
+          Subkind.print subkind
+      | _, _ -> assert false  (* see [create] *)
+
+    let compare
+          { kind = kind1; subkind = subkind1; }
+          { kind = kind2; subkind = subkind2; } =
+      let c = compare kind1 kind2 in
+      if c <> 0 then c
+      else Subkind.compare subkind1 subkind2
+
+    let equal t1 t2 = (compare t1 t2 = 0)
+
+    let hash { kind; subkind; } =
+      Hashtbl.hash (hash kind, Subkind.hash subkind)
+
+    let output _ _ = Misc.fatal_error "Not yet implemented"
+  end)
+end
+
 module Standard_int = struct
   type t =
     | Tagged_immediate
