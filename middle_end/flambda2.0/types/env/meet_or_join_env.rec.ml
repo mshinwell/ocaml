@@ -47,3 +47,9 @@ let right_join_env t =
   match t.right_join_env with
   | Some env -> env
   | None -> target_join_env t
+
+let flip_join_envs t =
+  { central_env = t.central_env;
+    left_join_env = t.right_join_env;
+    right_join_env = t.left_join_env;
+  }

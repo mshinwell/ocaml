@@ -110,7 +110,7 @@ struct
       let ({ known = known1; at_least = at_least1; } : t) = t1 in
       let ({ known = known2; at_least = at_least2; } : t) = t2 in
       let env_extension = ref (TEE.empty ()) in
-      let one_side_only (tag_or_unknown1 : _ Or_unknown.t) index1
+      let one_side_only env (tag_or_unknown1 : _ Or_unknown.t) index1
             maps_to1 at_least2 =
         let from_at_least2 =
           Tag_or_unknown_and_index.Map.find_last_opt
@@ -157,9 +157,10 @@ Format.eprintf "Resulting env extension, case 1:@ %a\n%!"
       let merge tag index maps_to1 maps_to2 =
         match maps_to1, maps_to2 with
         | Some maps_to1, None ->
-          one_side_only tag index maps_to1 at_least2
+          one_side_only env tag index maps_to1 at_least2
         | None, Some maps_to2 ->
-          one_side_only tag index maps_to2 at_least1
+          one_side_only (Meet_or_join_env.flip_join_envs env)
+            tag index maps_to2 at_least1
         | Some maps_to1, Some maps_to2 ->
           let maps_to =
             E.switch Maps_to.meet Maps_to.join env maps_to1 maps_to2

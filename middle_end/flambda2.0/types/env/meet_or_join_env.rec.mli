@@ -33,3 +33,5 @@ val target_join_env : t -> Typing_env.t
 val left_join_env : t -> Typing_env.t
 
 val right_join_env : t -> Typing_env.t
+
+val flip_join_envs : t -> t
