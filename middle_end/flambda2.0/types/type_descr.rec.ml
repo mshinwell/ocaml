@@ -403,9 +403,20 @@ module Make (Head : Type_head_intf.S
           Option.map (fun (simple, _) -> simple) canonical_simple2
         in
         let shared_aliases =
-          let target_env = Meet_or_join_env.target_join_env join_env in
-          Simple.Set.inter (all_aliases_of target_env canonical_simple1)
-            (all_aliases_of target_env canonical_simple2)
+          Simple.Set.inter
+            (all_aliases_of (Meet_or_join_env.left_join_env join_env)
+              canonical_simple1)
+            (all_aliases_of (Meet_or_join_env.right_join_env join_env)
+              canonical_simple2)
+        in
+        let shared_aliases =
+          Simple.Set.filter (fun simple ->
+              match Simple.descr simple with
+              | Const _ -> true
+              | Name name ->
+                Typing_env.mem (Meet_or_join_env.target_join_env join_env)
+                  name)
+            shared_aliases
         in
         match Simple.Set.choose_opt shared_aliases with
         | Some simple -> create_equals simple
