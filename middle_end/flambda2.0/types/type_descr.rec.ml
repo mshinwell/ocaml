@@ -392,9 +392,46 @@ module Make (Head : Type_head_intf.S
           ~right_env:(Meet_or_join_env.right_join_env join_env)
           ~right_ty:t2
       in
+      let choose_shared_alias ~shared_aliases =
+        let shared_aliases =
+          Simple.Set.filter (fun simple ->
+              match Simple.descr simple with
+              | Const _ -> true
+              | Name name ->
+                Typing_env.mem (Meet_or_join_env.target_join_env join_env)
+                  name)
+            shared_aliases
+        in
+        match Simple.Set.choose_opt shared_aliases with
+        | Some simple -> Some (create_equals simple)
+        | None -> None
+      in
       match canonical_simple1, canonical_simple2 with
-      | Bottom, _ -> t2
-      | _, Bottom -> t1
+      | Bottom, Bottom -> bottom ()
+      | Ok canonical_simple, Bottom ->
+        let canonical_simple =
+          Option.map (fun (simple, _) -> simple) canonical_simple
+        in
+        let shared_aliases =
+          all_aliases_of (Meet_or_join_env.left_join_env join_env)
+            canonical_simple
+        in
+        begin match choose_shared_alias ~shared_aliases with
+        | Some joined_ty -> joined_ty
+        | None -> unknown ()
+        end
+      | Bottom, Ok canonical_simple ->
+        let canonical_simple =
+          Option.map (fun (simple, _) -> simple) canonical_simple
+        in
+        let shared_aliases =
+          all_aliases_of (Meet_or_join_env.right_join_env join_env)
+            canonical_simple
+        in
+        begin match choose_shared_alias ~shared_aliases with
+        | Some joined_ty -> joined_ty
+        | None -> unknown ()
+        end
       | Ok canonical_simple1, Ok canonical_simple2 ->
         let canonical_simple1 =
           Option.map (fun (simple, _) -> simple) canonical_simple1
@@ -409,17 +446,8 @@ module Make (Head : Type_head_intf.S
             (all_aliases_of (Meet_or_join_env.right_join_env join_env)
               canonical_simple2)
         in
-        let shared_aliases =
-          Simple.Set.filter (fun simple ->
-              match Simple.descr simple with
-              | Const _ -> true
-              | Name name ->
-                Typing_env.mem (Meet_or_join_env.target_join_env join_env)
-                  name)
-            shared_aliases
-        in
-        match Simple.Set.choose_opt shared_aliases with
-        | Some simple -> create_equals simple
+        match choose_shared_alias ~shared_aliases with
+        | Some joined_ty -> joined_ty
         | None ->
           match join_head_or_unknown_or_bottom join_env head1 head2 with
           | Bottom -> bottom ()
