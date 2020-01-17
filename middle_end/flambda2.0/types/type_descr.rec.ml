@@ -275,6 +275,9 @@ module Make (Head : Type_head_intf.S
          [head2]), because they may contain names not bound in the target
          join environment.  We force this by joining those types with
          themselves. *)
+      (* CR mshinwell: It would be better to use [make_suitable_for_environment]
+         here as it's lazy.  In that case we would need to start returning
+         environment extensions from [join], which should be fine. *)
       | Ok head1, Bottom ->
         let env =
           Meet_or_join_env.create_for_join

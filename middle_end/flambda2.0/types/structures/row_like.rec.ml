@@ -126,7 +126,26 @@ struct
         | None ->
           begin match E.op () with
           | Meet -> None
-          | Join -> Some maps_to1
+          | Join ->
+            (* CR mshinwell: Same comment as per
+               Type_descr.join_head_or_unknown_or_bottom *)
+            let env =
+              Meet_or_join_env.create_for_join
+                (Meet_or_join_env.target_join_env env)
+                ~left_env:(Meet_or_join_env.left_join_env env)
+                ~right_env:(Meet_or_join_env.left_join_env env)
+            in
+            let maps_to =
+              E.switch Maps_to.meet Maps_to.join env
+                maps_to1 maps_to1
+            in
+            match maps_to with
+            | Bottom -> None
+            | Ok (maps_to, env_extension') ->
+              env_extension :=
+                TEE.meet (Meet_or_join_env.meet_env env)
+                  !env_extension env_extension';
+              Some maps_to
           end
         | Some ((_tag_or_unknown, index2), from_at_least2) ->
           assert (Index.subset index2 index1);
