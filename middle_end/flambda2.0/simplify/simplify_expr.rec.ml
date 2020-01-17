@@ -75,9 +75,14 @@ and simplify_let_symbol
     Name_occurrences.symbols (Bound_symbols.free_names bound_symbols)
   in
   let dacc =
+    (* CR mshinwell: tidy this up? *)
     DA.map_denv dacc ~f:(fun denv ->
       Symbol.Set.fold (fun symbol denv ->
-          DE.now_defining_symbol denv symbol)
+          match bound_symbols with
+          | Singleton _ -> DE.now_defining_symbol denv symbol
+          | Sets_of_closures _ ->
+            (* [Simplify_set_of_closures] will do [now_defining_symbol]. *)
+            denv)
         defining
         denv)
   in
@@ -94,7 +99,9 @@ and simplify_let_symbol
   let dacc =
     DA.map_denv dacc ~f:(fun denv ->
       Symbol.Set.fold (fun symbol denv ->
-          DE.no_longer_defining_symbol denv symbol)
+          match bound_symbols with
+          | Singleton _ -> DE.no_longer_defining_symbol denv symbol
+          | Sets_of_closures _ -> denv)
         defining
         denv)
   in

@@ -702,13 +702,12 @@ let type_closure_elements_and_make_lifting_decision_for_one_set dacc
 
 let type_closure_elements_for_previously_lifted_set dacc
       ~min_name_mode set_of_closures =
-  let ({ can_lift; _ } as result) =
-    type_closure_elements_and_make_lifting_decision_for_one_set dacc
-      ~min_name_mode ~closure_bound_vars_inverse:Variable.Map.empty
-      set_of_closures
-  in
-  assert can_lift;
-  result
+  (* N.B. The returned [can_lift] might not be [true], since the closure
+     variables might actually assigned to be [Variable]s, in the case of a
+     non-constant lifted closure. *)
+  type_closure_elements_and_make_lifting_decision_for_one_set dacc
+    ~min_name_mode ~closure_bound_vars_inverse:Variable.Map.empty
+    set_of_closures
 
 let simplify_non_lifted_set_of_closures dacc
       ~(bound_vars : Bindable_let_bound.t) set_of_closures =
@@ -857,14 +856,13 @@ let simplify_lifted_sets_of_closures dacc ~orig_bound_symbols ~orig_static_const
   let closure_elements_and_types_all_sets =
     List.map
       (fun ({ code = _; set_of_closures; } : SC.Code_and_set_of_closures.t) ->
-        let { can_lift;
+        let { can_lift = _;
               closure_elements;
               closure_element_types;
             } =
           type_closure_elements_for_previously_lifted_set
             dacc ~min_name_mode:Name_mode.normal set_of_closures
         in
-        assert can_lift;
         closure_elements, closure_element_types)
       code_and_sets_of_closures
   in
