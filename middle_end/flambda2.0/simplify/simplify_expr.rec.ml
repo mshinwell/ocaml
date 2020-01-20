@@ -291,6 +291,10 @@ and simplify_non_recursive_let_cont_handler
                       let param_types =
                         TE.find_params handler_typing_env params
                       in
+Format.eprintf "%a: trying to unbox.@ params %a,@ param types %a\n%!"
+  Continuation.print cont
+  KP.List.print params
+  (Format.pp_print_list ~pp_sep:Format.pp_print_space T.print) param_types;
                       Unbox_continuation_params.make_unboxing_decisions
                         handler_typing_env ~arg_types_by_use_id ~params
                         ~param_types extra_params_and_args
@@ -301,6 +305,8 @@ and simplify_non_recursive_let_cont_handler
                       assert is_exn_handler;
                       handler_typing_env, extra_params_and_args
                   in
+Format.eprintf "EPA:@ %a\n%!"
+  Continuation_extra_params_and_args.print extra_params_and_args;
                   let dacc =
                     DA.with_denv dacc_after_body
                       (DE.with_typing_env denv typing_env)

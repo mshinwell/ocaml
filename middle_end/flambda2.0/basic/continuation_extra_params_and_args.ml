@@ -48,8 +48,8 @@ type t = {
 let print ppf { extra_params; extra_args; extra_args_recursive_uses; } =
   Format.fprintf ppf "@[<hov 1>(\
       @[<hov 1>(extra_params@ %a)@]@ \
-      @[<hov 1>(extra_args_recursive_uses@ %a)@]@ \
-      @[<hov 1>(extra_args@ %a)@]\
+      @[<hov 1>(extra_args@ %a)@]@ \
+      @[<hov 1>(extra_args_recursive_uses@ %a)@]\
       )@]"
     Kinded_parameter.List.print extra_params
     (Apply_cont_rewrite_id.Map.print Extra_arg.List.print) extra_args
