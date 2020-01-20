@@ -2,9 +2,11 @@
 (*                                                                        *)
 (*                                 OCaml                                  *)
 (*                                                                        *)
+(*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2019 Jane Street Group LLC                                 *)
+(*   Copyright 2013--2020 OCamlPro SAS                                    *)
+(*   Copyright 2014--2020 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -12,31 +14,28 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-30-40-41-42"]
+(** Tracking of variable usage during the downwards pass of simplification.
+    This information can be used e.g. to remove unused parameters of recursive
+    continuations. *)
 
-(** Things that a [Let]-expression binds. *)
+[@@@ocaml.warning "+a-30-40-41-42"]
 
-type t = private
-  | Singleton of Var_in_binding_pos.t
-  | Set_of_closures of {
-      name_mode : Name_mode.t;
-      closure_vars : Var_in_binding_pos.t Closure_id.Map.t;
-    }
+type t
 
-include Bindable.S with type t := t
+val empty : t
 
-val singleton : Var_in_binding_pos.t -> t
+val print : Format.formatter -> t -> unit
 
-val set_of_closures : closure_vars:Var_in_binding_pos.t Closure_id.Map.t -> t
+val record_use_of_variable
+   : t
+  -> ?var_being_defined:Variable.t
+  -> Variable.Set.t
+  -> t
 
-val must_be_singleton : t -> Var_in_binding_pos.t
+val record_uses_of_variables
+   : t
+  -> ?var_being_defined:Variable.t
+  -> Variable.Set.t
+  -> t
 
-val must_be_set_of_closures : t -> Var_in_binding_pos.t Closure_id.Map.t
-
-val name_mode : t -> Name_mode.t
-
-val all_bound_vars : t -> Var_in_binding_pos.Set.t
-
-val all_bound_vars' : t -> Variable.Set.t
-
-val recursively_bound_vars : t -> Variable.Set.t
+val used_variables : t -> Variable.Set.t

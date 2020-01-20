@@ -74,6 +74,27 @@ let simplify_named dacc ~bound_vars named =
     let bindings_outermost_first, dacc =
       simplify_named0 dacc ~bound_vars named
     in
+    let dacc =
+      List.fold_left (fun dacc (bound_vars, (defining_expr : Reachable.t)) ->
+          match defining_expr with
+          | Invalid _ -> dacc
+          | Reachable defining_expr ->
+            let vars_being_defined =
+              Bindable_let_bound.all_bound_vars' bound_vars
+            in
+            let free_vars_defining_expr =
+              Variable.Set.diff
+                (Name_occurrences.variables (Named.free_names defining_expr))
+                (Bindable_let_bound.recursively_bound_vars bound_vars)
+            in
+            Variable.Set.fold (fun var_being_defined dacc ->
+                DA.record_uses_of_variables dacc ~var_being_defined
+                  free_vars_defining_expr)
+              vars_being_defined
+              dacc)
+        dacc
+        bindings_outermost_first
+    in
     { bindings_outermost_first;
       dacc;
     }

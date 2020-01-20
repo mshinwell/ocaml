@@ -191,3 +191,8 @@ let all_bound_vars' t =
   | Set_of_closures { closure_vars; _ } ->
     Variable.Set.of_list (
       List.map Var_in_binding_pos.var (Closure_id.Map.data closure_vars))
+
+let recursively_bound_vars t =
+  match t with
+  | Singleton _ -> Variable.Set.empty
+  | Set_of_closures _ -> all_bound_vars' t
