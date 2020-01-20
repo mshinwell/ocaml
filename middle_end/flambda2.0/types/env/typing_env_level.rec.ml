@@ -589,7 +589,9 @@ let trivial_join t ~initial_env_at_join ~env_at_use envs_with_levels =
      basically left with switch arms as the place we might want to propagate
      things to.  Those have no arguments.  This seems like we're just doing it
      for the benefit of CSE now.  We should review whether at the non-trivial
-     joins we should propagate existentials for things used by the types. *)
+     joins we should propagate existentials for things used by the types.
+     Update: we can now get here in apparently-inlinable cases, when inlining
+     would move a continuation into a recursive one. *)
   (* CR mshinwell: Add note about CSE handling. *)
   let vars_at_join = Typing_env.var_domain initial_env_at_join in
 (*
@@ -730,9 +732,6 @@ Format.eprintf "Non-trivial join CSE:@ %a"
 let n_way_join ~initial_env_at_join envs_with_levels =
   match envs_with_levels with
   | [] -> empty (), Continuation_extra_params_and_args.empty
-  | [_env_at_use, _id, Continuation_use_kind.Inlinable,
-     _interesting_vars, _t] ->
-    Misc.fatal_error "Unnecessary join; should have been caught earlier"
   | [env_at_use, _id, _use_kind, _interesting_vars, t] as envs_with_levels ->
     trivial_join t ~initial_env_at_join ~env_at_use envs_with_levels
   | envs_with_levels -> non_trivial_join ~initial_env_at_join envs_with_levels

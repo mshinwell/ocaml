@@ -54,13 +54,17 @@ let record_continuation_use t cont kind ~typing_env_at_use ~arg_types =
   t, id
 
 let compute_handler_env t cont recursive
-      ~definition_typing_env_with_params_defined ~params ~param_types
+      ~definition_typing_env_with_params_defined
+      ~inside_handlers_of_recursive_continuations
+      ~params ~param_types
       : Continuation_env_and_param_types.t =
   match Continuation.Map.find cont t.continuation_uses with
   | exception Not_found -> No_uses
   | uses ->
     Continuation_uses.compute_handler_env uses recursive
-      ~definition_typing_env_with_params_defined ~params ~param_types
+      ~definition_typing_env_with_params_defined
+      ~inside_handlers_of_recursive_continuations
+      ~params ~param_types
 
 let num_continuation_uses t cont =
   match Continuation.Map.find cont t.continuation_uses with

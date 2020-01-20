@@ -94,9 +94,13 @@ let record_continuation_use t cont use_kind ~typing_env_at_use ~arg_types =
   with_continuation_uses_env t cont_uses_env, id
 
 let compute_handler_env t cont recursive
-      ~definition_typing_env_with_params_defined ~params ~param_types =
+      ~definition_typing_env_with_params_defined
+      ~inside_handlers_of_recursive_continuations
+      ~params ~param_types =
   CUE.compute_handler_env t.continuation_uses_env cont recursive
-    ~definition_typing_env_with_params_defined ~params ~param_types
+    ~definition_typing_env_with_params_defined
+    ~inside_handlers_of_recursive_continuations
+    ~params ~param_types
 
 let num_continuation_uses t cont =
   CUE.num_continuation_uses t.continuation_uses_env cont
@@ -140,8 +144,5 @@ module Usage = struct
           ~uses_in_defining_expr;
     }
 
-  let unused_variables t =
-    let used_variables = DU.used_variables t.usage in
-    let all_variables = TE.var_domain (DE.typing_env t.denv) in
-    Variable.Set.diff all_variables used_variables
+  let used_variables t = DU.used_variables t.usage
 end

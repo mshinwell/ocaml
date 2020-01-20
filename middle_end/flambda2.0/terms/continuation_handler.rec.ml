@@ -24,6 +24,89 @@ type t = {
 
 let invariant _env _t = ()
 
+let print_parameter_with_type ppf param =
+  (* CR mshinwell: Share with Flambda_type somehow *)
+  let kind_with_subkind = Kinded_parameter.kind_with_subkind param in
+  let kind = Flambda_kind.With_subkind.kind kind_with_subkind in
+  let print_type ppf () =
+    let colour = Flambda_colours.top_or_bottom_type () in
+    match kind with
+    | Value ->
+      begin match Flambda_kind.With_subkind.subkind kind_with_subkind with
+      | Anything ->
+        Format.fprintf ppf "@<0>%s@<1>\u{22a4}@<0>%s"
+          colour
+          (Flambda_colours.normal ())
+      | Boxed_float ->
+        let colour = Flambda_colours.top_or_bottom_type () in
+        Format.fprintf ppf
+          "@<0>%s(Boxed_float (Naked_float @<0>%s@<1>\u{22a4}@<0>%s))@<0>%s"
+          (Flambda_colours.type_in_term ())
+          colour
+          (Flambda_colours.type_in_term ())
+          (Flambda_colours.normal ())
+      | Boxed_int32 ->
+        Format.fprintf ppf
+          "@<0>%s(Boxed_int32 (Naked_int32 @<0>%s@<1>\u{22a4}@<0>%s))@<0>%s"
+          (Flambda_colours.type_in_term ())
+          colour
+          (Flambda_colours.type_in_term ())
+          (Flambda_colours.normal ())
+      | Boxed_int64 ->
+        Format.fprintf ppf
+          "@<0>%s(Boxed_int64 (Naked_int64 @<0>%s@<1>\u{22a4}@<0>%s))@<0>%s"
+          (Flambda_colours.type_in_term ())
+          colour
+          (Flambda_colours.type_in_term ())
+          (Flambda_colours.normal ())
+      | Boxed_nativeint ->
+        Format.fprintf ppf
+          "@<0>%s\
+           (Boxed_nativeint (Naked_nativeint @<0>%s@<1>\u{22a4}@<0>%s))@<0>%s"
+          (Flambda_colours.type_in_term ())
+          colour
+          (Flambda_colours.type_in_term ())
+          (Flambda_colours.normal ())
+      | Immediate ->
+        Format.fprintf ppf
+          "@<0>%s(Variant@ ((blocks@ @<0>%s@<1>\u{22a5}@<0>%s)@ \
+            (immediates@ @<0>%s@<1>\u{22a4}@<0>%s)))@<0>%s"
+          (Flambda_colours.type_in_term ())
+          colour
+          (Flambda_colours.normal ())
+          colour
+          (Flambda_colours.type_in_term ())
+          (Flambda_colours.normal ())
+      end
+    | Naked_number Naked_immediate ->
+      Format.fprintf ppf "@<0>%s@<1>\u{22a4}@<0>%s"
+        colour
+        (Flambda_colours.normal ())
+    | Naked_number Naked_float ->
+      Format.fprintf ppf "@<0>%s@<1>\u{22a4}@<0>%s"
+        colour
+        (Flambda_colours.normal ())
+    | Naked_number Naked_int32 ->
+      Format.fprintf ppf "@<0>%s@<1>\u{22a4}@<0>%s"
+        colour
+        (Flambda_colours.normal ())
+    | Naked_number Naked_int64 ->
+      Format.fprintf ppf "@<0>%s@<1>\u{22a4}@<0>%s"
+        colour
+        (Flambda_colours.normal ())
+    | Naked_number Naked_nativeint ->
+      Format.fprintf ppf "@<0>%s@<1>\u{22a4}@<0>%s"
+        colour
+        (Flambda_colours.normal ())
+    | Fabricated -> Misc.fatal_error "No longer used"
+  in
+  Format.fprintf ppf "@[(@<0>%s%a@<0>%s : %a @<1>\u{2237} %a)@]"
+    (Flambda_colours.parameter ())
+    Parameter.print (Kinded_parameter.param param)
+    (Flambda_colours.normal ())
+    print_type ()
+    Flambda_kind.print kind
+
 let print_using_where_with_cache (recursive : Recursive.t) ~cache ppf k
       ({ params_and_handler = _; stub; is_exn_handler; } as t) ~first =
   if not first then begin
@@ -43,7 +126,14 @@ let print_using_where_with_cache (recursive : Recursive.t) ~cache ppf k
         (if is_exn_handler then "[eh]" else "")
         (Flambda_colours.normal ());
       if List.length params > 0 then begin
-        fprintf ppf " %a" Kinded_parameter.List.print params
+        match recursive with
+        | Non_recursive ->
+          fprintf ppf " @[<hov 0>%a@]" KP.List.print params
+        | Recursive ->
+          fprintf ppf " @[<hov 0>%a@]"
+            (Format.pp_print_list ~pp_sep:Format.pp_print_space
+              print_parameter_with_type)
+            params
       end;
       fprintf ppf "@<0>%s:@<0>%s@ %a"
         (Flambda_colours.elide ())

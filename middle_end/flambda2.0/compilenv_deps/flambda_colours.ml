@@ -29,6 +29,7 @@ let constructor () = C.fg_256 69
 let kind () = C.fg_256 37
 
 let top_or_bottom_type () = C.fg_256 37
+let type_in_term () = C.fg_256 250
 
 let debuginfo () = C.fg_256 243
 

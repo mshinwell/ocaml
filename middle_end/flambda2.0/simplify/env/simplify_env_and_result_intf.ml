@@ -60,6 +60,14 @@ module type Downwards_env = sig
 
   val get_continuation_scope_level : t -> Scope.t
 
+  (* CR mshinwell: maybe combine with the scope level increments above? *)
+  val now_inside_handler_of_recursive_continuation
+     : t
+    -> Scope.t
+    -> t
+
+  val inside_handlers_of_recursive_continuations : t -> Scope.Set.t
+
   val now_defining_symbol : t -> Symbol.t -> t
 
   val no_longer_defining_symbol : t -> Symbol.t -> t

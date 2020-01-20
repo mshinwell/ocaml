@@ -90,9 +90,9 @@ let arity t = t.arity
    4. Path sensitivity.
 *)
 
-(* CR mshinwell: Move to [Generic_simplify_let_cont]? *)
 let compute_handler_env t (recursive : Recursive.t)
       ~definition_typing_env_with_params_defined:typing_env
+      ~inside_handlers_of_recursive_continuations
       ~params ~param_types : Continuation_env_and_param_types.t =
 (*
 Format.eprintf "%d uses for %a\n%!"
@@ -126,8 +126,23 @@ Format.eprintf "%d uses for %a\n%!"
 Format.eprintf "Unknown at or later than %a\n%!"
   Scope.print (Scope.next definition_scope_level);
 *)
+        let can_inline =
+          (* Do not inline continuations into recursive continuations,
+             even if there is only one use. *)
+          match use_envs_with_ids with
+          | [use_env, _, Inlinable, _] ->
+            let use_scope_level = TE.current_scope use_env in
+            assert (Scope.(<=) definition_scope_level use_scope_level);
+            Scope.Set.for_all (fun rec_cont_scope_level ->
+                (* CR mshinwell: check these are exactly right; add tests *)
+                Scope.(<) rec_cont_scope_level definition_scope_level
+                  || Scope.(>) rec_cont_scope_level use_scope_level)
+              inside_handlers_of_recursive_continuations
+          | [] | [_, _, Non_inlinable, _]
+          | (_, _, (Inlinable | Non_inlinable), _) :: _ -> true
+        in
         begin match use_envs_with_ids with
-        | [use_env, _, Inlinable, _] ->
+        | [use_env, _, Inlinable, _] when can_inline ->
           (* A single inlinable use will be inlined out by the simplifier, so
              avoid any join-related computations. *)
           use_env, Continuation_extra_params_and_args.empty, true

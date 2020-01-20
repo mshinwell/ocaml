@@ -42,7 +42,7 @@ include Identifiable.Make (struct
       (Flambda_colours.parameter ())
       Parameter.print param
       (Flambda_colours.normal ())
-      Flambda_kind.With_subkind.print kind
+      Flambda_kind.print (Flambda_kind.With_subkind.kind kind)
 
   let output chan t =
     print (Format.formatter_of_out_channel chan) t

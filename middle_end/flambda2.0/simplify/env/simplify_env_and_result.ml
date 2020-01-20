@@ -39,6 +39,7 @@ end = struct
     at_unit_toplevel : bool;
     unit_toplevel_exn_continuation : Continuation.t;
     symbols_currently_being_defined : Symbol.Set.t;
+    inside_handlers_of_recursive_continuations : Scope.Set.t;
   }
 
   let print ppf { backend = _; round; typing_env;
@@ -46,6 +47,7 @@ end = struct
                   inlining_depth_increment; float_const_prop;
                   code; at_unit_toplevel; unit_toplevel_exn_continuation;
                   symbols_currently_being_defined;
+                  inside_handlers_of_recursive_continuations;
                 } =
     Format.fprintf ppf "@[<hov 1>(\
         @[<hov 1>(round@ %d)@]@ \
@@ -57,6 +59,7 @@ end = struct
         @[<hov 1>(at_unit_toplevel@ %b)@] \
         @[<hov 1>(unit_toplevel_exn_continuation@ %a)@]@ \
         @[<hov 1>(symbols_currently_being_defined@ %a)@]@ \
+        @[<hov 1>(inside_handlers_of_recursive_continuations@ %a)@]@ \
         @[<hov 1>(code@ %a)@]\
         )@]"
       round
@@ -68,6 +71,7 @@ end = struct
       at_unit_toplevel
       Continuation.print unit_toplevel_exn_continuation
       Symbol.Set.print symbols_currently_being_defined
+      Scope.Set.print inside_handlers_of_recursive_continuations
       (Code_id.Map.print Function_params_and_body.print) code
 
   let invariant _t = ()
@@ -86,6 +90,7 @@ end = struct
       at_unit_toplevel = true;
       unit_toplevel_exn_continuation;
       symbols_currently_being_defined = Symbol.Set.empty;
+      inside_handlers_of_recursive_continuations = Scope.Set.empty;
     }
 
   let resolver t = TE.resolver t.typing_env
@@ -117,6 +122,17 @@ end = struct
   let increment_continuation_scope_level_twice t =
     increment_continuation_scope_level
       (increment_continuation_scope_level t)
+
+  let now_inside_handler_of_recursive_continuation t scope =
+    let inside_handlers_of_recursive_continuations =
+      Scope.Set.add scope t.inside_handlers_of_recursive_continuations
+    in
+    { t with
+      inside_handlers_of_recursive_continuations;
+    }
+
+  let inside_handlers_of_recursive_continuations t =
+    t.inside_handlers_of_recursive_continuations
 
   let now_defining_symbol t symbol =
     if Symbol.Set.mem symbol t.symbols_currently_being_defined then begin
@@ -153,6 +169,7 @@ end = struct
                       float_const_prop; code; at_unit_toplevel = _;
                       unit_toplevel_exn_continuation;
                       symbols_currently_being_defined;
+                      inside_handlers_of_recursive_continuations = _;
                     } =
     { backend;
       round;
@@ -165,6 +182,7 @@ end = struct
       at_unit_toplevel = false;
       unit_toplevel_exn_continuation;
       symbols_currently_being_defined;
+      inside_handlers_of_recursive_continuations = Scope.Set.empty;
     }
 
   let define_variable t var kind =

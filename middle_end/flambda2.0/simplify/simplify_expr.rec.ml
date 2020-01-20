@@ -162,33 +162,16 @@ and simplify_one_continuation_handler :
   -> extra_params_and_args:Continuation_extra_params_and_args.t
   -> 'a k 
   -> Continuation_handler.t * 'a * UA.t
-= fun dacc cont (recursive : Recursive.t) (cont_handler : CH.t) ~params
+= fun dacc cont (_recursive : Recursive.t) (cont_handler : CH.t) ~params
       ~(handler : Expr.t) ~(extra_params_and_args : EPA.t) k ->
-  (* 
-Format.eprintf "handler:@.%a@."
-  Expr.print cont_handler.handler;
-  *)
-  (*
-Format.eprintf "About to simplify handler %a, params %a, EPA %a\n%!"
-  Continuation.print cont
-  KP.List.print params
-  EPA.print extra_params_and_args;
-  *)
-  let handler, user_data, uacc = simplify_expr dacc handler k in
-  let handler, uacc =
-  (*
-    let () =
-      Format.eprintf "For %a: simplified handler: %a\n%!"
-        Continuation.print cont Expr.print handler
-    in
-    *)
-    let free_names = Expr.free_names handler in
-    let used_params =
-      (* Removal of unused parameters of recursive continuations is not
-         currently supported. *)
-      match recursive with
-      | Recursive -> params
-      | Non_recursive ->
+  let handler, (user_data, params), uacc =
+    simplify_expr dacc handler (fun dacc ->
+      (* It is here that the need for [DA.Usage] crystallises: we need the
+         used-variables information before reconstructing the term (in the
+         recursive cases), so the normal [free_names] infrastructure doesn't
+         suffice. *)
+      let used_variables = DA.Usage.used_variables dacc in
+      let used_params =
         let first = ref true in
         List.filter (fun param ->
             (* CR mshinwell: We should have a robust means of propagating which
@@ -199,51 +182,34 @@ Format.eprintf "About to simplify handler %a, params %a, EPA %a\n%!"
               true
             end else begin
               first := false;
-              Name_occurrences.mem_var free_names (KP.var param)
+              Variable.Set.mem (KP.var param) used_variables
             end)
           params
-    in
-    let used_extra_params =
-      List.filter (fun extra_param ->
-          Name_occurrences.mem_var free_names (KP.var extra_param))
-        extra_params_and_args.extra_params
-    in
-    (*
-    let () =
-      Format.eprintf "For %a: free names %a, \
-          used_params %a, EP %a, used_extra_params %a\n%!"
-        Continuation.print cont
-        Name_occurrences.print free_names
-        KP.List.print used_params
-        KP.List.print extra_params_and_args.extra_params
-        KP.List.print used_extra_params
-    in
-    *)
-    let handler =
+      in
+      let used_extra_params =
+        List.filter (fun extra_param ->
+            Variable.Set.mem (KP.var extra_param) used_variables)
+          extra_params_and_args.extra_params
+      in
+      let rewrite =
+        Apply_cont_rewrite.create ~original_params:params
+          ~used_params:(KP.Set.of_list used_params)
+          ~extra_params:extra_params_and_args.extra_params
+          ~extra_args:extra_params_and_args.extra_args
+          ~extra_args_recursive_uses:
+            extra_params_and_args.extra_args_recursive_uses
+          ~used_extra_params:(KP.Set.of_list used_extra_params)
+      in
+      let user_data, uacc = k dacc in
+      let uacc =
+        UA.map_uenv uacc ~f:(fun uenv ->
+          UE.add_apply_cont_rewrite uenv cont rewrite)
+      in
       let params = used_params @ used_extra_params in
-      CH.with_params_and_handler cont_handler (CPH.create params ~handler)
-    in
-    let rewrite =
-      Apply_cont_rewrite.create ~original_params:params
-        ~used_params:(KP.Set.of_list used_params)
-        ~extra_params:extra_params_and_args.extra_params
-        ~extra_args:extra_params_and_args.extra_args
-        ~extra_args_recursive_uses:
-          extra_params_and_args.extra_args_recursive_uses
-        ~used_extra_params:(KP.Set.of_list used_extra_params)
-    in
-    (*
-Format.eprintf "Rewrite:@ %a\n%!" Apply_cont_rewrite.print rewrite;
-*)
-    let uacc =
-      UA.map_uenv uacc ~f:(fun uenv ->
-        UE.add_apply_cont_rewrite uenv cont rewrite)
-    in
-(*
-Format.eprintf "Finished simplifying handler %a\n%!"
-Continuation.print cont;
-*)
-    handler, uacc
+      (user_data, params), uacc)
+  in
+  let handler =
+    CH.with_params_and_handler cont_handler (CPH.create params ~handler)
   in
   handler, user_data, uacc
 
@@ -302,6 +268,8 @@ and simplify_non_recursive_let_cont_handler
                 CUE.compute_handler_env cont_uses_env cont Non_recursive
                   ~definition_typing_env_with_params_defined:
                     (DE.typing_env denv)
+                  ~inside_handlers_of_recursive_continuations:
+                    (DE.inside_handlers_of_recursive_continuations denv)
                   ~params ~param_types
               in
               let handler, user_data, uacc, is_single_inlinable_use =
@@ -480,11 +448,18 @@ and simplify_recursive_let_cont_handlers
         let body, (handlers, user_data), uacc =
           simplify_expr dacc body (fun dacc ->
             let dacc = DA.map_denv dacc ~f:DE.set_not_at_unit_toplevel in
+            let dacc =
+              DA.map_denv dacc ~f:(fun denv ->
+                DE.now_inside_handler_of_recursive_continuation denv
+                  (DE.get_continuation_scope_level denv))
+            in
             let uses =
               let cont_uses_env = DA.continuation_uses_env dacc in
               CUE.compute_handler_env cont_uses_env cont Recursive
                 ~definition_typing_env_with_params_defined:
                   (DE.typing_env denv)
+                ~inside_handlers_of_recursive_continuations:
+                  (DE.inside_handlers_of_recursive_continuations denv)
                 ~params ~param_types
             in
             match uses with
@@ -505,9 +480,9 @@ and simplify_recursive_let_cont_handlers
                 simplify_one_continuation_handler dacc cont Recursive
                   cont_handler ~params ~handler ~extra_params_and_args
                   (fun dacc ->
-                    Format.eprintf "Usage:@ %a\nUnused vars:@ %a%!"
+                    Format.eprintf "Usage:@ %a\nUsed vars:@ %a%!"
                       Downwards_usage.print (DA.Usage.get dacc)
-                      Variable.Set.print (DA.Usage.unused_variables dacc);
+                      Variable.Set.print (DA.Usage.used_variables dacc);
                     let user_data, uacc = k dacc in
                     let uacc =
                       UA.map_uenv uacc ~f:(fun uenv ->

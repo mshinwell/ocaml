@@ -87,5 +87,5 @@ module Usage : sig
     -> uses_in_defining_expr:Variable.Set.t
     -> t
 
-  val unused_variables : t -> Variable.Set.t
+  val used_variables : t -> Variable.Set.t
 end
