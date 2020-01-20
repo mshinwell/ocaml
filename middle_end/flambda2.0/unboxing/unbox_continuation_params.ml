@@ -122,7 +122,7 @@ module Make (U : Unboxing_spec) = struct
                 else
                   let extra_arg =
                     Apply_cont_rewrite_id.Map.add id
-                      (EA.Already_in_scope simple) extra_args
+                      (EA.Already_in_scope simple) extra_arg
                   in
                   Some extra_arg, field_types_by_id)
         arg_types_by_use_id
@@ -134,10 +134,11 @@ module Make (U : Unboxing_spec) = struct
       (* Uses of a recursive continuation whose parameters are being unboxed
          are allowed to introduce projections within the handler of the
          continuation. *)
-      let extra_arg_recursive_cases =
-        U.project_field info ~block:(KP.simple extra_param) ~index:Index.t
+      let extra_arg_recursive_uses : EA.t =
+        let prim = U.project_field info ~block:(KP.simple extra_param) ~index in
+        New_binding prim
       in
-      Some (extra_arg, extra_arg_recursive_cases), field_types_by_id
+      Some (extra_arg, extra_arg_recursive_uses), field_types_by_id
 
   let unbox_fields_of_one_parameter info ~new_param_vars ~arg_types_by_use_id
         extra_params_and_args =
@@ -152,7 +153,7 @@ module Make (U : Unboxing_spec) = struct
           in
           let param_type =
             let param_kind = KP.kind extra_param in
-            match extra_args with
+            match extra_arg with
             | None -> T.unknown param_kind
             | Some _ -> T.alias_type_of param_kind (KP.simple extra_param)
           in
@@ -163,10 +164,10 @@ module Make (U : Unboxing_spec) = struct
           | None ->
             Index.Map.add index param_type param_types_rev,
               all_field_types_by_id_rev, extra_params_and_args
-          | Some (extra_arg, extra_arg_recursive_cases) ->
+          | Some (extra_arg, extra_arg_recursive_uses) ->
             let extra_params_and_args =
               EPA.add extra_params_and_args ~extra_param ~extra_arg
-                ~extra_arg_recursive_cases
+                ~extra_arg_recursive_uses
             in
             Index.Map.add index param_type param_types_rev,
               all_field_types_by_id_rev, extra_params_and_args)

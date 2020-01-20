@@ -548,15 +548,19 @@ Format.eprintf "Extra param is needed\n%!";
           let cse =
             EP.Map.add prim (Simple.var (Kinded_parameter.var extra_param)) cse
           in
-          let extra_args =
+          let extra_arg =
             Apply_cont_rewrite_id.Map.map
               (fun simple : Continuation_extra_params_and_args.Extra_arg.t ->
                 Already_in_scope simple)
               bound_to
           in
           let extra_bindings =
+            (* CR mshinwell: The recursive_uses case should never be used
+               here, yet we still have to provide values for it *)
             Continuation_extra_params_and_args.add extra_bindings ~extra_param
-              ~extra_args
+              ~extra_arg
+              ~extra_arg_recursive_uses:
+                (Already_in_scope Simple.const_zero)  (* will never be used *)
           in
 (*
 Format.eprintf "extra_bindings is now:@ %a\n%!"

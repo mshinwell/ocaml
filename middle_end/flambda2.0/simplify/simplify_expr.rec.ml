@@ -228,6 +228,8 @@ Format.eprintf "About to simplify handler %a, params %a, EPA %a\n%!"
         ~used_params:(KP.Set.of_list used_params)
         ~extra_params:extra_params_and_args.extra_params
         ~extra_args:extra_params_and_args.extra_args
+        ~extra_args_recursive_uses:
+          extra_params_and_args.extra_args_recursive_uses
         ~used_extra_params:(KP.Set.of_list used_extra_params)
     in
     (*

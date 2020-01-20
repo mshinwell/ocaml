@@ -30,6 +30,8 @@ val create
   -> extra_params:Kinded_parameter.t list
   -> extra_args:Continuation_extra_params_and_args.Extra_arg.t list
        Apply_cont_rewrite_id.Map.t
+  -> extra_args_recursive_uses:
+       Continuation_extra_params_and_args.Extra_arg.t list
   -> used_extra_params:Kinded_parameter.Set.t
   -> t
 

@@ -65,11 +65,11 @@ let is_empty t =
   match t.extra_params with
   | [] ->
     assert (Apply_cont_rewrite_id.Map.is_empty t.extra_args);
-    assert (Apply_cont_rewrite_id.Map.is_empty t.extra_args_recursive_uses);
+    assert (List.length t.extra_args_recursive_uses = 0);
     true
   | _::_ -> false
 
-let add t ~extra_param ~extra_arg =
+let add t ~extra_param ~extra_arg ~extra_arg_recursive_uses =
   let extra_args =
     if Apply_cont_rewrite_id.Map.is_empty t.extra_args then
       Apply_cont_rewrite_id.Map.map (fun extra_arg -> [extra_arg]) extra_arg
@@ -90,5 +90,6 @@ let add t ~extra_param ~extra_arg =
   in
   { extra_params = extra_param :: t.extra_params;
     extra_args;
-    extra_args_recursive_uses = extra_arg :: t.extra_args_recursive_uses;
+    extra_args_recursive_uses =
+      extra_arg_recursive_uses :: t.extra_args_recursive_uses;
   }
