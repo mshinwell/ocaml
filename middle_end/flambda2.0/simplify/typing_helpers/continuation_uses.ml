@@ -18,6 +18,7 @@
 
 module T = Flambda_type
 module TE = Flambda_type.Typing_env
+module TEE = Flambda_type.Typing_env_extension
 module U = One_continuation_use
 
 type t = {
@@ -91,9 +92,9 @@ let arity t = t.arity
 *)
 
 (* CR mshinwell: Move to [Generic_simplify_let_cont]? *)
-let compute_handler_env t
+let compute_handler_env t (recursive : Recursive.t)
       ~definition_typing_env_with_params_defined:typing_env
-      ~params : Continuation_env_and_param_types.t =
+      ~params ~param_types : Continuation_env_and_param_types.t =
 (*
 Format.eprintf "%d uses for %a\n%!"
   (List.length t.uses)
@@ -111,10 +112,34 @@ Format.eprintf "%d uses for %a\n%!"
             (Format.pp_print_list ~pp_sep:Format.pp_print_space T.print)
             (U.arg_types use) TE.print (U.typing_env_at_use use);
 *)
+          let typing_env_at_use = U.typing_env_at_use use in
+          let param_types_rev, env_extension =
+            match recursive with
+            | Non_recursive -> List.rev (U.arg_types use), TEE.empty ()
+            | Recursive ->
+              List.fold_left2
+                (fun (param_types_rev, env_extension) param_type arg_type ->
+                  match
+                    T.meet typing_env_at_use param_type arg_type
+                  with
+                  | Bottom ->
+                    let param_type = T.bottom_like param_type in
+                    param_type :: param_types_rev, env_extension
+                  | Ok (param_type, env_extension') ->
+                    let meet_env_at_use = T.Meet_env.create typing_env_at_use in
+                    let env_extension =
+                      TEE.meet meet_env_at_use env_extension env_extension'
+                    in
+                    param_type :: param_types_rev, env_extension)
+                ([], TEE.empty ())
+                param_types
+                (U.arg_types use)
+          in
           let use_env =
-            U.typing_env_at_use use
+            typing_env_at_use
             |> TE.add_equations_on_params ~params
-                 ~param_types:(U.arg_types use)
+                 ~param_types:(List.rev param_types_rev)
+            |> TE.add_env_extension ~env_extension
           in
           use_env, U.id use, U.use_kind use,
             Variable.Set.empty (* CR mshinwell: remove *) )

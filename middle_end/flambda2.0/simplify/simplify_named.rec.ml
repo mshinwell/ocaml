@@ -59,6 +59,11 @@ let simplify_named0 dacc ~(bound_vars : Bindable_let_bound.t)
       if T.is_bottom (DE.typing_env (DA.denv dacc)) ty then Reachable.invalid ()
       else defining_expr
     in
+    if T.is_bottom (DE.typing_env (DA.denv dacc)) ty then begin
+      Format.eprintf "Simplifying %a = %a returned bottom\n%!"
+        Bindable_let_bound.print bound_vars
+        Named.print named
+    end;
     [bound_vars, defining_expr], dacc
   | Set_of_closures set_of_closures ->
     Simplify_set_of_closures.simplify_non_lifted_set_of_closures dacc

@@ -40,6 +40,12 @@ val arity_of_list : t list -> Flambda_arity.t
 type typing_env
 type typing_env_extension
 
+module Meet_env : sig
+  type t
+
+  val create : typing_env -> t
+end
+
 module Typing_env_extension : sig
   type t = typing_env_extension
 
@@ -58,6 +64,8 @@ module Typing_env_extension : sig
     -> Flambda_primitive.Eligible_for_cse.t
     -> bound_to:Simple.t
     -> t
+
+  val meet : Meet_env.t -> t -> t -> t
 end
 
 module Typing_env : sig

@@ -293,10 +293,14 @@ and simplify_non_recursive_let_cont_handler
                 DE.add_lifted_constants denv ~lifted:(R.get_lifted_constants r)
               in
               let uses =
+                let param_types =
+                  List.map (fun param -> T.unknown (KP.kind param)) params
+                in
                 let cont_uses_env = DA.continuation_uses_env dacc_after_body in
-                CUE.compute_handler_env cont_uses_env cont ~params
+                CUE.compute_handler_env cont_uses_env cont Non_recursive
                   ~definition_typing_env_with_params_defined:
                     (DE.typing_env denv)
+                  ~params ~param_types
               in
               let handler, user_data, uacc, is_single_inlinable_use =
                 match uses with
@@ -447,60 +451,39 @@ and simplify_recursive_let_cont_handlers
       let params_and_handler = CH.params_and_handler cont_handler in
       CPH.pattern_match params_and_handler ~f:(fun params ~handler ->
         let arity = KP.List.arity params in
-        let dacc =
-          DA.map_denv dacc ~f:DE.increment_continuation_scope_level
+        let param_types =
+          let arity = KP.List.arity_with_subkinds params in
+          List.map (fun (kind : K.With_subkind.t) ->
+              (* CR mshinwell: Move to [Flambda_type] *)
+              match K.With_subkind.kind kind with
+              | Value ->
+                begin match K.With_subkind.subkind kind with
+                | Anything -> T.any_value ()
+                | Boxed_float -> T.any_boxed_float ()
+                | Boxed_int32 -> T.any_boxed_int32 ()
+                | Boxed_int64 -> T.any_boxed_int64 ()
+                | Boxed_nativeint -> T.any_boxed_nativeint ()
+                | Immediate -> T.any_tagged_immediate ()
+                end
+              | (Naked_number _ | Fabricated) as kind -> T.unknown kind)
+            arity
         in
-        (* let set = Continuation_handlers.domain rec_handlers in *)
+        Format.eprintf "Param types:@ %a\n%!"
+          (Format.pp_print_list ~pp_sep:Format.pp_print_space T.print)
+          param_types;
+        let denv = DE.add_parameters (DA.denv dacc) params ~param_types in
+        let dacc =
+          DA.with_denv dacc (DE.increment_continuation_scope_level denv)
+        in
         let body, (handlers, user_data), uacc =
-          simplify_expr dacc body (fun dacc_after_body ->
-            let cont_uses_env = DA.continuation_uses_env dacc_after_body  in
-            let r = DA.r dacc_after_body in
-            let arg_types =
-              let arity = KP.List.arity_with_subkinds params in
-              (* We only know limited type information from the call types *)
-              List.map (fun (kind : K.With_subkind.t) ->
-                  (* CR mshinwell: Move to [Flambda_type] *)
-                  match K.With_subkind.kind kind with
-                  | Value ->
-                    begin match K.With_subkind.subkind kind with
-                    | Anything -> T.any_value ()
-                    | Boxed_float -> T.any_boxed_float ()
-                    | Boxed_int32 -> T.any_boxed_int32 ()
-                    | Boxed_int64 -> T.any_boxed_int64 ()
-                    | Boxed_nativeint -> T.any_boxed_nativeint ()
-                    | Immediate -> T.any_tagged_immediate ()
-                    end
-                  | (Naked_number _ | Fabricated) as kind -> T.unknown kind)
-                arity
-            in
-            let (cont_uses_env, _apply_cont_rewrite_id) :
-              Continuation_uses_env.t * Apply_cont_rewrite_id.t =
-              (* We don't know anything, it's like it was called
-                 with an arbitrary argument! *)
-              CUE.record_continuation_use cont_uses_env
-                cont
-                Non_inlinable (* Maybe simpler ? *)
-                ~typing_env_at_use:(
-                  (* not useful as parameter types will not involve any
-                     names *)
-                  DE.typing_env definition_denv
-                )
-                ~arg_types
-            in
-            let denv =
-              (* XXX These don't have the same scope level as the
-                 non-recursive case *)
-              DE.add_parameters definition_denv params ~param_types:arg_types
-            in
-            let dacc = DA.create denv cont_uses_env r in
-            let dacc =
-              DA.map_denv dacc ~f:DE.set_not_at_unit_toplevel
-            in
+          simplify_expr dacc body (fun dacc ->
+            let dacc = DA.map_denv dacc ~f:DE.set_not_at_unit_toplevel in
             let uses =
               let cont_uses_env = DA.continuation_uses_env dacc in
-              CUE.compute_handler_env cont_uses_env cont ~params
+              CUE.compute_handler_env cont_uses_env cont Recursive
                 ~definition_typing_env_with_params_defined:
                   (DE.typing_env denv)
+                ~params ~param_types
             in
             match uses with
             | No_uses ->
@@ -510,10 +493,10 @@ and simplify_recursive_let_cont_handlers
               let typing_env, extra_params_and_args =
                 Unbox_continuation_params.make_unboxing_decisions
                   handler_typing_env ~arg_types_by_use_id ~params
-                  ~param_types:arg_types extra_params_and_args
+                  ~param_types extra_params_and_args
               in
               let dacc =
-                DA.with_denv dacc_after_body
+                DA.with_denv dacc
                   (DE.with_typing_env denv typing_env)
               in
               let handler, user_data, uacc =
