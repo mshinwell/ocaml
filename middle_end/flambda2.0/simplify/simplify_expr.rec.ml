@@ -358,10 +358,6 @@ and simplify_non_recursive_let_cont_handler
                     else
                       None
                   in
-                  let () = Format.eprintf "%a, can inline (SE)? %a\n%!"
-                    Continuation.print cont
-                    (Misc.Stdlib.Option.print Continuation_handler.print)
-                    can_inline in
                   match can_inline with
                   | Some handler ->
                     (* CR mshinwell: tidy up *)
@@ -440,9 +436,6 @@ and simplify_recursive_let_cont_handlers
               | (Naked_number _ | Fabricated) as kind -> T.unknown kind)
             arity
         in
-        Format.eprintf "Param types:@ %a\n%!"
-          (Format.pp_print_list ~pp_sep:Format.pp_print_space T.print)
-          param_types;
         let denv = DE.add_parameters (DA.denv dacc) params ~param_types in
         let dacc =
           DA.with_denv dacc (DE.increment_continuation_scope_level denv)

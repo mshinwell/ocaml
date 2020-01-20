@@ -98,10 +98,12 @@ let arity t = t.arity
 let compute_handler_env t (recursive : Recursive.t)
       ~definition_typing_env_with_params_defined:typing_env
       ~params ~param_types : Continuation_env_and_param_types.t =
+(*
 Format.eprintf "%d uses for %a (params %a)\n%!"
   (List.length t.uses)
   Continuation.print t.continuation
   Kinded_parameter.List.print params;
+*)
   match t.uses with
   | [] -> No_uses
   | uses ->
@@ -139,17 +141,21 @@ Format.eprintf "Unknown at or later than %a\n%!"
             assert (Scope.(<=) definition_scope_level use_scope_level);
             Scope.Set.for_all (fun rec_cont_scope_level ->
                 assert (Scope.(<=) rec_cont_scope_level use_scope_level);
+(*
                 Format.eprintf "%a: def %a, use %a, rec_cont at %a\n%!"
                   Continuation.print t.continuation
                   Scope.print definition_scope_level
                   Scope.print use_scope_level
                   Scope.print rec_cont_scope_level;
+*)
                 Scope.(<) rec_cont_scope_level definition_scope_level)
               (U.inside_handlers_of_recursive_continuations_at_use use)
           | [] | [_, _, Non_inlinable, _]
           | (_, _, (Inlinable | Non_inlinable), _) :: _ -> false
         in
+(*
         Format.eprintf "Can inline? %b\n%!" can_inline;
+*)
         begin match use_envs_with_ids with
         | [use_env, _, Inlinable, _] when can_inline ->
           (* A single inlinable use will be inlined out by the simplifier, so
