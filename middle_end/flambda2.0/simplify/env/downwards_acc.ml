@@ -18,6 +18,7 @@
 
 module CUE = Continuation_uses_env
 module DE = Simplify_env_and_result.Downwards_env
+module DU = Downwards_usage
 module R = Simplify_env_and_result.Result
 module TE = Flambda_type.Typing_env
 
@@ -25,22 +26,26 @@ type t = {
   denv : DE.t;
   continuation_uses_env : CUE.t;
   r : R.t;
+  usage : DU.t;
 }
 
-let print ppf { denv; continuation_uses_env; r; } =
+let print ppf { denv; continuation_uses_env; r; usage; } =
   Format.fprintf ppf "@[<hov 1>(\
       @[<hov 1>(denv@ %a)@]@ \
       @[<hov 1>(continuation_uses_env@ %a)@]@ \
-      @[<hov 1>(r@ %a)@]\
+      @[<hov 1>(r@ %a)@]@ \
+      @[<hov 1>(usage@ %a)@]\
       )@]"
     DE.print denv
     CUE.print continuation_uses_env
     R.print r
+    DU.print usage
 
 let create denv continuation_uses_env r = {
   denv;
   continuation_uses_env;
   r;
+  usage = DU.empty;
 }
 
 let denv t = t.denv
@@ -108,3 +113,20 @@ let with_code_age_relation t code_age_relation =
   with_denv t (DE.with_typing_env (denv t) typing_env)
 
 let typing_env t = DE.typing_env (denv t)
+
+module Usage = struct
+  let record_use_of_variable t var =
+    { t with
+      usage = DU.record_use_of_variable t.usage var;
+    }
+
+  let record_definition t ~var_being_defined ~defining_expr =
+    { t with
+      usage = DU.record_definition t.usage ~var_being_defined ~defining_expr;
+    }
+
+  let unused_variables t =
+    let used_variables = DU.used_variables t.usage in
+    let all_variables = TE.var_domain (DE.typing_env t.denv) in
+    Variable.Set.diff all_variables used_variables
+end

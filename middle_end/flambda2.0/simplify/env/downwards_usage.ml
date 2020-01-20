@@ -24,14 +24,12 @@ open! Int_replace_polymorphic_compare
 
   The <- relation is represented by the type
 
-     t Variable.Map.t
+     entry Variable.Map.t
 
-  if [Variable.Map.find (f, x) relation = Top] then (f, x) <- Top
-  is in the relation.
+  If [Variable.Map.find x relation = Top] then x <- Top is in the relation.
 
-  if [Variable.Map.find (f, x) relation = Implication s] and
-  [Variable.Set.mem (g, y) s] then (f, x) <- (g, y) is in the
-  relation.
+  If [Variable.Map.find x relation = Implication s] and [Variable.Set.mem y s]
+  then x <- y is in the relation.
 *)
 
 type entry =
@@ -39,6 +37,8 @@ type entry =
   | Implication of Variable.Set.t
 
 type t = entry Variable.Map.t
+
+let empty = Variable.Map.empty
 
 let print_entry ppf entry =
   match entry with
@@ -49,7 +49,7 @@ let print_entry ppf entry =
 
 let print ppf t = Variable.Map.print print_entry ppf t
 
-let top t p = Variable.Map.add p Top t
+let top t var = Variable.Map.add var Top t
 
 let implies t ~from ~to_ =
   match Variable.Map.find to_ t with
@@ -102,20 +102,18 @@ let transitive_closure t =
   in
   least_fixed_point t
 
-let record_use_of_variable t ?var_being_defined var =
-  match var_being_defined with
-  | None -> top t var
-  | Some var_being_defined -> implies t ~from:var_being_defined ~to:var
+let record_use_of_variable t var =
+  top t var
 
-let record_uses_of_variables t ~var_being_defined vars =
+let record_definition t ~var_being_defined ~uses_in_defining_expr =
   Variable.Set.fold (fun var t ->
-      record_use_of_variable t ?var_being_defined var)
-    vars
+      implies t ~from:var_being_defined ~to_:var)
+    uses_in_defining_expr
     t
 
 let used_variables t =
   transitive_closure t
-  |> Variable.Map.filter (fun entry ->
+  |> Variable.Map.filter (fun _ entry ->
        match entry with
        | Top -> true
        | Implication _ -> false)

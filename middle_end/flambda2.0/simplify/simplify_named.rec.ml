@@ -82,14 +82,14 @@ let simplify_named dacc ~bound_vars named =
             let vars_being_defined =
               Bindable_let_bound.all_bound_vars' bound_vars
             in
-            let free_vars_defining_expr =
+            let uses_in_defining_expr =
               Variable.Set.diff
                 (Name_occurrences.variables (Named.free_names defining_expr))
                 (Bindable_let_bound.recursively_bound_vars bound_vars)
             in
             Variable.Set.fold (fun var_being_defined dacc ->
-                DA.record_uses_of_variables dacc ~var_being_defined
-                  free_vars_defining_expr)
+                DA.Usage.record_definition dacc ~var_being_defined
+                  ~uses_in_defining_expr)
               vars_being_defined
               dacc)
         dacc

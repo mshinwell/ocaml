@@ -26,16 +26,12 @@ val empty : t
 
 val print : Format.formatter -> t -> unit
 
-val record_use_of_variable
-   : t
-  -> ?var_being_defined:Variable.t
-  -> Variable.Set.t
-  -> t
+val record_use_of_variable : t -> Variable.t -> t
 
-val record_uses_of_variables
+val record_definition
    : t
-  -> ?var_being_defined:Variable.t
-  -> Variable.Set.t
+  -> var_being_defined:Variable.t
+  -> uses_in_defining_expr:Variable.Set.t
   -> t
 
 val used_variables : t -> Variable.Set.t
