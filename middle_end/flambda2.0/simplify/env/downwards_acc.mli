@@ -73,7 +73,13 @@ val with_code_age_relation : t -> Code_age_relation.t -> t
 val typing_env : t -> Flambda_type.Typing_env.t
 
 module Usage : sig
+  val get : t -> Downwards_usage.t
+
   val record_use_of_variable : t -> Variable.t -> t
+
+  val record_use_of_simple : t -> Simple.t -> t
+
+  val record_uses_of_simples : t -> Simple.t list -> t
 
   val record_definition
      : t

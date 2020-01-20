@@ -16,8 +16,6 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
-open! Int_replace_polymorphic_compare
-
 (* The analysis proceeds in two steps:
    * accumulate the atomic <- relations
    * compute the least-fixed point

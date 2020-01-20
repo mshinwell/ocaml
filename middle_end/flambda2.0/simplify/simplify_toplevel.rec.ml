@@ -23,7 +23,10 @@ let simplify_toplevel dacc expr ~return_continuation ~return_arity
   let expr, cont_uses_env, uacc =
     try
       Simplify_expr.simplify_expr dacc expr
-        (fun cont_uses_env code_age_relation r ->
+        (fun dacc ->
+          let cont_uses_env = DA.continuation_uses_env dacc in
+          let code_age_relation = DA.code_age_relation dacc in
+          let r = DA.r dacc in
           let uenv =
             UE.add_continuation UE.empty return_continuation
               return_cont_scope return_arity

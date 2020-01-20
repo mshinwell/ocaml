@@ -115,14 +115,29 @@ let with_code_age_relation t code_age_relation =
 let typing_env t = DE.typing_env (denv t)
 
 module Usage = struct
+  let get t = t.usage
+
   let record_use_of_variable t var =
     { t with
       usage = DU.record_use_of_variable t.usage var;
     }
 
-  let record_definition t ~var_being_defined ~defining_expr =
+  let record_use_of_simple t simple =
+    match Simple.descr simple with
+    | Name (Var var) -> record_use_of_variable t var
+    | Name (Symbol _) | Const _ -> t
+
+  let record_uses_of_simples t simples =
+    List.fold_left (fun t simple ->
+        record_use_of_simple t simple)
+      t
+      simples
+
+  let record_definition t ~var_being_defined ~uses_in_defining_expr =
     { t with
-      usage = DU.record_definition t.usage ~var_being_defined ~defining_expr;
+      usage =
+        DU.record_definition t.usage ~var_being_defined
+          ~uses_in_defining_expr;
     }
 
   let unused_variables t =
