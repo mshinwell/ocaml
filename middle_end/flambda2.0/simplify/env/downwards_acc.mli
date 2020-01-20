@@ -62,7 +62,24 @@ val with_r : t -> Simplify_env_and_result.Result.t -> t
 
 (* CR mshinwell: Why do these take scope arguments when [DE] knows the
    current scope level? *)
-include Continuation_uses_env_intf.S with type t := t
+val record_continuation_use
+   : t
+  -> Continuation.t
+  -> Continuation_use_kind.t
+  -> typing_env_at_use:Flambda_type.Typing_env.t
+  -> arg_types:Flambda_type.t list
+  -> t * Apply_cont_rewrite_id.t
+
+val compute_handler_env
+   : t
+  -> Continuation.t
+  -> Recursive.t
+  -> definition_typing_env_with_params_defined:Flambda_type.Typing_env.t
+  -> params:Kinded_parameter.t list
+  -> param_types:Flambda_type.t list
+  -> Continuation_env_and_param_types.t
+
+val num_continuation_uses : t -> Continuation.t -> int
 
 val continuation_uses_env : t -> Continuation_uses_env.t
 

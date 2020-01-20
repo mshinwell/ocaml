@@ -24,16 +24,22 @@ type t = {
   kind : Continuation_use_kind.t;
   arg_types : T.t list;
   typing_env : TE.t;
+  inside_handlers_of_recursive_continuations_at_use : Scope.Set.t;
 }
 
-let create kind ~typing_env_at_use:typing_env id ~arg_types =
+let create kind ~typing_env_at_use:typing_env
+      ~inside_handlers_of_recursive_continuations_at_use
+      id ~arg_types =
   { id;
     kind;
     arg_types;
     typing_env;
+    inside_handlers_of_recursive_continuations_at_use;
   }
 
-let print ppf { typing_env = _; id = _; kind = _; arg_types; } =
+let print ppf { typing_env = _; id = _; kind = _; arg_types;
+                inside_handlers_of_recursive_continuations_at_use = _;
+              } =
   Format.fprintf ppf "@[<hov 1>(\
       @[<hov 1>(arg_types@ %a)@]@ \
       )@]"
@@ -44,3 +50,5 @@ let id t = t.id
 let use_kind t = t.kind
 let arg_types t = t.arg_types
 let typing_env_at_use t = t.typing_env
+let inside_handlers_of_recursive_continuations_at_use t =
+  t.inside_handlers_of_recursive_continuations_at_use

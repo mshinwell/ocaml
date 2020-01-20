@@ -32,7 +32,9 @@ let empty = {
   continuation_uses = Continuation.Map.empty;
 }
 
-let record_continuation_use t cont kind ~typing_env_at_use ~arg_types =
+let record_continuation_use t cont kind ~typing_env_at_use
+      ~inside_handlers_of_recursive_continuations_at_use
+      ~arg_types =
   (* XXX This needs to deal with exn continuation extra-args *)
   let id = Apply_cont_rewrite_id.create () in
   let continuation_uses =
@@ -40,11 +42,11 @@ let record_continuation_use t cont kind ~typing_env_at_use ~arg_types =
         | None ->
           let arity = T.arity_of_list arg_types in
           let uses = Continuation_uses.create cont arity in
-          Some (Continuation_uses.add_use uses kind ~typing_env_at_use id
-            ~arg_types)
+          Some (Continuation_uses.add_use uses kind ~typing_env_at_use
+            ~inside_handlers_of_recursive_continuations_at_use id ~arg_types)
         | Some uses ->
-          Some (Continuation_uses.add_use uses kind ~typing_env_at_use id
-            ~arg_types))
+          Some (Continuation_uses.add_use uses kind ~typing_env_at_use
+            ~inside_handlers_of_recursive_continuations_at_use id ~arg_types))
       t.continuation_uses
   in
   let t : t =
@@ -55,7 +57,6 @@ let record_continuation_use t cont kind ~typing_env_at_use ~arg_types =
 
 let compute_handler_env t cont recursive
       ~definition_typing_env_with_params_defined
-      ~inside_handlers_of_recursive_continuations
       ~params ~param_types
       : Continuation_env_and_param_types.t =
   match Continuation.Map.find cont t.continuation_uses with
@@ -63,7 +64,6 @@ let compute_handler_env t cont recursive
   | uses ->
     Continuation_uses.compute_handler_env uses recursive
       ~definition_typing_env_with_params_defined
-      ~inside_handlers_of_recursive_continuations
       ~params ~param_types
 
 let num_continuation_uses t cont =

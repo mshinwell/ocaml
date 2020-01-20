@@ -34,6 +34,7 @@ val add_use
    : t
   -> Continuation_use_kind.t
   -> typing_env_at_use:Flambda_type.Typing_env.t
+  -> inside_handlers_of_recursive_continuations_at_use:Scope.Set.t
   -> Apply_cont_rewrite_id.t
   -> arg_types:Flambda_type.t list
   -> t
@@ -42,7 +43,6 @@ val compute_handler_env
    : t
   -> Recursive.t
   -> definition_typing_env_with_params_defined:Flambda_type.Typing_env.t
-  -> inside_handlers_of_recursive_continuations:Scope.Set.t
   -> params:Kinded_parameter.t list
   -> param_types:Flambda_type.t list
   -> Continuation_env_and_param_types.t

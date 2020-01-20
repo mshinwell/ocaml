@@ -268,8 +268,6 @@ and simplify_non_recursive_let_cont_handler
                 CUE.compute_handler_env cont_uses_env cont Non_recursive
                   ~definition_typing_env_with_params_defined:
                     (DE.typing_env denv)
-                  ~inside_handlers_of_recursive_continuations:
-                    (DE.inside_handlers_of_recursive_continuations denv)
                   ~params ~param_types
               in
               let handler, user_data, uacc, is_single_inlinable_use =
@@ -360,6 +358,10 @@ and simplify_non_recursive_let_cont_handler
                     else
                       None
                   in
+                  let () = Format.eprintf "%a, can inline (SE)? %a\n%!"
+                    Continuation.print cont
+                    (Misc.Stdlib.Option.print Continuation_handler.print)
+                    can_inline in
                   match can_inline with
                   | Some handler ->
                     (* CR mshinwell: tidy up *)
@@ -447,19 +449,11 @@ and simplify_recursive_let_cont_handlers
         in
         let body, (handlers, user_data), uacc =
           simplify_expr dacc body (fun dacc ->
-            let dacc = DA.map_denv dacc ~f:DE.set_not_at_unit_toplevel in
-            let dacc =
-              DA.map_denv dacc ~f:(fun denv ->
-                DE.now_inside_handler_of_recursive_continuation denv
-                  (DE.get_continuation_scope_level denv))
-            in
             let uses =
               let cont_uses_env = DA.continuation_uses_env dacc in
               CUE.compute_handler_env cont_uses_env cont Recursive
                 ~definition_typing_env_with_params_defined:
                   (DE.typing_env denv)
-                ~inside_handlers_of_recursive_continuations:
-                  (DE.inside_handlers_of_recursive_continuations denv)
                 ~params ~param_types
             in
             match uses with
@@ -475,6 +469,12 @@ and simplify_recursive_let_cont_handlers
               let dacc =
                 DA.with_denv dacc
                   (DE.with_typing_env denv typing_env)
+              in
+              let dacc = DA.map_denv dacc ~f:DE.set_not_at_unit_toplevel in
+              let dacc =
+                DA.map_denv dacc ~f:(fun denv ->
+                  DE.now_inside_handler_of_recursive_continuation denv
+                    (DE.get_continuation_scope_level denv))
               in
               let handler, user_data, uacc =
                 simplify_one_continuation_handler dacc cont Recursive

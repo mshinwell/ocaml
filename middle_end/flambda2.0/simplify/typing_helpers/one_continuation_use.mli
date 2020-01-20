@@ -24,6 +24,7 @@ type t
 val create
    : Continuation_use_kind.t
   -> typing_env_at_use:TE.t
+  -> inside_handlers_of_recursive_continuations_at_use:Scope.Set.t
   -> Apply_cont_rewrite_id.t
   -> arg_types:T.t list
   -> t
@@ -34,3 +35,4 @@ val id : t -> Apply_cont_rewrite_id.t
 val use_kind : t -> Continuation_use_kind.t
 val arg_types : t -> T.t list
 val typing_env_at_use : t -> TE.t
+val inside_handlers_of_recursive_continuations_at_use : t -> Scope.Set.t

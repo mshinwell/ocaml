@@ -86,20 +86,21 @@ let with_continuation_uses_env t continuation_uses_env =
     continuation_uses_env;
   }
 
-let record_continuation_use t cont use_kind ~typing_env_at_use ~arg_types =
+let record_continuation_use t cont use_kind ~typing_env_at_use
+      ~arg_types =
   let cont_uses_env, id =
     CUE.record_continuation_use t.continuation_uses_env cont use_kind
+      ~inside_handlers_of_recursive_continuations_at_use:
+        (DE.inside_handlers_of_recursive_continuations t.denv)
       ~typing_env_at_use ~arg_types
   in
   with_continuation_uses_env t cont_uses_env, id
 
 let compute_handler_env t cont recursive
       ~definition_typing_env_with_params_defined
-      ~inside_handlers_of_recursive_continuations
       ~params ~param_types =
   CUE.compute_handler_env t.continuation_uses_env cont recursive
     ~definition_typing_env_with_params_defined
-    ~inside_handlers_of_recursive_continuations
     ~params ~param_types
 
 let num_continuation_uses t cont =
