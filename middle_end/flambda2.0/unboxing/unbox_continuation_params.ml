@@ -59,73 +59,85 @@ module Make (U : Unboxing_spec) = struct
     (* Don't unbox parameters unless, at all use sites, there is a
        non-irrelevant [Simple] available for the corresponding field of the
        block. *)
-    Apply_cont_rewrite_id.Map.fold
-      (fun id (typing_env_at_use, arg_type_at_use)
-           (extra_args, field_types_by_id) ->
-        let env_extension =
-          let result_var =
-            Var_in_binding_pos.create field_var Name_mode.normal
-          in
-          T.meet_shape typing_env_at_use arg_type_at_use
-            ~shape ~result_var ~result_kind:param_kind
-        in
-        let field = Simple.var field_var in
-        match env_extension with
-        | Bottom ->
-          let field_types_by_id =
-            Apply_cont_rewrite_id.Map.add id
-              (typing_env_at_use, T.bottom param_kind)
-              field_types_by_id
-          in
-          None, field_types_by_id
-        | Ok env_extension ->
-          let typing_env_at_use =
-            TE.add_definition typing_env_at_use field_name param_kind
-          in
-          let typing_env_at_use =
-            TE.add_env_extension typing_env_at_use ~env_extension
-          in
-          let field_type = T.alias_type_of param_kind field in
-          let field_types_by_id =
-            Apply_cont_rewrite_id.Map.add id
-              (typing_env_at_use, field_type)
-              field_types_by_id
-          in
-          (* CR mshinwell: hoist extra_args None check *)
-          match extra_args with
-          | None -> None, field_types_by_id
-          | Some extra_args ->
-            let canonical_simple, kind' =
-              TE.get_canonical_simple_with_kind typing_env_at_use
-                ~min_name_mode:Name_mode.normal
-                field
+    let extra_arg, field_types_by_id =
+      Apply_cont_rewrite_id.Map.fold
+        (fun id (typing_env_at_use, arg_type_at_use)
+             (extra_arg, field_types_by_id) ->
+          let env_extension =
+            let result_var =
+              Var_in_binding_pos.create field_var Name_mode.normal
             in
-            assert (Flambda_kind.equal param_kind kind');
-            (* CR-someday pchambart: This shouldn't add another load if
-               there is already one in the list of parameters.  That is,
-                 apply_cont k (a, b) a
-                 where k x y
-               should become:
-                 apply_cont k (a, b) a b
-                 where k x y b'
-               not:
-                 apply_cont k (a, b) a a b
-                 where k x y a' b'
-               mshinwell: We never add any loads now, but might in the future.
-            *)
-            match canonical_simple with
-            | Bottom | Ok None ->
-              None, field_types_by_id
-            | Ok (Some simple) ->
-              if Simple.equal simple field then None, field_types_by_id
-              else
-                let extra_arg : EA.t = Already_in_scope simple in
-                let extra_args =
-                  Apply_cont_rewrite_id.Map.add id extra_arg extra_args
-                in
-                Some extra_args, field_types_by_id)
-      arg_types_by_use_id
-      (Some Apply_cont_rewrite_id.Map.empty, Apply_cont_rewrite_id.Map.empty)
+            T.meet_shape typing_env_at_use arg_type_at_use
+              ~shape ~result_var ~result_kind:param_kind
+          in
+          let field = Simple.var field_var in
+          match env_extension with
+          | Bottom ->
+            let field_types_by_id =
+              Apply_cont_rewrite_id.Map.add id
+                (typing_env_at_use, T.bottom param_kind)
+                field_types_by_id
+            in
+            None, field_types_by_id
+          | Ok env_extension ->
+            let typing_env_at_use =
+              TE.add_definition typing_env_at_use field_name param_kind
+            in
+            let typing_env_at_use =
+              TE.add_env_extension typing_env_at_use ~env_extension
+            in
+            let field_type = T.alias_type_of param_kind field in
+            let field_types_by_id =
+              Apply_cont_rewrite_id.Map.add id
+                (typing_env_at_use, field_type)
+                field_types_by_id
+            in
+            (* CR mshinwell: hoist extra_arg None check *)
+            match extra_arg with
+            | None -> None, field_types_by_id
+            | Some extra_arg ->
+              let canonical_simple, kind' =
+                TE.get_canonical_simple_with_kind typing_env_at_use
+                  ~min_name_mode:Name_mode.normal
+                  field
+              in
+              assert (Flambda_kind.equal param_kind kind');
+              (* CR-someday pchambart: This shouldn't add another load if
+                 there is already one in the list of parameters.  That is,
+                   apply_cont k (a, b) a
+                   where k x y
+                 should become:
+                   apply_cont k (a, b) a b
+                   where k x y b'
+                 not:
+                   apply_cont k (a, b) a a b
+                   where k x y a' b'
+                 mshinwell: We never add any loads now, but might in the future.
+              *)
+              match canonical_simple with
+              | Bottom | Ok None ->
+                None, field_types_by_id
+              | Ok (Some simple) ->
+                if Simple.equal simple field then None, field_types_by_id
+                else
+                  let extra_arg =
+                    Apply_cont_rewrite_id.Map.add id
+                      (EA.Already_in_scope simple) extra_args
+                  in
+                  Some extra_arg, field_types_by_id)
+        arg_types_by_use_id
+        (Some Apply_cont_rewrite_id.Map.empty, Apply_cont_rewrite_id.Map.empty)
+    in
+    match extra_arg with
+    | None -> None, field_types_by_id
+    | Some extra_arg ->
+      (* Uses of a recursive continuation whose parameters are being unboxed
+         are allowed to introduce projections within the handler of the
+         continuation. *)
+      let extra_arg_recursive_cases =
+        U.project_field info ~block:(KP.simple extra_param) ~index:Index.t
+      in
+      Some (extra_arg, extra_arg_recursive_cases), field_types_by_id
 
   let unbox_fields_of_one_parameter info ~new_param_vars ~arg_types_by_use_id
         extra_params_and_args =
@@ -134,7 +146,7 @@ module Make (U : Unboxing_spec) = struct
         (fun index extra_param
              (param_types_rev, all_field_types_by_id_rev,
               extra_params_and_args) ->
-          let extra_args, field_types_by_id =
+          let extra_arg, field_types_by_id =
             unbox_one_field_of_one_parameter info ~extra_param ~index
               ~arg_types_by_use_id
           in
@@ -147,13 +159,14 @@ module Make (U : Unboxing_spec) = struct
           let all_field_types_by_id_rev =
             field_types_by_id :: all_field_types_by_id_rev
           in
-          match extra_args with
+          match extra_arg with
           | None ->
             Index.Map.add index param_type param_types_rev,
               all_field_types_by_id_rev, extra_params_and_args
-          | Some extra_args ->
+          | Some (extra_arg, extra_arg_recursive_cases) ->
             let extra_params_and_args =
-              EPA.add extra_params_and_args ~extra_param ~extra_args
+              EPA.add extra_params_and_args ~extra_param ~extra_arg
+                ~extra_arg_recursive_cases
             in
             Index.Map.add index param_type param_types_rev,
               all_field_types_by_id_rev, extra_params_and_args)

@@ -501,8 +501,7 @@ and simplify_recursive_let_cont_handlers
               in
               let handler, user_data, uacc =
                 simplify_one_continuation_handler dacc cont Recursive
-                  cont_handler ~params ~handler
-                  ~extra_params_and_args
+                  cont_handler ~params ~handler ~extra_params_and_args
                   (fun dacc ->
                     Format.eprintf "Usage:@ %a\nUnused vars:@ %a%!"
                       Downwards_usage.print (DA.Usage.get dacc)

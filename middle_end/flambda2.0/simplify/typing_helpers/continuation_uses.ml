@@ -102,60 +102,42 @@ Format.eprintf "%d uses for %a\n%!"
   match t.uses with
   | [] -> No_uses
   | uses ->
-    let definition_scope_level = TE.current_scope typing_env in
-    let use_envs_with_ids =
-      List.map (fun use ->
-(*
-          Format.eprintf "Use: parameters: %a,@ arg types: %a,@ env:@ %a\n%!"
-            Kinded_parameter.List.print params
-            (Format.pp_print_list ~pp_sep:Format.pp_print_space T.print)
-            (U.arg_types use) TE.print (U.typing_env_at_use use);
-*)
-          let typing_env_at_use = U.typing_env_at_use use in
-          let param_types_rev =
-            match recursive with
-            | Non_recursive -> List.rev (U.arg_types use)
-            | Recursive ->
-              List.fold_left2
-                (fun param_types_rev param_type arg_type ->
-                  match
-                    T.meet typing_env_at_use param_type arg_type
-                  with
-                  | Bottom ->
-                    let param_type = T.bottom_like param_type in
-                    param_type :: param_types_rev
-                  | Ok (_meet_type, _env_extension) ->
-                    param_type :: param_types_rev)
-                []
-                param_types
-                (U.arg_types use)
-          in
-          let use_env =
-            typing_env_at_use
-            |> TE.add_equations_on_params ~params
-                 ~param_types:(List.rev param_types_rev)
-          in
-          use_env, U.id use, U.use_kind use,
-            Variable.Set.empty (* CR mshinwell: remove *) )
-        uses
-    in
+    let handler_typing_env, extra_params_and_args, is_single_inlinable_use =
+      match recursive with
+      | Non_recursive ->
+        let definition_scope_level = TE.current_scope typing_env in
+        let use_envs_with_ids =
+          List.map (fun use ->
+    (*
+              Format.eprintf "Use: parameters: %a,@ arg types: %a,@ env:@ %a\n%!"
+                Kinded_parameter.List.print params
+                (Format.pp_print_list ~pp_sep:Format.pp_print_space T.print)
+                (U.arg_types use) TE.print (U.typing_env_at_use use);
+    *)
+              let use_env =
+                TE.add_equations_on_params (U.typing_env_at_use use)
+                  ~params ~param_types:(U.arg_types use)
+              in
+              use_env, U.id use, U.use_kind use,
+                Variable.Set.empty (* CR mshinwell: remove *) )
+            uses
+        in
 (*
 Format.eprintf "Unknown at or later than %a\n%!"
   Scope.print (Scope.next definition_scope_level);
 *)
-    let handler_typing_env, extra_params_and_args, is_single_inlinable_use =
-      match use_envs_with_ids with
-      | [use_env, _, Inlinable, _] ->
-        (* A single inlinable use will be inlined out by the simplifier, so
-           avoid any join-related computations. *)
-        use_env, Continuation_extra_params_and_args.empty, true
-      | [] | [_, _, Non_inlinable, _]
-      | (_, _, (Inlinable | Non_inlinable), _) :: _ ->
-        let env_extension, extra_params_and_args =
-          TE.cut_and_n_way_join typing_env use_envs_with_ids
-            ~unknown_if_defined_at_or_later_than:
-              (Scope.next definition_scope_level)
-        in
+        begin match use_envs_with_ids with
+        | [use_env, _, Inlinable, _] ->
+          (* A single inlinable use will be inlined out by the simplifier, so
+             avoid any join-related computations. *)
+          use_env, Continuation_extra_params_and_args.empty, true
+        | [] | [_, _, Non_inlinable, _]
+        | (_, _, (Inlinable | Non_inlinable), _) :: _ ->
+          let env_extension, extra_params_and_args =
+            TE.cut_and_n_way_join typing_env use_envs_with_ids
+              ~unknown_if_defined_at_or_later_than:
+                (Scope.next definition_scope_level)
+          in
 (*
 Format.eprintf "handler env extension for %a is:@ %a\n%!"
   Continuation.print t.continuation
@@ -163,13 +145,41 @@ Format.eprintf "handler env extension for %a is:@ %a\n%!"
 Format.eprintf "The extra params and args are:@ %a\n%!"
   Continuation_extra_params_and_args.print extra_params_and_args;
 *)
-        let handler_env =
-          typing_env
-          |> TE.add_definitions_of_params
-            ~params:extra_params_and_args.extra_params
-          |> TE.add_env_extension ~env_extension
+          let handler_env =
+            typing_env
+            |> TE.add_definitions_of_params
+              ~params:extra_params_and_args.extra_params
+            |> TE.add_env_extension ~env_extension
+          in
+          handler_env, extra_params_and_args, false
+        end
+      | Recursive ->
+        (* CR mshinwell: Do meet with param types and all arg types to see
+           if any become bottom. *)
+(*
+        List.iter (fun use ->
+            List.fold_left2
+              (fun param_types_rev param_type arg_type ->
+                match
+                  T.meet typing_env_at_use param_type arg_type
+                with
+                | Bottom ->
+                  let param_type = T.bottom_like param_type in
+                  param_type :: param_types_rev
+                | Ok (_meet_type, _env_extension) ->
+                  param_type :: param_types_rev)
+              []
+              param_types
+              (U.arg_types use)
+
+          uses
+        let param_types_rev =
         in
-        handler_env, extra_params_and_args, false
+*)
+        let handler_typing_env =
+          TE.add_equations_on_params typing_env ~params ~param_types
+        in
+        handler_typing_env, Continuation_extra_params_and_args.empty, false
     in
     let arg_types_by_use_id =
       List.fold_left (fun args use ->
