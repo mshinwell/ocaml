@@ -66,7 +66,9 @@ let symbol s =
 let name env = function
   | Name.Var v -> Env.inline_variable env v
   | Name.Symbol s ->
-    Env.check_scope env (Code_id_or_symbol.Symbol s);
+    let env =
+      Env.check_scope ~allow_deleted:false env (Code_id_or_symbol.Symbol s)
+    in
     C.symbol (symbol s), env, Ece.pure
 
 (* Constants *)
@@ -816,7 +818,10 @@ and apply_call env e =
      given arbitrary effects and coeffects. *)
   | Call_kind.Function (* FIXME Let code *)
       Call_kind.Function_call.Direct { code_id; closure_id = _; return_arity; } ->
-      Env.check_scope env (Code_id_or_symbol.Code_id code_id);
+      let env =
+        Env.check_scope ~allow_deleted:false env
+          (Code_id_or_symbol.Code_id code_id)
+      in
       let info = Env.get_function_info env code_id in
       let ty = machtype_of_return_arity return_arity in
       let args, env, _ = arg_list env (Apply_expr.args e) in

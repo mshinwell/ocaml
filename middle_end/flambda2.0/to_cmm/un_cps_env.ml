@@ -108,6 +108,15 @@ type t = {
 
   names_in_scope : Code_id_or_symbol.Set.t;
   (* Code ids and symbols bound in this scope, for invariant checking *)
+
+  deleted : Code_id.Set.t;
+  used_code_ids : Code_id.Set.t;
+  (* Code ids marked as deleted are only allowed in the newer_version_of
+     field of code definitions.
+     Due to the order in which the checks are made, it is possible that
+     a code id is checked before we know whether it is deleted or not,
+     so the used_code_ids records all code ids that were checked.
+  *)
 }
 
 let mk offsets k_return k_exn used_closure_vars = {
@@ -119,6 +128,8 @@ let mk offsets k_return k_exn used_closure_vars = {
   conts = Continuation.Map.empty;
   exn_conts_extra_args = Continuation.Map.empty;
   names_in_scope = Code_id_or_symbol.Set.empty;
+  deleted = Code_id.Set.empty;
+  used_code_ids = Code_id.Set.empty;
 }
 
 let enter_function_def env k_return k_exn = {
@@ -132,6 +143,8 @@ let enter_function_def env k_return k_exn = {
   conts = Continuation.Map.empty;
   exn_conts_extra_args = Continuation.Map.empty;
   names_in_scope = env.names_in_scope;
+  deleted = env.deleted;
+  used_code_ids = env.used_code_ids;
 }
 
 let dummy offsets used_closure_vars =
@@ -410,7 +423,17 @@ let add_to_scope env names =
     names_in_scope = Code_id_or_symbol.Set.union env.names_in_scope names;
   }
 
-let check_scope env code_id_or_symbol =
+let mark_code_id_as_deleted env code_id =
+  if Code_id.Set.mem code_id env.used_code_ids
+  then
+    Misc.fatal_errorf "Use of deleted code id %a"
+      Code_id.print code_id
+  else
+    { env with
+      deleted = Code_id.Set.add code_id env.deleted;
+    }
+
+let check_scope ~allow_deleted env code_id_or_symbol =
   let in_scope =
     Code_id_or_symbol.Set.mem code_id_or_symbol env.names_in_scope
   in
@@ -419,7 +442,20 @@ let check_scope env code_id_or_symbol =
       (Code_id_or_symbol.compilation_unit code_id_or_symbol)
       (Compilation_unit.get_current_exn ()))
   in
-  if in_scope || in_another_unit then ()
+  let updated_env =
+    match (code_id_or_symbol: Code_id_or_symbol.t) with
+    | Code_id code_id ->
+      if allow_deleted then env
+      else if Code_id.Set.mem code_id env.deleted then
+        Misc.fatal_errorf "Use of deleted code id %a"
+          Code_id.print code_id
+      else
+        { env with
+          used_code_ids = Code_id.Set.add code_id env.used_code_ids;
+        }
+    | Symbol _ -> env
+  in
+  if in_scope || in_another_unit then updated_env
   else
     Misc.fatal_errorf "Use out of scope of %a@.Known names:@.%a@."
       Code_id_or_symbol.print code_id_or_symbol

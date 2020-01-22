@@ -140,8 +140,13 @@ val used_closure_vars : t -> Var_within_closure.Set.t
 (** All closure variables used in the whole program. *)
 
 val add_to_scope : t -> Code_id_or_symbol.Set.t -> t
-(* Add the given names to the current scope *)
+(** Add the given names to the current scope *)
 
-val check_scope : t -> Code_id_or_symbol.t -> unit
-(* Check that the given name is in scope *)
+val mark_code_id_as_deleted : t -> Code_id.t -> t
+(** Mark the given code id as deleted, so that [check_scope] will report
+    an error if it is used. *)
+
+val check_scope : allow_deleted:bool -> t -> Code_id_or_symbol.t -> t
+(** Check that the given name is in scope. If [allow_deleted] is [false],
+    check that it is not declared as deleted. *)
 

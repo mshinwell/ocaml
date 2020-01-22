@@ -55,9 +55,9 @@ let todo () = failwith "Not yet implemented"
 (* ----- End of functions to share ----- *)
 
 let name_static env = function
-  | Name.Var v -> `Var v
+  | Name.Var v -> env, `Var v
   | Name.Symbol s ->
-    Env.check_scope env (Code_id_or_symbol.Symbol s);
+    Env.check_scope ~allow_deleted:false env (Code_id_or_symbol.Symbol s),
     `Data [C.symbol_address (symbol s)]
 
 let const_static _env c =
@@ -79,16 +79,16 @@ let const_static _env c =
 let simple_static env s =
   match (Simple.descr s : Simple.descr) with
   | Name n -> name_static env n
-  | Const c -> `Data (const_static env c)
+  | Const c -> env, `Data (const_static env c)
 
 let static_value env v =
   match (v : SC.Field_of_block.t) with
   | Symbol s ->
-      Env.check_scope env (Code_id_or_symbol.Symbol s);
+      Env.check_scope ~allow_deleted:false env (Code_id_or_symbol.Symbol s),
       C.symbol_address (symbol s)
-  | Dynamically_computed _ -> C.cint 1n
+  | Dynamically_computed _ -> env, C.cint 1n
   | Tagged_immediate i ->
-      C.cint (nativeint_of_targetint (tag_targetint (targetint_of_imm i)))
+      env, C.cint (nativeint_of_targetint (tag_targetint (targetint_of_imm i)))
 
 let or_variable f default v cont =
   match (v : _ Or_variable.t) with
@@ -163,7 +163,7 @@ let rec static_set_of_closures env symbs set prev_update =
       (List.map fst (Closure_id.Map.bindings decls))
       (List.map fst (Var_within_closure.Map.bindings elts))
   in
-  let l, updates, length =
+  let env, l, updates, length =
     fill_static_layout clos_symb symbs decls elts env [] prev_update 0 layout
   in
   let header = C.cint (C.black_closure_header length) in
@@ -171,13 +171,13 @@ let rec static_set_of_closures env symbs set prev_update =
     | None -> []
     | Some s -> C.define_symbol ~global:false (symbol s)
   in
-  header :: sdef @ l, updates
+  env, header :: sdef @ l, updates
 
 and fill_static_layout s symbs decls elts env acc updates i = function
-  | [] -> List.rev acc, updates, i
+  | [] -> env, List.rev acc, updates, i
   | (j, slot) :: r ->
       let acc = fill_static_up_to j acc i in
-      let acc, offset, updates =
+      let env, acc, offset, updates =
         fill_static_slot s symbs decls elts env acc j updates slot
       in
       fill_static_layout s symbs decls elts env acc updates offset r
@@ -186,10 +186,13 @@ and fill_static_slot s symbs decls elts env acc offset updates slot =
   match (slot : Un_cps_closure.layout_slot) with
   | Infix_header ->
       let field = C.cint (C.infix_header (offset + 1)) in
-      field :: acc, offset + 1, updates
+      env, field :: acc, offset + 1, updates
   | Env_var v ->
+      let env, contents =
+        simple_static env (Var_within_closure.Map.find v elts)
+      in
       let fields, updates =
-        match simple_static env (Var_within_closure.Map.find v elts) with
+        match contents with
         | `Data fields -> fields, updates
         | `Var v ->
             let s = get_whole_closure_symbol s in
@@ -198,7 +201,7 @@ and fill_static_slot s symbs decls elts env acc offset updates slot =
             in
             [C.cint 1n], updates
       in
-      List.rev fields @ acc, offset + 1, updates
+      env, List.rev fields @ acc, offset + 1, updates
   | Closure c ->
       let decl = Closure_id.Map.find c decls in
       let symb = Closure_id.Map.find c symbs in
@@ -216,7 +219,7 @@ and fill_static_slot s symbs decls elts env acc offset updates slot =
           C.symbol_address code_name ::
           acc
         in
-        acc, offset + 2, updates
+        env, acc, offset + 2, updates
       end else begin
         let acc =
           C.symbol_address code_name ::
@@ -224,7 +227,7 @@ and fill_static_slot s symbs decls elts env acc offset updates slot =
           C.symbol_address (C.curry_function_sym arity) ::
           acc
         in
-        acc, offset + 3, updates
+        env, acc, offset + 3, updates
       end
 
 and fill_static_up_to j acc i =
@@ -239,7 +242,13 @@ let static_const0 env r ~params_and_body (bound_symbols : Bound_symbols.t)
       let tag = Tag.Scannable.to_int tag in
       let block_name = name, Cmmgen_state.Global in
       let header = C.block_header tag (List.length fields) in
-      let static_fields = List.map (static_value env) fields in
+      let env, static_fields =
+        List.fold_right
+          (fun v (env, static_fields) ->
+             let env, static_field = static_value env v in
+             env, static_field :: static_fields)
+          fields (env, [])
+      in
       let block = C.emit_block block_name header static_fields in
       let updates = static_block_updates (C.symbol name) env None 0 fields in
       env, R.add_data block r, updates
@@ -252,9 +261,16 @@ let static_const0 env r ~params_and_body (bound_symbols : Bound_symbols.t)
       let module SCCSC = Static_const.Code_and_set_of_closures in
       let update_env env { SCCSC.code; set_of_closures = _; } =
         Code_id.Map.fold
-          (fun code_id SC.Code.({ params_and_body = p; newer_version_of = _; }) env ->
+          (fun code_id SC.Code.({ params_and_body = p; newer_version_of; }) env ->
+            let env =
+              match newer_version_of with
+              | None -> env
+              | Some code_id ->
+                Env.check_scope ~allow_deleted:true env
+                  (Code_id_or_symbol.Code_id code_id)
+            in
             match (p : _ SC.Code.or_deleted) with
-            | Deleted -> env
+            | Deleted -> Env.mark_code_id_as_deleted env code_id
             | Present p ->
                 Function_params_and_body.pattern_match p
                   ~f:(fun ~return_continuation:_ _exn_k _ps ~body ~my_closure ->
@@ -291,18 +307,18 @@ let static_const0 env r ~params_and_body (bound_symbols : Bound_symbols.t)
           r
       in
       let r = List.fold_left add_functions r definitions in
-      let preallocate (r, updates)
+      let preallocate (r, updates, env)
           { BSCSC.code_ids = _; closure_symbols; }
           { SCCSC.code = _; set_of_closures; } =
-        let data, updates =
+        let env, data, updates =
           static_set_of_closures env closure_symbols set_of_closures updates
         in
-        R.add_data data r, updates
+        R.add_data data r, updates, env
       in
-      let r, updates =
-        List.fold_left2 preallocate (r, None) binders definitions
+      let r, updates, env =
+        List.fold_left2 preallocate (r, None, updated_env) binders definitions
       in
-      updated_env, r, updates
+      env, r, updates
   | Singleton s, Boxed_float v ->
       let default = Numbers.Float_by_bit_pattern.zero in
       let transl = Numbers.Float_by_bit_pattern.to_float in
