@@ -280,7 +280,18 @@ and simplify_non_recursive_let_cont_handler
                   let user_data, uacc = k dacc_after_body in
                   cont_handler, user_data, uacc, false
                 | Uses { handler_typing_env; arg_types_by_use_id;
-                         extra_params_and_args; is_single_inlinable_use; } ->
+                         extra_params_and_args; is_single_inlinable_use;
+                         jumps_out_of_loop; } ->
+                  if jumps_out_of_loop then begin
+                    (* XXX In this case maybe we should have the unboxing
+                       pass rematerialise any boxed value that it unboxes
+                       (perhaps just for boxed numbers?).  That will stop
+                       dependencies from the loop holding boxed values
+                       alive.  This could be done by returning a permutation
+                       to be applied to the handler before it's simplified. *)
+                    Format.eprintf "jumps out of loop:@ %a\n%!"
+                      Continuation_handler.print cont_handler;
+                  end;
                   let typing_env, extra_params_and_args =
                     match Continuation.sort cont with
                     | Normal when is_single_inlinable_use ->
@@ -459,7 +470,8 @@ and simplify_recursive_let_cont_handlers
             | No_uses ->
               Misc.fatal_error "To be continued"
             | Uses { handler_typing_env; arg_types_by_use_id;
-                     extra_params_and_args; is_single_inlinable_use = _; } ->
+                     extra_params_and_args; is_single_inlinable_use = _;
+                     jumps_out_of_loop = _; } ->
               let typing_env, extra_params_and_args =
                 Unbox_continuation_params.make_unboxing_decisions
                   handler_typing_env ~arg_types_by_use_id ~params

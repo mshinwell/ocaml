@@ -162,6 +162,8 @@ let rewrite_use t id apply_cont =
         | Already_in_scope _ -> expr
         | New_binding prim ->
           Flambda.Expr.create_let
+            (* XXX Creating the wrong thing here.  The prim needs to project
+               from one of the other *arguments* to this Apply_cont... *)
             (Var_in_binding_pos.create new_var Name_mode.normal)
             (Flambda.Named.create_prim prim Debuginfo.none)
             expr)

@@ -107,7 +107,8 @@ Format.eprintf "%d uses for %a (params %a)\n%!"
   match t.uses with
   | [] -> No_uses
   | uses ->
-    let handler_typing_env, extra_params_and_args, is_single_inlinable_use =
+    let handler_typing_env, extra_params_and_args, is_single_inlinable_use,
+        jumps_out_of_loop =
       match recursive with
       | Non_recursive ->
         let definition_scope_level = TE.current_scope typing_env in
@@ -131,25 +132,30 @@ Format.eprintf "%d uses for %a (params %a)\n%!"
 Format.eprintf "Unknown at or later than %a\n%!"
   Scope.print (Scope.next definition_scope_level);
 *)
+        let jumps_out_of_loop =
+          (* XXX Maybe this should check if _all_ loops have been jumped
+             out of. *)
+          List.exists (fun use ->
+              let use_scope_level =
+                TE.current_scope (U.typing_env_at_use use)
+              in
+              assert (Scope.(<=) definition_scope_level use_scope_level);
+              Scope.Set.exists (fun rec_cont_scope_level ->
+                  assert (Scope.(<=) rec_cont_scope_level use_scope_level);
+                  Format.eprintf "%a: def %a, use %a, rec_cont at %a\n%!"
+                    Continuation.print t.continuation
+                    Scope.print definition_scope_level
+                    Scope.print use_scope_level
+                    Scope.print rec_cont_scope_level;
+                  Scope.(>) rec_cont_scope_level definition_scope_level)
+                (U.inside_handlers_of_recursive_continuations_at_use use))
+            uses
+        in
         let can_inline =
           (* Do not inline continuations into recursive continuations,
              even if there is only one use. *)
           match use_envs_with_ids with
-          | [use_env, _, Inlinable, _] ->
-            let use_scope_level = TE.current_scope use_env in
-            let use = List.hd uses in
-            assert (Scope.(<=) definition_scope_level use_scope_level);
-            Scope.Set.for_all (fun rec_cont_scope_level ->
-                assert (Scope.(<=) rec_cont_scope_level use_scope_level);
-(*
-                Format.eprintf "%a: def %a, use %a, rec_cont at %a\n%!"
-                  Continuation.print t.continuation
-                  Scope.print definition_scope_level
-                  Scope.print use_scope_level
-                  Scope.print rec_cont_scope_level;
-*)
-                Scope.(<) rec_cont_scope_level definition_scope_level)
-              (U.inside_handlers_of_recursive_continuations_at_use use)
+          | [_, _, Inlinable, _] -> not jumps_out_of_loop
           | [] | [_, _, Non_inlinable, _]
           | (_, _, (Inlinable | Non_inlinable), _) :: _ -> false
         in
@@ -160,7 +166,8 @@ Format.eprintf "Unknown at or later than %a\n%!"
         | [use_env, _, Inlinable, _] when can_inline ->
           (* A single inlinable use will be inlined out by the simplifier, so
              avoid any join-related computations. *)
-          use_env, Continuation_extra_params_and_args.empty, true
+          use_env, Continuation_extra_params_and_args.empty, true,
+            jumps_out_of_loop
         | [] | [_, _, Non_inlinable, _]
         | (_, _, (Inlinable | Non_inlinable), _) :: _ ->
           let env_extension, extra_params_and_args =
@@ -181,7 +188,7 @@ Format.eprintf "The extra params and args are:@ %a\n%!"
               ~params:extra_params_and_args.extra_params
             |> TE.add_env_extension ~env_extension
           in
-          handler_env, extra_params_and_args, false
+          handler_env, extra_params_and_args, false, jumps_out_of_loop
         end
       | Recursive ->
         (* CR mshinwell: Do meet with param types and all arg types to see
@@ -209,7 +216,8 @@ Format.eprintf "The extra params and args are:@ %a\n%!"
         let handler_typing_env =
           TE.add_equations_on_params typing_env ~params ~param_types
         in
-        handler_typing_env, Continuation_extra_params_and_args.empty, false
+        handler_typing_env, Continuation_extra_params_and_args.empty, false,
+          false
     in
     let arg_types_by_use_id =
       List.fold_left (fun args use ->
@@ -227,4 +235,5 @@ Format.eprintf "The extra params and args are:@ %a\n%!"
       arg_types_by_use_id;
       extra_params_and_args;
       is_single_inlinable_use;
+      jumps_out_of_loop;
     }

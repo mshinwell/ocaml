@@ -14,6 +14,9 @@
 (*                                                                        *)
 (**************************************************************************)
 
+(* XXX This must not be applied for anything except boxed numbers in the
+   recursive case *)
+
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 open! Simplify_import
