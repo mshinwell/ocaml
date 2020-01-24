@@ -54,6 +54,8 @@ module Cached : sig
     -> t
 
   val with_cse : t -> cse:Simple.t Flambda_primitive.Eligible_for_cse.Map.t -> t
+
+  val make_all_defined_vars_irrelevant : t -> t
 end = struct
   type t = {
     names_to_types :
@@ -150,6 +152,18 @@ end = struct
   (* CR mshinwell: Add type lookup function *)
 
   let with_cse t ~cse = { t with cse; }
+
+  let make_all_defined_vars_irrelevant t =
+    let names_to_types =
+      Name.Map.mapi (fun (name : Name.t) ((ty, binding_time, _mode) as info) ->
+          match name with
+          | Var _ -> ty, binding_time, Name_mode.in_types
+          | Symbol _ -> info)
+        t.names_to_types
+    in
+    { t with
+      names_to_types;
+    }
 end
 
 module One_level = struct
@@ -195,6 +209,12 @@ module One_level = struct
 
   let defines_name_but_no_equations t name =
     Typing_env_level.defines_name_but_no_equations t.level name
+
+  let make_all_defined_vars_irrelevant t =
+    { t with
+      just_after_level =
+        Cached.make_all_defined_vars_irrelevant t.just_after_level;
+    }
 end
 
 type t = {
@@ -1096,5 +1116,10 @@ let free_variables_transitive t typ =
     *)
   vars
 
-(* CR mshinwell: to implement (for .cmx file saving) *)
-let make_vars_on_current_level_irrelevant t = t
+let make_vars_on_current_level_irrelevant t =
+  let current_level =
+    One_level.make_all_defined_vars_irrelevant t.current_level
+  in
+  { t with
+    current_level;
+  }
