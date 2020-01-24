@@ -99,7 +99,7 @@ let print ppf t =
       Simple.print obj
       print_method_kind kind
   | C_call { alloc; param_arity; return_arity; } ->
-    fprintf ppf "@[(C (alloc %b) @<0>%s@<1>\u{2237}@<0>%s %a @<1>\u{2b69} %a)@]"
+    fprintf ppf "@[(C (alloc %b) @<0>%s@<1>\u{2237}@<0>%s %a @<1>\u{2192} %a)@]"
       alloc
       (Flambda_colours.elide ())
       (Flambda_colours.normal ())

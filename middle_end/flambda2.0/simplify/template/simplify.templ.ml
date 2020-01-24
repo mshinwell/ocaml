@@ -27,6 +27,21 @@ type simplify_result = {
   unit : Flambda_unit.t;
 }
 
+let predefined_exception_typing_env ~backend ~resolver ~get_imported_names =
+  let module Backend = (val backend : Flambda2_backend_intf.S) in
+  let comp_unit = Compilation_unit.get_current_exn () in
+  Compilation_unit.set_current (Compilation_unit.predefined_exception ());
+  let typing_env =
+    Symbol.Set.fold (fun sym typing_env ->
+        TE.add_definition typing_env
+          (Name_in_binding_pos.symbol sym)
+          K.value)
+      Backend.all_predefined_exception_symbols
+      (TE.create ~resolver ~get_imported_names)
+  in
+  Compilation_unit.set_current comp_unit;
+  typing_env
+
 let run ~backend ~round unit =
   let module Backend = (val backend : Flambda2_backend_intf.S) in
   let return_continuation = FU.return_continuation unit in
@@ -40,6 +55,10 @@ let run ~backend ~round unit =
   in
   let get_imported_names () = !imported_names in
   let get_imported_code () = !imported_code in
+  imported_units :=
+    Compilation_unit.Map.add (Compilation_unit.predefined_exception ())
+      (predefined_exception_typing_env ~backend ~resolver ~get_imported_names)
+      !imported_units;
   let denv =
     DE.create ~round
       ~backend
