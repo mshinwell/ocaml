@@ -40,7 +40,8 @@ let name t =
   | Some name -> name
   | None -> assert false
 
-let rename = Unit_id.rename
+let rename t =
+  Unit_id.create ~name:(name t) (Compilation_unit.get_current_exn ())
 
 let in_compilation_unit t cu =
   Compilation_unit.equal (get_compilation_unit t) cu

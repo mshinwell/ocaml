@@ -36,8 +36,9 @@ val create
 
 val create_with_same_name_as_ident : ?user_visible:unit -> Ident.t -> t
 
-(* CR mshinwell: check on gdb branch if this preserves the "original ident".
-   Sometimes it should and other times it should not (eg unboxing) *)
+(* The [rename] function, in addition to changing the stamp of the variable,
+   changes the compilation unit to the current one (unless otherwise specified
+   by [current_compilation_unit]). *)
 val rename
    : ?current_compilation_unit:Compilation_unit.t
   -> ?append:string
