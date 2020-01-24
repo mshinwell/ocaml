@@ -584,7 +584,8 @@ let trivial_join t ~initial_env_at_join ~env_at_use envs_with_levels =
      basically left with switch arms as the place we might want to propagate
      things to.  Those have no arguments.  This seems like we're just doing it
      for the benefit of CSE now.  We should review whether at the non-trivial
-     joins we should propagate existentials for things used by the types. *)
+     joins we should propagate existentials for things used by the types.
+     mshinwell: Well, and C calls... *)
   (* CR mshinwell: Add note about CSE handling. *)
   let vars_at_join = Typing_env.var_domain initial_env_at_join in
 (*
@@ -612,6 +613,17 @@ Format.eprintf "new CSE:@ %a"
       cse
       Name.Set.empty
   in
+  (* CR mshinwell: Try to condense this code a bit. *)
+  let allowed =
+    Name.Map.fold (fun (name : Name.t) ty allowed ->
+        match name with
+        | Var _ -> allowed
+        | Symbol _ ->
+          Variable.Set.union allowed
+            (Typing_env.free_variables_transitive env_at_use ty))
+      t.equations
+      (Variable.Set.union vars_at_join (Name.set_to_var_set used_in_cse))
+  in
   let allowed =
     Name.Set.fold (fun name allowed ->
         match Name.Map.find name t.equations with
@@ -620,7 +632,7 @@ Format.eprintf "new CSE:@ %a"
           Variable.Set.union allowed
             (Typing_env.free_variables_transitive env_at_use ty))
       (Typing_env.name_domain initial_env_at_join)
-      (Variable.Set.union vars_at_join (Name.set_to_var_set used_in_cse))
+      allowed
   in
   let allowed =
     (* CR mshinwell: factor out.  (Split from above to avoid a set union.) *)
@@ -633,9 +645,6 @@ Format.eprintf "new CSE:@ %a"
       used_in_cse
       allowed
   in
-  (*
-Format.eprintf "allowed vars are %a\n%!" Variable.Set.print allowed;
-*)
   let defined_vars =
     Variable.Map.filter (fun var _ -> Variable.Set.mem var allowed)
       t.defined_vars

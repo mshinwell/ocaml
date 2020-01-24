@@ -96,11 +96,6 @@ let defined_earlier t ~than =
       let time1 = t.binding_time in
       let time2 = than.binding_time in
       if Binding_time.equal time1 time2 then begin
-        let () =
-          Format.eprintf "Equal times:@ t=%a@ and@ than=%a\n!"
-            print t
-            print than
-        in
         (* CR mshinwell: We should think about this some more, it seems tricky.
            Currently we assign all imported variables the same binding time
            so we may need to break a tie here.  We just use [compare], but is

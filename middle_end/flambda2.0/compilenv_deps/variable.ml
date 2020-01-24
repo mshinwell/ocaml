@@ -25,10 +25,10 @@ type t = {
 }
 
 let compare0 t1 t2 =
-  let c = Compilation_unit.compare t1.compilation_unit t2.compilation_unit in
-  if c <> 0 then c
+  if t1 == t2 then 0
   else
-    if t1 == t2 then 0
+    let c = Compilation_unit.compare t1.compilation_unit t2.compilation_unit in
+    if c <> 0 then c
     else t1.name_stamp - t2.name_stamp
 
 let equal0 t1 t2 = (compare0 t1 t2 = 0)
