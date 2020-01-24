@@ -94,11 +94,10 @@ module Flambda2_backend = struct
     Compilenv.set_global_info (Flambda2 info)
 
   let get_global_info comp_unit =
-    (* CR mshinwell: We should have types for the predefined exceptions
-       already set up. *)
-    if Compilation_unit.is_predefined_exception comp_unit
-      || Compilation_unit.is_external_symbols comp_unit
-    then None
+    (* The Flambda 2.0 simplifier should have returned the typing information
+       for the predefined exception compilation unit before getting here. *)
+    assert (not (Compilation_unit.is_predefined_exception comp_unit));
+    if Compilation_unit.is_external_symbols comp_unit then None
     else
       let id =
         (* CR mshinwell: Unsure how to construct this properly.  Also see CR

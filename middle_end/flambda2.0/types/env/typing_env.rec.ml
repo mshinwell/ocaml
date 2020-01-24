@@ -38,8 +38,6 @@ module Cached : sig
 
   val cse : t -> Simple.t Flambda_primitive.Eligible_for_cse.Map.t
 
-  val binding_time : t -> Name.t -> Binding_time.t
-
   val domain : t -> Name.Set.t
 
   val var_domain : t -> Variable.Set.t
@@ -150,12 +148,6 @@ end = struct
     }
 
   (* CR mshinwell: Add type lookup function *)
-
-  let binding_time t name =
-    match Name.Map.find name t.names_to_types with
-    | exception Not_found ->
-      Misc.fatal_errorf "Unbound name %a" Name.print name
-    | (_ty, time, _name_mode) -> time
 
   let with_cse t ~cse = { t with cse; }
 end
@@ -677,7 +669,7 @@ Format.eprintf "Aliases before adding equation:@ %a\n%!"
     | Some alias_of ->
       let kind = Type_grammar.kind ty in
       let alias =
-        let binding_time = Cached.binding_time (cached t) name in
+        let binding_time = find_binding_time t name in
         Alias.create_name kind name binding_time name_mode
       in
       let rec_info = Simple.rec_info alias_of in
