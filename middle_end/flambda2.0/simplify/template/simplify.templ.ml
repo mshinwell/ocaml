@@ -40,7 +40,6 @@ let predefined_exception_typing_env ~backend ~resolver ~get_imported_names =
       (TE.create ~resolver ~get_imported_names)
   in
   Compilation_unit.set_current comp_unit;
-  Format.eprintf "Predef typing env:@ %a" TE.print typing_env;
   typing_env
 
 let run ~backend ~round unit =
