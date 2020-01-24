@@ -18,39 +18,42 @@
 
 open! Simplify_import
 
-let rec load_cmx_file_contents backend comp_unit ~imported_names
+let rec load_cmx_file_contents backend comp_unit ~imported_units ~imported_names
       ~imported_code =
-  let module Backend = (val backend : Flambda2_backend_intf.S) in
-  match Backend.get_global_info comp_unit with
-  | None -> None
-  | Some cmx ->
-    let cmx = ((Obj.obj cmx) : Flambda_cmx_format.t) in
-    let resolver comp_unit =
-      load_cmx_file_contents backend comp_unit ~imported_names ~imported_code
-    in
-    let get_imported_names () = !imported_names in
-    let typing_env =
-      Flambda_cmx_format.final_typing_env cmx
-      |> TE.Serializable.to_typing_env ~resolver ~get_imported_names
-    in
-    Format.eprintf "For unit %a loaded the following env:@ %a"
-      Compilation_unit.print comp_unit
-      TE.print typing_env;
-    let newly_imported_names = TE.name_domain typing_env in
-    if not (Name.Set.is_empty (
-      Name.Set.inter newly_imported_names !imported_names))
-    then begin
-      (* CR mshinwell: I suspect this could be caused by a user error, e.g.
-         renaming a .cmx file or something? *)
-      Misc.fatal_errorf "The .cmx file for %a contains names that are \
-          already defined:@ %a"
-        Compilation_unit.print comp_unit
-        Name.Set.print newly_imported_names
-    end;
-    imported_names := Name.Set.union newly_imported_names !imported_names;
-    let code = Flambda_cmx_format.all_code cmx in
-    imported_code := Code_id.Map.disjoint_union code !imported_code;
-    Some typing_env
+  match Compilation_unit.Map.find comp_unit !imported_units with
+  | typing_env -> Some typing_env
+  | exception Not_found ->
+    let module Backend = (val backend : Flambda2_backend_intf.S) in
+    match Backend.get_global_info comp_unit with
+    | None -> None
+    | Some cmx ->
+      let cmx = ((Obj.obj cmx) : Flambda_cmx_format.t) in
+      let resolver comp_unit =
+        load_cmx_file_contents backend comp_unit ~imported_names ~imported_code
+          ~imported_units
+      in
+      let get_imported_names () = !imported_names in
+      let typing_env =
+        Flambda_cmx_format.final_typing_env cmx
+        |> TE.Serializable.to_typing_env ~resolver ~get_imported_names
+      in
+      let newly_imported_names = TE.name_domain typing_env in
+      if not (Name.Set.is_empty (
+        Name.Set.inter newly_imported_names !imported_names))
+      then begin
+        (* CR mshinwell: I suspect this could be caused by a user error, e.g.
+           renaming a .cmx file or something? *)
+        Misc.fatal_errorf "The .cmx file for %a contains names that are \
+            already defined:@ %a"
+          Compilation_unit.print comp_unit
+          Name.Set.print newly_imported_names
+      end;
+      imported_names := Name.Set.union newly_imported_names !imported_names;
+      let code = Flambda_cmx_format.all_code cmx in
+      imported_code := Code_id.Map.disjoint_union code !imported_code;
+      imported_units :=
+        Compilation_unit.Map.add comp_unit typing_env !imported_units;
+      Some typing_env
 
 let prepare_cmx_file_contents ~return_cont_env:cont_uses_env
       ~return_continuation all_code =
@@ -61,6 +64,8 @@ let prepare_cmx_file_contents ~return_cont_env:cont_uses_env
   | None -> None
   | Some _ when !Clflags.opaque -> None
   | Some final_typing_env ->
+    (* CR mshinwell: We should remove typing information about names that
+       do not occur (transitively) in the type of the module block. *)
     let final_typing_env =
       TE.make_vars_on_current_level_irrelevant final_typing_env
       |> TE.Serializable.create

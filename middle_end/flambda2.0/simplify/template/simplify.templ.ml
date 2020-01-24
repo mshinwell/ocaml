@@ -33,9 +33,10 @@ let run ~backend ~round unit =
   let exn_continuation = FU.exn_continuation unit in
   let imported_names = ref Name.Set.empty in
   let imported_code = ref Code_id.Map.empty in
+  let imported_units = ref Compilation_unit.Map.empty in
   let resolver comp_unit =
     Flambda_cmx.load_cmx_file_contents backend comp_unit ~imported_names
-      ~imported_code
+      ~imported_code ~imported_units
   in
   let get_imported_names () = !imported_names in
   let get_imported_code () = !imported_code in

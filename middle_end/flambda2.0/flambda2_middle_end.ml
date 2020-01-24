@@ -129,7 +129,10 @@ let middle_end ~ppf_dump:ppf ~prefixname ~backend ~filename ~module_ident
         ~module_block_size_in_words ~module_initializer
     in
     let module B = (val backend : Flambda2_backend_intf.S) in
-    B.set_global_info (Obj.repr simplify_result.cmx);
+    begin match simplify_result.cmx with
+    | None -> ()
+    | Some cmx -> B.set_global_info (Obj.repr cmx)
+    end;
     { cmx = simplify_result.cmx;
       unit = simplify_result.unit;
     }
