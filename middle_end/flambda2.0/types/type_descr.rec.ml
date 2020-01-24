@@ -134,7 +134,7 @@ module Make (Head : Type_head_intf.S
     | No_alias head -> head
     | Equals _ -> Misc.fatal_errorf "Expected [No_alias]:@ %a" T.print t
 
-  let expand_head ~force_to_kind t env : _ Or_unknown_or_bottom.t =
+  let rec expand_head ~force_to_kind t env : _ Or_unknown_or_bottom.t =
     match descr t with
     | No_alias head -> head
     | Equals simple ->
@@ -179,11 +179,23 @@ module Make (Head : Type_head_intf.S
               | Ok head -> Ok head
             end
             *)
-          | Equals _ ->
-            Misc.fatal_errorf "Canonical alias %a should never have \
-                [Equals] type:@ %a"
-              Simple.print simple
-              TE.print env
+          | Equals simple ->
+            let try_other_unit =
+              match Simple.descr simple with
+              | Const _ -> false
+              | Name (Var var) ->
+                not (Compilation_unit.equal (Variable.compilation_unit var)
+                  (Compilation_unit.get_current_exn ()))
+              | Name (Symbol sym) ->
+                not (Compilation_unit.equal (Symbol.compilation_unit sym)
+                  (Compilation_unit.get_current_exn ()))
+            in
+            if try_other_unit then expand_head ~force_to_kind t env
+            else
+              Misc.fatal_errorf "Canonical alias %a should never have \
+                  [Equals] type:@ %a"
+                Simple.print simple
+                TE.print env
 
   let expand_head' ~force_to_kind t env =
     match expand_head ~force_to_kind t env with
