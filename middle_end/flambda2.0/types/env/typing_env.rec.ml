@@ -217,6 +217,48 @@ type t = {
   next_binding_time : Binding_time.t;
 }
 
+module Serializable = struct
+  type typing_env = t
+
+  type t = {
+    defined_symbols : Flambda_kind.t Symbol.Map.t;
+    code_age_relation : Code_age_relation.t;
+    prev_levels : One_level.t Scope.Map.t;
+    current_level : One_level.t;
+    next_binding_time : Binding_time.t;
+  }
+
+  let create ({ resolver = _;
+                get_imported_names = _;
+                defined_symbols;
+                code_age_relation;
+                prev_levels;
+                current_level;
+                next_binding_time; } : typing_env) =
+    { defined_symbols;
+      code_age_relation;
+      prev_levels;
+      current_level;
+      next_binding_time;
+    }
+
+  let to_typing_env { defined_symbols;
+                      code_age_relation;
+                      prev_levels;
+                      current_level;
+                      next_binding_time;
+                    }
+        ~resolver ~get_imported_names =
+    { resolver;
+      get_imported_names;
+      defined_symbols;
+      code_age_relation;
+      prev_levels;
+      current_level;
+      next_binding_time;
+    }
+end
+
 let is_empty t =
   One_level.is_empty t.current_level
     && Scope.Map.is_empty t.prev_levels

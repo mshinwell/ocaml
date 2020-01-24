@@ -138,3 +138,16 @@ val cut_and_n_way_join
 val free_variables_transitive : t -> Type_grammar.t -> Variable.Set.t
 
 val make_vars_on_current_level_irrelevant : t -> t
+
+module Serializable : sig
+  type typing_env = t
+  type t
+
+  val create : typing_env -> t
+
+  val to_typing_env
+     : t
+    -> resolver:(Compilation_unit.t -> typing_env option)
+    -> get_imported_names:(unit -> Name.Set.t)
+    -> typing_env
+end

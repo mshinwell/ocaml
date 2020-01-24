@@ -18,13 +18,21 @@
 
 open! Simplify_import
 
-let load_cmx_file_contents backend comp_unit ~imported_names ~imported_code =
+let rec load_cmx_file_contents backend comp_unit ~imported_names
+      ~imported_code =
   let module Backend = (val backend : Flambda2_backend_intf.S) in
   match Backend.get_global_info comp_unit with
   | None -> None
   | Some cmx ->
     let cmx = ((Obj.obj cmx) : Flambda_cmx_format.t) in
-    let typing_env = Flambda_cmx_format.final_typing_env cmx in
+    let resolver comp_unit =
+      load_cmx_file_contents backend comp_unit ~imported_names ~imported_code
+    in
+    let get_imported_names () = !imported_names in
+    let typing_env =
+      Flambda_cmx_format.final_typing_env cmx
+      |> TE.Serializable.to_typing_env ~resolver ~get_imported_names
+    in
     Format.eprintf "For unit %a loaded the following env:@ %a"
       Compilation_unit.print comp_unit
       TE.print typing_env;
@@ -55,7 +63,6 @@ let prepare_cmx_file_contents ~return_cont_env:cont_uses_env
   | Some final_typing_env ->
     let final_typing_env =
       TE.make_vars_on_current_level_irrelevant final_typing_env
+      |> TE.Serializable.create
     in
-    Format.eprintf "Final typing env:@ %a"
-      TE.print final_typing_env;
     Some (Flambda_cmx_format.create ~final_typing_env ~all_code)

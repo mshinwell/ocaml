@@ -90,7 +90,8 @@ module Flambda2_backend = struct
   let max_sensible_number_of_arguments =
     Proc.max_arguments_for_tailcalls - 1
 
-  let set_global_info info = Compilenv.set_global_info (Flambda2 info)
+  let set_global_info info =
+    Compilenv.set_global_info (Flambda2 info)
 
   let get_global_info comp_unit =
     let id =

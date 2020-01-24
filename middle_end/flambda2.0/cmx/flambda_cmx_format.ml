@@ -20,7 +20,7 @@
     Flambda. *)
 
 type t = {
-  final_typing_env : Flambda_type.Typing_env.t;
+  final_typing_env : Flambda_type.Typing_env.Serializable.t;
   all_code : Flambda.Function_params_and_body.t Code_id.Map.t;
 }
 

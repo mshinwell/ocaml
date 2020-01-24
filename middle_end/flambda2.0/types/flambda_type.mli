@@ -154,6 +154,19 @@ module Typing_env : sig
   val free_variables_transitive : t -> flambda_type -> Variable.Set.t
 
   val make_vars_on_current_level_irrelevant : t -> t
+
+  module Serializable : sig
+    type typing_env = t
+    type t
+
+    val create : typing_env -> t
+
+    val to_typing_env
+       : t
+      -> resolver:(Compilation_unit.t -> typing_env option)
+      -> get_imported_names:(unit -> Name.Set.t)
+      -> typing_env
+  end
 end
 
 val meet : Typing_env.t -> t -> t -> (t * Typing_env_extension.t) Or_bottom.t
