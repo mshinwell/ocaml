@@ -38,16 +38,6 @@ let rec load_cmx_file_contents backend comp_unit ~imported_units ~imported_names
         |> TE.Serializable.to_typing_env ~resolver ~get_imported_names
       in
       let newly_imported_names = TE.name_domain typing_env in
-      if not (Name.Set.is_empty (
-        Name.Set.inter newly_imported_names !imported_names))
-      then begin
-        (* CR mshinwell: I suspect this could be caused by a user error, e.g.
-           renaming a .cmx file or something? *)
-        Misc.fatal_errorf "The .cmx file for %a contains names that are \
-            already defined:@ %a"
-          Compilation_unit.print comp_unit
-          Name.Set.print newly_imported_names
-      end;
       imported_names := Name.Set.union newly_imported_names !imported_names;
       let code = Flambda_cmx_format.all_code cmx in
       imported_code := Code_id.Map.disjoint_union code !imported_code;
