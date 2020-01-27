@@ -676,9 +676,18 @@ let rec prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
     prepare env lam k
   | Lfor (ident, start, stop, dir, body) ->
     let loc = Location.none in
-    let cont = L.next_raise_count () in
-    mark_as_recursive_static_catch cont;
+    let loop_cont = L.next_raise_count () in
+    mark_as_recursive_static_catch loop_cont;
+    let join_cont = L.next_raise_count () in
+    let start_ident = Ident.create_local "start" in
     let stop_ident = Ident.create_local "stop" in
+    let first_test =
+      match dir with
+      | Upto ->
+        L.Lprim (Pintcomp Cle, [L.Lvar start_ident; L.Lvar stop_ident], loc)
+      | Downto ->
+        L.Lprim (Pintcomp Cge, [L.Lvar start_ident; L.Lvar stop_ident], loc)
+    in
     let test =
       match dir with
       | Upto -> L.Lprim (Pintcomp Cle, [L.Lvar ident; L.Lvar stop_ident], loc)
@@ -692,14 +701,20 @@ let rec prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
     in
     let lam : L.lambda =
       (* CR mshinwell: check evaluation order of start vs. end *)
-      Llet (Strict, Pgenval, stop_ident, stop,
-        Lstaticcatch (
-          Lstaticraise (cont, [start]),
-          (cont, [ident, Pgenval]),
-          Lifthenelse (test,
-            Lsequence (
-              body,
-              Lstaticraise (cont, [next_value_of_counter])),
+      Llet (Strict, Pgenval, start_ident, start,
+        Llet (Strict, Pgenval, stop_ident, stop,
+          Lstaticcatch (
+            Lifthenelse (first_test,
+              Lstaticcatch (
+                Lstaticraise (loop_cont, [Lvar start_ident]),
+                (loop_cont, [ident, Pgenval]),
+                Lifthenelse (test,
+                  Lsequence (
+                    body,
+                    Lstaticraise (loop_cont, [next_value_of_counter])),
+                  Lstaticraise (join_cont, []))),
+              Lstaticraise (join_cont, [])),
+            (join_cont, []),
             Lconst (Const_base (Const_int 0)))))
     in
     prepare env lam k

@@ -13,7 +13,7 @@ let unbox_float_refs () =
   opaque !r
 *)
 
-let unbox_float_refs () =
+let unbox_float_refs init =
   let r = ref 0. in
-  for i = 1 to 1000 do r := !r +. 1. done;
+  for i = init to 1000 do r := !r +. 1. done;
   opaque !r

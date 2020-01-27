@@ -132,10 +132,11 @@ Format.eprintf "Unknown at or later than %a\n%!"
   Scope.print (Scope.next definition_scope_level);
 *)
         let can_inline =
+          match use_envs_with_ids with
+          | [_use_env, _, Inlinable, _] -> true
+(*
           (* Do not inline continuations into recursive continuations,
              even if there is only one use. *)
-          match use_envs_with_ids with
-          | [use_env, _, Inlinable, _] ->
             let use_scope_level = TE.current_scope use_env in
             let use = List.hd uses in
             assert (Scope.(<=) definition_scope_level use_scope_level);
@@ -150,6 +151,7 @@ Format.eprintf "Unknown at or later than %a\n%!"
 *)
                 Scope.(<) rec_cont_scope_level definition_scope_level)
               (U.inside_handlers_of_recursive_continuations_at_use use)
+*)
           | [] | [_, _, Non_inlinable, _]
           | (_, _, (Inlinable | Non_inlinable), _) :: _ -> false
         in
