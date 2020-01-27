@@ -140,6 +140,9 @@ let map t ~f =
     print_as_char = t.print_as_char;
   }
 
+let is_non_negative t =
+  Targetint.OCaml.compare t.value Targetint.OCaml.zero >= 0
+
 let set_to_targetint_set (set : Set.t) : TO.Set.t =
   Set.fold (fun t targetints -> TO.Set.add t.value targetints)
     set

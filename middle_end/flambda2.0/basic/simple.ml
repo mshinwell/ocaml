@@ -28,6 +28,10 @@ let const_false = const_bool false
 let untagged_const_true = const RWC.untagged_const_true
 let untagged_const_false = const RWC.untagged_const_false
 
+let untagged_const_zero = const RWC.untagged_const_zero
+
+let untagged_const_int i = const (RWC.untagged_const_int i)
+
 let const_int i = const (RWC.const_int i)
 let const_zero = const RWC.const_zero
 let const_one = const RWC.const_one

@@ -25,6 +25,7 @@ val create
    : Continuation_use_kind.t
   -> typing_env_at_use:TE.t
   -> Apply_cont_rewrite_id.t
+  -> args:Simple.t list
   -> arg_types:T.t list
   -> t
 
@@ -32,5 +33,6 @@ val print : Format.formatter -> t -> unit
 
 val id : t -> Apply_cont_rewrite_id.t
 val use_kind : t -> Continuation_use_kind.t
+val args : t -> Simple.t list
 val arg_types : t -> T.t list
 val typing_env_at_use : t -> TE.t

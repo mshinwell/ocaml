@@ -111,7 +111,7 @@ let simplify_unbox_number (boxable_number_kind : K.Boxable_number.t)
       Simple.var (Var_in_binding_pos.var result_var))
   in
   let env_extension =
-    TEE.add_cse env_extension (P.Eligible_for_cse.create_exn box_prim)
+    TEE.add_cse env_extension ~prim:(P.Eligible_for_cse.create_exn box_prim)
       ~bound_to:arg
   in
   reachable, env_extension, dacc

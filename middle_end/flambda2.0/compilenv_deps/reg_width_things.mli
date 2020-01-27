@@ -30,6 +30,10 @@ module Const : sig
   val untagged_const_true : t
   val untagged_const_false : t
 
+  val untagged_const_zero : t
+
+  val untagged_const_int : Targetint.OCaml.t -> t
+
   val const_zero : t
   val const_one : t
   val const_unit : t

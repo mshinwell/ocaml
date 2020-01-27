@@ -107,7 +107,7 @@ module Code = struct
         params_and_body
 
   let print_with_cache ~cache ppf { params_and_body; newer_version_of; } =
-    Format.fprintf ppf "@[<hov 1>(\
+    Format.fprintf ppf "@[<v 1>(\
         @[<hov 1>@<0>%s(newer_version_of@ %a)@<0>%s@]@ \
         %a\
         )@]"

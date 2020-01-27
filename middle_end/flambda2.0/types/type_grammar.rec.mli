@@ -120,8 +120,21 @@ val blocks_with_these_tags : Tag.Set.t -> t
 val immutable_block : Tag.t -> field_kind:Flambda_kind.t -> fields:t list -> t
 
 val immutable_block_with_size_at_least
-   : n:Targetint.OCaml.t
+   : tag:Tag.t Or_unknown.t
+  -> n:Targetint.OCaml.t
   -> field_kind:Flambda_kind.t
+  -> field_n_minus_one:Variable.t
+  -> t
+
+val variant
+   : const_ctors:t
+  -> non_const_ctors:t list Tag.Scannable.Map.t
+  -> t
+
+val open_variant_from_const_ctors_type : const_ctors:t -> t
+
+val open_variant_from_non_const_ctor_with_size_at_least
+   : n:Targetint.OCaml.t
   -> field_n_minus_one:Variable.t
   -> t
 

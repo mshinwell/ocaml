@@ -476,7 +476,7 @@ let immutable_block tag ~field_kind ~fields =
       ~blocks:(Known (Row_like.For_blocks.create ~field_kind
         ~field_tys:fields (Closed tag)))))))
 
-let immutable_block_with_size_at_least ~n ~field_kind ~field_n_minus_one =
+let immutable_block_with_size_at_least ~tag ~n ~field_kind ~field_n_minus_one =
   let n = Targetint.OCaml.to_int n in
   let field_tys =
     List.init n (fun index ->
@@ -486,6 +486,37 @@ let immutable_block_with_size_at_least ~n ~field_kind ~field_n_minus_one =
   Value (T_V.create_no_alias (Ok (Variant (Variant.create
     ~immediates:(Known (bottom K.naked_immediate))
     ~blocks:(Known (Row_like.For_blocks.create ~field_kind
+      ~field_tys (Open tag)))))))
+
+let variant ~const_ctors ~non_const_ctors =
+  let blocks =
+    let field_tys_by_tag =
+      Tag.Scannable.Map.fold (fun tag ty non_const_ctors ->
+          Tag.Map.add (Tag.Scannable.to_tag tag) ty non_const_ctors)
+        non_const_ctors
+        Tag.Map.empty
+    in
+    Row_like.For_blocks.create_exactly_multiple ~field_tys_by_tag
+  in
+  Value (T_V.create_no_alias (Ok (
+    Variant (Variant.create ~immediates:(Known const_ctors)
+      ~blocks:(Known blocks)))))
+
+let open_variant_from_const_ctors_type ~const_ctors =
+  Value (T_V.create_no_alias (Ok (
+    Variant (Variant.create ~immediates:(Known const_ctors)
+      ~blocks:Unknown))))
+
+let open_variant_from_non_const_ctor_with_size_at_least ~n ~field_n_minus_one =
+  let n = Targetint.OCaml.to_int n in
+  let field_tys =
+    List.init n (fun index ->
+      if index < n - 1 then any_value ()
+      else alias_type_of K.value (Simple.var field_n_minus_one))
+  in
+  Value (T_V.create_no_alias (Ok (Variant (Variant.create
+    ~immediates:Unknown
+    ~blocks:(Known (Row_like.For_blocks.create ~field_kind:K.value
       ~field_tys (Open Unknown)))))))
 
 let this_immutable_string str =

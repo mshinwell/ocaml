@@ -39,7 +39,7 @@ val add_or_replace_equation : t -> Name.t -> Type_grammar.t -> t
 
 val add_cse
    : t
-  -> Flambda_primitive.Eligible_for_cse.t
+  -> prim:Flambda_primitive.Eligible_for_cse.t
   -> bound_to:Simple.t
   -> t
 

@@ -481,6 +481,28 @@ struct
         other_tags = Bottom;
       }
 
+    let create_exactly_multiple ~field_tys_by_tag =
+      let known_tags =
+        Tag.Map.map (fun field_tys ->
+            (* CR mshinwell: Validate [field_tys] like [create] does, above *)
+            let field_kind =
+              match field_tys with
+              | [] -> Flambda_kind.value
+              | field_ty::_ -> Type_grammar.kind field_ty
+            in
+            let maps_to =
+              Product.Int_indexed.create_from_list field_kind field_tys
+            in 
+            let size = Targetint.OCaml.of_int (List.length field_tys) in
+            { maps_to;
+              index = Known size;
+            })
+          field_tys_by_tag
+      in
+      { known_tags;
+        other_tags = Bottom;
+      }
+
     let all_tags_and_sizes t : Targetint.OCaml.t Tag.Map.t Or_unknown.t =
       match all_tags_and_indexes t with
       | Unknown -> Unknown

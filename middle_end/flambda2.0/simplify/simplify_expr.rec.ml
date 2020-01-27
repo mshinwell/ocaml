@@ -359,7 +359,7 @@ and simplify_non_recursive_let_cont_handler
                    we won't duplicate code (i.e. if there is only one use)
                    ---but this is not a normal "inlinable" position and cannot
                    be treated as such (e.g. for join calculations). *)
-                | Uses { handler_typing_env; arg_types_by_use_id;
+                | Uses { handler_typing_env; args_with_types_by_use_id;
                          extra_params_and_args; is_single_inlinable_use;
                          is_single_use; } ->
                   let typing_env, extra_params_and_args =
@@ -376,7 +376,7 @@ and simplify_non_recursive_let_cont_handler
                         TE.find_params handler_typing_env params
                       in
                       Unbox_continuation_params.make_unboxing_decisions
-                        handler_typing_env ~arg_types_by_use_id ~params
+                        handler_typing_env ~args_with_types_by_use_id ~params
                         ~param_types extra_params_and_args
                     | Return | Toplevel_return ->
                       assert (not is_exn_handler);
@@ -534,16 +534,25 @@ and simplify_recursive_let_cont_handlers
               (* We can't know a good type from the call types *)
               List.map T.unknown arity
             in
+            (* CR mshinwell: This next part is dubious, use the rewritten
+               version in the recursive-continuation-unboxing branch. *)
             let (cont_uses_env, _apply_cont_rewrite_id) :
               Continuation_uses_env.t * Apply_cont_rewrite_id.t =
               (* We don't know anything, it's like it was called
                  with an arbitrary argument! *)
+              let args =
+                (* CR mshinwell: This is wrong but won't be used, as the
+                   only consumer is currently the unboxing pass.  See CR
+                   above for fixing this. *)
+                List.map (fun _ -> Simple.const_zero) arg_types
+              in
               CUE.record_continuation_use cont_uses_env cont
                 Non_inlinable (* Maybe simpler ? *)
                 ~typing_env_at_use:(
                   (* not useful as we will have only top *)
                   DE.typing_env definition_denv
                 )
+                ~args
                 ~arg_types
             in
             let denv =
@@ -661,6 +670,7 @@ Format.eprintf "Simplifying inlined body with DE depth delta = %d\n%!"
     let dacc, use_id =
       DA.record_continuation_use dacc (Apply.continuation apply) Non_inlinable
         ~typing_env_at_use:(DA.typing_env dacc)
+        ~args
         ~arg_types:(T.unknown_types_from_arity result_arity)
     in
     let dacc, exn_cont_use_id =
@@ -668,6 +678,7 @@ Format.eprintf "Simplifying inlined body with DE depth delta = %d\n%!"
         (Exn_continuation.exn_handler (Apply.exn_continuation apply))
         Non_inlinable
         ~typing_env_at_use:(DA.typing_env dacc)
+        ~args
         ~arg_types:(T.unknown_types_from_arity (
           Exn_continuation.arity (Apply.exn_continuation apply)))
     in
@@ -945,9 +956,10 @@ and simplify_direct_function_call
         Apply.print apply
 
 and simplify_function_call_where_callee's_type_unavailable
-  : 'a. DA.t -> Apply.t -> Call_kind.Function_call.t -> arg_types:T.t list
+  : 'a. DA.t -> Apply.t -> Call_kind.Function_call.t
+    -> args:Simple.t list -> arg_types:T.t list
     -> 'a k -> Expr.t * 'a * UA.t
-= fun dacc apply (call : Call_kind.Function_call.t) ~arg_types k ->
+= fun dacc apply (call : Call_kind.Function_call.t) ~args ~arg_types k ->
   let cont = Apply.continuation apply in
   let denv = DA.denv dacc in
   let typing_env_at_use = DE.typing_env denv in
@@ -956,6 +968,7 @@ and simplify_function_call_where_callee's_type_unavailable
       (Exn_continuation.exn_handler (Apply.exn_continuation apply))
       Non_inlinable
       ~typing_env_at_use:(DA.typing_env dacc)
+      ~args
       ~arg_types:(T.unknown_types_from_arity (
         Exn_continuation.arity (Apply.exn_continuation apply)))
   in
@@ -971,14 +984,14 @@ and simplify_function_call_where_callee's_type_unavailable
     end;
 *)
     DA.record_continuation_use dacc cont Non_inlinable ~typing_env_at_use
-      ~arg_types:(T.unknown_types_from_arity return_arity)
+      ~args ~arg_types:(T.unknown_types_from_arity return_arity)
   in
   let call_kind, use_id, dacc =
     match call with
     | Indirect_unknown_arity ->
       let dacc, use_id =
         DA.record_continuation_use dacc (Apply.continuation apply) Non_inlinable
-          ~typing_env_at_use ~arg_types:[T.any_value ()]
+          ~typing_env_at_use ~args ~arg_types:[T.any_value ()]
       in
       Call_kind.indirect_function_call_unknown_arity (), use_id, dacc
     | Indirect_known_arity { param_arity; return_arity; } ->
@@ -1033,9 +1046,10 @@ and simplify_function_call
     -> arg_types:T.t list -> 'a k
     -> Expr.t * 'a * UA.t
 = fun dacc apply ~callee_ty (call : Call_kind.Function_call.t) ~arg_types k ->
+  let args = Apply.args apply in
   let type_unavailable () =
     simplify_function_call_where_callee's_type_unavailable dacc apply call
-      ~arg_types k
+      ~args ~arg_types k
   in
   (* CR mshinwell: Should this be using [meet_shape], like for primitives? *)
   let denv = DA.denv dacc in
@@ -1142,6 +1156,7 @@ and simplify_method_call
     -> obj:Simple.t -> arg_types:T.t list -> 'a k
     -> Expr.t * 'a * UA.t
 = fun dacc apply ~callee_ty ~kind:_ ~obj ~arg_types k ->
+  let args = Apply.args apply in
   let callee_kind = T.kind callee_ty in
   if not (K.is_value callee_kind) then begin
     Misc.fatal_errorf "Method call with callee of wrong kind %a: %a"
@@ -1160,6 +1175,7 @@ and simplify_method_call
   let dacc, use_id =
     DA.record_continuation_use dacc (Apply.continuation apply) Non_inlinable
       ~typing_env_at_use:(DE.typing_env denv)
+      ~args
       ~arg_types:[T.any_value ()]
   in
   let dacc, exn_cont_use_id =
@@ -1167,6 +1183,7 @@ and simplify_method_call
       (Exn_continuation.exn_handler (Apply.exn_continuation apply))
       Non_inlinable
       ~typing_env_at_use:(DA.typing_env dacc)
+      ~args
       ~arg_types:(T.unknown_types_from_arity (
         Exn_continuation.arity (Apply.exn_continuation apply)))
   in
@@ -1188,6 +1205,7 @@ and simplify_c_call
     -> return_arity:Flambda_arity.t -> arg_types:T.t list -> 'a k
     -> Expr.t * 'a * UA.t
 = fun dacc apply ~callee_ty ~param_arity ~return_arity ~arg_types k ->
+  let args = Apply.args apply in
   let callee_kind = T.kind callee_ty in
   if not (K.is_value callee_kind) then begin
     Misc.fatal_errorf "C callees must be of kind [value], not %a: %a"
@@ -1217,6 +1235,7 @@ and simplify_c_call
   let dacc, use_id =
     DA.record_continuation_use dacc (Apply.continuation apply) Non_inlinable
       ~typing_env_at_use:(DA.typing_env dacc)
+      ~args
       ~arg_types:(T.unknown_types_from_arity return_arity)
   in
   let dacc, exn_cont_use_id =
@@ -1225,6 +1244,7 @@ and simplify_c_call
       (Exn_continuation.exn_handler (Apply.exn_continuation apply))
       Non_inlinable
       ~typing_env_at_use:(DA.typing_env dacc)
+      ~args
       ~arg_types:(T.unknown_types_from_arity (
         Exn_continuation.arity (Apply.exn_continuation apply)))
   in
@@ -1291,6 +1311,7 @@ and simplify_apply_cont
         (AC.continuation apply_cont)
         use_kind
         ~typing_env_at_use:(DA.typing_env dacc)
+        ~args
         ~arg_types
     in
     let user_data, uacc = k dacc in
@@ -1451,7 +1472,7 @@ and simplify_switch
             | [] ->
               let dacc, rewrite_id =
                 DA.record_continuation_use dacc (AC.continuation action)
-                  Non_inlinable ~typing_env_at_use ~arg_types:[]
+                  Non_inlinable ~typing_env_at_use ~args:[] ~arg_types:[]
               in
               let arms = Immediate.Map.add arm (action, rewrite_id, []) arms in
               arms, dacc
@@ -1463,7 +1484,7 @@ and simplify_switch
                 let args, arg_types = List.split args_with_types in
                 let dacc, rewrite_id =
                   DA.record_continuation_use dacc (AC.continuation action)
-                    Non_inlinable ~typing_env_at_use ~arg_types
+                    Non_inlinable ~typing_env_at_use ~args ~arg_types
                 in
                 let arity = List.map T.kind arg_types in
                 let action = Apply_cont.update_args action ~args in

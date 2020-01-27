@@ -29,8 +29,11 @@ val create_from_targetint : Targetint.OCaml.t -> t option
 
 val to_int : t -> int
 val to_targetint : t -> Targetint.t
+val to_targetint_ocaml : t -> Targetint.OCaml.t
 
 val zero : t
+
+(* CR mshinwell: Remove "_tag" suffixes *)
 val string_tag : t
 val closure_tag : t
 val double_tag : t

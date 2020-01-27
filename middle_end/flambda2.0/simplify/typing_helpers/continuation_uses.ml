@@ -43,8 +43,15 @@ let print ppf { continuation; arity; uses; } =
     Flambda_arity.print arity
     (Format.pp_print_list ~pp_sep:Format.pp_print_space U.print) uses
 
-let add_use t kind ~typing_env_at_use id ~arg_types =
+let get_uses t = t.uses
+
+let add_use t kind ~typing_env_at_use id ~args ~arg_types =
   try
+    if List.compare_lengths args arg_types <> 0 then begin
+      Misc.fatal_errorf "Arguments (%a) don't match argument types (%a)"
+        Simple.List.print args
+        (Format.pp_print_list ~pp_sep:Format.pp_print_space T.print) arg_types
+    end;
     let arity = T.arity_of_list arg_types in
     if not (Flambda_arity.equal arity t.arity) then begin
       Misc.fatal_errorf "Arity of use (%a) doesn't match continuation's \
@@ -52,7 +59,7 @@ let add_use t kind ~typing_env_at_use id ~arg_types =
         Flambda_arity.print arity
         Flambda_arity.print t.arity
     end;
-    let use = U.create kind ~typing_env_at_use id ~arg_types in
+    let use = U.create kind ~typing_env_at_use id ~args ~arg_types in
     { t with
       uses = use :: t.uses;
     }
@@ -184,20 +191,20 @@ Format.eprintf "The extra params and args are:@ %a\n%!"
         | (_, _, (Inlinable | Non_inlinable)) :: _ ->
           handler_env, extra_params_and_args, false, is_single_use
     in
-    let arg_types_by_use_id =
+    let args_with_types_by_use_id =
       List.fold_left (fun args use ->
-          List.map2 (fun arg_map arg_type ->
+          List.map2 (fun arg_map (arg, arg_type) ->
               Apply_cont_rewrite_id.Map.add (U.id use)
-                (U.typing_env_at_use use, arg_type)
+                (U.typing_env_at_use use, arg, arg_type)
                 arg_map)
             args
-            (U.arg_types use))
+            (List.combine (U.args use) (U.arg_types use)))
         (List.map (fun _ -> Apply_cont_rewrite_id.Map.empty) t.arity)
         uses
     in
     Uses {
       handler_typing_env;
-      arg_types_by_use_id;
+      args_with_types_by_use_id;
       extra_params_and_args;
       is_single_inlinable_use;
       is_single_use;

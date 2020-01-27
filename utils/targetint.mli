@@ -403,12 +403,13 @@ module OCaml : sig
   val max : t -> t -> t
   (** Returns the larger integer. *)
 
-
   (* CR mshinwell: Add an [Array] module *)
 
   include Identifiable.S with type t := t
 
   val to_string : t -> string
+
+  val zero_to_n_minus_one : n:t -> t list
 
   val set_of_targetint_set : Targetint_set.t -> Set.t
 
