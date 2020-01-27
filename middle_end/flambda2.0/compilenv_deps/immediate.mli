@@ -51,6 +51,8 @@ val to_tag : t -> Tag.t option
 
 val map : t -> f:(Targetint.OCaml.t -> Targetint.OCaml.t) -> t
 
+val is_non_negative : t -> bool
+
 (* CR mshinwell: bad names *)
 val to_targetint : t -> Targetint.OCaml.t
 val to_targetint' : t -> Targetint.t

@@ -131,18 +131,32 @@ let rewrite_use t id apply_cont : rewrite_use_result =
       original_params_with_args
   in
   let extra_args_list = extra_args t id in
-  let extra_args =
-    List.map
-      (fun (arg : Continuation_extra_params_and_args.Extra_arg.t) ->
+  let extra_args_rev, extra_lets =
+    List.fold_left
+      (fun (extra_args_rev, extra_lets)
+           (arg : Continuation_extra_params_and_args.Extra_arg.t) ->
         match arg with
-        | Already_in_scope simple -> simple)
+        | Already_in_scope simple -> simple :: extra_args_rev, extra_lets
+        | New_let_binding (temp, prim) ->
+          let extra_args_rev = Simple.var temp :: extra_args_rev in
+          let extra_lets =
+            (Var_in_binding_pos.create temp Name_mode.normal,
+             Flambda.Named.create_prim prim Debuginfo.none)
+              :: extra_lets
+          in
+          extra_args_rev, extra_lets)
+      ([], [])
       extra_args_list
   in
-  let args = args @ extra_args in
+  let args = args @ List.rev extra_args_rev in
   let apply_cont =
     Flambda.Apply_cont.update_args apply_cont ~args
   in
-  Apply_cont apply_cont
+  match extra_lets with
+  | [] -> Apply_cont apply_cont
+  | _::_ ->
+    let expr = Flambda.Expr.create_apply_cont apply_cont in
+    Expr (Flambda.Expr.bind ~bindings:extra_lets ~body:expr)
 
 (* CR mshinwell: tidy up.
    Also remove confusion between "extra args" as added by e.g. unboxing and
@@ -173,7 +187,9 @@ let rewrite_exn_continuation t id exn_cont =
     List.map2
       (fun param (arg : Continuation_extra_params_and_args.Extra_arg.t) ->
         match arg with
-        | Already_in_scope simple -> simple, KP.kind param)
+        | Already_in_scope simple -> simple, KP.kind param
+        | New_let_binding _ ->
+          Misc.fatal_error "[New_let_binding] not expected here")
       t.used_extra_params extra_args_list
   in
   let extra_args = extra_args0 @ extra_args1 in

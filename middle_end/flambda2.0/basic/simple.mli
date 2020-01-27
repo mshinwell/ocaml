@@ -51,6 +51,10 @@ val untagged_const_false : t
 (** The constant representating the number zero of type "int". *)
 val const_zero : t
 
+val untagged_const_zero : t
+
+val untagged_const_int : Targetint.OCaml.t -> t
+
 val const_one : t
 
 (** The constant representing the unit value. *)

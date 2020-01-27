@@ -32,6 +32,8 @@ let empty = {
   continuation_uses = Continuation.Map.empty;
 }
 
+let get_uses t = t.continuation_uses
+
 let record_continuation_use t cont kind ~typing_env_at_use ~arg_types =
   (* XXX This needs to deal with exn continuation extra-args *)
   let id = Apply_cont_rewrite_id.create () in

@@ -74,6 +74,8 @@ let number_of_uses t = List.length t.uses
 
 let arity t = t.arity
 
+let get_uses t = t.uses
+
 (* CR mshinwell: Four possible stages of join (turn into proper comment):
 
    1. Simple erasure policy

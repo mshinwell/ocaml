@@ -56,6 +56,7 @@ let create_from_targetint ti =
 
 let to_int t = t
 let to_targetint t = Targetint.of_int (to_int t)
+let to_targetint_ocaml t = Targetint.OCaml.of_int (to_int t)
 
 let zero = 0
 let string_tag = Obj.string_tag

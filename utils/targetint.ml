@@ -42,6 +42,8 @@ module type S = sig
     include Targetint_intf.OCaml with type t := t
                                   and type targetint := targetint
 
+    val zero_to_n_minus_one : n:t -> t list
+
     val set_of_targetint_set : Targetint_set.t -> Set.t
 
     module Or_unknown : sig
@@ -236,6 +238,20 @@ module Int32 = struct
 
     module Pair = Pair
     let cross_product = cross_product
+
+    (* CR mshinwell: duplication with Int64 version below *)
+    let zero_to_n_minus_one ~n =
+      if Stdlib.(<) (compare n zero) 0 then begin
+        Misc.fatal_errorf "Invalid argument %a to [zero_to_n_minus_one]"
+          print n
+      end;
+      let result_rev = ref [] in
+      let count = ref zero in
+      while Stdlib.(<) (compare !count n) 0 do
+        result_rev := !count :: !result_rev;
+        count := succ !count
+      done;
+      List.rev !result_rev
 
     let set_of_targetint_set set = set
 
@@ -435,6 +451,19 @@ module Int64 = struct
 
     module Pair = Pair
     let cross_product = cross_product
+
+    let zero_to_n_minus_one ~n =
+      if Stdlib.(<) (compare n zero) 0 then begin
+        Misc.fatal_errorf "Invalid argument %a to [zero_to_n_minus_one]"
+          print n
+      end;
+      let result_rev = ref [] in
+      let count = ref zero in
+      while Stdlib.(<) (compare !count n) 0 do
+        result_rev := !count :: !result_rev;
+        count := succ !count
+      done;
+      List.rev !result_rev
 
     let set_of_targetint_set set = set
 

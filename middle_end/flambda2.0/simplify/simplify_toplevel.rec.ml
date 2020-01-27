@@ -45,4 +45,69 @@ let simplify_toplevel dacc expr ~return_continuation ~return_arity
       raise Misc.Fatal_error
     end
   in
-  expr, dacc, UA.r uacc
+  (* CR mshinwell: add comment about this next part (and also see if it could
+     be done more efficiently and/or effectively).  See variant_unboxing.ml
+     test case.   It's a shame [compute_handler_env] can't be used, but it
+     can't, as the types of the parameters may involve symbols that are
+     out of scope. *)
+  let uses = Continuation_uses_env.get_uses (DA.continuation_uses_env dacc) in
+  match Continuation.Map.find return_continuation uses with
+  | exception Not_found -> expr, dacc, UA.r uacc
+  | _uses ->
+  (*
+    let simples_in_scope simples =
+      List.for_all (fun simple ->
+          Simple.pattern_match simple
+            ~const:(fun _ -> true)
+            ~name:(fun name -> TE.mem (DA.typing_env dacc) name))
+        simples
+    in
+    let simples =
+      List.fold_left
+        (fun (simples : Simple.t list option Or_bottom.t) use
+             : Simple.t list option Or_bottom.t ->
+          match simples with
+          | Bottom -> Bottom
+          | Ok simples ->
+            let arg_types = One_continuation_use.arg_types use in
+            let args =
+              List.filter_map (fun arg_type ->
+                  match T.get_alias_exn arg_type with
+                  | exception Not_found -> None
+                  | arg ->
+                    match
+                      TE.get_canonical_simple_exn
+                        (One_continuation_use.typing_env_at_use use)
+                        ~min_name_mode:Name_mode.normal
+                        arg
+                    with
+                    | exception Not_found -> None
+                    | arg -> Some arg)
+                arg_types
+            in
+            if List.compare_lengths args arg_types <> 0 then Bottom
+            else
+              match simples with
+              | None ->
+                if simples_in_scope args then Ok (Some args)
+                else Bottom
+              | Some simples ->
+                assert (List.compare_lengths simples args = 0);
+                if Misc.Stdlib.List.compare Simple.compare simples args = 0
+                  && simples_in_scope simples
+                then
+                  Ok (Some simples)
+                else
+                  Bottom)
+        (Or_bottom.Ok None)
+        (Continuation_uses.get_uses uses)
+    in
+    match simples with
+    | Bottom | Ok None -> expr, dacc, UA.r uacc
+    | Ok (Some simples) ->
+      let expr =
+        Apply_cont.create return_continuation ~args:simples
+          ~dbg:Debuginfo.none
+        |> Expr.create_apply_cont
+      in *)
+      expr, dacc, UA.r uacc

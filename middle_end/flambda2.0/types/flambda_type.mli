@@ -55,7 +55,7 @@ module Typing_env_extension : sig
 
   val add_cse
      : t
-    -> Flambda_primitive.Eligible_for_cse.t
+    -> prim:Flambda_primitive.Eligible_for_cse.t
     -> bound_to:Simple.t
     -> t
 end
@@ -301,8 +301,21 @@ val immutable_block : Tag.t -> field_kind:Flambda_kind.t -> fields:t list -> t
     tag. The type of the [n - 1]th field is taken to be an [Equals] to the
     given variable. *)
 val immutable_block_with_size_at_least
-   : n:Targetint.OCaml.t
+   : tag:Tag.t Or_unknown.t
+  -> n:Targetint.OCaml.t
   -> field_kind:Flambda_kind.t
+  -> field_n_minus_one:Variable.t
+  -> t
+
+val variant
+   : const_ctors:t
+  -> non_const_ctors:t list Tag.Scannable.Map.t
+  -> t
+
+val open_variant_from_const_ctors_type : const_ctors:t -> t
+
+val open_variant_from_non_const_ctor_with_size_at_least
+   : n:Targetint.OCaml.t
   -> field_n_minus_one:Variable.t
   -> t
 
@@ -359,6 +372,8 @@ val alias_type_of : Flambda_kind.t -> Simple.t -> t
 (** Determine the (unique) kind of a type. *)
 val kind : t -> Flambda_kind.t
 
+val get_alias_exn : t -> Simple.t
+
 (** For each of the kinds in an arity, create an "unknown" type. *)
 val unknown_types_from_arity : Flambda_arity.t -> t list
 
@@ -409,6 +424,16 @@ val prove_naked_int32s : Typing_env.t -> t -> Numbers.Int32.Set.t proof
 val prove_naked_int64s : Typing_env.t -> t -> Numbers.Int64.Set.t proof
 
 val prove_naked_nativeints : Typing_env.t -> t -> Targetint.Set.t proof
+
+type variant_proof = private {
+  const_ctors : Immediate.Set.t;
+  non_const_ctors_with_sizes : Targetint.OCaml.t Tag.Scannable.Map.t;
+}
+
+val prove_variant
+   : Typing_env.t
+  -> t
+  -> variant_proof proof_allowing_kind_mismatch
 
 val prove_is_a_tagged_immediate
    : Typing_env.t

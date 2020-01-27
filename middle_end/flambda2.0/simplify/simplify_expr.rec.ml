@@ -534,6 +534,8 @@ and simplify_recursive_let_cont_handlers
               (* We can't know a good type from the call types *)
               List.map T.unknown arity
             in
+            (* CR mshinwell: This next part is dubious, use the rewritten
+               version in the recursive-continuation-unboxing branch. *)
             let (cont_uses_env, _apply_cont_rewrite_id) :
               Continuation_uses_env.t * Apply_cont_rewrite_id.t =
               (* We don't know anything, it's like it was called
@@ -945,9 +947,10 @@ and simplify_direct_function_call
         Apply.print apply
 
 and simplify_function_call_where_callee's_type_unavailable
-  : 'a. DA.t -> Apply.t -> Call_kind.Function_call.t -> arg_types:T.t list
+  : 'a. DA.t -> Apply.t -> Call_kind.Function_call.t
+    -> args:Simple.t list -> arg_types:T.t list
     -> 'a k -> Expr.t * 'a * UA.t
-= fun dacc apply (call : Call_kind.Function_call.t) ~arg_types k ->
+= fun dacc apply (call : Call_kind.Function_call.t) ~args:_ ~arg_types k ->
   let cont = Apply.continuation apply in
   let denv = DA.denv dacc in
   let typing_env_at_use = DE.typing_env denv in
@@ -1033,9 +1036,10 @@ and simplify_function_call
     -> arg_types:T.t list -> 'a k
     -> Expr.t * 'a * UA.t
 = fun dacc apply ~callee_ty (call : Call_kind.Function_call.t) ~arg_types k ->
+  let args = Apply.args apply in
   let type_unavailable () =
     simplify_function_call_where_callee's_type_unavailable dacc apply call
-      ~arg_types k
+      ~args ~arg_types k
   in
   (* CR mshinwell: Should this be using [meet_shape], like for primitives? *)
   let denv = DA.denv dacc in

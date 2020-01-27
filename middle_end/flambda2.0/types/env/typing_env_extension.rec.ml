@@ -74,7 +74,7 @@ let add_or_replace_equation { abst; } name ty =
   in
   { abst; }
 
-let add_cse { abst; } prim ~bound_to =
+let add_cse { abst; } ~prim ~bound_to =
   let abst =
     A.pattern_match abst ~f:(fun level ->
       let level = Typing_env_level.add_cse level prim ~bound_to in

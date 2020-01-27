@@ -38,6 +38,8 @@ val add_use
   -> arg_types:Flambda_type.t list
   -> t
 
+val get_uses : t -> One_continuation_use.t list
+
 val compute_handler_env
    : t
   -> env_at_fork_plus_params_and_consts:Flambda_type.Typing_env.t

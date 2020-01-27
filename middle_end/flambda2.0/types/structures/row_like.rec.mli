@@ -37,6 +37,10 @@ module For_blocks : sig
 
   val create_blocks_with_these_tags : field_kind:Flambda_kind.t -> Tag.Set.t -> t
 
+  val create_exactly_multiple
+     : field_tys_by_tag:Type_grammar.t list Tag.Map.t
+    -> t
+
   val all_tags : t -> Tag.Set.t Or_unknown.t
 
   val all_tags_and_sizes : t -> Targetint.OCaml.t Tag.Map.t Or_unknown.t

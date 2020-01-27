@@ -256,6 +256,10 @@ module Const = struct
   let untagged_const_true = naked_immediate Immediate.bool_true
   let untagged_const_false = naked_immediate Immediate.bool_false
 
+  let untagged_const_zero = naked_immediate Immediate.zero
+
+  let untagged_const_int i = naked_immediate (Immediate.int i)
+
   let const_int i = tagged_immediate (Immediate.int i)
 
   let const_zero = tagged_immediate Immediate.zero

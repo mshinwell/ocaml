@@ -39,8 +39,8 @@ choose_best = $(strip $(if \
     $(ROOTDIR)/$1.opt, \
     $(CAMLRUN) $(ROOTDIR)/$1))
 
-BEST_OCAMLC := $(call choose_best,ocamlc)
-BEST_OCAMLOPT := $(call choose_best,ocamlopt)
-BEST_OCAMLLEX := $(call choose_best,lex/ocamllex)
+BEST_OCAMLC := $(CAMLRUN) $(ROOTDIR)/ocamlc
+BEST_OCAMLOPT := $(CAMLRUN) $(ROOTDIR)/ocamlopt
+BEST_OCAMLLEX := $(CAMLRUN) $(ROOTDIR)/boot/ocamllex
 
 BEST_OCAMLDEP := $(BEST_OCAMLC) -depend

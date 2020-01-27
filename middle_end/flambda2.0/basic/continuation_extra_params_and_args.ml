@@ -19,12 +19,17 @@
 module Extra_arg = struct
   type t =
     | Already_in_scope of Simple.t
+    | New_let_binding of Variable.t * Flambda_primitive.t
 
   let print ppf t =
     match t with
     | Already_in_scope simple ->
       Format.fprintf ppf "@[<hov 1>(Already_in_scope@ %a)@]"
         Simple.print simple
+    | New_let_binding (var, prim) ->
+      Format.fprintf ppf "@[<hov 1>(New_let_binding@ %a@ %a)@]"
+        Variable.print var
+        Flambda_primitive.print prim
 
   module List = struct
     type nonrec t = t list
