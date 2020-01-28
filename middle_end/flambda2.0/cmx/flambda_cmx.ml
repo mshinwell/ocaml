@@ -41,6 +41,8 @@ let rec load_cmx_file_contents backend comp_unit ~imported_units ~imported_names
       imported_names := Name.Set.union newly_imported_names !imported_names;
       let code = Flambda_cmx_format.all_code cmx in
       imported_code := Code_id.Map.disjoint_union code !imported_code;
+      let offsets = Flambda_cmx_format.exported_offsets cmx in
+      Exported_offsets.import_offsets offsets;
       imported_units :=
         Compilation_unit.Map.add comp_unit typing_env !imported_units;
       Some typing_env
@@ -60,4 +62,10 @@ let prepare_cmx_file_contents ~return_cont_env:cont_uses_env
       TE.make_vars_on_current_level_irrelevant final_typing_env
       |> TE.Serializable.create
     in
-    Some (Flambda_cmx_format.create ~final_typing_env ~all_code)
+    let exported_offsets =
+      (* The offsets computations for newly defined elements will be added
+         after Un_cps_closure *)
+      Exported_offsets.imported_offsets ()
+    in
+    Some (Flambda_cmx_format.create ~final_typing_env ~all_code
+            ~exported_offsets)
