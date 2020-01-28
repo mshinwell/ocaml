@@ -1191,9 +1191,21 @@ and params_and_body env fun_name fun_dbg p =
 
 let unit (middle_end_result : Flambda2_middle_end.middle_end_result) =
   let unit = middle_end_result.unit in
+  let offsets =
+    match middle_end_result.cmx with
+    | None -> Exported_offsets.empty
+    | Some cmx -> Flambda_cmx_format.exported_offsets cmx
+  in
   result := R.empty;
   Profile.record_call "flambda2_to_cmm" (fun () ->
-      let offsets = Un_cps_closure.compute_offsets unit in
+      let offsets = Un_cps_closure.compute_offsets offsets unit in
+      begin match middle_end_result.cmx with
+      | None -> () (* Either opaque was passed, or there is no need to export
+                      offsets *)
+      | Some cmx ->
+        let cmx = Flambda_cmx_format.with_exported_offsets cmx offsets in
+        Compilenv.(set_global_info (Flambda2 (Obj.repr cmx)))
+      end;
       let used_closure_vars = Flambda_unit.used_closure_vars unit in
       let dummy_k = Continuation.create () in
       (* The dummy continuation is passed here since we're going to manually

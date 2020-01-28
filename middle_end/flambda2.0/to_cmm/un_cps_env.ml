@@ -95,7 +95,7 @@ type t = {
   conts : cont Continuation.Map.t;
   (* Map from continuations to handlers (i.e variables bound by the
      continuation and expression of the continuation handler). *)
-  offsets : Un_cps_closure.env;
+  offsets : Exported_offsets.t;
   (* Offsets for closure_ids and var_within_closures. *)
   exn_conts_extra_args : Backend_var.t list Continuation.Map.t;
   (* Mutable variables used for compiling extra arguments to
@@ -243,10 +243,16 @@ let get_exn_extra_args env k =
 (* Offsets *)
 
 let closure_offset env closure =
-  Un_cps_closure.closure_offset env.offsets closure
+  let (info : Exported_offsets.closure_info) =
+    Exported_offsets.closure_offset env.offsets closure
+  in
+  info.offset
 
 let env_var_offset env env_var =
-  Un_cps_closure.env_var_offset env.offsets env_var
+  let (info : Exported_offsets.env_var_info) =
+    Exported_offsets.env_var_offset env.offsets env_var
+  in
+  info.offset
 
 let layout env closures env_vars =
   Un_cps_closure.layout env.offsets closures env_vars

@@ -22,12 +22,16 @@
 type t = {
   final_typing_env : Flambda_type.Typing_env.Serializable.t;
   all_code : Flambda.Function_params_and_body.t Code_id.Map.t;
+  exported_offsets : Exported_offsets.t;
 }
 
-let create ~final_typing_env ~all_code =
+let create ~final_typing_env ~all_code ~exported_offsets =
   { final_typing_env;
     all_code;
+    exported_offsets;
   }
 
 let final_typing_env t = t.final_typing_env
 let all_code t = t.all_code
+let exported_offsets t = t.exported_offsets
+let with_exported_offsets t exported_offsets = { t with exported_offsets; }
