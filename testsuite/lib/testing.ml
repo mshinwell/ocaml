@@ -86,11 +86,15 @@ let test_raises_this_failure s f x =
 
 (* Applies f to x and checks that the evaluation indeed
    raises the exception Failure. *)
+(* unused
 let test_raises_some_failure f x =
-  test_raises_exc_p (function Failure _ -> true | _ -> false) f x;;
+   test_raises_exc_p (function Failure _ -> true | _ -> false) f x;;
+*)
 
 let failure_test f x s = test_raises_this_failure s f x;;
+(* unused
 let any_failure_test = test_raises_some_failure;;
+*)
 
 let scan_failure_test f x =
   test_raises_exc_p (function Scan_failure _ -> true | _ -> false) f x;;

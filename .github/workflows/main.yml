@@ -27,14 +27,13 @@ jobs:
         # Operating system to run tests on. TODO: add macos-latest and windows-latest
         # os: [ubuntu-latest, macos-latest, windows-latest]
         os: [ubuntu-latest]
-        # Paralellism for builds
-        j: ["1"]
-        # Configure arguments. TODO: add a non-flambda build
-        config_args: ["--enable-flambda"]
 
     # Build ENV
     # ---------
     env:
+      # Paralellism for builds
+      J: "3"
+      # disable flambda invariants else everything takes forever to compile
       OCAMLPARAM: "_,flambda-invariants=0"
 
     # Build/test steps
@@ -45,27 +44,33 @@ jobs:
       uses: actions/checkout@master
     # Apply ocamltest patch
     - name: Patch the repo
-      run: git apply .github/workflows/main.patch
+      run: git apply .github/workflows/ocamltest_makefile.patch
+    # Install dependencies
+    - name: Install dependencies
+      run: sudo apt-get install parallel
     # Configure the compiler
     - name: configure
-      run: ./configure ${{ matrix.config_args }}
+      run: ./configure --enable-flambda
+    # Debug step
+    - name: Debug step
+      run: echo "J is $J"
     # Build ocamlc, ocamlopt and just enough to run the testsuite
     - name: Build the compiler
       run: |
-        make -j ${{ matrix.j }} world
-        make -j ${{ matrix.j }} ocamlopt
-        make -j ${{ matrix.j }} runtimeopt
-        make -j ${{ matrix.j }} libraryopt
-        make -j ${{ matrix.j }} compilerlibs/ocamlcommon.cmxa
-        make -j ${{ matrix.j }} -C otherlibs/str allopt
-        make -j ${{ matrix.j }} -C otherlibs/unix allopt
-        make -j ${{ matrix.j }} -C otherlibs/bigarray allopt
-        make -j ${{ matrix.j }} -C otherlibs/systhreads allopt
-        make                    -C testsuite tools lib
+        make -j $J world
+        make -j $J ocamlopt
+        make -j $J runtimeopt
+        make -j $J libraryopt
+        make -j $J compilerlibs/ocamlcommon.cmxa
+        make -j $J -C otherlibs/str allopt
+        make -j $J -C otherlibs/unix allopt
+        make -j $J -C otherlibs/bigarray allopt
+        make -j $J -C otherlibs/systhreads allopt
+        make       -C testsuite tools lib
     # Generate list of tests to run
     - name: Generate test list
       run: grep -v '#' .github/workflows/test-list > .github/workflows/main.list
     # Run some part of the testsuite
     - name: Running the testsuite
-      run: cd testsuite && make list FILE=../.github/workflows/main.list
+      run: cd testsuite && make list-parallel FILE=../.github/workflows/main.list
 
