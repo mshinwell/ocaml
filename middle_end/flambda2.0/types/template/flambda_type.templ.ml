@@ -869,6 +869,62 @@ Format.eprintf "reifying %a\n%!" print t;
         | Unknown -> try_canonical_simple ()
         | Invalid -> Invalid
         end
+      | Naked_float (Ok fs) ->
+        begin match Float.Set.get_singleton fs with
+        | None -> try_canonical_simple ()
+        | Some f -> Simple (Simple.const (Naked_float f))
+        end
+      | Naked_int32 (Ok ns) ->
+        begin match Int32.Set.get_singleton ns with
+        | None -> try_canonical_simple ()
+        | Some n -> Simple (Simple.const (Naked_int32 n))
+        end
+      | Naked_int64 (Ok ns) ->
+        begin match Int64.Set.get_singleton ns with
+        | None -> try_canonical_simple ()
+        | Some n -> Simple (Simple.const (Naked_int64 n))
+        end
+      | Naked_nativeint (Ok ns) ->
+        begin match Targetint.Set.get_singleton ns with
+        | None -> try_canonical_simple ()
+        | Some n -> Simple (Simple.const (Naked_nativeint n))
+        end
+      | Value (Ok (Boxed_float ty_naked_float)) ->
+        begin match prove_naked_floats env ty_naked_float with
+        | Unknown -> try_canonical_simple ()
+        | Invalid -> Invalid
+        | Proved fs ->
+          match Float.Set.get_singleton fs with
+          | None -> try_canonical_simple ()
+          | Some f -> Lift (Boxed_float f)
+        end
+      | Value (Ok (Boxed_int32 ty_naked_int32)) ->
+        begin match prove_naked_int32s env ty_naked_int32 with
+        | Unknown -> try_canonical_simple ()
+        | Invalid -> Invalid
+        | Proved ns ->
+          match Int32.Set.get_singleton ns with
+          | None -> try_canonical_simple ()
+          | Some n -> Lift (Boxed_int32 n)
+        end
+      | Value (Ok (Boxed_int64 ty_naked_int64)) ->
+        begin match prove_naked_int64s env ty_naked_int64 with
+        | Unknown -> try_canonical_simple ()
+        | Invalid -> Invalid
+        | Proved ns ->
+          match Int64.Set.get_singleton ns with
+          | None -> try_canonical_simple ()
+          | Some n -> Lift (Boxed_int64 n)
+        end
+      | Value (Ok (Boxed_nativeint ty_naked_nativeint)) ->
+        begin match prove_naked_nativeints env ty_naked_nativeint with
+        | Unknown -> try_canonical_simple ()
+        | Invalid -> Invalid
+        | Proved ns ->
+          match Targetint.Set.get_singleton ns with
+          | None -> try_canonical_simple ()
+          | Some n -> Lift (Boxed_nativeint n)
+        end
       | Value Bottom
       | Naked_immediate Bottom | Naked_float Bottom
       | Naked_int32 Bottom | Naked_int64 Bottom | Naked_nativeint Bottom ->
