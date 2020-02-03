@@ -267,9 +267,13 @@ Format.eprintf "Deleting binding of %a; free names of body are:@ %a\n%!"
     let let_expr = Let_expr.create ~bound_vars ~defining_expr ~body in
     let free_names =
       let from_defining_expr =
-        Name_occurrences.downgrade_occurrences_at_strictly_greater_kind
-          (Named.free_names defining_expr)
-          (Var_in_binding_pos.name_mode bound_var)
+        let from_defining_expr = Named.free_names defining_expr in
+        if not !Clflags.debug then (* CR mshinwell: refine condition *)
+          from_defining_expr
+        else
+          Name_occurrences.downgrade_occurrences_at_strictly_greater_kind
+            from_defining_expr
+            (Var_in_binding_pos.name_mode bound_var)
       in
       (* We avoid [Let_expr.free_names] since we already know the free names
          of [body] -- and calling that function would cause an abstraction

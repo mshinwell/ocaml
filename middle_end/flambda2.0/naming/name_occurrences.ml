@@ -217,18 +217,19 @@ end = struct
       t1
 
   let union t1 t2 =
-    let t =
-      N.Map.merge (fun _name for_one_name1 for_one_name2 ->
-          match for_one_name1, for_one_name2 with
-          | None, None -> None
-          | None, Some _ -> for_one_name2
-          | Some _, None -> for_one_name1
-          | Some for_one_name1, Some for_one_name2 ->
+    if is_empty t1 then begin
+      t2
+    end else if is_empty t2 then begin
+      t1
+    end else begin
+      let t =
+        N.Map.union (fun _name for_one_name1 for_one_name2 ->
             Some (For_one_name.union for_one_name1 for_one_name2))
-        t1 t2
-    in
-    invariant t;
-    t
+          t1 t2
+      in
+      invariant t;
+      t
+    end
 
   let keys t = N.Map.keys t
 
@@ -601,13 +602,16 @@ let mem_name t (name : Name.t) =
   | Symbol symbol -> mem_symbol t symbol
 
 let remove_var t var =
-  let variables = For_variables.remove t.variables var in
-  { t with
-    variables;
-  }
+  if For_variables.is_empty t.variables then t
+  else
+    let variables = For_variables.remove t.variables var in
+    { t with
+      variables;
+    }
 
 let remove_vars t vars =
-  Variable.Set.fold (fun var t -> remove_var t var) vars t
+  if For_variables.is_empty t.variables then t
+  else Variable.Set.fold (fun var t -> remove_var t var) vars t
 
 let greatest_name_mode_var t var =
   For_variables.greatest_name_mode t.variables var
@@ -616,6 +620,7 @@ let downgrade_occurrences_at_strictly_greater_kind
       { variables; continuations; symbols; closure_vars; code_ids;
         newer_version_of_code_ids; }
       max_kind =
+  (* CR mshinwell: Don't reallocate the record if nothing changed *)
   let variables =
     For_variables.downgrade_occurrences_at_strictly_greater_kind
       variables max_kind

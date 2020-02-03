@@ -120,6 +120,7 @@ let free_names ({ bound_vars_and_body = _; defining_expr; } as t) =
         name_mode
     in
     let from_body = Expr.free_names body in
+    (* CR mshinwell: See comment in expr.rec.ml *)
     Name_occurrences.union from_defining_expr
       (Name_occurrences.remove_vars from_body bound_vars))
 

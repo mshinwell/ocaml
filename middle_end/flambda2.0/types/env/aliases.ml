@@ -117,11 +117,8 @@ end) = struct
 
     let union t1 t2 =
       let aliases =
-        E.Order_within_equiv_class.Map.merge (fun _order elts1 elts2 ->
-            match elts1, elts2 with
-            | None, None -> None
-            | Some elts, None | None, Some elts -> Some elts
-            | Some elts1, Some elts2 -> Some (E.Set.union elts1 elts2))
+        E.Order_within_equiv_class.Map.union (fun _order elts1 elts2 ->
+            Some (E.Set.union elts1 elts2))
           t1.aliases t2.aliases
       in
       let t =

@@ -250,16 +250,12 @@ let add_cse t prim ~bound_to =
 
 let concat (t1 : t) (t2 : t) =
   let defined_vars =
-    Variable.Map.merge (fun var data1 data2 ->
-        match data1, data2 with
-        | None, None -> None
-        | Some data, None | None, Some data -> Some data
-        | Some _, _ ->
-          Misc.fatal_errorf "Cannot concatenate levels that have overlapping \
-              defined variables (e.g. %a):@ %a@ and@ %a"
-            Variable.print var
-            print t1
-            print t2)
+    Variable.Map.union (fun var _data1 _data2 ->
+        Misc.fatal_errorf "Cannot concatenate levels that have overlapping \
+            defined variables (e.g. %a):@ %a@ and@ %a"
+          Variable.print var
+          print t1
+          print t2)
       t1.defined_vars
       t2.defined_vars
   in
@@ -332,21 +328,17 @@ let meet_equation env t name typ =
 
 let meet0 env (t1 : t) (t2 : t) =
   let defined_vars =
-    Variable.Map.merge (fun var data1 data2 ->
-        match data1, data2 with
-        | None, None -> None
-        | Some data, None | None, Some data -> Some data
-        | Some (kind1, binding_time1), Some (kind2, binding_time2) ->
-          if Flambda_kind.equal kind1 kind2
-            && Binding_time.equal binding_time1 binding_time2
-          then Some (kind1, binding_time1)
-          else
-            Misc.fatal_errorf "Cannot meet levels that have overlapping \
-                defined variables (e.g. %a) that disagree on kind and/or \
-                binding time:@ %a@ and@ %a"
-              Variable.print var
-              print t1
-              print t2)
+    Variable.Map.union (fun var (kind1, binding_time1) (kind2, binding_time2) ->
+        if Flambda_kind.equal kind1 kind2
+          && Binding_time.equal binding_time1 binding_time2
+        then Some (kind1, binding_time1)
+        else
+          Misc.fatal_errorf "Cannot meet levels that have overlapping \
+              defined variables (e.g. %a) that disagree on kind and/or \
+              binding time:@ %a@ and@ %a"
+            Variable.print var
+            print t1
+            print t2)
       t1.defined_vars
       t2.defined_vars
   in
@@ -378,6 +370,7 @@ let meet0 env (t1 : t) (t2 : t) =
       (t, env)
   in
   let cse =
+    (* CR mshinwell: Add [Map.inter] (also used elsewhere) *)
     Flambda_primitive.Eligible_for_cse.Map.merge (fun _ simple1 simple2 ->
         match simple1, simple2 with
         | None, None | None, Some _ | Some _, None -> None
