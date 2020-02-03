@@ -224,12 +224,16 @@ end) = struct
     if E.equal canonical_element to_be_demoted then
       t
     else
+      let aliases_of_to_be_demoted =
+        get_aliases_of_canonical_element t ~canonical_element:to_be_demoted
+      in
+      assert (not (Aliases_of_canonical_element.mem
+        aliases_of_to_be_demoted canonical_element));
       let canonical_elements =
         t.canonical_elements
-        (* CR mshinwell: A lot of allocation here *)
-        |> E.Map.map_sharing (fun element ->
-             if E.equal element to_be_demoted then canonical_element
-             else element)
+        |> E.Set.fold (fun alias canonical_elements ->
+            E.Map.add alias canonical_element canonical_elements)
+          (Aliases_of_canonical_element.all aliases_of_to_be_demoted)
         |> E.Map.add to_be_demoted canonical_element
       in
       let aliases_of_canonical_element =
@@ -237,11 +241,6 @@ end) = struct
       in
       assert (not (Aliases_of_canonical_element.mem
         aliases_of_canonical_element to_be_demoted));
-      let aliases_of_to_be_demoted =
-        get_aliases_of_canonical_element t ~canonical_element:to_be_demoted
-      in
-      assert (not (Aliases_of_canonical_element.mem
-        aliases_of_to_be_demoted canonical_element));
       assert (Aliases_of_canonical_element.is_empty (
         Aliases_of_canonical_element.inter
           aliases_of_canonical_element aliases_of_to_be_demoted));
