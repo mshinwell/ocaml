@@ -27,7 +27,7 @@ type descr =
 
 type free_names =
   | Ok of Name_occurrences.t
-  | Not_computed
+[@@unboxed]
 
 type t = {
   descr : descr;
@@ -119,8 +119,10 @@ let free_names t =
   match t.free_names with
   | Ok free_names ->
     Name_occurrences.apply_name_permutation free_names t.delayed_permutation
-  | Not_computed ->
-    match descr t with
+
+let create descr =
+  let free_names =
+    match descr with
     | Let let_expr -> Let_expr.free_names let_expr
     | Let_symbol let_symbol_expr -> Let_symbol_expr.free_names let_symbol_expr
     | Let_cont let_cont -> Let_cont_expr.free_names let_cont
@@ -128,11 +130,10 @@ let free_names t =
     | Apply_cont apply_cont -> Apply_cont.free_names apply_cont
     | Switch switch -> Switch.free_names switch
     | Invalid _ -> Name_occurrences.empty
-
-let create descr =
+  in
   { descr;
     delayed_permutation = Name_permutation.empty;
-    free_names = Not_computed;
+    free_names = Ok free_names;
   }
 
 type let_creation_result =
