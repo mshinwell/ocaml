@@ -227,7 +227,7 @@ end) = struct
       let canonical_elements =
         t.canonical_elements
         (* CR mshinwell: A lot of allocation here *)
-        |> E.Map.map (fun element ->
+        |> E.Map.map_sharing (fun element ->
              if E.equal element to_be_demoted then canonical_element
              else element)
         |> E.Map.add to_be_demoted canonical_element
