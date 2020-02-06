@@ -39,6 +39,7 @@ module Data = struct
       user_visible
 
   let hash { compilation_unit; name; name_stamp; user_visible = _; } =
+    (* The [stamp] uniquely determines [user_visible]; see below. *)
     Hashtbl.hash (Compilation_unit.hash compilation_unit, name, name_stamp)
 
   let equal
@@ -103,15 +104,10 @@ let rename ?append t =
   create ?user_visible name
 
 let with_user_visible t ~user_visible =
-  (* CR mshinwell: duplicate code with above *)
-  let name_stamp =
-    incr previous_name_stamp;
-    !previous_name_stamp
-  in
   let data : Data.t =
     { compilation_unit = compilation_unit t;
       name = name t;
-      name_stamp;
+      name_stamp = name_stamp t;
       user_visible;
     }
   in

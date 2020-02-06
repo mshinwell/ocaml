@@ -30,14 +30,12 @@ module Id = struct
   let flags t = t land mask_selecting_bottom_bits
 
   let [@inline always] with_flags t flags =
-    if flags < 0 || flags > mask_selecting_bottom_bits then begin
+    if flags < 0 || flags >= (1 lsl (flags_size_in_bits + 1)) then begin
       Misc.fatal_errorf "Flags value 0x%x out of range" flags
     end;
     t lor flags
 
   let without_flags t = t land mask_selecting_top_bits
-
-  let hash t = t
 end
 
 module Make (E : sig
@@ -47,7 +45,11 @@ module Make (E : sig
   val hash : t -> int
   val equal : t -> t -> bool
 end) = struct
-  module HT = Hashtbl.Make (Int)
+  module HT = Hashtbl.Make (struct
+    type t = int
+    let hash t = t
+    let equal t1 t2 = (t1 == t2)
+  end)
 
   type t = E.t HT.t
 

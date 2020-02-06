@@ -332,8 +332,9 @@ let name_domain t = domain0 t
 let find t name =
   match Name.Map.find name (names_to_types t) with
   | exception Not_found ->
-    Misc.fatal_errorf "Name %a not bound in typing environment:@ %a"
+    Misc.fatal_errorf "Name %a (0x%x) not bound in typing environment:@ %a"
       Name.print name
+      ((Obj.magic name) : int)
       print t
   (* CR mshinwell: Should this resolve aliases? *)
   | ty, _binding_time, _name_mode -> ty

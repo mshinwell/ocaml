@@ -20,7 +20,7 @@ open! Int_replace_polymorphic_compare
 
 module Id = Table_by_int_id.Id
 
-type t = Id.t
+type t = int
 
 let var_flag = 0
 let symbol_flag = 1
@@ -77,9 +77,15 @@ module With_map = Identifiable.Make (struct
   let output chan t =
     print (Format.formatter_of_out_channel chan) t
 
-  let hash = Id.hash
-  let compare = Id.compare
-  let equal = Id.equal
+  let hash t = t
+
+  let compare t1 t2 =
+    if t1 == t2 then 0
+    else if t1 < t2 then (-1)
+    else 1
+
+  let equal t1 t2 =
+    t1 == t2
 end)
 
 (* CR mshinwell: We need a better way of adding the colours to maps. *)
