@@ -23,7 +23,7 @@
     The linkage name must be globally unique: two compilation units linked in
     the same program must not share a linkage name. *)
 
-type t = Table_by_int_id.Id.t
+type t = private Table_by_int_id.Id.t
 
 include Identifiable.S with type t := t
 

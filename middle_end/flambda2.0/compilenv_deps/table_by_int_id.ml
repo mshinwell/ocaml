@@ -56,18 +56,10 @@ end) = struct
   exception Can_add of int
   exception Already_added of int
 
-  let min_positive_hash = 1 lsl Id.num_empty_bottom_bits
-  let max_negative_hash = -(min_positive_hash + 1)
-
-  let () =
-    assert (min_positive_hash > max_negative_hash)
-
   let add t elt =
     let hash = (E.hash elt) land Id.mask_selecting_top_bits in
     match HT.find t hash with
     | exception Not_found ->
-Format.eprintf "Adding with hash 0x%x:@ %a\n%!"
-  hash E.print elt;
       HT.add t hash elt;
       hash
     | existing_elt ->
@@ -78,9 +70,9 @@ Format.eprintf "Adding with hash 0x%x:@ %a\n%!"
           let starting_hash = hash in
           let hash = ref (starting_hash + 1) in
           while !hash <> starting_hash do
-            if !hash > max_negative_hash && !hash < min_positive_hash then begin
-              hash := min_positive_hash + 1
-            end;
+            while !hash land Id.mask_selecting_bottom_bits <> 0 do
+              incr hash;
+            done;
             match HT.find t !hash with
             | exception Not_found -> raise (Can_add !hash)
             | existing_elt ->
@@ -94,5 +86,7 @@ Format.eprintf "Adding with hash 0x%x:@ %a\n%!"
         end
       end
 
-  let find t id = HT.find t id
+  let find t id =
+    assert (id land Id.mask_selecting_bottom_bits = 0);
+    HT.find t id
 end

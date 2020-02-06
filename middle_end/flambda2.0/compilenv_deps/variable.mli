@@ -18,8 +18,7 @@
 
 (** The names of variables. *)
 
-(* CR mshinwell: can't be private... *)
-type t = Table_by_int_id.Id.t
+type t = private Table_by_int_id.Id.t
 
 include Identifiable.S with type t := t
 

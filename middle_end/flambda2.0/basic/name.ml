@@ -28,14 +28,21 @@ let symbol_flag = 1
 let () =
   assert (Id.flags_size_in_bits >= 1)
 
-let var v = v
-let symbol s = Id.with_flags s symbol_flag
+(* CR mshinwell: Think about the use of [Obj].  It seems worse to have to
+   remove the [private] in e.g. variable.mli.
+
+   Maybe one option would be to turn the hierarchy around so Name is actually
+   the thing doing the creation, rather than depending on Variable and
+   Symbol.  There could just be Name, in fact, perhaps... *)
+
+let var v = ((Obj.magic v) : t)
+let symbol s = Id.with_flags ((Obj.magic s) : t) symbol_flag
 
 let [@inline always] pattern_match t ~var ~symbol =
   let flags = Id.flags t in
   let var_or_symbol = Id.without_flags t in
-  if flags = var_flag then var var_or_symbol
-  else if flags = symbol_flag then symbol var_or_symbol
+  if flags = var_flag then var ((Obj.magic var_or_symbol) : Variable.t)
+  else if flags = symbol_flag then symbol ((Obj.magic var_or_symbol) : Symbol.t)
   else assert false
 
 let is_var t = pattern_match t ~var:(fun _ -> true) ~symbol:(fun _ -> false)
