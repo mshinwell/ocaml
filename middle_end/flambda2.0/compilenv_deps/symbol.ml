@@ -53,7 +53,7 @@ let initialise () =
 let compilation_unit t = (Table.find !global_table t).compilation_unit
 let linkage_name t = (Table.find !global_table t).linkage_name
 
-module T = Identifiable.Make (struct
+include Identifiable.Make (struct
   include Table_by_int_id.Id
 
   let print ppf t =
@@ -67,10 +67,8 @@ module T = Identifiable.Make (struct
     print (Format.formatter_of_out_channel chan) t
 end)
 
-include T
-
 let unsafe_create compilation_unit linkage_name =
-  let data : Data.t = { compilation_unit; linkage_name; hash; } in
+  let data : Data.t = { compilation_unit; linkage_name; } in
   Table.add !global_table data
 
 let create compilation_unit linkage_name =

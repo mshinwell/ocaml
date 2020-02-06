@@ -77,12 +77,15 @@ let build_dep_graph dacc lifted_constants =
                 | Bottom | Ok None -> free_syms
                 | Ok (Some canonical) ->
                   match Simple.descr canonical with
-                  | Name (Var _) | Const _ -> free_syms
-                  | Name (Symbol sym) ->
-                    if Symbol.Set.mem sym all_symbols_being_defined then
-                      Symbol.Set.add sym free_syms
-                    else
-                      free_syms)
+                  | Const _ -> free_syms
+                  | Name name ->
+                    Name.pattern_match name
+                      ~var:(fun _var -> free_syms)
+                      ~symbol:(fun sym ->
+                        if Symbol.Set.mem sym all_symbols_being_defined then
+                          Symbol.Set.add sym free_syms
+                        else
+                          free_syms))
               (Name_occurrences.variables free_names)
               (Name_occurrences.symbols free_names)
           in

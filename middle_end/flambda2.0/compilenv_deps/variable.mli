@@ -18,7 +18,8 @@
 
 (** The names of variables. *)
 
-type t = private Table_by_int_id.Id.t
+(* CR mshinwell: can't be private... *)
+type t = Table_by_int_id.Id.t
 
 include Identifiable.S with type t := t
 
@@ -30,6 +31,8 @@ val create_with_same_name_as_ident : ?user_visible:unit -> Ident.t -> t
 
 (* CR mshinwell: check on gdb branch if this preserves the "original ident".
    Sometimes it should and other times it should not (eg unboxing) *)
+(** [rename] always returns a variable with a compilation unit set to that
+    of the current unit, not the unit of the variable passed in. *)
 val rename : ?append:string -> t -> t
 
 val compilation_unit : t -> Compilation_unit.t
@@ -59,9 +62,5 @@ val compare_lists : t list -> t list -> int
 module List : sig
   type nonrec t = t list
 
-  val rename
-     : ?current_compilation_unit:Compilation_unit.t
-    -> ?append:string
-    -> t
-    -> t
+  val rename : ?append:string -> t -> t
 end

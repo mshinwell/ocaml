@@ -30,7 +30,7 @@ module Data = struct
     Format.fprintf ppf "@[<hov 1>(\
         @[<hov 1>(compilation_unit@ %a)@]@ \
         @[<hov 1>(name@ %s)@]@ \
-        @[<hov 1>(name_stamp@ %s)@]@ \
+        @[<hov 1>(name_stamp@ %d)@]@ \
         @[<hov 1>(user_visible@ %b)@]\
         )@]"
       Compilation_unit.print compilation_unit
@@ -64,7 +64,7 @@ let name t = (Table.find !global_table t).name
 let name_stamp t = (Table.find !global_table t).name_stamp
 let user_visible t = (Table.find !global_table t).user_visible
 
-module T = Identifiable.Make (struct
+module Self = Identifiable.Make (struct
   include Table_by_int_id.Id
 
   let print ppf t = Format.fprintf ppf "%s/%d" (name t) (name_stamp t)
@@ -72,7 +72,7 @@ module T = Identifiable.Make (struct
   let output chan t = print (Format.formatter_of_out_channel chan) t
 end)
 
-include T
+include Self
 
 let previous_name_stamp = ref (-1)
 
@@ -82,7 +82,8 @@ let create ?user_visible name =
     !previous_name_stamp
   in
   let data : Data.t =
-    { name;
+    { compilation_unit = Compilation_unit.get_current_exn ();
+      name;
       name_stamp;
       user_visible = Option.is_some user_visible;
     }
@@ -95,14 +96,26 @@ let create_with_same_name_as_ident ?user_visible ident : t =
 let rename ?append t =
   let name =
     match append with
-    | None -> t.name
-    | Some s -> t.name ^ s
+    | None -> (name t)
+    | Some s -> (name t) ^ s
   in
-  let user_visible = if t.user_visible then Some () else None in
+  let user_visible = if user_visible t then Some () else None in
   create ?user_visible name
 
 let with_user_visible t ~user_visible =
-  { t with user_visible; }
+  (* CR mshinwell: duplicate code with above *)
+  let name_stamp =
+    incr previous_name_stamp;
+    !previous_name_stamp
+  in
+  let data : Data.t =
+    { compilation_unit = compilation_unit t;
+      name = name t;
+      name_stamp;
+      user_visible;
+    }
+  in
+  Table.add !global_table data
 
 let raw_name = name
 let raw_name_stamp = name_stamp

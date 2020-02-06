@@ -373,10 +373,10 @@ let add_symbol t sym kind =
     symbols = For_symbols.add t.symbols sym kind;
   }
 
-let add_name t (name : Name.t) kind =
-  match name with
-  | Var var -> add_variable t var kind
-  | Symbol sym -> add_symbol t sym kind
+let add_name t name kind =
+  Name.pattern_match name
+    ~var:(fun var -> add_variable t var kind)
+    ~symbol:(fun sym -> add_symbol t sym kind)
 
 let add_closure_var t clos_var kind =
   { t with
@@ -400,9 +400,9 @@ let singleton_symbol sym kind =
   }
 
 let singleton_name (name : Name.t) kind =
-  match name with
-  | Var var -> singleton_variable var kind
-  | Symbol sym -> singleton_symbol sym kind
+  Name.pattern_match name
+    ~var:(fun var -> singleton_variable var kind)
+    ~symbol:(fun sym -> singleton_symbol sym kind)
 
 let create_variables vars kind =
   (* CR mshinwell: This reallocates the record for each [var]! *)
@@ -413,9 +413,9 @@ let create_variables vars kind =
 
 let create_names names kind =
   Name.Set.fold (fun (name : Name.t) t ->
-      match name with
-      | Var var -> add_variable t var kind
-      | Symbol sym -> add_symbol t sym kind)
+      Name.pattern_match name
+        ~var:(fun var -> add_variable t var kind)
+        ~symbol:(fun sym -> add_symbol t sym kind))
     names
     empty
 
@@ -596,10 +596,10 @@ let mem_var t var = For_variables.mem t.variables var
 let mem_symbol t symbol = For_symbols.mem t.symbols symbol
 let mem_code_id t code_id = For_code_ids.mem t.code_ids code_id
 
-let mem_name t (name : Name.t) =
-  match name with
-  | Var var -> mem_var t var
-  | Symbol symbol -> mem_symbol t symbol
+let mem_name t name =
+  Name.pattern_match name
+    ~var:(fun var -> mem_var t var)
+    ~symbol:(fun symbol -> mem_symbol t symbol)
 
 let remove_var t var =
   if For_variables.is_empty t.variables then t

@@ -16,8 +16,10 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
+module Int = Numbers.Int
+
 module Id = struct
-  include Numbers.Int
+  include Int
 
   let num_empty_bottom_bits = 2
   let mask_selecting_top_bits = (-1) lsl num_empty_bottom_bits
@@ -49,7 +51,7 @@ end) = struct
 
   type t = E.t HT.t
 
-  let create () = HT.create ()
+  let create () = HT.create 10_000
 
   exception Can_add of int
 
@@ -82,4 +84,6 @@ end) = struct
     end
 
   let find t id = HT.find t id
+
+  let _ = E.equal  (* CR mshinwell: decide if [equal] needed *)
 end

@@ -16,7 +16,7 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
-open Int_replace_polymorphic_compare
+open! Int_replace_polymorphic_compare
 
 module Id = Table_by_int_id.Id
 
@@ -29,7 +29,7 @@ let () =
   assert (Id.flags_size_in_bits >= 1)
 
 let var v = v
-let symbol s = Id.with_flags v symbol_flag
+let symbol s = Id.with_flags s symbol_flag
 
 let [@inline always] pattern_match t ~var ~symbol =
   let flags = Id.flags t in
@@ -43,53 +43,42 @@ let is_var t = pattern_match t ~var:(fun _ -> true) ~symbol:(fun _ -> false)
 let is_symbol t = pattern_match t ~var:(fun _ -> false) ~symbol:(fun _ -> true)
 
 let map_var t ~f =
-let map_var t ~f =
-  pattern_match t ~var:(fun var -> ) ~symbol:(fun _ -> false)
-  match t with
-  | Var var ->
-    let var' = f var in
-    if var == var' then t
-    else Var var'
-  | Symbol _ -> t
+  pattern_match t ~var:(fun v -> var (f v)) ~symbol:(fun _ -> t)
 
 let map_symbol t ~f =
-  match t with
-  | Var _ -> t
-  | Symbol symbol ->
-    let symbol' = f symbol in
-    if symbol == symbol' then t
-    else Symbol symbol'
+  pattern_match t ~var:(fun _ -> t) ~symbol:(fun s -> symbol (f s))
 
 let to_var t =
-  match t with
-  | Var var -> Some var
-  | Symbol _ -> None
+  pattern_match t ~var:(fun var -> Some var) ~symbol:(fun _ -> None)
 
 let to_symbol t =
-  match t with
-  | Var _ -> None
-  | Symbol sym -> Some sym
+  pattern_match t ~var:(fun _ -> None) ~symbol:(fun symbol -> Some symbol)
 
-module With_map =
-  Identifiable.Make (struct
-    type nonrec t = t
+module With_map = Identifiable.Make (struct
+  type nonrec t = t
 
-    let print ppf t =
-      Format.fprintf ppf "@<0>%s" (Flambda_colours.name ());
-      pattern_match t
-        ~var:(fun var -> Variable.print ppf var)
-        ~symbol:(fun symbol -> Symbol.print ppf symbol);
-      Format.fprintf ppf "@<0>%s" (Flambda_colours.normal ())
+  let print ppf t =
+    Format.fprintf ppf "@<0>%s" (Flambda_colours.name ());
+    pattern_match t
+      ~var:(fun var -> Variable.print ppf var)
+      ~symbol:(fun symbol -> Symbol.print ppf symbol);
+    Format.fprintf ppf "@<0>%s" (Flambda_colours.normal ())
 
-    let output chan t =
-      print (Format.formatter_of_out_channel chan) t
+  let output chan t =
+    print (Format.formatter_of_out_channel chan) t
 
-    let hash = Id.hash
-    let compare = Id.compare
-    let equal = Id.equal
-  end)
+  let hash = Id.hash
+  let compare = Id.compare
+  let equal = Id.equal
+end)
 
 (* CR mshinwell: We need a better way of adding the colours to maps. *)
+
+let print = With_map.print
+let output = With_map.output
+let hash = With_map.hash
+let equal = With_map.equal
+let compare = With_map.compare
 
 module T = With_map.T
 
@@ -112,17 +101,17 @@ module Tbl = With_map.Tbl
 
 let variables_only set = Set.filter is_var set
 
-let symbols_only_map map = Map.filter is_symbol map
+let symbols_only_map map = Map.filter (fun t _ -> is_symbol t) map
 
 let set_of_var_set vars =
-  Variable.Set.fold (fun var t_set ->
-      Set.add (Var var) t_set)
+  Variable.Set.fold (fun v t_set ->
+      Set.add (var v) t_set)
     vars
     Set.empty
 
 let set_of_symbol_set symbols =
-  Symbol.Set.fold (fun symbol t_set ->
-      Set.add (Symbol symbol) t_set)
+  Symbol.Set.fold (fun sym t_set ->
+      Set.add (symbol sym) t_set)
     symbols
     Set.empty
 
@@ -143,19 +132,36 @@ let set_to_symbol_set t =
     Symbol.Set.empty
 
 let print_sexp ppf t =
-  match t with
-  | Var var -> Format.fprintf ppf "@[(Var %a)@]" Variable.print var
-  | Symbol sym -> Format.fprintf ppf "@[(Symbol %a)@]" Symbol.print sym
+  pattern_match t
+    ~var:(fun var ->
+      Format.fprintf ppf "@[(Var %a)@]" Variable.print var)
+    ~symbol:(fun sym ->
+      Format.fprintf ppf "@[(Symbol %a)@]" Symbol.print sym)
 
 let is_predefined_exception t =
-  match t with
-  | Var _ -> false
-  | Symbol sym -> Symbol.is_predefined_exception sym
+  pattern_match t
+    ~var:(fun _ -> false)
+    ~symbol:(fun sym -> Symbol.is_predefined_exception sym)
 
 let rename t =
-  match t with
-  | Var var -> Var (Variable.rename var)
-  | Symbol sym -> Symbol (Symbol.rename sym)
+  pattern_match t
+    ~var:(fun v -> var (Variable.rename v))
+    ~symbol:(fun sym -> symbol (Symbol.rename sym))
+
+let must_be_var_opt t =
+  pattern_match t
+    ~var:(fun var -> Some var)
+    ~symbol:(fun _ -> None)
+
+let must_be_symbol t =
+  pattern_match t
+    ~var:(fun _ -> Misc.fatal_errorf "Must be a symbol:@ %a" print t)
+    ~symbol:(fun sym -> sym)
+
+let must_be_symbol_opt t =
+  pattern_match t
+    ~var:(fun _ -> None)
+    ~symbol:(fun sym -> Some sym)
 
 module Pair = struct
   include Identifiable.Make_pair

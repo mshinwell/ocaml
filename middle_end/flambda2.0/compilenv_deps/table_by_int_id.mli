@@ -17,13 +17,17 @@
 [@@@ocaml.warning "+a-30-40-41-42"]
 
 module Id : sig
-  type t = private int
+  type t = int
 
   val flags_size_in_bits : int
 
   val flags : t -> int
 
+  val without_flags : t -> int
+
   val with_flags : t -> int -> t
+
+  include Identifiable.S with type t := t
 end
 
 module Make (E : sig

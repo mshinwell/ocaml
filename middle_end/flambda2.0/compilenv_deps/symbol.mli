@@ -23,22 +23,23 @@
     The linkage name must be globally unique: two compilation units linked in
     the same program must not share a linkage name. *)
 
-type t = private Table_by_int_id.Id.t
+type t = Table_by_int_id.Id.t
 
 include Identifiable.S with type t := t
 
+val initialise : unit -> unit
+
 val create : Compilation_unit.t -> Linkage_name.t -> t
 
-(* Create the symbol without prefixing with the compilation unit.
-   Used for predefined exceptions *)
+(** Create the symbol without prefixing with the compilation unit.
+    Used for predefined exceptions *)
 val unsafe_create : Compilation_unit.t -> Linkage_name.t -> t
 
 val import_for_pack : t -> pack:Compilation_unit.t -> t
 
 val compilation_unit : t -> Compilation_unit.t
-val linkage_name : t -> Linkage_name.t
 
-val print_opt : Format.formatter -> t option -> unit
+val linkage_name : t -> Linkage_name.t
 
 val in_compilation_unit : t -> Compilation_unit.t -> bool
 

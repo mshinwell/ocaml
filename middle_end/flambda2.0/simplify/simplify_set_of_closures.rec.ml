@@ -317,9 +317,10 @@ let dacc_inside_function context r ~params ~my_closure closure_id
   let dacc =
     DA.map_denv dacc ~f:(fun denv ->
       Closure_id.Map.fold (fun _closure_id bound_name denv ->
-          match Name_in_binding_pos.to_name bound_name with
-          | Var _ -> denv
-          | Symbol closure_symbol -> DE.now_defining_symbol denv closure_symbol)
+          Name.pattern_match (Name_in_binding_pos.to_name bound_name)
+            ~var:(fun _var -> denv)
+            ~symbol:(fun closure_symbol ->
+              DE.now_defining_symbol denv closure_symbol))
         closure_bound_names_inside_function
         denv)
   in
@@ -503,17 +504,20 @@ let simplify_and_lift_set_of_closures dacc ~closure_bound_vars_inverse
   let closure_element_types =
     Var_within_closure.Map.map (fun closure_element ->
         match Simple.descr closure_element with
-        | Const _ | Name (Symbol _) -> T.alias_type_of K.value closure_element
-        | Name (Var var) ->
-          match Variable.Map.find var closure_bound_vars_inverse with
-          | exception Not_found ->
-            assert (DE.mem_variable (DA.denv dacc) var);
-            T.alias_type_of K.value closure_element
-          | closure_id ->
-            let closure_symbol =
-              Closure_id.Map.find closure_id closure_symbols
-            in
-            T.alias_type_of K.value (Simple.symbol closure_symbol))
+        | Const _ -> T.alias_type_of K.value closure_element
+        | Name name ->
+          Name.pattern_match name
+            ~var:(fun var ->
+              match Variable.Map.find var closure_bound_vars_inverse with
+              | exception Not_found ->
+                assert (DE.mem_variable (DA.denv dacc) var);
+                T.alias_type_of K.value closure_element
+              | closure_id ->
+                let closure_symbol =
+                  Closure_id.Map.find closure_id closure_symbols
+                in
+                T.alias_type_of K.value (Simple.symbol closure_symbol))
+            ~symbol:(fun _sym -> T.alias_type_of K.value closure_element))
       closure_elements
   in
   let context =
@@ -691,8 +695,11 @@ let type_closure_elements_and_make_lifting_decision_for_one_set dacc
   let can_lift =
     Var_within_closure.Map.for_all (fun _ simple ->
         match Simple.descr simple with
-        | Const _ | Name (Symbol _) -> true
-        | Name (Var var) -> Variable.Map.mem var closure_bound_vars_inverse)
+        | Const _ -> true
+        | Name name ->
+          Name.pattern_match name
+            ~var:(fun var -> Variable.Map.mem var closure_bound_vars_inverse)
+            ~symbol:(fun _sym -> true))
       closure_elements
   in
   { can_lift;

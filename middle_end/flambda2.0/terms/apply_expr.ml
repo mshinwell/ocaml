@@ -89,9 +89,7 @@ let invariant env
     | C_call { alloc = _; param_arity = _; return_arity = _; } ->
       (* CR mshinwell: Check exactly what Cmmgen can compile and then
          add further checks on [param_arity] and [return_arity] *)
-      begin match Simple.descr callee with
-      | Name (Symbol _) -> ()
-      | _ ->
+      if not (Simple.is_symbol callee) then begin
         (* CR-someday mshinwell: We could expose indirect C calls at the
            source language level. *)
         Misc.fatal_errorf "For [C_call] applications the callee must be \

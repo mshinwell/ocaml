@@ -121,9 +121,7 @@ let tupled_function_call_stub
       (0, body_with_closure_bound)
       params
   in
-  let tuple_param =
-    Kinded_parameter.create (Parameter.wrap tuple_param_var) K.value
-  in
+  let tuple_param = Kinded_parameter.create tuple_param_var K.value in
   let params_and_body =
     Flambda.Function_params_and_body.create
       ~return_continuation
@@ -151,9 +149,8 @@ let tupled_function_call_stub
 let register_const0 t constant name =
   match Static_const.Map.find constant t.shareable_constants with
   | exception Not_found ->
-    let current_compilation_unit = Compilation_unit.get_current_exn () in
     (* Create a variable to ensure uniqueness of the symbol. *)
-    let var = Variable.create ~current_compilation_unit name in
+    let var = Variable.create name in
     let symbol =
       Symbol.create (Compilation_unit.get_current_exn ())
         (Linkage_name.create
@@ -336,9 +333,7 @@ let close_c_call t ~let_bound_var (prim : Primitive.description)
   if not needs_wrapper then call
   else
     let after_call =
-      let params =
-        [Kinded_parameter.create (Parameter.wrap handler_param) return_kind]
-      in
+      let params = [Kinded_parameter.create handler_param return_kind] in
       let params_and_handler =
         Flambda.Continuation_params_and_handler.create params
           ~handler:code_after_call
@@ -469,7 +464,7 @@ let rec close t env (ilam : Ilambda.t) : Expr.t =
             | Not_user_visible -> false
           in
           let param = Variable.with_user_visible param ~user_visible in
-          Kinded_parameter.create (Parameter.wrap param) (LC.value_kind kind))
+          Kinded_parameter.create param (LC.value_kind kind))
         params
         params_with_kinds
     in
@@ -778,7 +773,7 @@ and close_one_function t ~external_env ~by_closure_id decl
   in
   let params =
     List.map (fun (var, kind) ->
-        Kinded_parameter.create (Parameter.wrap var) (LC.value_kind kind))
+        Kinded_parameter.create var (LC.value_kind kind))
       param_vars
   in
   let body = close t closure_env body in
@@ -909,9 +904,7 @@ let ilambda_to_flambda ~backend ~module_ident ~module_block_size_in_words
       body (List.rev field_vars)
   in
   let load_fields_cont_handler =
-    let param =
-      Kinded_parameter.create (Parameter.wrap module_block_var) K.value
-    in
+    let param = Kinded_parameter.create module_block_var K.value in
     let params_and_handler =
       Flambda.Continuation_params_and_handler.create [param]
         ~handler:load_fields_body;

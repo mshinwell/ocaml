@@ -77,9 +77,7 @@ let rename t =
     name_stamp = get_next_stamp ();
   }
 
-let unwrap t =
-  Variable.create ~current_compilation_unit:t.compilation_unit
-    (to_string t)
+let unwrap t = Variable.create (to_string t)
 
 let wrap compilation_unit var =
   { compilation_unit;

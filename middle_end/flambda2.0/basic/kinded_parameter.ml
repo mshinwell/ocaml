@@ -63,7 +63,7 @@ let with_kind t kind = { t with kind; }
 
 let rename t = { t with param = Variable.rename t.param; }
 
-let map_var t ~f = { t with param = Variable.map_var f t.param; }
+let map_var t ~f = { t with param = f t.param; }
 
 let map_kind t ~f = { t with kind = f t.kind; }
 
@@ -110,8 +110,6 @@ module List = struct
   let var_set t = Variable.Set.of_list (vars t)
 
   let name_set t = Name.Set.of_list (List.map Name.var (vars t))
-
-  let param_set t = Variable.Set.of_list (List.map param t)
 
   let rename t = List.map (fun t -> rename t) t
 

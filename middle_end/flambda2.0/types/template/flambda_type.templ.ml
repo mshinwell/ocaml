@@ -126,8 +126,12 @@ let prove_equals_to_var_or_symbol_or_tagged_immediate env t
            to avoid relying on the fact that if there is a Symbol alias then
            it will be canonical *)
         match Simple.descr simple with
-        | Name (Symbol sym) -> Proved (Symbol sym)
-        | Name (Var var) -> Proved (Var var)
+        | Name name ->
+          Name.pattern_match name
+            ~var:(fun var : var_or_symbol_or_tagged_immediate proof ->
+              Proved (Var var))
+            ~symbol:(fun symbol : var_or_symbol_or_tagged_immediate proof ->
+              Proved (Symbol symbol))
         | Const (Tagged_immediate imm) -> Proved (Tagged_immediate imm)
         | Const _ ->
           let kind = kind t in
@@ -655,11 +659,7 @@ Format.eprintf "reifying %a\n%!" print t;
     Typing_env.get_alias_then_canonical_simple env ~min_name_mode t
   with
   | Bottom -> Invalid
-  | Ok (Some canonical_simple)
-      when begin match Simple.descr canonical_simple with
-      | Name (Symbol _) -> true
-      | _ -> false
-      end ->
+  | Ok (Some canonical_simple) when Simple.is_symbol canonical_simple ->
     (* Don't lift things that are already bound to symbols.  Apart from
        anything else, this could cause aliases between symbols, which are
        currently forbidden (every symbol has the same binding time). *)

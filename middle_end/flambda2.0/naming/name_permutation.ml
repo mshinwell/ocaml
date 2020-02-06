@@ -70,10 +70,10 @@ let apply_variable_set t vars =
     vars
     Variable.Set.empty
 
-let apply_name t (name : Name.t) =
-  match name with
-  | Var var -> Name.var (apply_variable t var)
-  | Symbol _ -> name
+let apply_name t name =
+  Name.pattern_match name
+    ~var:(fun var -> Name.var (apply_variable t var))
+    ~symbol:(fun _ -> name)
 
 let add_continuation t k1 k2 =
   { t with

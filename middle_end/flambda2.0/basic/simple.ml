@@ -155,18 +155,20 @@ let unit = Const Const.const_unit
 
 let is_var t =
   match t with
-  | Name (Var _) | Rec_name (Var _, _) -> true
-  | _ -> false
+  | Name name
+  | Rec_name (name, _) -> Name.is_var name
+  | Const _ -> false
+
+let is_symbol t =
+  match t with
+  | Name name
+  | Rec_name (name, _) -> Name.is_symbol name
+  | Const _ -> false
 
 let is_const t =
   match t with
   | Const _ -> true
-  | _ -> false
-
-let is_symbol t =
-  match t with
-  | Name (Symbol _) | Rec_name (Symbol _, _) -> true
-  | _ -> false
+  | Name _ | Rec_name _ -> false
 
 let merge_rec_info t ~newer_rec_info =
   match newer_rec_info with
@@ -191,15 +193,20 @@ let without_rec_info t =
   | Rec_name (name, _rec_info) -> Name name
   | Name _ | Const _ -> t
 
+(* CR mshinwell: Make naming consistent with [Name] re. the option type *)
+
+(* CR mshinwell: Careful that Rec_info doesn't get dropped using the
+   following *)
+
 let must_be_var t =
   match t with
-  | Name (Var var) | Rec_name (Var var, _) -> Some var
-  | Name _ | Rec_name (_, _) | Const _ -> None
+  | Name name | Rec_name (name, _) -> Name.must_be_var_opt name
+  | Const _ -> None
 
 let must_be_symbol t =
   match t with
-  | Name (Symbol sym) | Rec_name (Symbol sym, _) -> Some sym
-  | Name _ | Rec_name (_, _) | Const _ -> None
+  | Name name | Rec_name (name, _) -> Name.must_be_symbol_opt name
+  | Const _ -> None
 
 let allowed t ~allowed =
   match must_be_var t with

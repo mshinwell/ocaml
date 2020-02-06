@@ -52,6 +52,16 @@ val set_to_symbol_set : Set.t -> Symbol.Set.t
 
 val is_predefined_exception : t -> bool
 
+val is_var : t -> bool
+
+val is_symbol : t -> bool
+
+val must_be_symbol : t -> Symbol.t
+
+val must_be_var_opt : t -> Variable.t option
+
+val must_be_symbol_opt : t -> Symbol.t option
+
 val rename : t -> t
 
 module Pair : sig
