@@ -54,36 +54,45 @@ end) = struct
   let create () = HT.create 10_000
 
   exception Can_add of int
+  exception Already_added of int
 
   let min_positive_hash = 1 lsl Id.num_empty_bottom_bits
   let max_negative_hash = -(min_positive_hash + 1)
 
+  let () =
+    assert (min_positive_hash > max_negative_hash)
+
   let add t elt =
     let hash = (E.hash elt) land Id.mask_selecting_top_bits in
-    if not (HT.mem t hash) then begin
+    match HT.find t hash with
+    | exception Not_found ->
+Format.eprintf "Adding with hash 0x%x:@ %a\n%!"
+  hash E.print elt;
       HT.add t hash elt;
       hash
-    end else begin
-      try
-        let starting_hash = hash in
-        let hash = ref (starting_hash + 1) in
-        while !hash <> starting_hash do
-          if !hash > max_negative_hash && !hash < min_positive_hash then begin
-            hash := min_positive_hash + 1
-          end;
-          if not (HT.mem t !hash) then begin
-            raise (Can_add !hash)
-          end;
-          incr hash
-        done;
-        Misc.fatal_errorf "No hash values left for@ %a" E.print elt
-      with (Can_add hash) -> begin
-        HT.add t hash elt;
+    | existing_elt ->
+      if E.equal elt existing_elt then begin
         hash
+      end else begin
+        try
+          let starting_hash = hash in
+          let hash = ref (starting_hash + 1) in
+          while !hash <> starting_hash do
+            if !hash > max_negative_hash && !hash < min_positive_hash then begin
+              hash := min_positive_hash + 1
+            end;
+            match HT.find t !hash with
+            | exception Not_found -> raise (Can_add !hash)
+            | existing_elt ->
+              if E.equal elt existing_elt then raise (Already_added !hash)
+              else incr hash
+          done;
+          Misc.fatal_errorf "No hash values left for@ %a" E.print elt
+        with (Can_add hash) | (Already_added hash) -> begin
+          HT.add t hash elt;
+          hash
+        end
       end
-    end
 
   let find t id = HT.find t id
-
-  let _ = E.equal  (* CR mshinwell: decide if [equal] needed *)
 end
