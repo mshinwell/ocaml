@@ -54,11 +54,12 @@ let filter_closure_vars env s =
 let todo () = failwith "Not yet implemented"
 (* ----- End of functions to share ----- *)
 
-let name_static env = function
-  | Name.Var v -> env, `Var v
-  | Name.Symbol s ->
-    Env.check_scope ~allow_deleted:false env (Code_id_or_symbol.Symbol s),
-    `Data [C.symbol_address (symbol s)]
+let name_static env name =
+  Name.pattern_match name
+    ~var:(fun v -> env, `Var v)
+    ~symbol:(fun s ->
+      Env.check_scope ~allow_deleted:false env (Code_id_or_symbol.Symbol s),
+      `Data [C.symbol_address (symbol s)])
 
 let const_static _env c =
   match (c : Simple.Const.t) with

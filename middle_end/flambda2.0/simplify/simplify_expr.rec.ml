@@ -628,7 +628,7 @@ and simplify_direct_partial_application
     let return_continuation = Continuation.create () in
     let remaining_params =
       List.map (fun kind ->
-          let param = Parameter.wrap (Variable.create "param") in
+          let param = Variable.create "param" in
           Kinded_parameter.create param kind)
         remaining_param_arity
     in
@@ -758,7 +758,7 @@ and simplify_direct_over_application
   let after_full_application = Continuation.create () in
   let after_full_application_handler =
     let params_and_handler =
-      let func_param = KP.create (Parameter.wrap func_var) K.value in
+      let func_param = KP.create func_var K.value in
       Continuation_params_and_handler.create [func_param]
         ~handler:(Expr.create_apply perform_over_application)
     in

@@ -63,13 +63,14 @@ let nativeint_of_targetint t =
 let symbol s =
   Linkage_name.to_string (Symbol.linkage_name s)
 
-let name env = function
-  | Name.Var v -> Env.inline_variable env v
-  | Name.Symbol s ->
-    let env =
-      Env.check_scope ~allow_deleted:false env (Code_id_or_symbol.Symbol s)
-    in
-    C.symbol (symbol s), env, Ece.pure
+let name env name =
+  Name.pattern_match name
+    ~var:(fun v -> Env.inline_variable env v)
+    ~symbol:(fun s ->
+      let env =
+        Env.check_scope ~allow_deleted:false env (Code_id_or_symbol.Symbol s)
+      in
+      C.symbol (symbol s), env, Ece.pure)
 
 (* Constants *)
 
@@ -101,12 +102,17 @@ let default_of_kind (k : Flambda_kind.t) =
 
 (* Function symbol *)
 
-let function_name s =
-  match (Simple.descr s : Simple.descr) with
-  | Name Symbol s -> symbol s
-  | _ ->
-      Misc.fatal_errorf
-        "Expected a function symbol, instead of@ %a" Simple.print s
+let function_name simple =
+  let fail simple =
+    Misc.fatal_errorf
+      "Expected a function symbol, instead of@ %a" Simple.print simple
+  in
+  match Simple.descr simple with
+  | Name name ->
+    Name.pattern_match name
+      ~var:(fun _ -> fail simple)
+      ~symbol:(fun sym -> symbol sym)
+  | Const _ -> fail simple
 
 (* 'Simple' expression *)
 
@@ -569,8 +575,7 @@ let is_var_used v e =
 
 let function_args vars my_closure body =
   if is_var_used my_closure body then begin
-    let param = Parameter.wrap my_closure in
-    let last_arg = Kinded_parameter.create param Flambda_kind.value in
+    let last_arg = Kinded_parameter.create my_closure Flambda_kind.value in
     vars @ [last_arg]
   end else
     vars
@@ -1212,7 +1217,7 @@ let unit (unit : Flambda_unit.t) =
         (* Note: the environment would be used if we needed to compile the
            handler, but since it's constant we don't need it *)
         var_list env [
-          Kinded_parameter.create (Parameter.wrap (Variable.create "*ret*"))
+          Kinded_parameter.create (Variable.create "*ret*")
             Flambda_kind.value;
         ]
       in

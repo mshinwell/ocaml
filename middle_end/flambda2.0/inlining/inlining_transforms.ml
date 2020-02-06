@@ -97,9 +97,7 @@ let inline dacc ~callee ~args function_decl
               let body = make_inlined_body ~apply_exn_continuation:wrapper in
               let wrapper_handler =
                 let param = Variable.create "exn" in
-                let kinded_params =
-                  [KP.create (Parameter.wrap param) K.value]
-                in
+                let kinded_params = [KP.create param K.value] in
                 let exn_handler =
                   Exn_continuation.exn_handler apply_exn_continuation
                 in

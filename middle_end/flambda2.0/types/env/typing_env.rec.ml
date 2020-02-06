@@ -132,14 +132,14 @@ end = struct
     in
     let domain = Name.Set.add name t.domain in
     let var_domain =
-      match name with
-      | Var var -> Variable.Set.add var t.var_domain
-      | Symbol _ -> t.var_domain
+      Name.pattern_match name
+        ~var:(fun var -> Variable.Set.add var t.var_domain)
+        ~symbol:(fun _sym -> t.var_domain)
     in
     let sym_domain =
-      match name with
-      | Symbol sym -> Symbol.Set.add sym t.sym_domain
-      | Var _ -> t.sym_domain
+      Name.pattern_match name
+        ~var:(fun _var -> t.sym_domain)
+        ~symbol:(fun sym -> Symbol.Set.add sym t.sym_domain)
     in
     { names_to_types;
       domain;
@@ -449,15 +449,15 @@ let alias_of_simple t simple =
 
 let add_definition t (name : Name_in_binding_pos.t) kind =
   let name_mode = Name_in_binding_pos.name_mode name in
-  match Name_in_binding_pos.name name with
-  | Var var -> add_variable_definition t var kind name_mode
-  | Symbol sym ->
-    if not (Name_mode.equal name_mode Name_mode.normal) then begin
-      Misc.fatal_errorf "Cannot define symbol %a with name mode that \
-          is not `normal'"
-        Name_in_binding_pos.print name
-    end;
-    add_symbol_definition t sym kind
+  Name.pattern_match (Name_in_binding_pos.name name)
+    ~var:(fun var -> add_variable_definition t var kind name_mode)
+    ~symbol:(fun sym ->
+      if not (Name_mode.equal name_mode Name_mode.normal) then begin
+        Misc.fatal_errorf "Cannot define symbol %a with name mode that \
+            is not `normal'"
+          Name_in_binding_pos.print name
+      end;
+      add_symbol_definition t sym kind)
 
 let invariant_for_new_equation t name ty =
   if !Clflags.flambda_invariant_checks then begin
@@ -944,8 +944,11 @@ let earliest_alias_of_simple_satisfying t ~min_name_mode ~allowed_vars
   let aliases =
     Alias.Set_ordered_by_binding_time.filter (fun alias ->
         match Simple.descr (Alias.simple alias) with
-        | Name (Var var) -> Variable.Set.mem var allowed_vars
-        | Name (Symbol _) | Const _ -> true)
+        | Name name ->
+          Name.pattern_match name
+            ~var:(fun var -> Variable.Set.mem var allowed_vars)
+            ~symbol:(fun _sym -> true)
+        | Const _ -> true)
       (aliases_of_simple0 t ~min_name_mode simple)
   in
   Option.map Alias.simple
@@ -963,15 +966,15 @@ let create_using_resolver_and_symbol_bindings_from t =
   in
   Name.Map.fold
     (fun (name : Name.t) (typ, _binding_time, _name_mode) t ->
-      match name with
-      | Var _ -> t
-      | Symbol _ ->
-        let level, typ =
-          Type_grammar.make_suitable_for_environment0 typ original_t
-            ~suitable_for:t (Typing_env_level.empty ())
-        in
-        let t = add_env_extension_from_level t level in
-        add_equation t name typ)
+      Name.pattern_match name
+        ~var:(fun _var -> t)
+        ~symbol:(fun _sym ->
+          let level, typ =
+            Type_grammar.make_suitable_for_environment0 typ original_t
+              ~suitable_for:t (Typing_env_level.empty ())
+          in
+          let t = add_env_extension_from_level t level in
+          add_equation t name typ))
     names_to_types
     t
 

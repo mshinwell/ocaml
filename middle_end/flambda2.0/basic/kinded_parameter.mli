@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2018 OCamlPro SAS                                          *)
-(*   Copyright 2018 Jane Street Group LLC                                 *)
+(*   Copyright 2018--2020 OCamlPro SAS                                    *)
+(*   Copyright 2018--2020 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -16,18 +16,17 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
+(* CR mshinwell: Rename to [Parameter] *)
+
 (** A parameter (to a function, continuation, etc.) together with its kind. *)
 type t
 
 include Bindable.S with type t := t
 
 (** Create a kinded parameter. *)
-val create : Parameter.t -> Flambda_kind.t -> t
+val create : Variable.t -> Flambda_kind.t -> t
 
-(** The underlying parameter. *)
-val param : t -> Parameter.t
-
-(** The underlying variable (cf. [Parameter.var]). *)
+(** The underlying variable. *)
 val var : t -> Variable.t
 
 val name : t -> Name.t
@@ -59,9 +58,9 @@ module List : sig
 
   include Contains_names.S with type t := t
 
-  val create : (Parameter.t * Flambda_kind.t) list -> t
+  val create : (Variable.t * Flambda_kind.t) list -> t
 
-  (** As for [Parameter.List.vars]. *)
+  (** As for [Variable.List.vars]. *)
   val vars : t -> Variable.t list
 
   (** As for [vars] but returns a list of [Simple.t] values describing the
@@ -73,9 +72,6 @@ module List : sig
 
   (** As for [var_set] but returns a set of [Name]s. *)
   val name_set : t -> Name.Set.t
-
-  (** As for [var_set] but returns a set of [Parameter]s. *)
-  val param_set : t -> Parameter.Set.t
 
   val equal_vars : t -> Variable.t list -> bool
 
