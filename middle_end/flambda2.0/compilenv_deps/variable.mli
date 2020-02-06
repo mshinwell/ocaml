@@ -16,35 +16,23 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
-(** [Variable.t] is the equivalent of a non-persistent [Ident.t] in
-    the [Flambda] tree.  It wraps an [Ident.t] together with its source
-    [compilation_unit].  As such, it is unique within a whole program,
-    not just one compilation unit.
+(** The names of variables. *)
 
-    Introducing a new type helps in tracing the source of identifiers
-    when debugging the inliner.  It also avoids Ident renaming when
-    importing cmx files.
-*)
+type t = private Table_by_int_id.Id.t
 
-include Identifiable.S
+include Identifiable.S with type t := t
 
-val create
-   : ?current_compilation_unit:Compilation_unit.t
-  -> ?user_visible:unit
-  -> string
-  -> t
+val initialise : unit -> unit
+
+val create : ?user_visible:unit -> string -> t
 
 val create_with_same_name_as_ident : ?user_visible:unit -> Ident.t -> t
 
 (* CR mshinwell: check on gdb branch if this preserves the "original ident".
    Sometimes it should and other times it should not (eg unboxing) *)
-val rename
-   : ?current_compilation_unit:Compilation_unit.t
-  -> ?append:string
-  -> t
-  -> t
+val rename : ?append:string -> t -> t
 
-val fresh : unit -> t
+val compilation_unit : t -> Compilation_unit.t
 
 val user_visible : t -> bool
 

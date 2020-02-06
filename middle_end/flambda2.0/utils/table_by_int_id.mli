@@ -16,46 +16,28 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
-type t = private Table_by_int_id.Id.t
+module Id : sig
+  type t = private int
 
-val var : Variable.t -> t
+  val flags_size_in_bits : int
 
-val symbol : Symbol.t -> t
+  val flags : t -> int
 
-val pattern_match
-   : t
-  -> var:(Variable.t -> 'a)
-  -> symbol:(Symbol.t -> 'a)
-  -> 'a
+  val with_flags : t -> int -> t
+end
 
-val map_var : t -> f:(Variable.t -> Variable.t) -> t
+module Make (E : sig
+  type t
 
-val map_symbol : t -> f:(Symbol.t -> Symbol.t) -> t
+  val print : Format.formatter -> t -> unit
+  val hash : t -> int
+  val equal : t -> t -> bool
+end) : sig
+  type t
 
-val to_var : t -> Variable.t option
+  val create : unit -> t
 
-include Identifiable.S with type t := t
+  val add : t -> E.t -> Id.t
 
-val print_sexp : Format.formatter -> t -> unit
-
-val variables_only : Set.t -> Set.t
-
-val symbols_only_map : 'a Map.t -> 'a Map.t
-
-val set_of_var_set : Variable.Set.t -> Set.t
-
-val set_of_symbol_set : Symbol.Set.t -> Set.t
-
-val set_to_var_set : Set.t -> Variable.Set.t
-
-val set_to_symbol_set : Set.t -> Symbol.Set.t
-
-val is_predefined_exception : t -> bool
-
-val rename : t -> t
-
-module Pair : sig
-  type nonrec t = t * t
-
-  include Identifiable.S with type t := t
+  val find : t -> Id.t -> E.t
 end

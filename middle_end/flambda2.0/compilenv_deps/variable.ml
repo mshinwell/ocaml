@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2013--2016 OCamlPro SAS                                    *)
-(*   Copyright 2014--2016 Jane Street Group LLC                           *)
+(*   Copyright 2013--2020 OCamlPro SAS                                    *)
+(*   Copyright 2014--2020 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -14,106 +14,108 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+[@@@ocaml.warning "+a-30-40-41-42"]
 
-type t = {
-  name : string;
-  name_stamp : int;
-  (** [name_stamp]s are unique within any given compilation unit.
-      We don't need to store the compilation unit because no variables are
-      free in a complete program.  Any variables seen (which might e.g. have
-      come from another compilation unit) will always be freshened first. *)
-  user_visible : bool;
-}
+type t = Table_by_int_id.Id.t
 
-let compare0 t1 t2 =
-  if t1 == t2 then 0
-  else t1.name_stamp - t2.name_stamp
+module Data = struct
+  type t = {
+    compilation_unit : Compilation_unit.t;
+    name : string;
+    name_stamp : int;
+    user_visible : bool;
+  }
 
-let equal0 t1 t2 = (compare0 t1 t2 = 0)
+  let print ppf { compilation_unit; name; name_stamp; user_visible; } =
+    Format.fprintf ppf "@[<hov 1>(\
+        @[<hov 1>(compilation_unit@ %a)@]@ \
+        @[<hov 1>(name@ %s)@]@ \
+        @[<hov 1>(name_stamp@ %s)@]@ \
+        @[<hov 1>(user_visible@ %b)@]\
+        )@]"
+      Compilation_unit.print compilation_unit
+      name
+      name_stamp
+      user_visible
 
-module Self = Identifiable.Make (struct
-  type nonrec t = t
+  let hash { compilation_unit; name; name_stamp; user_visible = _; } =
+    Hashtbl.hash (Compilation_unit.hash compilation_unit, name, name_stamp)
 
-  let compare = compare0
+  let equal
+      { compilation_unit = compilation_unit1; name = name1;
+        name_stamp = name_stamp1; user_visible = _; }
+      { compilation_unit = compilation_unit2; name = name2;
+        name_stamp = name_stamp2; user_visible = _; }
+      =
+    Int.equal name_stamp1 name_stamp2
+      && String.equal name1 name2
+      && Compilation_unit.equal compilation_unit1 compilation_unit2
+end
 
-  let equal = equal0
+module Table = Table_by_int_id.Make (Data)
 
-  let hash t = t.name_stamp
+let global_table = ref (Table.create ())
 
-  let print ppf t = Format.fprintf ppf "%s/%d" t.name t.name_stamp
+let initialise () =
+  global_table := Table.create ()
+
+let compilation_unit t = (Table.find !global_table t).compilation_unit
+let name t = (Table.find !global_table t).name
+let name_stamp t = (Table.find !global_table t).name_stamp
+let user_visible t = (Table.find !global_table t).user_visible
+
+module T = Identifiable.Make (struct
+  include Table_by_int_id.Id
+
+  let print ppf t = Format.fprintf ppf "%s/%d" (name t) (name_stamp t)
 
   let output chan t = print (Format.formatter_of_out_channel chan) t
 end)
 
-include Self
-
-let compare = compare0
-
-let equal = equal0
+include T
 
 let previous_name_stamp = ref (-1)
 
-let create ?current_compilation_unit ?user_visible name =
-  ignore current_compilation_unit;
-(*
-  let compilation_unit =
-    match current_compilation_unit with
-    | Some compilation_unit -> compilation_unit
-    | None -> Compilation_unit.get_current_exn ()
-  in
-*)
+let create ?user_visible name =
   let name_stamp =
     incr previous_name_stamp;
     !previous_name_stamp
   in
-(*
-if name_stamp = 285366 then begin
-  Format.eprintf "Creation of variable 285366:\n%s\n%!"
-    (Printexc.raw_backtrace_to_string (Printexc.get_callstack 10))
-end;
-*)
-  { name;
-    name_stamp;
-    user_visible = Option.is_some user_visible;
-  }
+  let data : Data.t =
+    { name;
+      name_stamp;
+      user_visible = Option.is_some user_visible;
+    }
+  in
+  Table.add !global_table data
 
 let create_with_same_name_as_ident ?user_visible ident : t =
   create ?user_visible (Ident.name ident)
 
-let fresh () : t = create "fresh"
-
-let rename ?current_compilation_unit ?append t =
-  let current_compilation_unit =
-    match current_compilation_unit with
-    | Some compilation_unit -> compilation_unit
-    | None -> Compilation_unit.get_current_exn ()
-  in
+let rename ?append t =
   let name =
     match append with
     | None -> t.name
     | Some s -> t.name ^ s
   in
   let user_visible = if t.user_visible then Some () else None in
-  create ~current_compilation_unit ?user_visible name
-
-let user_visible t = t.user_visible
+  create ?user_visible name
 
 let with_user_visible t ~user_visible =
   { t with user_visible; }
 
-let raw_name t = t.name
-let raw_name_stamp t = t.name_stamp
+let raw_name = name
+let raw_name_stamp = name_stamp
 
 let unique_name t =
-  t.name ^ "_" ^ (string_of_int t.name_stamp)
+  (name t) ^ "_" ^ (string_of_int (name_stamp t))
 
 let print_list ppf ts =
   let pp_sep ppf () = Format.fprintf ppf "@ " in
   Format.pp_print_list ~pp_sep print ppf ts
 
 let debug_when_stamp_matches t ~stamp ~f =
-  if t.name_stamp = stamp then f ()
+  if (name_stamp t) = stamp then f ()
 
 let print_opt ppf = function
   | None -> Format.fprintf ppf "<no var>"
@@ -132,6 +134,6 @@ let compare_lists l1 l2 =
 module List = struct
   type nonrec t = t list
 
-  let rename ?current_compilation_unit ?append t =
-    List.map (fun var -> rename ?current_compilation_unit ?append var) t
+  let rename ?append t =
+    List.map (fun var -> rename ?append var) t
 end

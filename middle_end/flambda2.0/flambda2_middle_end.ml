@@ -117,6 +117,8 @@ let middle_end0 ppf ~prefixname:_ ~backend ~filename ~module_ident
 
 let middle_end ~ppf_dump:ppf ~prefixname ~backend ~filename ~module_ident
       ~module_block_size_in_words ~module_initializer =
+  Variable.initialise ();
+  Symbol.initialise ();
   try
     middle_end0 ppf ~prefixname ~backend ~filename ~module_ident
       ~module_block_size_in_words ~module_initializer

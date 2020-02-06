@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2013--2017 OCamlPro SAS                                    *)
-(*   Copyright 2014--2017 Jane Street Group LLC                           *)
+(*   Copyright 2013--2020 OCamlPro SAS                                    *)
+(*   Copyright 2014--2020 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -14,16 +14,37 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+[@@@ocaml.warning "+a-30-40-41-42"]
 
-type t =
-  | Var of Variable.t
-  | Symbol of Symbol.t
+open Int_replace_polymorphic_compare
 
-let var v = Var v
-let symbol s = Symbol s
+module Id = Table_by_int_id.Id
+
+type t = Id.t
+
+let var_flag = 0
+let symbol_flag = 1
+
+let () =
+  assert (Id.flags_size_in_bits >= 1)
+
+let var v = v
+let symbol s = Id.with_flags v symbol_flag
+
+let [@inline always] pattern_match t ~var ~symbol =
+  let flags = Id.flags t in
+  let var_or_symbol = Id.without_flags t in
+  if flags = var_flag then var var_or_symbol
+  else if flags = symbol_flag then symbol var_or_symbol
+  else assert false
+
+let is_var t = pattern_match t ~var:(fun _ -> true) ~symbol:(fun _ -> false)
+
+let is_symbol t = pattern_match t ~var:(fun _ -> false) ~symbol:(fun _ -> true)
 
 let map_var t ~f =
+let map_var t ~f =
+  pattern_match t ~var:(fun var -> ) ~symbol:(fun _ -> false)
   match t with
   | Var var ->
     let var' = f var in
@@ -55,41 +76,22 @@ module With_map =
 
     let print ppf t =
       Format.fprintf ppf "@<0>%s" (Flambda_colours.name ());
-      begin match t with
-      | Var var -> Variable.print ppf var
-      | Symbol sym -> Symbol.print ppf sym
-      end;
+      pattern_match t
+        ~var:(fun var -> Variable.print ppf var)
+        ~symbol:(fun symbol -> Symbol.print ppf symbol);
       Format.fprintf ppf "@<0>%s" (Flambda_colours.normal ())
 
     let output chan t =
       print (Format.formatter_of_out_channel chan) t
 
-    let hash t =
-      match t with
-      | Var var -> Hashtbl.hash (0, Variable.hash var)
-      | Symbol sym -> Hashtbl.hash (1, Symbol.hash sym)
-
-    let compare t1 t2 =
-      if t1 == t2 then 0
-      else
-        match t1, t2 with
-        | Var var1, Var var2 -> Variable.compare var1 var2
-        | Symbol sym1, Symbol sym2 -> Symbol.compare sym1 sym2
-        | Var _, Symbol _ -> -1
-        | Symbol _, Var _ -> 1
-
-    let equal t1 t2 = (compare t1 t2 = 0)
+    let hash = Id.hash
+    let compare = Id.compare
+    let equal = Id.equal
   end)
 
 (* CR mshinwell: We need a better way of adding the colours to maps. *)
 
 module T = With_map.T
-
-let compare = T.compare
-let equal t1 t2 = T.compare t1 t2 = 0
-let print = T.print
-let output = T.output
-let hash = T.hash
 
 module Set = With_map.Set
 
@@ -108,19 +110,9 @@ end
 
 module Tbl = With_map.Tbl
 
-let variables_only t =
-  Set.filter (fun name ->
-      match name with
-      | Var _ -> true
-      | Symbol _ -> false)
-    t
+let variables_only set = Set.filter is_var set
 
-let symbols_only_map t =
-  Map.filter (fun name _ ->
-      match name with
-      | Var _ -> false
-      | Symbol _ -> true)
-    t
+let symbols_only_map map = Map.filter is_symbol map
 
 let set_of_var_set vars =
   Variable.Set.fold (fun var t_set ->

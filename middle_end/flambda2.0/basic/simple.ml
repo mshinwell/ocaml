@@ -124,6 +124,8 @@ module Const = struct
     | Naked_nativeint _ -> K.naked_nativeint
 end
 
+module Const = Reg_width_const
+
 (* CR-someday mshinwell: Consider putting [Var] and [Symbol] directly
    in here. *)
 type t =
