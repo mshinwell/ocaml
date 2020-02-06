@@ -279,7 +279,6 @@ Format.eprintf "Deleting binding of %a; free names of body are:@ %a\n%!"
       (* We avoid [Let_expr.free_names] since we already know the free names
          of [body] -- and calling that function would cause an abstraction
          to be opened. *)
-      (* CR mshinwell: This is a major source of allocation *)
       Name_occurrences.union from_defining_expr
         (Name_occurrences.remove_var free_names_of_body
           (Var_in_binding_pos.var bound_var))
@@ -363,20 +362,19 @@ let create_switch0 ~scrutinee ~arms : t * switch_creation_result =
   if Immediate.Map.cardinal arms < 1 then
     create_invalid (), Have_deleted_comparison_and_branch
   else
-    let change_to_goto k =
-      create_apply_cont (Apply_cont.goto k),
-        Have_deleted_comparison_but_not_branch
+    let change_to_apply_cont action =
+      create_apply_cont action, Have_deleted_comparison_but_not_branch
     in
     match Immediate.Map.get_singleton arms with
-    | Some (_discriminant, k) -> change_to_goto k
+    | Some (_discriminant, action) -> change_to_apply_cont action
     | None ->
       (* CR mshinwell: We should do a partial invariant check here (one
          which doesn't require [Invariant_env.t]. *)
-      let destinations =
-        Continuation.Set.of_list (Immediate.Map.data arms)
+      let actions =
+        Apply_cont_expr.Set.of_list (Immediate.Map.data arms)
       in
-      match Continuation.Set.get_singleton destinations with
-      | Some k -> change_to_goto k
+      match Apply_cont_expr.Set.get_singleton actions with
+      | Some action -> change_to_apply_cont action
       | None ->
         let switch = Switch.create ~scrutinee ~arms in
         create (Switch switch), Nothing_deleted

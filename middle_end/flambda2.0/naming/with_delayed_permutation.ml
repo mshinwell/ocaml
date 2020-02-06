@@ -32,36 +32,52 @@ end) = struct
   type t = {
     mutable descr : Descr.t;
     mutable delayed_permutation : Name_permutation.t;
-    free_names : Name_occurrences.t;
+    mutable free_names : Name_occurrences.t option;
   }
 
   let create descr =
     { descr;
       delayed_permutation = Name_permutation.empty;
-      free_names = Descr.free_names descr;
+      free_names = None;
     }
 
   let descr t =
-    let descr = Descr.apply_name_permutation t.descr t.delayed_permutation in
-    t.descr <- descr;
-    t.delayed_permutation <- Name_permutation.empty;
-    descr
+    if Name_permutation.is_empty t.delayed_permutation then begin
+      t.descr
+    end else begin
+      let descr = Descr.apply_name_permutation t.descr t.delayed_permutation in
+      t.descr <- descr;
+      t.delayed_permutation <- Name_permutation.empty;
+      let free_names =
+        match t.free_names with
+        | None -> Descr.free_names descr
+        | Some free_names ->
+          Name_occurrences.apply_name_permutation free_names
+            t.delayed_permutation
+      in
+      t.free_names <- Some free_names;
+      descr
+    end
 
   let apply_name_permutation t perm =
     let delayed_permutation =
       Name_permutation.compose ~second:perm ~first:t.delayed_permutation
     in
-    let free_names =
-      Name_occurrences.apply_name_permutation t.free_names perm
-    in
-    { descr = t.descr;
+    { t with
       delayed_permutation;
-      free_names;
     }
 
-  let free_names t = t.free_names
+  let free_names t =
+    let descr = descr t in
+    match t.free_names with
+    | Some free_names -> free_names
+    | None ->
+      let free_names = Descr.free_names descr in
+      t.free_names <- Some free_names;
+      free_names
 
-  let print_with_cache ~cache ppf t = Descr.print_with_cache ~cache ppf t.descr
+  let print_with_cache ~cache ppf t =
+    Descr.print_with_cache ~cache ppf (descr t)
 
-  let print ppf t = Descr.print ppf t.descr
+  let print ppf t = Descr.print ppf (descr t)
 end

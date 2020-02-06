@@ -64,19 +64,19 @@ let bottom_types_from_arity arity =
 
 let is_bottom env t =
   match expand_head t env with
-  | Resolved (Value Bottom)
-  | Resolved (Naked_immediate Bottom)
-  | Resolved (Naked_float Bottom)
-  | Resolved (Naked_int32 Bottom)
-  | Resolved (Naked_int64 Bottom)
-  | Resolved (Naked_nativeint Bottom) -> true
+  | Value Bottom
+  | Naked_immediate Bottom
+  | Naked_float Bottom
+  | Naked_int32 Bottom
+  | Naked_int64 Bottom
+  | Naked_nativeint Bottom -> true
   | Const _
-  | Resolved (Value _)
-  | Resolved (Naked_immediate _)
-  | Resolved (Naked_float _)
-  | Resolved (Naked_int32 _)
-  | Resolved (Naked_int64 _)
-  | Resolved (Naked_nativeint _) -> false
+  | Value _
+  | Naked_immediate _
+  | Naked_float _
+  | Naked_int32 _
+  | Naked_int64 _
+  | Naked_nativeint _ -> false
 
 type 'a proof =
   | Proved of 'a
@@ -103,72 +103,78 @@ let prove_equals_to_var_or_symbol_or_tagged_immediate env t
   end;
   (* XXX This probably shouldn't be using [get_alias] *)
   (* XXX This needs to match the equal-to-tagged-immediates function below *)
-  match get_alias t with
-  | None -> Unknown
-  | Some simple ->
-    match Simple.descr simple with
-    | Const (Tagged_immediate imm) -> Proved (Tagged_immediate imm)
-    | Const _ ->
-      Misc.fatal_errorf "[Simple] %a in the [Equals] field has a kind \
-          different from that returned by [kind] (%a):@ %a"
-        Simple.print simple
-        K.print original_kind
-        print t
-    | Name _ ->
-      match
-        Typing_env.get_canonical_simple env simple
-          ~min_name_mode:Name_mode.normal
-      with
-      | Bottom -> Invalid
-      | Ok None -> Unknown
-      | Ok (Some simple) ->
-        (* CR mshinwell: Instead, get all aliases and find a Symbol,
-           to avoid relying on the fact that if there is a Symbol alias then
-           it will be canonical *)
-        match Simple.descr simple with
-        | Name (Symbol sym) -> Proved (Symbol sym)
-        | Name (Var var) -> Proved (Var var)
-        | Const (Tagged_immediate imm) -> Proved (Tagged_immediate imm)
-        | Const _ ->
-          let kind = kind t in
-          Misc.fatal_errorf "Kind returned by [get_canonical_simple] (%a) \
-              doesn't match the kind of the returned [Simple] %a:@ %a"
-            K.print kind
+  match get_alias_exn t with
+  | exception Not_found -> Unknown
+  | simple ->
+    Simple.pattern_match simple
+      ~const:(fun cst : _ proof ->
+        match Reg_width_const.descr cst with
+        | Tagged_immediate imm -> Proved (Tagged_immediate imm)
+        | _ ->
+          Misc.fatal_errorf "[Simple] %a in the [Equals] field has a kind \
+              different from that returned by [kind] (%a):@ %a"
             Simple.print simple
-            print t
+            K.print original_kind
+            print t)
+      ~name:(fun _ : _ proof ->
+        match
+          Typing_env.get_canonical_simple_exn env simple
+            ~min_name_mode:Name_mode.normal
+        with
+        | exception Not_found -> Unknown
+        | simple ->
+          (* CR mshinwell: Instead, get all aliases and find a Symbol,
+             to avoid relying on the fact that if there is a Symbol alias then
+             it will be canonical *)
+          Simple.pattern_match simple
+            ~const:(fun cst : _ proof ->
+              match Reg_width_const.descr cst with
+              | Tagged_immediate imm -> Proved (Tagged_immediate imm)
+              | _ ->
+                let kind = kind t in
+                Misc.fatal_errorf "Kind returned by [get_canonical_simple] (%a) \
+                    doesn't match the kind of the returned [Simple] %a:@ %a"
+                  K.print kind
+                  Simple.print simple
+                  print t)
+            ~name:(fun name ->
+              Name.pattern_match name
+                ~var:(fun var : var_or_symbol_or_tagged_immediate proof ->
+                  Proved (Var var))
+                ~symbol:(fun symbol
+                    : var_or_symbol_or_tagged_immediate proof ->
+                  Proved (Symbol symbol))))
 
 let prove_single_closures_entry' env t : _ proof_allowing_kind_mismatch =
   match expand_head t env with
   | Const _ -> Invalid
-  | Resolved resolved ->
-    match resolved with
-    | Value (Ok (Closures closures)) ->
-      begin match
-        Row_like.For_closures_entry_by_set_of_closures_contents.
-          get_singleton closures.by_closure_id
-      with
-      | None -> Unknown
-      | Some ((closure_id, set_of_closures_contents), closures_entry) ->
-        let closure_ids =
-          Set_of_closures_contents.closures set_of_closures_contents
-        in
-        assert (Closure_id.Set.mem closure_id closure_ids);
-        let function_decl =
-          Closures_entry.find_function_declaration closures_entry closure_id
-        in
-        match function_decl with
-        | Bottom -> Invalid
-        | Ok function_decl ->
-          Proved (closure_id, closures_entry, function_decl)
-      end
-    | Value (Ok _) -> Invalid
-    | Value Unknown -> Unknown
-    | Value Bottom -> Invalid
-    | Naked_immediate _ -> Wrong_kind
-    | Naked_float _ -> Wrong_kind
-    | Naked_int32 _ -> Wrong_kind
-    | Naked_int64 _ -> Wrong_kind
-    | Naked_nativeint _ -> Wrong_kind
+  | Value (Ok (Closures closures)) ->
+    begin match
+      Row_like.For_closures_entry_by_set_of_closures_contents.
+        get_singleton closures.by_closure_id
+    with
+    | None -> Unknown
+    | Some ((closure_id, set_of_closures_contents), closures_entry) ->
+      let closure_ids =
+        Set_of_closures_contents.closures set_of_closures_contents
+      in
+      assert (Closure_id.Set.mem closure_id closure_ids);
+      let function_decl =
+        Closures_entry.find_function_declaration closures_entry closure_id
+      in
+      match function_decl with
+      | Bottom -> Invalid
+      | Ok function_decl ->
+        Proved (closure_id, closures_entry, function_decl)
+    end
+  | Value (Ok _) -> Invalid
+  | Value Unknown -> Unknown
+  | Value Bottom -> Invalid
+  | Naked_immediate _ -> Wrong_kind
+  | Naked_float _ -> Wrong_kind
+  | Naked_int32 _ -> Wrong_kind
+  | Naked_int64 _ -> Wrong_kind
+  | Naked_nativeint _ -> Wrong_kind
 
 let prove_single_closures_entry env t : _ proof =
   match prove_single_closures_entry' env t with
@@ -187,18 +193,16 @@ let prove_naked_floats env t : _ proof =
   | Const (Naked_float f) -> Proved (Float.Set.singleton f)
   | Const (Naked_immediate _ | Tagged_immediate _ | Naked_int32 _
     | Naked_int64 _ | Naked_nativeint _) -> wrong_kind ()
-  | Resolved resolved ->
-    match resolved with
-    | Naked_float (Ok fs) ->
-      if Float.Set.is_empty fs then Invalid
-      else Proved fs
-    | Naked_float Unknown -> Unknown
-    | Naked_float Bottom -> Invalid
-    | Value _ -> wrong_kind ()
-    | Naked_immediate _ -> wrong_kind ()
-    | Naked_int32 _ -> wrong_kind ()
-    | Naked_int64 _ -> wrong_kind ()
-    | Naked_nativeint _ -> wrong_kind ()
+  | Naked_float (Ok fs) ->
+    if Float.Set.is_empty fs then Invalid
+    else Proved fs
+  | Naked_float Unknown -> Unknown
+  | Naked_float Bottom -> Invalid
+  | Value _ -> wrong_kind ()
+  | Naked_immediate _ -> wrong_kind ()
+  | Naked_int32 _ -> wrong_kind ()
+  | Naked_int64 _ -> wrong_kind ()
+  | Naked_nativeint _ -> wrong_kind ()
 
 let prove_naked_int32s env t : _ proof =
   let wrong_kind () =
@@ -208,18 +212,16 @@ let prove_naked_int32s env t : _ proof =
   | Const (Naked_int32 i) -> Proved (Int32.Set.singleton i)
   | Const (Naked_immediate _ | Tagged_immediate _ | Naked_float _
     | Naked_int64 _ | Naked_nativeint _) -> wrong_kind ()
-  | Resolved resolved ->
-    match resolved with
-    | Naked_int32 (Ok is) ->
-      if Int32.Set.is_empty is then Invalid
-      else Proved is
-    | Naked_int32 Unknown -> Unknown
-    | Naked_int32 Bottom -> Invalid
-    | Value _ -> wrong_kind ()
-    | Naked_immediate _ -> wrong_kind ()
-    | Naked_float _ -> wrong_kind ()
-    | Naked_int64 _ -> wrong_kind ()
-    | Naked_nativeint _ -> wrong_kind ()
+  | Naked_int32 (Ok is) ->
+    if Int32.Set.is_empty is then Invalid
+    else Proved is
+  | Naked_int32 Unknown -> Unknown
+  | Naked_int32 Bottom -> Invalid
+  | Value _ -> wrong_kind ()
+  | Naked_immediate _ -> wrong_kind ()
+  | Naked_float _ -> wrong_kind ()
+  | Naked_int64 _ -> wrong_kind ()
+  | Naked_nativeint _ -> wrong_kind ()
 
 let prove_naked_int64s env t : _ proof =
   let wrong_kind () =
@@ -229,18 +231,16 @@ let prove_naked_int64s env t : _ proof =
   | Const (Naked_int64 i) -> Proved (Int64.Set.singleton i)
   | Const (Naked_immediate _ | Tagged_immediate _ | Naked_float _
     | Naked_int32 _ | Naked_nativeint _) -> wrong_kind ()
-  | Resolved resolved ->
-    match resolved with
-    | Naked_int64 (Ok is) ->
-      if Int64.Set.is_empty is then Invalid
-      else Proved is
-    | Naked_int64 Unknown -> Unknown
-    | Naked_int64 Bottom -> Invalid
-    | Value _ -> wrong_kind ()
-    | Naked_immediate _ -> wrong_kind ()
-    | Naked_float _ -> wrong_kind ()
-    | Naked_int32 _ -> wrong_kind ()
-    | Naked_nativeint _ -> wrong_kind ()
+  | Naked_int64 (Ok is) ->
+    if Int64.Set.is_empty is then Invalid
+    else Proved is
+  | Naked_int64 Unknown -> Unknown
+  | Naked_int64 Bottom -> Invalid
+  | Value _ -> wrong_kind ()
+  | Naked_immediate _ -> wrong_kind ()
+  | Naked_float _ -> wrong_kind ()
+  | Naked_int32 _ -> wrong_kind ()
+  | Naked_nativeint _ -> wrong_kind ()
 
 let prove_naked_nativeints env t : _ proof =
   let wrong_kind () =
@@ -250,18 +250,16 @@ let prove_naked_nativeints env t : _ proof =
   | Const (Naked_nativeint i) -> Proved (Targetint.Set.singleton i)
   | Const (Naked_immediate _ | Tagged_immediate _ | Naked_float _
     | Naked_int32 _ | Naked_int64 _) -> wrong_kind ()
-  | Resolved resolved ->
-    match resolved with
-    | Naked_nativeint (Ok is) ->
-      if Targetint.Set.is_empty is then Invalid
-      else Proved is
-    | Naked_nativeint Unknown -> Unknown
-    | Naked_nativeint Bottom -> Invalid
-    | Value _ -> wrong_kind ()
-    | Naked_immediate _ -> wrong_kind ()
-    | Naked_float _ -> wrong_kind ()
-    | Naked_int32 _ -> wrong_kind ()
-    | Naked_int64 _ -> wrong_kind ()
+  | Naked_nativeint (Ok is) ->
+    if Targetint.Set.is_empty is then Invalid
+    else Proved is
+  | Naked_nativeint Unknown -> Unknown
+  | Naked_nativeint Bottom -> Invalid
+  | Value _ -> wrong_kind ()
+  | Naked_immediate _ -> wrong_kind ()
+  | Naked_float _ -> wrong_kind ()
+  | Naked_int32 _ -> wrong_kind ()
+  | Naked_int64 _ -> wrong_kind ()
 
 let prove_is_int env t : bool proof =
   let wrong_kind () =
@@ -270,29 +268,27 @@ let prove_is_int env t : bool proof =
   match expand_head t env with
   | Const (Tagged_immediate _) -> Proved true
   | Const _ -> wrong_kind ()
-  | Resolved resolved ->
-    match resolved with
-    | Value (Ok (Variant blocks_imms)) ->
-      begin match blocks_imms.blocks, blocks_imms.immediates with
-      | Unknown, Unknown | Unknown, Known _ | Known _, Unknown -> Unknown
-      | Known blocks, Known imms ->
-        (* CR mshinwell: Should we tighten things up by causing fatal errors
-           in cases such as [blocks] and [imms] both being bottom? *)
-        if Row_like.For_blocks.is_bottom blocks then
-          if is_bottom env imms then Invalid
-          else Proved true
-        else
-          if is_bottom env imms then Proved false
-          else Unknown
-      end
-    | Value (Ok _) -> Invalid
-    | Value Unknown -> Unknown
-    | Value Bottom -> Invalid
-    | Naked_immediate _ -> wrong_kind ()
-    | Naked_float _ -> wrong_kind ()
-    | Naked_int32 _ -> wrong_kind ()
-    | Naked_int64 _ -> wrong_kind ()
-    | Naked_nativeint _ -> wrong_kind ()
+  | Value (Ok (Variant blocks_imms)) ->
+    begin match blocks_imms.blocks, blocks_imms.immediates with
+    | Unknown, Unknown | Unknown, Known _ | Known _, Unknown -> Unknown
+    | Known blocks, Known imms ->
+      (* CR mshinwell: Should we tighten things up by causing fatal errors
+         in cases such as [blocks] and [imms] both being bottom? *)
+      if Row_like.For_blocks.is_bottom blocks then
+        if is_bottom env imms then Invalid
+        else Proved true
+      else
+        if is_bottom env imms then Proved false
+        else Unknown
+    end
+  | Value (Ok _) -> Invalid
+  | Value Unknown -> Unknown
+  | Value Bottom -> Invalid
+  | Naked_immediate _ -> wrong_kind ()
+  | Naked_float _ -> wrong_kind ()
+  | Naked_int32 _ -> wrong_kind ()
+  | Naked_int64 _ -> wrong_kind ()
+  | Naked_nativeint _ -> wrong_kind ()
 
 let prove_tags_must_be_a_block env t : Tag.Set.t proof =
   let wrong_kind () =
@@ -301,35 +297,33 @@ let prove_tags_must_be_a_block env t : Tag.Set.t proof =
   match expand_head t env with
   | Const (Tagged_immediate _) -> Unknown
   | Const _ -> wrong_kind ()
-  | Resolved resolved ->
-    match resolved with
-    | Value (Ok (Variant blocks_imms)) ->
-      begin match blocks_imms.immediates with
-      | Unknown -> Unknown
-      | Known imms ->
-        if not (is_bottom env imms) then
-          Invalid
-        else
-          match blocks_imms.blocks with
+  | Value (Ok (Variant blocks_imms)) ->
+    begin match blocks_imms.immediates with
+    | Unknown -> Unknown
+    | Known imms ->
+      if not (is_bottom env imms) then
+        Invalid
+      else
+        match blocks_imms.blocks with
+        | Unknown -> Unknown
+        | Known blocks ->
+          (* CR mshinwell: maybe [all_tags] should return the [Invalid]
+             case directly? *)
+          match Row_like.For_blocks.all_tags blocks with
           | Unknown -> Unknown
-          | Known blocks ->
-            (* CR mshinwell: maybe [all_tags] should return the [Invalid]
-               case directly? *)
-            match Row_like.For_blocks.all_tags blocks with
-            | Unknown -> Unknown
-            | Known tags ->
-              if Tag.Set.is_empty tags then Invalid
-              else Proved tags
-      end
-    | Value (Ok _) -> Invalid
-    | Value Unknown -> Unknown
-    | Value Bottom -> Invalid
-    (* CR mshinwell: Here and elsewhere, use or-patterns. *)
-    | Naked_immediate _ -> wrong_kind ()
-    | Naked_float _ -> wrong_kind ()
-    | Naked_int32 _ -> wrong_kind ()
-    | Naked_int64 _ -> wrong_kind ()
-    | Naked_nativeint _ -> wrong_kind ()
+          | Known tags ->
+            if Tag.Set.is_empty tags then Invalid
+            else Proved tags
+    end
+  | Value (Ok _) -> Invalid
+  | Value Unknown -> Unknown
+  | Value Bottom -> Invalid
+  (* CR mshinwell: Here and elsewhere, use or-patterns. *)
+  | Naked_immediate _ -> wrong_kind ()
+  | Naked_float _ -> wrong_kind ()
+  | Naked_int32 _ -> wrong_kind ()
+  | Naked_int64 _ -> wrong_kind ()
+  | Naked_nativeint _ -> wrong_kind ()
 
 let prove_naked_immediates env t : Immediate.Set.t proof =
   let wrong_kind () =
@@ -339,40 +333,38 @@ let prove_naked_immediates env t : Immediate.Set.t proof =
   | Const (Naked_immediate i) -> Proved (Immediate.Set.singleton i)
   | Const (Tagged_immediate _ | Naked_float _ | Naked_int32 _
     | Naked_int64 _ | Naked_nativeint _) -> wrong_kind ()
-  | Resolved resolved ->
-    match resolved with
-    | Naked_immediate (Ok (Naked_immediates is)) ->
-      (* CR mshinwell: As noted elsewhere, add abstraction to avoid the need
-         for these checks *)
-      if Immediate.Set.is_empty is then Invalid
-      else Proved is
-    | Naked_immediate (Ok (Is_int scrutinee_ty)) ->
-      begin match prove_is_int env scrutinee_ty with
-      | Proved true -> Proved (Immediate.Set.singleton Immediate.bool_true)
-      | Proved false -> Proved (Immediate.Set.singleton Immediate.bool_false)
-      | Unknown -> Unknown
-      | Invalid -> Invalid
-      end
-    | Naked_immediate (Ok (Get_tag block_ty)) ->
-      begin match prove_tags_must_be_a_block env block_ty with
-      | Proved tags ->
-        let is =
-          Tag.Set.fold (fun tag is ->
-              Immediate.Set.add (Immediate.tag tag) is)
-            tags
-            Immediate.Set.empty
-        in
-        Proved is
-      | Unknown -> Unknown
-      | Invalid -> Invalid
-      end
-    | Naked_immediate Unknown -> Unknown
-    | Naked_immediate Bottom -> Invalid
-    | Value _ -> wrong_kind ()
-    | Naked_float _ -> wrong_kind ()
-    | Naked_int32 _ -> wrong_kind ()
-    | Naked_int64 _ -> wrong_kind ()
-    | Naked_nativeint _ -> wrong_kind ()
+  | Naked_immediate (Ok (Naked_immediates is)) ->
+    (* CR mshinwell: As noted elsewhere, add abstraction to avoid the need
+       for these checks *)
+    if Immediate.Set.is_empty is then Invalid
+    else Proved is
+  | Naked_immediate (Ok (Is_int scrutinee_ty)) ->
+    begin match prove_is_int env scrutinee_ty with
+    | Proved true -> Proved (Immediate.Set.singleton Immediate.bool_true)
+    | Proved false -> Proved (Immediate.Set.singleton Immediate.bool_false)
+    | Unknown -> Unknown
+    | Invalid -> Invalid
+    end
+  | Naked_immediate (Ok (Get_tag block_ty)) ->
+    begin match prove_tags_must_be_a_block env block_ty with
+    | Proved tags ->
+      let is =
+        Tag.Set.fold (fun tag is ->
+            Immediate.Set.add (Immediate.tag tag) is)
+          tags
+          Immediate.Set.empty
+      in
+      Proved is
+    | Unknown -> Unknown
+    | Invalid -> Invalid
+    end
+  | Naked_immediate Unknown -> Unknown
+  | Naked_immediate Bottom -> Invalid
+  | Value _ -> wrong_kind ()
+  | Naked_float _ -> wrong_kind ()
+  | Naked_int32 _ -> wrong_kind ()
+  | Naked_int64 _ -> wrong_kind ()
+  | Naked_nativeint _ -> wrong_kind ()
 
 let prove_equals_tagged_immediates env t : Immediate.Set.t proof =
   let wrong_kind () =
@@ -382,26 +374,24 @@ let prove_equals_tagged_immediates env t : Immediate.Set.t proof =
   | Const (Tagged_immediate imm) -> Proved (Immediate.Set.singleton imm)
   | Const (Naked_immediate _ | Naked_float _ | Naked_int32 _ | Naked_int64 _
     | Naked_nativeint _) -> wrong_kind ()
-  | Resolved resolved ->
-    match resolved with
-    | Value (Ok (Variant blocks_imms)) ->
-      begin match blocks_imms.blocks, blocks_imms.immediates with
-      | Unknown, Unknown | Unknown, Known _ | Known _, Unknown -> Unknown
-      | Known blocks, Known imms ->
-        (* CR mshinwell: Check this.  Again it depends on the context; is
-           this a context where variants are ok? *)
-        if not (Row_like.For_blocks.is_bottom blocks)
-        then Unknown
-        else prove_naked_immediates env imms
-      end
-    | Value (Ok _) -> Invalid
-    | Value Unknown -> Unknown
-    | Value Bottom -> Invalid
-    | Naked_immediate _ -> wrong_kind ()
-    | Naked_float _ -> wrong_kind ()
-    | Naked_int32 _ -> wrong_kind ()
-    | Naked_int64 _ -> wrong_kind ()
-    | Naked_nativeint _ -> wrong_kind ()
+  | Value (Ok (Variant blocks_imms)) ->
+    begin match blocks_imms.blocks, blocks_imms.immediates with
+    | Unknown, Unknown | Unknown, Known _ | Known _, Unknown -> Unknown
+    | Known blocks, Known imms ->
+      (* CR mshinwell: Check this.  Again it depends on the context; is
+         this a context where variants are ok? *)
+      if not (Row_like.For_blocks.is_bottom blocks)
+      then Unknown
+      else prove_naked_immediates env imms
+    end
+  | Value (Ok _) -> Invalid
+  | Value Unknown -> Unknown
+  | Value Bottom -> Invalid
+  | Naked_immediate _ -> wrong_kind ()
+  | Naked_float _ -> wrong_kind ()
+  | Naked_int32 _ -> wrong_kind ()
+  | Naked_int64 _ -> wrong_kind ()
+  | Naked_nativeint _ -> wrong_kind ()
 
 let prove_equals_single_tagged_immediate env t : _ proof =
   match prove_equals_tagged_immediates env t with
@@ -420,34 +410,32 @@ let prove_tags_and_sizes env t : Targetint.OCaml.t Tag.Map.t proof =
   match expand_head t env with
   | Const (Tagged_immediate _) -> Unknown
   | Const _ -> wrong_kind ()
-  | Resolved resolved ->
-    match resolved with
-    | Value (Ok (Variant blocks_imms)) ->
-      begin match blocks_imms.immediates with
-      (* CR mshinwell: Care.  Should this return [Unknown] or [Invalid] if
-         there is the possibility of the type representing a tagged
-         immediate? *)
-      | Unknown -> Unknown
-      | Known immediates ->
-        if is_bottom env immediates then
-          match blocks_imms.blocks with
+  | Value (Ok (Variant blocks_imms)) ->
+    begin match blocks_imms.immediates with
+    (* CR mshinwell: Care.  Should this return [Unknown] or [Invalid] if
+       there is the possibility of the type representing a tagged
+       immediate? *)
+    | Unknown -> Unknown
+    | Known immediates ->
+      if is_bottom env immediates then
+        match blocks_imms.blocks with
+        | Unknown -> Unknown
+        | Known blocks ->
+          match Row_like.For_blocks.all_tags_and_sizes blocks with
           | Unknown -> Unknown
-          | Known blocks ->
-            match Row_like.For_blocks.all_tags_and_sizes blocks with
-            | Unknown -> Unknown
-            | Known tags_and_sizes -> Proved tags_and_sizes
-        else
-          Unknown
-      end
-    | Value (Ok _) -> Invalid
-    | Value Unknown -> Unknown
-    | Value Bottom -> Invalid
-    (* CR mshinwell: Here and elsewhere, use or-patterns. *)
-    | Naked_immediate _ -> wrong_kind ()
-    | Naked_float _ -> wrong_kind ()
-    | Naked_int32 _ -> wrong_kind ()
-    | Naked_int64 _ -> wrong_kind ()
-    | Naked_nativeint _ -> wrong_kind ()
+          | Known tags_and_sizes -> Proved tags_and_sizes
+      else
+        Unknown
+    end
+  | Value (Ok _) -> Invalid
+  | Value Unknown -> Unknown
+  | Value Bottom -> Invalid
+  (* CR mshinwell: Here and elsewhere, use or-patterns. *)
+  | Naked_immediate _ -> wrong_kind ()
+  | Naked_float _ -> wrong_kind ()
+  | Naked_int32 _ -> wrong_kind ()
+  | Naked_int64 _ -> wrong_kind ()
+  | Naked_nativeint _ -> wrong_kind ()
 
 let prove_unique_tag_and_size env t
      : (Tag.t * Targetint.OCaml.t) proof_allowing_kind_mismatch =
@@ -466,59 +454,49 @@ let prove_is_a_tagged_immediate env t : _ proof_allowing_kind_mismatch =
   match expand_head t env with
   | Const (Tagged_immediate _) -> Proved ()
   | Const _ -> Wrong_kind
-  | Resolved resolved ->
-    match resolved with
-    | Value Unknown -> Unknown
-    | Value (Ok (Variant { blocks; immediates; })) ->
-      begin match blocks, immediates with
-      | Unknown, Unknown | Unknown, Known _ | Known _, Unknown -> Unknown
-      | Known blocks, Known imms ->
-        if Row_like.For_blocks.is_bottom blocks && not (is_bottom env imms)
-        then Proved ()
-        else Invalid
-      end
-    | Value _ -> Invalid
-    | _ -> Wrong_kind
+  | Value Unknown -> Unknown
+  | Value (Ok (Variant { blocks; immediates; })) ->
+    begin match blocks, immediates with
+    | Unknown, Unknown | Unknown, Known _ | Known _, Unknown -> Unknown
+    | Known blocks, Known imms ->
+      if Row_like.For_blocks.is_bottom blocks && not (is_bottom env imms)
+      then Proved ()
+      else Invalid
+    end
+  | Value _ -> Invalid
+  | _ -> Wrong_kind
 
 let prove_is_a_boxed_float env t : _ proof_allowing_kind_mismatch =
   match expand_head t env with
   | Const _ -> Wrong_kind
-  | Resolved resolved ->
-    match resolved with
-    | Value Unknown -> Unknown
-    | Value (Ok (Boxed_float _)) -> Proved ()
-    | Value _ -> Invalid
-    | _ -> Wrong_kind
+  | Value Unknown -> Unknown
+  | Value (Ok (Boxed_float _)) -> Proved ()
+  | Value _ -> Invalid
+  | _ -> Wrong_kind
 
 let prove_is_a_boxed_int32 env t : _ proof_allowing_kind_mismatch =
   match expand_head t env with
   | Const _ -> Wrong_kind
-  | Resolved resolved ->
-    match resolved with
-    | Value Unknown -> Unknown
-    | Value (Ok (Boxed_int32 _)) -> Proved ()
-    | Value _ -> Invalid
-    | _ -> Wrong_kind
+  | Value Unknown -> Unknown
+  | Value (Ok (Boxed_int32 _)) -> Proved ()
+  | Value _ -> Invalid
+  | _ -> Wrong_kind
 
 let prove_is_a_boxed_int64 env t : _ proof_allowing_kind_mismatch =
   match expand_head t env with
   | Const _ -> Wrong_kind
-  | Resolved resolved ->
-    match resolved with
-    | Value Unknown -> Unknown
-    | Value (Ok (Boxed_int64 _)) -> Proved ()
-    | Value _ -> Invalid
-    | _ -> Wrong_kind
+  | Value Unknown -> Unknown
+  | Value (Ok (Boxed_int64 _)) -> Proved ()
+  | Value _ -> Invalid
+  | _ -> Wrong_kind
 
 let prove_is_a_boxed_nativeint env t : _ proof_allowing_kind_mismatch =
   match expand_head t env with
   | Const _ -> Wrong_kind
-  | Resolved resolved ->
-    match resolved with
-    | Value Unknown -> Unknown
-    | Value (Ok (Boxed_nativeint _)) -> Proved ()
-    | Value _ -> Invalid
-    | _ -> Wrong_kind
+  | Value Unknown -> Unknown
+  | Value (Ok (Boxed_nativeint _)) -> Proved ()
+  | Value _ -> Invalid
+  | _ -> Wrong_kind
 
 (* CR mshinwell: Factor out code from the following. *)
 
@@ -539,7 +517,7 @@ let prove_boxed_floats env t : _ proof =
           Name_mode.normal)
         result_kind
     in
-    let env = Typing_env.add_env_extension env ~env_extension in
+    let env = Typing_env.add_env_extension env env_extension in
     let t = Typing_env.find env (Name.var result_var) in
     prove_naked_floats env t
 
@@ -560,7 +538,7 @@ let prove_boxed_int32s env t : _ proof =
           Name_mode.normal)
         result_kind
     in
-    let env = Typing_env.add_env_extension env ~env_extension in
+    let env = Typing_env.add_env_extension env env_extension in
     let t = Typing_env.find env (Name.var result_var) in
     prove_naked_int32s env t
 
@@ -581,7 +559,7 @@ let prove_boxed_int64s env t : _ proof =
           Name_mode.normal)
         result_kind
     in
-    let env = Typing_env.add_env_extension env ~env_extension in
+    let env = Typing_env.add_env_extension env env_extension in
     let t = Typing_env.find env (Name.var result_var) in
     prove_naked_int64s env t
 
@@ -602,7 +580,7 @@ let prove_boxed_nativeints env t : _ proof =
           Name_mode.normal)
         result_kind
     in
-    let env = Typing_env.add_env_extension env ~env_extension in
+    let env = Typing_env.add_env_extension env env_extension in
     let t = Typing_env.find env (Name.var result_var) in
     prove_naked_nativeints env t
 
@@ -614,14 +592,12 @@ let prove_strings env t : String_info.Set.t proof =
   | Const _ ->
     if K.equal (kind t) K.value then Invalid
     else wrong_kind ()
-  | Resolved resolved ->
-    match resolved with
-    | Value (Ok (String strs)) -> Proved strs      
-    | Value (Ok _) -> Invalid
-    | Value Unknown -> Unknown
-    | Value Bottom -> Invalid
-    | Naked_immediate _ | Naked_float _ | Naked_int32 _ | Naked_int64 _
-    | Naked_nativeint _ -> wrong_kind ()
+  | Value (Ok (String strs)) -> Proved strs      
+  | Value (Ok _) -> Invalid
+  | Value Unknown -> Unknown
+  | Value Bottom -> Invalid
+  | Naked_immediate _ | Naked_float _ | Naked_int32 _ | Naked_int64 _
+  | Naked_nativeint _ -> wrong_kind ()
 
 type to_lift =
   | Immutable_block of Tag.Scannable.t
@@ -644,289 +620,288 @@ type reification_result =
 
 (* CR mshinwell: Think more to identify all the cases that should be
    in this function. *)
-let reify ?allowed_free_vars env ~min_name_mode t : reification_result =
-  let allowed_free_vars =
-    Option.value allowed_free_vars ~default:Variable.Set.empty
+let reify ?allowed_if_free_vars_defined_in ?disallowed_free_vars env
+      ~min_name_mode t : reification_result =
+  let var_allowed var =
+    match allowed_if_free_vars_defined_in with
+    | None -> false
+    | Some allowed_if_free_vars_defined_in ->
+      Typing_env.mem allowed_if_free_vars_defined_in (Name.var var)
+        && match disallowed_free_vars with
+           | None -> true
+           | Some disallowed_free_vars ->
+             not (Variable.Set.mem var disallowed_free_vars)
   in
-(*
-Format.eprintf "reifying %a\n%!" print t;
-*)
-  match
-    Typing_env.get_alias_then_canonical_simple env ~min_name_mode t
-  with
-  | Bottom -> Invalid
-  | Ok (Some canonical_simple)
-      when begin match Simple.descr canonical_simple with
-      | Name (Symbol _) -> true
-      | _ -> false
-      end ->
+  let canonical_simple =
+    match Typing_env.get_alias_then_canonical_simple_exn env ~min_name_mode t
+    with
+    | exception Not_found -> None
+    | canonical_simple -> Some canonical_simple
+  in
+  match canonical_simple with
+  | Some canonical_simple when Simple.is_symbol canonical_simple ->
     (* Don't lift things that are already bound to symbols.  Apart from
        anything else, this could cause aliases between symbols, which are
        currently forbidden (every symbol has the same binding time). *)
     Cannot_reify
-  | Ok canonical_simple_opt ->
+  | canonical_simple_opt ->
+    let try_canonical_simple () =
+      match canonical_simple_opt with
+      | None -> Cannot_reify
+      | Some canonical_simple -> Simple canonical_simple
+    in
     match expand_head t env with
-    | Const const -> Simple (Simple.const const)
-    | Resolved resolved ->
-      let try_canonical_simple () =
-        match canonical_simple_opt with
-        | None -> Cannot_reify
-        | Some canonical_simple -> Simple canonical_simple
-      in
-      match resolved with
-      | Value (Ok (Variant blocks_imms)) ->
-        begin match blocks_imms.blocks, blocks_imms.immediates with
-        | Known blocks, Known imms ->
-          if is_bottom env imms then
-            begin match Row_like.For_blocks.get_singleton blocks with
-            | None -> try_canonical_simple ()
-            | Some ((tag, size), field_types) ->
-              assert (Targetint.OCaml.equal size
-                (Product.Int_indexed.width field_types));
-              (* CR mshinwell: Could recognise other things, e.g. tagged
-                 immediates and float arrays, supported by [Static_part]. *)
-              let field_types =
-                Product.Int_indexed.components field_types
-              in
-              let vars_or_symbols_or_tagged_immediates =
-                List.filter_map
-                  (fun field_type
-                         : var_or_symbol_or_tagged_immediate option ->
-                    match
-                      (* CR mshinwell: Change this to a function
-                         [prove_equals_to_simple]? *)
-                      prove_equals_to_var_or_symbol_or_tagged_immediate env
-                        field_type
-                    with
-                    | Proved (Var var) ->
-                      if Variable.Set.mem var allowed_free_vars then
-                        Some (Var var)
-                      else
-                        None
-                    | Proved (Symbol sym) -> Some (Symbol sym)
-                    | Proved (Tagged_immediate imm) ->
-                      Some (Tagged_immediate imm)
-                    (* CR mshinwell: [Invalid] should propagate up *)
-                    | Unknown | Invalid -> None)
-                  field_types
-              in
-              if List.compare_lengths field_types
-                   vars_or_symbols_or_tagged_immediates = 0
-              then
-                match Tag.Scannable.of_tag tag with
-                | Some tag ->
-                  Lift (Immutable_block (
-                    tag, vars_or_symbols_or_tagged_immediates))
-                | None -> try_canonical_simple ()
-              else
-                try_canonical_simple ()
-            end
-          else if Row_like.For_blocks.is_bottom blocks then
-            match prove_naked_immediates env imms with
-            | Proved imms ->
-              begin match Immediate.Set.get_singleton imms with
+    | Const const -> Simple (Simple.const_from_descr const)
+    | Value (Ok (Variant blocks_imms)) ->
+      begin match blocks_imms.blocks, blocks_imms.immediates with
+      | Known blocks, Known imms ->
+        if is_bottom env imms then
+          begin match Row_like.For_blocks.get_singleton blocks with
+          | None -> try_canonical_simple ()
+          | Some ((tag, size), field_types) ->
+            assert (Targetint.OCaml.equal size
+              (Product.Int_indexed.width field_types));
+            (* CR mshinwell: Could recognise other things, e.g. tagged
+               immediates and float arrays, supported by [Static_part]. *)
+            let field_types =
+              Product.Int_indexed.components field_types
+            in
+            let vars_or_symbols_or_tagged_immediates =
+              List.filter_map
+                (fun field_type
+                       : var_or_symbol_or_tagged_immediate option ->
+                  match
+                    (* CR mshinwell: Change this to a function
+                       [prove_equals_to_simple]? *)
+                    prove_equals_to_var_or_symbol_or_tagged_immediate env
+                      field_type
+                  with
+                  | Proved (Var var) ->
+                    if var_allowed var then Some (Var var) else None
+                  | Proved (Symbol sym) -> Some (Symbol sym)
+                  | Proved (Tagged_immediate imm) ->
+                    Some (Tagged_immediate imm)
+                  (* CR mshinwell: [Invalid] should propagate up *)
+                  | Unknown | Invalid -> None)
+                field_types
+            in
+            if List.compare_lengths field_types
+                 vars_or_symbols_or_tagged_immediates = 0
+            then
+              match Tag.Scannable.of_tag tag with
+              | Some tag ->
+                Lift (Immutable_block (
+                  tag, vars_or_symbols_or_tagged_immediates))
               | None -> try_canonical_simple ()
-              | Some imm ->
-                Simple (Simple.const (Tagged_immediate imm))
-              end
-            | Unknown -> try_canonical_simple ()
-            | Invalid -> Invalid
-          else
-            try_canonical_simple ()
-        | _, _ -> try_canonical_simple ()
-        end
-      | Value (Ok (Closures closures)) ->
-        (* CR mshinwell: Here and above, move to separate function. *)
-        begin match
-          Row_like.For_closures_entry_by_set_of_closures_contents.
-            get_singleton closures.by_closure_id
-        with
-        | None -> try_canonical_simple ()
-        | Some ((closure_id, contents), closures_entry) ->
-          (* CR mshinwell: What about if there were multiple entries in the
-             row-like structure for the same closure ID?  This is ruled out
-             by [get_singleton] at the moment.  We should probably choose
-             the best entry from the [Row_like] structure. *)
-          let closure_ids = Set_of_closures_contents.closures contents in
-          (* CR mshinwell: Should probably check
-             [Set_of_closures_contents.closure_vars contents]? *)
-          if not (Closure_id.Set.mem closure_id closure_ids) then begin
-            Misc.fatal_errorf "Closure ID %a expected in \
-                set-of-closures-contents in closure type@ %a"
-              Closure_id.print closure_id
-              print t
-          end;
-          let function_decls_with_closure_vars =
-            Closure_id.Set.fold
-              (fun closure_id function_decls_with_closure_vars ->
-                match
-                  Closures_entry.find_function_declaration closures_entry
-                    closure_id
-                with
-                | Bottom -> function_decls_with_closure_vars
-                | Ok function_decl ->
-                  match function_decl with
-                  | Bottom | Unknown | Ok (Non_inlinable _) ->
-                    function_decls_with_closure_vars
-                  | Ok (Inlinable inlinable_decl) ->
-                    (* CR mshinwell: We're ignoring [rec_info] *)
-                    let closure_var_types =
-                      Closures_entry.closure_var_types closures_entry
-                    in
-                    let closure_var_simples =
-                      Var_within_closure.Map.filter_map closure_var_types
-                        ~f:(fun _closure_var closure_var_type ->
-                          match
-                            prove_equals_to_var_or_symbol_or_tagged_immediate
-                              env closure_var_type
-                          with
-                          | Proved (Var var) ->
-                            if Variable.Set.mem var allowed_free_vars then
-                              Some (Simple.var var)
-                            else
-                              None
-                          | Proved (Symbol sym) -> Some (Simple.symbol sym)
-                          | Proved (Tagged_immediate imm) ->
-                            Some (Simple.const (Tagged_immediate imm))
-                          | Unknown | Invalid -> None)
-                    in
-                    if Var_within_closure.Map.cardinal closure_var_types
-                      <> Var_within_closure.Map.cardinal closure_var_simples
-                    then function_decls_with_closure_vars
-                    else
-                      Closure_id.Map.add closure_id
-                        (inlinable_decl, closure_var_simples)
-                        function_decls_with_closure_vars)
-              closure_ids
-              Closure_id.Map.empty
-          in
-          if Closure_id.Set.cardinal closure_ids
-            <> Closure_id.Map.cardinal function_decls_with_closure_vars
-          then try_canonical_simple ()
-          else
-            let function_decls =
-              Closure_id.Map.map (fun (function_decl, _) -> function_decl)
-                function_decls_with_closure_vars
-            in
-            let closure_vars =
-              Closure_id.Map.fold
-                (fun _closure_id (_function_decl, closure_var_simples)
-                     all_closure_vars ->
-                  Var_within_closure.Map.fold
-                    (fun closure_var simple all_closure_vars ->
-                      begin match
-                        Var_within_closure.Map.find closure_var
-                          all_closure_vars
-                      with
-                      | exception Not_found -> ()
-                      | existing_simple ->
-                        if not (Simple.equal simple existing_simple)
-                        then begin
-                          Misc.fatal_errorf "Disagreement on %a and %a \
-                              (closure var %a)@ \
-                              whilst reifying set-of-closures from:@ %a"
-                            Simple.print simple
-                            Simple.print existing_simple
-                            Var_within_closure.print closure_var
-                            print t
-                        end
-                      end;
-                      Var_within_closure.Map.add closure_var simple
-                        all_closure_vars)
-                   closure_var_simples
-                   all_closure_vars)
-                function_decls_with_closure_vars
-                Var_within_closure.Map.empty
-            in
-            Lift_set_of_closures {
-              closure_id;
-              function_decls;
-              closure_vars;
-            }
-        end
-      (* CR mshinwell: share code with [prove_equals_tagged_immediates],
-         above *)
-      | Naked_immediate (Ok (Is_int scrutinee_ty)) ->
-        begin match prove_is_int env scrutinee_ty with
-        | Proved true -> Simple Simple.untagged_const_true
-        | Proved false -> Simple Simple.untagged_const_false
-        | Unknown -> try_canonical_simple ()
-        | Invalid -> Invalid
-        end
-      | Naked_immediate (Ok (Get_tag block_ty)) ->
-        begin match prove_tags_must_be_a_block env block_ty with
-        | Proved tags ->
-          let is =
-            Tag.Set.fold (fun tag is ->
-                Immediate.Set.add (Immediate.tag tag) is)
-              tags
-              Immediate.Set.empty
-          in
-          begin match Immediate.Set.get_singleton is with
-          | None -> try_canonical_simple ()
-          | Some i -> Simple (Simple.const (Naked_immediate i))
+            else
+              try_canonical_simple ()
           end
-        | Unknown -> try_canonical_simple ()
-        | Invalid -> Invalid
-        end
-      | Naked_float (Ok fs) ->
-        begin match Float.Set.get_singleton fs with
+        else if Row_like.For_blocks.is_bottom blocks then
+          match prove_naked_immediates env imms with
+          | Proved imms ->
+            begin match Immediate.Set.get_singleton imms with
+            | None -> try_canonical_simple ()
+            | Some imm ->
+              Simple (Simple.const (Reg_width_const.tagged_immediate imm))
+            end
+          | Unknown -> try_canonical_simple ()
+          | Invalid -> Invalid
+        else
+          try_canonical_simple ()
+      | _, _ -> try_canonical_simple ()
+      end
+    | Value (Ok (Closures closures)) ->
+      (* CR mshinwell: Here and above, move to separate function. *)
+      begin match
+        Row_like.For_closures_entry_by_set_of_closures_contents.
+          get_singleton closures.by_closure_id
+      with
+      | None -> try_canonical_simple ()
+      | Some ((closure_id, contents), closures_entry) ->
+        (* CR mshinwell: What about if there were multiple entries in the
+           row-like structure for the same closure ID?  This is ruled out
+           by [get_singleton] at the moment.  We should probably choose
+           the best entry from the [Row_like] structure. *)
+        let closure_ids = Set_of_closures_contents.closures contents in
+        (* CR mshinwell: Should probably check
+           [Set_of_closures_contents.closure_vars contents]? *)
+        if not (Closure_id.Set.mem closure_id closure_ids) then begin
+          Misc.fatal_errorf "Closure ID %a expected in \
+              set-of-closures-contents in closure type@ %a"
+            Closure_id.print closure_id
+            print t
+        end;
+        let function_decls_with_closure_vars =
+          Closure_id.Set.fold
+            (fun closure_id function_decls_with_closure_vars ->
+              match
+                Closures_entry.find_function_declaration closures_entry
+                  closure_id
+              with
+              | Bottom -> function_decls_with_closure_vars
+              | Ok function_decl ->
+                match function_decl with
+                | Bottom | Unknown | Ok (Non_inlinable _) ->
+                  function_decls_with_closure_vars
+                | Ok (Inlinable inlinable_decl) ->
+                  (* CR mshinwell: We're ignoring [rec_info] *)
+                  let closure_var_types =
+                    Closures_entry.closure_var_types closures_entry
+                  in
+                  let closure_var_simples =
+                    Var_within_closure.Map.filter_map closure_var_types
+                      ~f:(fun _closure_var closure_var_type ->
+                        match
+                          prove_equals_to_var_or_symbol_or_tagged_immediate
+                            env closure_var_type
+                        with
+                        | Proved (Var var) ->
+                          if var_allowed var
+                          then Some (Simple.var var)
+                          else None
+                        | Proved (Symbol sym) -> Some (Simple.symbol sym)
+                        | Proved (Tagged_immediate imm) ->
+                          Some (Simple.const (
+                            Reg_width_const.tagged_immediate imm))
+                        | Unknown | Invalid -> None)
+                  in
+                  if Var_within_closure.Map.cardinal closure_var_types
+                    <> Var_within_closure.Map.cardinal closure_var_simples
+                  then function_decls_with_closure_vars
+                  else
+                    Closure_id.Map.add closure_id
+                      (inlinable_decl, closure_var_simples)
+                      function_decls_with_closure_vars)
+            closure_ids
+            Closure_id.Map.empty
+        in
+        if Closure_id.Set.cardinal closure_ids
+          <> Closure_id.Map.cardinal function_decls_with_closure_vars
+        then try_canonical_simple ()
+        else
+          let function_decls =
+            Closure_id.Map.map (fun (function_decl, _) -> function_decl)
+              function_decls_with_closure_vars
+          in
+          let closure_vars =
+            Closure_id.Map.fold
+              (fun _closure_id (_function_decl, closure_var_simples)
+                   all_closure_vars ->
+                Var_within_closure.Map.fold
+                  (fun closure_var simple all_closure_vars ->
+                    begin match
+                      Var_within_closure.Map.find closure_var
+                        all_closure_vars
+                    with
+                    | exception Not_found -> ()
+                    | existing_simple ->
+                      if not (Simple.equal simple existing_simple)
+                      then begin
+                        Misc.fatal_errorf "Disagreement on %a and %a \
+                            (closure var %a)@ \
+                            whilst reifying set-of-closures from:@ %a"
+                          Simple.print simple
+                          Simple.print existing_simple
+                          Var_within_closure.print closure_var
+                          print t
+                      end
+                    end;
+                    Var_within_closure.Map.add closure_var simple
+                      all_closure_vars)
+                 closure_var_simples
+                 all_closure_vars)
+              function_decls_with_closure_vars
+              Var_within_closure.Map.empty
+          in
+          Lift_set_of_closures {
+            closure_id;
+            function_decls;
+            closure_vars;
+          }
+      end
+    (* CR mshinwell: share code with [prove_equals_tagged_immediates],
+       above *)
+    | Naked_immediate (Ok (Is_int scrutinee_ty)) ->
+      begin match prove_is_int env scrutinee_ty with
+      | Proved true -> Simple Simple.untagged_const_true
+      | Proved false -> Simple Simple.untagged_const_false
+      | Unknown -> try_canonical_simple ()
+      | Invalid -> Invalid
+      end
+    | Naked_immediate (Ok (Get_tag block_ty)) ->
+      begin match prove_tags_must_be_a_block env block_ty with
+      | Proved tags ->
+        let is =
+          Tag.Set.fold (fun tag is ->
+              Immediate.Set.add (Immediate.tag tag) is)
+            tags
+            Immediate.Set.empty
+        in
+        begin match Immediate.Set.get_singleton is with
         | None -> try_canonical_simple ()
-        | Some f -> Simple (Simple.const (Naked_float f))
+        | Some i -> Simple (Simple.const (Reg_width_const.naked_immediate i))
         end
-      | Naked_int32 (Ok ns) ->
-        begin match Int32.Set.get_singleton ns with
+      | Unknown -> try_canonical_simple ()
+      | Invalid -> Invalid
+      end
+    | Naked_float (Ok fs) ->
+      begin match Float.Set.get_singleton fs with
+      | None -> try_canonical_simple ()
+      | Some f -> Simple (Simple.const (Reg_width_const.naked_float f))
+      end
+    | Naked_int32 (Ok ns) ->
+      begin match Int32.Set.get_singleton ns with
+      | None -> try_canonical_simple ()
+      | Some n -> Simple (Simple.const (Reg_width_const.naked_int32 n))
+      end
+    | Naked_int64 (Ok ns) ->
+      begin match Int64.Set.get_singleton ns with
+      | None -> try_canonical_simple ()
+      | Some n -> Simple (Simple.const (Reg_width_const.naked_int64 n))
+      end
+    | Naked_nativeint (Ok ns) ->
+      begin match Targetint.Set.get_singleton ns with
+      | None -> try_canonical_simple ()
+      | Some n -> Simple (Simple.const (Reg_width_const.naked_nativeint n))
+      end
+    | Value (Ok (Boxed_float ty_naked_float)) ->
+      begin match prove_naked_floats env ty_naked_float with
+      | Unknown -> try_canonical_simple ()
+      | Invalid -> Invalid
+      | Proved fs ->
+        match Float.Set.get_singleton fs with
         | None -> try_canonical_simple ()
-        | Some n -> Simple (Simple.const (Naked_int32 n))
-        end
-      | Naked_int64 (Ok ns) ->
-        begin match Int64.Set.get_singleton ns with
+        | Some f -> Lift (Boxed_float f)
+      end
+    | Value (Ok (Boxed_int32 ty_naked_int32)) ->
+      begin match prove_naked_int32s env ty_naked_int32 with
+      | Unknown -> try_canonical_simple ()
+      | Invalid -> Invalid
+      | Proved ns ->
+        match Int32.Set.get_singleton ns with
         | None -> try_canonical_simple ()
-        | Some n -> Simple (Simple.const (Naked_int64 n))
-        end
-      | Naked_nativeint (Ok ns) ->
-        begin match Targetint.Set.get_singleton ns with
+        | Some n -> Lift (Boxed_int32 n)
+      end
+    | Value (Ok (Boxed_int64 ty_naked_int64)) ->
+      begin match prove_naked_int64s env ty_naked_int64 with
+      | Unknown -> try_canonical_simple ()
+      | Invalid -> Invalid
+      | Proved ns ->
+        match Int64.Set.get_singleton ns with
         | None -> try_canonical_simple ()
-        | Some n -> Simple (Simple.const (Naked_nativeint n))
-        end
-      | Value (Ok (Boxed_float ty_naked_float)) ->
-        begin match prove_naked_floats env ty_naked_float with
-        | Unknown -> try_canonical_simple ()
-        | Invalid -> Invalid
-        | Proved fs ->
-          match Float.Set.get_singleton fs with
-          | None -> try_canonical_simple ()
-          | Some f -> Lift (Boxed_float f)
-        end
-      | Value (Ok (Boxed_int32 ty_naked_int32)) ->
-        begin match prove_naked_int32s env ty_naked_int32 with
-        | Unknown -> try_canonical_simple ()
-        | Invalid -> Invalid
-        | Proved ns ->
-          match Int32.Set.get_singleton ns with
-          | None -> try_canonical_simple ()
-          | Some n -> Lift (Boxed_int32 n)
-        end
-      | Value (Ok (Boxed_int64 ty_naked_int64)) ->
-        begin match prove_naked_int64s env ty_naked_int64 with
-        | Unknown -> try_canonical_simple ()
-        | Invalid -> Invalid
-        | Proved ns ->
-          match Int64.Set.get_singleton ns with
-          | None -> try_canonical_simple ()
-          | Some n -> Lift (Boxed_int64 n)
-        end
-      | Value (Ok (Boxed_nativeint ty_naked_nativeint)) ->
-        begin match prove_naked_nativeints env ty_naked_nativeint with
-        | Unknown -> try_canonical_simple ()
-        | Invalid -> Invalid
-        | Proved ns ->
-          match Targetint.Set.get_singleton ns with
-          | None -> try_canonical_simple ()
-          | Some n -> Lift (Boxed_nativeint n)
-        end
-      | Value Bottom
-      | Naked_immediate Bottom | Naked_float Bottom
-      | Naked_int32 Bottom | Naked_int64 Bottom | Naked_nativeint Bottom ->
-        Invalid
-      | _ -> try_canonical_simple ()
+        | Some n -> Lift (Boxed_int64 n)
+      end
+    | Value (Ok (Boxed_nativeint ty_naked_nativeint)) ->
+      begin match prove_naked_nativeints env ty_naked_nativeint with
+      | Unknown -> try_canonical_simple ()
+      | Invalid -> Invalid
+      | Proved ns ->
+        match Targetint.Set.get_singleton ns with
+        | None -> try_canonical_simple ()
+        | Some n -> Lift (Boxed_nativeint n)
+      end
+    | Value Bottom
+    | Naked_immediate Bottom | Naked_float Bottom
+    | Naked_int32 Bottom | Naked_int64 Bottom | Naked_nativeint Bottom ->
+      Invalid
+    | _ -> try_canonical_simple ()

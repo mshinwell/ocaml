@@ -149,7 +149,7 @@ let standard_int_or_float_of_boxed_integer (bint : L.boxed_integer)
   | Pint64 -> Naked_int64
 
 (* let const_of_boxed_integer (i:int32) (bint : L.boxed_integer) *)
-(*   : Simple.Const.t = *)
+(*   : Reg_width_const.t = *)
 (*   match bint with *)
 (*   | Pnativeint -> Naked_nativeint (Targetint.of_int32 i) *)
 (*   | Pint32 -> Naked_int32 i *)

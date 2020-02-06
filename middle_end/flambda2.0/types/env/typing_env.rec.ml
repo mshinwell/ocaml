@@ -38,14 +38,6 @@ module Cached : sig
 
   val cse : t -> Simple.t Flambda_primitive.Eligible_for_cse.Map.t
 
-  val binding_time : t -> Name.t -> Binding_time.t
-
-  val domain : t -> Name.Set.t
-
-  val var_domain : t -> Variable.Set.t
-
-  val sym_domain : t -> Symbol.Set.t
-
   val add_or_replace_binding
      : t
     -> Name.t
@@ -55,14 +47,18 @@ module Cached : sig
     -> new_aliases:Aliases.t
     -> t
 
+  val replace_variable_binding
+     : t
+    -> Variable.t
+    -> Type_grammar.t
+    -> new_aliases:Aliases.t
+    -> t
+
   val with_cse : t -> cse:Simple.t Flambda_primitive.Eligible_for_cse.Map.t -> t
 end = struct
   type t = {
     names_to_types :
       (Type_grammar.t * Binding_time.t * Name_mode.t) Name.Map.t;
-    domain : Name.Set.t;
-    var_domain : Variable.Set.t;
-    sym_domain : Symbol.Set.t;
     aliases : Aliases.t;
     cse : Simple.t Flambda_primitive.Eligible_for_cse.Map.t;
   }
@@ -109,53 +105,38 @@ end = struct
 
   let empty =
     { names_to_types = Name.Map.empty;
-      domain = Name.Set.empty;
-      var_domain = Variable.Set.empty;
-      sym_domain = Symbol.Set.empty;
       aliases = Aliases.empty;
       cse = Flambda_primitive.Eligible_for_cse.Map.empty;
     }
 
   let names_to_types t = t.names_to_types
-  let domain t = t.domain
-  let var_domain t = t.var_domain
-  let sym_domain t = t.sym_domain
   let aliases t = t.aliases
   let cse t = t.cse
 
-  let add_or_replace_binding t (name : Name.t) ty binding_time
-        name_mode ~new_aliases =
+  (* CR mshinwell: At least before the following two functions were split
+     (used to be add-or-replace), the [names_to_types] map addition was a
+     major source of allocation. *)
+
+  let add_or_replace_binding t (name : Name.t) ty binding_time name_mode ~new_aliases =
     let names_to_types =
-      (* CR mshinwell: Major source of allocation (via Map) *)
-      Name.Map.add name (ty, binding_time, name_mode)
-        t.names_to_types
-    in
-    let domain = Name.Set.add name t.domain in
-    let var_domain =
-      match name with
-      | Var var -> Variable.Set.add var t.var_domain
-      | Symbol _ -> t.var_domain
-    in
-    let sym_domain =
-      match name with
-      | Symbol sym -> Symbol.Set.add sym t.sym_domain
-      | Var _ -> t.sym_domain
+      Name.Map.add name (ty, binding_time, name_mode) t.names_to_types
     in
     { names_to_types;
-      domain;
-      var_domain;
-      sym_domain;
       aliases = new_aliases;
       cse = t.cse;
     }
 
-  (* CR mshinwell: Add type lookup function *)
-
-  let binding_time t name =
-    match Name.Map.find name t.names_to_types with
-    | exception Not_found ->
-      Misc.fatal_errorf "Unbound name %a" Name.print name
-    | (_ty, time, _name_mode) -> time
+  let replace_variable_binding t var ty ~new_aliases =
+    let names_to_types =
+      Name.Map.replace (Name.var var)
+        (function (_old_ty, binding_time, name_mode) ->
+          ty, binding_time, name_mode)
+        t.names_to_types
+    in
+    { names_to_types;
+      aliases = new_aliases;
+      cse = t.cse;
+    }
 
   let with_cse t ~cse = { t with cse; }
 end
@@ -201,13 +182,15 @@ module One_level = struct
 
   let is_empty t = Typing_env_level.is_empty t.level
 
+(*
   let defines_name_but_no_equations t name =
     Typing_env_level.defines_name_but_no_equations t.level name
+*)
 end
 
 type t = {
   resolver : (Export_id.t -> Type_grammar.t option);
-  defined_symbols : Flambda_kind.t Symbol.Map.t;
+  defined_symbols : Symbol.Set.t;
   code_age_relation : Code_age_relation.t;
   prev_levels : One_level.t Scope.Map.t;
   (* CR mshinwell: hold list of symbol definitions, then change defined_names
@@ -219,7 +202,7 @@ type t = {
 let is_empty t =
   One_level.is_empty t.current_level
     && Scope.Map.is_empty t.prev_levels
-    && Symbol.Map.is_empty t.defined_symbols
+    && Symbol.Set.is_empty t.defined_symbols
 
 (* CR mshinwell: Should print name occurrence kinds *)
 (* CR mshinwell: Add option to print [aliases] *)
@@ -244,7 +227,7 @@ let print_with_cache ~cache ppf
             @[<hov 1>(code_age_relation@ %a)@]@ \
             @[<hov 1>(levels@ %a)@]\
             )@]"
-        (Symbol.Map.print K.print) defined_symbols
+        Symbol.Set.print defined_symbols
         Code_age_relation.print code_age_relation
         (Scope.Map.print (One_level.print_with_cache ~cache)) levels)
 
@@ -301,7 +284,7 @@ let create ~resolver =
     prev_levels = Scope.Map.empty;
     current_level = One_level.create_empty Scope.initial;
     next_binding_time = Binding_time.earliest_var;
-    defined_symbols = Symbol.Map.empty;
+    defined_symbols = Symbol.Set.empty;
     code_age_relation = Code_age_relation.empty;
   }
 
@@ -321,50 +304,62 @@ let increment_scope t =
     current_level;
   }
 
-let domain0 t =
-  Cached.domain (One_level.just_after_level t.current_level)
+let defined_symbols t = t.defined_symbols
 
-let var_domain t =
-  Cached.var_domain (One_level.just_after_level t.current_level)
+let initial_symbol_type0 =
+  lazy (Type_grammar.any_value ())
 
-let name_domain t = domain0 t
+let initial_symbol_type =
+  lazy (Type_grammar.any_value (), Binding_time.symbols, Name_mode.normal)
+
+let find_with_binding_time_and_mode t name =
+  let [@inline always] var var =
+    Misc.fatal_errorf "Variable %a not bound in typing environment:@ %a"
+      Variable.print var
+      print t
+  in
+  let [@inline always] symbol sym =
+    if Symbol.Set.mem sym t.defined_symbols then
+      Lazy.force initial_symbol_type
+    else
+      Misc.fatal_errorf "Symbol %a not bound in typing environment:@ %a"
+        Symbol.print sym
+        print t
+  in
+  match Name.Map.find name (names_to_types t) with
+  | exception Not_found -> Name.pattern_match name ~var ~symbol
+  | result -> result
 
 let find t name =
-  match Name.Map.find name (names_to_types t) with
-  | exception Not_found ->
-    Misc.fatal_errorf "Name %a not bound in typing environment:@ %a"
-      Name.print name
+  let [@inline always] var var =
+    Misc.fatal_errorf "Variable %a not bound in typing environment:@ %a"
+      Variable.print var
       print t
-  (* CR mshinwell: Should this resolve aliases? *)
-  | ty, _binding_time, _name_mode -> ty
+  in
+  let [@inline always] symbol sym =
+    if Symbol.Set.mem sym t.defined_symbols then
+      Lazy.force initial_symbol_type0
+    else
+      Misc.fatal_errorf "Symbol %a not bound in typing environment:@ %a"
+        Symbol.print sym
+        print t
+  in
+  match Name.Map.find name (names_to_types t) with
+  | exception Not_found -> Name.pattern_match name ~var ~symbol
+  | ty, _, _ -> ty
 
 let find_params t params =
   List.map (fun param -> find t (Kinded_parameter.name param)) params
 
-let find_with_name_mode t name =
-  match Name.Map.find name (names_to_types t) with
-  | exception Not_found ->
-    Misc.fatal_errorf "Name %a not bound in typing environment:@ %a"
-      Name.print name
-      print t
-  (* CR mshinwell: Should this resolve aliases? *)
-  | ty, _binding_time, name_mode -> ty, name_mode
-
-let find_with_binding_time_and_mode t name =
-  match Name.Map.find name (names_to_types t) with
-  | exception Not_found ->
-    Misc.fatal_errorf "Name %a not bound in typing environment:@ %a"
-      Name.print name
-      print t
-  | ty, binding_time, name_mode -> ty, binding_time, name_mode
-
 let mem t name =
-  Name.Map.mem name (names_to_types t)
+  Name.pattern_match name
+    ~var:(fun _var -> Name.Map.mem name (names_to_types t))
+    ~symbol:(fun sym -> Symbol.Set.mem sym t.defined_symbols)
 
 let mem_simple t simple =
-  match Simple.descr simple with
-  | Name name -> mem t name
-  | Const _ -> true
+  Simple.pattern_match simple
+    ~name:(fun name -> mem t name)
+    ~const:(fun _ -> true)
 
 let with_current_level t ~current_level =
   let t = { t with current_level; } in
@@ -381,27 +376,19 @@ let cached t = One_level.just_after_level t.current_level
 
 let add_variable_definition t var kind name_mode =
   let name = Name.var var in
-  if mem t name then begin
+  if !Clflags.flambda_invariant_checks && mem t name then begin
     Misc.fatal_errorf "Cannot rebind %a in environment:@ %a"
       Name.print name
       print t
   end;
   let level =
     Typing_env_level.add_definition (One_level.level t.current_level) var kind
-      t.next_binding_time
   in
   let just_after_level =
-    let aliases =
-      let canonical =
-        Alias.create kind (Simple.name name) t.next_binding_time
-          name_mode
-      in
-      Aliases.add_canonical_element (aliases t) canonical
-    in
     Cached.add_or_replace_binding (cached t)
       name (Type_grammar.unknown kind)
       t.next_binding_time name_mode
-      ~new_aliases:aliases
+      ~new_aliases:(aliases t)
   in
   let current_level =
     One_level.create (current_scope t) level ~just_after_level
@@ -409,61 +396,66 @@ let add_variable_definition t var kind name_mode =
   with_current_level_and_next_binding_time t ~current_level
     (Binding_time.succ t.next_binding_time)
 
-let add_symbol_definition t sym kind =
-  let name_mode = Name_mode.normal in
-  let name = Name.symbol sym in
-  let just_after_level =
-    let aliases =
-      let canonical =
-        Alias.create kind (Simple.name name) Binding_time.symbols
-          name_mode
-      in
-      Aliases.add_canonical_element (aliases t) canonical
-    in
-    Cached.add_or_replace_binding (cached t)
-      name (Type_grammar.unknown kind)
-      Binding_time.symbols name_mode
-      ~new_aliases:aliases
-  in
-  let current_level =
-    One_level.create (current_scope t) (One_level.level t.current_level)
-      ~just_after_level
-  in
-  let t = with_current_level t ~current_level in
+let add_symbol_definition t sym =
+  (* CR mshinwell: check for redefinition when invariants enabled? *)
   { t with
-    defined_symbols = Symbol.Map.add sym kind t.defined_symbols;
+    defined_symbols = Symbol.Set.add sym t.defined_symbols;
+  }
+
+let add_symbol_definitions t syms =
+  { t with
+    defined_symbols = Symbol.Set.union syms t.defined_symbols;
   }
 
 let alias_of_simple t simple =
-  let kind, binding_time, mode =
-    match Simple.descr simple with
-    | Const const ->
-      Type_grammar.kind_for_const const,
-        Binding_time.consts_and_discriminants,
-        Name_mode.normal
-    | Name name ->
-      let ty, binding_time, mode = find_with_binding_time_and_mode t name in
-      Type_grammar.kind ty, binding_time, mode
+  let [@inline always] const const =
+    let binding_time = Binding_time.consts_and_discriminants in
+    let mode = Name_mode.normal in
+    Alias.create (Simple.const const) binding_time mode
   in
-  Alias.create kind simple binding_time mode
+  let [@inline always] name name =
+    let _ty, binding_time, mode = find_with_binding_time_and_mode t name in
+    Name.pattern_match name
+      ~var:(fun _var -> Alias.create simple binding_time mode)
+      ~symbol:(fun sym -> Alias.create_symbol sym)
+  in
+  Simple.pattern_match simple ~const ~name
+
+let alias_of_simple_with_kind t simple =
+  let [@inline always] const const =
+    let binding_time = Binding_time.consts_and_discriminants in
+    let mode = Name_mode.normal in
+    Alias.create (Simple.const const) binding_time mode,
+      Type_grammar.kind (Type_grammar.type_for_const const)
+  in
+  let [@inline always] name name =
+    let ty, binding_time, mode = find_with_binding_time_and_mode t name in
+    let kind = Type_grammar.kind ty in
+    Name.pattern_match name
+      ~var:(fun _var -> Alias.create simple binding_time mode, kind)
+      ~symbol:(fun sym -> Alias.create_symbol sym, kind)
+  in
+  Simple.pattern_match simple ~const ~name
 
 let add_definition t (name : Name_in_binding_pos.t) kind =
   let name_mode = Name_in_binding_pos.name_mode name in
-  match Name_in_binding_pos.name name with
-  | Var var -> add_variable_definition t var kind name_mode
-  | Symbol sym ->
-    if not (Name_mode.equal name_mode Name_mode.normal) then begin
-      Misc.fatal_errorf "Cannot define symbol %a with name mode that \
-          is not `normal'"
-        Name_in_binding_pos.print name
-    end;
-    add_symbol_definition t sym kind
+  Name.pattern_match (Name_in_binding_pos.name name)
+    ~var:(fun var -> add_variable_definition t var kind name_mode)
+    ~symbol:(fun sym ->
+      if not (Name_mode.equal name_mode Name_mode.normal) then begin
+        Misc.fatal_errorf "Cannot define symbol %a with name mode that \
+            is not `normal'"
+          Name_in_binding_pos.print name
+      end;
+      add_symbol_definition t sym)
 
 let invariant_for_new_equation t name ty =
   if !Clflags.flambda_invariant_checks then begin
     (* CR mshinwell: This should check that precision is not decreasing. *)
+    (* XXX [domain] needs to have [defined_symbols] unioned in *)
+    let domain = Name.Map.keys (names_to_types t) in
     let defined_names =
-      Name_occurrences.create_names (domain0 t) Name_mode.in_types
+      Name_occurrences.create_names domain Name_mode.in_types
     in
     (* CR mshinwell: It's a shame we can't check code IDs here. *)
     let free_names =
@@ -484,60 +476,56 @@ let add_cse t prim ~bound_to =
     Typing_env_level.add_cse (One_level.level t.current_level) prim ~bound_to
   in
   let cached = cached t in
-  let cse =
-    let cse = Cached.cse cached in
-    match Flambda_primitive.Eligible_for_cse.Map.find prim cse with
-    | exception Not_found ->
-      Flambda_primitive.Eligible_for_cse.Map.add prim bound_to cse
-    | _bound_to -> cse
-  in
-  let just_after_level = Cached.with_cse cached ~cse in
-  let current_level =
-    One_level.create (current_scope t) level ~just_after_level
-  in
-  with_current_level t ~current_level
+  let cse = Cached.cse cached in
+  match Flambda_primitive.Eligible_for_cse.Map.find prim cse with
+  | exception Not_found ->
+    let cse = Flambda_primitive.Eligible_for_cse.Map.add prim bound_to cse in
+    let just_after_level = Cached.with_cse cached ~cse in
+    let current_level =
+      One_level.create (current_scope t) level ~just_after_level
+    in
+    with_current_level t ~current_level
+  | _bound_to -> t
 
-let add_equation0 t aliases name name_mode ty =
+let rec add_equation0 t aliases name ty =
   invariant_for_new_equation t name ty;
-  if Type_grammar.is_obviously_unknown ty
-    && One_level.defines_name_but_no_equations t.current_level name
-  then t
+  (* CR mshinwell: For the moment we assume here that types don't regress. *)
+  if Type_grammar.is_obviously_unknown ty then t
   else
     let level =
       Typing_env_level.add_or_replace_equation
         (One_level.level t.current_level) name ty
     in
-    let just_after_level = One_level.just_after_level t.current_level in
-    (* CR mshinwell: remove second lookup *)
-    let binding_time = Cached.binding_time just_after_level name in
     let just_after_level =
-      Cached.add_or_replace_binding just_after_level
-        name ty binding_time name_mode
-        ~new_aliases:aliases
+      Name.pattern_match name
+        ~var:(fun var ->
+          Cached.replace_variable_binding 
+            (One_level.just_after_level t.current_level)
+            var ty ~new_aliases:aliases)
+        ~symbol:(fun _ ->
+          Cached.add_or_replace_binding 
+            (One_level.just_after_level t.current_level)
+            name ty Binding_time.symbols Name_mode.normal
+            ~new_aliases:aliases)
     in
     let current_level =
       One_level.create (current_scope t) level ~just_after_level
     in
     with_current_level t ~current_level
 
-let rec add_equation t name ty =
-(*
-Format.eprintf "Adding equation %a : %a from:\n%s\n%!"
-  Name.print name
-  Type_grammar.print ty
-  (Printexc.raw_backtrace_to_string (Printexc.get_callstack 5));
-*)
-  let existing_ty, name_mode = find_with_name_mode t name in
-  if not (K.equal (Type_grammar.kind existing_ty) (Type_grammar.kind ty))
-  then begin
-    Misc.fatal_errorf "Cannot add equation %a = %a@ given existing binding \
-        %a = %a@ whose type is of a different kind:@ %a"
-      Name.print name
-      Type_grammar.print ty
-      Name.print name
-      Type_grammar.print existing_ty
-      print t
-  end;
+and add_equation t name ty =
+  if !Clflags.flambda_invariant_checks then begin
+    let existing_ty = find t name in
+    if not (K.equal (Type_grammar.kind existing_ty) (Type_grammar.kind ty))
+    then begin
+      Misc.fatal_errorf "Cannot add equation %a = %a@ given existing binding \
+          %a = %a@ whose type is of a different kind:@ %a"
+        Name.print name
+        Type_grammar.print ty
+        Name.print name
+        Type_grammar.print existing_ty
+        print t
+    end
   (* XXX Needs to be guarded
   let free_names = Type_free_names.free_names ty in
   if not (Name_occurrences.subset_domain free_names (domain t))
@@ -553,58 +541,48 @@ Format.eprintf "Adding equation %a : %a from:\n%s\n%!"
       print t
   end;
   *)
-  begin match Type_grammar.get_alias ty with
-  | None -> ()
-  | Some simple ->
-    match Simple.descr simple with
-    | Name name' ->
-      if Name.equal name name' then begin
-        Misc.fatal_errorf "Directly recursive equation@ %a = %a@ \
-            disallowed:@ %a"
-          Name.print name
-          Type_grammar.print ty
-          print t
-      end
-    | Const _ -> ()
   end;
-  (*
-Format.eprintf "Trying to add equation %a = %a\n%!"
-  Name.print name
-  Type_grammar.print ty;
-Format.eprintf "Aliases before adding equation:@ %a\n%!"
-  Aliases.print (aliases t);
-  *)
-  let aliases, simple, name_mode, rec_info, t, ty =
+  if !Clflags.flambda_invariant_checks then begin
+    match Type_grammar.get_alias_exn ty with
+    | exception Not_found -> ()
+    | simple ->
+      Simple.pattern_match simple
+        ~name:(fun name' ->
+          if Name.equal name name' then begin
+            Misc.fatal_errorf "Directly recursive equation@ %a = %a@ \
+                disallowed:@ %a"
+              Name.print name
+              Type_grammar.print ty
+              print t
+          end)
+        ~const:(fun _ -> ())
+  end;
+  let aliases, simple, rec_info, t, ty =
     let aliases = aliases t in
-    match Type_grammar.get_alias ty with
-    | None -> aliases, Simple.name name, name_mode, None, t, ty
-    | Some alias_of ->
-      let kind = Type_grammar.kind ty in
+    match Type_grammar.get_alias_exn ty with
+    | exception Not_found -> aliases, Simple.name name, None, t, ty
+    | alias_of ->
       let alias =
-        let binding_time = Cached.binding_time (cached t) name in
-        Alias.create_name kind name binding_time name_mode
+        Name.pattern_match name
+          ~var:(fun _var ->
+            let _typ, binding_time, name_mode =
+              find_with_binding_time_and_mode t name
+            in
+            Alias.create (Simple.name name) binding_time name_mode)
+          ~symbol:(fun sym -> Alias.create_symbol sym)
       in
       let rec_info = Simple.rec_info alias_of in
       let alias_of = alias_of_simple t alias_of in
-      match Aliases.add aliases alias alias_of with
-      | None, aliases ->
-        aliases, Alias.simple alias_of, Alias.name_mode alias_of,
-          rec_info, t, ty
-      | (Some { canonical_element; alias_of; }), aliases ->
-(*
-Format.eprintf "For name %a, Aliases returned CN=%a, alias_of=%a\n%!"
-   Name.print name
-   Alias.print canonical_element
-   Alias.print alias_of; 
-   *)
-        let kind = Type_grammar.kind ty in
-        assert (K.equal kind (Alias.kind canonical_element));
-        let ty =
-          Type_grammar.alias_type_of kind
-            (Alias.simple canonical_element)
-        in
-        aliases, Alias.simple alias_of, Alias.name_mode alias_of,
-          rec_info, t, ty
+      let ({ canonical_element; alias_of; t = aliases; } : Aliases.add_result) =
+        Aliases.add aliases alias alias_of
+      in
+      let kind = Type_grammar.kind ty in
+      (* assert (K.equal kind (Alias.kind canonical_element)); *)
+      let ty =
+        Type_grammar.alias_type_of kind
+          (Alias.simple canonical_element)
+      in
+      aliases, Alias.simple alias_of, rec_info, t, ty
   in
   (* Beware: if we're about to add the equation on a name which is different
      from the one that the caller passed in, then we need to make sure that the
@@ -620,25 +598,17 @@ Format.eprintf "For name %a, Aliases returned CN=%a, alias_of=%a\n%!"
 
      Note also that [p] and [x] may have different name modes! *)
   let ty, t =
-    match Simple.descr simple with
-    | Name eqn_name when not (Name.equal name eqn_name) ->
-      let env = Meet_env.create t in
-      let existing_ty = find t eqn_name in
-(*
-      Format.eprintf "%a = new ty %a, existing ty %a, for meet\n%!"
-        Simple.print simple
-        Type_grammar.print ty
-        Type_grammar.print existing_ty;
-*)
-      begin match Type_grammar.meet env ty existing_ty with
-      | Bottom -> Type_grammar.bottom_like ty, t
-      | Ok (meet_ty, env_extension) ->
-(*
-        Format.eprintf "meet_ty is %a\n%!" Type_grammar.print meet_ty;
-*)
-        meet_ty, add_env_extension t ~env_extension
-      end
-    | Name _ | Const _ -> ty, t
+    let [@inline always] name eqn_name =
+      if Name.equal name eqn_name then ty, t
+      else
+        let env = Meet_env.create t in
+        let existing_ty = find t eqn_name in
+        match Type_grammar.meet env ty existing_ty with
+        | Bottom -> Type_grammar.bottom_like ty, t
+        | Ok (meet_ty, env_extension) ->
+          meet_ty, add_env_extension t env_extension
+    in
+    Simple.pattern_match simple ~name ~const:(fun _ -> ty, t)
   in
   let ty =
     match rec_info with
@@ -648,21 +618,15 @@ Format.eprintf "For name %a, Aliases returned CN=%a, alias_of=%a\n%!"
       | Bottom -> Type_grammar.bottom (Type_grammar.kind ty)
       | Ok ty -> ty
   in
-(*
-Format.eprintf "Now really adding equation %a = %a\n%!"
-  Simple.print simple
-  Type_grammar.print ty;
-*)
-  match Simple.descr simple with
-  | Const _ -> t
-  | Name name -> add_equation0 t aliases name name_mode ty
+  let [@inline always] name name = add_equation0 t aliases name ty in
+  Simple.pattern_match simple ~name ~const:(fun _ -> t)
 
 and add_env_extension_from_level t level : t =
   let t =
-    List.fold_left (fun t (var, kind) ->
+    Variable.Map.fold (fun var kind t ->
         add_variable_definition t var kind Name_mode.in_types)
+      (Typing_env_level.defined_vars level)
       t
-      (Typing_env_level.defined_vars_in_order level)
   in
   let t =
     Name.Map.fold (fun name ty t -> add_equation t name ty)
@@ -674,9 +638,17 @@ and add_env_extension_from_level t level : t =
     (Typing_env_level.cse level)
     t
 
-and add_env_extension t ~env_extension =
-  Typing_env_extension.pattern_match env_extension ~f:(fun level ->
-    add_env_extension_from_level t level)
+and add_env_extension t env_extension =
+  let [@inline always] f level =
+    (add_env_extension_from_level [@inlined never]) t level
+  in
+  Typing_env_extension.pattern_match env_extension ~f
+
+(* These version is outside the [let rec] and thus does not cause
+   [caml_apply*] to be used when calling from outside this module. *)
+let add_equation t name ty = add_equation t name ty
+
+let add_env_extension t env_extension = add_env_extension t env_extension
 
 let add_definitions_of_params t ~params =
   List.fold_left (fun t param ->
@@ -689,7 +661,9 @@ let add_definitions_of_params t ~params =
     params
 
 let add_equations_on_params t ~params ~param_types =
-  if List.compare_lengths params param_types <> 0 then begin
+  if !Clflags.flambda_invariant_checks
+    && List.compare_lengths params param_types <> 0
+  then begin
     Misc.fatal_errorf "Mismatch between number of [params] and \
         [param_types]:@ (%a)@ and@ %a"
       Kinded_parameter.List.print params
@@ -707,45 +681,6 @@ let find_cse t prim =
   | exception Not_found -> None
   | bound_to -> Some bound_to
 
-let find_cse_rev t ~bound_to =
-  (* CR mshinwell: Store reverse map and add abstract type. *)
-  let cse = Cached.cse (cached t) in
-  let rev_cse =
-    Flambda_primitive.Eligible_for_cse.Map.bindings cse
-    |> List.map (fun (equation, bound_to) -> bound_to, equation)
-    |> Simple.Map.of_list
-  in
-  match Simple.Map.find bound_to rev_cse with
-  | exception Not_found -> None
-  | equation -> Some equation
-
-let meet_equation t name ty =
-  let existing_ty = find t name in
-  Format.eprintf "For %a, new type is %a, existing type %a\n%!"
-    Name.print name
-    Type_grammar.print ty
-    Type_grammar.print existing_ty;
-  match Type_grammar.meet (Meet_env.create t) ty existing_ty with
-  | Bottom -> add_equation t name (Type_grammar.bottom_like ty)
-  | Ok (meet_ty, env_extension) ->
-    let t = add_env_extension t ~env_extension in
-    add_equation t name meet_ty
-
-(* CR mshinwell: May not need these "meet" functions *)
-
-let meet_equations_on_params t ~params ~param_types =
-  if List.compare_lengths params param_types <> 0 then begin
-    Misc.fatal_errorf "Mismatch between number of [params] and \
-        [param_types]:@ (%a)@ and@ %a"
-      Kinded_parameter.List.print params
-      (Format.pp_print_list ~pp_sep:Format.pp_print_space Type_grammar.print)
-      param_types
-  end;
-  List.fold_left2 (fun t param param_type ->
-      meet_equation t (Kinded_parameter.name param) param_type)
-    t
-    params param_types
-
 let add_to_code_age_relation t ~newer ~older =
   let code_age_relation =
     Code_age_relation.add t.code_age_relation ~newer ~older
@@ -757,17 +692,14 @@ let code_age_relation t = t.code_age_relation
 let with_code_age_relation t code_age_relation =
   { t with code_age_relation; }
 
+(* CR mshinwell: Change the name of the labelled argument *)
 let cut t ~unknown_if_defined_at_or_later_than:min_scope =
   let current_scope = current_scope t in
-  let original_t = t in
   if Scope.(>) min_scope current_scope then
-    Typing_env_level.empty (), var_domain t
+    Typing_env_level.empty ()
   else
-    let all_levels =
-      Scope.Map.add current_scope t.current_level t.prev_levels
-    in
-    let strictly_less, at_min_scope, strictly_greater =
-      Scope.Map.split min_scope all_levels
+    let _strictly_less, at_min_scope, strictly_greater =
+      Scope.Map.split min_scope t.prev_levels
     in
     let at_or_after_cut =
       match at_min_scope with
@@ -775,54 +707,13 @@ let cut t ~unknown_if_defined_at_or_later_than:min_scope =
       | Some typing_env_level ->
         Scope.Map.add min_scope typing_env_level strictly_greater
     in
-    let t =
-      if Scope.Map.is_empty strictly_less then
-        let t = create ~resolver:t.resolver in
-        Symbol.Map.fold (fun symbol kind t ->
-            add_symbol_definition t symbol kind)
-          original_t.defined_symbols
-          t
-      else
-        let current_scope, current_level =
-          Scope.Map.max_binding strictly_less
-        in
-        let prev_levels =
-          Scope.Map.remove current_scope strictly_less
-        in
-        let t =
-          { resolver = t.resolver;
-            prev_levels;
-            current_level;
-            next_binding_time = t.next_binding_time;
-            defined_symbols = t.defined_symbols;
-            code_age_relation = t.code_age_relation;
-          }
-        in
-        let symbols_still_defined =
-          Cached.sym_domain (One_level.just_after_level current_level)
-        in
-        Symbol.Map.fold (fun symbol kind t ->
-            if not (Symbol.Set.mem symbol symbols_still_defined) then
-              add_symbol_definition t symbol kind
-            else
-              t)
-          original_t.defined_symbols
-          t
+    let at_or_after_cut =
+      Scope.Map.add current_scope t.current_level at_or_after_cut
     in
-    invariant t;
-(* Format.eprintf "Cutting env, %a onwards:@ %a@ backtrace:@ %s\n%!"
- *   Scope.print min_scope
- *   print original_t
- *   (Printexc.raw_backtrace_to_string (Printexc.get_callstack 15)); *)
-    let level =
-      Scope.Map.fold (fun _scope one_level result ->
-          Typing_env_level.concat result (One_level.level one_level))
-        at_or_after_cut
-        (Typing_env_level.empty ())
-    in
-(* Format.eprintf "Portion cut off:@ %a\n%!" Typing_env_extension.print env_extension; *)
-    let vars_in_scope_at_cut = Name.set_to_var_set (domain0 t) in
-    level, vars_in_scope_at_cut
+    Scope.Map.fold (fun _scope one_level result ->
+        Typing_env_level.concat result (One_level.level one_level))
+      at_or_after_cut
+      (Typing_env_level.empty ())
 
 let cut_and_n_way_join definition_typing_env ts_and_use_ids
       ~unknown_if_defined_at_or_later_than =
@@ -830,179 +721,171 @@ let cut_and_n_way_join definition_typing_env ts_and_use_ids
      computed by this function? *)
   let after_cuts =
     List.map (fun (t, use_id, use_kind, interesting_vars) ->
-        let level, _in_scope = cut t ~unknown_if_defined_at_or_later_than in
+        let level = cut t ~unknown_if_defined_at_or_later_than in
         t, use_id, use_kind, interesting_vars, level)
       ts_and_use_ids
   in
   let level, extra_params_and_args =
-    Typing_env_level.n_way_join ~initial_env_at_join:definition_typing_env
+    Typing_env_level.n_way_join ~env_at_fork:definition_typing_env
       after_cuts
   in
   let env_extension = Typing_env_extension.create level in
   env_extension, extra_params_and_args
 
-let get_canonical_simple0 t ?min_name_mode simple : _ Or_bottom.t * _ =
+let get_canonical_simple_with_kind_exn t ?min_name_mode simple =
+  let alias, kind = alias_of_simple_with_kind t simple in
   let newer_rec_info =
     let newer_rec_info = Simple.rec_info simple in
-    match Simple.descr simple with
-    | Const _ -> newer_rec_info
-    | Name name ->
-      let ty = find t name in
-      match Type_grammar.get_alias ty with
-      | None -> newer_rec_info
-      | Some simple ->
-        match Simple.rec_info simple with
-        | None -> newer_rec_info
-        | Some rec_info ->
-          match newer_rec_info with
-          | None -> Some rec_info
-          | Some newer_rec_info ->
-            Some (Rec_info.merge rec_info ~newer:newer_rec_info)
+    match newer_rec_info with
+    | None -> None
+    | Some newer_rec_info ->
+      Simple.pattern_match simple
+        ~const:(fun _ -> Some newer_rec_info)
+        ~name:(fun name ->
+          match Type_grammar.get_alias_exn (find t name) with
+          | exception Not_found -> Some newer_rec_info
+          | simple ->
+            match Simple.rec_info simple with
+            | None -> Some newer_rec_info
+            | Some rec_info ->
+              Some (Rec_info.merge rec_info ~newer:newer_rec_info))
   in
-  let alias = alias_of_simple t simple in
-  let kind = Alias.kind alias in
   let min_order_within_equiv_class =
     match min_name_mode with
     | None -> Alias.name_mode alias
     | Some name_mode -> name_mode
   in
-  let result =
-    try
-      Aliases.get_canonical_element (aliases t) alias
-        ~min_order_within_equiv_class
-    with Misc.Fatal_error -> begin
-      if !Clflags.flambda2_context_on_error then begin
-        Format.eprintf "\n%sContext is:%s typing environment@ %a\n"
-          (Flambda_colours.error ())
-          (Flambda_colours.normal ())
-          print t
-      end;
-      raise Misc.Fatal_error
-    end
-  in 
-  match result with
-  | None -> Ok None, kind
-  | Some alias ->
+  match
+    Aliases.get_canonical_element_exn (aliases t) alias
+      ~min_order_within_equiv_class
+  with
+  | exception Misc.Fatal_error ->
+    if !Clflags.flambda2_context_on_error then begin
+      Format.eprintf "\n%sContext is:%s typing environment@ %a\n"
+        (Flambda_colours.error ())
+        (Flambda_colours.normal ())
+        print t
+    end;
+    raise Misc.Fatal_error
+  | alias ->
     let simple = Alias.simple alias in
-    (* CR mshinwell: Check that [simple] has no [Rec_info] on it *)
-    match Simple.merge_rec_info simple ~newer_rec_info with
-    | None -> Bottom, kind
-    | Some simple ->
-      let rec_info = Simple.rec_info simple in
-      match Simple.descr simple with
-      | Const _ -> Ok (Some (simple, rec_info)), kind
-      | Name name ->
-        (* CR mshinwell: Do we have to return [Bottom]? *)
-        let ty = find t name in
-        if Type_grammar.is_obviously_bottom ty
-        then Bottom, kind
-        else Ok (Some (simple, rec_info)), kind
+    match newer_rec_info with
+    | None -> simple, kind
+    | Some _ ->
+      match Simple.merge_rec_info simple ~newer_rec_info with
+      | None -> raise Not_found
+      | Some simple -> simple, kind
 
-let get_canonical_simple_with_kind t ?min_name_mode simple =
-  let result, kind = get_canonical_simple0 t ?min_name_mode simple in
-  let result =
-    Or_bottom.map result ~f:(fun result ->
-      Option.map (fun (simple, _rec_info) -> simple) result)
-  in
-  result, kind
-
-let get_canonical_simple t ?min_name_mode simple =
-  fst (get_canonical_simple_with_kind t ?min_name_mode simple)
-
-let get_alias_then_canonical_simple t ?min_name_mode typ : _ Or_bottom.t =
-  match Type_grammar.get_alias typ with
-  | None -> Ok None
-  | Some simple -> get_canonical_simple t ?min_name_mode simple
-
-let aliases_of_simple0 t ~min_name_mode simple =
+let get_canonical_simple_exn t ?min_name_mode simple =
+  (* Duplicated from above to eliminate the allocation of the returned pair. *)
   let alias = alias_of_simple t simple in
-  Alias.Set.fold (fun alias result ->
-      let name_mode = Alias.name_mode alias in
-      match Name_mode.compare_partial_order name_mode min_name_mode with
-      | None -> result
-      | Some c ->
-        if c >= 0 then Alias.Set_ordered_by_binding_time.add alias result
-        else result)
-    (Aliases.get_aliases (aliases t) alias)
-    Alias.Set_ordered_by_binding_time.empty
+  let newer_rec_info =
+    let newer_rec_info = Simple.rec_info simple in
+    match newer_rec_info with
+    | None -> None
+    | Some newer_rec_info ->
+      Simple.pattern_match simple
+        ~const:(fun _ -> Some newer_rec_info)
+        ~name:(fun name ->
+          match Type_grammar.get_alias_exn (find t name) with
+          | exception Not_found -> Some newer_rec_info
+          | simple ->
+            match Simple.rec_info simple with
+            | None -> Some newer_rec_info
+            | Some rec_info ->
+              Some (Rec_info.merge rec_info ~newer:newer_rec_info))
+  in
+  let min_order_within_equiv_class =
+    match min_name_mode with
+    | None -> Alias.name_mode alias
+    | Some name_mode -> name_mode
+  in
+  match
+    Aliases.get_canonical_element_exn (aliases t) alias
+      ~min_order_within_equiv_class
+  with
+  | exception Misc.Fatal_error ->
+    if !Clflags.flambda2_context_on_error then begin
+      Format.eprintf "\n%sContext is:%s typing environment@ %a\n"
+        (Flambda_colours.error ())
+        (Flambda_colours.normal ())
+        print t
+    end;
+    raise Misc.Fatal_error
+  | alias ->
+    let simple = Alias.simple alias in
+    match newer_rec_info with
+    | None -> simple
+    | Some _ ->
+      match Simple.merge_rec_info simple ~newer_rec_info with
+      | None -> raise Not_found
+      | Some simple -> simple
+
+let get_alias_then_canonical_simple_exn t ?min_name_mode typ =
+  Type_grammar.get_alias_exn typ
+  |> get_canonical_simple_exn t ?min_name_mode
 
 let aliases_of_simple t ~min_name_mode simple =
+  let aliases =
+    alias_of_simple t simple
+    |> Aliases.get_aliases (aliases t)
+    |> Alias.Set.filter (fun alias ->
+      let name_mode = Alias.name_mode alias in
+      match Name_mode.compare_partial_order name_mode min_name_mode with
+      | None -> false
+      | Some c -> c >= 0)
+    |> Alias.set_to_simple_set
+  in
   let newer_rec_info = Simple.rec_info simple in
-  Alias.Set_ordered_by_binding_time.fold (fun alias simples ->
-      let simple = Alias.simple alias in
-      match Simple.merge_rec_info simple ~newer_rec_info with
-      | None -> simples
-      | Some simple -> Simple.Set.add simple simples)
-    (aliases_of_simple0 t ~min_name_mode simple)
-    Simple.Set.empty
+  match newer_rec_info with
+  | None -> aliases
+  | Some _ ->
+    Simple.Set.fold (fun simple simples ->
+        match Simple.merge_rec_info simple ~newer_rec_info with
+        | None -> simples
+        | Some simple -> Simple.Set.add simple simples)
+      aliases
+      Simple.Set.empty
 
 let aliases_of_simple_allowable_in_types t simple =
   aliases_of_simple t ~min_name_mode:Name_mode.in_types simple
 
-let earliest_alias_of_simple_satisfying t ~min_name_mode ~allowed_vars
-      simple =
-  let aliases =
-    Alias.Set_ordered_by_binding_time.filter (fun alias ->
-        match Simple.descr (Alias.simple alias) with
-        | Name (Var var) -> Variable.Set.mem var allowed_vars
-        | Name (Symbol _) | Const _ -> true)
-      (aliases_of_simple0 t ~min_name_mode simple)
-  in
-  Option.map Alias.simple
-    (Alias.Set_ordered_by_binding_time.min_elt_opt aliases)
-
-(* CR mshinwell: This function is a performance bottleneck. *)
 let create_using_resolver_and_symbol_bindings_from t =
   let original_t = t in
   let names_to_types = names_to_types t in
   let t =
-    Symbol.Map.fold (fun symbol kind t ->
-        add_symbol_definition t symbol kind)
-      t.defined_symbols
-      (create_using_resolver_from t)
+    { (create_using_resolver_from t) with
+      defined_symbols = original_t.defined_symbols;
+    }
   in
-  Name.Map.fold
-    (fun (name : Name.t) (typ, _binding_time, _name_mode) t ->
-      match name with
-      | Var _ -> t
-      | Symbol _ ->
+  Symbol.Set.fold (fun sym t ->
+      let name = Name.symbol sym in
+      match Name.Map.find name names_to_types with
+      | exception Not_found -> t
+      | typ, _binding_time, _name_mode ->
         let level, typ =
           Type_grammar.make_suitable_for_environment0 typ original_t
             ~suitable_for:t (Typing_env_level.empty ())
         in
         let t = add_env_extension_from_level t level in
         add_equation t name typ)
-    names_to_types
+    original_t.defined_symbols
     t
 
 let rec free_names_transitive_of_type_of_name t name ~result =
-  let result = Name.Set.add name result in
+  let result = Name_occurrences.add_name result name Name_mode.in_types in
   let typ = find t name in
   free_names_transitive0 t typ ~result
 
 and free_names_transitive0 t typ ~result =
-  let free_names = Name_occurrences.names (Type_grammar.free_names typ) in
-  let to_traverse = Name.Set.diff free_names result in
-  if Name.Set.is_empty to_traverse then result
+  let free_names = Type_grammar.free_names typ in
+  let to_traverse = Name_occurrences.diff free_names result in
+  if Name_occurrences.is_empty to_traverse then result
   else
-    Name.Set.fold (fun name result ->
+    Name_occurrences.fold_names to_traverse
+      ~init:result
+      ~f:(fun result name ->
         free_names_transitive_of_type_of_name t name ~result)
-      to_traverse
-      result
 
 let free_names_transitive t typ =
-  free_names_transitive0 t typ ~result:Name.Set.empty
-
-let free_variables_transitive t typ =
-(*
-  Format.eprintf "Computing FV transitive of %a in:@ %a"
-    Type_grammar.print typ
-    print t;
-    *)
-  let vars = Name.set_to_var_set (free_names_transitive t typ) in
-  (*
-  Format.eprintf "FV transitive of %a = %a\n%!"
-    Type_grammar.print typ
-    Variable.Set.print vars;
-    *)
-  vars
+  free_names_transitive0 t typ ~result:Name_occurrences.empty

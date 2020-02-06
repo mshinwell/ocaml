@@ -19,7 +19,6 @@ module Make (E : sig
   include Identifiable.S with type t := t
 
   val defined_earlier : t -> than:t -> bool
-  val implicitly_bound_and_canonical : t -> bool
 
   module Order_within_equiv_class : sig
     type t
@@ -46,10 +45,10 @@ end) = struct
 
     val add : t -> E.t -> t
 
-    val find_earliest
+    val find_earliest_exn
        : t
       -> min_order_within_equiv_class:E.Order_within_equiv_class.t
-      -> E.t option
+      -> E.t
 
     val all : t -> E.Set.t
 
@@ -87,7 +86,9 @@ end) = struct
           (function
             | None -> Some (E.Set.singleton elt)
             | Some elts ->
-              assert (not (E.Set.mem elt elts));
+              if !Clflags.flambda_invariant_checks then begin
+                assert (not (E.Set.mem elt elts))
+              end;
               Some (E.Set.add elt elts))
           t.aliases
       in
@@ -96,8 +97,8 @@ end) = struct
         all;
       }
 
-    let find_earliest t ~min_order_within_equiv_class =
-      match
+    let find_earliest_exn t ~min_order_within_equiv_class =
+      let _order, elts =
         E.Order_within_equiv_class.Map.find_first (fun order ->
             match
               E.Order_within_equiv_class.compare_partial_order
@@ -106,9 +107,8 @@ end) = struct
             | None -> false
             | Some result -> result >= 0)
           t.aliases
-      with
-      | exception Not_found -> None
-      | (_order, elts) -> E.Set.min_elt_opt elts
+      in
+      E.Set.min_elt elts
 
     let mem t elt =
       E.Set.mem elt t.all
@@ -148,6 +148,8 @@ end) = struct
 
   type t = {
     canonical_elements : E.t E.Map.t;
+    (* Canonical elements that have no known aliases are not included in
+       [canonical_elements]. *)
     aliases_of_canonical_elements : Aliases_of_canonical_element.t E.Map.t;
     (* For [elt |-> aliases] in [aliases_of_canonical_elements], then
        [aliases] never includes [elt]. *)
@@ -195,11 +197,11 @@ end) = struct
     end
 
   let empty = {
+    (* CR mshinwell: Rename canonical_elements, maybe to
+       aliases_to_canonical_elements. *)
     canonical_elements = E.Map.empty;
     aliases_of_canonical_elements = E.Map.empty;
   }
-
-  let canonical_elements t = E.Map.keys t.canonical_elements
 
   type canonical =
     | Is_canonical of E.t
@@ -207,13 +209,12 @@ end) = struct
 
   let canonical t element : canonical =
     match E.Map.find element t.canonical_elements with
-    | exception Not_found ->
-      Misc.fatal_errorf "Element %a hasn't been seen by alias tracker (ensure \
-          that [add_canonical_element] was called)"
-        E.print element
+    | exception Not_found -> Is_canonical element
     | canonical_element ->
-      if E.equal element canonical_element then Is_canonical element
-      else Alias_of_canonical { element; canonical_element; }
+      if !Clflags.flambda_invariant_checks then begin
+        assert (not (E.equal element canonical_element))
+      end;
+      Alias_of_canonical { element; canonical_element; }
 
   let get_aliases_of_canonical_element t ~canonical_element =
     match E.Map.find canonical_element t.aliases_of_canonical_elements with
@@ -227,8 +228,10 @@ end) = struct
       let aliases_of_to_be_demoted =
         get_aliases_of_canonical_element t ~canonical_element:to_be_demoted
       in
-      assert (not (Aliases_of_canonical_element.mem
-        aliases_of_to_be_demoted canonical_element));
+      if !Clflags.flambda_invariant_checks then begin
+        assert (not (Aliases_of_canonical_element.mem
+          aliases_of_to_be_demoted canonical_element))
+      end;
       let canonical_elements =
         t.canonical_elements
         |> E.Set.fold (fun alias canonical_elements ->
@@ -239,11 +242,13 @@ end) = struct
       let aliases_of_canonical_element =
         get_aliases_of_canonical_element t ~canonical_element
       in
-      assert (not (Aliases_of_canonical_element.mem
-        aliases_of_canonical_element to_be_demoted));
-      assert (Aliases_of_canonical_element.is_empty (
-        Aliases_of_canonical_element.inter
-          aliases_of_canonical_element aliases_of_to_be_demoted));
+      if !Clflags.flambda_invariant_checks then begin
+        assert (not (Aliases_of_canonical_element.mem
+          aliases_of_canonical_element to_be_demoted));
+        assert (Aliases_of_canonical_element.is_empty (
+          Aliases_of_canonical_element.inter
+            aliases_of_canonical_element aliases_of_to_be_demoted))
+      end;
       let aliases =
         Aliases_of_canonical_element.add
           (Aliases_of_canonical_element.union aliases_of_to_be_demoted
@@ -278,20 +283,24 @@ end) = struct
 
   (* CR mshinwell: add submodule *)
   type add_result = {
+    t : t;
     canonical_element : E.t;
     alias_of : E.t;
   }
 
-  let invariant_add_result t ~original_t { canonical_element; alias_of; } =
-    if not (E.equal canonical_element alias_of) then begin
-      if not (E.defined_earlier canonical_element ~than:alias_of) then begin
-        Misc.fatal_errorf "Canonical element %a should be defined earlier than \
-            %a after alias addition.@ Original alias tracker:@ %a@ \
-            Resulting alias tracker:@ %a"
-          E.print canonical_element
-          E.print alias_of
-          print original_t
-          print t
+  let invariant_add_result ~original_t { canonical_element; alias_of; t; } =
+    if !Clflags.flambda_invariant_checks then begin
+      invariant t;
+      if not (E.equal canonical_element alias_of) then begin
+        if not (E.defined_earlier canonical_element ~than:alias_of) then begin
+          Misc.fatal_errorf "Canonical element %a should be defined earlier \
+              than %a after alias addition.@ Original alias tracker:@ %a@ \
+              Resulting alias tracker:@ %a"
+            E.print canonical_element
+            E.print alias_of
+            print original_t
+            print t
+        end
       end
     end
 
@@ -302,17 +311,15 @@ end) = struct
         choose_canonical_element_to_be_demoted ~canonical_element1
           ~canonical_element2
       in
-      let add_result =
-        { canonical_element;
-          (* CR mshinwell: [alias_of] is not a good name. *)
-          alias_of = to_be_demoted;
-        }
-      in
       let t =
         add_alias_between_canonical_elements t ~canonical_element
           ~to_be_demoted
       in
-      Some add_result, t
+      { t;
+        canonical_element;
+        (* CR mshinwell: [alias_of] is not a good name. *)
+        alias_of = to_be_demoted;
+      }
     | Alias_of_canonical
           { element = element1; canonical_element = canonical_element1; },
         Is_canonical canonical_element2
@@ -327,16 +334,14 @@ end) = struct
         if E.equal to_be_demoted canonical_element1 then element1
         else canonical_element2
       in
-      let add_result =
-        { canonical_element;
-          alias_of;
-        }
-      in
       let t =
         add_alias_between_canonical_elements t ~canonical_element
           ~to_be_demoted
       in
-      Some add_result, t
+      { t;
+        canonical_element;
+        alias_of;
+      }
     | Alias_of_canonical
           { element = element1; canonical_element = canonical_element1; },
         Alias_of_canonical
@@ -350,45 +355,14 @@ end) = struct
         if E.equal to_be_demoted canonical_element1 then element1
         else element2
       in
-      let add_result =
-        { canonical_element;
-          alias_of;
-        }
-      in
       let t =
         add_alias_between_canonical_elements t ~canonical_element
           ~to_be_demoted
       in
-      Some add_result, t
-
-  let add_canonical_element t element =
-(*
-Format.eprintf "add canonical %a:\n%s\n%!"
-  E.print element
-  (Printexc.raw_backtrace_to_string (Printexc.get_callstack 20));
-*)
-    if E.Map.mem element t.canonical_elements then begin
-      if E.implicitly_bound_and_canonical element then
-        t
-      else
-        Misc.fatal_errorf "Element %a already in alias tracker:@ %a"
-          E.print element
-          print t
-    end else begin
-      let canonical_elements =
-        (* CR mshinwell: Major source of allocation *)
-        E.Map.add element element t.canonical_elements
-      in
-      { canonical_elements;
-        aliases_of_canonical_elements = t.aliases_of_canonical_elements;
+      { t;
+        canonical_element;
+        alias_of;
       }
-    end
-
-  let add_implicitly_bound_canonical_element t element =
-    if E.implicitly_bound_and_canonical element then
-      add_canonical_element t element
-    else
-      t
 
   let add t element1 element2 =
 (*
@@ -398,22 +372,25 @@ Format.eprintf "add element1 %a element2 %a:\n%s\n%!"
   (Printexc.raw_backtrace_to_string (Printexc.get_callstack 20));
 *)
     let original_t = t in
-    let t = add_implicitly_bound_canonical_element t element1 in
-    let t = add_implicitly_bound_canonical_element t element2 in
-    let add_result, t = add_alias t element1 element2 in
-    invariant t;
-    Option.iter (fun add_result ->
-        invariant_add_result t ~original_t add_result)
-      add_result;
-    add_result, t
+    let add_result = add_alias t element1 element2 in
+    if !Clflags.flambda_invariant_checks then begin
+      invariant_add_result ~original_t add_result
+    end;
+    add_result
 
-  let get_canonical_element t element ~min_order_within_equiv_class =
-    let t = add_implicitly_bound_canonical_element t element in
+  let get_canonical_element_exn t element ~min_order_within_equiv_class =
     match E.Map.find element t.canonical_elements with
     | exception Not_found ->
-      Misc.fatal_errorf "Element %a not in [canonical_elements]:@ %a"
-        E.print element
-        print t
+      begin match
+        E.Order_within_equiv_class.compare_partial_order
+          (E.order_within_equiv_class element)
+          min_order_within_equiv_class
+      with
+      | None -> raise Not_found
+      | Some c ->
+        if c >= 0 then element
+        else raise Not_found
+      end
     | canonical_element ->
 (*
 Format.eprintf "looking for canonical for %a, candidate canonical %a, min order %a\n%!"
@@ -423,7 +400,7 @@ Format.eprintf "looking for canonical for %a, candidate canonical %a, min order 
 *)
       let find_earliest () =
         let aliases = get_aliases_of_canonical_element t ~canonical_element in
-        Aliases_of_canonical_element.find_earliest aliases
+        Aliases_of_canonical_element.find_earliest_exn aliases
           ~min_order_within_equiv_class
       in
       match
@@ -433,11 +410,10 @@ Format.eprintf "looking for canonical for %a, candidate canonical %a, min order 
       with
       | None -> find_earliest ()
       | Some c ->
-        if c >= 0 then Some canonical_element
+        if c >= 0 then canonical_element
         else find_earliest ()
 
   let get_aliases t element =
-    let t = add_implicitly_bound_canonical_element t element in
     match canonical t element with
     | Is_canonical canonical_element ->
       let aliases =
@@ -446,11 +422,15 @@ Format.eprintf "looking for canonical for %a, candidate canonical %a, min order 
       in
       E.Set.add element aliases
     | Alias_of_canonical { element = _; canonical_element; } ->
-      assert (not (E.equal element canonical_element));
+      if !Clflags.flambda_invariant_checks then begin
+        assert (not (E.equal element canonical_element))
+      end;
       let aliases =
         Aliases_of_canonical_element.all
           (get_aliases_of_canonical_element t ~canonical_element)
       in
-      assert (E.Set.mem element aliases);
+      if !Clflags.flambda_invariant_checks then begin
+        assert (E.Set.mem element aliases)
+      end;
       E.Set.add canonical_element aliases
 end

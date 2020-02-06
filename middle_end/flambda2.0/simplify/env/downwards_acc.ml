@@ -45,12 +45,12 @@ let create denv continuation_uses_env r = {
 
 let denv t = t.denv
 
-let map_denv t ~f =
+let [@inline always] map_denv t ~f =
   { t with
     denv = f t.denv;
   }
 
-let map_denv2 t ~f =
+let [@inline always] map_denv2 t ~f =
   let denv, user_data = f t.denv in
   let t =
     { t with
@@ -59,19 +59,19 @@ let map_denv2 t ~f =
   in
   t, user_data
 
-let with_denv t denv =
+let [@inline always] with_denv t denv =
   { t with
     denv;
   }
 
 let r t = t.r
 
-let map_r t ~f =
+let [@inline always] map_r t ~f =
   { t with
     r = f t.r;
   }
 
-let with_r t r =
+let [@inline always] with_r t r =
   { t with
     r;
   }
@@ -108,3 +108,9 @@ let with_code_age_relation t code_age_relation =
   with_denv t (DE.with_typing_env (denv t) typing_env)
 
 let typing_env t = DE.typing_env (denv t)
+
+let add_variable t var ty =
+  with_denv t (DE.add_variable (denv t) var ty)
+
+let extend_typing_environment t env_extension =
+  with_denv t (DE.extend_typing_environment (denv t) env_extension)

@@ -512,7 +512,7 @@ end = struct
   let these = T.these_naked_immediates
 
   let term imm : Named.t =
-    Named.create_simple (Simple.const (Naked_immediate imm))
+    Named.create_simple (Simple.const (Reg_width_const.naked_immediate imm))
 
   module Pair = I.Num.Pair
   let cross_product = I.Num.cross_product
@@ -575,7 +575,7 @@ end = struct
   let these = T.these_naked_immediates
 
   let term imm : Named.t =
-    Named.create_simple (Simple.const (Naked_immediate imm))
+    Named.create_simple (Simple.const (Reg_width_const.naked_immediate imm))
 
   module Pair = I.Num.Pair
   let cross_product = I.Num.cross_product
@@ -640,7 +640,7 @@ end = struct
   let these = T.these_naked_floats
 
   let term f =
-    Named.create_simple (Simple.const (Naked_float f))
+    Named.create_simple (Simple.const (Reg_width_const.naked_float f))
 
   module Pair = F.Pair
   let cross_product = F.cross_product
@@ -732,7 +732,7 @@ end = struct
   let these = T.these_naked_immediates
 
   let term imm : Named.t =
-    Named.create_simple (Simple.const (Naked_immediate imm))
+    Named.create_simple (Simple.const (Reg_width_const.naked_immediate imm))
 
   module Pair = F.Pair
   let cross_product = F.cross_product
@@ -785,7 +785,7 @@ end = struct
   let these = T.these_naked_immediates
 
   let term imm : Named.t =
-    Named.create_simple (Simple.const (Naked_immediate imm))
+    Named.create_simple (Simple.const (Reg_width_const.naked_immediate imm))
 
   module Pair = I.Num.Pair
   let cross_product = I.Num.cross_product
@@ -833,7 +833,7 @@ let simplify_immutable_block_load ~result_kind dacc ~original_term _dbg
     let env_extension = TEE.one_equation (Name.var result_var') ty in
     Reachable.invalid (), env_extension, dacc
   in
-  let typing_env = DE.typing_env (DA.denv dacc) in
+  let typing_env = DA.typing_env dacc in
   match T.prove_equals_single_tagged_immediate typing_env index_ty with
   | Invalid -> invalid ()
   | Unknown -> unchanged ()
@@ -866,7 +866,7 @@ let simplify_phys_equal (op : P.equality_comparison)
   else
     begin match kind with
     | Value ->
-      let typing_env = DE.typing_env (DA.denv dacc) in
+      let typing_env = DA.typing_env dacc in
       let proof1 = T.prove_equals_tagged_immediates typing_env arg1_ty in
       let proof2 = T.prove_equals_tagged_immediates typing_env arg2_ty in
       begin match proof1, proof2 with

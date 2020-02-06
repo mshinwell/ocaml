@@ -15,6 +15,7 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 type t
+type binding_time = t
 
 include Identifiable.S with type t := t
 
@@ -26,3 +27,13 @@ val succ : t -> t
 
 val strictly_earlier : t -> than:t -> bool
 val equal : t -> t -> bool
+
+module With_name_mode : sig
+  type t = private int
+
+  val create : binding_time -> Name_mode.t -> t
+
+  val binding_time : t -> binding_time
+
+  val name_mode : t -> Name_mode.t
+end

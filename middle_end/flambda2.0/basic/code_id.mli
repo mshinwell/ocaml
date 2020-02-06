@@ -18,6 +18,8 @@
 
 include Identifiable.S
 
+val initialise : unit -> unit
+
 val create : name:string -> Compilation_unit.t -> t
 val name : t -> string
 val get_compilation_unit : t -> Compilation_unit.t

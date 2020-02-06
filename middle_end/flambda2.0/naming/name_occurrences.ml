@@ -15,6 +15,7 @@
 (**************************************************************************)
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
+[@@@ocaml.warning "-55"]
 
 module Kind = Name_mode
 
@@ -68,8 +69,6 @@ end) : sig
 
   val subset_domain : t -> t -> bool
 
-  val overlap : t -> t -> bool
-
   val mem : t -> N.t -> bool
 
   val remove : t -> N.t -> t
@@ -79,6 +78,12 @@ end) : sig
   val greatest_name_mode : t -> N.t -> Kind.Or_absent.t
 
   val downgrade_occurrences_at_strictly_greater_kind : t -> Kind.t -> t
+
+  val fold : t -> init:'a -> f:('a -> N.t -> 'a) -> 'a
+
+  val for_all : t -> f:(N.t -> bool) -> bool
+
+  val filter : t -> f:(N.t -> bool) -> t
 end = struct
   module For_one_name : sig
     type t
@@ -101,164 +106,330 @@ end = struct
 
     val union : t -> t -> t
   end = struct
-    type t = int array
+    (* CR mshinwell: Provide 32-bit implementation. *)
+
+    type t = int
+
+    let num_occurrences_normal t =
+      t land 0xfffff
+
+    let num_occurrences_in_types t =
+      (t land 0xfffff_00000) lsr 20
+
+    let num_occurrences_phantom t =
+      (t land 0xfffff_00000_00000) lsr 40
+
+    let encode_normal_occurrences num =
+      assert (num >= 0 && num <= 0xfffff);  (* CR mshinwell: proper error *)
+      num
+
+    let encode_in_types_occurrences num =
+      assert (num >= 0 && num <= 0xfffff);
+      num lsl 20
+
+    let encode_phantom_occurrences num =
+      assert (num >= 0 && num <= 0xfffff);
+      num lsl 40
+
+    let without_normal_occurrences num =
+      num land (lnot 0xfffff)
+
+    let without_in_types_occurrences num =
+      num land (lnot 0xfffff_00000)
+
+    let without_phantom_occurrences num =
+      num land (lnot 0xfffff_00000_00000)
+
+    let to_map t =
+      Kind.Map.empty
+      |> Kind.Map.add Kind.normal (num_occurrences_normal t)
+      |> Kind.Map.add Kind.in_types (num_occurrences_in_types t)
+      |> Kind.Map.add Kind.phantom (num_occurrences_phantom t)
 
     let print ppf t =
-      let by_kind =
-        t
-        |> Array.mapi (fun mode count -> Kind.of_int mode, count)
-        |> Array.to_list
-        |> Kind.Map.of_list
-      in
       Format.fprintf ppf "@[<hov 1>(\
           @[<hov 1>(by_kind %a)@]\
           )@]"
-        (Kind.Map.print Format.pp_print_int) by_kind
+        (Kind.Map.print Format.pp_print_int) (to_map t)
 
-    let invariant t =
-      (* CR mshinwell: Check num_occurrences *)
-      if Array.length t <> Kind.max_to_int + 1
-        || Array.exists (fun count -> count < 0) t
-      then begin
-        Misc.fatal_errorf "[For_one_name] invariant failed:@ %a" print t
-      end
+    let invariant _t = ()
 
-    let equal t1 t2 = Stdlib.compare t1 t2 = 0
+    let equal t1 t2 =
+      t1 == t2
 
     let num_occurrences t =
-      Array.fold_left (fun total num_occs -> num_occs + total) 0 t
+      num_occurrences_normal t
+        + num_occurrences_in_types t
+        + num_occurrences_phantom t
 
     let one_occurrence kind =
-      let kind = Kind.to_int kind in
-      Array.init (Kind.max_to_int + 1)
-        (fun mode -> if mode = kind then 1 else 0)
+      match Kind.descr kind with
+      | Normal -> encode_normal_occurrences 1
+      | In_types -> encode_in_types_occurrences 1
+      | Phantom -> encode_phantom_occurrences 1
 
     let add t kind =
-      let kind = Kind.to_int kind in
-      let t = Array.copy t in
-      t.(kind) <- t.(kind) + 1;
-      t
+      match Kind.descr kind with
+      | Normal ->
+        (encode_normal_occurrences (1 + num_occurrences_normal t))
+          lor (without_normal_occurrences t)
+      | In_types ->
+        (encode_in_types_occurrences (1 + num_occurrences_in_types t))
+          lor (without_in_types_occurrences t)
+      | Phantom ->
+        (encode_phantom_occurrences (1 + num_occurrences_phantom t))
+          lor (without_phantom_occurrences t)
 
     (* CR mshinwell: Add -strict-sequence to the build *)
 
     let downgrade_occurrences_at_strictly_greater_kind t max_kind =
-      let max_kind = Kind.to_int max_kind in
-      let needed = ref false in
-      for kind = max_kind + 1 to Kind.max_to_int do
-        if t.(kind) > 0 then begin
-          needed := true
-        end
-      done;
-      if not !needed then t
-      else begin
-        let t = Array.copy t in
-        for kind = max_kind + 1 to Kind.max_to_int do
-          let count = t.(kind) in
-          t.(max_kind) <- t.(max_kind) + count;
-          t.(kind) <- 0
-        done;
-        t
-      end
+      match Kind.descr max_kind with
+      | Normal -> t
+      | In_types ->
+        encode_in_types_occurrences
+          (num_occurrences_in_types t
+            + num_occurrences_normal t)
+      | Phantom ->
+        encode_phantom_occurrences
+          (num_occurrences_phantom t
+            + num_occurrences_normal t)
 
+    (* CR mshinwell: this is relying on implementation of Name_mode *)
     let max_kind_opt t =
-      let result = ref (-1) in
-      for mode = 0 to Kind.max_to_int do
-        if t.(mode) > 0 then begin
-          result := mode
-        end;
-      done;
-      if !result < 0 then None else Some (Kind.of_int !result)
+      let num_normal = num_occurrences_normal t in
+      if num_normal > 0 then Some Kind.normal
+      else
+        let num_in_types = num_occurrences_in_types t in
+        if num_in_types > 0 then Some Kind.in_types
+        else
+          let num_phantom = num_occurrences_phantom t in
+          if num_phantom > 0 then Some Kind.phantom
+          else None
 
     let union t1 t2 =
-      let t = Array.copy t1 in
-      for mode = 0 to Kind.max_to_int do
-        t.(mode) <- t.(mode) + t2.(mode)
-      done;
-      t
+      (encode_normal_occurrences
+        (num_occurrences_normal t1 + num_occurrences_normal t2))
+      lor (encode_in_types_occurrences
+        (num_occurrences_in_types t1 + num_occurrences_in_types t2))
+      lor (encode_phantom_occurrences
+        (num_occurrences_phantom t1 + num_occurrences_phantom t2))
   end
 
-  type t = For_one_name.t N.Map.t
+  type t =
+    | Empty
+    | One of N.t * Kind.t
+    | Potentially_many of For_one_name.t N.Map.t
+
+  let map t =
+    match t with
+    | Empty -> N.Map.empty
+    | One (name, kind) ->
+      let for_one_name = For_one_name.one_occurrence kind in
+      N.Map.singleton name for_one_name
+    | Potentially_many map -> map
 
   let print ppf t =
-    N.Map.print For_one_name.print ppf t
+    N.Map.print For_one_name.print ppf (map t)
 
   let invariant t =
     if !Clflags.flambda_invariant_checks then begin
       N.Map.iter (fun _name for_one_name ->
           For_one_name.invariant for_one_name)
-        t
+        (map t)
     end
 
-  let equal t1 t2 = N.Map.equal For_one_name.equal t1 t2
+  let equal t1 t2 =
+    match t1, t2 with
+    | Empty, Empty -> true
+    | One (n1, kind1), One (n2, kind2) ->
+      N.equal n1 n2 && Kind.equal kind1 kind2
+    | Potentially_many map1, Potentially_many map2 ->
+      N.Map.equal For_one_name.equal map1 map2
+    | (Empty | One _ | Potentially_many _), _ -> false
 
-  let empty = N.Map.empty
+  let empty = Empty
 
-  let is_empty = N.Map.is_empty
+  let is_empty t =
+    match t with
+    | Empty -> true
+    | One _ -> false
+    | Potentially_many map -> N.Map.is_empty map
 
-  let singleton name kind =
-    N.Map.singleton name (For_one_name.one_occurrence kind)
+  let singleton name kind = One (name, kind)
 
   let add t name kind =
-    N.Map.update name (function
-        | None -> Some (For_one_name.one_occurrence kind)
-        | Some for_one_name -> Some (For_one_name.add for_one_name kind))
-      t
+    match t with
+    | Empty -> singleton name kind
+    | One (name', kind') ->
+      if N.equal name name' then
+        let for_one_name =
+          For_one_name.add (For_one_name.one_occurrence kind') kind
+        in
+        Potentially_many (N.Map.singleton name for_one_name)
+      else
+        let map =
+          N.Map.empty
+          |> N.Map.add name (For_one_name.one_occurrence kind)
+          |> N.Map.add name' (For_one_name.one_occurrence kind')
+        in
+        Potentially_many map
+    | Potentially_many map ->
+      let map =
+        N.Map.update name (function
+            | None -> Some (For_one_name.one_occurrence kind)
+            | Some for_one_name -> Some (For_one_name.add for_one_name kind))
+          map
+      in
+      Potentially_many map
 
   let apply_name_permutation t perm =
-    N.Map.fold (fun name for_one_name result ->
-        let name = N.apply_name_permutation name perm in
-        N.Map.add name for_one_name result)
-      t
-      N.Map.empty
+    match t with
+    | Empty -> Empty
+    | One (name, kind) ->
+      let name' = N.apply_name_permutation name perm in
+      if name == name' then t
+      else One (name', kind)
+    | Potentially_many map ->
+      let map =
+        N.Map.fold (fun name for_one_name result ->
+            let name = N.apply_name_permutation name perm in
+            N.Map.add name for_one_name result)
+          map
+          N.Map.empty
+      in
+      Potentially_many map
 
   let diff t1 t2 =
-    N.Set.fold (fun name t -> N.Map.remove name t)
-      (N.Map.keys t2)
-      t1
+    match t1, t2 with
+    | (Empty | One _ | Potentially_many _), Empty -> t1
+    | Empty, (One _ | Potentially_many _) -> Empty
+    | One (name1, _), One (name2, _) ->
+      if N.equal name1 name2 then Empty
+      else t1
+    | One (name1, _), Potentially_many map2 ->
+      if N.Map.mem name1 map2 then Empty
+      else t1
+    | Potentially_many map1, One (name2, _) ->
+      (* CR mshinwell: This and the next case could go back to [Empty] *)
+      let map = N.Map.remove name2 map1 in
+      if N.Map.is_empty map then Empty
+      else Potentially_many map
+    | Potentially_many map1, Potentially_many map2 ->
+      let map =
+        N.Map.fold (fun name _ map -> N.Map.remove name map)
+          map2
+          map1
+      in
+      Potentially_many map
 
   let union t1 t2 =
-    if is_empty t1 then begin
-      t2
-    end else if is_empty t2 then begin
-      t1
-    end else begin
-      let t =
+    match t1, t2 with
+    | Empty, Empty -> Empty
+    | Empty, (One _ | Potentially_many _) -> t2
+    | (One _ | Potentially_many _), Empty -> t1
+    | One (name1, kind1), One (name2, kind2) ->
+      let map =
+        if N.equal name1 name2 then
+          N.Map.empty
+          |> N.Map.add name1
+            (For_one_name.add (For_one_name.one_occurrence kind1) kind2)
+        else
+          N.Map.empty
+          |> N.Map.add name1 (For_one_name.one_occurrence kind1)
+          |> N.Map.add name2 (For_one_name.one_occurrence kind2)
+      in
+      Potentially_many map
+    | One (name, kind), Potentially_many map
+    | Potentially_many map, One (name, kind) ->
+      let map =
+        N.Map.update name (function
+            | None -> Some (For_one_name.one_occurrence kind)
+            | Some for_one_name ->
+              Some (For_one_name.add for_one_name kind))
+          map
+      in
+      Potentially_many map
+    | Potentially_many map1, Potentially_many map2 ->
+      let map =
         N.Map.union (fun _name for_one_name1 for_one_name2 ->
             Some (For_one_name.union for_one_name1 for_one_name2))
-          t1 t2
+          map1 map2
       in
+      let t = Potentially_many map in
       invariant t;
       t
-    end
 
-  let keys t = N.Map.keys t
+  let keys t =
+    match t with
+    | Empty -> N.Set.empty
+    | One (name, _) -> N.Set.singleton name
+    | Potentially_many map -> N.Map.keys map
 
-  let subset_domain t1 t2 = N.Set.subset (N.Map.keys t1) (N.Map.keys t2)
+  let subset_domain t1 t2 =
+    match t1, t2 with
+    | Empty, (Empty | One _ | Potentially_many _) -> true
+    | (One _ | Potentially_many _), Empty -> false
+    | One (name1, _), One (name2, _) -> N.equal name1 name2
+    | One (name1, _), Potentially_many map2 -> N.Map.mem name1 map2
+    | Potentially_many map1, One (name2, _) ->
+      N.Map.is_empty map1
+        || begin match N.Map.get_singleton map1 with
+           | Some (name1, _) -> N.equal name1 name2
+           | None -> false
+           end
+    | Potentially_many map1, Potentially_many map2 ->
+      N.Set.subset (N.Map.keys map1) (N.Map.keys map2)
 
-  let overlap t1 t2 =
-    not (N.Set.is_empty (N.Set.inter (N.Map.keys t1) (N.Map.keys t2)))
+  let mem t name =
+    match t with
+    | Empty -> false
+    | One (name', _) -> N.equal name name'
+    | Potentially_many map -> N.Map.mem name map
 
-  let mem t name = N.Map.mem name t
-
-  let remove t name = N.Map.remove name t
+  let remove t name =
+    match t with
+    | Empty -> Empty
+    | One (name', _) -> if N.equal name name' then Empty else t
+    | Potentially_many map ->
+      let map = N.Map.remove name map in
+      if N.Map.is_empty map then Empty
+      else Potentially_many map
 
   let count t name : Num_occurrences.t =
-    match N.Map.find name t with
-    | exception Not_found -> Zero
-    | for_one_name ->
-      let num_occurrences = For_one_name.num_occurrences for_one_name in
-      assert (num_occurrences >= 0);
-      if num_occurrences = 0 then Zero
-      else if num_occurrences = 1 then One
-      else More_than_one
+    match t with
+    | Empty -> Zero
+    | One (name', _) ->
+      if N.equal name name' then One else Zero
+    | Potentially_many map ->
+      match N.Map.find name map with
+      | exception Not_found -> Zero
+      | for_one_name ->
+        let num_occurrences = For_one_name.num_occurrences for_one_name in
+        assert (num_occurrences >= 0);
+        if num_occurrences = 0 then Zero
+        else if num_occurrences = 1 then One
+        else More_than_one
 
   let greatest_name_mode t name : Kind.Or_absent.t =
-    match N.Map.find name t with
-    | exception Not_found -> Kind.Or_absent.absent
-    | for_one_name ->
-      match For_one_name.max_kind_opt for_one_name with
-      | None -> Kind.Or_absent.absent
-      | Some kind -> Kind.Or_absent.present kind
+    match t with
+    | Empty -> Kind.Or_absent.absent
+    | One (name', kind) ->
+      if N.equal name name' then Kind.Or_absent.present kind
+      else Kind.Or_absent.absent
+    | Potentially_many map ->
+      match N.Map.find name map with
+      | exception Not_found -> Kind.Or_absent.absent
+      | for_one_name ->
+        match For_one_name.max_kind_opt for_one_name with
+        | None -> Kind.Or_absent.absent
+        | Some kind -> Kind.Or_absent.present kind
+
+  let fold t ~init ~f =
+    match t with
+    | Empty -> init
+    | One (name, _kind) -> f init name
+    | Potentially_many map ->
+      N.Map.fold (fun name _kind acc -> f acc name) map init
 
   let downgrade_occurrences_at_strictly_greater_kind t max_kind =
     (* CR-someday mshinwell: This can be condensed when the compiler
@@ -266,31 +437,69 @@ end = struct
     match Kind.descr max_kind with
     | Normal -> t
     | Phantom ->
-      N.Map.map (fun for_one_name ->
-          For_one_name.downgrade_occurrences_at_strictly_greater_kind
-            for_one_name Kind.phantom)
-        t
+      begin match t with
+      | Empty -> Empty
+      | One (name, kind) ->
+        begin match Kind.descr kind with
+        | Normal | Phantom -> One (name, Kind.phantom)
+        | In_types ->
+          Misc.fatal_errorf "Cannot downgrade [In_types] to [Phantom]:@ %a"
+            print t
+        end
+      | Potentially_many map ->
+        let map =
+          N.Map.map (fun for_one_name ->
+              For_one_name.downgrade_occurrences_at_strictly_greater_kind
+                for_one_name Kind.phantom)
+            map
+        in
+        Potentially_many map
+      end
     | In_types ->
-      N.Map.map (fun for_one_name ->
-          For_one_name.downgrade_occurrences_at_strictly_greater_kind
-            for_one_name Kind.in_types)
-        t
-end
+      begin match t with
+      | Empty -> Empty
+      | One (name, kind) ->
+        begin match Kind.descr kind with
+        | Normal | In_types -> One (name, Kind.in_types)
+        | Phantom ->
+          Misc.fatal_errorf "Cannot downgrade [Phantom] to [In_types]:@ %a"
+            print t
+        end
+      | Potentially_many map ->
+        let map =
+          N.Map.map (fun for_one_name ->
+              For_one_name.downgrade_occurrences_at_strictly_greater_kind
+                for_one_name Kind.in_types)
+            map
+        in
+        Potentially_many map
+      end
 
-module For_variables = For_one_variety_of_names (struct
-  include Variable
-  let apply_name_permutation t perm = Name_permutation.apply_variable perm t
+    let for_all t ~f =
+      match t with
+      | Empty -> true
+      | One (name, _) -> f name
+      | Potentially_many map ->
+        N.Map.for_all (fun name _ -> f name) map
+
+    let filter t ~f =
+      match t with
+      | Empty -> t
+      | One (name, _) -> if f name then t else Empty
+      | Potentially_many map ->
+        let map = N.Map.filter (fun name _ -> f name) map in
+        if N.Map.is_empty map then Empty
+        else Potentially_many map
+end [@@@inlined always]
+
+module For_names = For_one_variety_of_names (struct
+  include Name
+  let apply_name_permutation t perm = Name_permutation.apply_name perm t
 end)
 
 module For_continuations = For_one_variety_of_names (struct
   include Continuation
   let apply_name_permutation t perm = Name_permutation.apply_continuation perm t
-end)
-
-module For_symbols = For_one_variety_of_names (struct
-  include Symbol
-  (* We never bind [Symbol]s using [Name_abstraction]. *)
-  let apply_name_permutation t _perm = t
 end)
 
 module For_closure_vars = For_one_variety_of_names (struct
@@ -306,9 +515,8 @@ module For_code_ids = For_one_variety_of_names (struct
 end)
 
 type t = {
-  variables : For_variables.t;
+  names : For_names.t;
   continuations : For_continuations.t;
-  symbols : For_symbols.t;
   closure_vars : For_closure_vars.t;
   code_ids : For_code_ids.t;
   newer_version_of_code_ids : For_code_ids.t;
@@ -316,27 +524,24 @@ type t = {
      "newer version of" fields (e.g. in [Flambda_static.Static_part.code]). *)
 }
 
-let print ppf { variables; continuations; symbols; closure_vars;
-                code_ids; newer_version_of_code_ids; } =
+let print ppf { names; continuations; closure_vars; code_ids;
+                newer_version_of_code_ids; } =
   Format.fprintf ppf "@[<hov 1>\
-      @[<hov 1>(variables %a)@]@ \
+      @[<hov 1>(names %a)@]@ \
       @[<hov 1>(continuations %a)@]@ \
-      @[<hov 1>(symbols %a)@]@ \
       @[<hov 1>(closure_vars %a)@]@ \
       @[<hov 1>(code_ids %a)@]\
       @[<hov 1>(newer_version_of_code_ids %a)@]\
       @]"
-    For_variables.print variables
+    For_names.print names
     For_continuations.print continuations
-    For_symbols.print symbols
     For_closure_vars.print closure_vars
     For_code_ids.print code_ids
     For_code_ids.print newer_version_of_code_ids
 
 let empty = {
-  variables = For_variables.empty;
+  names = For_names.empty;
   continuations = For_continuations.empty;
-  symbols = For_symbols.empty;
   closure_vars = For_closure_vars.empty;
   code_ids = For_code_ids.empty;
   newer_version_of_code_ids = For_code_ids.empty;
@@ -356,27 +561,27 @@ let count_continuation t cont =
   For_continuations.count t.continuations cont
 
 let count_variable t var =
-  For_variables.count t.variables var
+  For_names.count t.names (Name.var var)
 
 let singleton_variable var kind =
   { empty with
-    variables = For_variables.singleton var kind;
+    names = For_names.singleton (Name.var var) kind;
   }
 
 let add_variable t var kind =
   { t with
-    variables = For_variables.add t.variables var kind;
+    names = For_names.add t.names (Name.var var) kind;
   }
 
 let add_symbol t sym kind =
   { t with
-    symbols = For_symbols.add t.symbols sym kind;
+    names = For_names.add t.names (Name.symbol sym) kind;
   }
 
-let add_name t (name : Name.t) kind =
-  match name with
-  | Var var -> add_variable t var kind
-  | Symbol sym -> add_symbol t sym kind
+let add_name t name kind =
+  { t with
+    names = For_names.add t.names name kind;
+  }
 
 let add_closure_var t clos_var kind =
   { t with
@@ -396,28 +601,35 @@ let add_newer_version_of_code_id t id kind =
 
 let singleton_symbol sym kind =
   { empty with
-    symbols = For_symbols.singleton sym kind;
+    names = For_names.singleton (Name.symbol sym) kind;
   }
 
-let singleton_name (name : Name.t) kind =
-  match name with
-  | Var var -> singleton_variable var kind
-  | Symbol sym -> singleton_symbol sym kind
+let singleton_name name kind =
+  { empty with
+    names = For_names.singleton name kind;
+  }
 
 let create_variables vars kind =
-  (* CR mshinwell: This reallocates the record for each [var]! *)
-  Variable.Set.fold (fun (var : Variable.t) t ->
-      add_variable t var kind)
-    vars
-    empty
+  let names =
+    Variable.Set.fold (fun var names ->
+        For_names.add names (Name.var var) kind)
+      vars
+      For_names.empty
+  in
+  { empty with
+    names;
+  }
 
 let create_names names kind =
-  Name.Set.fold (fun (name : Name.t) t ->
-      match name with
-      | Var var -> add_variable t var kind
-      | Symbol sym -> add_symbol t sym kind)
-    names
-    empty
+  let names =
+    Name.Set.fold (fun name names ->
+        For_names.add names name kind)
+      names
+      For_names.empty
+  in
+  { empty with
+    names;
+  }
 
 let create_closure_vars clos_vars =
   let closure_vars =
@@ -429,145 +641,105 @@ let create_closure_vars clos_vars =
   { empty with closure_vars; }
 
 let apply_name_permutation
-      ({ variables; continuations; symbols; closure_vars; code_ids;
+      ({ names; continuations; closure_vars; code_ids;
          newer_version_of_code_ids; } as t)
       perm =
   if Name_permutation.is_empty perm then t
   else
-    let variables =
-      For_variables.apply_name_permutation variables perm
+    let names =
+      For_names.apply_name_permutation names perm
     in
     let continuations =
       For_continuations.apply_name_permutation continuations perm
     in
     (* [Symbol]s, [Var_within_closure]s and [Code_id]s are never bound using
        [Name_abstraction]. *)
-    { variables;
+    { names;
       continuations;
-      symbols;
       closure_vars;
       code_ids;
       newer_version_of_code_ids;
     }
 
-let binary_conjunction ~for_variables ~for_continuations ~for_symbols
-      ~for_closure_vars ~for_code_ids 
-      { variables = variables1;
+let binary_conjunction ~for_names ~for_continuations
+      ~for_closure_vars ~for_code_ids
+      { names = names1;
         continuations = continuations1;
-        symbols = symbols1;
         closure_vars = closure_vars1;
         code_ids = code_ids1;
         newer_version_of_code_ids = newer_version_of_code_ids1;
       }
-      { variables = variables2;
+      { names = names2;
         continuations = continuations2;
-        symbols = symbols2;
         closure_vars = closure_vars2;
         code_ids = code_ids2;
         newer_version_of_code_ids = newer_version_of_code_ids2;
       } =
-  for_variables variables1 variables2
+  for_names names1 names2
     && for_continuations continuations1 continuations2
-    && for_symbols symbols1 symbols2
     && for_closure_vars closure_vars1 closure_vars2
     && for_code_ids code_ids1 code_ids2
     && for_code_ids newer_version_of_code_ids1 newer_version_of_code_ids2
 
-let binary_disjunction ~for_variables ~for_continuations ~for_symbols
-      ~for_closure_vars ~for_code_ids 
-      { variables = variables1;
+let binary_op ~for_names ~for_continuations ~for_closure_vars ~for_code_ids
+      { names = names1;
         continuations = continuations1;
-        symbols = symbols1;
         closure_vars = closure_vars1;
         code_ids = code_ids1;
         newer_version_of_code_ids = newer_version_of_code_ids1;
       }
-      { variables = variables2;
+      { names = names2;
         continuations = continuations2;
-        symbols = symbols2;
         closure_vars = closure_vars2;
         code_ids = code_ids2;
         newer_version_of_code_ids = newer_version_of_code_ids2;
       } =
-  for_variables variables1 variables2
-    || for_continuations continuations1 continuations2
-    || for_symbols symbols1 symbols2
-    || for_closure_vars closure_vars1 closure_vars2
-    || for_code_ids code_ids1 code_ids2
-    || for_code_ids newer_version_of_code_ids1 newer_version_of_code_ids2
-
-let binary_op ~for_variables ~for_continuations ~for_symbols ~for_closure_vars
-      ~for_code_ids
-      { variables = variables1;
-        continuations = continuations1;
-        symbols = symbols1;
-        closure_vars = closure_vars1;
-        code_ids = code_ids1;
-        newer_version_of_code_ids = newer_version_of_code_ids1;
-      }
-      { variables = variables2;
-        continuations = continuations2;
-        symbols = symbols2;
-        closure_vars = closure_vars2;
-        code_ids = code_ids2;
-        newer_version_of_code_ids = newer_version_of_code_ids2;
-      } =
-  let variables = for_variables variables1 variables2 in
+  let names = for_names names1 names2 in
   let continuations = for_continuations continuations1 continuations2 in
-  let symbols = for_symbols symbols1 symbols2 in
   let closure_vars = for_closure_vars closure_vars1 closure_vars2 in
   let code_ids = for_code_ids code_ids1 code_ids2 in
   let newer_version_of_code_ids =
     for_code_ids newer_version_of_code_ids1 newer_version_of_code_ids2
   in
-  { variables;
+  { names;
     continuations;
-    symbols;
     closure_vars;
     code_ids;
     newer_version_of_code_ids;
   }
 
 let diff t1 t2 =
-  binary_op ~for_variables:For_variables.diff
+  binary_op ~for_names:For_names.diff
     ~for_continuations:For_continuations.diff
-    ~for_symbols:For_symbols.diff
     ~for_closure_vars:For_closure_vars.diff
     ~for_code_ids:For_code_ids.diff
     t1 t2
 
 let union t1 t2 =
-  binary_op ~for_variables:For_variables.union
+  binary_op ~for_names:For_names.union
     ~for_continuations:For_continuations.union
-    ~for_symbols:For_symbols.union
     ~for_closure_vars:For_closure_vars.union
     ~for_code_ids:For_code_ids.union
     t1 t2
 
 let equal t1 t2 =
-  binary_conjunction ~for_variables:For_variables.equal
+  binary_conjunction ~for_names:For_names.equal
     ~for_continuations:For_continuations.equal
-    ~for_symbols:For_symbols.equal
     ~for_closure_vars:For_closure_vars.equal
     ~for_code_ids:For_code_ids.equal
     t1 t2
 
 let is_empty t = equal t empty
 
+(* CR mshinwell: It may be worth caching this or similar *)
+let no_variables t =
+  For_names.for_all t.names ~f:(fun var -> not (Name.is_var var))
+
 let subset_domain t1 t2 =
-  binary_conjunction ~for_variables:For_variables.subset_domain
+  binary_conjunction ~for_names:For_names.subset_domain
     ~for_continuations:For_continuations.subset_domain
-    ~for_symbols:For_symbols.subset_domain
     ~for_closure_vars:For_closure_vars.subset_domain
     ~for_code_ids:For_code_ids.subset_domain
-    t1 t2
-
-let overlap t1 t2 =
-  binary_disjunction ~for_variables:For_variables.overlap
-    ~for_continuations:For_continuations.overlap
-    ~for_symbols:For_symbols.overlap
-    ~for_closure_vars:For_closure_vars.overlap
-    ~for_code_ids:For_code_ids.overlap
     t1 t2
 
 let rec union_list ts =
@@ -575,8 +747,6 @@ let rec union_list ts =
   | [] -> empty
   | t::ts -> union t (union_list ts)
 
-let variables t = For_variables.keys t.variables
-let symbols t = For_symbols.keys t.symbols
 let closure_vars t = For_closure_vars.keys t.closure_vars
 let continuations t = For_continuations.keys t.continuations
 let code_ids t = For_code_ids.keys t.code_ids
@@ -588,50 +758,47 @@ let code_ids_and_newer_version_of_code_ids t =
 let only_newer_version_of_code_ids t =
   Code_id.Set.diff (newer_version_of_code_ids t) (code_ids t)
 
-let names t =
-  Name.Set.union (Name.set_of_var_set (variables t))
-    (Name.set_of_symbol_set (symbols t))
-
-let mem_var t var = For_variables.mem t.variables var
-let mem_symbol t symbol = For_symbols.mem t.symbols symbol
+let mem_name t name = For_names.mem t.names name
+let mem_var t var = For_names.mem t.names (Name.var var)
+let mem_symbol t symbol = For_names.mem t.names (Name.symbol symbol)
 let mem_code_id t code_id = For_code_ids.mem t.code_ids code_id
 
-let mem_name t (name : Name.t) =
-  match name with
-  | Var var -> mem_var t var
-  | Symbol symbol -> mem_symbol t symbol
-
 let remove_var t var =
-  if For_variables.is_empty t.variables then t
+  if For_names.is_empty t.names then t
   else
-    let variables = For_variables.remove t.variables var in
+    let names = For_names.remove t.names (Name.var var) in
     { t with
-      variables;
+      names;
     }
 
 let remove_vars t vars =
-  if For_variables.is_empty t.variables then t
-  else Variable.Set.fold (fun var t -> remove_var t var) vars t
+  if For_names.is_empty t.names then t
+  else
+    let names =
+      Variable.Set.fold (fun var names ->
+          For_names.remove names (Name.var var))
+        vars
+        t.names
+    in
+    { t with
+      names;
+    }
 
 let greatest_name_mode_var t var =
-  For_variables.greatest_name_mode t.variables var
+  For_names.greatest_name_mode t.names (Name.var var)
 
 let downgrade_occurrences_at_strictly_greater_kind
-      { variables; continuations; symbols; closure_vars; code_ids;
+      { names; continuations; closure_vars; code_ids;
         newer_version_of_code_ids; }
       max_kind =
   (* CR mshinwell: Don't reallocate the record if nothing changed *)
-  let variables =
-    For_variables.downgrade_occurrences_at_strictly_greater_kind
-      variables max_kind
+  let names =
+    For_names.downgrade_occurrences_at_strictly_greater_kind
+      names max_kind
   in
   let continuations =
     For_continuations.downgrade_occurrences_at_strictly_greater_kind
       continuations max_kind
-  in
-  let symbols =
-    For_symbols.downgrade_occurrences_at_strictly_greater_kind
-      symbols max_kind
   in
   let closure_vars =
     For_closure_vars.downgrade_occurrences_at_strictly_greater_kind
@@ -645,9 +812,8 @@ let downgrade_occurrences_at_strictly_greater_kind
     For_code_ids.downgrade_occurrences_at_strictly_greater_kind
       newer_version_of_code_ids max_kind
   in
-  { variables;
+  { names;
     continuations;
-    symbols;
     closure_vars;
     code_ids;
     newer_version_of_code_ids;
@@ -658,3 +824,10 @@ let without_code_ids t =
     code_ids = For_code_ids.empty;
     newer_version_of_code_ids = For_code_ids.empty;
   }
+
+let fold_names t ~init ~f =
+  For_names.fold t.names ~init ~f
+
+let filter_names t ~f =
+  let names = For_names.filter t.names ~f in
+  { t with names; }

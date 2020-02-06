@@ -85,10 +85,7 @@ let has_empty_environment t =
   Var_within_closure.Map.is_empty t.closure_elements
 
 let environment_doesn't_mention_variables t =
-  Var_within_closure.Map.for_all (fun _vwc (simple : Simple.t) ->
-      match Simple.descr simple with
-      | Name (Symbol _) -> true
-      | _ -> false)
+  Var_within_closure.Map.for_all (fun _vwc simple -> Simple.is_symbol simple)
     t.closure_elements
 
 let print_with_cache ~cache ppf

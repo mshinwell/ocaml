@@ -53,10 +53,12 @@ module Bound_symbols = struct
           (Closure_id.Map.bindings closure_symbols)
 
     let being_defined { code_ids = _; closure_symbols; } =
-      Symbol.Set.of_list (Closure_id.Map.data closure_symbols)
+      Closure_id.Map.fold (fun _closure_id symbol being_defined ->
+          Symbol.Set.add symbol being_defined)
+        closure_symbols
+        Symbol.Set.empty
 
-    let closure_symbols_being_defined { code_ids = _; closure_symbols; } =
-      Symbol.Set.of_list (Closure_id.Map.data closure_symbols)
+    let closure_symbols_being_defined t = being_defined t
 
     let code_being_defined { code_ids; closure_symbols = _; } = code_ids
 
@@ -102,8 +104,11 @@ module Bound_symbols = struct
     match t with
     | Singleton sym -> Symbol.Set.singleton sym
     | Sets_of_closures sets ->
-      Symbol.Set.union_list
-        (List.map Code_and_set_of_closures.being_defined sets)
+      List.fold_left (fun being_defined set ->
+          Symbol.Set.union (Code_and_set_of_closures.being_defined set)
+            being_defined)
+        Symbol.Set.empty
+        sets
 
   let closure_symbols_being_defined t =
     match t with

@@ -183,6 +183,13 @@ module Make (Id : Identifiable.S) = struct
     in
     { back; forth }, integer_graph
 
+  let rec int_list_mem x xs =
+    match xs with
+    | [] -> false
+    | x':: xs ->
+      if Int.equal x x' then true
+      else int_list_mem x xs
+
   let component_graph graph =
     let numbering, integer_graph = number graph in
     let { Kosaraju. sorted_connected_components;
@@ -193,7 +200,7 @@ module Make (Id : Identifiable.S) = struct
         match nodes with
         | [] -> assert false
         | [node] ->
-          (if List.mem node integer_graph.(node)
+          (if int_list_mem node integer_graph.(node)
            then Has_loop [numbering.forth.(node)]
            else No_loop numbering.forth.(node)),
             component_edges.(component)

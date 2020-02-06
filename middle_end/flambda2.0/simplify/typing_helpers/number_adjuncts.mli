@@ -40,7 +40,7 @@ module type Num_common = sig
   val div : t -> t -> t option
   val mod_ : t -> t -> t option
 
-  val to_const : t -> Simple.Const.t
+  val to_const : t -> Reg_width_const.t
 
   val to_immediate : t -> Immediate.t
   val to_naked_float : t -> Numbers.Float_by_bit_pattern.t

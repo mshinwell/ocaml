@@ -190,14 +190,14 @@ let kind t =
   | Naked_int64 _ -> K.naked_int64
   | Naked_nativeint _ -> K.naked_nativeint
 
-let get_alias t =
+let get_alias_exn t =
   match t with
-  | Value ty -> T_V.get_alias ty
-  | Naked_immediate ty -> T_NI.get_alias ty
-  | Naked_float ty -> T_Nf.get_alias ty
-  | Naked_int32 ty -> T_N32.get_alias ty
-  | Naked_int64 ty -> T_N64.get_alias ty
-  | Naked_nativeint ty -> T_NN.get_alias ty
+  | Value ty -> T_V.get_alias_exn ty
+  | Naked_immediate ty -> T_NI.get_alias_exn ty
+  | Naked_float ty -> T_Nf.get_alias_exn ty
+  | Naked_int32 ty -> T_N32.get_alias_exn ty
+  | Naked_int64 ty -> T_N64.get_alias_exn ty
+  | Naked_nativeint ty -> T_NN.get_alias_exn ty
 
 (* CR mshinwell: We should have transformations and invariant checks to
    enforce that, when a type can be expressed just using [Equals] (e.g. to
@@ -273,19 +273,24 @@ let unknown (kind : K.t) =
 let unknown_like t = unknown (kind t)
 
 let this_naked_immediate i : t =
-  Naked_immediate (T_NI.create_equals (Simple.const (Naked_immediate i)))
+  Naked_immediate (T_NI.create_equals (Simple.const (
+    Reg_width_const.naked_immediate i)))
 
 let this_naked_float f : t =
-  Naked_float (T_Nf.create_equals (Simple.const (Naked_float f)))
+  Naked_float (T_Nf.create_equals (Simple.const (
+    Reg_width_const.naked_float f)))
 
 let this_naked_int32 i : t =
-  Naked_int32 (T_N32.create_equals (Simple.const (Naked_int32 i)))
+  Naked_int32 (T_N32.create_equals (Simple.const (
+    Reg_width_const.naked_int32 i)))
 
 let this_naked_int64 i : t =
-  Naked_int64 (T_N64.create_equals (Simple.const (Naked_int64 i)))
+  Naked_int64 (T_N64.create_equals (Simple.const (
+    Reg_width_const.naked_int64 i)))
 
 let this_naked_nativeint i : t =
-  Naked_nativeint (T_NN.create_equals (Simple.const (Naked_nativeint i)))
+  Naked_nativeint (T_NN.create_equals (Simple.const (
+    Reg_width_const.naked_nativeint i)))
 
 let these_naked_immediates0 ~no_alias is =
   match Immediate.Set.get_singleton is with
@@ -381,7 +386,8 @@ let any_tagged_immediate () : t =
     ~blocks:(Known (Row_like.For_blocks.create_bottom ()))))))
 
 let this_tagged_immediate imm : t =
-  Value (T_V.create_equals (Simple.const (Tagged_immediate imm)))
+  Value (T_V.create_equals (Simple.const (
+    Reg_width_const.tagged_immediate imm)))
 
 let these_tagged_immediates0 ~no_alias imms : t =
   match Immediate.Set.get_singleton imms with
@@ -473,8 +479,8 @@ let immutable_block_with_size_at_least ~n ~field_kind ~field_n_minus_one =
   let n = Targetint.OCaml.to_int n in
   let field_tys =
     List.init n (fun index ->
-        if index < n - 1 then unknown field_kind
-        else alias_type_of field_kind (Simple.var field_n_minus_one))
+      if index < n - 1 then unknown field_kind
+      else alias_type_of field_kind (Simple.var field_n_minus_one))
   in
   Value (T_V.create_no_alias (Ok (Variant (Variant.create
     ~immediates:(Known (bottom K.naked_immediate))
@@ -606,8 +612,8 @@ let closure_with_at_least_this_closure_var closure_var ~closure_element_var =
 let array_of_length ~length =
   Value (T_V.create (Array { length; }))
 
-let type_for_const (const : Simple.Const.t) =
-  match const with
+let type_for_const const =
+  match Reg_width_const.descr const with
   | Naked_immediate i -> this_naked_immediate i
   | Tagged_immediate i -> this_tagged_immediate i
   | Naked_float f -> this_naked_float f
@@ -623,32 +629,32 @@ let expand_head t env : Resolved_type.t =
     let head =
       T_V.expand_head ~force_to_kind:force_to_kind_value ty env
     in
-    Resolved (Value head)
+    Value head
   | Naked_immediate ty ->
     let head =
       T_NI.expand_head ~force_to_kind:force_to_kind_naked_immediate ty env
     in
-    Resolved (Naked_immediate head)
+    Naked_immediate head
   | Naked_float ty ->
     let head =
       T_Nf.expand_head ~force_to_kind:force_to_kind_naked_float ty env
     in
-    Resolved (Naked_float head)
+    Naked_float head
   | Naked_int32 ty ->
     let head =
       T_N32.expand_head ~force_to_kind:force_to_kind_naked_int32 ty env
     in
-    Resolved (Naked_int32 head)
+    Naked_int32 head
   | Naked_int64 ty ->
     let head =
       T_N64.expand_head ~force_to_kind:force_to_kind_naked_int64 ty env
     in
-    Resolved (Naked_int64 head)
+    Naked_int64 head
   | Naked_nativeint ty ->
     let head =
       T_NN.expand_head ~force_to_kind:force_to_kind_naked_nativeint ty env
     in
-    Resolved (Naked_nativeint head)
+    Naked_nativeint head
 
 let expand_head' t env : t =
   match t with
@@ -674,63 +680,71 @@ let expand_head' t env : t =
    [suitable_for] doesn't mean that we should blindly return "=name".  The
    type of the name in [suitable_for] might be (much) worse than the one
    in the environment [t]. *)
+(* CR mshinwell: This is related to a trivial join - think about this some
+   more. *)
 let rec make_suitable_for_environment0_core t env ~depth ~suitable_for level =
-  let free_vars = Name_occurrences.variables (free_names t) in
-  if Variable.Set.is_empty free_vars then level, t
+  let free_names = free_names t in
+  if Name_occurrences.no_variables free_names then level, t
   else
-    let allowed = TE.var_domain suitable_for in
-    let to_erase = Variable.Set.diff free_vars allowed in
-    if Variable.Set.is_empty to_erase then level, t
+    let to_erase =
+      Name_occurrences.filter_names free_names
+        ~f:(fun free_name ->
+          Name.pattern_match free_name
+            ~var:(fun _ -> not (TE.mem suitable_for free_name))
+            ~symbol:(fun _ -> true))
+    in
+    if Name_occurrences.is_empty to_erase then level, t
     else if depth > 1 then level, unknown (kind t)
     else
-      let result_level, perm, _binding_time =
+      let result_level, perm =
         (* To avoid writing an erasure operation, we define irrelevant fresh
            variables in the returned [Typing_env_level], and swap them with
            the variables that we wish to erase throughout the type. *)
-        Variable.Set.fold (fun to_erase (result_level, perm, binding_time) ->
-            let original_type = TE.find env (Name.var to_erase) in
-            let kind = kind original_type in
-            let fresh_var = Variable.rename to_erase in
-            let fresh_var_name = Name.var fresh_var in
-            let result_level =
-              TEL.add_definition result_level fresh_var kind binding_time
-            in
-            let canonical_simple =
-              TE.get_canonical_simple env
-                ~min_name_mode:Name_mode.in_types
-                (Simple.var to_erase)
-            in
-            let result_level =
-              let level, ty =
-                match canonical_simple with
-                | Bottom -> None, bottom kind
-                | Ok None -> None, unknown kind
-                | Ok (Some canonical_simple) ->
-                  if TE.mem_simple suitable_for canonical_simple then
-                    None, alias_type_of kind canonical_simple
-                  else
-                    let t = TE.find env (Name.var to_erase) in
-                    let t = expand_head' t env in
-                    let level, t =
-                      make_suitable_for_environment0_core t env
-                        ~depth:(depth + 1) ~suitable_for level
-                    in
-                    Some level, t
-              in
-              let result_level =
-                match level with
-                | None -> result_level
-                | Some level ->
-                  TEL.meet (Meet_env.create suitable_for) level result_level
-              in
-              TEL.add_or_replace_equation result_level fresh_var_name ty
-            in
-            let perm =
-              Name_permutation.add_variable perm to_erase fresh_var
-            in
-            result_level, perm, Binding_time.succ binding_time)
-          to_erase
-          (level, Name_permutation.empty, Binding_time.earliest_var)
+        Name_occurrences.fold_names to_erase
+          ~init:(level, Name_permutation.empty)
+          ~f:(fun ((result_level, perm) as acc) to_erase_name ->
+            Name.pattern_match to_erase_name
+              ~symbol:(fun _ -> acc)
+              ~var:(fun to_erase ->
+                let original_type = TE.find env to_erase_name in
+                let kind = kind original_type in
+                let fresh_var = Variable.rename to_erase in
+                let fresh_var_name = Name.var fresh_var in
+                let result_level =
+                  TEL.add_definition result_level fresh_var kind
+                in
+                let result_level =
+                  let level, ty =
+                    match
+                      TE.get_canonical_simple_exn env
+                        ~min_name_mode:Name_mode.in_types
+                        (Simple.var to_erase)
+                    with
+                    | exception Not_found -> None, unknown kind
+                    | canonical_simple ->
+                      if TE.mem_simple suitable_for canonical_simple then
+                        None, alias_type_of kind canonical_simple
+                      else
+                        let t = TE.find env (Name.var to_erase) in
+                        let t = expand_head' t env in
+                        let level, t =
+                          make_suitable_for_environment0_core t env
+                            ~depth:(depth + 1) ~suitable_for level
+                        in
+                        Some level, t
+                  in
+                  let result_level =
+                    match level with
+                    | None -> result_level
+                    | Some level ->
+                      TEL.meet (Meet_env.create suitable_for) level result_level
+                  in
+                  TEL.add_or_replace_equation result_level fresh_var_name ty
+                in
+                let perm =
+                  Name_permutation.add_variable perm to_erase fresh_var
+                in
+                result_level, perm))
       in
       result_level, apply_name_permutation t perm
 
@@ -765,70 +779,39 @@ module Make_meet_or_join
    with type typing_env := Typing_env.t
    with type typing_env_extension := Typing_env_extension.t) =
 struct
+  module T_V_meet_or_join = T_V.Make_meet_or_join (E)
+  module T_NI_meet_or_join = T_NI.Make_meet_or_join (E)
+  module T_Nf_meet_or_join = T_Nf.Make_meet_or_join (E)
+  module T_N32_meet_or_join = T_N32.Make_meet_or_join (E)
+  module T_N64_meet_or_join = T_N64.Make_meet_or_join (E)
+  module T_NN_meet_or_join = T_NN.Make_meet_or_join (E)
+
   let meet_or_join (env : Meet_or_join_env.t) t1 t2 =
     match t1, t2 with
     | Value ty1, Value ty2 ->
-      (* CR mshinwell: Try to lift out these functor applications (or ditch
-         the functors entirely). *)
-      let module T_V_meet_or_join = T_V.Make_meet_or_join (E) in
-      begin match
-        T_V_meet_or_join.meet_or_join env ty1 ty2
-          ~force_to_kind:force_to_kind_value
-          ~to_type:(fun ty -> Value ty)
-      with
-      | Ok (ty, env_extension) -> Value ty, env_extension
-      | Bottom -> bottom_value (), TEE.empty ()
-      end
+      T_V_meet_or_join.meet_or_join env t1 t2 ty1 ty2
+        ~force_to_kind:force_to_kind_value
+        ~to_type:(fun ty -> Value ty)
     | Naked_immediate ty1, Naked_immediate ty2 ->
-      let module T_NI_meet_or_join = T_NI.Make_meet_or_join (E) in
-      begin match
-        T_NI_meet_or_join.meet_or_join env ty1 ty2
-          ~force_to_kind:force_to_kind_naked_immediate
-          ~to_type:(fun ty -> Naked_immediate ty)
-      with
-      | Ok (ty, env_extension) -> Naked_immediate ty, env_extension
-      | Bottom -> bottom_naked_immediate (), TEE.empty ()
-      end
+      T_NI_meet_or_join.meet_or_join env t1 t2 ty1 ty2
+        ~force_to_kind:force_to_kind_naked_immediate
+        ~to_type:(fun ty -> Naked_immediate ty)
     | Naked_float ty1, Naked_float ty2 ->
-      let module T_Nf_meet_or_join = T_Nf.Make_meet_or_join (E) in
-      begin match
-        T_Nf_meet_or_join.meet_or_join env ty1 ty2
-          ~force_to_kind:force_to_kind_naked_float
-          ~to_type:(fun ty -> Naked_float ty)
-      with
-      | Ok (ty, env_extension) -> Naked_float ty, env_extension
-      | Bottom -> bottom_naked_float (), TEE.empty ()
-      end
+      T_Nf_meet_or_join.meet_or_join env t1 t2 ty1 ty2
+        ~force_to_kind:force_to_kind_naked_float
+        ~to_type:(fun ty -> Naked_float ty)
     | Naked_int32 ty1, Naked_int32 ty2 ->
-      let module T_N32_meet_or_join = T_N32.Make_meet_or_join (E) in
-      begin match
-        T_N32_meet_or_join.meet_or_join env ty1 ty2
-          ~force_to_kind:force_to_kind_naked_int32
-          ~to_type:(fun ty -> Naked_int32 ty)
-      with
-      | Ok (ty, env_extension) -> Naked_int32 ty, env_extension
-      | Bottom -> bottom_naked_int32 (), TEE.empty ()
-      end
+      T_N32_meet_or_join.meet_or_join env t1 t2 ty1 ty2
+        ~force_to_kind:force_to_kind_naked_int32
+        ~to_type:(fun ty -> Naked_int32 ty)
     | Naked_int64 ty1, Naked_int64 ty2 ->
-      let module T_N64_meet_or_join = T_N64.Make_meet_or_join (E) in
-      begin match
-        T_N64_meet_or_join.meet_or_join env ty1 ty2
-          ~force_to_kind:force_to_kind_naked_int64
-          ~to_type:(fun ty -> Naked_int64 ty)
-      with
-      | Ok (ty, env_extension) -> Naked_int64 ty, env_extension
-      | Bottom -> bottom_naked_int64 (), TEE.empty ()
-      end
+      T_N64_meet_or_join.meet_or_join env t1 t2 ty1 ty2
+        ~force_to_kind:force_to_kind_naked_int64
+        ~to_type:(fun ty -> Naked_int64 ty)
     | Naked_nativeint ty1, Naked_nativeint ty2 ->
-      let module T_NN_meet_or_join = T_NN.Make_meet_or_join (E) in
-      begin match
-        T_NN_meet_or_join.meet_or_join env ty1 ty2
-          ~force_to_kind:force_to_kind_naked_nativeint
-          ~to_type:(fun ty -> Naked_nativeint ty)
-      with
-      | Ok (ty, env_extension) -> Naked_nativeint ty, env_extension
-      | Bottom -> bottom_naked_nativeint (), TEE.empty ()
-      end
+      T_NN_meet_or_join.meet_or_join env t1 t2 ty1 ty2
+        ~force_to_kind:force_to_kind_naked_nativeint
+        ~to_type:(fun ty -> Naked_nativeint ty)
     | (Value _ | Naked_immediate _ | Naked_float _ | Naked_int32 _
         | Naked_int64 _ | Naked_nativeint _), _ ->
       Misc.fatal_errorf "Kind mismatch upon %s:@ %a@ versus@ %a"

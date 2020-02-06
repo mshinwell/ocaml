@@ -73,8 +73,6 @@ module Typing_env : sig
 
   val resolver : t -> (Export_id.t -> flambda_type option)
 
-  val var_domain : t -> Variable.Set.t
-
   val current_scope : t -> Scope.t
 
   val increment_scope : t -> t
@@ -86,12 +84,6 @@ module Typing_env : sig
   val add_equation : t -> Name.t -> flambda_type -> t
 
   val add_equations_on_params
-     : t
-    -> params:Kinded_parameter.t list
-    -> param_types:flambda_type list
-    -> t
-
-  val meet_equations_on_params
      : t
     -> params:Kinded_parameter.t list
     -> param_types:flambda_type list
@@ -111,27 +103,21 @@ module Typing_env : sig
 
   val find_cse : t -> Flambda_primitive.Eligible_for_cse.t -> Simple.t option
 
-  val find_cse_rev
-     : t
-    -> bound_to:Simple.t
-    -> Flambda_primitive.Eligible_for_cse.t option
+  val add_env_extension : t -> Typing_env_extension.t -> t
 
-  val add_env_extension
-     : t
-    -> env_extension:Typing_env_extension.t
-    -> t
-
-  val get_canonical_simple
+  (** Raises [Not_found] if no canonical [Simple] was found. *)
+  val get_canonical_simple_exn
      : t
     -> ?min_name_mode:Name_mode.t
     -> Simple.t
-    -> Simple.t option Or_bottom.t
+    -> Simple.t
 
-  val get_canonical_simple_with_kind
+  (** Raises [Not_found] if no canonical [Simple] was found. *)
+  val get_canonical_simple_with_kind_exn
      : t
     -> ?min_name_mode:Name_mode.t
     -> Simple.t
-    -> Simple.t option Or_bottom.t * Flambda_kind.t
+    -> Simple.t * Flambda_kind.t
 
   val add_to_code_age_relation : t -> newer:Code_id.t -> older:Code_id.t -> t
 
@@ -145,8 +131,6 @@ module Typing_env : sig
          * Variable.Set.t) list
     -> unknown_if_defined_at_or_later_than:Scope.t
     -> Typing_env_extension.t * Continuation_extra_params_and_args.t
-
-  val free_variables_transitive : t -> flambda_type -> Variable.Set.t
 end
 
 val meet : Typing_env.t -> t -> t -> (t * Typing_env_extension.t) Or_bottom.t
@@ -376,8 +360,8 @@ val bottom_types_from_arity : Flambda_arity.t -> t list
     constructed (in other words, it is [Invalid]). *)
 val is_bottom : (t -> bool) type_accessor
 
-val type_for_const : Simple.Const.t -> t
-val kind_for_const : Simple.Const.t -> Flambda_kind.t
+val type_for_const : Reg_width_const.t -> t
+val kind_for_const : Reg_width_const.t -> Flambda_kind.t
 
 type 'a proof = private
   | Proved of 'a
@@ -501,7 +485,8 @@ type reification_result = private
   | Invalid
 
 val reify
-   : ?allowed_free_vars:Variable.Set.t
+   : ?allowed_if_free_vars_defined_in:Typing_env.t
+  -> ?disallowed_free_vars:Variable.Set.t
   -> Typing_env.t
   -> min_name_mode:Name_mode.t
   -> t

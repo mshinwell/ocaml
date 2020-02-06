@@ -126,7 +126,7 @@ let find_var env (v, loc) =
   | Some var ->
     var
 
-let const (c:Fexpr.const) : Simple.Const.t =
+let const (c:Fexpr.const) : Reg_width_const.t =
   match c with
   | Tagged_immediate i ->
     let i = Targetint.of_string i in

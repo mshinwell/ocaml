@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2013--2019 OCamlPro SAS                                    *)
-(*   Copyright 2014--2019 Jane Street Group LLC                           *)
+(*   Copyright 2013--2020 OCamlPro SAS                                    *)
+(*   Copyright 2014--2020 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -14,25 +14,17 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+(** The sum type holding a [Variable] or a [Symbol]. *)
 
-type t = private
-  | Var of Variable.t
-  | Symbol of Symbol.t
-(* CR mshinwell: Phantom variables should be in here now.
-  | Phantom_var of Variable.t
-*)
+[@@@ocaml.warning "+a-30-40-41-42"]
 
-val var : Variable.t -> t
-val symbol : Symbol.t -> t
+include module type of struct include Reg_width_things.Name end
 
 val map_var : t -> f:(Variable.t -> Variable.t) -> t
 
 val map_symbol : t -> f:(Symbol.t -> Symbol.t) -> t
 
 val to_var : t -> Variable.t option
-
-include Identifiable.S with type t := t
 
 val print_sexp : Format.formatter -> t -> unit
 
@@ -50,10 +42,14 @@ val set_to_symbol_set : Set.t -> Symbol.Set.t
 
 val is_predefined_exception : t -> bool
 
+val is_var : t -> bool
+
+val is_symbol : t -> bool
+
+val must_be_symbol : t -> Symbol.t
+
+val must_be_var_opt : t -> Variable.t option
+
+val must_be_symbol_opt : t -> Symbol.t option
+
 val rename : t -> t
-
-module Pair : sig
-  type nonrec t = t * t
-
-  include Identifiable.S with type t := t
-end

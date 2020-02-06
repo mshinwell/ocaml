@@ -37,11 +37,11 @@ let build_dep_graph dacc lifted_constants =
   List.fold_left
     (fun (dep_graph, code_id_or_symbol_to_const)
          ((bound_symbols : Bound_symbols.t), defining_expr) ->
-      (*
+(*
       Format.eprintf "Input for one set: %a = %a\n%!"
         Bound_symbols.print bound_symbols
         Static_const.print defining_expr;
-      *)
+*)
       let bound_symbols_free_names = Bound_symbols.free_names bound_symbols in
       CIS.Set.fold
         (fun (being_defined : CIS.t)
@@ -66,25 +66,29 @@ let build_dep_graph dacc lifted_constants =
              involved in the current SCC calculation.  For this latter set,
              we must explicitly add them as dependencies. *)
           let free_syms =
-            Variable.Set.fold (fun var free_syms ->
-                let typing_env = DE.typing_env (DA.denv dacc) in
-                let canonical =
-                  TE.get_canonical_simple typing_env
-                    ~min_name_mode:NM.normal
-                    (Simple.var var)
-                in
-                match canonical with
-                | Bottom | Ok None -> free_syms
-                | Ok (Some canonical) ->
-                  match Simple.descr canonical with
-                  | Name (Var _) | Const _ -> free_syms
-                  | Name (Symbol sym) ->
-                    if Symbol.Set.mem sym all_symbols_being_defined then
-                      Symbol.Set.add sym free_syms
-                    else
-                      free_syms)
-              (Name_occurrences.variables free_names)
-              (Name_occurrences.symbols free_names)
+            Name_occurrences.fold_names free_names
+              ~init:Symbol.Set.empty
+              ~f:(fun free_syms name ->
+                Name.pattern_match name
+                  ~var:(fun var ->
+                    let typing_env = DA.typing_env dacc in
+                    match
+                      TE.get_canonical_simple_exn typing_env
+                        ~min_name_mode:NM.normal
+                        (Simple.var var)
+                    with
+                    | exception Not_found -> free_syms
+                    | canonical ->
+                      Simple.pattern_match canonical
+                        ~const:(fun _ -> free_syms)
+                        ~name:(fun name ->
+                          Name.pattern_match name
+                            ~var:(fun _var -> free_syms)
+                            ~symbol:(fun sym ->
+                              if Symbol.Set.mem sym all_symbols_being_defined
+                              then Symbol.Set.add sym free_syms
+                              else free_syms)))
+                  ~symbol:(fun sym -> Symbol.Set.add sym free_syms))
           in
           let free_code_ids =
             Name_occurrences.code_ids_and_newer_version_of_code_ids free_names

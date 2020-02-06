@@ -14,30 +14,22 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-type t
+type t = private Simple.t
 type elt = t
 
+val initialise : unit -> unit
+
 val create
-   : Flambda_kind.t
-  -> Simple.t
+   : Simple.t
   -> Binding_time.t
   -> Name_mode.t
   -> t
 
-val create_name
-   : Flambda_kind.t
-  -> Name.t
-  -> Binding_time.t
-  -> Name_mode.t
-  -> t
+val create_symbol : Symbol.t -> t
 
 val defined_earlier : t -> than:t -> bool
 
 val simple : t -> Simple.t
-
-val kind : t -> Flambda_kind.t
-
-val implicitly_bound_and_canonical : t -> bool
 
 val name_mode : t -> Name_mode.t
 
@@ -46,8 +38,8 @@ module Order_within_equiv_class
 
 val order_within_equiv_class : t -> Order_within_equiv_class.t
 
-val name : t -> Name.t option
-
 module Set_ordered_by_binding_time : Set.S with type elt := t
 
 include Identifiable.S with type t := t
+
+val set_to_simple_set : Set.t -> Simple.Set.t

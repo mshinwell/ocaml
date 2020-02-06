@@ -105,12 +105,12 @@ Format.eprintf "%d uses for %a\n%!"
     let definition_scope_level = TE.current_scope typing_env in
     let use_envs_with_ids =
       List.map (fun use ->
-(*
+      (*
           Format.eprintf "Use: parameters: %a,@ arg types: %a,@ env:@ %a\n%!"
             Kinded_parameter.List.print params
             (Format.pp_print_list ~pp_sep:Format.pp_print_space T.print)
             (U.arg_types use) TE.print (U.typing_env_at_use use);
-*)
+        *)
           let use_env =
             U.typing_env_at_use use
             |> TE.add_equations_on_params ~params
@@ -124,12 +124,13 @@ Format.eprintf "%d uses for %a\n%!"
 Format.eprintf "Unknown at or later than %a\n%!"
   Scope.print (Scope.next definition_scope_level);
 *)
-    let handler_typing_env, extra_params_and_args, is_single_inlinable_use =
+    let handler_typing_env, extra_params_and_args, is_single_inlinable_use,
+        is_single_use =
       match use_envs_with_ids with
       | [use_env, _, Inlinable, _] ->
         (* A single inlinable use will be inlined out by the simplifier, so
            avoid any join-related computations. *)
-        use_env, Continuation_extra_params_and_args.empty, true
+        use_env, Continuation_extra_params_and_args.empty, true, true
       | [] | [_, _, Non_inlinable, _]
       | (_, _, (Inlinable | Non_inlinable), _) :: _ ->
         let env_extension, extra_params_and_args =
@@ -148,9 +149,14 @@ Format.eprintf "The extra params and args are:@ %a\n%!"
           typing_env
           |> TE.add_definitions_of_params
             ~params:extra_params_and_args.extra_params
-          |> TE.add_env_extension ~env_extension
         in
-        handler_env, extra_params_and_args, false
+        let handler_env = TE.add_env_extension handler_env env_extension in
+        let is_single_use =
+          match uses with
+          | [_] -> true
+          | [] | _::_::_ -> false
+        in
+        handler_env, extra_params_and_args, false, is_single_use
     in
     let arg_types_by_use_id =
       List.fold_left (fun args use ->
@@ -168,4 +174,5 @@ Format.eprintf "The extra params and args are:@ %a\n%!"
       arg_types_by_use_id;
       extra_params_and_args;
       is_single_inlinable_use;
+      is_single_use;
     }

@@ -16,303 +16,105 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Const = struct
-  type t =
-    | Naked_immediate of Immediate.t
-    | Tagged_immediate of Immediate.t
-    | Naked_float of Numbers.Float_by_bit_pattern.t
-    | Naked_int32 of Int32.t
-    | Naked_int64 of Int64.t
-    | Naked_nativeint of Targetint.t
+module RWC = Reg_width_const
 
-  let const_true = Tagged_immediate (Immediate.bool_true)
-  let const_false = Tagged_immediate (Immediate.bool_false)
+include Reg_width_things.Simple
 
-  let untagged_const_true = Naked_immediate Immediate.bool_true
-  let untagged_const_false = Naked_immediate Immediate.bool_false
+let const_bool b = const (if b then RWC.const_true else RWC.const_false)
 
-  let const_int i = Tagged_immediate (Immediate.int i) 
+let const_true = const_bool true
+let const_false = const_bool false
 
-  let const_zero = const_int Targetint.OCaml.zero
-  let const_one = const_int Targetint.OCaml.one
-  let const_unit = const_zero
+let untagged_const_true = const RWC.untagged_const_true
+let untagged_const_false = const RWC.untagged_const_false
 
-  include Identifiable.Make (struct
-    type nonrec t = t
+let const_int i = const (RWC.const_int i)
+let const_zero = const RWC.const_zero
+let const_one = const RWC.const_one
 
-    let compare t1 t2 =
-      match t1, t2 with
-      | Naked_immediate i1, Naked_immediate i2 ->
-        Immediate.compare i1 i2
-      | Tagged_immediate i1, Tagged_immediate i2 ->
-        Immediate.compare i1 i2
-      | Naked_float f1, Naked_float f2 ->
-        Numbers.Float_by_bit_pattern.compare f1 f2
-      | Naked_int32 n1, Naked_int32 n2 ->
-        Int32.compare n1 n2
-      | Naked_int64 n1, Naked_int64 n2 ->
-        Int64.compare n1 n2
-      | Naked_nativeint n1, Naked_nativeint n2 ->
-        Targetint.compare n1 n2
-      | Naked_immediate _, _ -> -1
-      | _, Naked_immediate _ -> 1
-      | Tagged_immediate _, _ -> -1
-      | _, Tagged_immediate _ -> 1
-      | Naked_float _, _ -> -1
-      | _, Naked_float _ -> 1
-      | Naked_int32 _, _ -> -1
-      | _, Naked_int32 _ -> 1
-      | Naked_int64 _, _ -> -1
-      | _, Naked_int64 _ -> 1
+let const_unit = const RWC.const_unit
 
-    let equal t1 t2 = (compare t1 t2 = 0)
+let [@inline always] is_var t =
+  pattern_match t ~name:Name.is_var ~const:(fun _ -> false)
 
-    let hash t =
-      match t with
-      | Naked_immediate n -> Immediate.hash n
-      | Tagged_immediate n -> Immediate.hash n
-      | Naked_float n -> Numbers.Float_by_bit_pattern.hash n
-      | Naked_int32 n -> Hashtbl.hash n
-      | Naked_int64 n -> Hashtbl.hash n
-      | Naked_nativeint n -> Targetint.hash n
+let [@inline always] is_symbol t =
+  pattern_match t ~name:Name.is_symbol ~const:(fun _ -> false)
 
-    let print ppf (t : t) =
-      match t with
-      | Naked_immediate i ->
-        Format.fprintf ppf "@<0>%s#%a@<0>%s"
-          (Flambda_colours.naked_number ())
-          Immediate.print i
-          (Flambda_colours.normal ())
-      | Tagged_immediate i ->
-        Format.fprintf ppf "@<0>%s%a@<0>%s"
-          (Flambda_colours.tagged_immediate ())
-          Immediate.print i
-          (Flambda_colours.normal ())
-      | Naked_float f ->
-        Format.fprintf ppf "@<0>%s#%a@<0>%s"
-          (Flambda_colours.naked_number ())
-          Numbers.Float_by_bit_pattern.print f
-          (Flambda_colours.normal ())
-      | Naked_int32 n ->
-        Format.fprintf ppf "@<0>%s#%ldl@<0>%s"
-          (Flambda_colours.naked_number ())
-          n
-          (Flambda_colours.normal ())
-      | Naked_int64 n ->
-        Format.fprintf ppf "@<0>%s#%LdL@<0>%s"
-          (Flambda_colours.naked_number ())
-          n
-          (Flambda_colours.normal ())
-      | Naked_nativeint n ->
-        Format.fprintf ppf "@<0>%s#%an@<0>%s"
-          (Flambda_colours.naked_number ())
-          Targetint.print n
-          (Flambda_colours.normal ())
+let [@inline always] is_const t =
+  pattern_match t ~name:(fun _ -> false) ~const:(fun _ -> true)
 
-    let output chan t =
-      print (Format.formatter_of_out_channel chan) t
-  end)
+let const_from_descr descr = const (RWC.of_descr descr)
 
-  let kind t =
-    let module K = Flambda_kind in
-    match t with
-    | Naked_immediate _ -> K.naked_immediate
-    | Tagged_immediate _ -> K.value
-    | Naked_float _ -> K.naked_float
-    | Naked_int32 _ -> K.naked_int32
-    | Naked_int64 _ -> K.naked_int64
-    | Naked_nativeint _ -> K.naked_nativeint
-end
-
-(* CR-someday mshinwell: Consider putting [Var] and [Symbol] directly
-   in here. *)
-type t =
-  | Name of Name.t
-  | Rec_name of Name.t * Rec_info.t
-  | Const of Const.t
-
-let name name = Name name
-let var var = Name (Name.var var)
-let vars vars = List.map var vars
-let symbol sym = Name (Name.symbol sym)
-let const cst = Const cst
-
-let const_bool b = Const (if b then Const.const_true else Const.const_false)
-
-let const_int i = Const (Const.const_int i)
-
-let const_true = Const Const.const_true
-let const_false = Const Const.const_false
-let const_unit = Const Const.const_unit
-
-let untagged_const_true = Const Const.untagged_const_true
-let untagged_const_false = Const Const.untagged_const_false
-
-let const_zero = Const Const.const_zero
-let const_one = Const Const.const_one
-
-let unit = Const Const.const_unit
-
-let is_var t =
-  match t with
-  | Name (Var _) | Rec_name (Var _, _) -> true
-  | _ -> false
-
-let is_const t =
-  match t with
-  | Const _ -> true
-  | _ -> false
-
-let is_symbol t =
-  match t with
-  | Name (Symbol _) | Rec_name (Symbol _, _) -> true
-  | _ -> false
+let without_rec_info t = pattern_match t ~name ~const
 
 let merge_rec_info t ~newer_rec_info =
-  match newer_rec_info with
-  | None -> Some t
-  | Some newer_rec_info ->
-    match t with
-    | Const _ -> None
-    | Name name -> Some (Rec_name (name, newer_rec_info))
-    | Rec_name (name, older_rec_info) ->
-      let t =
-        Rec_name (name, Rec_info.merge older_rec_info ~newer:newer_rec_info)
+  if is_const t then None
+  else
+    match newer_rec_info with
+    | None -> Some t
+    | Some newer_rec_info ->
+      let rec_info =
+        match rec_info t with
+        | None -> newer_rec_info
+        | Some older_rec_info ->
+          Rec_info.merge older_rec_info ~newer:newer_rec_info
       in
-      Some t
+      Some (with_rec_info (without_rec_info t) rec_info)
 
-let rec_info t =
-  match t with
-  | Rec_name (_, rec_info) -> Some rec_info
-  | Name _ | Const _ -> None
+(* CR mshinwell: Make naming consistent with [Name] re. the option type *)
 
-let without_rec_info t =
-  match t with
-  | Rec_name (name, _rec_info) -> Name name
-  | Name _ | Const _ -> t
+(* CR mshinwell: Careful that Rec_info doesn't get dropped using the
+   following *)
 
-let must_be_var t =
-  match t with
-  | Name (Var var) | Rec_name (Var var, _) -> Some var
-  | Name _ | Rec_name (_, _) | Const _ -> None
+let [@inline always] must_be_var t =
+  pattern_match t ~name:Name.must_be_var_opt ~const:(fun _ -> None)
 
-let must_be_symbol t =
-  match t with
-  | Name (Symbol sym) | Rec_name (Symbol sym, _) -> Some sym
-  | Name _ | Rec_name (_, _) | Const _ -> None
+let [@inline always] must_be_symbol t =
+  pattern_match t ~name:Name.must_be_symbol_opt ~const:(fun _ -> None)
 
-let allowed t ~allowed =
-  match must_be_var t with
-  | None -> true
-  | Some var -> Variable.Set.mem var allowed
+let [@inline always] must_be_name t =
+  pattern_match t ~name:(fun name -> Some name) ~const:(fun _ -> None)
 
 let to_name t =
-  match t with
-  | Name name -> Some (None, name)
-  | Rec_name (name, rec_info) -> Some (Some rec_info, name)
-  | _ -> None
+  match must_be_name t with
+  | None -> None
+  | Some name -> Some (rec_info t, name)
 
 let map_name t ~f =
-  match t with
-  | Name name ->
-    let name' = f name in
-    if name == name' then t
-    else Name name'
-  | Rec_name (name, rec_info) ->
-    let name' = f name in
-    if name == name' then t
-    else Rec_name (name', rec_info)
-  | Const _ -> t
+  match must_be_name t with
+  | None -> t
+  | Some old_name -> name (f old_name)
 
 let map_var t ~f =
-  match t with
-  | Name name ->
-    let name' = Name.map_var name ~f in
-    if name == name' then t
-    else Name name'
-  | Rec_name (name, rec_info) ->
-    let name' = Name.map_var name ~f in
-    if name == name' then t
-    else Rec_name (name', rec_info)
-  | Const _ -> t
+  match must_be_name t with
+  | None -> t
+  | Some old_name -> name (Name.map_var old_name ~f)
 
 let map_symbol t ~f =
-  match t with
-  | Name name ->
-    let name' = Name.map_symbol name ~f in
-    if name == name' then t
-    else Name name'
-  | Rec_name (name, rec_info) ->
-    let name' = Name.map_symbol name ~f in
-    if name == name' then t
-    else Rec_name (name', rec_info)
-  | Const _ -> t
+  match must_be_name t with
+  | None -> t
+  | Some old_name -> name (Name.map_symbol old_name ~f)
 
 let free_names t =
-  match t with
-  | Name name | Rec_name (name, _) ->
-    Name_occurrences.singleton_name name Name_mode.normal
-  | Const _ -> Name_occurrences.empty
+  pattern_match t
+    ~name:(fun name -> Name_occurrences.singleton_name name Name_mode.normal)
+    ~const:(fun _ -> Name_occurrences.empty)
 
 let free_names_in_types t =
-  match t with
-  | Name name | Rec_name (name, _) ->
-    Name_occurrences.singleton_name name Name_mode.in_types
-  | Const _ -> Name_occurrences.empty
+  pattern_match t
+    ~name:(fun name -> Name_occurrences.singleton_name name Name_mode.in_types)
+    ~const:(fun _ -> Name_occurrences.empty)
 
 let apply_name_permutation t perm =
-  match t with
-  | Name name ->
-    let name' = Name_permutation.apply_name perm name in
-    if name == name' then t
-    else Name name'
-  | Rec_name (name, rec_info) ->
-    let name' = Name_permutation.apply_name perm name in
-    if name == name' then t
-    else Rec_name (name', rec_info)
-  | Const _ -> t
-
-module T0 = Identifiable.Make (struct
-  type nonrec t = t
-
-  let compare t1 t2 =
-    if t1 == t2 then 0
+  let [@inline always] name old_name =
+    let new_name = Name_permutation.apply_name perm old_name in
+    if old_name == new_name then t
     else
-      match t1, t2 with
-      | Name n1, Name n2 -> Name.compare n1 n2
-      | Rec_name (n1, rec_info1), Rec_name (n2, rec_info2) ->
-        let c = Name.compare n1 n2 in
-        if c <> 0 then c
-        else Rec_info.compare rec_info1 rec_info2
-      | Const c1, Const c2 -> Const.compare c1 c2
-      | Name _, _ -> -1
-      | Rec_name _, Name _ -> 1
-      | Rec_name _, _ -> -1
-      | Const _, (Name _ | Rec_name _) -> 1
-
-  let equal t1 t2 = (compare t1 t2 = 0)
-
-  let hash t =
-    match t with
-    | Name name -> Hashtbl.hash (0, Name.hash name)
-    | Rec_name (name, rec_info) ->
-      Hashtbl.hash (1, (Name.hash name, Rec_info.hash rec_info))
-    | Const c -> Hashtbl.hash (2, Const.hash c)
-
-  let print ppf t =
-    match t with
-    | Name name -> Name.print ppf name
-    | Rec_name (name, rec_info) ->
-      Format.fprintf ppf "@[%a@ %a@]"
-        Name.print name
-        Rec_info.print rec_info
-    | Const c -> Const.print ppf c
-
-  let output chan t =
-    print (Format.formatter_of_out_channel chan) t
-end)
-
-include T0
+      match rec_info t with
+      | None -> name new_name
+      | Some rec_info -> with_rec_info (name new_name) rec_info
+  in
+  pattern_match t ~const:(fun _ -> t) ~name
 
 module List = struct
   type nonrec t = t list
@@ -358,8 +160,8 @@ end
 
 module Pair = struct
   include Identifiable.Make_pair
-    (struct type nonrec t = t include T0 end)
-    (struct type nonrec t = t include T0 end)
+    (Reg_width_things.Simple)
+    (Reg_width_things.Simple)
 
   type nonrec t = t * t
 end
@@ -396,18 +198,3 @@ module With_kind = struct
     if simple == simple' then t
     else simple', kind
 end
-
-type descr =
-  | Name of Name.t
-  | Const of Const.t
-
-let descr (t : t) : descr =
-  match t with
-  (* CR mshinwell: This causes quite a lot of allocation *)
-  | Name name | Rec_name (name, _) -> Name name
-  | Const const -> Const const
-
-let of_descr (descr : descr) : t =
-  match descr with
-  | Name name -> Name name
-  | Const const -> Const const

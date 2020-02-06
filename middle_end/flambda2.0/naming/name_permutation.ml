@@ -14,10 +14,13 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-30-40-41-42"]
+[@@@ocaml.warning "+a-4-30-40-41-42-55"]
 
-module Continuations = Permutation.Make (Continuation)
-module Variables = Permutation.Make (Variable)
+(* CR mshinwell: Disabling warning 55 is required to satisfy Closure, work
+   out something better... *)
+
+module Continuations = (Permutation.Make [@inlined always]) (Continuation)
+module Variables = (Permutation.Make [@inlined always]) (Variable)
 
 type t = {
   continuations : Continuations.t;
@@ -41,7 +44,7 @@ let is_empty { continuations; variables }  =
   Continuations.is_empty continuations
     && Variables.is_empty variables
 
-let compose
+let compose0
       ~second:
         { continuations = continuations2;
           variables = variables2;
@@ -54,6 +57,11 @@ let compose
       Continuations.compose ~second:continuations2 ~first:continuations1;
     variables = Variables.compose ~second:variables2 ~first:variables1;
   }
+
+let compose ~second ~first =
+  if is_empty second then first
+  else if is_empty first then second
+  else compose0 ~second ~first
 
 let add_variable t var1 var2 =
   { t with
@@ -70,10 +78,10 @@ let apply_variable_set t vars =
     vars
     Variable.Set.empty
 
-let apply_name t (name : Name.t) =
-  match name with
-  | Var var -> Name.var (apply_variable t var)
-  | Symbol _ -> name
+let apply_name t name =
+  Name.pattern_match name
+    ~var:(fun var -> Name.var (apply_variable t var))
+    ~symbol:(fun _ -> name)
 
 let add_continuation t k1 k2 =
   { t with

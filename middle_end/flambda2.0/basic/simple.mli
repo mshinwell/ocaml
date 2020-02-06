@@ -19,53 +19,19 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Const : sig
-  type t =
-    | Naked_immediate of Immediate.t
-      (** [Naked_immediate] is similar to [Naked_nativeint], but represents
-          integers of width [n - 1] bits, where [n] is the native machine
-          width. (By contrast, [Naked_nativeint] represents integers of
-          width [n] bits.) *)
-    | Tagged_immediate of Immediate.t
-    | Naked_float of Numbers.Float_by_bit_pattern.t
-    | Naked_int32 of Int32.t
-    | Naked_int64 of Int64.t
-    | Naked_nativeint of Targetint.t
+include module type of struct include Reg_width_things.Simple end
 
-  include Identifiable.S with type t := t
-
-  val kind : t -> Flambda_kind.t
-end
-
-type t
-
-type descr = private
-  | Name of Name.t
-  | Const of Const.t
-
-val descr : t -> descr
-
-val of_descr : descr -> t
-
-val name : Name.t -> t
-
-val var : Variable.t -> t
-
-val vars : Variable.t list -> t list
-
-val symbol : Symbol.t -> t
-
-val const : Const.t -> t
-
-val rec_info : t -> Rec_info.t option
-
-val without_rec_info : t -> t
+include Contains_names.S with type t := t
 
 val merge_rec_info : t -> newer_rec_info:Rec_info.t option -> t option
+
+val without_rec_info : t -> t
 
 val must_be_var : t -> Variable.t option
 
 val must_be_symbol : t -> Symbol.t option
+
+val must_be_name : t -> Name.t option
 
 (** The constant representating the given number of type "int". *)
 val const_int : Targetint.OCaml.t -> t
@@ -87,10 +53,10 @@ val const_zero : t
 
 val const_one : t
 
+(** The constant representing the unit value. *)
 val const_unit : t
 
-(** The constant representing the unit value. *)
-val unit : t
+val const_from_descr : Reg_width_const.Descr.t -> t
 
 val map_name : t -> f:(Name.t -> Name.t) -> t
 
@@ -106,13 +72,7 @@ val is_symbol : t -> bool
 
 val is_var : t -> bool
 
-include Contains_names.S with type t := t
-
 val free_names_in_types : t -> Name_occurrences.t
-
-val allowed : t -> allowed:Variable.Set.t -> bool 
-
-include Identifiable.S with type t := t
 
 module List : sig
   type nonrec t = t list

@@ -15,16 +15,42 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 include Numbers.Int
+type binding_time = t
 
-let strictly_earlier t ~than =
+let strictly_earlier (t : t) ~than =
   t < than
 
 let consts_and_discriminants = 0
 let symbols = 1
 let earliest_var = 2
 
-let succ t =
+let succ (t : t) =
   if t < earliest_var then
     Misc.fatal_error "Cannot increment binding time for symbols"
   else
     t + 1
+
+(* CR mshinwell: enforce an upper limit on values of type [t] *)
+
+module With_name_mode = struct
+  type t = int
+
+  let [@inline always] create binding_time name_mode =
+    let name_mode =
+      match Name_mode.descr name_mode with
+      | Normal -> 0
+      | In_types -> 1
+      | Phantom -> 2
+    in
+    (binding_time lsl 2) lor name_mode
+
+  let binding_time t =
+    t lsr 2
+
+  let [@inline always] name_mode t =
+    match t land 3 with
+    | 0 -> Name_mode.normal
+    | 1 -> Name_mode.in_types
+    | 2 -> Name_mode.phantom
+    | _ -> assert false
+end

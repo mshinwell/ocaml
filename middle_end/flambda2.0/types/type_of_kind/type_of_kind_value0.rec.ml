@@ -244,9 +244,9 @@ struct
         let right_env = Meet_or_join_env.right_join_env env in
         (* CR mshinwell: Move to [TEE] *)
         let join_extensions env ext1 ext2 =
-          let initial_env_at_join = Meet_or_join_env.target_join_env env in
+          let env_at_fork = Meet_or_join_env.target_join_env env in
           let env_extension, _ =
-            TEE.n_way_join ~initial_env_at_join [
+            TEE.n_way_join ~env_at_fork [
               left_env, Apply_cont_rewrite_id.create (), Non_inlinable,
                 Variable.Set.empty, ext1;
               right_env, Apply_cont_rewrite_id.create (), Non_inlinable,

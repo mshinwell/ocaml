@@ -121,7 +121,7 @@ module Call_site_decision = struct
 end
 
 (* CR mshinwell: These parameters need to be configurable *)
-let max_inlining_depth = 10
+let max_inlining_depth = 1
 let max_rec_depth = 1
 
 let make_decision_for_call_site denv ~function_decl_rec_info

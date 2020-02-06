@@ -45,9 +45,9 @@ let simplify_make_block dacc _prim dbg
           if T.is_bottom (DE.typing_env denv) arg_ty then begin
            found_bottom := true
           end;
-          match Simple.descr arg with
-          | Const _ -> arg_ty
-          | Name name -> T.alias_type_of K.value (Simple.name name))
+          Simple.pattern_match arg
+            ~const:(fun _ -> arg_ty)
+            ~name:(fun name -> T.alias_type_of K.value (Simple.name name)))
         args_with_tys value_kinds
     in
     if !found_bottom then begin
@@ -75,18 +75,21 @@ let simplify_make_block dacc _prim dbg
   | Full_of_naked_floats -> Misc.fatal_error "Not yet implemented"
   | Generic_array _spec -> Misc.fatal_error "Not yet implemented"
 
-let try_cse dacc prim args ~min_name_mode ~result_var
+let try_cse dacc ~original_prim prim args ~min_name_mode ~result_var
       : Simplify_common.cse =
   let result_kind = P.result_kind_of_variadic_primitive' prim in
-  match S.simplify_simples dacc args ~min_name_mode:Name_mode.min_in_types with
-  | Bottom -> Invalid (T.bottom result_kind)
-  | Ok args_with_tys ->
-    let args, _tys = List.split args_with_tys in
-    let original_prim : P.t = Variadic (prim, args) in
+  match S.simplify_simples' dacc args ~min_name_mode:Name_mode.min_in_types with
+  | _, Bottom -> Invalid (T.bottom result_kind)
+  | changed, Ok args ->
+    let original_prim : P.t =
+      match changed with
+      | Changed -> Variadic (prim, args)
+      | Unchanged -> original_prim
+    in
     Simplify_common.try_cse dacc ~original_prim ~result_kind
       ~min_name_mode ~result_var
 
-let simplify_variadic_primitive dacc
+let simplify_variadic_primitive dacc ~original_named ~original_prim
       (prim : P.variadic_primitive) args dbg ~result_var =
   let min_name_mode = Var_in_binding_pos.name_mode result_var in
   let result_var' = Var_in_binding_pos.var result_var in
@@ -94,23 +97,30 @@ let simplify_variadic_primitive dacc
     let env_extension = TEE.one_equation (Name.var result_var') ty in
     Reachable.invalid (), env_extension, dacc
   in
-  match try_cse dacc prim args ~min_name_mode ~result_var:result_var' with
+  match
+    try_cse dacc ~original_prim prim args ~min_name_mode ~result_var:result_var'
+  with
   | Invalid ty -> invalid ty
   | Applied result -> result
   | Not_applied dacc ->
     match S.simplify_simples dacc args ~min_name_mode with
-    | Bottom ->
+    | _, Bottom ->
       let result_kind = P.result_kind_of_variadic_primitive' prim in
       invalid (T.bottom result_kind)
-    | Ok args_with_tys ->
+    | args_changed, Ok args_with_tys ->
       match prim with
-      | Make_block ((Full_of_values _) as make_block_kind, mutable_or_immutable) ->
+      | Make_block ((Full_of_values _) as make_block_kind,
+          mutable_or_immutable) ->
         simplify_make_block dacc prim dbg ~make_block_kind ~mutable_or_immutable
           args_with_tys ~result_var:result_var'
       | Make_block _
       | Bigarray_set _ (*(_is_safe, _num_dims, _kind, _layout) *)
       | Bigarray_load _ -> (* (_is_safe, _num_dims, _kind, _layout) -> *)
-        let named = Named.create_prim (Variadic (prim, args)) dbg in
+        let named =
+          match args_changed with
+          | Changed -> Named.create_prim (Variadic (prim, args)) dbg
+          | Unchanged -> original_named
+        in
         let kind = P.result_kind_of_variadic_primitive' prim in
         let ty = T.unknown kind in
         let env_extension = TEE.one_equation (Name.var result_var') ty in

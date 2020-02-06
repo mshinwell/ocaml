@@ -67,13 +67,6 @@ let object_tag = Obj.object_tag
 
 let arbitrary = max_int
 
-let all_as_targetints =
-  let all = ref Targetint.Set.empty in
-  for tag = min_tag to max_tag do
-    all := Targetint.Set.add (Targetint.of_int tag) !all
-  done;
-  !all
-
 module Scannable = struct
   type nonrec t = t
 

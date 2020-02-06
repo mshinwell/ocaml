@@ -56,14 +56,15 @@ let filter_closure_vars env s =
 let todo () = failwith "Not yet implemented"
 (* ----- End of functions to share ----- *)
 
-let name_static env = function
-  | Name.Var v -> env, `Var v
-  | Name.Symbol s ->
-    Env.check_scope ~allow_deleted:false env (Code_id_or_symbol.Symbol s),
-    `Data [C.symbol_address (symbol s)]
+let name_static env name =
+  Name.pattern_match name
+    ~var:(fun v -> env, `Var v)
+    ~symbol:(fun s ->
+      Env.check_scope ~allow_deleted:false env (Code_id_or_symbol.Symbol s),
+      `Data [C.symbol_address (symbol s)])
 
-let const_static _env c =
-  match (c : Simple.Const.t) with
+let const_static _env cst =
+  match Reg_width_const.descr cst with
   | Naked_immediate i ->
       [C.cint (nativeint_of_targetint (targetint_of_imm i))]
   | Tagged_immediate i ->
@@ -79,9 +80,9 @@ let const_static _env c =
       [C.cint (nativeint_of_targetint t)]
 
 let simple_static env s =
-  match (Simple.descr s : Simple.descr) with
-  | Name n -> name_static env n
-  | Const c -> env, `Data (const_static env c)
+  Simple.pattern_match s
+    ~name:(fun n -> name_static env n)
+    ~const:(fun c -> env, `Data (const_static env c))
 
 let static_value env v =
   match (v : SC.Field_of_block.t) with
@@ -238,15 +239,16 @@ and fill_static_up_to j acc i =
 
 let update_env_for_function
     env code_id ~return_continuation:_ _exn_k _ps ~body ~my_closure =
-  let free_vars = Name_occurrences.variables (Expr.free_names body) in
+  let free_vars = Expr.free_names body in
   (* Format.eprintf "Free vars: %a@." Variable.Set.print free_vars; *)
-  let needs_closure_arg = Variable.Set.mem my_closure free_vars in
+  let needs_closure_arg = Name_occurrences.mem_var free_vars my_closure in
   let info : Env.function_info = { needs_closure_arg; } in
   Env.add_function_info env code_id info
 
 let update_env_for_set_of_closure env { SCCSC.code; set_of_closures = _; } =
   Code_id.Map.fold
     (fun code_id SC.Code.({ params_and_body = p; newer_version_of; }) env ->
+       (* Check scope of the closure id *)
        let env =
          match newer_version_of with
          | None -> env

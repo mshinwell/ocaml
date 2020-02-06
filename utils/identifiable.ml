@@ -14,6 +14,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
+[@@@ocaml.warning "-55"]
+
 module type Thing = sig
   type t
 
@@ -34,8 +36,6 @@ module type Set = sig
   val of_list : elt list -> t
   val map : (elt -> elt) -> t -> t
   val union_list : t list -> t
-
-  module Set : Set.S with type elt = t
 end
 
 module type Map = sig
@@ -72,6 +72,7 @@ module type Map = sig
         -> 'a t
         -> 'b
         -> 'b option
+  val inter : (key -> 'a -> 'a -> 'a) -> 'a t -> 'a t -> 'a t
 end
 
 module type Tbl = sig
@@ -108,7 +109,7 @@ module Pair (A : Thing) (B : Thing) : Thing with type t = A.t * B.t = struct
 end
 
 module Make_map (T : Thing) (Set : Set with module T := T) = struct
-  include Map.Make (T)
+  include (Map.Make [@inlined always]) (T)
 
   module Set = Set
 
@@ -220,11 +221,18 @@ module Make_map (T : Thing) (Set : Set with module T := T) = struct
              if T.compare key1 key2 <> 0 then None
              else Some (f key1 datum1 datum2 acc))
         (Some init) t1 t2
-end
+
+  let inter f t1 t2 =
+    merge (fun key datum1_opt datum2_opt ->
+        match datum1_opt, datum2_opt with
+        | None, None | None, Some _ | Some _, None -> None
+        | Some datum1, Some datum2 -> Some (f key datum1 datum2))
+      t1 t2
+end [@@@inline always]
 
 module Make_set (T : Thing) = struct
   module T0 = struct
-    include Set.Make (T)
+    include (Set.Make [@inlined always]) (T)
 
     let output oc s =
       Printf.fprintf oc " ( ";
@@ -246,16 +254,15 @@ module Make_set (T : Thing) = struct
   end
 
   include T0
-  module Set = Set.Make (T0)
 
   let rec union_list ts =
     match ts with
     | [] -> empty
     | t::ts -> union t (union_list ts)
-end
+end [@@@inline always]
 
 module Make_tbl (T : Thing) (Map : Map with module T := T) = struct
-  include Hashtbl.Make (T)
+  include (Hashtbl.Make [@inlined always]) (T)
 
   module Map = Map
 
@@ -283,7 +290,7 @@ module Make_tbl (T : Thing) (Map : Map with module T := T) = struct
 
   let map t f =
     of_map (Map.map f (to_map t))
-end
+end [@@@inline always]
 
 module type S = sig
   type t
@@ -303,7 +310,7 @@ module Make (T : Thing) = struct
   module Set = Make_set (T)
   module Map = Make_map (T) (Set)
   module Tbl = Make_tbl (T) (Map)
-end
+end [@@@inline always]
 
 module Make_pair (T1 : S) (T2 : S) = struct
   module Pair = Pair (T1.T) (T2.T)

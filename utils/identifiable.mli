@@ -44,8 +44,6 @@ module type Set = sig
   val of_list : elt list -> t
   val map : (elt -> elt) -> t -> t
   val union_list : t list -> t
-
-  module Set : Set.S with type elt = t
 end
 
 module type Map = sig
@@ -89,6 +87,8 @@ module type Map = sig
         -> 'a t
         -> 'b
         -> 'b option
+
+  val inter : (key -> 'a -> 'a -> 'a) -> 'a t -> 'a t -> 'a t
 end
 
 module type Tbl = sig
@@ -109,6 +109,9 @@ module type Tbl = sig
   val memoize : 'a t -> (key -> 'a) -> key -> 'a
   val map : 'a t -> ('a -> 'b) -> 'b t
 end
+
+module Make_tbl (T : Thing) (Map : Map with module T := T)
+  : Tbl with module T := T with module Map = Map
 
 module type S = sig
   type t

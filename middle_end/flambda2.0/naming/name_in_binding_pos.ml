@@ -40,11 +40,12 @@ let symbol sym =
   }
 
 let to_var t =
-  match t.name with
-  | Var var -> Some (Var_in_binding_pos.create var t.name_mode)
-  | Symbol _ -> None
+  Name.pattern_match t.name
+    ~var:(fun var -> Some (Var_in_binding_pos.create var t.name_mode))
+    ~symbol:(fun _sym -> None)
 
 let to_name t = t.name
+
 let to_simple t = Simple.name t.name
 
 include Identifiable.Make (struct
@@ -74,20 +75,14 @@ include Identifiable.Make (struct
   let output _ _ = Misc.fatal_error "Not yet implemented"
 end)
 
-let is_symbol t =
-  match t.name with
-  | Symbol _ -> true
-  | Var _ -> false
+let is_symbol t = Name.is_symbol t.name
 
-let must_be_symbol t =
-  match t.name with
-  | Symbol sym -> sym
-  | Var _ -> Misc.fatal_errorf "Must be a symbol:@ %a" print t
+let must_be_symbol t = Name.must_be_symbol t.name
 
 let rename t =
-  match t.name with
-  | Symbol _ -> t
-  | Var var ->
-    { t with
-      name = Name.var (Variable.rename var);
-    }
+  Name.pattern_match t.name
+    ~var:(fun var ->
+      { t with
+        name = Name.var (Variable.rename var);
+      })
+    ~symbol:(fun _ -> t)

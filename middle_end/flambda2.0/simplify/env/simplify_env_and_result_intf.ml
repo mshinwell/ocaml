@@ -66,6 +66,8 @@ module type Downwards_env = sig
 
   val symbol_is_currently_being_defined : t -> Symbol.t -> bool
 
+  val symbols_currently_being_defined : t -> Symbol.Set.t
+
   val typing_env : t -> Flambda_type.Typing_env.t
 
   val define_variable : t -> Var_in_binding_pos.t -> Flambda_kind.t -> t
@@ -131,15 +133,7 @@ module type Downwards_env = sig
 
   val check_code_id_is_bound : t -> Code_id.t -> unit
 
-  (** Add the given lifted constants to the given environment.  Symbols
-      defined in the lifted constants but already defined in the given
-      environment are ignored.
-  *)
   val add_lifted_constants : t -> lifted:lifted_constant list -> t
-
-  (** Like [add_lifted_constants], but takes the constants from the given
-      result structure. *)
-  val add_lifted_constants_from_r : t -> result -> t
 
   val define_code
      : t
@@ -155,7 +149,9 @@ module type Downwards_env = sig
   (** Appends the locations of inlined call-sites to the given debuginfo
       and sets the resulting debuginfo as the current one in the
       environment. *)
-  val add_inlined_debuginfo : t -> Debuginfo.t -> t
+  val add_inlined_debuginfo : t -> Debuginfo.t -> t (* CR mshinwell: remove? *)
+
+  val set_inlined_debuginfo : t -> Debuginfo.t -> t
 
   val add_inlined_debuginfo' : t -> Debuginfo.t -> Debuginfo.t
 
@@ -189,6 +185,14 @@ module type Upwards_env = sig
     -> Flambda_arity.t
     -> t
 
+  val add_continuation_with_handler
+     : t
+    -> Continuation.t
+    -> Scope.t
+    -> Flambda_arity.t
+    -> Continuation_handler.t
+    -> t
+
   val add_unreachable_continuation
      : t
     -> Continuation.t
@@ -201,15 +205,6 @@ module type Upwards_env = sig
     -> Continuation.t
     -> Flambda_arity.t
     -> alias_for:Continuation.t
-    -> t
-
-  val add_continuation_apply_cont_with_constant_arg
-     : t
-    -> Continuation.t
-    -> Scope.t
-    -> Flambda_arity.t
-    -> destination_cont:Continuation.t
-    -> destination_arg:Simple.Const.t
     -> t
 
   val add_continuation_to_inline
@@ -274,6 +269,10 @@ module type Result = sig
       in the order returned (first element of the list defined first). *)
   (* CR mshinwell: Update name to reflect this *)
   val get_lifted_constants : t -> lifted_constant list
+
+  val get_and_clear_lifted_constants : t -> t * (lifted_constant list)
+
+  val add_prior_lifted_constants : t -> lifted_constant list -> t
 
   val set_lifted_constants : t -> lifted_constant list -> t
 

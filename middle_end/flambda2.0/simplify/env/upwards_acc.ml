@@ -17,7 +17,6 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module DA = Downwards_acc
-module DE = Simplify_env_and_result.Downwards_env
 module R = Simplify_env_and_result.Result
 module TE = Flambda_type.Typing_env
 module UE = Simplify_env_and_result.Upwards_env
@@ -46,7 +45,7 @@ let create uenv code_age_relation r =
 
 let of_dacc dacc =
   { uenv = UE.empty;
-    code_age_relation = TE.code_age_relation (DE.typing_env (DA.denv dacc));
+    code_age_relation = TE.code_age_relation (DA.typing_env dacc);
     r = DA.r dacc;
   }
 

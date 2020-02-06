@@ -348,20 +348,22 @@ module For_blocks = struct
 
   let create ~(field_kind : Flambda_kind.t) ~field_tys
         (open_or_closed : open_or_closed) =
-    let field_kind' =
-      List.map Type_grammar.kind field_tys
-      |> Flambda_kind.Set.of_list
-      |> Flambda_kind.Set.get_singleton
-    in
-    begin match field_kind' with
-    | None ->
-      if List.length field_tys <> 0 then begin
-        Misc.fatal_error "[field_tys] must all be of the same kind"
-      end
-    | Some field_kind' ->
-      if not (Flambda_kind.equal field_kind field_kind') then begin
-        Misc.fatal_errorf "Declared field kind %a doesn't match [field_tys]"
-          Flambda_kind.print field_kind
+    if !Clflags.flambda_invariant_checks then begin
+      let field_kind' =
+        List.map Type_grammar.kind field_tys
+        |> Flambda_kind.Set.of_list
+        |> Flambda_kind.Set.get_singleton
+      in
+      begin match field_kind' with
+      | None ->
+        if List.length field_tys <> 0 then begin
+          Misc.fatal_error "[field_tys] must all be of the same kind"
+        end
+      | Some field_kind' ->
+        if not (Flambda_kind.equal field_kind field_kind') then begin
+          Misc.fatal_errorf "Declared field kind %a doesn't match [field_tys]"
+            Flambda_kind.print field_kind
+        end
       end
     end;
     let tag : _ Or_unknown.t =
@@ -404,9 +406,8 @@ module For_blocks = struct
             Flambda_kind.print field_kind
         end
     in
-    let fields = List.mapi (fun index ty -> index, ty) field_tys in
-    let product = Product.Int_indexed.create (Int.Map.of_list fields) in
-    let size = Targetint.OCaml.of_int (List.length field_tys) in
+    let product = Product.Int_indexed.create_from_list field_tys in
+    let size = Product.Int_indexed.width product in
     match open_or_closed with
     | Open _ -> create_at_least (tag, size) product
     | Closed _ ->
@@ -418,7 +419,7 @@ module For_blocks = struct
     let at_least =
       Tag.Set.fold (fun tag at_least ->
           Tag_or_unknown_and_size.Map.add (Known tag, Targetint.OCaml.zero)
-            (Product.Int_indexed.create Int.Map.empty)
+            (Product.Int_indexed.create_empty ())
             at_least)
         tags
         Tag_or_unknown_and_size.Map.empty

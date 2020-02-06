@@ -16,32 +16,9 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module T0 = struct
-  type t = {
-    body : Expr.t;
-  }
-
-  let print_with_cache ~cache:_ ppf { body; } =
-    fprintf ppf "@[<hov 1>(\
-        @[<hov 1>(body %a)@]\
-        )@]"
-      Expr.print body
-
-  let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
-
-  let free_names { body; } =
-    Expr.free_names body
-
-  let apply_name_permutation ({ body;} as t) perm =
-    let body' =
-      Expr.apply_name_permutation body perm
-    in
-    if body == body' then t
-    else { body = body'; }
-end
-module T1 = Name_abstraction.Make_list (Kinded_parameter) (T0)
-module T2 = Name_abstraction.Make (Bindable_exn_continuation) (T1)
-module A = Name_abstraction.Make (Bindable_continuation) (T2)
+module T0 = Name_abstraction.Make_list (Kinded_parameter) (Expr)
+module T1 = Name_abstraction.Make (Bindable_exn_continuation) (T0)
+module A = Name_abstraction.Make (Bindable_continuation) (T1)
 
 type t = {
   abst : A.t;
@@ -51,39 +28,30 @@ type t = {
 let invariant _env _t = ()
 
 let create ~return_continuation exn_continuation params ~body ~my_closure =
-  let t0 : T0.t =
-    { body;
-    }
-  in
-  let my_closure =
-    Kinded_parameter.create (Parameter.wrap my_closure) K.value
-  in
-  let t1 = T1.create (params @ [my_closure]) t0 in
-  let t2 = T2.create exn_continuation t1 in
-  let abst = A.create return_continuation t2 in
+  let my_closure = Kinded_parameter.create my_closure K.value in
+  let t0 = T0.create (params @ [my_closure]) body in
+  let t1 = T1.create exn_continuation t0 in
+  let abst = A.create return_continuation t1 in
   { abst;
     params_arity = Kinded_parameter.List.arity params;
   }
 
 let pattern_match t ~f =
-  A.pattern_match t.abst ~f:(fun return_continuation t2 ->
-    T2.pattern_match t2 ~f:(fun exn_continuation t1 ->
-      T1.pattern_match t1 ~f:(fun params_and_my_closure t0 ->
+  A.pattern_match t.abst ~f:(fun return_continuation t1 ->
+    T1.pattern_match t1 ~f:(fun exn_continuation t0 ->
+      T0.pattern_match t0 ~f:(fun params_and_my_closure body ->
         let params, my_closure =
           match List.rev params_and_my_closure with
           | my_closure::params_rev ->
             List.rev params_rev, Kinded_parameter.var my_closure
           | [] -> assert false  (* see [create], above. *)
         in
-        f ~return_continuation exn_continuation params ~body:t0.body
-          ~my_closure)))
+        f ~return_continuation exn_continuation params ~body ~my_closure)))
 
 let print_with_cache ~cache ppf t =
   pattern_match t
     ~f:(fun ~return_continuation exn_continuation params ~body ~my_closure ->
-      let my_closure =
-        Kinded_parameter.create (Parameter.wrap my_closure) Flambda_kind.value
-      in
+      let my_closure = Kinded_parameter.create my_closure Flambda_kind.value in
       fprintf ppf
         "@[<hov 1>(@<0>%s@<1>\u{03bb}@<0>%s@[<hov 1>\
          @<1>\u{3008}%a@<1>\u{3009}@<1>\u{300a}%a@<1>\u{300b}\

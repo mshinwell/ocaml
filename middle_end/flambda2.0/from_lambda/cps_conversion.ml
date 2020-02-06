@@ -195,6 +195,26 @@ let rec cps_non_tail (lam : L.lambda) (k : Ident.t -> Ilambda.t)
     let func = cps_function func in
     let body = cps_non_tail body k k_exn in
     Let_rec ([id, func], body)
+  | Llet (_, value_kind, id, Lconst const, body) ->
+    (* This case avoids extraneous continuations. *)
+    let body = cps_non_tail body k k_exn in
+    I.Let (id, User_visible, value_kind, Const const, body)
+  | Llet (_let_kind, value_kind, id, Lprim (prim, args, loc), body) ->
+    (* This case avoids extraneous continuations. *)
+    let exn_continuation : I.exn_continuation option =
+      if L.primitive_can_raise prim then
+        Some {
+          exn_handler = k_exn;
+          extra_args = [];
+        }
+      else None
+    in
+    cps_non_tail_list args (fun args ->
+        let body = cps_non_tail body k k_exn in
+        I.Let (id, User_visible, value_kind,
+          Prim { prim; args; loc; exn_continuation; },
+          body))
+      k_exn
   | Llet (_let_kind, value_kind, id, defining_expr, body) ->
     let body = cps_non_tail body k k_exn in
     let after_defining_expr = Continuation.create () in
@@ -445,10 +465,41 @@ and cps_tail (lam : L.lambda) (k : Continuation.t) (k_exn : Continuation.t)
       handler = Let_mutable let_mutable;
     }
   | Llet (Alias, Pgenval, id, Lfunction func, body) ->
+    (* CR mshinwell: Why is this case restricted to [Alias]? *)
     (* This case is here to get function names right. *)
     let func = cps_function func in
     let body = cps_tail body k k_exn in
     Let_rec ([id, func], body)
+  | Llet (_, value_kind, id, Lconst const, body) ->
+    (* This case avoids extraneous continuations. *)
+    let body = cps_tail body k k_exn in
+    I.Let (id, User_visible, value_kind, Const const, body)
+  | Llet (_let_kind, value_kind, id, Lprim (prim, args, loc), body) ->
+    (* This case avoids extraneous continuations. *)
+    let exn_continuation : I.exn_continuation option =
+      if L.primitive_can_raise prim then
+        Some {
+          exn_handler = k_exn;
+          extra_args = [];
+        }
+      else None
+    in
+    cps_non_tail_list args (fun args ->
+        let body = cps_tail body k k_exn in
+        I.Let (id, User_visible, value_kind,
+          Prim { prim; args; loc; exn_continuation; },
+          body))
+      k_exn
+  | Llet (_let_kind, _value_kind, id, Lassign (being_assigned, new_value),
+      body) ->
+    (* This case is also to avoid extraneous continuations in code that
+       relies on the ref-conversion optimisation. *)
+    cps_non_tail new_value (fun new_value ->
+        let body = cps_tail body k k_exn in
+        I.Let (id, User_visible, Pgenval,
+          I.Assign { being_assigned; new_value; },
+          body))
+      k_exn
   | Llet (_let_kind, value_kind, id, defining_expr, body) ->
     let body = cps_tail body k k_exn in
     let after_defining_expr = Continuation.create () in
@@ -609,7 +660,7 @@ and name_then_cps_tail name defining_expr k _k_exn : I.t =
 
 and cps_non_tail_list lams k k_exn =
   let lams = List.rev lams in  (* Always evaluate right-to-left. *)
-  cps_non_tail_list_core lams k k_exn
+  cps_non_tail_list_core lams (fun ids -> k (List.rev ids)) k_exn
 
 and cps_non_tail_list_core (lams : L.lambda list)
       (k : Ident.t list -> Ilambda.t)
@@ -618,7 +669,7 @@ and cps_non_tail_list_core (lams : L.lambda list)
   | [] -> k []
   | lam::lams ->
     cps_non_tail lam (fun id ->
-      cps_non_tail_list_core lams (fun ids -> k (ids @ [id])) k_exn)
+      cps_non_tail_list_core lams (fun ids -> k (id :: ids)) k_exn)
       k_exn
 
 and cps_function ({ kind; params; return; body; attr; loc; } : L.lfunction)
@@ -652,53 +703,49 @@ and cps_function ({ kind; params; return; body; attr; loc; } : L.lfunction)
 
 and cps_switch (switch : proto_switch) ~scrutinee (k : Continuation.t)
       (k_exn : Continuation.t) : Ilambda.t =
-  let const_nums, consts = List.split switch.consts in
-  let const_conts = List.map (fun _ -> Continuation.create ()) consts in
-  let consts = List.combine consts const_conts in
-  let failaction_cont, failaction =
-    match switch.failaction with
-    | None -> None, None
-    | Some failaction ->
-      let cont = Continuation.create () in
-      Some cont, Some (cont, failaction)
+  let consts_rev, wrappers =
+    List.fold_left (fun (consts_rev, wrappers) (arm, action) ->
+        let action = cps_tail action k k_exn in
+        match action with
+        | Apply_cont (cont, trap, args) ->
+          let consts_rev = (arm, cont, trap, args) :: consts_rev in
+          consts_rev, wrappers
+        | Let _ | Let_mutable _ | Let_rec _ | Let_cont _ | Apply _ | Switch _ ->
+          let cont = Continuation.create () in
+          let consts_rev = (arm, cont, None, []) :: consts_rev in
+          let wrappers = (cont, action) :: wrappers in
+          consts_rev, wrappers)
+      ([], [])
+      switch.consts
   in
-  let switch : Ilambda.switch =
+  let consts = List.rev consts_rev in
+  let failaction, wrappers =
+    match switch.failaction with
+    | None -> None, wrappers
+    | Some action ->
+      let cont = Continuation.create () in
+      let action = cps_tail action k k_exn in
+      let wrappers = (cont, action) :: wrappers in
+      Some (cont, None, []), wrappers
+  in
+  let switch : I.switch =
     { numconsts = switch.numconsts;
-      consts = List.combine const_nums const_conts;
-      failaction = failaction_cont;
+      consts;
+      failaction;
     }
   in
-  let make_continuations desc ~init =
-    List.fold_right (fun (case, cont) acc ->
-        let handler = cps_tail case k k_exn in
-        I.Let_cont {
-          name = cont;
-          is_exn_handler = false;
-          params = [];
-          recursive = Nonrecursive;
-          body = acc;
-          handler;
-        })
-      desc
-      init
-  in
   cps_non_tail scrutinee (fun scrutinee ->
-      let body = I.Switch (scrutinee, switch) in
-      let init =
-        match failaction with
-        | None -> body
-        | Some (cont, failaction) ->
-          let handler = cps_tail failaction k k_exn in
+      List.fold_left (fun body (cont, action) ->
           I.Let_cont {
             name = cont;
             is_exn_handler = false;
             params = [];
             recursive = Nonrecursive;
             body;
-            handler;
-          }
-      in
-      make_continuations consts ~init)
+            handler = action;
+          })
+        (I.Switch (scrutinee, switch))
+        wrappers)
     k_exn
 
 let lambda_to_ilambda lam ~recursive_static_catches:recursive_static_catches'

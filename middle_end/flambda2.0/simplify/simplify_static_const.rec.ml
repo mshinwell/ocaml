@@ -35,14 +35,18 @@ let simplify_field_of_block dacc (field : Field_of_block.t) =
       (* CR mshinwell: This should be "invalid" and propagate up *)
       field, T.bottom K.value
     | Ok simple, ty ->
-      match Simple.descr simple with
-      | Name (Symbol sym) -> Field_of_block.Symbol sym, ty
-      | Name (Var _) -> field, ty
-      | Const (Tagged_immediate imm) -> Field_of_block.Tagged_immediate imm, ty
-      | Const (Naked_immediate _ | Naked_float _ | Naked_int32 _
-          | Naked_int64 _ | Naked_nativeint _) ->
-        (* CR mshinwell: This should be "invalid" and propagate up *)
-        field, ty
+      Simple.pattern_match simple
+        ~name:(fun name ->
+          Name.pattern_match name
+            ~var:(fun _var -> field, ty)
+            ~symbol:(fun sym -> Field_of_block.Symbol sym, ty))
+        ~const:(fun const ->
+          match Reg_width_const.descr const with
+          | Tagged_immediate imm -> Field_of_block.Tagged_immediate imm, ty
+          | Naked_immediate _ | Naked_float _ | Naked_int32 _
+              | Naked_int64 _ | Naked_nativeint _ ->
+            (* CR mshinwell: This should be "invalid" and propagate up *)
+            field, ty)
 
 let simplify_or_variable dacc type_for_const
       (or_variable : _ Or_variable.t) =

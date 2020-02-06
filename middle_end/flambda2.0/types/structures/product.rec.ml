@@ -52,8 +52,6 @@ module Make (Index : Identifiable.S) = struct
     Index.Map.exists (fun _ typ -> Type_grammar.is_obviously_bottom typ)
       t.components_by_index
 
-  let indexes t = Index.Map.keys t.components_by_index
-
   let width t =
     Targetint.OCaml.of_int (Index.Map.cardinal t.components_by_index)
 
@@ -65,16 +63,13 @@ module Make (Index : Identifiable.S) = struct
     let all_bottom = ref true in
     let env_extension = ref (TEE.empty ()) in
     let components_by_index =
-      Index.Map.merge (fun _index ty1_opt ty2_opt ->
-          match ty1_opt, ty2_opt with
-          | None, None | Some _, None | None, Some _ -> None
-          | Some ty1, Some ty2 ->
-            let ty, env_extension' = Type_grammar.meet' env ty1 ty2 in
-            env_extension := TEE.meet env !env_extension env_extension';
-            if not (Type_grammar.is_obviously_bottom ty) then begin
-              all_bottom := false
-            end;
-            Some ty)
+      Index.Map.inter (fun _index ty1 ty2 ->
+          let ty, env_extension' = Type_grammar.meet' env ty1 ty2 in
+          env_extension := TEE.meet env !env_extension env_extension';
+          if not (Type_grammar.is_obviously_bottom ty) then begin
+            all_bottom := false
+          end;
+          ty)
         components_by_index1
         components_by_index2
     in
@@ -85,27 +80,25 @@ module Make (Index : Identifiable.S) = struct
         { components_by_index = components_by_index1; }
         { components_by_index = components_by_index2; } =
     let components_by_index =
-      Index.Map.merge (fun _index ty1_opt ty2_opt ->
-          match ty1_opt, ty2_opt with
-          | None, None -> None
-          | Some ty, None | None, Some ty -> Some ty
-          | Some ty1, Some ty2 -> Some (Type_grammar.join' env ty1 ty2))
+      Index.Map.union (fun _index ty1 ty2 ->
+          Some (Type_grammar.join' env ty1 ty2))
         components_by_index1
         components_by_index2
     in
     { components_by_index; }
 
   let widen t ~to_match =
-    let missing_indexes = Index.Set.diff (indexes to_match) (indexes t) in
+    let kind =
+      match Index.Map.choose to_match.components_by_index with
+      | exception Not_found -> Flambda_kind.value  (* won't be used *)
+      | (_index, ty) -> Type_grammar.kind ty
+    in
+    let ty = Type_grammar.unknown kind in
     let components_by_index =
-      Index.Set.fold (fun index components_by_index ->
-          let kind =
-            match Index.Map.choose to_match.components_by_index with
-            | exception Not_found -> assert false
-            | (_index, ty) -> Type_grammar.kind ty
-          in
-          Index.Map.add index (Type_grammar.unknown kind) components_by_index)
-        missing_indexes
+      Index.Map.fold (fun index _ components_by_index ->
+          if Index.Map.mem index t.components_by_index then components_by_index
+          else Index.Map.add index ty components_by_index)
+        to_match.components_by_index
         t.components_by_index
     in
     { components_by_index; }
@@ -145,8 +138,91 @@ module Make (Index : Identifiable.S) = struct
   let to_map t = t.components_by_index
 end
 
-module Int_indexed = Make (Numbers.Int)
-
 module Closure_id_indexed = Make (Closure_id)
 
 module Var_within_closure_indexed = Make (Var_within_closure)
+
+module Int_indexed = struct
+  (* CR mshinwell: Add [Or_bottom].  However what should [width] return for
+     [Bottom]?  Maybe we can circumvent that question if removing [Row_like].
+  *)
+  type t = T.t array
+
+  let print ppf t =
+    Format.fprintf ppf "@[<hov 1>(%a)@]"
+      (Format.pp_print_list ~pp_sep:Format.pp_print_space T.print)
+      (Array.to_list t)
+
+  let print_with_cache ~cache:_ ppf t = print ppf t
+
+  let create _ = Misc.fatal_error "Not implemented"
+
+  let create_from_list tys = Array.of_list tys
+
+  let create_empty () = [| |]
+
+  let create_bottom () = [| (Type_grammar.bottom Flambda_kind.value) |]
+
+  let is_bottom t =
+    Array.exists Type_grammar.is_obviously_bottom t
+
+  let width t = Targetint.OCaml.of_int (Array.length t)
+
+  let components t = Array.to_list t
+
+  let meet env t1 t2 : _ Or_bottom.t =
+    let all_bottom = ref true in
+    let env_extension = ref (TEE.empty ()) in
+    let t =
+      Array.init (Array.length t1) (fun index ->
+        let ty, env_extension' = Type_grammar.meet' env t1.(index) t2.(index) in
+        env_extension := TEE.meet env !env_extension env_extension';
+        if not (Type_grammar.is_obviously_bottom ty) then begin
+          all_bottom := false
+        end;
+        ty)
+    in
+    if !all_bottom && Array.length t > 0 then Bottom
+    else Ok (t, !env_extension)
+
+  let join env t1 t2 =
+    Array.init (Array.length t1) (fun index ->
+      Type_grammar.join' env t1.(index) t2.(index))
+
+  let widen t ~to_match =
+    let t_len = Array.length t in
+    let to_match_len = Array.length to_match in
+    if t_len >= to_match_len then t
+    else
+      let kind = Type_grammar.kind to_match.(0) in
+      Array.init to_match_len (fun index ->
+        if index < t_len then t.(index)
+        else Type_grammar.unknown kind)
+
+  let apply_name_permutation t perm =
+    let t = Array.copy t in
+    for i = 0 to Array.length t - 1 do
+      t.(i) <- Type_grammar.apply_name_permutation t.(i) perm
+    done;
+    t
+
+  let free_names t =
+    Array.fold_left (fun free_names ty ->
+        Name_occurrences.union (Type_grammar.free_names ty) free_names)
+      Name_occurrences.empty
+      t
+
+  let map_types t ~(f : Type_grammar.t -> Type_grammar.t Or_bottom.t)
+        : _ Or_bottom.t =
+    let found_bottom = ref false in
+    let t = Array.copy t in
+    for i = 0 to Array.length t - 1 do
+      match f t.(i) with
+      | Bottom -> found_bottom := true
+      | Ok typ -> t.(i) <- typ
+    done;
+    if !found_bottom then Bottom
+    else Ok t
+
+  let to_map _ = Misc.fatal_error "Not implemented"
+end

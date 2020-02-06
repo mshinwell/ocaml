@@ -18,7 +18,7 @@
 
 open! Simplify_import
 
-let simplify_primitive dacc (prim : P.t) dbg ~result_var =
+let simplify_primitive dacc ~original_named (prim : P.t) dbg ~result_var =
 (*Format.eprintf "Simplifying primitive:@ %a\n%!" P.print prim;*)
   match prim with
   | Unary (prim, arg) ->
@@ -30,6 +30,7 @@ let simplify_primitive dacc (prim : P.t) dbg ~result_var =
   | Ternary (prim, arg1, arg2, arg3) ->
     Simplify_ternary_primitive.simplify_ternary_primitive dacc
       prim arg1 arg2 arg3 dbg ~result_var
-  | Variadic (prim, args) ->
+  | Variadic (variadic_prim, args) ->
     Simplify_variadic_primitive.simplify_variadic_primitive dacc
-      prim args dbg ~result_var
+      ~original_named ~original_prim:prim variadic_prim
+      args dbg ~result_var

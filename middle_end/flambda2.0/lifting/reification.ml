@@ -51,13 +51,12 @@ let lift dacc ty ~bound_to static_const =
       end;
       let dacc =
         DA.map_r dacc ~f:(fun r ->
-          Lifted_constant.create (DA.denv dacc)
-            (Singleton symbol) static_const
-            ~types_of_symbols:(Symbol.Map.singleton symbol ty)
-          |> R.new_lifted_constant r)
-      in
-      let dacc =
-        DA.map_r dacc ~f:(fun r ->
+          let r =
+            Lifted_constant.create (DA.denv dacc)
+              (Singleton symbol) static_const
+              ~types_of_symbols:(Symbol.Map.singleton symbol ty)
+            |> R.new_lifted_constant r
+          in
           R.consider_constant_for_sharing r symbol static_const)
       in
       let dacc =
@@ -96,9 +95,10 @@ let try_to_reify dacc (term : Reachable.t) ~bound_to =
            recursive function [f] that has no free variables, containing
            the closure [f].) *)
         let overlap_with_current_definitions =
+          let free_names = Static_const.free_names static_const in
           Symbol.Set.exists (fun sym ->
-              DE.symbol_is_currently_being_defined denv sym)
-            (Name_occurrences.symbols (Static_const.free_names static_const))
+              Name_occurrences.mem_symbol free_names sym)
+            (DE.symbols_currently_being_defined denv)
         in
         if overlap_with_current_definitions then term, dacc, ty
         else lift dacc ty ~bound_to static_const

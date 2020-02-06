@@ -40,11 +40,17 @@ val extra_args
   -> Apply_cont_rewrite_id.t
   -> Continuation_extra_params_and_args.Extra_arg.t list
 
+type rewrite_use_result = private
+  | Apply_cont of Flambda.Apply_cont.t
+  | Expr of Flambda.Expr.t
+
+val no_rewrite : Flambda.Apply_cont.t -> rewrite_use_result
+
 val rewrite_use
    : t
   -> Apply_cont_rewrite_id.t
   -> Flambda.Apply_cont.t
-  -> Flambda.Expr.t * Flambda.Apply_cont.t * Simple.t list
+  -> rewrite_use_result
 
 val rewrite_exn_continuation
    : t

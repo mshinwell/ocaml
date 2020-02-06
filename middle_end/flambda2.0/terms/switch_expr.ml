@@ -16,54 +16,49 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module K = Flambda_kind
-
 type t = {
   scrutinee : Simple.t;
-  arms : Continuation.t Immediate.Map.t;
+  arms : Apply_cont_expr.t Immediate.Map.t;
 }
 
 let fprintf = Format.fprintf
 
 let print_arms ppf arms =
   let arms =
-    Immediate.Map.fold (fun discr k arms_inverse ->
-        match Continuation.Map.find k arms_inverse with
+    Immediate.Map.fold (fun discr action arms_inverse ->
+        match Apply_cont_expr.Map.find action arms_inverse with
         | exception Not_found ->
-          Continuation.Map.add k (Immediate.Set.singleton discr)
+          Apply_cont_expr.Map.add action (Immediate.Set.singleton discr)
             arms_inverse
         | discrs ->
-          Continuation.Map.add k (Immediate.Set.add discr discrs)
+          Apply_cont_expr.Map.add action (Immediate.Set.add discr discrs)
             arms_inverse)
       arms
-      Continuation.Map.empty
+      Apply_cont_expr.Map.empty
   in
   let spc = ref false in
   let arms =
-    List.sort (fun (k1, discrs1) (k2, discrs2) ->
+    List.sort (fun (action1, discrs1) (action2, discrs2) ->
         let min1 = Immediate.Set.min_elt_opt discrs1 in
         let min2 = Immediate.Set.min_elt_opt discrs2 in
         match min1, min2 with
-        | None, None -> Continuation.compare k1 k2
+        | None, None -> Apply_cont_expr.compare action1 action2
         | None, Some _ -> -1
         | Some _, None -> 1
         | Some min1, Some min2 -> Immediate.compare min1 min2)
-      (Continuation.Map.bindings arms)
+      (Apply_cont_expr.Map.bindings arms)
   in
-  List.iter (fun (k, discrs) ->
+  List.iter (fun (action, discrs) ->
       if !spc then fprintf ppf "@ " else spc := true;
       let discrs = Immediate.Set.elements discrs in
-      fprintf ppf "@[<hov 2>@[<hov 0>| %a @<0>%s\u{21a6}@<0>%s@ @]\
-          @<0>%sgoto@<0>%s %a@]"
+      fprintf ppf "@[<hov 2>@[<hov 0>| %a @<0>%s\u{21a6}@<0>%s@ @]%a@]"
         (Format.pp_print_list
           ~pp_sep:(fun ppf () -> Format.fprintf ppf "@ | ")
           Immediate.print)
         discrs
         (Flambda_colours.elide ())
         (Flambda_colours.normal ())
-        (Flambda_colours.expr_keyword ())
-        (Flambda_colours.normal ())
-        Continuation.print k)
+        Apply_cont_expr.print action)
     arms
 
 let print ppf { scrutinee; arms; } =
@@ -76,6 +71,9 @@ let print ppf { scrutinee; arms; } =
 
 let print_with_cache ~cache:_ ppf t = print ppf t
 
+let invariant _ _ = ()
+
+(*
 let invariant env ({ scrutinee; arms; } as t) =
   let module E = Invariant_env in
   let unbound_continuation cont reason =
@@ -111,6 +109,7 @@ let invariant env ({ scrutinee; arms; } as t) =
       end
   in
   Immediate.Map.iter check arms
+*)
 
 let create ~scrutinee ~arms =
   { scrutinee; arms; }
@@ -124,8 +123,9 @@ let arms t = t.arms
 
 let free_names { scrutinee; arms; } =
   let free_names_in_arms =
-    Immediate.Map.fold (fun _discr k free_names ->
-        Name_occurrences.add_continuation free_names k)
+    Immediate.Map.fold (fun _discr action free_names ->
+        Name_occurrences.union (Apply_cont_expr.free_names action)
+          free_names)
       arms
       (Name_occurrences.empty)
   in
@@ -134,8 +134,8 @@ let free_names { scrutinee; arms; } =
 let apply_name_permutation ({ scrutinee; arms; } as t) perm =
   let scrutinee' = Simple.apply_name_permutation scrutinee perm in
   let arms' =
-    Immediate.Map.map_sharing (fun k ->
-        Name_permutation.apply_continuation perm k)
+    Immediate.Map.map_sharing (fun action ->
+        Apply_cont_expr.apply_name_permutation action perm)
       arms
   in
   if scrutinee == scrutinee' && arms == arms' then t

@@ -48,3 +48,5 @@ module Option : sig
 
   val print : Format.formatter -> t -> unit
 end
+
+val compare : t -> t -> int

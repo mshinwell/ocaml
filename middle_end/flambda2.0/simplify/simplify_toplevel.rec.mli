@@ -24,6 +24,4 @@ val simplify_toplevel
   -> Exn_continuation.t
   -> return_cont_scope:Scope.t
   -> exn_cont_scope:Scope.t
-  -> Flambda.Expr.t
-       * Continuation_uses_env.t
-       * Simplify_env_and_result.Result.t
+  -> Flambda.Expr.t * Downwards_acc.t * Simplify_env_and_result.Result.t

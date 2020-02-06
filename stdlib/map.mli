@@ -86,6 +86,8 @@ module type S =
        of [x] in [m] disappears.
        @before 4.03 Physical equality was not ensured. *)
 
+    val replace: key -> ('a -> 'a) -> 'a t -> 'a t
+
     val update: key -> ('a option -> 'a option) -> 'a t -> 'a t
     (** [update x f m] returns a map containing the same bindings as
         [m], except for the binding of [x]. Depending on the value of

@@ -21,12 +21,33 @@ type raise_kind =
   | Reraise
   | No_trace
 
+let raise_kind_to_int = function
+  | Regular -> 0
+  | Reraise -> 1
+  | No_trace -> 2
+
+let compare_raise_kind rk1 rk2 =
+  Int.compare (raise_kind_to_int rk1) (raise_kind_to_int rk2)
+
 type t =
   | Push of { exn_handler : Continuation.t; }
   | Pop of {
       exn_handler : Continuation.t;
       raise_kind : raise_kind option;
     }
+
+let compare t1 t2 =
+  match t1, t2 with
+  | Push { exn_handler = exn_handler1; },
+      Push { exn_handler = exn_handler2; } ->
+    Continuation.compare exn_handler1 exn_handler2
+  | Pop { exn_handler = exn_handler1; raise_kind = raise_kind1; },
+      Pop { exn_handler = exn_handler2; raise_kind = raise_kind2; } ->
+    let c = Continuation.compare exn_handler1 exn_handler2 in
+    if c <> 0 then c
+    else Option.compare compare_raise_kind raise_kind1 raise_kind2
+  | Push _, Pop _ -> -1
+  | Pop _, Push _ -> 1
 
 let raise_kind_option_to_string = function
   | None -> ""

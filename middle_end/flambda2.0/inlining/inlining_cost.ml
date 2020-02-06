@@ -117,10 +117,9 @@ let smaller' denv expr ~than:threshold =
     if !size > threshold then raise Exit;
     match named with
     | Simple simple ->
-      begin match Simple.descr simple with
-      | Name _ -> ()
-      | Const _ -> incr size
-      end
+      Simple.pattern_match simple
+        ~const:(fun _ -> incr size)
+        ~name:(fun _ -> ())
     | Set_of_closures set_of_closures ->
       let func_decls = Set_of_closures.function_decls set_of_closures in
       let funs = Function_declarations.funs func_decls in

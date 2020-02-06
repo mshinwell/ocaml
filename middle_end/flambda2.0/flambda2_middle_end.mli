@@ -18,6 +18,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+(** This function is not currently re-entrant. *)
 val middle_end
    : ppf_dump:Format.formatter
   -> prefixname:string

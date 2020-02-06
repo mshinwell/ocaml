@@ -228,34 +228,20 @@ let rec transform_expr env (expr : Ilambda.t) : Ilambda.t =
     Apply_cont (cont, trap_action, args @ extra_args)
   | Switch (id, switch) ->
     let id = Env.rename_variable env id in
-    (* CR mshinwell: This should probably be factored out somehow.  The
-       procedure is presumably also needed for every continuation whose
-       arity cannot be changed. *)
-    let wrapper_conts_for_consts, consts_rev =
-      List.fold_left (fun (wrapper_conts, consts_rev) (arm, cont) ->
+    let consts_rev =
+      List.fold_left (fun consts_rev (arm, cont, trap, args) ->
           let extra_args = Env.extra_args_for_continuation env cont in
-          match extra_args with
-          | [] -> wrapper_conts, (arm, cont) :: consts_rev
-          | _::_ ->
-            let wrapper_cont = Continuation.create () in
-            let handler : Ilambda.t = Apply_cont (cont, None, extra_args) in
-            let wrapper_conts = (wrapper_cont, handler) :: wrapper_conts in
-            wrapper_conts, (arm, wrapper_cont) :: consts_rev)
-        ([], [])
+          (arm, cont, trap, args @ extra_args) :: consts_rev)
+        []
         switch.consts
     in
     let consts = List.rev consts_rev in
-    let wrapper_conts_for_failaction, failaction =
+    let failaction =
       match switch.failaction with
-      | None -> [], None
-      | Some cont ->
+      | None -> None
+      | Some (cont, trap, args) ->
         let extra_args = Env.extra_args_for_continuation env cont in
-        match extra_args with
-        | [] -> [], Some cont
-        | _::_ ->
-          let wrapper_cont = Continuation.create () in
-          let handler : Ilambda.t = Apply_cont (cont, None, extra_args) in
-          [wrapper_cont, handler], Some wrapper_cont
+        Some (cont, trap, args @ extra_args)
     in
     let switch =
       { switch with
@@ -263,17 +249,7 @@ let rec transform_expr env (expr : Ilambda.t) : Ilambda.t =
         failaction;
       }
     in
-    List.fold_left (fun expr (cont, handler) : Ilambda.t ->
-        Let_cont {
-          name = cont;
-          is_exn_handler = false;
-          params = [];
-          recursive = Nonrecursive;
-          body = expr;
-          handler;
-        })
-      (Ilambda.Switch (id, switch))
-      (wrapper_conts_for_consts @ wrapper_conts_for_failaction)
+    Ilambda.Switch (id, switch)
 
 and transform_named env id user_visible kind (named : Ilambda.named) k
       : Ilambda.t =

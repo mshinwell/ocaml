@@ -124,8 +124,8 @@ and apply_kind =
 
 and switch = {
   numconsts : int;
-  consts : (int * Continuation.t) list;
-  failaction : Continuation.t option;
+  consts : (int * Continuation.t * trap_action option * (Ident.t list)) list;
+  failaction : (Continuation.t * trap_action option * (Ident.t list)) option;
 }
 
 type program = {

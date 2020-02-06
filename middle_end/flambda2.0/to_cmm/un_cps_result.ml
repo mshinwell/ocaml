@@ -51,7 +51,7 @@ let set_data r l =
       | _ ->
         Misc.fatal_errorf
           "Un_cps_result.set_data: %s"
-          "about to loose some translated static data items"
+          "about to lose some translated static data items"
     )
 
 let add_gc_roots r l =

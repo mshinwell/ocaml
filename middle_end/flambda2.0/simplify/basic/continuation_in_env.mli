@@ -17,13 +17,11 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 type t =
-  | Unknown of { arity : Flambda_arity.t; }
-  | Unreachable of { arity : Flambda_arity.t; }
-  | Apply_cont_with_constant_arg of {
-      cont : Continuation.t;
-      arg : Simple.Const.t;
+  | Unknown of {
       arity : Flambda_arity.t;
+      handler : Flambda.Continuation_handler.t option;
     }
+  | Unreachable of { arity : Flambda_arity.t; }
   | Inline of {
       arity : Flambda_arity.t;
       handler : Flambda.Continuation_handler.t;

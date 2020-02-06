@@ -18,6 +18,8 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+(* CR mshinwell: Remove uses of polymorphic comparison *)
+
 module K = Flambda_kind
 
 type classification_for_printing =
@@ -37,7 +39,13 @@ module Value_kind = struct
     | Definitely_pointer -> Format.pp_print_string ppf "Definitely_pointer"
     | Definitely_immediate -> Format.pp_print_string ppf "Definitely_immediate"
 
-  let compare = Stdlib.compare
+  let to_int t =
+    match t with
+    | Anything -> 0
+    | Definitely_pointer -> 1
+    | Definitely_immediate -> 2
+
+  let compare t1 t2 = (to_int t1) - (to_int t2)
 end
 
 module Generic_array_specialisation = struct
@@ -455,7 +463,7 @@ type unary_primitive =
 
 (* Here and below, operations that are genuine projections shouldn't be
    eligible for CSE, since we deal with projections through types. *)
-let unary_primitive_eligible_for_cse p =
+let unary_primitive_eligible_for_cse p ~arg =
   match p with
   | Duplicate_block {
       source_mutability = Immutable;
@@ -476,7 +484,11 @@ let unary_primitive_eligible_for_cse p =
   | Num_conv _
   | Boolean_not -> true
   | Unbox_number _ -> false
-  | Box_number _ -> true
+  | Box_number _ ->
+    (* Boxing of constants will yield values that can be lifted and if needs
+       be deduplicated -- so there's no point in adding CSE variables to
+       hold them. *)
+    Simple.is_var arg
   | Select_closure _
   | Project_var _ -> false
 
@@ -1002,9 +1014,12 @@ type variadic_primitive =
   | Bigarray_set of is_safe * num_dimensions * bigarray_kind * bigarray_layout
   | Bigarray_load of is_safe * num_dimensions * bigarray_kind * bigarray_layout
 
-let variadic_primitive_eligible_for_cse p =
+let variadic_primitive_eligible_for_cse p ~args =
   match p with
-  | Make_block (_, Immutable) -> true
+  | Make_block (_, Immutable) ->
+    (* See comment in [unary_primitive_eligible_for_cse], above, on
+       [Box_number] case. *)
+    List.exists (fun arg -> Simple.is_var arg) args
   | Make_block (_, Mutable) -> false
   | Bigarray_set _
   | Bigarray_load _ -> false
@@ -1386,15 +1401,15 @@ let at_most_generative_effects t =
 module Eligible_for_cse = struct
   type t = primitive_application
 
-  let create t =
+  let create ?map_arg t =
     (* CR mshinwell: Possible way of handling commutativity: for eligible
        primitives, sort the arguments here *)
     let prim_eligible =
       match t with
-      | Unary (prim, _) -> unary_primitive_eligible_for_cse prim
+      | Unary (prim, arg) -> unary_primitive_eligible_for_cse prim ~arg
       | Binary (prim, _, _) -> binary_primitive_eligible_for_cse prim
       | Ternary (prim, _, _, _) -> ternary_primitive_eligible_for_cse prim
-      | Variadic (prim, _) -> variadic_primitive_eligible_for_cse prim
+      | Variadic (prim, args) -> variadic_primitive_eligible_for_cse prim ~args
     in
     let eligible =
       prim_eligible && List.exists Simple.is_var (args t)
@@ -1411,8 +1426,34 @@ module Eligible_for_cse = struct
       Misc.fatal_errorf "Eligible_for_cse.create inconsistency: %a"
         print t
     end;
-    if eligible then Some t
-    else None
+    if not eligible then None
+    else
+      match map_arg with
+      | None -> Some t
+      | Some map_arg ->
+        let t =
+          match t with
+          | Unary (prim, arg) ->
+            let arg' = map_arg arg in
+            if arg == arg' then t
+            else Unary (prim, arg')
+          | Binary (prim, arg1, arg2) ->
+            let arg1' = map_arg arg1 in
+            let arg2' = map_arg arg2 in
+            if arg1 == arg1' && arg2 == arg2' then t
+            else Binary (prim, arg1', arg2')
+          | Ternary (prim, arg1, arg2, arg3) ->
+            let arg1' = map_arg arg1 in
+            let arg2' = map_arg arg2 in
+            let arg3' = map_arg arg3 in
+            if arg1 == arg1' && arg2 == arg2' && arg3 == arg3' then t
+            else Ternary (prim, arg1', arg2', arg3')
+          | Variadic (prim, args) ->
+            let args' = List.map map_arg args in
+            if List.for_all2 (==) args args' then t
+            else Variadic (prim, args')
+        in
+        Some t
 
   let create_exn prim =
     match create prim with
@@ -1455,6 +1496,45 @@ module Eligible_for_cse = struct
           args
       in
       acc, Variadic (prim, List.rev args)
+
+  let filter_map_args t ~f =
+    match t with
+    | Unary (prim, arg) ->
+      begin match f arg with
+      | None -> None
+      | Some arg' ->
+        if arg == arg' then Some t
+        else Some (Unary (prim, arg'))
+      end
+    | Binary (prim, arg1, arg2) ->
+      begin match f arg1 with
+      | None -> None
+      | Some arg1' ->
+        match f arg2 with
+        | None -> None
+        | Some arg2' ->
+          if arg1 == arg1' && arg2 == arg2' then Some t
+          else Some (Binary (prim, arg1', arg2'))
+      end
+    | Ternary (prim, arg1, arg2, arg3) ->
+      begin match f arg1 with
+      | None -> None
+      | Some arg1' ->
+        match f arg2 with
+        | None -> None
+        | Some arg2' ->
+          match f arg3 with
+          | None -> None
+          | Some arg3' ->
+            if arg1 == arg1' && arg2 == arg2' && arg3 == arg3' then Some t
+            else Some (Ternary (prim, arg1', arg2', arg3'))
+      end
+    | Variadic (prim, args) ->
+      let args' = List.filter_map f args in
+      if List.compare_lengths args args' = 0 then
+        if List.for_all2 (==) args args' then Some t
+        else Some (Variadic (prim, args'))
+      else None
 
   let free_names = free_names
   let apply_name_permutation = apply_name_permutation

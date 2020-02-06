@@ -32,20 +32,19 @@ val empty : unit -> t
 
 val is_empty : t -> bool
 
-val defined_vars_in_order : t -> (Variable.t * Flambda_kind.t) list
-
-val defined_vars_in_order' : t -> Variable.t list
+val defined_vars : t -> Flambda_kind.t Variable.Map.t
 
 val defined_names : t -> Name.Set.t
 
+(*
 val defines_name_but_no_equations : t -> Name.t -> bool
+*)
 
 val equations : t -> Type_grammar.t Name.Map.t
 
 val one_equation : Name.t -> Type_grammar.t -> t
 
-(* CR mshinwell: Can we remove [Binding_time.t] here? *)
-val add_definition : t -> Variable.t -> Flambda_kind.t -> Binding_time.t -> t
+val add_definition : t -> Variable.t -> Flambda_kind.t -> t
 
 val add_or_replace_equation : t -> Name.t -> Type_grammar.t -> t
 
@@ -60,7 +59,7 @@ val concat : t -> t -> t
 val meet : Meet_env.t -> t -> t -> t
 
 val n_way_join
-   : initial_env_at_join:Typing_env.t
+   : env_at_fork:Typing_env.t
   -> (Typing_env.t * Apply_cont_rewrite_id.t * Continuation_use_kind.t
        * Variable.Set.t * t) list
   -> t * Continuation_extra_params_and_args.t

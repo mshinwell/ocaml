@@ -236,8 +236,10 @@ let rec bind_rec ~backend exn_cont
                   (Expr.create_switch
                     ~scrutinee:prim_result
                     ~arms:(Immediate.Map.of_list [
-                      Immediate.bool_true, condition_passed_cont;
-                      Immediate.bool_false, failure_cont;
+                      Immediate.bool_true,
+                        Apply_cont.goto condition_passed_cont;
+                      Immediate.bool_false,
+                        Apply_cont.goto failure_cont;
                     ])))))
         (Expr.create_apply_cont
            (Apply_cont.create primitive_cont ~args:[] ~dbg:Debuginfo.none))

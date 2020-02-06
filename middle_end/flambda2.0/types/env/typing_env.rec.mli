@@ -32,10 +32,6 @@ val current_scope : t -> Scope.t
 
 val increment_scope : t -> t
 
-val var_domain : t -> Variable.Set.t
-
-val name_domain : t -> Name.Set.t
-
 val add_definition : t -> Name_in_binding_pos.t -> Flambda_kind.t -> t
 
 (** The caller is to ensure that the supplied type is the most precise
@@ -44,13 +40,9 @@ val add_equation : t -> Name.t -> Type_grammar.t -> t
 
 val add_definitions_of_params : t -> params:Kinded_parameter.t list -> t
 
-val add_equations_on_params
-   : t
-  -> params:Kinded_parameter.t list
-  -> param_types:Type_grammar.t list
-  -> t
+val add_symbol_definitions : t -> Symbol.Set.t -> t
 
-val meet_equations_on_params
+val add_equations_on_params
    : t
   -> params:Kinded_parameter.t list
   -> param_types:Type_grammar.t list
@@ -75,11 +67,6 @@ val find_cse
   -> Flambda_primitive.Eligible_for_cse.t
   -> Simple.t option
 
-val find_cse_rev
-   : t
-  -> bound_to:Simple.t
-  -> Flambda_primitive.Eligible_for_cse.t option
-
 val add_env_extension_from_level
    : t
   -> Typing_env_level.t
@@ -88,35 +75,28 @@ val add_env_extension_from_level
 (* CR mshinwell: clarify that this does not meet *)
 val add_env_extension
    : t
-  -> env_extension:Typing_env_extension.t
+  -> Typing_env_extension.t
   -> t
 
-val get_canonical_simple
+val get_canonical_simple_exn
    : t
   -> ?min_name_mode:Name_mode.t
   -> Simple.t
-  -> Simple.t option Or_bottom.t
+  -> Simple.t
 
-val get_canonical_simple_with_kind
+val get_canonical_simple_with_kind_exn
    : t
   -> ?min_name_mode:Name_mode.t
   -> Simple.t
-  -> Simple.t option Or_bottom.t * Flambda_kind.t
+  -> Simple.t * Flambda_kind.t
 
-val get_alias_then_canonical_simple
+val get_alias_then_canonical_simple_exn
    : t
   -> ?min_name_mode:Name_mode.t
   -> Type_grammar.t
-  -> Simple.t option Or_bottom.t
+  -> Simple.t
 
 val aliases_of_simple_allowable_in_types : t -> Simple.t -> Simple.Set.t
-
-val earliest_alias_of_simple_satisfying
-   : t
-  -> min_name_mode:Name_mode.t
-  -> allowed_vars:Variable.Set.t
-  -> Simple.t
-  -> Simple.t option
 
 val add_to_code_age_relation : t -> newer:Code_id.t -> older:Code_id.t -> t
 
@@ -132,4 +112,6 @@ val cut_and_n_way_join
   -> unknown_if_defined_at_or_later_than:Scope.t
   -> Typing_env_extension.t * Continuation_extra_params_and_args.t
 
-val free_variables_transitive : t -> Type_grammar.t -> Variable.Set.t
+val free_names_transitive : t -> Type_grammar.t -> Name_occurrences.t
+
+val defined_symbols : t -> Symbol.Set.t

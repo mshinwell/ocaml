@@ -167,13 +167,9 @@ module Or_absent = struct
     | Present kind1, Present kind2 -> compare_partial_order kind1 kind2
 end
 
-type descr =
+type descr = t =
   | Normal
-  | In_types
   | Phantom
+  | In_types
 
-let descr (t : t) : descr =
-  match t with
-  | Normal -> Normal
-  | In_types -> In_types
-  | Phantom -> Phantom
+let descr t = t

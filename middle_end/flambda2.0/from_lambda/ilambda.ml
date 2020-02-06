@@ -103,8 +103,8 @@ and apply_kind =
 
 and switch = {
   numconsts : int;
-  consts : (int * Continuation.t) list;
-  failaction : Continuation.t option;
+  consts : (int * Continuation.t * trap_action option * (Ident.t list)) list;
+  failaction : (Continuation.t * trap_action option * (Ident.t list)) option;
 }
 
 type program = {
@@ -166,6 +166,16 @@ and print_named ppf (named : named) =
     fprintf ppf "@[<2>(assign@ %a@ %a)@]" Ident.print being_assigned
       Ident.print new_value
 
+and print_trap_action ppf trap_action =
+  match trap_action with
+  | None -> ()
+  | Some (Push { exn_handler; }) ->
+    fprintf ppf "push %a then "
+      Continuation.print exn_handler
+  | Some (Pop { exn_handler; }) ->
+    fprintf ppf "pop %a then "
+      Continuation.print exn_handler
+
 and print ppf (t : t) =
   match t with
   | Apply ap ->
@@ -219,16 +229,37 @@ and print ppf (t : t) =
   | Switch (arg, sw) ->
     let switch ppf sw =
       let spc = ref false in
-      List.iter (fun (n, l) ->
+      List.iter (fun (n, cont, trap, args) ->
           if !spc then fprintf ppf "@ " else spc := true;
-          fprintf ppf "@[<hv 1>| %i -> goto %a@]"
-            n Continuation.print l)
+          match args with
+          | [] ->
+            fprintf ppf "@[<hv 1>| %i -> %agoto %a@]"
+              n
+              print_trap_action trap
+              Continuation.print cont
+          | args ->
+            fprintf ppf "@[<hv 1>| %i -> %aapply_cont %a %a@]"
+              n
+              print_trap_action trap
+              Continuation.print cont
+              (Format.pp_print_list ~pp_sep:Format.pp_print_space Ident.print)
+              args)
         sw.consts;
       begin match sw.failaction with
       | None  -> ()
-      | Some l ->
+      | Some (l, trap, args) ->
         if !spc then fprintf ppf "@ " else spc := true;
-        fprintf ppf "@[<hv 1>default:@ apply_cont %a@]" Continuation.print l
+        match args with
+        | [] ->
+          fprintf ppf "@[<hv 1>default:@ %agoto %a@]"
+            print_trap_action trap
+            Continuation.print l
+        | args ->
+          fprintf ppf "@[<hv 1>default:@ %aapply_cont %a %a@]"
+            print_trap_action trap
+            Continuation.print l
+            (Format.pp_print_list ~pp_sep:Format.pp_print_space Ident.print)
+            args
       end in
     fprintf ppf
       "@[<1>(@[<v 1>%s %a@ @[<v 0>%a@]@])@]"
@@ -263,16 +294,6 @@ and print ppf (t : t) =
       print body
       (Format.pp_print_list ~pp_sep print_let_cont) let_conts
   | Apply_cont (i, trap_action, ls)  ->
-    let print_trap_action ppf trap_action =
-      match trap_action with
-      | None -> ()
-      | Some (Push { exn_handler; }) ->
-        fprintf ppf "push %a then "
-          Continuation.print exn_handler
-      | Some (Pop { exn_handler; }) ->
-        fprintf ppf "pop %a then "
-          Continuation.print exn_handler
-    in
     fprintf ppf "@[<2>(%aapply_cont@ %a@ %a)@]"
       print_trap_action trap_action
       Continuation.print i

@@ -44,8 +44,6 @@ val arbitrary : t
 
 val is_structured_block : t -> bool
 
-val all_as_targetints : Targetint.Set.t
-
 (* CR mshinwell: This name should be changed---all "value"s are scannable.
    "Structured"? *)
 module Scannable : sig

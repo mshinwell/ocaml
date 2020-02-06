@@ -153,7 +153,7 @@ let rec print_compact ppf t =
 (* CR mshinwell: read the formatter margin? *)
 let print_compact ppf t =
   let str = Format.asprintf "%a" print_compact t in
-  if String.length str < 30 then print_compact ppf t
+  if String.length str < 300000000 then print_compact ppf t
   else begin
     let t =
       match t with

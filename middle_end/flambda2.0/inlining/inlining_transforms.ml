@@ -21,7 +21,6 @@ open! Simplify_import
 module DA = Downwards_acc
 module DE = Simplify_env_and_result.Downwards_env
 module I = Flambda_type.Function_declaration_type.Inlinable
-module T = Flambda_type
 module VB = Var_in_binding_pos
 
 let inline dacc ~callee ~args function_decl
@@ -31,6 +30,7 @@ let inline dacc ~callee ~args function_decl
   let params_and_body = DE.find_code denv (I.code_id function_decl) in
   Function_params_and_body.pattern_match params_and_body
     ~f:(fun ~return_continuation exn_continuation params ~body ~my_closure ->
+(*
       let typing_env = DE.typing_env denv in
       (* XXX The following is a hack until we work out more of the theory
          about [Rec_info] *)
@@ -39,10 +39,9 @@ let inline dacc ~callee ~args function_decl
           ~min_name_mode:Name_mode.normal
       in
       match canonical_callee with
-      | Bottom -> dacc, Expr.create_invalid ()
-      | Ok None ->
+      | None ->
         Misc.fatal_errorf "No canonical callee for %a" Simple.print callee
-      | Ok (Some canonical_callee) ->
+      | Some canonical_callee ->
         (* CR mshinwell: Move to [Typing_env.map_type_of_canonical] or
            similar.  (Can we actually hide [find] from the Typing_env
            external interface?) *)
@@ -65,10 +64,11 @@ let inline dacc ~callee ~args function_decl
         | Bottom -> dacc, Expr.create_invalid ()
         | Ok typing_env ->
           let denv = DE.with_typing_env denv typing_env in
+*)
           let denv =
             DE.set_inlining_depth_increment
-              (DE.add_inlined_debuginfo denv dbg)
-              apply_inlining_depth
+              (DE.set_inlined_debuginfo denv dbg)
+              (apply_inlining_depth + 1)
           in
           let make_inlined_body ~apply_exn_continuation =
             let perm =
@@ -77,6 +77,11 @@ let inline dacc ~callee ~args function_decl
                   return_continuation apply_return_continuation)
                 (Exn_continuation.exn_handler exn_continuation)
                 apply_exn_continuation
+            in
+            let callee =
+              Simple.merge_rec_info callee
+                ~newer_rec_info:(Some (Rec_info.create ~depth:1 ~unroll_to))
+              |> Option.get  (* CR mshinwell: improve *)
             in
             Expr.apply_name_permutation
               (Expr.bind_parameters_to_simples ~bind:params ~target:args
@@ -97,9 +102,7 @@ let inline dacc ~callee ~args function_decl
               let body = make_inlined_body ~apply_exn_continuation:wrapper in
               let wrapper_handler =
                 let param = Variable.create "exn" in
-                let kinded_params =
-                  [KP.create (Parameter.wrap param) K.value]
-                in
+                let kinded_params = [KP.create param K.value] in
                 let exn_handler =
                   Exn_continuation.exn_handler apply_exn_continuation
                 in
@@ -124,6 +127,10 @@ let inline dacc ~callee ~args function_decl
               in
               Let_cont.create_non_recursive wrapper wrapper_handler ~body
           in
+(*
+  Format.eprintf "Inlined body to be simplified:@ %a\n%!"
+    Expr.print expr;
+*)
 (*
   Format.eprintf "Inlined body to be simplified:@ %a@ dacc:@ %a\n%!"
     Expr.print expr DA.print dacc;

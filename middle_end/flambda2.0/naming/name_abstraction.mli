@@ -74,10 +74,10 @@ module Make_list (Bindable : Bindable.S) (Term : Term) : sig
 
   val create : Bindable.t list -> Term.t -> t
 
-  (** Concretion of an abstraction at a fresh name. *)
+  (** Concretion of an abstraction at fresh names. *)
   val pattern_match : t -> f:(Bindable.t list -> Term.t -> 'a) -> 'a
 
-  (** Concretion of an abstraction at a fresh name followed by reconstruction of
+  (** Concretion of an abstraction at fresh names followed by reconstruction of
       the abstraction. *)
   val pattern_match_map : t -> f:(Term.t -> Term.t) -> t
 
@@ -87,10 +87,23 @@ module Make_list (Bindable : Bindable.S) (Term : Term) : sig
     -> f:(Bindable.t list -> Term.t -> Term.t)
     -> t
 
-  (** Concretion of a pair of abstractions at the same fresh [Bindable]. *)
+  (** Concretion of a pair of abstractions at the same fresh [Bindable]s. *)
   val pattern_match_pair
      : t
     -> t
     -> f:(Bindable.t list -> Term.t -> Term.t -> 'a)
     -> 'a
+end
+
+module Make_map (Bindable : Bindable.S) (Term : Term) : sig
+  (** Like [Make_list], but the names in binding position are specified by
+      the keys of a map, and the natural total ordering on such keys. *)
+
+  include Contains_names.S
+  include Common with type t := t
+
+  val create : _ Bindable.Map.t -> Term.t -> t
+
+  (** Concretion of an abstraction at fresh names. *)
+  val pattern_match : t -> f:(Term.t -> 'a) -> 'a
 end

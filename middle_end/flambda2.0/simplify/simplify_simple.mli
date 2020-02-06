@@ -24,8 +24,18 @@ val simplify_simple
   -> min_name_mode:Name_mode.t
   -> Simple.t Or_bottom.t * Flambda_type.t
 
+type changed =
+  | Unchanged
+  | Changed
+
 val simplify_simples
    : Downwards_acc.t
   -> Simple.t list
   -> min_name_mode:Name_mode.t
-  -> (Simple.t * Flambda_type.t) list Or_bottom.t
+  -> changed * ((Simple.t * Flambda_type.t) list Or_bottom.t)
+
+val simplify_simples'
+   : Downwards_acc.t
+  -> Simple.t list
+  -> min_name_mode:Name_mode.t
+  -> changed * (Simple.t list Or_bottom.t)

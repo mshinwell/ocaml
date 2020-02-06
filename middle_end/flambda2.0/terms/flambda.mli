@@ -110,21 +110,21 @@ module rec Expr : sig
       to [Invalid], and one-arm switches to [Apply_cont]. *)
   val create_switch0
      : scrutinee:Simple.t
-    -> arms:Continuation.t Immediate.Map.t
+    -> arms:Apply_cont_expr.t Immediate.Map.t
     -> Expr.t * switch_creation_result
 
   (** Like [create_switch0], but for use when the caller isn't interested in
       whether something got deleted. *)
   val create_switch
      : scrutinee:Simple.t
-    -> arms:Continuation.t Immediate.Map.t
+    -> arms:Apply_cont_expr.t Immediate.Map.t
     -> Expr.t
 
   (** Build a [Switch] corresponding to a traditional if-then-else. *)
   val create_if_then_else
      : scrutinee:Simple.t
-    -> if_true:Continuation.t
-    -> if_false:Continuation.t
+    -> if_true:Apply_cont_expr.t
+    -> if_false:Apply_cont_expr.t
     -> t
 
   (** Create an expression indicating type-incorrect or unreachable code. *)
@@ -382,11 +382,6 @@ end and Continuation_handler : sig
   type behaviour = private
     | Unreachable of { arity : Flambda_arity.t; }
     | Alias_for of { arity : Flambda_arity.t; alias_for : Continuation.t; }
-    | Apply_cont_with_constant_arg of {
-        cont : Continuation.t;
-        arg : Simple.Const.t;
-        arity : Flambda_arity.t;
-      }
     | Unknown of { arity : Flambda_arity.t; }
 
   val behaviour : t -> behaviour
@@ -559,9 +554,7 @@ end and Static_const : sig
   include Identifiable.S with type t := t
   include Contains_names.S with type t := t
 
-  val get_pieces_of_code
-     : t
-    -> (Function_params_and_body.t * (Code_id.t option)) Code_id.Map.t
+  val get_pieces_of_code : t -> Static_const.Code.t Code_id.Map.t
 
   val is_fully_static : t -> bool
 

@@ -45,6 +45,17 @@ module Naked_number_kind = struct
     | Naked_int32 -> Format.pp_print_string ppf "Naked_int32"
     | Naked_int64 -> Format.pp_print_string ppf "Naked_int64"
     | Naked_nativeint -> Format.pp_print_string ppf "Naked_nativeint"
+
+  let to_int t =
+    match t with
+    | Naked_immediate -> 0
+    | Naked_float -> 1
+    | Naked_int32 -> 2
+    | Naked_int64 -> 3
+    | Naked_nativeint -> 4
+
+  let compare t1 t2 =
+    Int.compare (to_int t1) (to_int t2)
 end
 
 type t =
@@ -71,7 +82,15 @@ include Identifiable.Make (struct
 
   let compare t1 t2 =
     if t1 == t2 then 0
-    else Stdlib.compare t1 t2
+    else
+      match t1, t2 with
+      | Value, Value -> 0
+      | Naked_number n1, Naked_number n2 -> Naked_number_kind.compare n1 n2
+      | Fabricated, Fabricated -> 0
+      | Value, _ -> -1
+      | _, Value -> 1
+      | Naked_number _, _ -> -1
+      | _, Naked_number _ -> 1
 
   let equal t1 t2 = (compare t1 t2 = 0)
 
@@ -140,6 +159,14 @@ module Standard_int = struct
     | Naked_int64
     | Naked_nativeint
 
+  let to_int t =
+    match t with
+    | Tagged_immediate -> 0
+    | Naked_immediate -> 1
+    | Naked_int32 -> 2
+    | Naked_int64 -> 3
+    | Naked_nativeint -> 4
+
   let to_kind t : kind =
     match t with
     | Tagged_immediate -> Value
@@ -162,8 +189,10 @@ module Standard_int = struct
     let output chan t =
       print (Format.formatter_of_out_channel chan) t
 
-    let compare = Stdlib.compare
+    let compare t1 t2 = (to_int t1) - (to_int t2)
+
     let equal t1 t2 = (compare t1 t2 = 0)
+
     let hash = Hashtbl.hash
   end)
 
@@ -184,6 +213,15 @@ module Standard_int_or_float = struct
     | Naked_int32
     | Naked_int64
     | Naked_nativeint
+
+  let to_int t =
+    match t with
+    | Tagged_immediate -> 0
+    | Naked_immediate -> 1
+    | Naked_float -> 2
+    | Naked_int32 -> 3
+    | Naked_int64 -> 4
+    | Naked_nativeint -> 5
 
   let to_kind t : kind =
     match t with
@@ -209,7 +247,7 @@ module Standard_int_or_float = struct
     let output chan t =
       print (Format.formatter_of_out_channel chan) t
 
-    let compare = Stdlib.compare
+    let compare t1 t2 = (to_int t1) - (to_int t2)
     let equal t1 t2 = (compare t1 t2 = 0)
     let hash = Hashtbl.hash
   end)
@@ -231,6 +269,14 @@ module Boxable_number = struct
     | Naked_int64
     | Naked_nativeint
     | Untagged_immediate
+
+  let to_int t =
+    match t with
+    | Naked_float -> 0
+    | Naked_int32 -> 1
+    | Naked_int64 -> 2
+    | Naked_nativeint -> 3
+    | Untagged_immediate -> 4
 
   let to_kind t : kind =
     match t with
@@ -262,8 +308,10 @@ module Boxable_number = struct
     let output chan t =
       print (Format.formatter_of_out_channel chan) t
 
-    let compare = Stdlib.compare
-    let equal t1 t2 = (compare t1 t2 = 0)
+    let compare t1 t2 = (to_int t1) - (to_int t2)
+
+    let equal t1 t2 = (t1 == t2)
+
     let hash = Hashtbl.hash
   end)
 

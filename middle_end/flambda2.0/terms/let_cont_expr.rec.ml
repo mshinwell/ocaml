@@ -101,7 +101,7 @@ let create_non_recursive cont handler ~body =
   | Zero -> body
   | One | More_than_one ->
     match Expr.descr body with
-    | Apply_cont apply_cont when Apply_cont.is_goto apply_cont cont ->
+    | Apply_cont apply_cont when Apply_cont.is_goto_to apply_cont cont ->
       (* CR mshinwell: This could work for the >0 arity-case too, to handle
          continuation aliases. *)
       Continuation_params_and_handler.pattern_match

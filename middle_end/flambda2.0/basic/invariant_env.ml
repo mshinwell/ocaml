@@ -221,9 +221,9 @@ let check_name_is_bound t name =
   end
 
 let check_simple_is_bound t (simple : Simple.t) =
-  match Simple.descr simple with
-  | Name name -> check_name_is_bound t name
-  | Const _ -> ()
+  Simple.pattern_match simple
+    ~name:(fun name -> check_name_is_bound t name)
+    ~const:(fun _ -> ())
 
 let check_simples_are_bound t simples =
   List.iter (fun simple -> check_simple_is_bound t simple) simples
@@ -247,17 +247,17 @@ let check_name_is_bound_and_of_kind t name desired_kind =
       end
 
 let check_simple_is_bound_and_of_kind t (simple : Simple.t) desired_kind =
-  match Simple.descr simple with
-  | Name name -> check_name_is_bound_and_of_kind t name desired_kind
-  | Const const ->
-    let actual_kind = Simple.Const.kind const in
-    if not (Flambda_kind.equal actual_kind desired_kind)
-    then begin
-      Misc.fatal_errorf "Simple term %a of kind %a cannot be used at kind %a"
-        Simple.print simple
-        Flambda_kind.print actual_kind
-        Flambda_kind.print desired_kind
-    end
+  Simple.pattern_match simple
+    ~name:(fun name -> check_name_is_bound_and_of_kind t name desired_kind)
+    ~const:(fun const ->
+      let actual_kind = Reg_width_const.kind const in
+      if not (Flambda_kind.equal actual_kind desired_kind)
+      then begin
+        Misc.fatal_errorf "Simple term %a of kind %a cannot be used at kind %a"
+          Simple.print simple
+          Flambda_kind.print actual_kind
+          Flambda_kind.print desired_kind
+      end)
 
 let check_simples_are_bound_and_of_kind t simples desired_kind =
   List.iter (fun simple ->
@@ -293,9 +293,9 @@ let kind_of_name t name =
   | kind -> kind
 
 let kind_of_simple t (simple : Simple.t) =
-  match Simple.descr simple with
-  | Name name -> kind_of_name t name
-  | Const const -> Simple.Const.kind const
+  Simple.pattern_match simple
+    ~name:(fun name -> kind_of_name t name)
+    ~const:(fun const -> Reg_width_const.kind const)
 
 let kind_of_variable t var = kind_of_name t (Name.var var)
 

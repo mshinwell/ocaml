@@ -25,7 +25,7 @@ open! Simplify_import
    more transparent (e.g. through [find_continuation]).  Tricky potentially in
    conjunction with the rewrites. *)
 
-type 'a k = CUE.t -> Code_age_relation.t -> R.t -> ('a * UA.t)
+type 'a k = DA.t -> ('a * UA.t)
 
 let rec simplify_let
   : 'a. DA.t -> Let.t -> 'a k -> Expr.t * 'a * UA.t
@@ -71,39 +71,45 @@ and simplify_let_symbol
   let body = LS.body let_symbol_expr in
   let prior_lifted_constants = R.get_lifted_constants (DA.r dacc) in
   let dacc = DA.map_r dacc ~f:R.clear_lifted_constants in
-  let defining =
-    Name_occurrences.symbols (Bound_symbols.free_names bound_symbols)
-  in
+  let bound_symbols_free_names = Bound_symbols.free_names bound_symbols in
   let dacc =
     (* CR mshinwell: tidy this up? *)
     DA.map_denv dacc ~f:(fun denv ->
-      Symbol.Set.fold (fun symbol denv ->
-          match bound_symbols with
-          | Singleton _ -> DE.now_defining_symbol denv symbol
-          | Sets_of_closures _ ->
-            (* [Simplify_set_of_closures] will do [now_defining_symbol]. *)
-            denv)
-        defining
-        denv)
+      Name_occurrences.fold_names bound_symbols_free_names
+        ~init:denv
+        ~f:(fun denv name ->
+          Name.pattern_match name
+            ~var:(fun _ -> denv)
+            ~symbol:(fun symbol ->
+              match bound_symbols with
+              | Singleton _ -> DE.now_defining_symbol denv symbol
+              | Sets_of_closures _ ->
+                (* [Simplify_set_of_closures] will do [now_defining_symbol]. *)
+                denv)))
   in
   let bound_symbols, defining_expr, dacc =
     Simplify_static_const.simplify_static_const dacc bound_symbols defining_expr
   in
-  let bound_symbols_free_names = Bound_symbols.free_names bound_symbols in
+  (* CR mshinwell: Change to be run only when invariants are on, and use
+     [Name_occurrences.iter] (to be written).
   Symbol.Set.iter (fun sym ->
       DE.check_symbol_is_bound (DA.denv dacc) sym)
     (Name_occurrences.symbols bound_symbols_free_names);
   Code_id.Set.iter (fun code_id ->
       DE.check_code_id_is_bound (DA.denv dacc) code_id)
     (Name_occurrences.code_ids bound_symbols_free_names);
+  *)
   let dacc =
     DA.map_denv dacc ~f:(fun denv ->
-      Symbol.Set.fold (fun symbol denv ->
-          match bound_symbols with
-          | Singleton _ -> DE.no_longer_defining_symbol denv symbol
-          | Sets_of_closures _ -> denv)
-        defining
-        denv)
+      Name_occurrences.fold_names bound_symbols_free_names
+        ~init:denv
+        ~f:(fun denv name ->
+          Name.pattern_match name
+            ~var:(fun _ -> denv)
+            ~symbol:(fun symbol ->
+              match bound_symbols with
+              | Singleton _ -> DE.no_longer_defining_symbol denv symbol
+              | Sets_of_closures _ -> denv)))
   in
   let dacc =
     match bound_symbols with
@@ -262,6 +268,10 @@ and simplify_non_recursive_let_cont_handler
                (Name_occurrences.continuations free_names_of_body)
                (Continuation.Set.of_list [cont; unit_toplevel_exn_cont])
       in
+      let r, prior_lifted_constants =
+        R.get_and_clear_lifted_constants (DA.r dacc)
+      in
+      let dacc = DA.with_r dacc r in
       let body, handler, user_data, uacc =
         let body, (result, uenv', user_data), uacc =
           let scope = DE.get_continuation_scope_level (DA.denv dacc) in
@@ -269,40 +279,41 @@ and simplify_non_recursive_let_cont_handler
           let is_exn_handler = CH.is_exn_handler cont_handler in
           CPH.pattern_match params_and_handler ~f:(fun params ~handler ->
             let denv = DE.define_parameters (DA.denv dacc) ~params in
-            let dacc =
+            let dacc_for_body =
               DA.with_denv dacc (DE.increment_continuation_scope_level denv)
             in
-            simplify_expr dacc body (fun cont_uses_env code_age_relation r ->
-              (* CR mshinwell: Could assert that the code age relation is
-                 a superset. *)
-              let dacc = DA.with_code_age_relation dacc code_age_relation in
-      (*
-              Format.eprintf "Parameters for %a: %a\n%!"
-                Continuation.print cont
-                KP.List.print params;
-      *)
-              let denv =
-                (* CR mshinwell: Don't need to re-add constants that were
-                   above the [Let_cont], they will already be in denv. *)
-                DE.add_lifted_constants denv ~lifted:(R.get_lifted_constants r)
-              in
+            simplify_expr dacc_for_body body (fun dacc_after_body ->
+              let cont_uses_env = DA.continuation_uses_env dacc_after_body in
+              let r = DA.r dacc_after_body in
               let uses =
                 CUE.compute_handler_env cont_uses_env cont ~params
                   ~definition_typing_env_with_params_defined:
                     (DE.typing_env denv)
               in
-              let handler, user_data, uacc, is_single_inlinable_use =
+              let handler, user_data, uacc, is_single_inlinable_use,
+                  is_single_use =
                 match uses with
                 | No_uses ->
                   (* Don't simplify the handler if there aren't any uses:
                      otherwise, its code will be deleted but any continuation
                      usage information collected during its simplification will
                      remain. *)
-                  let code_age_relation = DA.code_age_relation dacc in
-                  let user_data, uacc = k cont_uses_env code_age_relation r in
-                  cont_handler, user_data, uacc, false
+                  let dacc =
+                    DA.map_r dacc_after_body ~f:(fun r ->
+                      R.add_prior_lifted_constants r prior_lifted_constants)
+                  in
+                  let user_data, uacc = k dacc in
+                  cont_handler, user_data, uacc, false, false
+                (* CR mshinwell: Refactor so we don't have the
+                   [is_single_use] hack.  The problem is that we want to
+                   have the code of the handler available if we might want to
+                   substitute it into a Switch---which we only want to do if
+                   we won't duplicate code (i.e. if there is only one use)
+                   ---but this is not a normal "inlinable" position and cannot
+                   be treated as such (e.g. for join calculations). *)
                 | Uses { handler_typing_env; arg_types_by_use_id;
-                         extra_params_and_args; is_single_inlinable_use; } ->
+                         extra_params_and_args; is_single_inlinable_use;
+                         is_single_use; } ->
                   let typing_env, extra_params_and_args =
                     match Continuation.sort cont with
                     | Normal when is_single_inlinable_use ->
@@ -324,8 +335,17 @@ and simplify_non_recursive_let_cont_handler
                       handler_typing_env, extra_params_and_args
                   in
                   let dacc =
-                    DA.create (DE.with_typing_env denv typing_env)
-                      cont_uses_env r
+                    (* Arrange for lifted constants that were produced during
+                       simplification of the body to be available in the
+                       environment to be used for simplifying the handler. *)
+                    DA.map_denv dacc_after_body ~f:(fun _denv_after_body ->
+                      DE.add_lifted_constants
+                        (DE.with_typing_env denv typing_env)
+                        ~lifted:(R.get_lifted_constants r))
+                  in
+                  let dacc =
+                    DA.map_r dacc ~f:(fun r ->
+                      R.add_prior_lifted_constants r prior_lifted_constants)
                   in
                   let dacc, handler =
                     match Continuation.sort cont with
@@ -350,7 +370,8 @@ and simplify_non_recursive_let_cont_handler
                       simplify_one_continuation_handler dacc cont Non_recursive
                         cont_handler ~params ~handler ~extra_params_and_args k
                     in
-                    handler, user_data, uacc, is_single_inlinable_use
+                    handler, user_data, uacc, is_single_inlinable_use,
+                      is_single_use
                   with Misc.Fatal_error -> begin
                     if !Clflags.flambda2_context_on_error then begin
                       Format.eprintf "\n%sContext is:%s simplifying \
@@ -387,7 +408,6 @@ and simplify_non_recursive_let_cont_handler
                       match CH.behaviour handler with
                       | Unreachable { arity; }
                       | Alias_for { arity; _ }
-                      | Apply_cont_with_constant_arg { arity; _ }
                       | Unknown { arity; } -> arity
                     in
                     UE.add_continuation_to_inline uenv cont scope arity
@@ -398,13 +418,12 @@ and simplify_non_recursive_let_cont_handler
                       UE.add_unreachable_continuation uenv cont scope arity
                     | Alias_for { arity; alias_for; } ->
                       UE.add_continuation_alias uenv cont arity ~alias_for
-                    | Apply_cont_with_constant_arg
-                        { cont = destination_cont; arg = destination_arg;
-                          arity; } ->
-                      UE.add_continuation_apply_cont_with_constant_arg uenv cont
-                        scope arity ~destination_cont ~destination_arg
                     | Unknown { arity; } ->
-                      UE.add_continuation uenv cont scope arity
+                      if is_single_use then
+                        UE.add_continuation_with_handler uenv cont scope arity
+                          handler
+                      else
+                        UE.add_continuation uenv cont scope arity
               in
               let uacc = UA.with_uenv uacc uenv in
               (handler, uenv_to_return, user_data), uacc))
@@ -446,7 +465,9 @@ and simplify_recursive_let_cont_handlers
         in
         (* let set = Continuation_handlers.domain rec_handlers in *)
         let body, (handlers, user_data), uacc =
-          simplify_expr dacc body (fun cont_uses_env _code_age_relation r ->
+          simplify_expr dacc body (fun dacc_after_body ->
+            let cont_uses_env = DA.continuation_uses_env dacc_after_body in
+            let r = DA.r dacc_after_body in
             let arg_types =
               (* We can't know a good type from the call types *)
               List.map T.unknown arity
@@ -455,8 +476,7 @@ and simplify_recursive_let_cont_handlers
               Continuation_uses_env.t * Apply_cont_rewrite_id.t =
               (* We don't know anything, it's like it was called
                  with an arbitrary argument! *)
-              CUE.record_continuation_use cont_uses_env
-                cont
+              CUE.record_continuation_use cont_uses_env cont
                 Non_inlinable (* Maybe simpler ? *)
                 ~typing_env_at_use:(
                   (* not useful as we will have only top *)
@@ -470,16 +490,14 @@ and simplify_recursive_let_cont_handlers
               DE.add_parameters definition_denv params ~param_types:arg_types
             in
             let dacc = DA.create denv cont_uses_env r in
-            let dacc =
-              DA.map_denv dacc ~f:DE.set_not_at_unit_toplevel
-            in
+            let dacc = DA.map_denv dacc ~f:DE.set_not_at_unit_toplevel in
             let handler, user_data, uacc =
               simplify_one_continuation_handler dacc cont Recursive
                 cont_handler ~params ~handler
                 ~extra_params_and_args:
                   Continuation_extra_params_and_args.empty
-                (fun cont_uses_env code_age_relation r ->
-                  let user_data, uacc = k cont_uses_env code_age_relation r in
+                (fun dacc ->
+                  let user_data, uacc = k dacc in
                   let uacc =
                     UA.map_uenv uacc ~f:(fun uenv ->
                       UE.add_continuation uenv cont
@@ -487,6 +505,12 @@ and simplify_recursive_let_cont_handlers
                         arity)
                   in
                   user_data, uacc)
+            in
+            let uacc =
+              UA.map_uenv uacc ~f:(fun uenv ->
+                UE.add_continuation_with_handler uenv cont
+                  original_cont_scope_level
+                  arity handler)
             in
             let handlers = Continuation.Map.singleton cont handler in
             (handlers, user_data), uacc)
@@ -511,11 +535,19 @@ and simplify_direct_full_application
 = fun dacc apply function_decl_opt ~result_arity k ->
   let callee = Apply.callee apply in
   let args = Apply.args apply in
+(*
+Format.eprintf "Considering inlining:@ %a\n%!" Apply.print apply;
+*)
   let inlined =
     match function_decl_opt with
     | None -> None
     | Some (function_decl, function_decl_rec_info) ->
       let apply_inlining_depth = Apply.inlining_depth apply in
+(*
+Format.eprintf "apply inlining depth = %d\n%!" apply_inlining_depth;
+Format.eprintf "function_decl_rec_info = %a\n%!"
+  Rec_info.print function_decl_rec_info;
+*)
       let decision =
         Inlining_decision.make_decision_for_call_site (DA.denv dacc)
           ~function_decl_rec_info
@@ -551,20 +583,18 @@ Format.eprintf "Simplifying inlined body with DE depth delta = %d\n%!"
   | None ->
     let dacc, use_id =
       DA.record_continuation_use dacc (Apply.continuation apply) Non_inlinable
-        ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
+        ~typing_env_at_use:(DA.typing_env dacc)
         ~arg_types:(T.unknown_types_from_arity result_arity)
     in
     let dacc, exn_cont_use_id =
       DA.record_continuation_use dacc
         (Exn_continuation.exn_handler (Apply.exn_continuation apply))
         Non_inlinable
-        ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
+        ~typing_env_at_use:(DA.typing_env dacc)
         ~arg_types:(T.unknown_types_from_arity (
           Exn_continuation.arity (Apply.exn_continuation apply)))
     in
-    let user_data, uacc =
-      k (DA.continuation_uses_env dacc) (DA.code_age_relation dacc) (DA.r dacc)
-    in
+    let user_data, uacc = k dacc in
     let apply =
       Simplify_common.update_exn_continuation_extra_args uacc ~exn_cont_use_id
         apply
@@ -628,7 +658,7 @@ and simplify_direct_partial_application
     let return_continuation = Continuation.create () in
     let remaining_params =
       List.map (fun kind ->
-          let param = Parameter.wrap (Variable.create "param") in
+          let param = Variable.create "param" in
           Kinded_parameter.create param kind)
         remaining_param_arity
     in
@@ -758,7 +788,7 @@ and simplify_direct_over_application
   let after_full_application = Continuation.create () in
   let after_full_application_handler =
     let params_and_handler =
-      let func_param = KP.create (Parameter.wrap func_var) K.value in
+      let func_param = KP.create func_var K.value in
       Continuation_params_and_handler.create [func_param]
         ~handler:(Expr.create_apply perform_over_application)
     in
@@ -805,15 +835,13 @@ and simplify_direct_function_call
     match callee's_code_id_from_call_kind with
     | None -> Ok callee's_code_id_from_type
     | Some callee's_code_id_from_call_kind ->
-      let code_age_rel = TE.code_age_relation (DE.typing_env (DA.denv dacc)) in
+      let code_age_rel = TE.code_age_relation (DA.typing_env dacc) in
       Code_age_relation.meet code_age_rel callee's_code_id_from_call_kind
         callee's_code_id_from_type
   in
   match callee's_code_id with
   | Bottom ->
-    let user_data, uacc =
-      k (DA.continuation_uses_env dacc) (DA.code_age_relation dacc) (DA.r dacc)
-    in
+    let user_data, uacc = k dacc in
     Expr.create_invalid (), user_data, uacc
   | Ok callee's_code_id ->
     let call_kind =
@@ -850,7 +878,7 @@ and simplify_function_call_where_callee's_type_unavailable
     DA.record_continuation_use dacc
       (Exn_continuation.exn_handler (Apply.exn_continuation apply))
       Non_inlinable
-      ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
+      ~typing_env_at_use:(DA.typing_env dacc)
       ~arg_types:(T.unknown_types_from_arity (
         Exn_continuation.arity (Apply.exn_continuation apply)))
   in
@@ -908,9 +936,7 @@ and simplify_function_call_where_callee's_type_unavailable
       in
       call_kind, use_id, dacc
   in
-  let user_data, uacc =
-    k (DA.continuation_uses_env dacc) (DA.code_age_relation dacc) (DA.r dacc)
-  in
+  let user_data, uacc = k dacc in
   let apply =
     Apply.with_call_kind apply call_kind
     |> Simplify_common.update_exn_continuation_extra_args uacc ~exn_cont_use_id
@@ -990,18 +1016,13 @@ and simplify_function_call
         ~recursive:(N.recursive non_inlinable)
         None k
     | Bottom ->
-      let user_data, uacc =
-        k (DA.continuation_uses_env dacc) (DA.code_age_relation dacc)
-          (DA.r dacc)
-      in
+      let user_data, uacc = k dacc in
       Expr.create_invalid (), user_data, uacc
     | Unknown -> type_unavailable ()
     end
   | Unknown -> type_unavailable ()
   | Invalid ->
-    let user_data, uacc =
-      k (DA.continuation_uses_env dacc) (DA.code_age_relation dacc) (DA.r dacc)
-    in
+    let user_data, uacc = k dacc in
     Expr.create_invalid (), user_data, uacc
 
 and simplify_apply_shared dacc apply : _ Or_bottom.t =
@@ -1014,8 +1035,8 @@ and simplify_apply_shared dacc apply : _ Or_bottom.t =
   | Bottom, _ty -> Bottom
   | Ok callee, callee_ty ->
     match S.simplify_simples dacc (Apply.args apply) ~min_name_mode with
-    | Bottom -> Bottom
-    | Ok args_with_types ->
+    | _, Bottom -> Bottom
+    | _changed, Ok args_with_types ->
       let args, arg_types = List.split args_with_types in
       let inlining_depth =
         DE.get_inlining_depth_increment (DA.denv dacc)
@@ -1033,8 +1054,6 @@ Format.eprintf "Apply of %a: apply's inlining depth %d, DE's delta %d\n%!"
           (Apply.exn_continuation apply)
           ~args
           ~call_kind:(Apply.call_kind apply)
-          (* CR mshinwell: check if the next line has the args the right way
-             around *)
           (DE.add_inlined_debuginfo' (DA.denv dacc) (Apply.dbg apply))
           ~inline:(Apply.inline apply)
           ~inlining_depth
@@ -1070,15 +1089,13 @@ and simplify_method_call
     DA.record_continuation_use dacc
       (Exn_continuation.exn_handler (Apply.exn_continuation apply))
       Non_inlinable
-      ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
+      ~typing_env_at_use:(DA.typing_env dacc)
       ~arg_types:(T.unknown_types_from_arity (
         Exn_continuation.arity (Apply.exn_continuation apply)))
   in
   (* CR mshinwell: Need to record exception continuation use (check all other
      cases like this too) *)
-  let user_data, uacc =
-    k (DA.continuation_uses_env dacc) (DA.code_age_relation dacc) (DA.r dacc)
-  in
+  let user_data, uacc = k dacc in
   let apply =
     Simplify_common.update_exn_continuation_extra_args uacc ~exn_cont_use_id
       apply
@@ -1122,7 +1139,7 @@ and simplify_c_call
 *)
   let dacc, use_id =
     DA.record_continuation_use dacc (Apply.continuation apply) Non_inlinable
-      ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
+      ~typing_env_at_use:(DA.typing_env dacc)
       ~arg_types:(T.unknown_types_from_arity return_arity)
   in
   let dacc, exn_cont_use_id =
@@ -1130,13 +1147,11 @@ and simplify_c_call
     DA.record_continuation_use dacc
       (Exn_continuation.exn_handler (Apply.exn_continuation apply))
       Non_inlinable
-      ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
+      ~typing_env_at_use:(DA.typing_env dacc)
       ~arg_types:(T.unknown_types_from_arity (
         Exn_continuation.arity (Apply.exn_continuation apply)))
   in
-  let user_data, uacc =
-    k (DA.continuation_uses_env dacc) (DA.code_age_relation dacc) (DA.r dacc)
-  in
+  let user_data, uacc = k dacc in
   (* CR mshinwell: Make sure that [resolve_continuation_aliases] has been
      called before building of any term that contains a continuation *)
   let apply =
@@ -1154,9 +1169,7 @@ and simplify_apply
 = fun dacc apply k ->
   match simplify_apply_shared dacc apply with
   | Bottom ->
-    let user_data, uacc =
-      k (DA.continuation_uses_env dacc) (DA.code_age_relation dacc) (DA.r dacc)
-    in
+    let user_data, uacc = k dacc in
     Expr.create_invalid (), user_data, uacc
   | Ok (callee_ty, apply, arg_types) ->
     match Apply.call_kind apply with
@@ -1168,18 +1181,17 @@ and simplify_apply
       simplify_c_call dacc apply ~callee_ty ~param_arity ~return_arity
         ~arg_types k
 
+
 and simplify_apply_cont
   : 'a. DA.t -> Apply_cont.t -> 'a k -> Expr.t * 'a * UA.t
 = fun dacc apply_cont k ->
   let module AC = Apply_cont in
   let min_name_mode = Name_mode.normal in
   match S.simplify_simples dacc (AC.args apply_cont) ~min_name_mode with
-  | Bottom ->
-    let user_data, uacc =
-      k (DA.continuation_uses_env dacc) (DA.code_age_relation dacc) (DA.r dacc)
-    in
+  | _, Bottom ->
+    let user_data, uacc = k dacc in
     Expr.create_invalid (), user_data, uacc
-  | Ok args_with_types ->
+  | _changed, Ok args_with_types ->
     let args, arg_types = List.split args_with_types in
 (* CR mshinwell: Resurrect arity checks
     let args_arity = T.arity_of_list arg_types in
@@ -1201,26 +1213,18 @@ and simplify_apply_cont
       DA.record_continuation_use dacc
         (AC.continuation apply_cont)
         use_kind
-        ~typing_env_at_use:(DE.typing_env (DA.denv dacc))
+        ~typing_env_at_use:(DA.typing_env dacc)
         ~arg_types
     in
-(*
-Format.eprintf "Apply_cont %a: arg types %a, rewrite ID %a\n%!"
-  Continuation.print (AC.continuation apply_cont)
-  (Format.pp_print_list T.print) arg_types
-  Apply_cont_rewrite_id.print rewrite_id;
-Format.eprintf "Apply_cont starts out being %a\n%!"
-  Apply_cont.print apply_cont;
-*)
-    let user_data, uacc =
-      k (DA.continuation_uses_env dacc) (DA.code_age_relation dacc) (DA.r dacc)
-    in
+    let user_data, uacc = k dacc in
     let uenv = UA.uenv uacc in
-    let rewrite = UE.find_apply_cont_rewrite uenv (AC.continuation apply_cont) in
+    let rewrite =
+      UE.find_apply_cont_rewrite uenv (AC.continuation apply_cont)
+    in
     let cont =
       UE.resolve_continuation_aliases uenv (AC.continuation apply_cont)
     in
-    let apply_cont_expr, apply_cont, args =
+    let rewrite_use_result =
       let apply_cont = AC.update_continuation_and_args apply_cont cont ~args in
       let apply_cont =
         match AC.trap_action apply_cont with
@@ -1233,24 +1237,16 @@ Format.eprintf "Apply_cont starts out being %a\n%!"
          [Simplify_static] was fixed to handle the toplevel exn continuation
          properly. *)
       match rewrite with
-      | None ->
-        Expr.create_apply_cont apply_cont, apply_cont,
-          Apply_cont.args apply_cont
+      | None -> Apply_cont_rewrite.no_rewrite apply_cont
       | Some rewrite ->
-(*
-Format.eprintf "Applying rewrite (ID %a):@ %a\n%!"
-  Apply_cont_rewrite_id.print rewrite_id
-  Apply_cont_rewrite.print rewrite;
-*)
         Apply_cont_rewrite.rewrite_use rewrite rewrite_id apply_cont
-    in
-(*
-Format.eprintf "Apply_cont is now %a\n%!" Expr.print apply_cont_expr;
-*)
+     in
+  (*
+  Format.eprintf "Apply_cont is now %a\n%!" Expr.print apply_cont_expr;
     if !Clflags.flambda_invariant_checks then begin
       Variable.Set.iter (fun var ->
           let name = Name.var var in
-          if not (TE.mem (DE.typing_env (DA.denv dacc)) name) then begin
+          if not (TE.mem (DA.typing_env dacc) name) then begin
             Misc.fatal_errorf "[Apply_cont]@ %a after rewrite@ %a \
                 contains unbound names in:@ %a"
               Expr.print apply_cont_expr
@@ -1259,8 +1255,9 @@ Format.eprintf "Apply_cont is now %a\n%!" Expr.print apply_cont_expr;
           end)
         (Name_occurrences.variables (Expr.free_names apply_cont_expr))
     end;
+  *)
     let check_arity_against_args ~arity:_ = () in
-(*
+  (*
       if not (Flambda_arity.equal args_arity arity) then begin
         Misc.fatal_errorf "Arity of arguments in [Apply_cont] (%a) does not \
             match continuation's arity from the environment (%a):@ %a"
@@ -1269,10 +1266,15 @@ Format.eprintf "Apply_cont is now %a\n%!" Expr.print apply_cont_expr;
           AC.print apply_cont
       end
     in
-*)
-    let normal_case () = apply_cont_expr, user_data, uacc in
+  *)
+    let normal_case () =
+      match rewrite_use_result with
+      | Apply_cont apply_cont ->
+        Expr.create_apply_cont apply_cont, user_data, uacc
+      | Expr expr -> expr, user_data, uacc
+    in
     match UE.find_continuation uenv cont with
-    | Unknown { arity; } ->
+    | Unknown { arity; handler = _; } ->
       check_arity_against_args ~arity;
       normal_case ()
     | Unreachable { arity; } ->
@@ -1281,168 +1283,204 @@ Format.eprintf "Apply_cont is now %a\n%!" Expr.print apply_cont_expr;
          on the basis that there wouldn't be any opportunity to collect any
          backtrace, even if the [Apply_cont] were compiled as "raise". *)
       Expr.create_invalid (), user_data, uacc
-    | Apply_cont_with_constant_arg { cont = _; arg = _; arity; } ->
-      check_arity_against_args ~arity;
-      normal_case ()
     | Inline { arity; handler; } ->
-      (* CR mshinwell: With -g, we can end up with continuations that are
-         just a sequence of phantom lets then "goto".  These would normally
-         be treated as aliases, but of course aren't in this scenario,
-         unless the continuations are used linearly. *)
-      (* CR mshinwell: maybe instead of [Inline] it should say "linearly used"
-         or "stub" -- could avoid resimplification of linearly used ones maybe,
-         although this wouldn't remove any parameter-to-argument [Let]s.
-         However perhaps [Flambda_to_cmm] could deal with these. *)
-      check_arity_against_args ~arity;
-      match AC.trap_action apply_cont with
-      | Some _ ->
-        (* Until such time as we can manually add to the backtrace buffer,
-           never substitute a "raise" for the body of an exception handler. *)
+      match rewrite_use_result with
+      | Expr _ ->
+        (* CR-someday mshinwell: Consider supporting inlining in the case of
+           a non-trivial wrapper. *)
         normal_case ()
-      | None ->
-        Flambda.Continuation_params_and_handler.pattern_match
-          (Flambda.Continuation_handler.params_and_handler handler)
-          ~f:(fun params ~handler ->
-(*
-            let params_arity = KP.List.arity params in
-            if not (Flambda_arity.equal params_arity args_arity) then begin
-              Misc.fatal_errorf "Arity of arguments in [Apply_cont] does not \
-                  match arity of parameters on handler (%a):@ %a"
-                Flambda_arity.print params_arity
-                AC.print apply_cont
-            end;
-*)
-            (* CR mshinwell: Why does [New_let_binding] have a [Variable]? *)
-            (* CR mshinwell: Should verify that names in the
-               [Apply_cont_rewrite] are in scope. *)
-            (* We can't easily call [simplify_expr] on the inlined body since
-               [dacc] isn't the correct accumulator and environment any more.
-               However there's no need to simplify the inlined body except to
-               make use of parameter-to-argument bindings; we just leave them
-               for a subsequent round of [Simplify] or [Un_cps] to clean up. *)
-            let params_and_args =
-              assert (List.compare_lengths params args = 0);
-              List.map (fun (param, arg) ->
-                  param, Named.create_simple arg)
-                (List.combine params args)
-            in
-            let expr =
-              Expr.bind_parameters ~bindings:params_and_args ~body:handler
-            in
-            expr, user_data, uacc)
+      | Apply_cont apply_cont ->
+        (* CR mshinwell: With -g, we can end up with continuations that are
+           just a sequence of phantom lets then "goto".  These would normally
+           be treated as aliases, but of course aren't in this scenario,
+           unless the continuations are used linearly. *)
+        (* CR mshinwell: maybe instead of [Inline] it should say "linearly used"
+           or "stub" -- could avoid resimplification of linearly used ones
+           maybe, although this wouldn't remove any parameter-to-argument
+           [Let]s. However perhaps [Flambda_to_cmm] could deal with these. *)
+        check_arity_against_args ~arity;
+        match AC.trap_action apply_cont with
+        | Some _ ->
+          (* Until such time as we can manually add to the backtrace buffer,
+             never substitute a "raise" for the body of an exception handler. *)
+          normal_case ()
+        | None ->
+          Flambda.Continuation_params_and_handler.pattern_match
+            (Flambda.Continuation_handler.params_and_handler handler)
+            ~f:(fun params ~handler ->
+    (*
+              let params_arity = KP.List.arity params in
+              if not (Flambda_arity.equal params_arity args_arity) then begin
+                Misc.fatal_errorf "Arity of arguments in [Apply_cont] does not \
+                    match arity of parameters on handler (%a):@ %a"
+                  Flambda_arity.print params_arity
+                  AC.print apply_cont
+              end;
+    *)
+              (* CR mshinwell: Why does [New_let_binding] have a [Variable]? *)
+              (* CR mshinwell: Should verify that names in the
+                 [Apply_cont_rewrite] are in scope. *)
+              (* We can't easily call [simplify_expr] on the inlined body since
+                 [dacc] isn't the correct accumulator and environment any more.
+                 However there's no need to simplify the inlined body except to
+                 make use of parameter-to-argument bindings; we just leave them
+                 for a subsequent round of [Simplify] or [Un_cps] to clean
+                 up. *)
+              let args = Apply_cont.args apply_cont in
+              let params_and_args =
+                assert (List.compare_lengths params args = 0);
+                List.map (fun (param, arg) ->
+                    param, Named.create_simple arg)
+                  (List.combine params args)
+              in
+              let expr =
+                Expr.bind_parameters ~bindings:params_and_args ~body:handler
+              in
+              expr, user_data, uacc)
 
 (* CR mshinwell: Consider again having [Switch] arms taking arguments. *)
 and simplify_switch
   : 'a. DA.t -> Switch.t -> 'a k -> Expr.t * 'a * UA.t
 = fun dacc switch k ->
+  let module AC = Apply_cont in
   let min_name_mode = Name_mode.normal in
   let scrutinee = Switch.scrutinee switch in
-  let invalid () =
-    let user_data, uacc =
-      k (DA.continuation_uses_env dacc) (DA.code_age_relation dacc) (DA.r dacc)
-    in
-    Expr.create_invalid (), user_data, uacc
-  in
-  (*
-  Format.eprintf "Simplifying Switch, env@ %a@ %a\n%!"
-    TE.print (DE.typing_env (DA.denv dacc)) Switch_expr.print switch;
-    *)
   match S.simplify_simple dacc scrutinee ~min_name_mode with
-  | Bottom, _ty -> invalid ()
+  | Bottom, _ty ->
+    let user_data, uacc = k dacc in
+    Expr.create_invalid (), user_data, uacc
   | Ok scrutinee, scrutinee_ty ->
-  (*
-    Format.eprintf "Simplified scrutinee is %a : %a\n%!"
-      Simple.print scrutinee T.print scrutinee_ty;
-      *)
-    let arms = Switch.arms switch in
     let arms, dacc =
-      let typing_env_at_use = DE.typing_env (DA.denv dacc) in
-      Immediate.Map.fold (fun arm cont (arms, dacc) ->
+      let typing_env_at_use = DA.typing_env dacc in
+      Immediate.Map.fold (fun arm action (arms, dacc) ->
           let shape =
             let imm = Immediate.int (Immediate.to_targetint arm) in
             T.this_naked_immediate imm
           in
-          (*
-          Format.eprintf "arm %a scrutinee_ty %a shape %a\n%!"
-            Immediate.print arm T.print scrutinee_ty T.print shape;
-            *)
           match T.meet typing_env_at_use scrutinee_ty shape with
-          | Bottom ->
-          (*
-            Format.eprintf "Switch arm %a is bottom\n%!" Immediate.print arm;
-            *)
-            arms, dacc
+          | Bottom -> arms, dacc
           | Ok (_meet_ty, env_extension) ->
-         (* 
-            Format.eprintf "Switch arm %a : %a is kept\n%!"
-              Immediate.print arm T.print meet_ty;
-              *)
+(*
+            Format.eprintf "Scrutinee %a, action:@ %a,@ EE:@ %a\n%!"
+              Simple.print scrutinee
+              Apply_cont.print action
+              TEE.print env_extension;
+*)
             let typing_env_at_use =
-              TE.add_env_extension typing_env_at_use ~env_extension
+              TE.add_env_extension typing_env_at_use env_extension
             in
-            let dacc, id =
-              DA.record_continuation_use dacc cont Non_inlinable
-                ~typing_env_at_use
-                ~arg_types:[]
-            in
-            let arms = Immediate.Map.add arm (cont, id) arms in
-            arms, dacc)
-        arms
+            let args = AC.args action in
+            match args with
+            | [] ->
+              let dacc, rewrite_id =
+                DA.record_continuation_use dacc (AC.continuation action)
+                  Non_inlinable ~typing_env_at_use ~arg_types:[]
+              in
+              let arms = Immediate.Map.add arm (action, rewrite_id, []) arms in
+              arms, dacc
+            | _::_ ->
+              let min_name_mode = Name_mode.normal in
+              match S.simplify_simples dacc args ~min_name_mode with
+              | _, Bottom -> arms, dacc
+              | _changed, Ok args_with_types ->
+                let args, arg_types = List.split args_with_types in
+                let dacc, rewrite_id =
+                  DA.record_continuation_use dacc (AC.continuation action)
+                    Non_inlinable ~typing_env_at_use ~arg_types
+                in
+                let arity = List.map T.kind arg_types in
+                let action = Apply_cont.update_args action ~args in
+                let arms =
+                  Immediate.Map.add arm (action, rewrite_id, arity) arms
+                in
+                arms, dacc)
+        (Switch.arms switch)
         (Immediate.Map.empty, dacc)
     in
-    let user_data, uacc =
-      k (DA.continuation_uses_env dacc) (DA.code_age_relation dacc) (DA.r dacc)
-    in
-    let uenv = UA.uenv uacc in
+    let user_data, uacc = k dacc in
     let new_let_conts, arms, identity_arms, not_arms =
       Immediate.Map.fold
-        (fun arm (cont, use_id)
+        (fun arm (action, use_id, arity)
              (new_let_conts, arms, identity_arms, not_arms) ->
-          let new_let_cont =
-            Simplify_common.add_wrapper_for_fixed_arity_continuation0 uacc cont
-              ~use_id Flambda_arity.nullary
-          in
-          match new_let_cont with
-          | None ->
-            let cont = UE.resolve_continuation_aliases uenv cont in
-            let normal_case ~identity_arms ~not_arms =
-              let arms = Immediate.Map.add arm cont arms in
-              new_let_conts, arms, identity_arms, not_arms
+          match
+            Simplify_common.add_wrapper_for_switch_arm uacc action
+              ~use_id arity
+          with
+          | Apply_cont action ->
+            let action =
+              (* First try to absorb any [Apply_cont] expression that forms the
+                 entirety of the arm's action (via an intermediate zero-arity
+                 continuation without trap action) into the [Switch] expression
+                 itself. *)
+              if not (Apply_cont.is_goto action) then Some action
+              else
+                let cont = Apply_cont.continuation action in
+                match UE.find_continuation (UA.uenv uacc) cont with
+                | Inline { arity = _; handler; }
+                | Unknown { arity = _; handler = Some handler; } ->
+                  Continuation_params_and_handler.pattern_match
+                    (Continuation_handler.params_and_handler handler)
+                    ~f:(fun _params ~handler ->
+                      match Expr.descr handler with
+                      | Apply_cont action -> Some action
+                      | Let _ | Let_symbol _ | Let_cont _ | Apply _
+                      | Switch _ | Invalid _ -> Some action)
+                | Unknown _ -> Some action
+                | Unreachable _ -> None
             in
-            begin match UE.find_continuation uenv cont with
-            | Unreachable _ -> new_let_conts, arms, identity_arms, not_arms
-            | Apply_cont_with_constant_arg { cont; arg; arity = _; } ->
-              begin match arg with
-              | Tagged_immediate arg ->
-                if Immediate.equal arm arg then
-                  let identity_arms =
-                    Immediate.Map.add arm cont identity_arms
-                  in
-                  normal_case ~identity_arms ~not_arms
-                else if
-                  (Immediate.equal arm Immediate.bool_true
-                    && Immediate.equal arg Immediate.bool_false)
-                  || 
-                    (Immediate.equal arm Immediate.bool_false
-                      && Immediate.equal arg Immediate.bool_true)
-                then
-                  let not_arms = Immediate.Map.add arm cont not_arms in
-                  normal_case ~identity_arms ~not_arms
-                else
-                  normal_case ~identity_arms ~not_arms
-              | Naked_immediate _ | Naked_float _ | Naked_int32 _
-              | Naked_int64 _ | Naked_nativeint _ ->
-                normal_case ~identity_arms ~not_arms
-              end
-            | Unknown _ | Inline _ -> normal_case ~identity_arms ~not_arms
+            begin match action with
+            | None ->
+              (* The destination is unreachable; delete the [Switch] arm. *)
+              new_let_conts, arms, identity_arms, not_arms
+            | Some action ->
+              let normal_case ~identity_arms ~not_arms =
+                let arms = Immediate.Map.add arm action arms in
+                new_let_conts, arms, identity_arms, not_arms
+              in
+              (* Now check to see if the arm is of a form that might mean the
+                 whole [Switch] is either the identity or a boolean NOT. *)
+              match Apply_cont.to_one_arg_without_trap_action action with
+              | None -> normal_case ~identity_arms ~not_arms
+              | Some arg ->
+                (* CR-someday mshinwell: Maybe this check should be generalised
+                   e.g. to detect
+                     | 0 -> apply_cont k x y 1
+                     | 1 -> apply_cont k x y 0
+                *)
+                let [@inline always] const arg =
+                  match Reg_width_const.descr arg with
+                  | Tagged_immediate arg ->
+                    if Immediate.equal arm arg then
+                      let identity_arms =
+                        Immediate.Map.add arm action identity_arms
+                      in
+                      normal_case ~identity_arms ~not_arms
+                    else if
+                      (Immediate.equal arm Immediate.bool_true
+                        && Immediate.equal arg Immediate.bool_false)
+                      || 
+                        (Immediate.equal arm Immediate.bool_false
+                          && Immediate.equal arg Immediate.bool_true)
+                    then
+                      let not_arms = Immediate.Map.add arm action not_arms in
+                      normal_case ~identity_arms ~not_arms
+                    else
+                      normal_case ~identity_arms ~not_arms
+                  | Naked_immediate _ | Naked_float _ | Naked_int32 _
+                  | Naked_int64 _ | Naked_nativeint _ ->
+                    normal_case ~identity_arms ~not_arms
+                in
+                Simple.pattern_match arg ~const
+                  ~name:(fun _ -> normal_case ~identity_arms ~not_arms)
             end
-          | Some ((new_cont, _new_handler) as new_let_cont) ->
+          | New_wrapper (new_cont, new_handler) ->
+            let new_let_cont = new_cont, new_handler in
             let new_let_conts = new_let_cont :: new_let_conts in
-            let arms = Immediate.Map.add arm new_cont arms in
+            let action = Apply_cont.goto new_cont in
+            let arms = Immediate.Map.add arm action arms in
             new_let_conts, arms, identity_arms, not_arms)
         arms
-        ([], Immediate.Map.empty, Immediate.Map.empty,
-          Immediate.Map.empty)
+        ([], Immediate.Map.empty, Immediate.Map.empty, Immediate.Map.empty)
     in
     let switch_is_identity =
       let arm_discrs = Immediate.Map.keys arms in
@@ -1451,6 +1489,7 @@ and simplify_switch
         None
       else
         Immediate.Map.data identity_arms
+        |> List.map Apply_cont.continuation
         |> Continuation.Set.of_list
         |> Continuation.Set.get_singleton
     in
@@ -1463,6 +1502,7 @@ and simplify_switch
         None
       else
         Immediate.Map.data not_arms
+        |> List.map Apply_cont.continuation
         |> Continuation.Set.of_list
         |> Continuation.Set.get_singleton
     in
@@ -1504,7 +1544,8 @@ and simplify_switch
               (Expr.create_apply_cont apply_cont))
         | None ->
           let expr = Expr.create_switch ~scrutinee ~arms in
-          if Simple.is_const scrutinee
+          if !Clflags.flambda_invariant_checks
+            && Simple.is_const scrutinee
             && Immediate.Map.cardinal arms > 1
           then begin
             Misc.fatal_errorf "[Switch] with constant scrutinee (type: %a) \
@@ -1536,8 +1577,5 @@ and simplify_expr
     (* CR mshinwell: Make sure that a program can be simplified to just
        [Invalid].  [Un_cps] should translate any [Invalid] that it sees as if
        it were [Halt_and_catch_fire]. *)
-    let user_data, uacc =
-      (* CR mshinwell: Factor out into [Simplify_common] *)
-      k (DA.continuation_uses_env dacc) (DA.code_age_relation dacc) (DA.r dacc)
-    in
+    let user_data, uacc = k dacc in
     expr, user_data, uacc

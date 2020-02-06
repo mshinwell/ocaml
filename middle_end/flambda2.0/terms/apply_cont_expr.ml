@@ -25,55 +25,83 @@ type t = {
   dbg : Debuginfo.t;
 }
 
-let print ppf { k; args; trap_action; dbg; } =
-  let name, trap_action =
-    match Continuation.sort k, trap_action, args with
-    | Normal, None, [] -> "goto", None
-    | Normal, None, _::_ -> "apply_cont", None
-    | Normal, Some trap_action, [] -> "goto", Some trap_action
-    | Normal, Some trap_action, _::_ -> "apply_cont", Some trap_action
-    | Return, None, [] -> "return", None
-    | Return, None, _::_ -> "return", None
-    | Return, Some trap_action, [] -> "return", Some trap_action
-    | Return, Some trap_action, _::_ -> "return", Some trap_action
-    | Define_root_symbol, None, [] ->
-      "apply_cont", None
-    | Define_root_symbol, None, _::_ ->
-      "apply_cont", None
-    | Define_root_symbol, Some trap_action, [] ->
-      "apply_cont", Some trap_action
-    | Define_root_symbol, Some trap_action, _::_ ->
-      "apply_cont", Some trap_action
-    | Toplevel_return, None, [] ->
-      "module_init_end", None
-    | Toplevel_return, None, _::_ ->
-      "module_init_end", None
-    | Toplevel_return, Some trap_action, [] ->
-      "module_init_end", Some trap_action
-    | Toplevel_return, Some trap_action, _::_ ->
-      "module_init_end", Some trap_action
-    (* CR mshinwell: See CR on [create], below. *)
-    | Exn, (None | Some (Push _)), []
-    | Exn, (None | Some (Push _)), _::_ ->
-      "apply_cont", trap_action (*assert false*)
-    | Exn, Some (Pop _), [] -> "raise", None
-    | Exn, Some (Pop _), _::_ -> "raise", None
-  in
-  Format.fprintf ppf "@[<hov 1>%a@<0>%s%s@<0>%s %a"
-    Trap_action.Option.print trap_action
-    (Flambda_colours.expr_keyword ())
-    name
-    (Flambda_colours.normal ())
-    Continuation.print k;
-  begin match args with
-  | [] -> ()
-  | args ->
-    Format.fprintf ppf " %a" Simple.List.print args
-  end;
-  Format.fprintf ppf "@<0>%s%a@<0>%s@]"
-    (Flambda_colours.elide ())
-    Debuginfo.print_or_elide dbg
-    (Flambda_colours.normal ())
+include Identifiable.Make (struct
+  type nonrec t = t
+
+  let print ppf { k; args; trap_action; dbg; } =
+    let name, trap_action =
+      match Continuation.sort k, trap_action, args with
+      | Normal, None, [] -> "goto", None
+      | Normal, None, _::_ -> "apply_cont", None
+      | Normal, Some trap_action, [] -> "goto", Some trap_action
+      | Normal, Some trap_action, _::_ -> "apply_cont", Some trap_action
+      | Return, None, [] -> "return", None
+      | Return, None, _::_ -> "return", None
+      | Return, Some trap_action, [] -> "return", Some trap_action
+      | Return, Some trap_action, _::_ -> "return", Some trap_action
+      | Define_root_symbol, None, [] ->
+        "apply_cont", None
+      | Define_root_symbol, None, _::_ ->
+        "apply_cont", None
+      | Define_root_symbol, Some trap_action, [] ->
+        "apply_cont", Some trap_action
+      | Define_root_symbol, Some trap_action, _::_ ->
+        "apply_cont", Some trap_action
+      | Toplevel_return, None, [] ->
+        "module_init_end", None
+      | Toplevel_return, None, _::_ ->
+        "module_init_end", None
+      | Toplevel_return, Some trap_action, [] ->
+        "module_init_end", Some trap_action
+      | Toplevel_return, Some trap_action, _::_ ->
+        "module_init_end", Some trap_action
+      (* CR mshinwell: See CR on [create], below. *)
+      | Exn, (None | Some (Push _)), []
+      | Exn, (None | Some (Push _)), _::_ ->
+        "apply_cont", trap_action (*assert false*)
+      | Exn, Some (Pop _), [] -> "raise", None
+      | Exn, Some (Pop _), _::_ -> "raise", None
+    in
+    Format.fprintf ppf "@[<hov 1>%a@<0>%s%s@<0>%s %a"
+      Trap_action.Option.print trap_action
+      (Flambda_colours.expr_keyword ())
+      name
+      (Flambda_colours.normal ())
+      Continuation.print k;
+    begin match args with
+    | [] -> ()
+    | args ->
+      Format.fprintf ppf " %a" Simple.List.print args
+    end;
+    Format.fprintf ppf "@<0>%s%a@<0>%s@]"
+      (Flambda_colours.elide ())
+      Debuginfo.print_or_elide dbg
+      (Flambda_colours.normal ())
+
+  let output _ _ = Misc.fatal_error "Not yet implemented"
+
+  let hash _ = Misc.fatal_error "Not yet implemented"
+
+  (* CR mshinwell: I wonder if the Debuginfo should be excluded from this.
+     For example at the moment we could get a Switch with two arms that go
+     to the same place but differ only on Debuginfo. *)
+  let compare
+        { k = k1; args = args1; trap_action = trap_action1; dbg = dbg1; }
+        { k = k2; args = args2; trap_action = trap_action2; dbg = dbg2; } =
+    let c = Continuation.compare k1 k2 in
+    if c <> 0 then c
+    else
+      let c = Misc.Stdlib.List.compare Simple.compare args1 args2 in
+      if c <> 0 then c
+      else
+        let c =
+          Option.compare Trap_action.compare trap_action1 trap_action2
+        in
+        if c <> 0 then c
+        else Debuginfo.compare dbg1 dbg2
+
+  let equal t1 t2 = (compare t1 t2 = 0)
+end)
 
 let print_with_cache ~cache:_ ppf t = print ppf t
 
@@ -233,10 +261,11 @@ let no_args t =
   | [] -> true
   | _::_ -> false
 
-let is_goto t k =
-  Continuation.equal (continuation t) k
-    && no_args t
-    && Option.is_none (trap_action t)
+let is_goto t =
+  no_args t && Option.is_none (trap_action t)
+
+let is_goto_to t k =
+  Continuation.equal (continuation t) k && is_goto t
 
 let to_goto t =
   if no_args t && Option.is_none (trap_action t) then Some (continuation t)
@@ -244,3 +273,11 @@ let to_goto t =
 
 let clear_trap_action t =
   { t with trap_action = None; }
+
+let to_one_arg_without_trap_action t =
+  match t.trap_action with
+  | Some _ -> None
+  | None ->
+    match t.args with
+    | [arg] -> Some arg 
+    | [] | _::_::_ -> None

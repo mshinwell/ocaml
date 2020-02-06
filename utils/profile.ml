@@ -17,6 +17,10 @@
 
 type file = string
 
+let enabled = ref false
+
+let enable () = enabled := true
+
 external time_include_children: bool -> float = "caml_sys_time_include_children"
 let cpu_time () = time_include_children true
 
@@ -71,7 +75,7 @@ let hierarchy = ref (create ())
 let initial_measure = ref None
 let reset () = hierarchy := create (); initial_measure := None
 
-let record_call ?(accumulate = false) name f =
+let record_call0 ?(accumulate = false) name f =
   let E prev_hierarchy = !hierarchy in
   let start_measure = Measure.create () in
   if !initial_measure = None then initial_measure := Some start_measure;
@@ -97,7 +101,12 @@ let record_call ?(accumulate = false) name f =
           Measure_diff.accumulate this_measure_diff start_measure end_measure in
         Hashtbl.add prev_hierarchy name (measure_diff, E this_table))
 
-let record ?accumulate pass f x = record_call ?accumulate pass (fun () -> f x)
+let record_call ?accumulate pass f =
+  if !enabled then record_call0 ?accumulate pass f
+  else f ()
+
+let record ?accumulate pass f x =
+  record_call ?accumulate pass (fun () -> f x)
 
 type display = {
   to_string : max:float -> width:int -> string;

@@ -104,7 +104,17 @@ let extra_args t id =
     []
   | extra_args -> extra_args
 
-let rewrite_use t id apply_cont =
+type rewrite_use_result =
+  | Apply_cont of Flambda.Apply_cont.t
+  | Expr of Flambda.Expr.t
+
+(* Suppress warning 37: this will be removed once variant unboxing is
+   introduced; that will use [Expr]. *)
+let _ = Expr (Flambda.Expr.create_invalid ())
+
+let no_rewrite apply_cont = Apply_cont apply_cont
+
+let rewrite_use t id apply_cont : rewrite_use_result =
   let args = Flambda.Apply_cont.args apply_cont in
   if List.compare_lengths args t.original_params <> 0 then begin
     Misc.fatal_errorf "Arguments to this [Apply_cont]@ (%a)@ do not match@ \
@@ -132,8 +142,7 @@ let rewrite_use t id apply_cont =
   let apply_cont =
     Flambda.Apply_cont.update_args apply_cont ~args
   in
-  let expr = Flambda.Expr.create_apply_cont apply_cont in
-  expr, apply_cont, args
+  Apply_cont apply_cont
 
 (* CR mshinwell: tidy up.
    Also remove confusion between "extra args" as added by e.g. unboxing and

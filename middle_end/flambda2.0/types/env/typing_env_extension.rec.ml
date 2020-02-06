@@ -17,7 +17,7 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module A =
-  Name_abstraction.Make_list (Bindable_variable_in_types) (Typing_env_level)
+  Name_abstraction.Make_map (Bindable_variable_in_types) (Typing_env_level)
 
 (* The record is here to avoid the double vision problem.  (Otherwise
    there would already be an equality
@@ -34,53 +34,65 @@ let print ppf { abst; } =
     A.print ppf abst)
 
 let invariant { abst; } =
-  A.pattern_match abst ~f:(fun _ level -> Typing_env_level.invariant level)
+  A.pattern_match abst ~f:(fun level -> Typing_env_level.invariant level)
 
-let empty () =
-  { abst = A.create [] (Typing_env_level.empty ()); }
+let empty =
+  lazy (
+    let abst =
+      A.create Bindable_variable_in_types.Map.empty (Typing_env_level.empty ())
+    in
+    { abst; })
+
+let empty () = Lazy.force empty
 
 let is_empty { abst; } =
-  A.pattern_match abst ~f:(fun _ level -> Typing_env_level.is_empty level)
+  A.pattern_match abst ~f:(fun level -> Typing_env_level.is_empty level)
 
 (* CR mshinwell: It might be worth adding a parameter here that asserts
    whether the [defined_vars] of the level are expected to be empty.  This
    should always be the case for extensions generated from [meet]. *)
 let create level =
   let abst =
-    A.create (Typing_env_level.defined_vars_in_order' level) level
+    A.create (Typing_env_level.defined_vars level) level
   in
   { abst; }
 
 let pattern_match { abst; } ~f =
-  A.pattern_match abst ~f:(fun _ level -> f level)
+  A.pattern_match abst ~f:(fun level -> f level)
 
 let one_equation name ty =
-  let abst = A.create [] (Typing_env_level.one_equation name ty) in
+  let abst =
+    A.create Variable.Map.empty (Typing_env_level.one_equation name ty)
+  in
   { abst; }
 
 let add_or_replace_equation { abst; } name ty =
   let abst =
-    A.pattern_match abst ~f:(fun _defined_names level ->
+    A.pattern_match abst ~f:(fun level ->
       let level = Typing_env_level.add_or_replace_equation level name ty in
-      A.create (Typing_env_level.defined_vars_in_order' level) level)
+      A.create (Typing_env_level.defined_vars level) level)
   in
   { abst; }
 
 let add_cse { abst; } prim ~bound_to =
   let abst =
-    A.pattern_match abst ~f:(fun _defined_names level ->
+    A.pattern_match abst ~f:(fun level ->
       let level = Typing_env_level.add_cse level prim ~bound_to in
-      A.create (Typing_env_level.defined_vars_in_order' level) level)
+      A.create (Typing_env_level.defined_vars level) level)
   in
   { abst; }
 
 let meet env (t1 : t) (t2 : t) : t =
-  let abst =
-    A.pattern_match t1.abst ~f:(fun _ level_1 ->
-      A.pattern_match t2.abst ~f:(fun _ level_2 ->
-        let level = Typing_env_level.meet env level_1 level_2 in
-        A.create (Typing_env_level.defined_vars_in_order' level) level))
+  (* CR mshinwell: Add [@inlined] annotations inside [pattern_match] itself
+     once a means of suppressing warning 55 has been produced *)
+  let [@inline always] f level_1 =
+    let [@inline always] f level_2 =
+      let level = Typing_env_level.meet env level_1 level_2 in
+      A.create (Typing_env_level.defined_vars level) level
+    in
+    A.pattern_match t2.abst ~f
   in
+  let abst = A.pattern_match t1.abst ~f in
   { abst; }
 
 let rec n_way_meet env ts =
@@ -88,22 +100,22 @@ let rec n_way_meet env ts =
   | [] -> empty ()
   | t::ts -> meet env t (n_way_meet env ts)
 
-let n_way_join ~initial_env_at_join envs_with_extensions : t * _ =
+let n_way_join ~env_at_fork envs_with_extensions : t * _ =
   let abst, extra_cse_bindings =
     let rec open_binders envs_with_extensions envs_with_levels =
       match envs_with_extensions with
       | [] ->
         let level, extra_cse_bindings =
-          Typing_env_level.n_way_join ~initial_env_at_join envs_with_levels
+          Typing_env_level.n_way_join ~env_at_fork envs_with_levels
         in
         let abst =
-          A.create (Typing_env_level.defined_vars_in_order' level) level
+          A.create (Typing_env_level.defined_vars level) level
         in
         abst, extra_cse_bindings
       | (_env, id, use_kind, interesting_vars, t)::envs_with_extensions ->
-        A.pattern_match t.abst ~f:(fun _ level ->
+        A.pattern_match t.abst ~f:(fun level ->
           let env =
-            Typing_env.add_env_extension_from_level initial_env_at_join level
+            Typing_env.add_env_extension_from_level env_at_fork level
           in
           (* It doesn't matter that the list gets reversed. *)
           let envs_with_levels =

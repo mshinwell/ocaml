@@ -20,10 +20,10 @@ open! Simplify_import
 
 let simplify_toplevel dacc expr ~return_continuation ~return_arity
       exn_continuation ~return_cont_scope ~exn_cont_scope =
-  let expr, cont_uses_env, uacc =
+  let expr, dacc, uacc =
     try
       Simplify_expr.simplify_expr dacc expr
-        (fun cont_uses_env code_age_relation r ->
+        (fun dacc ->
           let uenv =
             UE.add_continuation UE.empty return_continuation
               return_cont_scope return_arity
@@ -32,7 +32,7 @@ let simplify_toplevel dacc expr ~return_continuation ~return_arity
             UE.add_exn_continuation uenv exn_continuation
               exn_cont_scope
           in
-          cont_uses_env, UA.create uenv code_age_relation r)
+          dacc, UA.create uenv (DA.code_age_relation dacc) (DA.r dacc))
     with Misc.Fatal_error -> begin
       if !Clflags.flambda2_context_on_error then begin
         Format.eprintf "\n%sContext is:%s simplifying toplevel \
@@ -45,4 +45,4 @@ let simplify_toplevel dacc expr ~return_continuation ~return_arity
       raise Misc.Fatal_error
     end
   in
-  expr, cont_uses_env, UA.r uacc
+  expr, dacc, UA.r uacc

@@ -118,7 +118,7 @@ let tupled_function_call_stub
             (Binary (
               Block_load (block_access, Immutable),
               Simple.var tuple_param_var,
-              Simple.const (Tagged_immediate pos)))
+              Simple.const (Reg_width_const.tagged_immediate pos)))
             dbg
         in
         let param = VB.create param Name_mode.normal in
@@ -127,9 +127,7 @@ let tupled_function_call_stub
       (0, body_with_closure_bound)
       params
   in
-  let tuple_param =
-    Kinded_parameter.create (Parameter.wrap tuple_param_var) K.value
-  in
+  let tuple_param = Kinded_parameter.create tuple_param_var K.value in
   let params_and_body =
     Flambda.Function_params_and_body.create
       ~return_continuation
@@ -157,9 +155,8 @@ let tupled_function_call_stub
 let register_const0 t constant name =
   match Static_const.Map.find constant t.shareable_constants with
   | exception Not_found ->
-    let current_compilation_unit = Compilation_unit.get_current_exn () in
     (* Create a variable to ensure uniqueness of the symbol. *)
-    let var = Variable.create ~current_compilation_unit name in
+    let var = Variable.create name in
     let symbol =
       Symbol.create (Compilation_unit.get_current_exn ())
         (Linkage_name.create
@@ -229,7 +226,8 @@ let rec declare_const t (const : Lambda.structured_constant)
 let close_const t (const : Lambda.structured_constant) =
   match declare_const t const with
   | Tagged_immediate c, name ->
-    Named.create_simple (Simple.const (Tagged_immediate c)), name
+    Named.create_simple (Simple.const (Reg_width_const.tagged_immediate c)),
+      name
   | Symbol s, name -> Named.create_simple (Simple.symbol s), name
   | Dynamically_computed _, name ->
     Misc.fatal_errorf "Declaring a computed constant %s" name
@@ -342,9 +340,7 @@ let close_c_call t ~let_bound_var (prim : Primitive.description)
   if not needs_wrapper then call
   else
     let after_call =
-      let params =
-        [Kinded_parameter.create (Parameter.wrap handler_param) return_kind]
-      in
+      let params = [Kinded_parameter.create handler_param return_kind] in
       let params_and_handler =
         Flambda.Continuation_params_and_handler.create params
           ~handler:code_after_call
@@ -424,6 +420,14 @@ let close_primitive t env ~let_bound_var named (prim : Lambda.primitive) ~args
       ~register_const_string:(register_const_string t)
       prim ~args dbg k
 
+let close_trap_action_opt trap_action =
+  Option.map (fun (trap_action : Ilambda.trap_action) : Trap_action.t ->
+      match trap_action with
+      | Push { exn_handler; } -> Push { exn_handler; }
+      | Pop { exn_handler; } ->
+        Pop { exn_handler; raise_kind = None; })
+    trap_action
+
 let rec close t env (ilam : Ilambda.t) : Expr.t =
   match ilam with
   | Let (id, user_visible, _kind, defining_expr, body) ->
@@ -466,16 +470,8 @@ let rec close t env (ilam : Ilambda.t) : Expr.t =
           params)
     in
     let params =
-      List.map2 (fun param (_, (user_visible : Ilambda.user_visible), kind) ->
-          (* CR mshinwell: Maybe take [Ilambda.user_visible] into
-             [User_visible.t]? *)
-          let user_visible =
-            match user_visible with
-            | User_visible -> true
-            | Not_user_visible -> false
-          in
-          let param = Variable.with_user_visible param ~user_visible in
-          Kinded_parameter.create (Parameter.wrap param) (LC.value_kind kind))
+      List.map2 (fun param (_, _, kind) ->
+          Kinded_parameter.create param (LC.value_kind kind))
         params
         params_with_kinds
     in
@@ -519,50 +515,54 @@ let rec close t env (ilam : Ilambda.t) : Expr.t =
     Expr.create_apply apply
   | Apply_cont (cont, trap_action, args) ->
     let args = Env.find_simples env args in
-    let trap_action =
-      Option.map (fun (trap_action : Ilambda.trap_action) : Trap_action.t ->
-          match trap_action with
-          | Push { exn_handler; } -> Push { exn_handler; }
-          | Pop { exn_handler; } ->
-            Pop { exn_handler; raise_kind = None; })
-        trap_action
-    in
+    let trap_action = close_trap_action_opt trap_action in
     let apply_cont =
       Flambda.Apply_cont.create ?trap_action cont ~args ~dbg:Debuginfo.none
     in
     Flambda.Expr.create_apply_cont apply_cont
   | Switch (scrutinee, sw) ->
-      let arms =
-        List.map (fun (case, arm) ->
-            Immediate.int (Targetint.OCaml.of_int case), arm)
-          sw.consts
-      in
-      let arms =
-        match sw.failaction with
-        | None -> Immediate.Map.of_list arms
-        | Some default ->
-          Numbers.Int.Set.fold (fun case cases ->
-              let case = Immediate.int (Targetint.OCaml.of_int case) in
-              if Immediate.Map.mem case cases then cases
-              else Immediate.Map.add case default cases)
-            (Numbers.Int.zero_to_n (sw.numconsts - 1))
-            (Immediate.Map.of_list arms)
-      in
-      let scrutinee = Simple.name (Env.find_name env scrutinee) in
-      let untagged_scrutinee = Variable.create "untagged" in
-      let untagged_scrutinee' =
-        VB.create untagged_scrutinee Name_mode.normal
-      in
-      let untag =
-        Named.create_prim
-          (Unary (Unbox_number Untagged_immediate, scrutinee))
-          Debuginfo.none
-      in
-      if Immediate.Map.is_empty arms then
-        Expr.create_invalid ()
-      else
-        Expr.create_let untagged_scrutinee' untag
-          (Expr.create_switch ~scrutinee:(Simple.var untagged_scrutinee) ~arms)
+    let arms =
+      List.map (fun (case, cont, trap_action, args) ->
+          let trap_action = close_trap_action_opt trap_action in
+          let args = Env.find_simples env args in
+          Immediate.int (Targetint.OCaml.of_int case),
+            Flambda.Apply_cont.create ?trap_action cont ~args
+              ~dbg:Debuginfo.none)
+        sw.consts
+    in
+    let arms =
+      match sw.failaction with
+      | None -> Immediate.Map.of_list arms
+      | Some (default, trap_action, args) ->
+        Numbers.Int.Set.fold (fun case cases ->
+            let case = Immediate.int (Targetint.OCaml.of_int case) in
+            if Immediate.Map.mem case cases then cases
+            else
+              let args = Env.find_simples env args in
+              let trap_action = close_trap_action_opt trap_action in
+              let default =
+                Flambda.Apply_cont.create ?trap_action default ~args
+                  ~dbg:Debuginfo.none
+              in
+              Immediate.Map.add case default cases)
+          (Numbers.Int.zero_to_n (sw.numconsts - 1))
+          (Immediate.Map.of_list arms)
+    in
+    let scrutinee = Simple.name (Env.find_name env scrutinee) in
+    let untagged_scrutinee = Variable.create "untagged" in
+    let untagged_scrutinee' =
+      VB.create untagged_scrutinee Name_mode.normal
+    in
+    let untag =
+      Named.create_prim
+        (Unary (Unbox_number Untagged_immediate, scrutinee))
+        Debuginfo.none
+    in
+    if Immediate.Map.is_empty arms then
+      Expr.create_invalid ()
+    else
+      Expr.create_let untagged_scrutinee' untag
+        (Expr.create_switch ~scrutinee:(Simple.var untagged_scrutinee) ~arms)
 
 and close_named t env ~let_bound_var (named : Ilambda.named)
       (k : Named.t option -> Expr.t) : Expr.t =
@@ -654,27 +654,26 @@ and close_let_rec t env ~defs ~body =
     body
 
 and close_functions t external_env function_declarations =
-  let all_free_idents =
-    (* Filter out predefined exception identifiers, since they will be
-       turned into symbols when we closure-convert the body. *)
-    Ident.Set.filter (fun ident -> not (Ident.is_predef ident))
-      (Function_decls.all_free_idents function_declarations)
-  in
   let compilation_unit = Compilation_unit.get_current_exn () in
   let var_within_closures_from_idents =
     Ident.Set.fold (fun id map ->
-        let var = Variable.create_with_same_name_as_ident id in
-        Ident.Map.add id (Var_within_closure.wrap compilation_unit var) map)
-      all_free_idents
+        (* Filter out predefined exception identifiers, since they will be
+           turned into symbols when we closure-convert the body. *)
+        if Ident.is_predef id then map
+        else
+          let var = Variable.create_with_same_name_as_ident id in
+          Ident.Map.add id (Var_within_closure.wrap compilation_unit var) map)
+      (Function_decls.all_free_idents function_declarations)
       Ident.Map.empty
   in
+  let func_decl_list = Function_decls.to_list function_declarations in
   let closure_ids_from_idents =
     List.fold_left (fun map decl ->
         let id = Function_decl.let_rec_ident decl in
         let closure_id = Function_decl.closure_id decl in
         Ident.Map.add id closure_id map)
       Ident.Map.empty
-      (Function_decls.to_list function_declarations)
+      func_decl_list
   in
   let funs =
     List.fold_left (fun by_closure_id function_decl ->
@@ -682,7 +681,7 @@ and close_functions t external_env function_declarations =
           ~var_within_closures_from_idents ~closure_ids_from_idents
           function_declarations)
       Closure_id.Map.empty
-      (Function_decls.to_list function_declarations)
+      func_decl_list
   in
   let function_decls = Flambda.Function_declarations.create funs in
   let closure_elements =
@@ -784,15 +783,15 @@ and close_one_function t ~external_env ~by_closure_id decl
   in
   let params =
     List.map (fun (var, kind) ->
-        Kinded_parameter.create (Parameter.wrap var) (LC.value_kind kind))
+        Kinded_parameter.create var (LC.value_kind kind))
       param_vars
   in
   let body = close t closure_env body in
-  let free_vars_of_body = Name_occurrences.variables (Expr.free_names body) in
+  let free_names_of_body = Expr.free_names body in
   let my_closure' = Simple.var my_closure in
   let body =
     Variable.Map.fold (fun var closure_id body ->
-        if not (Variable.Set.mem var free_vars_of_body) then body
+        if not (Name_occurrences.mem_var free_names_of_body var) then body
         else
           let move : Flambda_primitive.unary_primitive =
             Select_closure {
@@ -809,7 +808,7 @@ and close_one_function t ~external_env ~by_closure_id decl
   in
   let body =
     Variable.Map.fold (fun var var_within_closure body ->
-        if not (Variable.Set.mem var free_vars_of_body) then body
+        if not (Name_occurrences.mem_var free_names_of_body var) then body
         else
           let var = VB.create var Name_mode.normal in
           Expr.create_let var
@@ -915,15 +914,13 @@ let ilambda_to_flambda ~backend ~module_ident ~module_block_size_in_words
             (Binary (
               Block_load (block_access, Immutable),
               Simple.var module_block_var,
-              Simple.const (Tagged_immediate pos)))
+              Simple.const (Reg_width_const.tagged_immediate pos)))
             Debuginfo.none)
           body)
       body (List.rev field_vars)
   in
   let load_fields_cont_handler =
-    let param =
-      Kinded_parameter.create (Parameter.wrap module_block_var) K.value
-    in
+    let param = Kinded_parameter.create module_block_var K.value in
     let params_and_handler =
       Flambda.Continuation_params_and_handler.create [param]
         ~handler:load_fields_body;

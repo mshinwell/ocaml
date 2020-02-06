@@ -26,29 +26,27 @@ let simplify_named0 dacc ~(bound_vars : Bindable_let_bound.t)
     let min_name_mode = Var_in_binding_pos.name_mode bound_var in
     begin match S.simplify_simple dacc simple ~min_name_mode with
     | Bottom, ty ->
-      let dacc =
-        DA.map_denv dacc ~f:(fun denv ->
-          DE.add_variable denv bound_var (T.bottom (T.kind ty)))
-      in
+      let dacc = DA.add_variable dacc bound_var (T.bottom (T.kind ty)) in
       let defining_expr = Reachable.invalid () in
       [bound_vars, defining_expr], dacc
-    | Ok simple, ty ->
-      let dacc =
-        DA.map_denv dacc ~f:(fun denv -> DE.add_variable denv bound_var ty)
+    | Ok new_simple, ty ->
+      let dacc = DA.add_variable dacc bound_var ty in
+      let defining_expr =
+        if simple == new_simple then Reachable.reachable named
+        else Reachable.reachable (Named.create_simple simple)
       in
-      let defining_expr = Reachable.reachable (Named.create_simple simple) in
       [bound_vars, defining_expr], dacc
     end
   | Prim (prim, dbg) ->
     let bound_var = Bindable_let_bound.must_be_singleton bound_vars in
     let term, env_extension, dacc =
-      Simplify_primitive.simplify_primitive dacc prim dbg ~result_var:bound_var
+      Simplify_primitive.simplify_primitive dacc ~original_named:named
+        prim dbg ~result_var:bound_var
     in
     let dacc =
-      DA.map_denv dacc ~f:(fun denv ->
-        let kind = P.result_kind' prim in
-        let denv = DE.add_variable denv bound_var (T.unknown kind) in
-        DE.extend_typing_environment denv env_extension)
+      let kind = P.result_kind' prim in
+      let dacc = DA.add_variable dacc bound_var (T.unknown kind) in
+      DA.extend_typing_environment dacc env_extension
     in
     (* CR mshinwell: Add check along the lines of: types are unknown
        whenever [not (P.With_fixed_value.eligible prim)] holds. *)
@@ -56,7 +54,7 @@ let simplify_named0 dacc ~(bound_vars : Bindable_let_bound.t)
       Reification.try_to_reify dacc term ~bound_to:bound_var
     in
     let defining_expr =
-      if T.is_bottom (DE.typing_env (DA.denv dacc)) ty then Reachable.invalid ()
+      if T.is_bottom (DA.typing_env dacc) ty then Reachable.invalid ()
       else defining_expr
     in
     [bound_vars, defining_expr], dacc

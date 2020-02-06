@@ -127,15 +127,16 @@ let dummy_value (kind : K.t) : t =
     match kind with
     | Value -> Simple.const_zero
     | Naked_number Naked_immediate ->
-      Simple.const (Naked_immediate Immediate.zero)
+      Simple.const (Reg_width_const.naked_immediate Immediate.zero)
     | Naked_number Naked_float ->
-      Simple.const (Naked_float Numbers.Float_by_bit_pattern.zero)
+      Simple.const (
+        Reg_width_const.naked_float Numbers.Float_by_bit_pattern.zero)
     | Naked_number Naked_int32 ->
-      Simple.const (Naked_int32 Int32.zero)
+      Simple.const (Reg_width_const.naked_int32 Int32.zero)
     | Naked_number Naked_int64 ->
-      Simple.const (Naked_int64 Int64.zero)
+      Simple.const (Reg_width_const.naked_int64 Int64.zero)
     | Naked_number Naked_nativeint ->
-      Simple.const (Naked_nativeint Targetint.zero)
+      Simple.const (Reg_width_const.naked_nativeint Targetint.zero)
     | Fabricated -> Misc.fatal_error "[Fabricated] kind not expected here"
   in
   Simple simple

@@ -365,15 +365,6 @@ let get_pieces_of_code t =
     List.fold_left
       (fun result
            ({ code; set_of_closures = _; } : Code_and_set_of_closures.t) ->
-        let code =
-          Code_id.Map.filter_map code
-            ~f:(fun _code_id
-                    ({ params_and_body; newer_version_of; } : Code.t) ->
-              match params_and_body with
-              | Present params_and_body ->
-                Some (params_and_body, newer_version_of)
-              | Deleted -> None)
-        in
         Code_id.Map.disjoint_union code result)
       Code_id.Map.empty
       sets
@@ -474,8 +465,7 @@ let apply_name_permutation t perm =
 
 let is_fully_static t =
   free_names t
-  |> Name_occurrences.variables
-  |> Variable.Set.is_empty
+  |> Name_occurrences.no_variables
 
 let can_share t =
   match t with

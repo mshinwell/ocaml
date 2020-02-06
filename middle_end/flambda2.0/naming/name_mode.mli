@@ -51,12 +51,13 @@ val compare : t -> t -> [ `Be_explicit_about_total_or_partial_ordering ]
 
 val to_int : t -> int
 val of_int : int -> t
+(* CR mshinwell: some of these may not be needed now *)
 val max_to_int : int
 
 type descr = private
   | Normal
-  | In_types
   | Phantom
+  | In_types
 
 val descr : t -> descr
 

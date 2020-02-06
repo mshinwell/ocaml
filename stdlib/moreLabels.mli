@@ -137,6 +137,7 @@ module Map : sig
       val is_empty: 'a t -> bool
       val mem : key -> 'a t -> bool
       val add : key:key -> data:'a -> 'a t -> 'a t
+      val replace: key:key -> f:('a -> 'a) -> 'a t -> 'a t
       val update: key:key -> f:('a option -> 'a option) -> 'a t -> 'a t
       val singleton: key -> 'a -> 'a t
       val remove : key -> 'a t -> 'a t

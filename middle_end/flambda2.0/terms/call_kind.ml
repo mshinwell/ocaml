@@ -154,10 +154,10 @@ let free_names t =
   | C_call { alloc = _; param_arity = _; return_arity = _; } ->
     Name_occurrences.empty
   | Method { kind = _; obj; } ->
-    match Simple.descr obj with
-    | Name obj ->
-      Name_occurrences.singleton_name obj Name_mode.normal
-    | Const _ -> Name_occurrences.empty
+    Simple.pattern_match obj
+      ~name:(fun obj ->
+        Name_occurrences.singleton_name obj Name_mode.normal)
+      ~const:(fun _ -> Name_occurrences.empty)
 
 let apply_name_permutation t perm =
   match t with

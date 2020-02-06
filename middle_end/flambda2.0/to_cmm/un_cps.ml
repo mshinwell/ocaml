@@ -63,21 +63,22 @@ let nativeint_of_targetint t =
 let symbol s =
   Linkage_name.to_string (Symbol.linkage_name s)
 
-let name env = function
-  | Name.Var v -> Env.inline_variable env v
-  | Name.Symbol s ->
-    let env =
-      Env.check_scope ~allow_deleted:false env (Code_id_or_symbol.Symbol s)
-    in
-    C.symbol (symbol s), env, Ece.pure
+let name env name =
+  Name.pattern_match name
+    ~var:(fun v -> Env.inline_variable env v)
+    ~symbol:(fun s ->
+      let env =
+        Env.check_scope ~allow_deleted:false env (Code_id_or_symbol.Symbol s)
+      in
+      C.symbol (symbol s), env, Ece.pure)
 
 (* Constants *)
 
 let tag_targetint t = Targetint.(add (shift_left t 1) one)
 let targetint_of_imm i = Targetint.OCaml.to_targetint i.Immediate.value
 
-let const _env c =
-  match (c : Simple.Const.t) with
+let const _env cst =
+  match Reg_width_const.descr cst with
   | Naked_immediate i ->
       C.targetint (targetint_of_imm i)
   | Tagged_immediate i ->
@@ -101,19 +102,24 @@ let default_of_kind (k : Flambda_kind.t) =
 
 (* Function symbol *)
 
-let function_name s =
-  match (Simple.descr s : Simple.descr) with
-  | Name Symbol s -> symbol s
-  | _ ->
-      Misc.fatal_errorf
-        "Expected a function symbol, instead of@ %a" Simple.print s
+let function_name simple =
+  let fail simple =
+    Misc.fatal_errorf
+      "Expected a function symbol, instead of@ %a" Simple.print simple
+  in
+  Simple.pattern_match simple
+    ~name:(fun name ->
+      Name.pattern_match name
+        ~var:(fun _ -> fail simple)
+        ~symbol:(fun sym -> symbol sym))
+    ~const:(fun _ -> fail simple)
 
 (* 'Simple' expression *)
 
 let simple env s =
-  match (Simple.descr s : Simple.descr) with
-  | Name n -> name env n
-  | Const c -> const env c, env, Ece.pure
+  Simple.pattern_match s
+    ~name:(fun n -> name env n)
+    ~const:(fun c -> const env c, env, Ece.pure)
 
 (* Arithmetic primitives *)
 
@@ -556,21 +562,11 @@ let decide_inline_let effs v body =
 
 let is_var_used v e =
   let free_names = Expr.free_names e in
-  let occurrence = Name_occurrences.greatest_name_mode_var free_names v in
-  match (occurrence : Name_mode.Or_absent.t) with
-  | Absent -> false
-  | Present _k ->
-    (* CR mshinwell: I think this should always be [true].  Even if the
-       variable is only used by phantom bindings, it still needs to be
-       there.  This may only arise in unusual cases (e.g. [my_closure]
-       that is used only by phantom bindings). *)
-    true
-    (* Name_mode.is_normal k *)
+  Name_occurrences.mem_var free_names v
 
 let function_args vars my_closure body =
   if is_var_used my_closure body then begin
-    let param = Parameter.wrap my_closure in
-    let last_arg = Kinded_parameter.create param Flambda_kind.value in
+    let last_arg = Kinded_parameter.create my_closure Flambda_kind.value in
     vars @ [last_arg]
   end else
     vars
@@ -1041,18 +1037,9 @@ and switch env s =
   let e, env, _ = simple env (Switch.scrutinee s) in
   let wrap, env = Env.flush_delayed_lets env in
   let ints, exprs =
-    Immediate.Map.fold (fun d k (ints, exprs) ->
+    Immediate.Map.fold (fun d action (ints, exprs) ->
       let i = Targetint.OCaml.to_int (Immediate.to_targetint d) in
-      let e = match Env.get_k env k with
-        | Jump { types = []; cont; } -> C.cexit cont [] []
-        | Inline { handler_params = []; handler_body; _ } ->
-            expr env handler_body
-        | Jump _
-        | Inline _ ->
-            Misc.fatal_errorf
-              "In@\n%a@\nSwitch branches should be goto (zero arguments) continuations"
-              Switch.print s
-      in
+      let e = apply_cont env action in
       (i :: ints, e :: exprs)
       ) (Switch.arms s) ([], [])
   in
@@ -1213,7 +1200,7 @@ let unit (unit : Flambda_unit.t) =
         (* Note: the environment would be used if we needed to compile the
            handler, but since it's constant we don't need it *)
         var_list env [
-          Kinded_parameter.create (Parameter.wrap (Variable.create "*ret*"))
+          Kinded_parameter.create (Variable.create "*ret*")
             Flambda_kind.value;
         ]
       in

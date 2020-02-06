@@ -487,6 +487,7 @@ module Greedy = struct
       | (j, s) ->
           assert (Assigned j = s.pos);
           let first_free_after = j + s.size in
+          (* CR mshinwell: [max] is polymorphic so this makes two C calls!! *)
           max curr first_free_after
     in
     (* find the first available space for the slot. *)

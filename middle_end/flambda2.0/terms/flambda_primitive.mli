@@ -365,7 +365,11 @@ module Eligible_for_cse : sig
 
   include Contains_names.S with type t := t
 
-  val create : primitive_application -> t option
+  val create
+     : ?map_arg:(Simple.t -> Simple.t)
+    -> primitive_application
+    -> t option
+
   val create_exn : primitive_application -> t
 
   val create_is_int : immediate_or_block:Name.t -> t
@@ -380,6 +384,8 @@ module Eligible_for_cse : sig
     -> init:'a
     -> f:('a -> Simple.t -> 'a * Simple.t)
     -> 'a * t
+
+  val filter_map_args : t -> f:(Simple.t -> Simple.t option) -> t option
 
   (** Total ordering, equality, printing, sets, maps etc. *)
   include Identifiable.S with type t := t

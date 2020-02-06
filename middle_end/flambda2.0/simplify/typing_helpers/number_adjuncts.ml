@@ -46,7 +46,7 @@ module type Num_common = sig
   val div : t -> t -> t option
   val mod_ : t -> t -> t option
 
-  val to_const : t -> Simple.Const.t
+  val to_const : t -> Reg_width_const.t
 
   val to_immediate : t -> Immediate.t
   val to_naked_float : t -> Numbers.Float_by_bit_pattern.t
@@ -163,7 +163,7 @@ module For_tagged_immediates : Int_number_kind = struct
           Targetint.OCaml.get_least_significant_16_bits_then_byte_swap i)
         t
 
-    let to_const t = Simple.Const.Tagged_immediate t
+    let to_const t = Reg_width_const.tagged_immediate t
 
     let to_immediate t = t
 
@@ -188,7 +188,7 @@ module For_tagged_immediates : Int_number_kind = struct
   let these_unboxed = T.these_tagged_immediates
 
   let term_unboxed imm =
-    Named.create_simple (Simple.const (Tagged_immediate imm))
+    Named.create_simple (Simple.const (Reg_width_const.tagged_immediate imm))
 end
 
 module For_naked_immediates : Int_number_kind = struct
@@ -222,7 +222,7 @@ module For_naked_immediates : Int_number_kind = struct
           Targetint.OCaml.get_least_significant_16_bits_then_byte_swap i)
         t
 
-    let to_const t = Simple.Const.Naked_immediate t
+    let to_const t = Reg_width_const.naked_immediate t
 
     let to_immediate t = t
 
@@ -247,7 +247,7 @@ module For_naked_immediates : Int_number_kind = struct
   let these_unboxed = T.these_naked_immediates
 
   let term_unboxed imm =
-    Named.create_simple (Simple.const (Naked_immediate imm))
+    Named.create_simple (Simple.const (Reg_width_const.naked_immediate imm))
 end
 
 module For_floats : Boxable_number_kind = struct
@@ -260,7 +260,7 @@ module For_floats : Boxable_number_kind = struct
     let div t1 t2 = Some (IEEE_semantics.div t1 t2)
     let mod_ t1 t2 = Some (IEEE_semantics.mod_ t1 t2)
 
-    let to_const t = Simple.Const.Naked_float t
+    let to_const t = Reg_width_const.naked_float t
 
     (* CR mshinwell: We need to validate that the backend compiles
        the [Int_of_float] primitive in the same way as
@@ -291,7 +291,7 @@ module For_floats : Boxable_number_kind = struct
   let box = T.box_float
 
   let term_unboxed f =
-    Named.create_simple (Simple.const (Naked_float f))
+    Named.create_simple (Simple.const (Reg_width_const.naked_float f))
 
   type naked_number_kind = K.naked_float
 end
@@ -324,7 +324,7 @@ module For_int32s : Boxable_int_number_kind = struct
     let shift_right_logical t shift =
       with_shift shift zero (fun shift -> shift_right_logical t shift)
 
-    let to_const t = Simple.Const.Naked_int32 t
+    let to_const t = Reg_width_const.naked_int32 t
 
     let to_immediate t = Immediate.int (Targetint.OCaml.of_int32 t)
     let to_naked_float t = Float_by_bit_pattern.create (Int32.to_float t)
@@ -348,7 +348,7 @@ module For_int32s : Boxable_int_number_kind = struct
   let box = T.box_int32
 
   let term_unboxed i =
-    Named.create_simple (Simple.const (Naked_int32 i))
+    Named.create_simple (Simple.const (Reg_width_const.naked_int32 i))
 
   type naked_number_kind = K.naked_int32
 end
@@ -381,7 +381,7 @@ module For_int64s : Boxable_int_number_kind = struct
     let shift_right_logical t shift =
       with_shift shift zero (fun shift -> shift_right_logical t shift)
 
-    let to_const t = Simple.Const.Naked_int64 t
+    let to_const t = Reg_width_const.naked_int64 t
 
     let to_immediate t = Immediate.int (Targetint.OCaml.of_int64 t)
     let to_naked_float t = Float_by_bit_pattern.create (Int64.to_float t)
@@ -405,7 +405,7 @@ module For_int64s : Boxable_int_number_kind = struct
   let box = T.box_int64
 
   let term_unboxed i =
-    Named.create_simple (Simple.const (Naked_int64 i))
+    Named.create_simple (Simple.const (Reg_width_const.naked_int64 i))
 
   type naked_number_kind = K.naked_int64
 end
@@ -438,7 +438,7 @@ module For_nativeints : Boxable_int_number_kind = struct
     let shift_right_logical t shift =
       with_shift shift zero (fun shift -> shift_right_logical t shift)
 
-    let to_const t = Simple.Const.Naked_nativeint t
+    let to_const t = Reg_width_const.naked_nativeint t
 
     let to_immediate t = Immediate.int (Targetint.OCaml.of_targetint t)
     let to_naked_float t = Float_by_bit_pattern.create (Targetint.to_float t)
@@ -462,7 +462,7 @@ module For_nativeints : Boxable_int_number_kind = struct
   let box = T.box_nativeint
 
   let term_unboxed i =
-    Named.create_simple (Simple.const (Naked_nativeint i))
+    Named.create_simple (Simple.const (Reg_width_const.naked_nativeint i))
 
   type naked_number_kind = K.naked_nativeint
 end

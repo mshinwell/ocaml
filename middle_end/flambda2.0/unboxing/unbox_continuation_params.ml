@@ -83,7 +83,7 @@ module Make (U : Unboxing_spec) = struct
             TE.add_definition typing_env_at_use field_name param_kind
           in
           let typing_env_at_use =
-            TE.add_env_extension typing_env_at_use ~env_extension
+            TE.add_env_extension typing_env_at_use env_extension
           in
           let field_type = T.alias_type_of param_kind field in
           let field_types_by_id =
@@ -95,12 +95,11 @@ module Make (U : Unboxing_spec) = struct
           match extra_args with
           | None -> None, field_types_by_id
           | Some extra_args ->
-            let canonical_simple, kind' =
-              TE.get_canonical_simple_with_kind typing_env_at_use
+            match
+              TE.get_canonical_simple_exn typing_env_at_use
                 ~min_name_mode:Name_mode.normal
                 field
-            in
-            assert (Flambda_kind.equal param_kind kind');
+            with
             (* CR-someday pchambart: This shouldn't add another load if
                there is already one in the list of parameters.  That is,
                  apply_cont k (a, b) a
@@ -113,10 +112,9 @@ module Make (U : Unboxing_spec) = struct
                  where k x y a' b'
                mshinwell: We never add any loads now, but might in the future.
             *)
-            match canonical_simple with
-            | Bottom | Ok None ->
+            | exception Not_found ->
               None, field_types_by_id
-            | Ok (Some simple) ->
+            | simple ->
               if Simple.equal simple field then None, field_types_by_id
               else
                 let extra_arg : EA.t = Already_in_scope simple in
@@ -167,11 +165,9 @@ module Make (U : Unboxing_spec) = struct
         extra_params_and_args ~unbox_value info indexes kind =
     let new_param_vars =
       Index.Set.fold (fun index new_param_vars ->
-          let name =
-            Format.asprintf "%s_%s" U.var_name (Index.to_string index)
-          in
+          let name = U.var_name ^ (Index.to_string index) in
           let var = Variable.create name in
-          let param = KP.create (Parameter.wrap var) kind in
+          let param = KP.create var kind in
           Index.Map.add index param new_param_vars)
         indexes
         Index.Map.empty
@@ -196,7 +192,7 @@ module Make (U : Unboxing_spec) = struct
       (* CR mshinwell: We can remove [New_let_binding] if we are always going to
          restrict ourselves to types where the field components are known
          [Simple]s. *)
-      let typing_env = TE.add_env_extension typing_env ~env_extension in
+      let typing_env = TE.add_env_extension typing_env env_extension in
       assert (Index.Map.cardinal fields = List.length all_field_types_by_id);
       let typing_env, extra_params_and_args =
         List.fold_left2

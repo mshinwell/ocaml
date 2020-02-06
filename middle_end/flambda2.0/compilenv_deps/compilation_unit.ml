@@ -30,8 +30,8 @@ let string_for_printing t = Ident.name t.id
    name of the pack. *)
 let compare0 v1 v2 =
   if v1 == v2 then 0
-  else
-    let c = compare v1.hash v2.hash in
+  else  (* CR mshinwell: is [hash] definitely >=0 on a 32-bit platform? *)
+    let c = v1.hash - v2.hash in
     if c = 0 then
       let v1_id = Ident.name v1.id in
       let v2_id = Ident.name v2.id in
@@ -42,7 +42,7 @@ let compare0 v1 v2 =
         c
     else c
 
-let equal0 t1 t2 = (compare t1 t2 = 0)
+let equal0 t1 t2 = (compare0 t1 t2 = 0)
 
 include Identifiable.Make (struct
   type nonrec t = t
@@ -59,6 +59,8 @@ include Identifiable.Make (struct
   let hash x = x.hash
 end)
 
+(* CR mshinwell: This shouldn't be necessary now we force inlining of the
+   functor *)
 (* Exposing [compare] and [equal] not via the functor application ensures
    that [Closure] will give an approximation for them.  Otherwise they won't
    be called directly. *)

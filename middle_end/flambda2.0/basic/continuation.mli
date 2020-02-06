@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2013--2019 OCamlPro SAS                                    *)
-(*   Copyright 2014--2019 Jane Street Group LLC                           *)
+(*   Copyright 2013--2020 OCamlPro SAS                                    *)
+(*   Copyright 2014--2020 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -14,28 +14,32 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+[@@@ocaml.warning "+a-30-40-41-42"]
 
-(** Continuation variables. *)
+(** The names of continuations. *)
 
-include Identifiable.S
+type t = private int
 
-type sort =
-  | Normal
-  | Return
-  | Define_root_symbol
-  | Toplevel_return
-  | Exn
+include Identifiable.S with type t := t
+
+module Sort : sig
+  type t =
+    | Normal
+    | Return
+    | Define_root_symbol
+    | Toplevel_return
+    | Exn
+end
 
 val dummy : t
 
-val create : ?sort:sort -> unit -> t
-
-val to_int : t -> int
+val create : ?sort:Sort.t -> unit -> t
 
 val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
 
-val sort : t -> sort
+val to_int : t -> int
+
+val sort : t -> Sort.t
 
 val is_exn : t -> bool
 

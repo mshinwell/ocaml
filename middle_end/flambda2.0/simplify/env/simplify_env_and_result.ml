@@ -147,6 +147,9 @@ end = struct
   let symbol_is_currently_being_defined t symbol =
     Symbol.Set.mem symbol t.symbols_currently_being_defined
 
+  let symbols_currently_being_defined t =
+    t.symbols_currently_being_defined
+
   let enter_closure { backend; round; typing_env;
                       inlined_debuginfo = _; can_inline;
                       inlining_depth_increment = _;
@@ -300,7 +303,7 @@ end = struct
     add_parameters t params ~param_types
 
   let extend_typing_environment t env_extension =
-    let typing_env = TE.add_env_extension t.typing_env ~env_extension in
+    let typing_env = TE.add_env_extension t.typing_env env_extension in
     { t with
       typing_env;
     }
@@ -334,10 +337,9 @@ end = struct
     end
 
   let check_simple_is_bound t (simple : Simple.t) =
-    match Simple.descr simple with
-    | Name name -> check_name_is_bound t name
-    (* CR mshinwell: Convert [Typing_env] to map from [Simple]s. *)
-    | Const _ -> ()
+    Simple.pattern_match simple
+      ~name:(fun name -> check_name_is_bound t name)
+      ~const:(fun _ -> ())
 
   let check_code_id_is_bound t code_id =
     if not (Code_id.Map.mem code_id t.code) then begin
@@ -372,11 +374,12 @@ end = struct
       Misc.fatal_errorf "Code ID %a not bound" Code_id.print id
     | code -> code
 
-  (* CR mshinwell: The label should state what order is expected. *)
-  (* CR mshinwell: Rework lifted constant handling so we don't try to add
-     lifted constants we already know about. *)
   let add_lifted_constants t ~lifted =
     (*
+    let num_lifted_constants = List.length lifted in
+    if num_lifted_constants > 0 then begin
+      Format.eprintf "Adding %d lifted constants\n%!" (List.length lifted)
+    end;
     Format.eprintf "Adding lifted:@ %a\n%!"
       (Format.pp_print_list ~pp_sep:Format.pp_print_space
         Lifted_constant.print) lifted;
@@ -386,62 +389,54 @@ end = struct
       List.fold_left (fun t lifted_constant ->
           let types_of_symbols = LC.types_of_symbols lifted_constant in
           Symbol.Map.fold (fun sym typ t ->
-              define_symbol_if_undefined t sym (T.kind typ))
+              define_symbol t sym (T.kind typ))
             types_of_symbols
             t)
         t
         lifted
     in
+    let typing_env =
+      List.fold_left (fun typing_env lifted_constant ->
+          let denv_at_definition = LC.denv_at_definition lifted_constant in
+          let types_of_symbols = LC.types_of_symbols lifted_constant in
+          Symbol.Map.fold (fun sym typ typing_env ->
+              let sym = Name.symbol sym in
+              let env_extension =
+                T.make_suitable_for_environment typ
+                  denv_at_definition.typing_env
+                  ~suitable_for:typing_env
+                  ~bind_to:sym
+              in
+              TE.add_env_extension typing_env env_extension)
+            types_of_symbols
+            typing_env)
+        t.typing_env
+        lifted
+    in
     List.fold_left (fun denv lifted_constant ->
-        let denv_at_definition = LC.denv_at_definition lifted_constant in
-        let types_of_symbols = LC.types_of_symbols lifted_constant in
-        let bound_symbols = LC.bound_symbols lifted_constant in
         let defining_expr = LC.defining_expr lifted_constant in
-        let being_defined =
-          Let_symbol.Bound_symbols.being_defined bound_symbols
-        in
-        let already_bound =
-          Symbol.Set.filter (fun sym -> mem_symbol denv sym)
-            being_defined
-        in
-        let typing_env =
-          if Symbol.Set.equal being_defined already_bound then denv.typing_env
-          else if not (Symbol.Set.is_empty already_bound) then
-            Misc.fatal_errorf "Expected all or none of the following symbols \
-                to be found:@ %a@ denv:@ %a"
-              LC.print lifted_constant
-              print denv
-          else begin
-            Symbol.Map.fold (fun sym typ typing_env ->
-                let sym = Name.symbol sym in
-                let env_extension =
-                  T.make_suitable_for_environment typ
-                    denv_at_definition.typing_env
-                    ~suitable_for:typing_env
-                    ~bind_to:sym
-                in
-                TE.add_env_extension typing_env ~env_extension)
-              types_of_symbols
-              denv.typing_env
-          end
-        in
         Code_id.Map.fold
-          (fun code_id (params_and_body, newer_version_of) denv ->
-            if mem_code denv code_id then denv
-            else define_code denv ?newer_version_of ~code_id ~params_and_body)
+          (fun code_id
+               ({ params_and_body; newer_version_of; } : Static_const.Code.t)
+               denv ->
+            match params_and_body with
+            | Present params_and_body ->
+              define_code denv ?newer_version_of ~code_id ~params_and_body
+            | Deleted -> denv)
           (Static_const.get_pieces_of_code defining_expr)
-          (with_typing_env denv typing_env))
-      t
-      (List.rev lifted)
+          denv)
+      (with_typing_env t typing_env)
+      lifted
 
-  (* CR mshinwell: Think more about this -- may be re-traversing long lists *)
-  let add_lifted_constants_from_r t r =
-    add_lifted_constants t ~lifted:(Result.get_lifted_constants r)
+  let set_inlined_debuginfo t dbg =
+    { t with inlined_debuginfo = dbg; }
 
   let add_inlined_debuginfo' t dbg =
     Debuginfo.concat t.inlined_debuginfo dbg
 
   let add_inlined_debuginfo t dbg =
+    if List.length dbg > 100 || List.length t.inlined_debuginfo > 100 then
+      Misc.fatal_errorf "STOP@ %a\n%!" print t;
     { t with
       inlined_debuginfo = add_inlined_debuginfo' t dbg
     }
@@ -519,9 +514,8 @@ end = struct
 
   let continuation_arity t cont =
     match find_continuation t cont with
-    | Unknown { arity; }
+    | Unknown { arity; handler = _; }
     | Unreachable { arity; }
-    | Apply_cont_with_constant_arg { cont = _; arg = _; arity; }
     | Inline { arity; _ } -> arity
 
   let add_continuation0 t cont scope cont_in_env =
@@ -533,7 +527,10 @@ end = struct
     }
 
   let add_continuation t cont scope arity =
-    add_continuation0 t cont scope (Unknown { arity; })
+    add_continuation0 t cont scope (Unknown { arity; handler = None; })
+
+  let add_continuation_with_handler t cont scope arity handler =
+    add_continuation0 t cont scope (Unknown { arity; handler = Some handler; })
 
   let add_unreachable_continuation t cont scope arity =
     add_continuation0 t cont scope (Unreachable { arity; })
@@ -574,14 +571,6 @@ end = struct
       continuation_aliases;
     }
 
-  let add_continuation_apply_cont_with_constant_arg t cont scope arity
-        ~destination_cont ~destination_arg =
-    add_continuation0 t cont scope (Apply_cont_with_constant_arg {
-      cont = destination_cont;
-      arg = destination_arg;
-      arity;
-    })
-
   let add_continuation_to_inline t cont scope arity handler =
     add_continuation0 t cont scope (Inline { arity; handler; })
 
@@ -590,7 +579,7 @@ end = struct
     let continuations =
       let cont = Exn_continuation.exn_handler exn_cont in
       let cont_in_env : Continuation_in_env.t =
-        Unknown { arity = Exn_continuation.arity exn_cont; }
+        Unknown { arity = Exn_continuation.arity exn_cont; handler = None; }
       in
       Continuation.Map.add cont (scope, cont_in_env) t.continuations
     in
@@ -674,13 +663,24 @@ end = struct
 
   let get_lifted_constants t = t.lifted_constants_innermost_last
 
-  let set_lifted_constants t consts =
-    { t with lifted_constants_innermost_last = consts; }
-
   let clear_lifted_constants t =
     { t with
       lifted_constants_innermost_last = [];
     }
+
+  let add_prior_lifted_constants t constants =
+    { t with
+      lifted_constants_innermost_last =
+        t.lifted_constants_innermost_last @ constants;
+    }
+
+  let get_and_clear_lifted_constants t =
+    let constants = t.lifted_constants_innermost_last in
+    let t = clear_lifted_constants t in
+    t, constants
+
+  let set_lifted_constants t consts =
+    { t with lifted_constants_innermost_last = consts; }
 
   let find_shareable_constant t static_const =
     Static_const.Map.find_opt static_const t.shareable_constants

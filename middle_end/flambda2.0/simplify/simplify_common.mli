@@ -41,20 +41,16 @@ val try_cse
   -> result_var:Variable.t
   -> cse
 
-val add_wrapper_for_fixed_arity_continuation0
-   : Upwards_acc.t
-  -> Continuation.t
-  -> use_id:Apply_cont_rewrite_id.t
-  -> Flambda_arity.t
-  -> (Continuation.t * Flambda.Continuation_handler.t) option
+type add_wrapper_for_switch_arm_result = private
+  | Apply_cont of Flambda.Apply_cont.t
+  | New_wrapper of Continuation.t * Flambda.Continuation_handler.t
 
-val add_wrapper_for_fixed_arity_continuation
+val add_wrapper_for_switch_arm
    : Upwards_acc.t
-  -> Continuation.t
+  -> Flambda.Apply_cont.t
   -> use_id:Apply_cont_rewrite_id.t
   -> Flambda_arity.t
-  -> around:(Continuation.t -> Flambda.Expr.t)
-  -> Flambda.Expr.t
+  -> add_wrapper_for_switch_arm_result
 
 val add_wrapper_for_fixed_arity_apply
    : Upwards_acc.t

@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2018 OCamlPro SAS                                          *)
-(*   Copyright 2018 Jane Street Group LLC                                 *)
+(*   Copyright 2018--2020 OCamlPro SAS                                    *)
+(*   Copyright 2018--2020 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -14,10 +14,10 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+[@@@ocaml.warning "+a-30-40-41-42"]
 
 type t = {
-  param : Parameter.t;
+  param : Variable.t;
   kind : Flambda_kind.t;
 }
 
@@ -27,19 +27,19 @@ include Identifiable.Make (struct
   let compare 
         { param = param1; kind = kind1; }
         { param = param2; kind = kind2; } =
-    let c = Parameter.compare param1 param2 in
+    let c = Variable.compare param1 param2 in
     if c <> 0 then c
     else Flambda_kind.compare kind1 kind2
 
   let equal t1 t2 = compare t1 t2 = 0
 
   let hash { param; kind; } =
-    Hashtbl.hash (Parameter.hash param, Flambda_kind.hash kind)
+    Hashtbl.hash (Variable.hash param, Flambda_kind.hash kind)
 
   let print ppf { param; kind; } =
     Format.fprintf ppf "@[(@<0>%s%a@<0>%s @<1>\u{2237} %a)@]"
       (Flambda_colours.parameter ())
-      Parameter.print param
+      Variable.print param
       (Flambda_colours.normal ())
       Flambda_kind.print kind
 
@@ -54,17 +54,16 @@ let create param kind =
     kind;
   }
 
-let param t = t.param
-let var t = Parameter.var t.param
+let var t = t.param
 let name t = Name.var (var t)
 let simple t = Simple.var (var t)
 let kind t = t.kind
 
 let with_kind t kind = { t with kind; }
 
-let rename t = { t with param = Parameter.rename t.param; }
+let rename t = { t with param = Variable.rename t.param; }
 
-let map_var t ~f = { t with param = Parameter.map_var f t.param; }
+let map_var t ~f = { t with param = f t.param; }
 
 let map_kind t ~f = { t with kind = f t.kind; }
 
@@ -75,11 +74,11 @@ let free_names ({ param = _; kind = _; } as t) =
   Name_occurrences.singleton_variable (var t) Name_mode.normal
 
 let apply_name_permutation ({ param = _; kind; } as t) perm =
-  match Name_permutation.apply_name perm (name t) with
-  | Var var -> create (Parameter.wrap var) kind
-  | _ ->
-    Misc.fatal_errorf "Illegal name permutation on [Kinded_parameter]: %a"
-      Name_permutation.print perm
+  Name.pattern_match (Name_permutation.apply_name perm (name t))
+    ~var:(fun var -> create var kind)
+    ~symbol:(fun _ ->
+      Misc.fatal_errorf "Illegal name permutation on [Kinded_parameter]: %a"
+        Name_permutation.print perm)
 
 let add_to_name_permutation t1 t2 perm =
   Name_permutation.add_variable perm (var t1) (var t2)
@@ -111,8 +110,6 @@ module List = struct
   let var_set t = Variable.Set.of_list (vars t)
 
   let name_set t = Name.Set.of_list (List.map Name.var (vars t))
-
-  let param_set t = Parameter.Set.of_list (List.map param t)
 
   let rename t = List.map (fun t -> rename t) t
 

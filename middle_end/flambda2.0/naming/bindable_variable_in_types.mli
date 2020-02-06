@@ -21,4 +21,7 @@
 
 type t = Variable.t
 
-include Bindable.S with type t := t
+include Bindable.S
+  with type t := t
+  with module Set = Variable.Set
+  with module Map = Variable.Map

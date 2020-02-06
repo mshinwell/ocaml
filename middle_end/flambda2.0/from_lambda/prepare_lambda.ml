@@ -20,47 +20,6 @@ module L = Lambda
 
 let stub_hack_prim_name = "*stub*"
 
-let add_default_argument_wrappers lam =
-  (* CR-someday mshinwell: Temporary hack to mark default argument wrappers
-     as stubs.  Other possibilities:
-     1. Change L.inline_attribute to add another ("stub") case;
-     2. Add a "stub" field to the Lfunction record. *)
-  let defs_are_all_functions (defs : (_ * L.lambda) list) =
-    List.for_all (function (_, L.Lfunction _) -> true | _ -> false) defs
-  in
-  let f (lam : L.lambda) : L.lambda =
-    match lam with
-    | Llet (( Strict | Alias | StrictOpt), _k, id,
-        Lfunction { kind; params; return; body = fbody; attr; loc; }, body) ->
-      begin match
-        Simplif.split_default_wrapper ~id ~kind ~params ~return ~body:fbody
-          ~attr ~loc
-      with
-      | [fun_id, def] -> Llet (Alias, Pgenval, fun_id, def, body)
-      | [fun_id, def; inner_fun_id, def_inner] ->
-        Llet (Alias, Pgenval, inner_fun_id, def_inner,
-              Llet (Alias, Pgenval, fun_id, def, body))
-      | _ -> assert false
-      end
-    | Lletrec (defs, body) as lam ->
-      if defs_are_all_functions defs then
-        let defs =
-          List.flatten
-            (List.map
-               (function
-                 | (id, L.Lfunction
-                     { kind; params; return; body; attr; loc; }) ->
-                   Simplif.split_default_wrapper ~id ~kind ~params ~return
-                     ~body ~attr ~loc
-                 | _ -> assert false)
-               defs)
-        in
-        Lletrec (defs, body)
-      else lam
-    | lam -> lam
-  in
-  L.map f lam
-
 type block_type = Normal | Boxed_float
 
 type letrec = {
@@ -522,6 +481,28 @@ let rec prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
         attr = attr;
         loc = loc;
       }))
+  | Llet ((Strict | Alias | StrictOpt), Pgenval, fun_id,
+      Lfunction { kind; params; body = fbody; attr; loc; _ }, body) ->
+    begin match
+      Simplif.split_default_wrapper ~id:fun_id ~kind ~params
+        ~body:fbody ~return:Pgenval ~attr ~loc
+    with
+    | [fun_id, def] ->
+      (* CR mshinwell: Here and below, mark the wrappers as stubs *)
+      prepare env def (fun def ->
+        prepare env body (fun body ->
+          k (L.Llet (Alias, Pgenval, fun_id, def, body))))
+    | [fun_id, def; inner_fun_id, inner_def] ->
+      prepare env inner_def (fun inner_def ->
+        prepare env def (fun def ->
+          prepare env body (fun body ->
+            k (L.Llet (Alias, Pgenval, inner_fun_id, inner_def,
+              L.Llet (Alias, Pgenval, fun_id, def, body))))))
+    | _ ->
+      Misc.fatal_errorf "Unexpected return value from \
+          [split_default_wrapper] when translating:@ %a"
+        Printlambda.lambda lam
+    end
   | Llet (let_kind, value_kind, id, defining_expr, body) ->
     prepare env defining_expr (fun defining_expr ->
       let env =
@@ -532,11 +513,18 @@ let rec prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
       prepare env body (fun body ->
         k (L.Llet (let_kind, value_kind, id, defining_expr, body))))
   | Lletrec (bindings, body) ->
-    let idents, bindings = List.split bindings in
-    prepare_list env bindings (fun bindings ->
-      let bindings = List.combine idents bindings in
-      prepare env body (fun body ->
-        k (dissect_letrec ~bindings ~body)))
+    prepare_list_with_flatten_map env bindings
+      ~flatten_map:(fun fun_id (binding : L.lambda) ->
+        match binding with
+        | Lfunction { kind; params; body = fbody; attr; loc; _ } ->
+          Simplif.split_default_wrapper ~id:fun_id ~kind ~params
+            ~body:fbody ~return:Pgenval ~attr ~loc
+        | _ ->
+          Misc.fatal_errorf "[Lletrec] with non-function(s):@ %a"
+            Printlambda.lambda lam)
+      (fun bindings ->
+        prepare env body (fun body ->
+          k (dissect_letrec ~bindings ~body)))
   | Lprim (Pfield _, [Lprim (Pgetglobal id, [],_)], _)
       when Ident.same id (Env.current_unit_id env) ->
     Misc.fatal_error "[Pfield (Pgetglobal ...)] for the current compilation \
@@ -730,6 +718,21 @@ and prepare_list env lams k =
     prepare env lam (fun lam ->
       prepare_list env lams (fun lams -> k (lam::lams)))
 
+and prepare_list_with_idents env lams k =
+  match lams with
+  | [] -> k []
+  | (id, lam)::lams ->
+    prepare env lam (fun lam ->
+      prepare_list_with_idents env lams (fun lams -> k ((id, lam)::lams)))
+
+and prepare_list_with_flatten_map env lams ~flatten_map k =
+  match lams with
+  | [] -> k []
+  | (id, lam)::lams ->
+    prepare_list_with_idents env (flatten_map id lam) (fun mapped ->
+      prepare_list_with_flatten_map env lams ~flatten_map (fun lams ->
+        k (mapped @ lams)))
+
 and prepare_option env lam_opt k =
   match lam_opt with
   | None -> k None
@@ -742,6 +745,5 @@ let run lam =
       (Compilation_unit.get_current_exn ())
   in
   let env = Env.create ~current_unit_id in
-  let lam = add_default_argument_wrappers lam in
   let lam = prepare env lam (fun lam -> lam) in
   lam, !recursive_static_catches

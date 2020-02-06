@@ -62,7 +62,7 @@ module Make (Bindable : Bindable.S) (Term : Term) = struct
 
   let create name term = name, term
 
-  let pattern_match (name, term) ~f =
+  let [@inline always] pattern_match (name, term) ~f =
     let fresh_name = Bindable.rename name in
     let perm = Bindable.name_permutation name fresh_name in
     let fresh_term = Term.apply_name_permutation term perm in
@@ -94,15 +94,15 @@ module Make (Bindable : Bindable.S) (Term : Term) = struct
         (Flambda_colours.normal ())
         (Term.print_with_cache ~cache) term)
 
-  let pattern_match_mapi t ~f =
+  let [@inline always] pattern_match_mapi t ~f =
     pattern_match t ~f:(fun fresh_name fresh_term ->
       let new_term = f fresh_name fresh_term in
       fresh_name, new_term)
 
-  let pattern_match_map t ~f =
+  let [@inline always] pattern_match_map t ~f =
     pattern_match_mapi t ~f:(fun _fresh_name fresh_term -> f fresh_term)
 
-  let pattern_match_pair (name0, term0) (name1, term1) ~f =
+  let [@inline always] pattern_match_pair (name0, term0) (name1, term1) ~f =
     let fresh_name = Bindable.rename name0 in
     let perm0 = Bindable.name_permutation name0 fresh_name in
     let perm1 = Bindable.name_permutation name1 fresh_name in
@@ -121,7 +121,7 @@ module Make (Bindable : Bindable.S) (Term : Term) = struct
     let in_binding_position = Bindable.singleton_occurrence_in_terms name in
     let free_in_term = Term.free_names term in
     Name_occurrences.diff free_in_term in_binding_position
-end
+end [@@@inline always]
 
 module Make_list (Bindable : Bindable.S) (Term : Term) = struct
   type t = Bindable.t list * Term.t
@@ -136,7 +136,7 @@ module Make_list (Bindable : Bindable.S) (Term : Term) = struct
     end;
     names, term
 
-  let pattern_match (names, term) ~f =
+  let [@inline always] pattern_match (names, term) ~f =
     match names with
     | [] -> f [] term
     | _ ->
@@ -181,15 +181,16 @@ module Make_list (Bindable : Bindable.S) (Term : Term) = struct
         print_bindable_name_list names
         (Term.print_with_cache ~cache) term)
 
-  let pattern_match_mapi t ~f =
+  let [@inline always] pattern_match_mapi t ~f =
     pattern_match t ~f:(fun fresh_names fresh_term ->
       let new_term = f fresh_names fresh_term in
       fresh_names, new_term)
 
-  let pattern_match_map t ~f =
+  let [@inline always] pattern_match_map t ~f =
     pattern_match_mapi t ~f:(fun _name term -> f term)
 
-  let pattern_match_pair ((names0, term0) as t1) ((names1, term1) as t2) ~f =
+  let [@inline always] pattern_match_pair
+        ((names0, term0) as t1) ((names1, term1) as t2) ~f =
     if List.compare_lengths names0 names1 <> 0 then begin
       let print ppf t : unit = print ppf t in
       Misc.fatal_errorf "Cannot concrete a pair of generalised abstractions \
@@ -233,4 +234,94 @@ module Make_list (Bindable : Bindable.S) (Term : Term) = struct
     in
     let free_in_term = Term.free_names term in
     Name_occurrences.diff free_in_term in_binding_position
-end
+end [@@@inline always]
+
+module Make_map (Bindable : Bindable.S) (Term : Term) = struct
+  type t = E : _ Bindable.Map.t * Term.t -> t
+
+  let create map term = E (map, term)
+
+  let [@inline always] pattern_match t ~f =
+    match t with
+    | E (names, term) ->
+      if Bindable.Map.is_empty names then f term
+      else
+        let perm =
+          Bindable.Map.fold (fun stale_name _ perm ->
+              let fresh_name = Bindable.rename stale_name in
+              Bindable.add_to_name_permutation fresh_name stale_name perm)
+            names
+            Name_permutation.empty
+        in
+        f (Term.apply_name_permutation term perm)
+
+  let pattern_match' t ~f =
+    match t with
+    | E (names, term) ->
+      if Bindable.Map.is_empty names then f [] term
+      else
+        let fresh_names, perm =
+          Bindable.Map.fold (fun stale_name _ (fresh_names, perm) ->
+              let fresh_name = Bindable.rename stale_name in
+              let fresh_names = Bindable.Set.add fresh_name fresh_names in
+              let perm =
+                Bindable.add_to_name_permutation fresh_name stale_name perm
+              in
+              fresh_names, perm)
+            names
+            (Bindable.Set.empty, Name_permutation.empty)
+        in
+        f (Bindable.Set.elements fresh_names)
+          (Term.apply_name_permutation term perm)
+
+  let print_bindable_name_list ppf bns =
+    let style = !printing_style in
+    match bns with
+    | [] -> ()
+    | _ ->
+      Format.fprintf ppf "@<1>%s%s@<1>%s%a@<1>%s%s@<1>%s"
+        (Flambda_colours.name_abstraction ())
+        (before_binding_position style)
+        (Flambda_colours.normal ())
+        (Format.pp_print_list ~pp_sep:Format.pp_print_space Bindable.print) bns
+        (Flambda_colours.name_abstraction ())
+        (after_binding_position style)
+        (Flambda_colours.normal ())
+
+  let print ppf t =
+    pattern_match' t ~f:(fun names term ->
+      Format.fprintf ppf "@[<hov 1>%a@ %a@]"
+        print_bindable_name_list names
+        Term.print term)
+
+  let print_with_cache ~cache ppf t =
+    pattern_match' t ~f:(fun names term ->
+      Format.fprintf ppf "@[<hov 1>%a@ %a@]"
+        print_bindable_name_list names
+        (Term.print_with_cache ~cache) term)
+
+  let apply_name_permutation t perm =
+    match t with
+    | E (names, term) ->
+      let names =
+        Bindable.Map.fold (fun name datum names ->
+            let name = Bindable.apply_name_permutation name perm in
+            Bindable.Map.add name datum names)
+          names
+          Bindable.Map.empty
+      in
+      let term = Term.apply_name_permutation term perm in
+      E (names, term)
+
+  let free_names t =
+    match t with
+    | E (names, term) ->
+      let in_binding_position =
+        Bindable.Map.fold (fun name _ in_binding_position ->
+            Bindable.add_occurrence_in_terms name in_binding_position)
+          names
+          Name_occurrences.empty
+      in
+      let free_in_term = Term.free_names term in
+      Name_occurrences.diff free_in_term in_binding_position
+end [@@@inline always]

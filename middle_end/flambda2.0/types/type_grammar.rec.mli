@@ -39,7 +39,7 @@ val alias_type_of : Flambda_kind.t -> Simple.t -> t
 
 val apply_rec_info : t -> Rec_info.t -> t Or_bottom.t
 
-val get_alias : t -> Simple.t option
+val get_alias_exn : t -> Simple.t
 
 val is_obviously_bottom : t -> bool
 val is_obviously_unknown : t -> bool
@@ -129,8 +129,8 @@ val this_immutable_string : string -> t
 
 val mutable_string : size:int -> t
 
-val type_for_const : Simple.Const.t -> t
-val kind_for_const : Simple.Const.t -> Flambda_kind.t
+val type_for_const : Reg_width_const.t -> t
+val kind_for_const : Reg_width_const.t -> Flambda_kind.t
 
 val create_inlinable_function_declaration
    : code_id:Code_id.t

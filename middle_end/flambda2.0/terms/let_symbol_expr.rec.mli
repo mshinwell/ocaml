@@ -24,6 +24,7 @@ module Bound_symbols : sig
     type t = {
       code_ids : Code_id.Set.t;
       closure_symbols : Symbol.t Closure_id.Map.t;
+      (* CR mshinwell: keep a separate field for the symbols being defined? *)
     }
 
     val print : Format.formatter -> t -> unit

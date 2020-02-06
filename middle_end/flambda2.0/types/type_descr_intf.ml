@@ -53,7 +53,7 @@ module type S = sig
 
   val descr : t -> Descr.t
 
-  val get_alias : t -> Simple.t option
+  val get_alias_exn : t -> Simple.t
 
   val is_obviously_bottom : t -> bool
   val is_obviously_unknown : t -> bool
@@ -86,8 +86,10 @@ module type S = sig
        : force_to_kind:(flambda_type -> t)  (* CR mshinwell: "of_type"? *)
       -> to_type:(t -> flambda_type)
       -> meet_or_join_env
+      -> flambda_type
+      -> flambda_type
       -> t
       -> t
-      -> (t * typing_env_extension) Or_bottom.t
+      -> flambda_type * typing_env_extension
   end
 end

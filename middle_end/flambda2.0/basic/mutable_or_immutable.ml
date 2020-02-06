@@ -23,4 +23,8 @@ let print ppf t =
   | Mutable -> Format.pp_print_string ppf "Mutable"
   | Immutable -> Format.pp_print_string ppf "Immutable"
 
-let compare = Stdlib.compare
+let compare t1 t2 =
+  match t1, t2 with
+  | Mutable, Mutable | Immutable, Immutable -> 0
+  | Mutable, Immutable -> -1
+  | Immutable, Mutable -> 1

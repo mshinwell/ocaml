@@ -124,7 +124,7 @@ let simplify_array_length dacc ~original_term ~arg:_ ~arg_ty:array_ty
 let simplify_string_length dacc ~original_term ~arg:_ ~arg_ty:str_ty
       ~result_var =
   let name = Name.var (Var_in_binding_pos.var result_var) in
-  let typing_env = DE.typing_env (DA.denv dacc) in
+  let typing_env = DA.typing_env dacc in
   match T.prove_strings typing_env str_ty with
   | Proved str_infos ->
     if String_info.Set.is_empty str_infos then

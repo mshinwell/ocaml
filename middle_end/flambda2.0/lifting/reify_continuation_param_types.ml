@@ -145,7 +145,7 @@ let lift_set_of_closures_discovered_via_reified_continuation_param_types dacc
       closure_symbols_by_set
 
 let reify_types_of_continuation_param_types dacc ~params =
-  let orig_typing_env = DE.typing_env (DA.denv dacc) in
+  let orig_typing_env = DA.typing_env dacc in
   Variable.Set.fold
     (fun var (dacc, reified_continuation_params_to_symbols, reified_definitions,
               closure_symbols_by_set) ->
@@ -155,27 +155,27 @@ let reify_types_of_continuation_param_types dacc ~params =
            (equivalently) defining static parts that already have symbols.
            This could happen if [var] is actually equal to another of the
            continuation's parameters. *)
-        TE.get_canonical_simple (DE.typing_env (DA.denv dacc))
-          ~min_name_mode:NM.normal (Simple.var var)
-        |> Or_bottom.value_map ~bottom:None
-             ~f:(Option.map Simple.must_be_symbol)
+        match
+          TE.get_canonical_simple_exn (DA.typing_env dacc)
+            ~min_name_mode:NM.normal (Simple.var var)
+        with
+        | exception Not_found -> None
+        | simple -> Simple.must_be_symbol simple
       in
       match existing_symbol with
-      | Some (Some _) ->
+      | Some _ ->
         dacc, reified_continuation_params_to_symbols, reified_definitions,
           closure_symbols_by_set
-      | None | Some None ->
+      | None ->
         (* Since the continuation we're dealing with might be inlined and
            we don't handle [extra_params_and_args] on such continuations at
            the [Apply_cont] site, be certain that the only variables appearing
            in our new [Let_symbol] bindings don't involve any of those
            (extra) parameters. *)
-        let typing_env = DE.typing_env (DA.denv dacc) in
-        let allowed_free_vars =
-          Variable.Set.diff (TE.var_domain typing_env) params
-        in
+        let typing_env = DA.typing_env dacc in
         match
-          T.reify ~allowed_free_vars typing_env ~min_name_mode:NM.normal ty
+          T.reify ~allowed_if_free_vars_defined_in:typing_env
+            ~disallowed_free_vars:params typing_env ~min_name_mode:NM.normal ty
         with
         | Lift to_lift ->
           lift_non_closure_discovered_via_reified_continuation_param_types

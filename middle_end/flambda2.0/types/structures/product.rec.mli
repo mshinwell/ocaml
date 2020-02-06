@@ -23,14 +23,18 @@ module Make (Index : Identifiable.S)
     with type meet_or_join_env := Meet_or_join_env.t
     with type typing_env_extension := Typing_env_extension.t
 
-module Int_indexed
-  : Product_intf.S
+module Int_indexed : sig
+  include Product_intf.S
     with module Index := Numbers.Int
     with type flambda_type := Type_grammar.t
     with type typing_env := Typing_env.t
     with type meet_env := Meet_env.t
     with type meet_or_join_env := Meet_or_join_env.t
     with type typing_env_extension := Typing_env_extension.t
+
+  val create_from_list : Type_grammar.t list -> t
+  val create_empty : unit -> t
+end
 
 module Closure_id_indexed
   : Product_intf.S

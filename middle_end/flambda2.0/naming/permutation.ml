@@ -49,6 +49,10 @@ module Make (N : Identifiable.S) = struct
     let rec apply t n =
       match t with
       | Empty -> n
+      | Leaf_branch { n1; n2; older = Empty; } ->
+        if N.equal n n1 then n2
+        else if N.equal n n2 then n1
+        else n
       | Leaf_branch { n1; n2; older; } ->
         let n = apply older n in
         if N.equal n n1 then n2
@@ -71,8 +75,11 @@ module Make (N : Identifiable.S) = struct
     }
 
   let compose ~second ~first =
-    Branch {
-      newer = second;
-      older = first;
-    }
+    if is_empty second then first
+    else if is_empty first then second
+    else
+      Branch {
+        newer = second;
+        older = first;
+      }
 end

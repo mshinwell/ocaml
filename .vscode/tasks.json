@@ -10,6 +10,24 @@
             ]
         },
         {
+            "label": "Build world (release profile)",
+            "type": "shell",
+            "command": "/Users/mark/dev/dune/dune.sh build @world --profile=release",
+            "group": "build",
+            "problemMatcher": [
+                "$ocamlc"
+            ]
+        },
+        {
+            "label": "Build world (Flambda + release profile)",
+            "type": "shell",
+            "command": "/Users/mark/dev/dune/dune-4.10-flambda.sh build @world --profile=release",
+            "group": "build",
+            "problemMatcher": [
+                "$ocamlc"
+            ]
+        },
+        {
             "label": "Build ilambdac",
             "type": "shell",
             "command": "/Users/mark/dev/dune/dune.sh build ilambdac.exe",
