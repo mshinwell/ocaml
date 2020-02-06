@@ -33,7 +33,10 @@ let () =
 
    Maybe one option would be to turn the hierarchy around so Name is actually
    the thing doing the creation, rather than depending on Variable and
-   Symbol.  There could just be Name, in fact, perhaps... *)
+   Symbol.  There could just be Name, in fact, perhaps...
+
+   Another option: put Variable, Symbol, Name (and in the future Simple) all
+   in the same .ml file. *)
 
 let var v = ((Obj.magic v) : t)
 let symbol s = Id.with_flags ((Obj.magic s) : t) symbol_flag
