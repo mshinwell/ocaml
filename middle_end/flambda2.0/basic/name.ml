@@ -160,9 +160,11 @@ let is_predefined_exception t =
     ~symbol:(fun sym -> Symbol.is_predefined_exception sym)
 
 let rename t =
+  (* CR mshinwell: It's odd that this doesn't rename symbols.  However things
+     break if we do... *)
   pattern_match t
     ~var:(fun v -> var (Variable.rename v))
-    ~symbol:(fun sym -> symbol (Symbol.rename sym))
+    ~symbol:(fun _ -> t)
 
 let must_be_var_opt t =
   pattern_match t
