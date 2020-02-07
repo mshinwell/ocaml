@@ -23,6 +23,9 @@ module TEE = Typing_env_extension
 
 type t = {
   function_decls : FDT.t Closure_id.Map.t;
+  (* CR pchambart: this probably needs also a list of available
+     closure_var. Product does not provides that information.
+     If something is not represented it is unknown and not bottom *)
   closure_types : PC.t;
   closure_var_types : PV.t;
 }
@@ -35,14 +38,14 @@ let create ~function_decls ~closure_types ~closure_var_types =
 
 let create_bottom () =
   { function_decls = Closure_id.Map.empty;
-    closure_types = PC.create_bottom ();
-    closure_var_types = PV.create_bottom ();
+    closure_types = PC.create_top Flambda_kind.value;
+    closure_var_types = PV.create_top Flambda_kind.value;
   }
 
-let is_bottom { function_decls; closure_types; closure_var_types; } =
+let is_bottom { function_decls; closure_types = _; closure_var_types = _; } =
   Closure_id.Map.is_empty function_decls
-    && PC.is_bottom closure_types
-    && PV.is_bottom closure_var_types
+    (* && PC.is_bottom closure_types
+     * && PV.is_bottom closure_var_types *)
 
 let print_with_cache ~cache ppf
       { function_decls; closure_types; closure_var_types; } =

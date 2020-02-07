@@ -45,15 +45,7 @@ module Make (Index : Identifiable.S) = struct
       kind;
     }
 
-  let create_bottom _ = assert false
-
-  (* CR mshinwell: This "bottom" stuff is still dubious.
-     We can't treat 0-sized blocks as bottom; it's legal to bind one of
-     those (e.g. an empty module). *)
-
-  let is_bottom t =
-    Index.Map.exists (fun _ typ -> Type_grammar.is_obviously_bottom typ)
-      t.components_by_index
+  let create_top kind = create kind Index.Map.empty
 
   let width t =
     Targetint.OCaml.of_int (Index.Map.cardinal t.components_by_index)

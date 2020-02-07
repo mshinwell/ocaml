@@ -565,7 +565,8 @@ let at_least_the_closures_with_ids ~this_closure closure_ids_and_bindings =
   in
   let closures_entry =
     Closures_entry.create ~function_decls ~closure_types
-      ~closure_var_types:(Product.Var_within_closure_indexed.create_bottom ())
+      ~closure_var_types:
+        (Product.Var_within_closure_indexed.create_top Flambda_kind.value)
   in
   let by_closure_id =
     let set_of_closures_contents =
@@ -595,7 +596,7 @@ let closure_with_at_least_this_closure_var closure_var ~closure_element_var =
   in
   let closures_entry =
     Closures_entry.create ~function_decls:Closure_id.Map.empty
-      ~closure_types:(Product.Closure_id_indexed.create_bottom ())
+      ~closure_types:(Product.Closure_id_indexed.create_top Flambda_kind.value)
       ~closure_var_types
   in
   let by_closure_id =

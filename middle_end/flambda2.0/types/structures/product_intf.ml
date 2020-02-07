@@ -27,9 +27,7 @@ module type S = sig
   (** Create a product value given the indexes with associated components. *)
   val create : Flambda_kind.t -> flambda_type Index.Map.t -> t
 
-  val create_bottom : unit -> t
-
-  val is_bottom : t -> bool
+  val create_top : Flambda_kind.t -> t
 
   val width : t -> Targetint.OCaml.t
 
