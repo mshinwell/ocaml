@@ -83,7 +83,7 @@ module Make (Index : Identifiable.S) = struct
         Flambda_kind.print kind1 Flambda_kind.print kind2;
     let components_by_index =
       Index.Map.inter (fun _index ty1 ty2 ->
-          Some (Type_grammar.join' env ty1 ty2))
+          Type_grammar.join' env ty1 ty2)
         components_by_index1
         components_by_index2
     in
@@ -145,12 +145,7 @@ module Int_indexed = struct
 
   let create_from_list _kind tys = Array.of_list tys
 
-  let create_empty _kind = [| |]
-
-  let create_bottom () = [| (Type_grammar.bottom Flambda_kind.value) |]
-
-  let is_bottom t =
-    Array.exists Type_grammar.is_obviously_bottom t
+  let create_top _kind = [| |]
 
   let width t = Targetint.OCaml.of_int (Array.length t)
 
@@ -174,16 +169,6 @@ module Int_indexed = struct
   let join env t1 t2 =
     Array.init (Array.length t1) (fun index ->
       Type_grammar.join' env t1.(index) t2.(index))
-
-  let widen t ~to_match =
-    let t_len = Array.length t in
-    let to_match_len = Array.length to_match in
-    if t_len >= to_match_len then t
-    else
-      let kind = Type_grammar.kind to_match.(0) in
-      Array.init to_match_len (fun index ->
-        if index < t_len then t.(index)
-        else Type_grammar.unknown kind)
 
   let apply_name_permutation t perm =
     let t = Array.copy t in

@@ -239,24 +239,7 @@ struct
       | Unknown -> ()
       | Known imms -> assert (not (T.is_obviously_bottom imms));
       end;
-      let env_extension =
-        let left_env = Meet_or_join_env.left_join_env env in
-        let right_env = Meet_or_join_env.right_join_env env in
-        (* CR mshinwell: Move to [TEE] *)
-        let join_extensions env ext1 ext2 =
-          let env_at_fork = Meet_or_join_env.target_join_env env in
-          let env_extension, _ =
-            TEE.n_way_join ~env_at_fork [
-              left_env, Apply_cont_rewrite_id.create (), Non_inlinable,
-                Variable.Set.empty, ext1;
-              right_env, Apply_cont_rewrite_id.create (), Non_inlinable,
-                Variable.Set.empty, ext2;
-            ]
-          in
-          env_extension
-        in
-        join_extensions env env_extension1 env_extension2
-      in
+      let env_extension = TEE.join env env_extension1 env_extension2 in
       Ok (blocks, immediates, env_extension)
 
   let meet_or_join env t1 t2 : _ Or_bottom_or_absorbing.t =

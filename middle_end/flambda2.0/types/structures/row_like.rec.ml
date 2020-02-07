@@ -419,7 +419,7 @@ module For_blocks = struct
     let at_least =
       Tag.Set.fold (fun tag at_least ->
           Tag_or_unknown_and_size.Map.add (Known tag, Targetint.OCaml.zero)
-            (Product.Int_indexed.create_empty field_kind)
+            (Product.Int_indexed.create_top field_kind)
             at_least)
         tags
         Tag_or_unknown_and_size.Map.empty

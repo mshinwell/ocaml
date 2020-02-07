@@ -126,3 +126,17 @@ let n_way_join ~env_at_fork envs_with_extensions : t * _ =
     open_binders envs_with_extensions []
   in
   { abst; }, extra_cse_bindings
+
+let join env ext1 ext2 =
+  let left_env = Meet_or_join_env.left_join_env env in
+  let right_env = Meet_or_join_env.right_join_env env in
+  let env_at_fork = Meet_or_join_env.target_join_env env in
+  let env_extension, _ =
+    n_way_join ~env_at_fork [
+      left_env, Apply_cont_rewrite_id.create (), Non_inlinable,
+      Variable.Set.empty, ext1;
+      right_env, Apply_cont_rewrite_id.create (), Non_inlinable,
+      Variable.Set.empty, ext2;
+    ]
+  in
+  env_extension

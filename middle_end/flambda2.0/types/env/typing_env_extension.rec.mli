@@ -47,9 +47,11 @@ val meet : Meet_env.t -> t -> t -> t
 
 val n_way_meet : Meet_env.t -> t list -> t
 
-val n_way_join
-   : env_at_fork:Typing_env.t
-  (* CR mshinwell: Introduce "continuation use summary" type or somesuch *)
-  -> (Typing_env.t * Apply_cont_rewrite_id.t * Continuation_use_kind.t
-       * Variable.Set.t * t) list
-  -> t * Continuation_extra_params_and_args.t
+(* val n_way_join
+ *    : env_at_fork:Typing_env.t
+ *   (\* CR mshinwell: Introduce "continuation use summary" type or somesuch *\)
+ *   -> (Typing_env.t * Apply_cont_rewrite_id.t * Continuation_use_kind.t
+ *        * Variable.Set.t * t) list
+ *   -> t * Continuation_extra_params_and_args.t *)
+
+val join : Meet_or_join_env.t -> t -> t -> t

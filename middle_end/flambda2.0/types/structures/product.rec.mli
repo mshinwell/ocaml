@@ -33,7 +33,7 @@ module Int_indexed : sig
     with type typing_env_extension := Typing_env_extension.t
 
   val create_from_list : Flambda_kind.t -> Type_grammar.t list -> t
-  val create_empty : Flambda_kind.t -> t
+  val create_top : Flambda_kind.t -> t
 end
 
 module Closure_id_indexed
