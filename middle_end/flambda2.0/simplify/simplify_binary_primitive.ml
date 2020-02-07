@@ -859,7 +859,10 @@ let simplify_phys_equal (op : P.equality_comparison)
     Reachable.reachable (Named.create_simple (Simple.const_bool bool)),
       env_extension, dacc
   in
-  if Simple.equal arg1 arg2 then const true
+  if Simple.equal arg1 arg2 then
+    match op with
+    | Eq -> const true
+    | Neq -> const false
   else
     begin match kind with
     | Value ->
