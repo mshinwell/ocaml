@@ -255,8 +255,7 @@ struct
           in
           env_extension
         in
-        E.switch0 TEE.meet join_extensions env
-          env_extension1 env_extension2
+        join_extensions env env_extension1 env_extension2
       in
       Ok (blocks, immediates, env_extension)
 
