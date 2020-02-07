@@ -97,13 +97,6 @@ module Make (Index : Identifiable.S) = struct
     in
     { components_by_index; kind = kind1; }
 
-  (* CR pchambart: widen shouldn't exist *)
-  let widen t ~to_match =
-    if not (Flambda_kind.equal t.kind to_match.kind) then
-      Misc.fatal_errorf "Product.widen between unmatching kinds %a and %a@."
-        Flambda_kind.print t.kind Flambda_kind.print to_match.kind;
-    t
-
   let apply_name_permutation ({ components_by_index; kind; } as t) perm =
     let components_by_index' =
       Index.Map.map_sharing (fun typ ->

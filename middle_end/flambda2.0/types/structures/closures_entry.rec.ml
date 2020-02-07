@@ -58,29 +58,6 @@ let print_with_cache ~cache ppf
 
 let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
-let widen t ~to_match =
-  let missing_function_decls =
-    Closure_id.Set.diff (Closure_id.Map.keys to_match.function_decls)
-      (Closure_id.Map.keys t.function_decls)
-  in
-  let function_decls =
-    Closure_id.Set.fold (fun closure_id function_decls ->
-        Closure_id.Map.add closure_id Or_unknown_or_bottom.Unknown
-          function_decls)
-      missing_function_decls
-      t.function_decls
-  in
-  let closure_types =
-    PC.widen t.closure_types ~to_match:to_match.closure_types
-  in
-  let closure_var_types =
-    PV.widen t.closure_var_types ~to_match:to_match.closure_var_types
-  in
-  { function_decls;
-    closure_types;
-    closure_var_types;
-  }
-
 module Make_meet_or_join
   (E : Lattice_ops_intf.S
    with type meet_env := Meet_env.t

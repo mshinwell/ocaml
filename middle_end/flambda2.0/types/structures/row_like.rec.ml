@@ -152,7 +152,7 @@ struct
           let maps_to =
             E.switch Maps_to.meet Maps_to.join env
               maps_to1
-              (Maps_to.widen from_at_least2 ~to_match:maps_to1)
+              from_at_least2
           in
           match maps_to with
           | Bottom -> None

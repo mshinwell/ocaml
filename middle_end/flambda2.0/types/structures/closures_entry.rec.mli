@@ -24,10 +24,6 @@ val create
   -> closure_var_types : Product.Var_within_closure_indexed.t
   -> t
 
-val create_bottom : unit -> t
-
-val widen : t -> to_match:t -> t
-
 val map_function_decl_types
    : t
   -> f:(Function_declaration_type.t

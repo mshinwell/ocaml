@@ -31,12 +31,6 @@ module type S = sig
 
   val is_bottom : t -> bool
 
-  (** Widen the product by adding as many fields, after any existing fields,
-      so that the product has the same number of fields as [to_match].  If the
-      supplied product already has at least that many fields then it is
-      returned unchanged. *)
-  val widen : t -> to_match:t -> t
-
   val width : t -> Targetint.OCaml.t
 
   val components : t -> flambda_type list

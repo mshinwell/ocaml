@@ -28,10 +28,6 @@ module type S = sig
 
   type t
 
-  val create_bottom : unit -> t
-
-  val widen : t -> to_match:t -> t
-
   include Type_structure_intf.S
     with type t := t
     with type flambda_type := flambda_type
