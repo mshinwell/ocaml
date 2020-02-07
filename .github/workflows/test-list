@@ -40,7 +40,7 @@
   tests/lexing
   tests/lib-arg
   tests/lib-array
-  tests/lib-bigarray
+# tests/lib-bigarray                TIMEOUT       `bigarrays.ml` >5min of compilation time (else the tests should pass)	
   tests/lib-bigarray-2
   tests/lib-bigarray-file
   tests/lib-bool
