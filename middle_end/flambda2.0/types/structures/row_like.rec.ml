@@ -109,7 +109,12 @@ struct
     let meet_or_join (env : Meet_or_join_env.t) t1 t2 : _ Or_bottom.t =
       let ({ known = known1; at_least = at_least1; } : t) = t1 in
       let ({ known = known2; at_least = at_least2; } : t) = t2 in
-      let env_extension = ref (TEE.empty ()) in
+      let env_extension = ref None in
+      let join_env_extension ext =
+        match !env_extension with
+        | None -> env_extension := Some ext
+        | Some ext2 -> env_extension := Some (TEE.join env ext2 ext)
+      in
       let one_side_only env (tag_or_unknown1 : _ Or_unknown.t) index1
             maps_to1 at_least2 =
         let from_at_least2 =
@@ -142,9 +147,7 @@ struct
             match maps_to with
             | Bottom -> None
             | Ok (maps_to, env_extension') ->
-              env_extension :=
-                TEE.meet (Meet_or_join_env.meet_env env)
-                  !env_extension env_extension';
+              join_env_extension env_extension';
               Some maps_to
           end
         | Some ((_tag_or_unknown, index2), from_at_least2) ->
@@ -163,9 +166,7 @@ Format.eprintf "Existing env extension, case 1:@ %a\n%!"
 Format.eprintf "New env extension, case 1:@ %a\n%!"
   TEE.print env_extension';
 *)
-            env_extension :=
-              TEE.meet (Meet_or_join_env.meet_env env)
-                !env_extension env_extension';
+            join_env_extension env_extension';
 (*
 Format.eprintf "Resulting env extension, case 1:@ %a\n%!"
   TEE.print !env_extension;
@@ -193,9 +194,7 @@ Format.eprintf "Existing env extension, case 2:@ %a\n%!"
 Format.eprintf "New env extension, case 2:@ %a\n%!"
   TEE.print env_extension';
 *)
-            env_extension :=
-              TEE.meet (Meet_or_join_env.meet_env env)
-                !env_extension env_extension';
+            join_env_extension env_extension';
 (*
 Format.eprintf "Resulting env extension, case 2:@ %a\n%!"
   TEE.print !env_extension;
@@ -225,7 +224,12 @@ Format.eprintf "RL meet is returning bottom\n%!";
 *)
         Bottom
       end else
-        Ok ({ known; at_least; }, !env_extension)
+        let env_extension =
+          match !env_extension with
+          | None -> TEE.empty ()
+          | Some ext -> ext
+        in
+        Ok ({ known; at_least; }, env_extension)
   end
 
   module Meet = Row_like_meet_or_join (Lattice_ops.For_meet)
