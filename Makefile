@@ -1292,7 +1292,7 @@ partialclean::
 
 # Flambda2 recursive modules black magic
 
-FLAMBDA_TYPE0_DEPS=$(shell sed "s|^|middle_end/flambda2.0/types/|g" \
+FLAMBDA_TYPE0_DEPS=$(shell sed -e "s|^\(.*\)|middle_end/flambda2.0/types/\1 middle_end/flambda2.0/types/\1i|g" \
   middle_end/flambda2.0/types/rec_modules | tr '\n' ' ')
 middle_end/flambda2.0/types/flambda_type.ml: \
   middle_end/flambda2.0/types/template/flambda_type.templ.ml \
@@ -1302,7 +1302,7 @@ middle_end/flambda2.0/types/flambda_type.ml: \
 	  ../scripts/assemble_rec_modules.sh template/flambda_type.templ.ml \
 	    rec_modules flambda_type.ml
 
-FLAMBDA_DEPS=$(shell sed "s|^|middle_end/flambda2.0/terms/|g" \
+FLAMBDA_DEPS=$(shell sed -e "s|^\(.*\)|middle_end/flambda2.0/terms/\1 middle_end/flambda2.0/terms/\1i|g" \
   middle_end/flambda2.0/terms/rec_modules | tr '\n' ' ')
 middle_end/flambda2.0/terms/flambda.ml: \
   middle_end/flambda2.0/terms/template/flambda.templ.ml \
@@ -1312,7 +1312,7 @@ middle_end/flambda2.0/terms/flambda.ml: \
 	  ../scripts/assemble_rec_modules.sh template/flambda.templ.ml \
 	    rec_modules flambda.ml
 
-SIMPLIFY_DEPS=$(shell sed "s|^|middle_end/flambda2.0/simplify/|g" \
+SIMPLIFY_DEPS=$(shell sed -e "s|^\(.*\)|middle_end/flambda2.0/simplify/\1 middle_end/flambda2.0/simplify/\1i|g" \
   middle_end/flambda2.0/simplify/rec_modules | tr '\n' ' ')
 middle_end/flambda2.0/simplify/simplify.ml: \
   middle_end/flambda2.0/simplify/template/simplify.templ.ml \
