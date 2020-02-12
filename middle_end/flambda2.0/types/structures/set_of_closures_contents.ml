@@ -61,6 +61,20 @@ let subset
   Closure_id.Set.subset closures1 closures2
     && Var_within_closure.Set.subset closure_vars1 closure_vars2
 
+let union
+      { closures = closures1; closure_vars = closure_vars1; }
+      { closures = closures2; closure_vars = closure_vars2; } =
+  let closures = Closure_id.Set.union closures1 closures2 in
+  let closure_vars = Var_within_closure.Set.union closure_vars1 closure_vars2 in
+  { closures; closure_vars }
+
+let inter
+      { closures = closures1; closure_vars = closure_vars1; }
+      { closures = closures2; closure_vars = closure_vars2; } =
+  let closures = Closure_id.Set.inter closures1 closures2 in
+  let closure_vars = Var_within_closure.Set.inter closure_vars1 closure_vars2 in
+  { closures; closure_vars }
+
 module With_closure_id = struct
   type nonrec t = Closure_id.t * t
 
