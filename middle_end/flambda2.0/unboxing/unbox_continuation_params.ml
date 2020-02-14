@@ -301,8 +301,10 @@ struct
       ~all_closures_in_set
       ~all_closure_vars_in_set:closure_vars
 
-  let make_boxed_value_accommodating _info closure_var ~index_var =
-    T.closure_with_at_least_this_closure_var closure_var
+  let make_boxed_value_accommodating (info : Info.t) closure_var ~index_var =
+    T.closure_with_at_least_this_closure_var
+      ~this_closure:info.closure_id
+      closure_var
       ~closure_element_var:index_var
 
 (*

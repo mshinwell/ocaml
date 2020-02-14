@@ -53,16 +53,6 @@ let right_join_env t =
   | Join { right_join_env; _ } -> right_join_env
   | Meet _ -> Misc.fatal_error "Not a join environment"
 
-let flip_join_envs t =
-  match t with
-  | Join { central_env; left_join_env; right_join_env; } ->
-    Join {
-      central_env;
-      left_join_env = right_join_env;
-      right_join_env = left_join_env;
-    }
-  | Meet _ -> t
-
 (* CR mshinwell: fix naming, it's odd at the moment to be using
    [already_meeting]... *)
 let now_joining t simple1 simple2 =

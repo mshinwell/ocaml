@@ -60,12 +60,16 @@ end
 module For_closures_entry_by_set_of_closures_contents : sig
   type t
 
-  val create_exactly_multiple
-     : Closures_entry.t Set_of_closures_contents.With_closure_id.Map.t
+   val create_exactly
+     : Closure_id.t
+    -> Set_of_closures_contents.t
+    -> Closures_entry.t
     -> t
 
-  val create_at_least_multiple
-     : Closures_entry.t Set_of_closures_contents.With_closure_id_or_unknown.Map.t
+   val create_at_least
+     : Closure_id.t
+    -> Set_of_closures_contents.t
+    -> Closures_entry.t
     -> t
 
   val get_singleton

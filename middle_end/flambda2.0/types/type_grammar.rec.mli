@@ -164,7 +164,8 @@ val at_least_the_closures_with_ids
   -> t
 
 val closure_with_at_least_this_closure_var
-   : Var_within_closure.t
+   : this_closure:Closure_id.t
+  -> Var_within_closure.t
   -> closure_element_var:Variable.t
   -> t
 

@@ -102,29 +102,30 @@ struct
     }
 
   (* let create_exactly_multiple known =
-   *   { known;
-   *     at_least = Tag_or_unknown.Map.empty;
-   *   } *)
+   *   (\* { known_tags = Tag.Map.map (fun closure_entry -> assert false) known;
+   *    *   other_tags = Bottom;
+   *    * } *\)
+   *   () *)
 
   let create_at_least tag index maps_to =
     { known_tags = Tag.Map.singleton tag { maps_to; index = At_least index };
       other_tags = Bottom;
     }
 
-  let create_exactly_unknown_tag index maps_to =
-    { known_tags = Tag.Map.empty;
-      other_tags = Ok { maps_to; index = Known index };
-    }
+  (* let create_exactly_unknown_tag index maps_to =
+   *   { known_tags = Tag.Map.empty;
+   *     other_tags = Ok { maps_to; index = Known index };
+   *   } *)
 
   let create_at_least_unknown_tag index maps_to =
     { known_tags = Tag.Map.empty;
       other_tags = Ok { maps_to; index = At_least index };
     }
 
-  (* let create_at_least_multiple at_least =
-   *   { known_tags = Tag.Map.map (fun  { maps_to; index = At_least index };
-   *     other_tags = Bottom;
-   *   } *)
+  (* let create_at_least_multiple at_least = ()
+   *   (\* { known_tags = Tag.Map.map (fun  { maps_to; index = At_least index };
+   *    *   other_tags = Bottom;
+   *    * } *\) *)
 
   let meet (meet_env : Meet_env.t) t1 t2 : (t * Typing_env_extension.t) Or_bottom.t =
     let ({ known_tags = known1; other_tags = other1; } : t) = t1 in
@@ -184,7 +185,7 @@ struct
         meet_case case1 case2
     in
     let known_tags =
-      Tag.Map.merge (fun tag case1 case2 -> meet_knowns_tags case1 case2)
+      Tag.Map.merge (fun _tag case1 case2 -> meet_knowns_tags case1 case2)
         known1 known2
     in
     let other_tags : case Or_bottom.t =
@@ -247,7 +248,7 @@ struct
           Some (join_case case1 case2)
       in
       let known_tags =
-        Tag.Map.merge (fun tag case1 case2 -> join_knowns_tags case1 case2)
+        Tag.Map.merge (fun _tag case1 case2 -> join_knowns_tags case1 case2)
           known1 known2
       in
       let other_tags : case Or_bottom.t =
@@ -297,36 +298,30 @@ struct
           (Maps_to.free_names maps_to)
           from_known_tags
 
-(*
-  let map_maps_to { known; at_least; }
+  let map_maps_to { known_tags; other_tags; }
         ~(f : Maps_to.t -> Maps_to.t Or_bottom.t)
         : _ Or_bottom.t =
-    let found_bottom = ref false in
-    let known =
-      Tag_and_index.Map.map (fun maps_to ->
-          match f maps_to with
+    let known_tags =
+      Tag.Map.filter_map ~f:(fun _ case ->
+          match f case.maps_to with
           | Bottom ->
-            found_bottom := true;
-            maps_to
-          | Ok maps_to -> maps_to)
-        known
+            None
+          | Ok maps_to ->
+            Some { case with maps_to })
+        known_tags
     in
-    let at_least =
-      Tag_or_unknown_and_index.Map.map (fun maps_to ->
-          match f maps_to with
-          | Bottom ->
-            found_bottom := true;
-            maps_to
-          | Ok maps_to -> maps_to)
-        at_least
+    let other_tags : case Or_bottom.t =
+      match other_tags with
+      | Bottom -> Bottom
+      | Ok case ->
+        Or_bottom.map (f case.maps_to) ~f:(fun maps_to -> { case with maps_to })
     in
-    if !found_bottom then Bottom
-    else
-      Ok { 
-        known;
-        at_least;
-      }
-*)
+    let result = {
+      known_tags;
+      other_tags;
+    } in
+    if is_bottom result then Bottom
+    else Ok result
 
   let apply_name_permutation ({ known_tags; other_tags; } as t) perm =
     let known_tags' =
@@ -463,7 +458,7 @@ end
 
 module For_closures_entry_by_set_of_closures_contents = struct
 
-  module Closure_id_or_unknown = Or_unknown.Lift(Closure_id)
+  (* module Closure_id_or_unknown = Or_unknown.Lift(Closure_id) *)
 
   (* module Closure_id_or_unknown : sig
    *   type nonrec t = Closure_id.t Or_unknown.t
@@ -476,7 +471,32 @@ module For_closures_entry_by_set_of_closures_contents = struct
      * (Closure_id_or_unknown) *)
     (Closures_entry)
 
-  (* let map_function_decl_types t ~f =
-   *   map_maps_to t ~f:(fun closures_entry ->
-   *     Closures_entry.map_function_decl_types closures_entry ~f) *)
+  let map_function_decl_types t ~f =
+    map_maps_to t ~f:(fun closures_entry ->
+        Closures_entry.map_function_decl_types closures_entry ~f)
+
+  let create_exactly
+      (closure_id : Closure_id.t)
+      (contents : Set_of_closures_contents.t)
+      (closures_entry : Closures_entry.t) : t =
+    let known_tags =
+      Closure_id.Map.singleton closure_id
+        { index = Known contents; maps_to = closures_entry }
+    in
+    { known_tags;
+      other_tags = Bottom;
+    }
+
+  let create_at_least
+      (closure_id : Closure_id.t)
+      (contents : Set_of_closures_contents.t)
+      (closures_entry : Closures_entry.t) : t =
+    let known_tags =
+      Closure_id.Map.singleton closure_id
+        { index = At_least contents; maps_to = closures_entry }
+    in
+    { known_tags;
+      other_tags = Bottom;
+    }
+
 end

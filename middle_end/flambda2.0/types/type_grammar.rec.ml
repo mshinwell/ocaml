@@ -540,14 +540,11 @@ let exactly_this_closure closure_id ~all_function_decls_in_set:function_decls
       Set_of_closures_contents.create (Closure_id.Map.keys function_decls)
         (Var_within_closure.Map.keys closure_var_types)
     in
-    let set_of_closures_contents_to_closures_entry =
-      Set_of_closures_contents.With_closure_id.Map.singleton
-        (closure_id, set_of_closures_contents)
-        closures_entry
-    in
     Row_like.For_closures_entry_by_set_of_closures_contents.
-      create_exactly_multiple
-        set_of_closures_contents_to_closures_entry
+      create_exactly
+      closure_id
+      set_of_closures_contents
+      closures_entry
   in
   Value (T_V.create (Closures { by_closure_id; }))
 
@@ -574,18 +571,16 @@ let at_least_the_closures_with_ids ~this_closure closure_ids_and_bindings =
         (Closure_id.Map.keys closure_ids_and_types)
         Var_within_closure.Set.empty
     in
-    let set_of_closures_contents_to_closures_entry =
-      Set_of_closures_contents.With_closure_id_or_unknown.Map.singleton
-        (Known this_closure, set_of_closures_contents)
-        closures_entry
-    in
     Row_like.For_closures_entry_by_set_of_closures_contents.
-      create_at_least_multiple
-        set_of_closures_contents_to_closures_entry
+      create_at_least
+      this_closure
+      set_of_closures_contents
+      closures_entry
   in
   Value (T_V.create (Closures { by_closure_id; }))
 
-let closure_with_at_least_this_closure_var closure_var ~closure_element_var =
+let closure_with_at_least_this_closure_var ~this_closure
+    closure_var ~closure_element_var : t =
   let closure_var_types =
     let closure_var_type =
       alias_type_of K.value (Simple.var closure_element_var)
@@ -605,14 +600,11 @@ let closure_with_at_least_this_closure_var closure_var ~closure_element_var =
         Closure_id.Set.empty
         (Var_within_closure.Set.singleton closure_var)
     in
-    let set_of_closures_contents_to_closures_entry =
-      Set_of_closures_contents.With_closure_id_or_unknown.Map.singleton
-        (Unknown, set_of_closures_contents)
-        closures_entry
-    in
     Row_like.For_closures_entry_by_set_of_closures_contents.
-      create_at_least_multiple
-        set_of_closures_contents_to_closures_entry
+      create_at_least
+      this_closure
+      set_of_closures_contents
+      closures_entry
   in
   Value (T_V.create (Closures { by_closure_id; }))
 

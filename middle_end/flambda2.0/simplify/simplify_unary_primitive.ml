@@ -36,14 +36,16 @@ let simplify_select_closure ~move_from ~move_to
     ~shape:(T.at_least_the_closures_with_ids ~this_closure:move_from closures)
     ~result_var ~result_kind:K.value
 
-let simplify_project_var _closure_id closure_element dacc ~original_term
+let simplify_project_var closure_id closure_element dacc ~original_term
       ~arg:_closure ~arg_ty:closure_ty ~result_var =
   (* CR pchambart: the shape should assert that the closure contains
      the closure_id we are projecting from *)
   Simplify_common.simplify_projection
     dacc ~original_term ~deconstructing:closure_ty
-    ~shape:(T.closure_with_at_least_this_closure_var closure_element
-      ~closure_element_var:(Var_in_binding_pos.var result_var))
+    ~shape:(T.closure_with_at_least_this_closure_var
+              ~this_closure:closure_id
+              closure_element
+              ~closure_element_var:(Var_in_binding_pos.var result_var))
     ~result_var ~result_kind:K.value
 
 let simplify_unbox_number (boxable_number_kind : K.Boxable_number.t)
