@@ -147,7 +147,7 @@ struct
           Bottom
       | Known known, At_least at_least
       | At_least at_least, Known known ->
-        if Index.subset at_least known then
+        if Index.subset known at_least then
           (* [Known known] is included in [At_least at_least], hence
              [Known known] \inter [At_least at_least] = [Known known] *)
           Ok (Known known)
