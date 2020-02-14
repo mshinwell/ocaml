@@ -627,11 +627,12 @@ and let_symbol env let_sym =
       (Let_symbol.Bound_symbols.everything_being_defined bound_symbols)
   in
   let env, r, update_opt =
-    Un_cps_static.static_const env ~params_and_body
+    Un_cps_static.static_const
+      env !result ~params_and_body
       (Let_symbol.bound_symbols let_sym)
       (Let_symbol.defining_expr let_sym)
   in
-  result := R.combine !result r;
+  result := r;
   match update_opt with
   | None -> expr env body (* trying to preserve tail calls whenever we can *)
   | Some update ->

@@ -28,6 +28,8 @@ module Bound_symbols = Let_symbol.Bound_symbols
 module Env = Un_cps_env
 module SC = Flambda.Static_const
 module R = Un_cps_result
+module BSCSC = Bound_symbols.Code_and_set_of_closures
+module SCCSC = Static_const.Code_and_set_of_closures
 
 (* CR mshinwell: Share these next functions with Un_cps.  Unfortunately
    there's a name clash with at least one of them ("symbol") with functions
@@ -135,7 +137,7 @@ let static_boxed_number kind env s default emit transl v r =
     | Var v ->
         make_update env kind (C.symbol name) v 0 None
   in
-  R.update_data (or_variable aux default v) r, updates
+  R.update_data r (or_variable aux default v), updates
 
 let get_whole_closure_symbol =
   let whole_closure_symb_count = ref 0 in
@@ -234,6 +236,62 @@ and fill_static_up_to j acc i =
   if i = j then acc
   else fill_static_up_to j (C.cint 1n :: acc) (i + 1)
 
+let update_env_for_function
+    env code_id ~return_continuation:_ _exn_k _ps ~body ~my_closure =
+  let free_vars = Name_occurrences.variables (Expr.free_names body) in
+  (* Format.eprintf "Free vars: %a@." Variable.Set.print free_vars; *)
+  let needs_closure_arg = Variable.Set.mem my_closure free_vars in
+  let info : Env.function_info = { needs_closure_arg; } in
+  Env.add_function_info env code_id info
+
+let update_env_for_set_of_closure env { SCCSC.code; set_of_closures = _; } =
+  Code_id.Map.fold
+    (fun code_id SC.Code.({ params_and_body = p; newer_version_of; }) env ->
+       (* Check scope of the closure id *)
+       let env =
+         match newer_version_of with
+         | None -> env
+         | Some code_id ->
+           Env.check_scope ~allow_deleted:true env
+             (Code_id_or_symbol.Code_id code_id)
+       in
+       match (p : _ SC.Code.or_deleted) with
+       | Deleted ->
+         Env.mark_code_id_as_deleted env code_id
+       | Present p ->
+         Function_params_and_body.pattern_match p
+           ~f:(update_env_for_function env code_id)
+    ) code env
+
+let add_function env r ~params_and_body code_id p =
+  let fun_symbol = Code_id.code_symbol code_id in
+  let fun_name =
+    Linkage_name.to_string (Symbol.linkage_name fun_symbol)
+  in
+  (* CR vlaviron: fix debug info *)
+  let func = params_and_body env fun_name Debuginfo.none p in
+  let fundecl = C.cfunction func in
+  R.add_function r fundecl
+
+let add_functions
+    env ~params_and_body r { SCCSC.code; set_of_closures = _; }  =
+  let aux code_id SC.Code.({ params_and_body = p; newer_version_of = _; }) r =
+    match (p : _ SC.Code.or_deleted) with
+    | Deleted -> r
+    | Present p -> add_function env r ~params_and_body code_id p
+  in
+  Code_id.Map.fold aux code r
+
+let preallocate_set_of_closures
+    (r, updates, env)
+    { BSCSC.code_ids = _; closure_symbols; }
+    { SCCSC.code = _; set_of_closures; } =
+  let env, data, updates =
+    static_set_of_closures env closure_symbols set_of_closures updates
+  in
+  let r = R.set_data r data in
+  R.archive_data r, updates, env
+
 let static_const0 env r ~params_and_body (bound_symbols : Bound_symbols.t)
       (static_const : Static_const.t) =
   match bound_symbols, static_const with
@@ -251,72 +309,21 @@ let static_const0 env r ~params_and_body (bound_symbols : Bound_symbols.t)
       in
       let block = C.emit_block block_name header static_fields in
       let updates = static_block_updates (C.symbol name) env None 0 fields in
-      env, R.add_data block r, updates
+      env, R.set_data r block, updates
   | Sets_of_closures binders (*{ code_ids = _; closure_symbols; }*),
     Sets_of_closures definitions (*{ code; set_of_closures; }*) ->
       (* We cannot both build the environment and compile the functions in
          one traversal, as the bodies may contain direct calls to the code ids
          being defined *)
-      let module BSCSC = Bound_symbols.Code_and_set_of_closures in
-      let module SCCSC = Static_const.Code_and_set_of_closures in
-      let update_env env { SCCSC.code; set_of_closures = _; } =
-        Code_id.Map.fold
-          (fun code_id SC.Code.({ params_and_body = p; newer_version_of; }) env ->
-            let env =
-              match newer_version_of with
-              | None -> env
-              | Some code_id ->
-                Env.check_scope ~allow_deleted:true env
-                  (Code_id_or_symbol.Code_id code_id)
-            in
-            match (p : _ SC.Code.or_deleted) with
-            | Deleted -> Env.mark_code_id_as_deleted env code_id
-            | Present p ->
-                Function_params_and_body.pattern_match p
-                  ~f:(fun ~return_continuation:_ _exn_k _ps ~body ~my_closure ->
-                      let free_vars =
-                        Name_occurrences.variables (Expr.free_names body)
-                      in
-                      (* Format.eprintf "Free vars: %a@." Variable.Set.print free_vars; *)
-                      let needs_closure_arg =
-                        Variable.Set.mem my_closure free_vars
-                      in
-                      let info : Env.function_info = { needs_closure_arg; } in
-                      Env.add_function_info env code_id info))
-          code
-          env
+      let updated_env =
+        List.fold_left update_env_for_set_of_closure env definitions
       in
-      let updated_env = List.fold_left update_env env definitions in
-      let add_functions r { SCCSC.code; set_of_closures = _; }  =
-        Code_id.Map.fold
-          (fun code_id SC.Code.({ params_and_body = p; newer_version_of = _; }) r ->
-            match (p : _ SC.Code.or_deleted) with
-            | Deleted -> r
-            | Present p ->
-              let fun_symbol = Code_id.code_symbol code_id in
-              let fun_name =
-                Linkage_name.to_string (Symbol.linkage_name fun_symbol)
-              in
-              (* CR vlaviron: fix debug info *)
-              let fundecl =
-                C.cfunction (params_and_body updated_env fun_name
-                  Debuginfo.none p)
-              in
-              R.add_function fundecl r)
-          code
-          r
-      in
-      let r = List.fold_left add_functions r definitions in
-      let preallocate (r, updates, env)
-          { BSCSC.code_ids = _; closure_symbols; }
-          { SCCSC.code = _; set_of_closures; } =
-        let env, data, updates =
-          static_set_of_closures env closure_symbols set_of_closures updates
-        in
-        R.add_data data r, updates, env
+      let r =
+        List.fold_left (add_functions env ~params_and_body) r definitions
       in
       let r, updates, env =
-        List.fold_left2 preallocate (r, None, updated_env) binders definitions
+        List.fold_left2 preallocate_set_of_closures
+          (r, None, updated_env) binders definitions
       in
       env, r, updates
   | Singleton s, Boxed_float v ->
@@ -358,12 +365,12 @@ let static_const0 env r ~params_and_body (bound_symbols : Bound_symbols.t)
         C.emit_float_array_constant (name, Cmmgen_state.Global) static_fields
       in
       let e = static_float_array_updates (C.symbol name) env None 0 fields in
-      env, R.update_data float_array r, e
+      env, R.update_data r float_array, e
   | Singleton s, Mutable_string { initial_value = str; }
   | Singleton s, Immutable_string str ->
       let name = symbol s in
       let data = C.emit_string_constant (name, Cmmgen_state.Global) str in
-      env, R.update_data data r, None
+      env, R.update_data r data, None
   | Singleton _, Sets_of_closures _ ->
       Misc.fatal_errorf "[Code_and_set_of_closures] cannot be bound by a \
           [Singleton] binding:@ %a"
@@ -376,8 +383,10 @@ let static_const0 env r ~params_and_body (bound_symbols : Bound_symbols.t)
           [Code_and_set_of_closures] binding:@ %a"
         SC.print static_const
 
-let static_const env ~params_and_body (bound_symbols : Bound_symbols.t)
-      (static_const : Static_const.t) =
+let static_const
+    env r ~params_and_body
+    (bound_symbols : Bound_symbols.t)
+    (static_const : Static_const.t) =
   (* Gc roots: statically allocated blocks themselves do not need to be scanned,
      however if statically allocated blocks contain dynamically allocated
      contents, then that block has to be registered as Gc roots for the Gc to
@@ -389,10 +398,12 @@ let static_const env ~params_and_body (bound_symbols : Bound_symbols.t)
     if Static_const.is_fully_static static_const then []
     else Symbol.Set.elements (Bound_symbols.being_defined bound_symbols)
   in
-  let r = R.add_gc_roots roots R.empty in
+  let r = R.add_gc_roots r roots in
   let env, r, update_opt =
     static_const0 env r ~params_and_body bound_symbols static_const
   in
   (* [R.archive_data] helps keep definitions of separate symbols in different
      [data_item] lists and this increases readability of the generated Cmm. *)
   env, R.archive_data r, update_opt
+
+

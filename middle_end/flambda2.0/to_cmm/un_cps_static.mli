@@ -19,7 +19,8 @@
 open! Flambda.Import
 
 val static_const
-   : Un_cps_env.t
+  : Un_cps_env.t
+  -> Un_cps_result.t
   -> params_and_body:(
         Un_cps_env.t
      -> string
