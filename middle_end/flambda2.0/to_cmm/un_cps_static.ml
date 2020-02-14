@@ -247,7 +247,6 @@ let update_env_for_function
 let update_env_for_set_of_closure env { SCCSC.code; set_of_closures = _; } =
   Code_id.Map.fold
     (fun code_id SC.Code.({ params_and_body = p; newer_version_of; }) env ->
-       (* Check scope of the closure id *)
        let env =
          match newer_version_of with
          | None -> env

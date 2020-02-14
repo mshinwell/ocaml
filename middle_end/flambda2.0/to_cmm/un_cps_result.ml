@@ -48,7 +48,10 @@ let update_data r f =
 let set_data r l =
   update_data r (function
       | [] -> l
-      | _ -> assert false
+      | _ ->
+        Misc.fatal_errorf
+          "Un_cps_result.set_data: %s"
+          "about to loose some translated static data items"
     )
 
 let add_gc_roots r l =
