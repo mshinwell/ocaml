@@ -57,10 +57,10 @@ struct
 
   let print_index ppf = function
     | Known index ->
-      Format.fprintf ppf "Known @[<2>%a@]"
+      Format.fprintf ppf "(Known @[<2>%a@])"
         Index.print index
     | At_least min_index ->
-      Format.fprintf ppf "At_least @[<2>%a@]"
+      Format.fprintf ppf "(At_least @[<2>%a@])"
         Index.print min_index
 
   let print_with_cache ~cache ppf (({ known_tags; other_tags } as t) : t) =
@@ -74,7 +74,7 @@ struct
         Format.fprintf ppf "%s_|_%s" colour (Flambda_colours.normal ())
     else
       let print ppf { maps_to; index } =
-        Format.fprintf ppf "%a => %a"
+        Format.fprintf ppf "=> %a,@ %a"
           print_index index
           (Maps_to.print_with_cache ~cache) maps_to
       in
