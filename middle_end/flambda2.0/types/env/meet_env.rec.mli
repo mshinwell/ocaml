@@ -20,6 +20,8 @@
 
 type t
 
+val print : Format.formatter -> t -> unit
+
 val create
    : Typing_env.t
   -> t

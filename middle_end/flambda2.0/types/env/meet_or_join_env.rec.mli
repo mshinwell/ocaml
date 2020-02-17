@@ -18,6 +18,8 @@
 
 type t
 
+val print : Format.formatter -> t -> unit
+
 val create_for_meet : Meet_env.t -> t
 
 val create_for_join
