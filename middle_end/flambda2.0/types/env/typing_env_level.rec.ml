@@ -222,9 +222,14 @@ let one_equation name ty =
 
 let add_or_replace_equation t name ty =
   check_equation t name ty;
-  { t with
-    equations = Name.Map.add name ty t.equations;
-  }
+  if Type_grammar.is_obviously_unknown ty then
+    { t with
+      equations = Name.Map.remove name t.equations;
+    }
+  else
+    { t with
+      equations = Name.Map.add name ty t.equations;
+    }
 
 let add_cse t prim ~bound_to =
   match Flambda_primitive.Eligible_for_cse.Map.find prim t.cse with
