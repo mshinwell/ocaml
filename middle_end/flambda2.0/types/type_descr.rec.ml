@@ -284,6 +284,8 @@ module Make (Head : Type_head_intf.S
       (* CR mshinwell: It would be better to use [make_suitable_for_environment]
          here as it's lazy.  In that case we would need to start returning
          environment extensions from [join], which should be fine. *)
+      (* CR pchambart: This seams terribly inefficient. We should change it.
+         Also the result is less precise as local aliases are lost *)
       | Ok head1, Bottom ->
         let env =
           Meet_or_join_env.create_for_join

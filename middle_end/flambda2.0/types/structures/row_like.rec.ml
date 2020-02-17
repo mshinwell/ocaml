@@ -147,8 +147,9 @@ struct
           Bottom
       | Known known, At_least at_least
       | At_least at_least, Known known ->
-        if Index.subset known at_least then
-          (* [Known known] is included in [At_least at_least], hence
+        if Index.subset at_least known then
+          (* [at_least] is included in [known] hence
+             [Known known] is included in [At_least at_least], hence
              [Known known] \inter [At_least at_least] = [Known known] *)
           Ok (Known known)
         else
@@ -224,7 +225,7 @@ struct
         | At_least i1', At_least i2' ->
           At_least (Index.inter i1' i2')
       in
-      let join_case case1 case2 =
+      let join_case env case1 case2 =
         let index = join_index case1.index case2.index in
         let maps_to = Maps_to.join env case1.maps_to case2.maps_to in
         { maps_to; index }
@@ -234,18 +235,40 @@ struct
         | None, None -> None
         | Some case1, None -> begin
             match other2 with
-            | Bottom -> Some case1
+            | Bottom ->
+              (* CF Type_descr.join_head_or_unknown_or_bottom,
+                 we need to join those to ensure that free variables not
+                 present in the target env are cleaned out of the types.
+                 Same bellow *)
+              (* CR pchambart: This seams terribly inefficient. *)
+              let env =
+                Meet_or_join_env.create_for_join
+                  (Meet_or_join_env.target_join_env env)
+                  ~left_env:(Meet_or_join_env.left_join_env env)
+                  ~right_env:(Meet_or_join_env.left_join_env env)
+              in
+              let case1 = join_case env case1 case1 in
+              Some case1
             | Ok other_case ->
-              Some (join_case case1 other_case)
+              Some (join_case env case1 other_case)
           end
         | None, Some case2 -> begin
             match other1 with
-            | Bottom -> Some case2
+            | Bottom ->
+              (* See at the other bottom case *)
+              let env =
+                Meet_or_join_env.create_for_join
+                  (Meet_or_join_env.target_join_env env)
+                  ~left_env:(Meet_or_join_env.right_join_env env)
+                  ~right_env:(Meet_or_join_env.right_join_env env)
+              in
+              let case2 = join_case env case2 case2 in
+              Some case2
             | Ok other_case ->
-              Some (join_case other_case case2)
+              Some (join_case env other_case case2)
           end
         | Some case1, Some case2 ->
-          Some (join_case case1 case2)
+          Some (join_case env case1 case2)
       in
       let known_tags =
         Tag.Map.merge (fun _tag case1 case2 -> join_knowns_tags case1 case2)
@@ -253,10 +276,30 @@ struct
       in
       let other_tags : case Or_bottom.t =
         match other1, other2 with
-        | Bottom, other
-        | other, Bottom -> other
+        | Bottom, Bottom ->
+          Bottom
+        | Ok other1, Bottom ->
+          (* See the previous cases *)
+          let env =
+            Meet_or_join_env.create_for_join
+              (Meet_or_join_env.target_join_env env)
+              ~left_env:(Meet_or_join_env.left_join_env env)
+              ~right_env:(Meet_or_join_env.left_join_env env)
+          in
+          let other1 = join_case env other1 other1 in
+          Ok other1
+        | Bottom, Ok other2 ->
+          (* See the previous cases *)
+          let env =
+            Meet_or_join_env.create_for_join
+              (Meet_or_join_env.target_join_env env)
+              ~left_env:(Meet_or_join_env.right_join_env env)
+              ~right_env:(Meet_or_join_env.right_join_env env)
+          in
+          let other2 = join_case env other2 other2 in
+          Ok other2
         | Ok other1, Ok other2 ->
-          Ok (join_case other1 other2)
+          Ok (join_case env other1 other2)
       in
       { known_tags; other_tags }
 
