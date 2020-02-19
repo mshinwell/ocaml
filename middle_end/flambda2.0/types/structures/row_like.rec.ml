@@ -486,16 +486,20 @@ module For_blocks = struct
     match all_tags_and_indexes t with
     | Unknown -> Unknown
     | Known tags_and_indexes ->
+      let any_unknown = ref false in
       let by_tag =
         Tag.Map.map (fun index ->
             match index with
             | Known index -> index
-            | At_least _ ->
-              Misc.fatal_errorf "More than one size for the same tag:@ %a"
-                print t)
+            | At_least index ->
+              any_unknown := true;
+              index)
           tags_and_indexes
       in
-      Known by_tag
+      if !any_unknown then
+        Unknown
+      else
+        Known by_tag
 
 end
 
