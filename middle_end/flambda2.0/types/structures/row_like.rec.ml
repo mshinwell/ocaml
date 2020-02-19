@@ -388,11 +388,11 @@ end
 
 module Targetint_ocaml_index = struct
   include Targetint.OCaml
-  let subset t1 t2 = Stdlib.(>=) (compare t1 t2) 0
-  (* An integer [i] represents all the values largers than i, hence
-     a bigger number is included in a smaller *)
-  let union t1 t2 = Targetint.OCaml.min t1 t2
-  let inter t1 t2 = Targetint.OCaml.max t1 t2
+  let subset t1 t2 = Stdlib.(<=) (compare t1 t2) 0
+  (* An integer [i] represents all the values smaller than i, hence
+     a smaller number is included in a bigger *)
+  let union t1 t2 = Targetint.OCaml.max t1 t2
+  let inter t1 t2 = Targetint.OCaml.min t1 t2
 end
 
 module For_blocks = struct
