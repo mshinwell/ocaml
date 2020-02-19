@@ -43,6 +43,8 @@ let print ppf = function
 
 let create_for_meet meet_env = Meet meet_env
 
+let _ = Meet_or_join_env.print
+
 let create_for_join central_env ~left_env ~right_env =
   Join {
     central_env = Meet_env.create central_env;
