@@ -524,21 +524,6 @@ type t = {
      "newer version of" fields (e.g. in [Flambda_static.Static_part.code]). *)
 }
 
-let print ppf { names; continuations; closure_vars; code_ids;
-                newer_version_of_code_ids; } =
-  Format.fprintf ppf "@[<hov 1>\
-      @[<hov 1>(names %a)@]@ \
-      @[<hov 1>(continuations %a)@]@ \
-      @[<hov 1>(closure_vars %a)@]@ \
-      @[<hov 1>(code_ids %a)@]\
-      @[<hov 1>(newer_version_of_code_ids %a)@]\
-      @]"
-    For_names.print names
-    For_continuations.print continuations
-    For_closure_vars.print closure_vars
-    For_code_ids.print code_ids
-    For_code_ids.print newer_version_of_code_ids
-
 let empty = {
   names = For_names.empty;
   continuations = For_continuations.empty;
@@ -546,6 +531,24 @@ let empty = {
   code_ids = For_code_ids.empty;
   newer_version_of_code_ids = For_code_ids.empty;
 }
+
+let print ppf ({ names; continuations; closure_vars; code_ids;
+                 newer_version_of_code_ids; } as t) =
+  if t = empty then
+    Format.fprintf ppf "no_occurrences"
+  else
+  Format.fprintf ppf "@[<hov 1>\
+      @[<hov 1>(names %a)@]@ \
+      @[<hov 1>(continuations %a)@]@ \
+      @[<hov 1>(closure_vars %a)@]@ \
+      @[<hov 1>(code_ids %a)@] \
+      @[<hov 1>(newer_version_of_code_ids %a)@]\
+      @]"
+    For_names.print names
+    For_continuations.print continuations
+    For_closure_vars.print closure_vars
+    For_code_ids.print code_ids
+    For_code_ids.print newer_version_of_code_ids
 
 let singleton_continuation cont =
   { empty with
