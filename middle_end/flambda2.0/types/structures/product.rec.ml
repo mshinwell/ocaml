@@ -27,6 +27,8 @@ module Make (Index : Identifiable.S) = struct
      { 1 => Unknown; 2 => V } is equal to { 2 => V } *)
   type t = {
     components_by_index : T.t Index.Map.t;
+    (* Consider moving that field to row_like instead. It is not
+       required for the closures_entry cases which are always values *)
     kind : Flambda_kind.t;
   }
 
