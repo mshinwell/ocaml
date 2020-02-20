@@ -145,14 +145,14 @@ module Block_access_kind = struct
     | Naked_float
 
   type t =
-    | Block of t0
+    | Block of { elt_kind : t0; tag : Tag.t; size : Lambda.block_size; }
     | Array of t0
     | Generic_array of Generic_array_specialisation.t
 
   let element_kind t =
     match t with
-    | Block (Value _) | Array (Value _) -> K.value
-    | Block Naked_float | Array Naked_float -> K.naked_float
+    | Block { elt_kind = Value _; _ } | Array (Value _) -> K.value
+    | Block { elt_kind = Naked_float; _ } | Array Naked_float -> K.naked_float
     | Generic_array _ -> Misc.fatal_error "Not yet implemented"
 
   let compare_t0 (t0_1 : t0) t0_2 = Stdlib.compare t0_1 t0_2
@@ -165,7 +165,13 @@ module Block_access_kind = struct
     | Array _, Generic_array _ -> -1
     | Generic_array _, Block _ -> 1
     | Generic_array _, Array _ -> 1
-    | Block t0_1, Block t0_2 -> compare_t0 t0_1 t0_2
+    | Block { elt_kind = ek_1; tag = tag1; size = size1; },
+      Block { elt_kind = ek_2; tag = tag2; size = size2; } ->
+      let c = compare_t0 ek_1 ek_2 in
+      if c <> 0 then c else
+      let c = Tag.compare tag1 tag2 in
+      if c <> 0 then c else
+      Stdlib.compare (size1: Lambda.block_size) size2
     | Array t0_1, Array t0_2 -> compare_t0 t0_1 t0_2
     | Generic_array spec1, Generic_array spec2 ->
       Generic_array_specialisation.compare spec1 spec2
@@ -176,9 +182,18 @@ module Block_access_kind = struct
       Format.fprintf ppf "@[(Value %a)@]" Value_kind.print kind
     | Naked_float -> Format.pp_print_string ppf "Naked_float"
 
+  let print_block_size ppf (size: Lambda.block_size) =
+    match size with
+    | Unknown -> Format.pp_print_string ppf "unknown"
+    | Known sz -> Format.pp_print_int ppf sz
+
   let print ppf kind =
     match kind with
-    | Block t0 -> Format.fprintf ppf "(Block %a)" print_t0 t0
+    | Block { elt_kind; tag; size; } ->
+      Format.fprintf ppf "(Block %a tag %a size %a)"
+        print_t0 elt_kind
+        Tag.print tag
+        print_block_size size
     | Array t0 -> Format.fprintf ppf "(Array %a)" print_t0 t0
     | Generic_array spec ->
       Format.fprintf ppf "(Generic %a)"

@@ -1533,12 +1533,17 @@ let divide_constant ctx m =
 
 (* Matching against a constructor *)
 
-let make_field_args loc binding_kind arg first_pos last_pos argl =
+let make_field_args loc binding_kind arg first_pos last_pos block_info argl =
   let rec make_args pos =
     if pos > last_pos then
       argl
     else
-      (Lprim (Pfield (pos, Reads_agree), [ arg ], loc), binding_kind)
+      let field_info = {
+        index = pos;
+        block_info;
+      }
+      in
+      (Lprim (Pfield (field_info, Reads_agree), [ arg ], loc), binding_kind)
         :: make_args (pos + 1)
   in
   make_args first_pos
@@ -1627,14 +1632,21 @@ let make_constr_matching p def ctx = function
           (arg, Alias) :: argl
         else
           match cstr.cstr_tag with
-          | Cstr_constant _
-          | Cstr_block _ ->
+          | Cstr_constant _ -> argl
+          | Cstr_block { tag; size; } ->
+              let block_info = { tag; size = Known size; } in
               make_field_args (of_raw_location p.pat_loc)
-                Alias arg 0 (cstr.cstr_arity - 1) argl
+                Alias arg 0 (cstr.cstr_arity - 1) block_info argl
           | Cstr_unboxed -> (arg, Alias) :: argl
-          | Cstr_extension _ ->
+          | Cstr_extension (_, true) -> argl
+          | Cstr_extension (_, false) ->
+              let block_info = {
+                  tag = Obj.object_tag;
+                  size = Known (cstr.cstr_arity + 1);
+                }
+              in
               make_field_args (of_raw_location p.pat_loc)
-                Alias arg 1 cstr.cstr_arity argl
+                Alias arg 1 cstr.cstr_arity block_info argl
       in
       { pm =
           { cases = [];
@@ -1670,6 +1682,19 @@ let make_variant_matching_constant p lab def ctx = function
         discr = normalize_pat p
       }
 
+let nonconstant_variant_field index =
+  Lambda.Pfield(
+    {
+      index;
+      (* Non-constant polymorphic variants are blocks of size 2:
+         First field is the hash label, second field is the argument.
+      *)
+      block_info = { tag = 0; size = Known 2; };
+    },
+    (* CR mshinwell: Is this correct? *)
+    Reads_agree)
+
+
 let matcher_variant_nonconst lab p rem =
   match p.pat_desc with
   | Tpat_or (_, _, _) -> raise OrPat
@@ -1683,12 +1708,10 @@ let make_variant_matching_nonconst p lab def ctx = function
       let def =
         Default_environment.specialize (matcher_variant_nonconst lab) def
       and ctx = Context.specialize p ctx in
-      (* CR mshinwell: Is this correct? *)
-      let sem = Reads_agree in
+      let field_prim = nonconstant_variant_field 1 in
       { pm =
           { cases = [];
-            args = (Lprim (Pfield (1, sem), [ arg ], of_raw_location p.pat_loc), Alias)
-                   :: argl;
+            args = (Lprim (field_prim, [ arg ], of_raw_location p.pat_loc), Alias) :: argl;
             default = def
           };
         ctx;
@@ -1796,6 +1819,15 @@ let code_force_lazy = get_mod_field "CamlinternalLazy" "force"
    Forward(val_out_of_heap).
 *)
 
+let lazy_forward_field =
+  Lambda.Pfield (
+    {
+      index = 0;
+      block_info = { tag = Obj.forward_tag; size = Known 1; };
+    },
+    Reads_vary)
+
+
 let inline_lazy_force_cond arg loc =
   let idarg = Ident.create_local "lzarg" in
   let varg = Lvar idarg in
@@ -1818,7 +1850,7 @@ let inline_lazy_force_cond arg loc =
                 ( Pintcomp Ceq,
                   [ tag_var; Lconst (Const_base (Const_int Obj.forward_tag)) ],
                   loc ),
-              Lprim (Pfield (0, Reads_vary), [ varg ], loc),
+              Lprim (lazy_forward_field, [ varg ], loc),
               Lifthenelse
                 ( (* if (tag == Obj.lazy_tag) then Lazy.force varg else ... *)
                   Lprim
@@ -1857,7 +1889,7 @@ let inline_lazy_force_switch arg loc =
                 sw_blocks =
                   [ ( { sw_tag = Obj.forward_tag;
                         sw_size = 1;
-                      } , Lprim (Pfield (0, Reads_vary), [ varg ], loc));
+                      } , Lprim (lazy_forward_field, [ varg ], loc));
                     ( { sw_tag = Obj.lazy_tag;
                         sw_size = 1;
                       }, Lapply
@@ -1931,7 +1963,12 @@ let make_tuple_matching loc arity def = function
         if pos >= arity then
           argl
         else
-          (Lprim (Pfield (pos, Reads_agree), [ arg ], loc), Alias)
+          let field_info = {
+            index = pos;
+            block_info = { tag = 0; size = Known arity; };
+          }
+          in
+          (Lprim (Pfield (field_info, Reads_agree), [ arg ], loc), Alias)
             :: make_args (pos + 1)
       in
       { cases = [];
@@ -1973,8 +2010,9 @@ let matcher_record num_fields p rem =
 let make_record_matching loc all_labels def = function
   | [] -> fatal_error "Matching.make_record_matching"
   | (arg, _mut) :: argl ->
+      let len = Array.length all_labels in
       let rec make_args pos =
-        if pos >= Array.length all_labels then
+        if pos >= len then
           argl
         else
           let lbl = all_labels.(pos) in
@@ -1984,15 +2022,26 @@ let make_record_matching loc all_labels def = function
             | Mutable -> Reads_vary
           in
           let access =
+            let field_info_reg tag = {
+              index = lbl.lbl_pos;
+              block_info = { tag; size = Known len; };
+            }
+            in
             match lbl.lbl_repres with
-            | Record_regular
-            | Record_inlined _ ->
-                Lprim (Pfield (lbl.lbl_pos, sem), [ arg ], loc)
+            | Record_regular ->
+                Lprim (Pfield (field_info_reg 0, sem), [ arg ], loc)
+            | Record_inlined tag ->
+                Lprim (Pfield (field_info_reg tag, sem), [ arg ], loc)
             | Record_unboxed _ -> arg
             | Record_float ->
                 Lprim (Pfloatfield (lbl.lbl_pos, sem), [ arg ], loc)
             | Record_extension _ ->
-                Lprim (Pfield (lbl.lbl_pos + 1, sem), [ arg ], loc)
+                let field_info = {
+                  index = lbl.lbl_pos + 1;
+                  block_info = { tag = 0; size = Known (len + 1); };
+                }
+                in
+                Lprim (Pfield (field_info, sem), [ arg ], loc)
           in
           let str =
             match lbl.lbl_mut with
@@ -2741,7 +2790,7 @@ let combine_constructor loc arg ex_pat cstr partial ctx def
                   nonconsts default
               in
               Llet (Alias, Pgenval, tag,
-                    Lprim (Pfield (0, Reads_agree), [ arg ], loc),
+                    Lprim (nonconstant_variant_field 0, [ arg ], loc),
                     tests)
         in
         List.fold_right
@@ -2831,7 +2880,7 @@ let call_switcher_variant_constr loc fail arg int_lambda_list =
     ( Alias,
       Pgenval,
       v,
-      Lprim (Pfield (0, Reads_agree), [ arg ], loc),
+      Lprim (nonconstant_variant_field 0, [ arg ], loc),
       call_switcher loc fail (Lvar v) min_int max_int int_lambda_list )
 
 let combine_variant loc row arg partial ctx def (tag_lambda_list, total1, _pats)

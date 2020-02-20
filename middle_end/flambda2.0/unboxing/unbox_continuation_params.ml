@@ -242,9 +242,12 @@ struct
       ~field_kind:Flambda_kind.value
       ~field_n_minus_one:index_var
 
-  let project_field _tag ~block ~index =
+  let project_field tag ~block ~index =
     let index = Simple.const_int index in
-    P.Binary (Block_load (Block (Value Anything), Immutable), block, index)
+    let block_access : P.Block_access_kind.t =
+      Block { elt_kind = Value Anything; tag; size = Unknown; }
+    in
+    P.Binary (Block_load (block_access, Immutable), block, index)
 end
 
 module Block_of_naked_floats_spec : Unboxing_spec
@@ -267,9 +270,12 @@ struct
       ~field_kind:Flambda_kind.naked_float
       ~field_n_minus_one:index_var
 
-  let project_field _tag ~block ~index =
+  let project_field tag ~block ~index =
     let index = Simple.const_int index in
-    P.Binary (Block_load (Block Naked_float, Immutable), block, index)
+    let block_access : P.Block_access_kind.t =
+      Block { elt_kind = Naked_float; tag; size = Unknown; }
+    in
+    P.Binary (Block_load (block_access, Immutable), block, index)
 end
 
 module Closures_info = struct

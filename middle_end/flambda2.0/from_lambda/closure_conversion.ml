@@ -108,9 +108,15 @@ let tupled_function_call_stub
     List.fold_left (fun (pos, body) param ->
         let defining_expr =
           let pos = Immediate.int (Targetint.OCaml.of_int pos) in
+          let block_access : P.Block_access_kind.t =
+            Block { elt_kind = Value Anything;
+                    tag = Tag.zero;
+                    size = Known (List.length params);
+                  }
+          in
           Named.create_prim
             (Binary (
-              Block_load (Block (Value Anything), Immutable),
+              Block_load (block_access, Immutable),
               Simple.var tuple_param_var,
               Simple.const (Tagged_immediate pos)))
             dbg
@@ -895,13 +901,19 @@ let ilambda_to_flambda ~backend ~module_ident ~module_block_size_in_words
       Let_symbol.create (Singleton module_symbol) static_const return
       |> Flambda.Expr.create_let_symbol
     in
+    let block_access : P.Block_access_kind.t =
+      Block { elt_kind = Value Anything;
+              tag = Tag.zero;
+              size = Known module_block_size_in_words;
+            }
+    in
     List.fold_left (fun body (pos, var) ->
         let var = VB.create var Name_mode.normal in
         let pos = Immediate.int (Targetint.OCaml.of_int pos) in
         Expr.create_let var
           (Named.create_prim
             (Binary (
-              Block_load (Block (Value Anything), Immutable),
+              Block_load (block_access, Immutable),
               Simple.var module_block_var,
               Simple.const (Tagged_immediate pos)))
             Debuginfo.none)

@@ -76,7 +76,7 @@ module Block_access_kind : sig
     | Naked_float
 
   type t =
-    | Block of t0
+    | Block of { elt_kind : t0; tag : Tag.t; size : Lambda.block_size; }
     | Array of t0
     | Generic_array of Generic_array_specialisation.t
 

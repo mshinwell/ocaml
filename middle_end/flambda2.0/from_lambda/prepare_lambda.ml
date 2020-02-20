@@ -544,11 +544,11 @@ let rec prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
   | Lprim (Psetfield (_, _, _), [Lprim (Pgetglobal _, [], _); _], _) ->
     Misc.fatal_error "[Psetfield (Pgetglobal ...)] is \
       forbidden upon entry to the middle end"
-  | Lprim (Pfield (i, _), _, _) when i < 0 ->
+  | Lprim (Pfield ({ index; _ }, _), _, _) when index < 0 ->
     Misc.fatal_error "Pfield with negative field index"
   | Lprim (Pfloatfield (i, _), _, _) when i < 0 ->
     Misc.fatal_error "Pfloatfield with negative field index"
-  | Lprim (Psetfield (i, _, _), _, _) when i < 0 ->
+  | Lprim (Psetfield ({ index; _ }, _, _), _, _) when index < 0 ->
     Misc.fatal_error "Psetfield with negative field index"
   | Lprim (Pmakeblock (tag, _, _), _, _)
       when tag < 0 || tag >= Obj.no_scan_tag ->

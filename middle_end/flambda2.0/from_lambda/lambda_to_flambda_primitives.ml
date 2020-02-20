@@ -271,15 +271,23 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
     tag_int (Binary (Float_comp (C.convert_float_comparison comp),
       unbox_float arg1, unbox_float arg2))
   | Pfield_computed sem, [obj; field] ->
-    Binary (Block_load (
-      Block (Value Anything), C.convert_field_read_semantics sem), obj, field)
+    let block_access : P.Block_access_kind.t =
+      (* Pfield_computed is only used for class access, on blocks of tag 0.
+         Obj.field uses Parrayref. *)
+      Block { elt_kind = Value Anything; tag = Tag.zero; size = Unknown; }
+    in
+    Binary (Block_load (block_access,
+      C.convert_field_read_semantics sem), obj, field)
   | Psetfield_computed (imm_or_pointer, init_or_assign), [obj; field; value] ->
     let access_kind =
       C.convert_access_kind imm_or_pointer
     in
+    let block_access : P.Block_access_kind.t =
+      Block { elt_kind = access_kind; tag = Tag.zero; size = Unknown; }
+    in
     Ternary
       (Block_set
-         (Block access_kind, C.convert_init_or_assign init_or_assign),
+         (block_access, C.convert_init_or_assign init_or_assign),
        obj, field, value)
   | Parraylength kind, [arg] ->
     Unary (Array_length (C.convert_array_kind kind), arg)
@@ -495,32 +503,47 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
            (Immediate.int (Targetint.OCaml.of_int n)))
     in
     Binary (Int_arith (I.Tagged_immediate, Add), arg, Simple const)
-  | Pfield (field, sem), [arg] ->
+  | Pfield ({ index; block_info = { tag; size; }; }, sem), [arg] ->
     (* CR mshinwell: Cause fatal error if the field value is < 0.
        We can't do this once we convert to Flambda *)
-    let imm = Immediate.int (Targetint.OCaml.of_int field) in
+    let imm = Immediate.int (Targetint.OCaml.of_int index) in
     let field = Simple.const (Simple.Const.Tagged_immediate imm) in
     let mutability = C.convert_field_read_semantics sem in
-    Binary (Block_load (Block (Value Anything), mutability), arg,
+    let block_access : P.Block_access_kind.t =
+      Block { elt_kind = Value Anything; tag = Tag.create_exn tag; size; }
+    in
+    Binary (Block_load (block_access, mutability), arg,
       Simple field)
   | Pfloatfield (field, sem), [arg] ->
     let imm = Immediate.int (Targetint.OCaml.of_int field) in
     let field = Simple.const (Simple.Const.Tagged_immediate imm) in
     let mutability = C.convert_field_read_semantics sem in
+    let block_access : P.Block_access_kind.t =
+      Block { elt_kind = Naked_float; tag = Tag.double_array_tag;
+              size = Unknown; }
+    in
     box_float
-      (Binary (Block_load (Block Naked_float, mutability), arg, Simple field))
-  | Psetfield (field, immediate_or_pointer, initialization_or_assignment),
+      (Binary (Block_load (block_access, mutability), arg, Simple field))
+  | Psetfield (fi, immediate_or_pointer, initialization_or_assignment),
     [block; value] ->
+    let { index; block_info = { tag; size; }; } : Lambda.field_info = fi in
     let access_kind = C.convert_access_kind immediate_or_pointer in
-    let imm = Immediate.int (Targetint.OCaml.of_int field) in
+    let imm = Immediate.int (Targetint.OCaml.of_int index) in
     let field = Simple.const (Simple.Const.Tagged_immediate imm) in
-    Ternary (Block_set (Block access_kind,
+    let block_access : P.Block_access_kind.t =
+      Block { elt_kind = access_kind; tag = Tag.create_exn tag; size; }
+    in
+    Ternary (Block_set (block_access,
          C.convert_init_or_assign initialization_or_assignment),
        block, Simple field, value)
   | Psetfloatfield (field, init_or_assign), [block; value] ->
     let imm = Immediate.int (Targetint.OCaml.of_int field) in
     let field = Simple.const (Simple.Const.Tagged_immediate imm) in
-    Ternary (Block_set (Block Naked_float,
+    let block_access : P.Block_access_kind.t =
+      Block { elt_kind = Naked_float; tag = Tag.double_array_tag;
+              size = Unknown; }
+    in
+    Ternary (Block_set (block_access,
         C.convert_init_or_assign init_or_assign),
       block, Simple field, unbox_float value)
   | Pdivint Unsafe, [arg1; arg2] ->
@@ -734,12 +757,16 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
       dbg;
     }
   | Poffsetref n, [block] ->
-    Ternary (Block_set (Block (Value Definitely_immediate), Assignment),
+    let block_access : P.Block_access_kind.t =
+      Block { elt_kind = Value Definitely_immediate; tag = Tag.zero;
+              size = Known 1; }
+    in
+    Ternary (Block_set (block_access, Assignment),
       block,
       Simple Simple.const_zero,
       Prim (Binary (Int_arith (Tagged_immediate, Add),
         Simple (Simple.const_int (Targetint.OCaml.of_int n)),
-        Prim (Binary (Block_load (Block (Value Definitely_immediate), Mutable),
+        Prim (Binary (Block_load (block_access, Mutable),
           block,
           Simple Simple.const_zero)))))
   | Pctconst const, _ ->
