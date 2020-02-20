@@ -63,7 +63,6 @@ INCLUDES=-I utils -I parsing -I typing -I bytecomp -I file_formats \
         -I middle_end/flambda2.0/types/type_of_kind \
         -I middle_end/flambda2.0/types/type_of_kind/boilerplate \
         -I middle_end/flambda2.0/unboxing \
-        -I middle_end/flambda2.0/utils \
         -I asmcomp -I asmcomp/debug \
         -I driver -I toplevel
 
@@ -224,13 +223,20 @@ MIDDLE_END_CLOSURE=\
   middle_end/closure/closure_middle_end.cmo
 
 MIDDLE_END_FLAMBDA2_COMPILENV_DEPS=\
-  middle_end/flambda2.0/compilenv_deps/flambda_colours.cmo \
+  middle_end/flambda2.0/compilenv_deps/table_by_int_id.cmo \
+  middle_end/flambda2.0/compilenv_deps/patricia_tree.cmo \
   middle_end/flambda2.0/compilenv_deps/linkage_name.cmo \
+  middle_end/flambda2.0/compilenv_deps/immediate.cmo \
+  middle_end/flambda2.0/compilenv_deps/flambda_colours.cmo \
   middle_end/flambda2.0/compilenv_deps/compilation_unit.cmo \
-  middle_end/flambda2.0/compilenv_deps/variable.cmo \
-  middle_end/flambda2.0/compilenv_deps/symbol.cmo
+  middle_end/flambda2.0/compilenv_deps/rec_info.cmo \
+  middle_end/flambda2.0/compilenv_deps/reg_width_things.cmo \
+  middle_end/flambda2.0/compilenv_deps/symbol.cmo \
+  middle_end/flambda2.0/compilenv_deps/variable.cmo
 
 MIDDLE_END_FLAMBDA2_BASIC=\
+  middle_end/flambda2.0/types/kinds/flambda_kind.cmo \
+  middle_end/flambda2.0/basic/reg_width_const.cmo \
   middle_end/flambda2.0/basic/continuation.cmo \
   middle_end/flambda2.0/basic/name.cmo \
   middle_end/flambda2.0/basic/var_within_closure.cmo \
@@ -243,12 +249,8 @@ MIDDLE_END_FLAMBDA2_BASIC=\
   middle_end/flambda2.0/naming/name_permutation.cmo \
   middle_end/flambda2.0/naming/name_occurrences.cmo \
   middle_end/flambda2.0/basic/or_variable.cmo \
-  middle_end/flambda2.0/basic/immediate.cmo \
-  middle_end/flambda2.0/types/kinds/flambda_kind.cmo \
-  middle_end/flambda2.0/inlining/rec_info.cmo \
   middle_end/flambda2.0/basic/simple.cmo \
   middle_end/flambda2.0/basic/closure_id.cmo \
-  middle_end/flambda2.0/basic/parameter.cmo \
   middle_end/flambda2.0/basic/kinded_parameter.cmo \
   middle_end/flambda2.0/basic/invariant_env.cmo \
   middle_end/flambda2.0/basic/expr_std.cmo \
@@ -357,7 +359,6 @@ MIDDLE_END_FLAMBDA2_SIMPLIFY=\
   middle_end/flambda2.0/simplify/simplify_binary_primitive.cmo \
   middle_end/flambda2.0/simplify/simplify_primitive.cmo \
   middle_end/flambda2.0/simplify/typing_helpers/continuation_handler_like_intf.cmo \
-  middle_end/flambda2.0/utils/monad.cmo \
   middle_end/flambda2.0/simplify/simplify.cmo
 
 MIDDLE_END_FLAMBDA2_FROM_LAMBDA=\
@@ -1547,7 +1548,6 @@ partialclean::
            middle_end/flambda2.0/types/type_of_kind \
            middle_end/flambda2.0/types/type_of_kind/boilerplate \
            middle_end/flambda2.0/unboxing \
-           middle_end/flambda2.0/utils \
            driver toplevel tools; do \
 	  rm -f $$d/*.cm[ioxt] $$d/*.cmti $$d/*.annot $$d/*.$(S) \
 	    $$d/*.$(O) $$d/*.$(SO); \
@@ -1580,7 +1580,6 @@ depend: beforedepend
          middle_end/flambda2.0/types/type_of_kind \
          middle_end/flambda2.0/types/type_of_kind/boilerplate \
          middle_end/flambda2.0/unboxing \
-         middle_end/flambda2.0/utils \
          driver toplevel; \
          do $(CAMLDEP) $(DEPFLAGS) $(DEPINCLUDES) $$d/*.mli $$d/*.ml || exit; \
          done) > .depend
