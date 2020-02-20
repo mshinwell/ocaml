@@ -16,6 +16,8 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+module Tag_or_unknown : Identifiable.S with type t = Or_unknown.Lift (Tag).t
+
 type t = Tag.t Or_unknown.t * Targetint.OCaml.t
 
 include Identifiable.S with type t := t
