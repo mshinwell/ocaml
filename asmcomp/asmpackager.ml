@@ -100,28 +100,47 @@ let make_package_object ~ppf_dump members targetobj targetname coercion
     let module_ident = Ident.create_persistent targetname in
     let prefixname = Filename.remove_extension objtemp in
     let required_globals = Ident.Set.empty in
-    let program, middle_end =
+    let program =
       let main_module_block_size, code =
-        Translmod.transl_store_package components
-          (Ident.create_persistent targetname) coercion
+        if Config.flambda then
+          Translmod.transl_package_flambda components coercion
+        else
+          Translmod.transl_store_package components
+            (Ident.create_persistent targetname) coercion
       in
       let code = Simplif.simplify_lambda code in
-      let program =
-        { Lambda.
-          code;
-          main_module_block_size;
-          module_ident;
-          required_globals;
-        }
-      in
-      program, Closure_middle_end.lambda_to_clambda
+      { Lambda.
+        code;
+        main_module_block_size;
+        module_ident;
+        required_globals;
+      }
     in
-    Asmgen.compile_implementation ~backend
-      ~filename:targetname
-      ~prefixname
-      ~middle_end
-      ~ppf_dump
-      program;
+    let () =
+      if Config.flambda then begin
+        let middle_end = Flambda2_middle_end.middle_end in
+        let backend =
+          (module Asmgen.Flambda2_backend : Flambda2_backend_intf.S)
+        in
+        Asmgen.compile_implementation2 program.required_globals
+          ~backend
+          ~prefixname
+          ~size:program.main_module_block_size
+          ~filename:targetname
+          ~module_ident:program.module_ident
+          ~module_initializer:program.code
+          ~ppf_dump
+          ~middle_end
+      end else begin
+        let middle_end = Closure_middle_end.lambda_to_clambda in
+        Asmgen.compile_implementation ~backend
+          ~filename:targetname
+          ~prefixname
+          ~middle_end
+          ~ppf_dump
+          program
+      end
+    in
     let objfiles =
       List.map
         (fun m -> Filename.remove_extension m.pm_file ^ Config.ext_obj)
@@ -131,7 +150,7 @@ let make_package_object ~ppf_dump members targetobj targetname coercion
     in
     remove_file objtemp;
     if not ok then raise(Error Linking_error)
-  )
+    )
 
 (* Make the .cmx file for the package *)
 
@@ -157,7 +176,10 @@ let build_package_cmx members cmxfile =
       members [] in
   let ui = Compilenv.current_unit_infos() in
   let ui_export_info =
-    Clambda (get_approx ui)
+    if Config.flambda then
+      Clambda Value_unknown
+    else
+      Clambda (get_approx ui)
   in
   let pkg_infos =
     { ui_name = ui.ui_name;

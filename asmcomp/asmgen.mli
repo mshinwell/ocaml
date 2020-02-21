@@ -63,6 +63,9 @@ val compile_implementation2
   -> Ident.Set.t
   -> unit
 
+(** Flambda2 backend *)
+module Flambda2_backend : Flambda2_backend_intf.S
+
 (** Compile an implementation from Lambda using the given middle end. *)
 val compile_implementation_flambda
    : ?toplevel:(string -> bool)

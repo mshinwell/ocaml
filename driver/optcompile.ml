@@ -30,68 +30,8 @@ let interface ~source_file ~output_prefix =
 let (|>>) (x, y) f = (x, f y)
 
 (** Native compilation backend for .ml files. *)
-
-module Flambda2_backend = struct
-  let symbol_for_module_block id =
-    assert (Ident.global id);
-    assert (not (Ident.is_predef id));
-    let comp_unit =
-      (* CR mshinwell: Get rid of this "caml" hack *)
-      Compilation_unit.create id
-        (Linkage_name.create ("caml" ^ Ident.name id))
-    in
-    Symbol.unsafe_create
-      comp_unit
-      (Linkage_name.create (Compilenv.symbol_for_global id))
-
-  let symbol_for_global' ?comp_unit id =
-    if Ident.global id && not (Ident.is_predef id) then
-      symbol_for_module_block id
-    else
-      let comp_unit =
-        match comp_unit with
-        | Some comp_unit -> comp_unit
-        | None ->
-          if Ident.is_predef id then Compilation_unit.predefined_exception ()
-          else Compilation_unit.get_current_exn ()
-      in
-      Symbol.unsafe_create
-        comp_unit
-        (Linkage_name.create (Compilenv.symbol_for_global id))
-
-  let closure_symbol _ = failwith "Not yet implemented"
-
-  let division_by_zero =
-    symbol_for_global'
-      ~comp_unit:(Compilation_unit.predefined_exception ())
-      Predef.ident_division_by_zero
-
-  let invalid_argument =
-    symbol_for_global'
-      ~comp_unit:(Compilation_unit.predefined_exception ())
-      Predef.ident_invalid_argument
-
-  let all_predefined_exception_symbols =
-    Predef.all_predef_exns
-    |> List.map (fun ident ->
-      symbol_for_global' ~comp_unit:(Compilation_unit.predefined_exception ())
-        ident)
-    |> Symbol.Set.of_list
-
-  let () =
-    assert (Symbol.Set.mem division_by_zero all_predefined_exception_symbols);
-    assert (Symbol.Set.mem invalid_argument all_predefined_exception_symbols)
-
-  let symbol_for_global' id : Symbol.t = symbol_for_global' id
-
-  let size_int = Arch.size_int
-  let big_endian = Arch.big_endian
-
-  let max_sensible_number_of_arguments =
-    Proc.max_arguments_for_tailcalls - 1
-end
 let flambda2_backend =
-  (module Flambda2_backend : Flambda2_backend_intf.S)
+  (module Asmgen.Flambda2_backend : Flambda2_backend_intf.S)
 
 let flambda2 i typed =
   if !Clflags.classic_inlining then begin
