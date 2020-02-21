@@ -368,12 +368,15 @@ let simplify_float_arith_op (op : P.unary_float_arith_op) dacc ~original_term
 
 let try_cse dacc prim arg ~min_name_mode ~result_var : Simplify_common.cse =
   let result_kind = P.result_kind_of_unary_primitive' prim in
-  match S.simplify_simple dacc arg ~min_name_mode:Name_mode.min_in_types with
-  | Bottom, _arg_ty -> Invalid (T.bottom result_kind)
-  | Ok arg, _arg_ty ->
-    let original_prim : P.t = Unary (prim, arg) in
-    Simplify_common.try_cse dacc ~original_prim ~result_kind
-      ~min_name_mode ~result_var
+  if Name_mode.is_phantom min_name_mode then
+    Not_applied dacc
+  else
+    match S.simplify_simple dacc arg ~min_name_mode:Name_mode.min_in_types with
+    | Bottom, _arg_ty -> Invalid (T.bottom result_kind)
+    | Ok arg, _arg_ty ->
+      let original_prim : P.t = Unary (prim, arg) in
+      Simplify_common.try_cse dacc ~original_prim ~result_kind
+        ~min_name_mode ~result_var
 
 let simplify_unary_primitive dacc (prim : P.unary_primitive)
       arg dbg ~result_var =
