@@ -47,15 +47,15 @@
   tests/lib-buffer
   tests/lib-bytes
   tests/lib-digest
-# tests/lib-dynlink-bytecode        -             not relevant
-# tests/lib-dynlink-csharp          -             skipped without C# compiler
-# tests/lib-dynlink-initializers    FAIL          dynlink doesn't compile yet
-# tests/lib-dynlink-native          FAIL          dynlink doesn't compile yet
-# tests/lib-dynlink-packed          FAIL          dynlink doesn't compile yet
-# tests/lib-dynlink-pr4229          FAIL          dynlink doesn't compile yet
-# tests/lib-dynlink-pr4839          FAIL          dynlink doesn't compile yet
-# tests/lib-dynlink-pr6950          FAIL          dynlink doesn't compile yet
-# tests/lib-dynlink-private         FAIL          dynlink doesn't compile yet
+  tests/lib-dynlink-bytecode
+  tests/lib-dynlink-csharp
+  tests/lib-dynlink-initializers
+  tests/lib-dynlink-native
+  tests/lib-dynlink-packed
+  tests/lib-dynlink-pr4229
+  tests/lib-dynlink-pr4839
+  tests/lib-dynlink-pr6950
+  tests/lib-dynlink-private
   tests/lib-filename
   tests/lib-float
   tests/lib-floatarray
@@ -88,7 +88,7 @@
   tests/lib-threads
   tests/lib-uchar
   tests/lib-unix
-# tests/link-test                   FAIL (FIXME)  'test.ml' : problems with pack (assertion failure in compilenv)
+  tests/link-test
   tests/locale
   tests/local-functions
   tests/manual-intf-c
@@ -111,7 +111,7 @@
   tests/prim-revapply
   tests/printing-types
   tests/raise-counts
-# tests/regression                  FAIL          'pr8769.ml' (pack)
+  tests/regression
   tests/required-external
   tests/runtime-C-exceptions
   tests/runtime-errors
