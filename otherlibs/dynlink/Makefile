@@ -35,8 +35,7 @@ COMPFLAGS=-strict-sequence -principal -absname -w +a-4-9-40-41-42-44-45-48-66 \
 	  -warn-error A \
           -bin-annot -safe-string -strict-formats
 ifeq "$(FLAMBDA)" "true"
-#OPTCOMPFLAGS=-O3 option removed because it causes errors with flambda2, TODO: fix this
-OPTCOMPFLAGS=
+OPTCOMPFLAGS=-O3
 else
 OPTCOMPFLAGS=
 endif
