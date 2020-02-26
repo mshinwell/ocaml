@@ -458,7 +458,8 @@ let boxed_nativeint_alias_to ~naked_nativeint =
 
 let blocks_with_these_tags tags =
   let blocks =
-    Row_like.For_blocks.create_blocks_with_these_tags tags
+    Row_like.For_blocks.create_blocks_with_these_tags
+      ~field_kind:Flambda_kind.value tags
   in
   Value (T_V.create_no_alias (Ok (Variant (Variant.create
     ~immediates:(Known (bottom K.naked_immediate))
@@ -525,10 +526,12 @@ let create_non_inlinable_function_declaration ~code_id ~param_arity
 let exactly_this_closure closure_id ~all_function_decls_in_set:function_decls
       ~all_closures_in_set:closure_types
       ~all_closure_vars_in_set:closure_var_types =
-  let closure_types = Product.Closure_id_indexed.create closure_types in
+  let closure_types =
+    Product.Closure_id_indexed.create Flambda_kind.value closure_types
+  in
   let closures_entry =
     let closure_var_types =
-      Product.Var_within_closure_indexed.create closure_var_types
+      Product.Var_within_closure_indexed.create Flambda_kind.value closure_var_types
     in
     Closures_entry.create ~function_decls ~closure_types ~closure_var_types
   in
@@ -557,7 +560,9 @@ let at_least_the_closures_with_ids ~this_closure closure_ids_and_bindings =
     Closure_id.Map.map (fun _ -> Or_unknown_or_bottom.Unknown)
       closure_ids_and_bindings
   in
-  let closure_types = Product.Closure_id_indexed.create closure_ids_and_types in
+  let closure_types =
+    Product.Closure_id_indexed.create Flambda_kind.value closure_ids_and_types
+  in
   let closures_entry =
     Closures_entry.create ~function_decls ~closure_types
       ~closure_var_types:(Product.Var_within_closure_indexed.create_bottom ())
@@ -585,6 +590,7 @@ let closure_with_at_least_this_closure_var closure_var ~closure_element_var =
       alias_type_of K.value (Simple.var closure_element_var)
     in
     Product.Var_within_closure_indexed.create
+      Flambda_kind.value
       (Var_within_closure.Map.singleton closure_var closure_var_type)
   in
   let closures_entry =

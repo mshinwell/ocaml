@@ -35,7 +35,7 @@ module For_blocks : sig
     -> open_or_closed
     -> t
 
-  val create_blocks_with_these_tags : Tag.Set.t -> t
+  val create_blocks_with_these_tags : field_kind:Flambda_kind.t -> Tag.Set.t -> t
 
   val all_tags : t -> Tag.Set.t Or_unknown.t
 

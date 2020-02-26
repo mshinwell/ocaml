@@ -25,7 +25,7 @@ module type S = sig
   module Index : Identifiable.S
 
   (** Create a product value given the indexes with associated components. *)
-  val create : flambda_type Index.Map.t -> t
+  val create : Flambda_kind.t -> flambda_type Index.Map.t -> t
 
   val create_bottom : unit -> t
 

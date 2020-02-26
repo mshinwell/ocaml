@@ -406,7 +406,7 @@ module For_blocks = struct
             Flambda_kind.print field_kind
         end
     in
-    let product = Product.Int_indexed.create_from_list field_tys in
+    let product = Product.Int_indexed.create_from_list field_kind field_tys in
     let size = Product.Int_indexed.width product in
     match open_or_closed with
     | Open _ -> create_at_least (tag, size) product
@@ -415,11 +415,11 @@ module For_blocks = struct
       | Known tag -> create_exactly tag size product
       | Unknown -> assert false  (* see above *)
 
-  let create_blocks_with_these_tags tags =
+  let create_blocks_with_these_tags ~field_kind tags =
     let at_least =
       Tag.Set.fold (fun tag at_least ->
           Tag_or_unknown_and_size.Map.add (Known tag, Targetint.OCaml.zero)
-            (Product.Int_indexed.create_empty ())
+            (Product.Int_indexed.create_empty field_kind)
             at_least)
         tags
         Tag_or_unknown_and_size.Map.empty

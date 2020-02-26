@@ -32,8 +32,8 @@ module Int_indexed : sig
     with type meet_or_join_env := Meet_or_join_env.t
     with type typing_env_extension := Typing_env_extension.t
 
-  val create_from_list : Type_grammar.t list -> t
-  val create_empty : unit -> t
+  val create_from_list : Flambda_kind.t -> Type_grammar.t list -> t
+  val create_empty : Flambda_kind.t -> t
 end
 
 module Closure_id_indexed
