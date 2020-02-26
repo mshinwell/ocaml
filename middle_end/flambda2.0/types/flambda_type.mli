@@ -127,8 +127,8 @@ module Typing_env : sig
 
   val cut_and_n_way_join
      : t
-    -> (t * Apply_cont_rewrite_id.t * Continuation_use_kind.t
-         * Variable.Set.t) list
+    -> (t * Apply_cont_rewrite_id.t * Continuation_use_kind.t) list
+    -> params:Kinded_parameter.t list
     -> unknown_if_defined_at_or_later_than:Scope.t
     -> Typing_env_extension.t * Continuation_extra_params_and_args.t
 end

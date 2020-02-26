@@ -215,6 +215,7 @@ let is_obviously_bottom (t : t) =
   | Naked_int64 ty -> T_N64.is_obviously_bottom ty
   | Naked_nativeint ty -> T_NN.is_obviously_bottom ty
 
+(*
 let is_obviously_unknown (t : t) =
   match t with
   | Value ty -> T_V.is_obviously_unknown ty
@@ -223,6 +224,7 @@ let is_obviously_unknown (t : t) =
   | Naked_int32 ty -> T_N32.is_obviously_unknown ty
   | Naked_int64 ty -> T_N64.is_obviously_unknown ty
   | Naked_nativeint ty -> T_NN.is_obviously_unknown ty
+*)
 
 let alias_type_of (kind : K.t) name : t =
   match kind with

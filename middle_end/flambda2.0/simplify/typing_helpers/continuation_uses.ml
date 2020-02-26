@@ -116,8 +116,7 @@ Format.eprintf "%d uses for %a\n%!"
             |> TE.add_equations_on_params ~params
                  ~param_types:(U.arg_types use)
           in
-          use_env, U.id use, U.use_kind use,
-            Variable.Set.empty (* CR mshinwell: remove *) )
+          use_env, U.id use, U.use_kind use)
         uses
     in
 (*
@@ -126,15 +125,9 @@ Format.eprintf "Unknown at or later than %a\n%!"
 *)
     let handler_typing_env, extra_params_and_args, is_single_inlinable_use,
         is_single_use =
-      match use_envs_with_ids with
-      | [use_env, _, Inlinable, _] ->
-        (* A single inlinable use will be inlined out by the simplifier, so
-           avoid any join-related computations. *)
-        use_env, Continuation_extra_params_and_args.empty, true, true
-      | [] | [_, _, Non_inlinable, _]
-      | (_, _, (Inlinable | Non_inlinable), _) :: _ ->
         let env_extension, extra_params_and_args =
           TE.cut_and_n_way_join typing_env use_envs_with_ids
+            ~params
             ~unknown_if_defined_at_or_later_than:
               (Scope.next definition_scope_level)
         in
@@ -156,7 +149,12 @@ Format.eprintf "The extra params and args are:@ %a\n%!"
           | [_] -> true
           | [] | _::_::_ -> false
         in
-        handler_env, extra_params_and_args, false, is_single_use
+        match use_envs_with_ids with
+        | [_, _, Inlinable] ->
+          handler_env, extra_params_and_args, true, true
+        | [] | [_, _, Non_inlinable]
+        | (_, _, (Inlinable | Non_inlinable)) :: _ ->
+          handler_env, extra_params_and_args, false, is_single_use
     in
     let arg_types_by_use_id =
       List.fold_left (fun args use ->

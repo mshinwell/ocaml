@@ -489,29 +489,26 @@ let add_cse t prim ~bound_to =
 
 let rec add_equation0 t aliases name ty =
   invariant_for_new_equation t name ty;
-  (* CR mshinwell: For the moment we assume here that types don't regress. *)
-  if Type_grammar.is_obviously_unknown ty then t
-  else
-    let level =
-      Typing_env_level.add_or_replace_equation
-        (One_level.level t.current_level) name ty
-    in
-    let just_after_level =
-      Name.pattern_match name
-        ~var:(fun var ->
-          Cached.replace_variable_binding 
-            (One_level.just_after_level t.current_level)
-            var ty ~new_aliases:aliases)
-        ~symbol:(fun _ ->
-          Cached.add_or_replace_binding 
-            (One_level.just_after_level t.current_level)
-            name ty Binding_time.symbols Name_mode.normal
-            ~new_aliases:aliases)
-    in
-    let current_level =
-      One_level.create (current_scope t) level ~just_after_level
-    in
-    with_current_level t ~current_level
+  let level =
+    Typing_env_level.add_or_replace_equation
+      (One_level.level t.current_level) name ty
+  in
+  let just_after_level =
+    Name.pattern_match name
+      ~var:(fun var ->
+        Cached.replace_variable_binding 
+          (One_level.just_after_level t.current_level)
+          var ty ~new_aliases:aliases)
+      ~symbol:(fun _ ->
+        Cached.add_or_replace_binding 
+          (One_level.just_after_level t.current_level)
+          name ty Binding_time.symbols Name_mode.normal
+          ~new_aliases:aliases)
+  in
+  let current_level =
+    One_level.create (current_scope t) level ~just_after_level
+  in
+  with_current_level t ~current_level
 
 and add_equation t name ty =
   if !Clflags.flambda_invariant_checks then begin
@@ -715,19 +712,19 @@ let cut t ~unknown_if_defined_at_or_later_than:min_scope =
       at_or_after_cut
       (Typing_env_level.empty ())
 
-let cut_and_n_way_join definition_typing_env ts_and_use_ids
+let cut_and_n_way_join definition_typing_env ts_and_use_ids ~params
       ~unknown_if_defined_at_or_later_than =
   (* CR mshinwell: Can't [unknown_if_defined_at_or_later_than] just be
      computed by this function? *)
   let after_cuts =
-    List.map (fun (t, use_id, use_kind, interesting_vars) ->
+    List.map (fun (t, use_id, use_kind) ->
         let level = cut t ~unknown_if_defined_at_or_later_than in
-        t, use_id, use_kind, interesting_vars, level)
+        t, use_id, use_kind, level)
       ts_and_use_ids
   in
   let level, extra_params_and_args =
     Typing_env_level.n_way_join ~env_at_fork:definition_typing_env
-      after_cuts
+      after_cuts ~params
   in
   let env_extension = Typing_env_extension.create level in
   env_extension, extra_params_and_args

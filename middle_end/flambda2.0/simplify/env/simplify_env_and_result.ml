@@ -281,6 +281,17 @@ end = struct
       t
       params
 
+  let define_parameters_as_bottom t ~params =
+    List.fold_left (fun t param ->
+        let var =
+          Var_in_binding_pos.create (KP.var param) Name_mode.normal
+        in
+        let kind = KP.kind param in
+        let t = define_variable t var kind in
+        add_equation_on_variable t (KP.var param) (T.bottom kind))
+      t
+      params
+
   let add_parameters t params ~param_types =
     if List.compare_lengths params param_types <> 0 then begin
       Misc.fatal_errorf "Mismatch between number of [params] and \

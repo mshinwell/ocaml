@@ -215,12 +215,20 @@ module Make (Head : Type_head_intf.S
     | Some name -> TEE.add_or_replace_equation env_extension name ty
     | None -> env_extension
 
-  let all_aliases_of env simple_opt =
+  let all_aliases_of env simple_opt ~in_env =
     match simple_opt with
     | None -> Simple.Set.empty
     | Some simple ->
-      Simple.Set.add simple (
-        TE.aliases_of_simple_allowable_in_types env simple)
+      let simples =
+        Simple.Set.add simple (
+          TE.aliases_of_simple_allowable_in_types env simple)
+      in
+      Format.eprintf "Aliases of %a are: %a\n%!"
+        Simple.print simple
+        Simple.Set.print simples;
+      Simple.Set.filter (fun simple ->
+          Typing_env.mem_simple in_env simple)
+        simples
 
   let [@inline always] get_canonical_simples_and_expand_heads ~force_to_kind
         ~to_type ~left_env ~left_ty ~right_env ~right_ty =
@@ -437,6 +445,10 @@ module Make (Head : Type_head_intf.S
           end
 
     let join ~force_to_kind ~to_type join_env t1 t2 =
+      Format.eprintf "Joining %a and %a\n%!" print t1 print t2;
+      Format.eprintf "Left:@ %a@ Right:@ %a\n%!"
+        Typing_env.print (Meet_or_join_env.left_join_env join_env)
+        Typing_env.print (Meet_or_join_env.right_join_env join_env);
       (* CR mshinwell: Rewrite this to avoid the [option] allocations from
          [get_canonical_simples_and_expand_heads] *)
       let canonical_simple1, head1, canonical_simple2, head2 =
@@ -447,26 +459,43 @@ module Make (Head : Type_head_intf.S
           ~right_ty:t2
       in
       let choose_shared_alias ~shared_aliases =
-        let shared_aliases =
-          Simple.Set.filter (fun simple ->
-              match Simple.must_be_name simple with
-              | None -> true
-              | Some name ->
-                Typing_env.mem (Meet_or_join_env.target_join_env join_env)
-                  name)
-            shared_aliases
-        in
-        match Simple.Set.choose_opt shared_aliases with
-        | Some simple -> Some (create_equals simple)
-        | None -> None
+        match Simple.Set.elements shared_aliases with
+        | [] -> None
+        | shared_aliases ->
+          (* We prefer [Const]s, and if not, [Symbol]s. *)
+          (* CR mshinwell: Add this as a supported ordering in [Simple] *)
+          let shared_aliases =
+            List.sort (fun simple1 simple2 ->
+                let is_const1 = Simple.is_const simple1 in
+                let is_const2 = Simple.is_const simple2 in
+                match is_const1, is_const2 with
+                | true, false -> -1
+                | false, true -> 1
+                | true, true | false, false ->
+                  let is_symbol1 = Simple.is_symbol simple1 in
+                  let is_symbol2 = Simple.is_symbol simple2 in
+                  match is_symbol1, is_symbol2 with
+                  | true, false -> -1
+                  | false, true -> 1
+                  | true, true | false, false ->
+                    Simple.compare simple1 simple2)
+              shared_aliases
+          in
+          Some (create_equals (List.hd shared_aliases))
       in
       let shared_aliases =
         Simple.Set.inter
           (all_aliases_of (Meet_or_join_env.left_join_env join_env)
-            canonical_simple1)
+            canonical_simple1
+            ~in_env:(Meet_or_join_env.target_join_env join_env))
           (all_aliases_of (Meet_or_join_env.right_join_env join_env)
-            canonical_simple2)
+            canonical_simple2
+            ~in_env:(Meet_or_join_env.target_join_env join_env))
       in
+      (*
+      Format.eprintf "Shared aliases:@ %a\n%!"
+        Simple.Set.print shared_aliases;
+        *)
       match choose_shared_alias ~shared_aliases with
       | Some joined_ty -> to_type joined_ty
       | None ->

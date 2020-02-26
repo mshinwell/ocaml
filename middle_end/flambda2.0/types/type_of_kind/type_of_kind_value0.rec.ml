@@ -239,7 +239,7 @@ struct
       | Unknown -> ()
       | Known imms -> assert (not (T.is_obviously_bottom imms));
       end;
-      let env_extension = TEE.join env env_extension1 env_extension2 in
+      let env_extension = TEE.join env ~params:[] env_extension1 env_extension2 in
       Ok (blocks, immediates, env_extension)
 
   let meet_or_join env t1 t2 : _ Or_bottom_or_absorbing.t =

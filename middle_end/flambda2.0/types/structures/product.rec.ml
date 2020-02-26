@@ -85,6 +85,7 @@ module Make (Index : Identifiable.S) = struct
         Flambda_kind.print kind1 Flambda_kind.print kind2;
     let components_by_index =
       Index.Map.inter (fun _index ty1 ty2 ->
+          Format.eprintf "INDEX %a\n%!" Index.print index;
           Type_grammar.join' env ty1 ty2)
         components_by_index1
         components_by_index2

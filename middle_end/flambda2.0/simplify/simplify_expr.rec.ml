@@ -278,7 +278,9 @@ and simplify_non_recursive_let_cont_handler
           let params_and_handler = CH.params_and_handler cont_handler in
           let is_exn_handler = CH.is_exn_handler cont_handler in
           CPH.pattern_match params_and_handler ~f:(fun params ~handler ->
-            let denv = DE.define_parameters (DA.denv dacc) ~params in
+            let denv =
+              DE.define_parameters (DA.denv dacc) ~params
+            in
             let dacc_for_body =
               DA.with_denv dacc (DE.increment_continuation_scope_level denv)
             in

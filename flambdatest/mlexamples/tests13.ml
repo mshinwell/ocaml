@@ -22,7 +22,7 @@ let rec map_foo f seq () = match seq() with
   | Nil -> Nil
   | Cons (x, next) ->
     let (g : unit -> 'a node) =
-      if opaque false then bar 1 map_foo else bar 2 map_foo
+      if opaque false then bar 10 map_foo else bar 20 map_foo
     in
     let g_result = (g [@inlined always]) () in
     ignore (opaque g_result);

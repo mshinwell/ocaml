@@ -106,6 +106,8 @@ module type Downwards_env = sig
 
   val define_parameters : t -> params:Kinded_parameter.t list -> t
 
+  val define_parameters_as_bottom : t -> params:Kinded_parameter.t list -> t
+
   val add_parameters
      : t
     -> Kinded_parameter.t list

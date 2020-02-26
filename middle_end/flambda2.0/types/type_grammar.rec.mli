@@ -42,7 +42,7 @@ val apply_rec_info : t -> Rec_info.t -> t Or_bottom.t
 val get_alias_exn : t -> Simple.t
 
 val is_obviously_bottom : t -> bool
-val is_obviously_unknown : t -> bool
+(* val is_obviously_unknown : t -> bool *)
 
 val bottom : Flambda_kind.t -> t
 val bottom_like : t -> t

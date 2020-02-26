@@ -100,26 +100,26 @@ let rec n_way_meet env ts =
   | [] -> empty ()
   | t::ts -> meet env t (n_way_meet env ts)
 
-let n_way_join ~env_at_fork envs_with_extensions : t * _ =
+let n_way_join ~env_at_fork envs_with_extensions ~params : t * _ =
   let abst, extra_cse_bindings =
     let rec open_binders envs_with_extensions envs_with_levels =
       match envs_with_extensions with
       | [] ->
         let level, extra_cse_bindings =
-          Typing_env_level.n_way_join ~env_at_fork envs_with_levels
+          Typing_env_level.n_way_join ~env_at_fork envs_with_levels ~params
         in
         let abst =
           A.create (Typing_env_level.defined_vars level) level
         in
         abst, extra_cse_bindings
-      | (_env, id, use_kind, interesting_vars, t)::envs_with_extensions ->
+      | (_env, id, use_kind, t)::envs_with_extensions ->
         A.pattern_match t.abst ~f:(fun level ->
           let env =
             Typing_env.add_env_extension_from_level env_at_fork level
           in
           (* It doesn't matter that the list gets reversed. *)
           let envs_with_levels =
-            (env, id, use_kind, interesting_vars, level) :: envs_with_levels
+            (env, id, use_kind, level) :: envs_with_levels
           in
           open_binders envs_with_extensions envs_with_levels)
     in
@@ -127,12 +127,12 @@ let n_way_join ~env_at_fork envs_with_extensions : t * _ =
   in
   { abst; }, extra_cse_bindings
 
-let join env ext1 ext2 =
+let join ~params env ext1 ext2 =
   let left_env = Meet_or_join_env.left_join_env env in
   let right_env = Meet_or_join_env.right_join_env env in
   let env_at_fork = Meet_or_join_env.target_join_env env in
   let env_extension, _ =
-    n_way_join ~env_at_fork [
+    n_way_join ~params ~env_at_fork [
       left_env, Apply_cont_rewrite_id.create (), Non_inlinable,
       Variable.Set.empty, ext1;
       right_env, Apply_cont_rewrite_id.create (), Non_inlinable,
