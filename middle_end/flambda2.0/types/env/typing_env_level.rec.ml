@@ -446,6 +446,25 @@ let join_types ~env_at_fork ~params envs_with_levels =
         let env_extension = Typing_env_extension.create level in
         Typing_env.add_env_extension env_at_fork env_extension
       in
+      let equations =
+        (* If the parameter is not present, it is considered as bottom
+           by the Name.Map.union while it should be unknown.
+           By default non present equations are unknown, but here we must
+           make it explicit.
+           This is not required for symbols as defined symbols are required
+           not to be unknown.
+           CR pchambart: are they really ? *)
+        List.fold_left (fun equations param ->
+          let param_name = Kinded_parameter.name param in
+          if not (Name.Map.mem param_name equations) then
+            Name.Map.add param_name
+              (Type_grammar.unknown (Kinded_parameter.kind param))
+              equations
+          else
+            equations)
+          t.equations
+          params
+      in
       let joined_types =
         Name.Map.union (fun name joined_ty use_ty ->
             Format.eprintf "Processing name:@ %a\n%!" Name.print name;
@@ -459,7 +478,7 @@ let join_types ~env_at_fork ~params envs_with_levels =
               Type_grammar.print joined_ty;
             Some joined_ty)
           joined_types
-          t.equations
+          equations
       in
       joined_types, env_at_fork)
     (joined_types, env_at_fork)
