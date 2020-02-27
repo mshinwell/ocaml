@@ -136,7 +136,7 @@ struct
       match !env_extension with
       | None -> env_extension := Some ext
       | Some ext2 ->
-        env_extension := Some (TEE.join join_env ext2 ext)
+        env_extension := Some (TEE.join ~params:[] join_env ext2 ext)
     in
     let meet_index i1 i2 : index Or_bottom.t =
       match i1, i2 with
