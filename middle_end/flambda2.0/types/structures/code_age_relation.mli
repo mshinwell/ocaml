@@ -35,7 +35,13 @@ val meet : t -> Code_id.t -> Code_id.t -> Code_id.t Or_bottom.t
 
 (** [join] calculates the newest common ancestor of the given pieces of code, or
     identifies that the pieces of code are unrelated. *)
-val join : t -> Code_id.t -> Code_id.t -> Code_id.t Or_unknown.t
+val join
+   : target_t:t
+  -> t
+  -> t
+  -> Code_id.t
+  -> Code_id.t
+  -> Code_id.t Or_unknown.t
 
 (** Returns [true] iff there is no branching in the elements of the code age
     relation newer than the given code ID.  Any code ID in the relation but

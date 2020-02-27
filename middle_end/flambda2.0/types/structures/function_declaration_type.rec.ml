@@ -188,7 +188,7 @@ struct
         recursive = recursive2;
       }) ->
       let typing_env = Meet_or_join_env.target_join_env env in
-      let code_age_rel = TE.code_age_relation typing_env in
+      let target_code_age_rel = TE.code_age_relation typing_env in
       let check_other_things_and_return code_id : (t * TEE.t) Or_bottom.t =
         assert (Flambda_arity.equal param_arity1 param_arity2);
         assert (Flambda_arity.equal result_arity1 result_arity2);
@@ -203,12 +203,23 @@ struct
       in
       begin match E.op () with
       | Meet ->
-        begin match Code_age_relation.meet code_age_rel code_id1 code_id2 with
+        begin match
+          Code_age_relation.meet target_code_age_rel code_id1 code_id2
+        with
         | Ok code_id -> check_other_things_and_return code_id
         | Bottom -> Bottom
         end
       | Join ->
-        begin match Code_age_relation.join code_age_rel code_id1 code_id2 with
+        let code_age_rel1 =
+          TE.code_age_relation (Meet_or_join_env.left_join_env env)
+        in
+        let code_age_rel2 =
+          TE.code_age_relation (Meet_or_join_env.right_join_env env)
+        in
+        begin match
+          Code_age_relation.join ~target_t:target_code_age_rel
+            code_age_rel1 code_age_rel2 code_id1 code_id2
+        with
         | Known code_id -> check_other_things_and_return code_id
         | Unknown -> Ok (Unknown, TEE.empty ())
         end
@@ -241,7 +252,7 @@ struct
         rec_info = _rec_info2;
       }) ->
       let typing_env = Meet_or_join_env.target_join_env env in
-      let code_age_rel = TE.code_age_relation typing_env in
+      let target_code_age_rel = TE.code_age_relation typing_env in
       let check_other_things_and_return code_id : (t * TEE.t) Or_bottom.t =
         assert (Flambda_arity.equal param_arity1 param_arity2);
         assert (Flambda_arity.equal result_arity1 result_arity2);
@@ -266,12 +277,23 @@ struct
       (* CR mshinwell: What about [rec_info]? *)
       match E.op () with
       | Meet ->
-        begin match Code_age_relation.meet code_age_rel code_id1 code_id2 with
+        begin match
+          Code_age_relation.meet target_code_age_rel code_id1 code_id2
+        with
         | Ok code_id -> check_other_things_and_return code_id
         | Bottom -> Bottom
         end
       | Join ->
-        begin match Code_age_relation.join code_age_rel code_id1 code_id2 with
+        let code_age_rel1 =
+          TE.code_age_relation (Meet_or_join_env.left_join_env env)
+        in
+        let code_age_rel2 =
+          TE.code_age_relation (Meet_or_join_env.right_join_env env)
+        in
+        begin match
+          Code_age_relation.join ~target_t:target_code_age_rel
+            code_age_rel1 code_age_rel2 code_id1 code_id2
+        with
         | Known code_id -> check_other_things_and_return code_id
         | Unknown -> Ok (Unknown, TEE.empty ())
         end
