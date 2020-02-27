@@ -461,8 +461,7 @@ module For_blocks = struct
             Flambda_kind.print field_kind
         end
     in
-    let fields = List.mapi (fun index ty -> index, ty) field_tys in
-    let product = Product.Int_indexed.create field_kind (Int.Map.of_list fields) in
+    let product = Product.Int_indexed.create_from_list field_kind field_tys in
     let size = Targetint.OCaml.of_int (List.length field_tys) in
     match open_or_closed with
     | Open _ -> begin
@@ -505,17 +504,7 @@ end
 
 module For_closures_entry_by_set_of_closures_contents = struct
 
-  (* module Closure_id_or_unknown = Or_unknown.Lift(Closure_id) *)
-
-  (* module Closure_id_or_unknown : sig
-   *   type nonrec t = Closure_id.t Or_unknown.t
-   * 
-   *   include Identifiable.S with type t := t
-   * end *)
-
   include Make (Closure_id) (Set_of_closures_contents)
-    (* (Set_of_closures_contents.With_closure_id)
-     * (Closure_id_or_unknown) *)
     (Closures_entry)
 
   let map_function_decl_types t ~f =

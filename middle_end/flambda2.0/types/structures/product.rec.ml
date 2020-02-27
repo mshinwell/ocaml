@@ -134,68 +134,101 @@ module Int_indexed = struct
   (* CR mshinwell: Add [Or_bottom].  However what should [width] return for
      [Bottom]?  Maybe we can circumvent that question if removing [Row_like].
   *)
-  type t = T.t array
+  type t = {
+    fields : T.t array;
+    kind : Flambda_kind.t;
+  }
 
   let print ppf t =
     Format.fprintf ppf "@[<hov 1>(%a)@]"
       (Format.pp_print_list ~pp_sep:Format.pp_print_space T.print)
-      (Array.to_list t)
+      (Array.to_list t.fields)
 
   let print_with_cache ~cache:_ ppf t = print ppf t
 
-  let create _ = Misc.fatal_error "Not implemented"
+  let create_from_list kind tys = {
+    kind;
+    fields = Array.of_list tys;
+  }
 
-  let create_from_list _kind tys = Array.of_list tys
+  let create_top kind = {
+    kind;
+    fields = [| |];
+  }
 
-  let create_top _kind = [| |]
+  let width t = Targetint.OCaml.of_int (Array.length t.fields)
 
-  let width t = Targetint.OCaml.of_int (Array.length t)
-
-  let components t = Array.to_list t
+  let components t = Array.to_list t.fields
 
   let meet env t1 t2 : _ Or_bottom.t =
-    let all_bottom = ref true in
+    if not (Flambda_kind.equal t1.kind t2.kind) then
+      Misc.fatal_errorf "Product.Int_indexed.meet between unmatching \
+                         kinds %a and %a@."
+        Flambda_kind.print t1.kind Flambda_kind.print t2.kind;
+    let fields1 = t1.fields in
+    let fields2 = t2.fields in
+    let any_bottom = ref false in
     let env_extension = ref (TEE.empty ()) in
-    let t =
-      Array.init (Array.length t1) (fun index ->
-        let ty, env_extension' = Type_grammar.meet' env t1.(index) t2.(index) in
-        env_extension := TEE.meet env !env_extension env_extension';
-        if not (Type_grammar.is_obviously_bottom ty) then begin
-          all_bottom := false
-        end;
-        ty)
+    let length = max (Array.length fields1) (Array.length fields2) in
+    let fields =
+      Array.init length (fun index ->
+        let get_opt fields =
+          if index >= Array.length fields then
+            None
+          else
+            Some fields.(index)
+        in
+        match get_opt fields1, get_opt fields2 with
+        | None, None -> assert false
+        | Some t, None | None, Some t -> t
+        | Some ty1, Some ty2 ->
+          let ty, env_extension' = Type_grammar.meet' env ty1 ty2 in
+          env_extension := TEE.meet env !env_extension env_extension';
+          if (Type_grammar.is_obviously_bottom ty) then begin
+            any_bottom := true
+          end;
+          ty)
     in
-    if !all_bottom && Array.length t > 0 then Bottom
-    else Ok (t, !env_extension)
+    if !any_bottom then Bottom
+    else Ok ({ fields; kind = t1.kind; }, !env_extension)
 
   let join env t1 t2 =
-    Array.init (Array.length t1) (fun index ->
-      Type_grammar.join' env t1.(index) t2.(index))
+    if not (Flambda_kind.equal t1.kind t2.kind) then
+      Misc.fatal_errorf "Product.Int_indexed.join between unmatching \
+                         kinds %a and %a@."
+        Flambda_kind.print t1.kind Flambda_kind.print t2.kind;
+    let fields1 = t1.fields in
+    let fields2 = t2.fields in
+    let length = max (Array.length fields1) (Array.length fields2) in
+    let fields =
+      Array.init length (fun index ->
+        Type_grammar.join' env fields1.(index) fields2.(index))
+    in
+    { kind = t1.kind; fields }
 
   let apply_name_permutation t perm =
-    let t = Array.copy t in
-    for i = 0 to Array.length t - 1 do
-      t.(i) <- Type_grammar.apply_name_permutation t.(i) perm
+    let fields = Array.copy t.fields in
+    for i = 0 to Array.length fields - 1 do
+      fields.(i) <- Type_grammar.apply_name_permutation fields.(i) perm
     done;
-    t
+    { t with fields }
 
   let free_names t =
     Array.fold_left (fun free_names ty ->
         Name_occurrences.union (Type_grammar.free_names ty) free_names)
       Name_occurrences.empty
-      t
+      t.fields
 
   let map_types t ~(f : Type_grammar.t -> Type_grammar.t Or_bottom.t)
         : _ Or_bottom.t =
     let found_bottom = ref false in
-    let t = Array.copy t in
-    for i = 0 to Array.length t - 1 do
-      match f t.(i) with
+    let fields = Array.copy t.fields in
+    for i = 0 to Array.length fields - 1 do
+      match f fields.(i) with
       | Bottom -> found_bottom := true
-      | Ok typ -> t.(i) <- typ
+      | Ok typ -> fields.(i) <- typ
     done;
     if !found_bottom then Bottom
-    else Ok t
+    else Ok { t with fields }
 
-  let to_map _ = Misc.fatal_error "Not implemented"
 end

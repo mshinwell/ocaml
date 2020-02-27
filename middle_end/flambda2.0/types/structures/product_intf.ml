@@ -14,7 +14,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module type S = sig
+module type S_base = sig
   type t
 
   type flambda_type
@@ -24,16 +24,11 @@ module type S = sig
 
   module Index : Identifiable.S
 
-  (** Create a product value given the indexes with associated components. *)
-  val create : Flambda_kind.t -> flambda_type Index.Map.t -> t
-
   val create_top : Flambda_kind.t -> t
 
   val width : t -> Targetint.OCaml.t
 
   val components : t -> flambda_type list
-
-  val to_map : t -> flambda_type Index.Map.t
 
   val map_types
      : t
@@ -46,4 +41,13 @@ module type S = sig
     with type typing_env := typing_env
     with type meet_env := meet_env
     with type typing_env_extension := typing_env_extension
+end
+
+module type S = sig
+  include S_base
+
+  (** Create a product value given the indexes with associated components. *)
+  val create : Flambda_kind.t -> flambda_type Index.Map.t -> t
+
+  val to_map : t -> flambda_type Index.Map.t
 end
