@@ -49,7 +49,7 @@ jobs:
         path: 'test'
     # Install dependencies
     - name: Install dependencies
-      run: sudo apt-get install parallel
+      run: sudo apt-get install parallel texlive-latex-extra texlive-fonts-recommended
     # Cache the install directory
     - name: Cache install directory
       uses: actions/cache@v1

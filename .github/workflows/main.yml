@@ -47,7 +47,7 @@ jobs:
       run: git apply .github/workflows/ocamltest_makefile.patch
     # Install dependencies
     - name: Install dependencies
-      run: sudo apt-get install parallel
+      run: sudo apt-get install parallel texlive-latex-extra texlive-fonts-recommended
     # Configure the compiler
     - name: configure
       run: ./configure --enable-flambda
@@ -66,6 +66,7 @@ jobs:
         make -j $J -C otherlibs/unix allopt
         make -j $J -C otherlibs/bigarray allopt
         make -j $J -C otherlibs/systhreads allopt
+        make -j $J -C tools caml-tex
         make       -C testsuite tools lib
     # Generate list of tests to run
     - name: Generate test list
@@ -73,4 +74,9 @@ jobs:
     # Run some part of the testsuite
     - name: Running the testsuite
       run: cd testsuite && make list-parallel FILE=../.github/workflows/main.list
+    # If the testsuite has failed, dump the relavant ocamltest logs
+    - name: Ocamltest failing logs
+      if: failure()
+      run: cd testsuite && make logs
+
 

@@ -193,15 +193,14 @@ exception Fatal_error
 
 let fatal_error_callstack = ref (Printexc.get_callstack 1)
 
-let fatal_error msg =
+let fatal_errorf fmt =
   fatal_error_callstack := Printexc.get_callstack 1000;
-  prerr_string (Color.bold_red ());
-  prerr_string ">> Fatal error: ";
-  prerr_string (Color.reset ());
-  prerr_endline msg;
-  raise Fatal_error
+  Format.kfprintf
+    (fun _ -> raise Fatal_error)
+    Format.err_formatter
+    ("@?@{<error>>> Fatal error: @}" ^^ fmt ^^ "@.")
 
-let fatal_errorf fmt = Format.kasprintf fatal_error fmt
+let fatal_error msg = fatal_errorf "%s" msg
 
 let fatal_error_callstack () = !fatal_error_callstack
 

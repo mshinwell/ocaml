@@ -1,11 +1,11 @@
 # commented test                 | status      | reason for not running / failure
 # ------------------------------------------------------------------------------------------------
-# tests/afl-instrumentation         -             not relevant yet
-# tests/arch-power                  -             not relevant yet
+  tests/afl-instrumentation
+  tests/arch-power
   tests/array-functions
-# tests/asmcomp                     -             not relevant yet
-# tests/asmgen                      -             not relevant yet
-# tests/ast-invariants              -             not relevant yet
+# tests/asmcomp                     FAIL
+# tests/asmgen                      FAIL
+  tests/ast-invariants
 # tests/backtrace                   FAIL (FIXME)  there is practically no backtrace info
 # tests/basic                       FAIL (FIXME)  Map.remove (see flambdatest/mlexamples/map_remove.ml)
   tests/basic-float
@@ -17,12 +17,12 @@
   tests/basic-multdef
   tests/basic-private
   tests/callback
-# tests/compatibility               -             not relevant yet
-# tests/compiler-libs               -             not relevant yet
-# tests/c-api                       -             not relevant yet
-# tests/embedded                    -             not relevant yet
-# tests/ephe-c-api                  -             not relevant yet
-# tests/exotic-syntax               -             not relevant yet
+  tests/compatibility
+  tests/compiler-libs
+  tests/c-api
+  tests/embedded
+  tests/ephe-c-api
+  tests/exotic-syntax
   tests/extension-constructor
   tests/flambda
 # tests/float-unboxing              FAIL (FIXME)  'float_subst_boxed_number.ml' see flambdatest/mlexamples/float_unboxing.ml for a simplified error example
@@ -118,22 +118,22 @@
   tests/runtime-objects
   tests/self-contained-toplevel
   tests/shadow_include
-# tests/tool-caml-tex               -             not relevant yet
-# tests/tool-command-line           -             not relevant yet
-# tests/tool-debugger               -             not relevant yet
+  tests/tool-caml-tex
+  tests/tool-command-line
+  tests/tool-debugger
   tests/tool-expect-test
-# tests/tool-lexyacc
+  tests/tool-lexyacc
   tests/tool-ocaml
   tests/tool-ocamlc-compat32
   tests/tool-ocamlc-error-cleanup
   tests/tool-ocamlc-open
   tests/tool-ocamlc-stop-after
-# tests/tool-ocamldep-modalias      -             not relevant yet
-# tests/tool-ocamldep-shadowing     -             not relevant yet
-# tests/tool-ocamldoc               -             not relevant yet
-# tests/tool-ocamldoc-open          -             not relevant yet
-# tests/tool-ocamlobjinfo           -             not relevant yet
-# tests/tool-ocaml-annot            -             not relevant yet
+  tests/tool-ocamldep-modalias
+  tests/tool-ocamldep-shadowing
+  tests/tool-ocamldoc
+  tests/tool-ocamldoc-open
+  tests/tool-ocamlobjinfo
+  tests/tool-ocaml-annot
   tests/tool-toplevel
   tests/tool-toplevel-invocation
   tests/translprim
