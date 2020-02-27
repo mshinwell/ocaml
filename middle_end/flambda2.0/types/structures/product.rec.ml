@@ -58,9 +58,10 @@ module Make (Index : Identifiable.S) = struct
         { components_by_index = components_by_index1; kind = kind1; }
         { components_by_index = components_by_index2; kind = kind2; }
     : _ Or_bottom.t =
-    if not (Flambda_kind.equal kind1 kind2) then
-      Misc.fatal_errorf "Product.meet between unmatching kinds %a and %a@."
-        Flambda_kind.print kind1 Flambda_kind.print kind2;
+    if not (Flambda_kind.equal kind1 kind2) then begin
+      Misc.fatal_errorf "Product.meet between mismatching kinds %a and %a@."
+        Flambda_kind.print kind1 Flambda_kind.print kind2
+    end;
     let any_bottom = ref false in
     let env_extension = ref (TEE.empty ()) in
     let components_by_index =
@@ -80,12 +81,12 @@ module Make (Index : Identifiable.S) = struct
   let join env
         { components_by_index = components_by_index1; kind = kind1; }
         { components_by_index = components_by_index2; kind = kind2; } =
-    if not (Flambda_kind.equal kind1 kind2) then
-      Misc.fatal_errorf "Product.join between unmatching kinds %a and %a@."
-        Flambda_kind.print kind1 Flambda_kind.print kind2;
+    if not (Flambda_kind.equal kind1 kind2) then begin
+      Misc.fatal_errorf "Product.join between mismatching kinds %a and %a@."
+        Flambda_kind.print kind1 Flambda_kind.print kind2
+    end;
     let components_by_index =
-      Index.Map.inter (fun index ty1 ty2 ->
-          Format.eprintf "INDEX %a\n%!" Index.print index;
+      Index.Map.inter (fun _index ty1 ty2 ->
           Type_grammar.join' env ty1 ty2)
         components_by_index1
         components_by_index2
@@ -162,10 +163,11 @@ module Int_indexed = struct
   let components t = Array.to_list t.fields
 
   let meet env t1 t2 : _ Or_bottom.t =
-    if not (Flambda_kind.equal t1.kind t2.kind) then
-      Misc.fatal_errorf "Product.Int_indexed.meet between unmatching \
+    if not (Flambda_kind.equal t1.kind t2.kind) then begin
+      Misc.fatal_errorf "Product.Int_indexed.meet between mismatching \
                          kinds %a and %a@."
-        Flambda_kind.print t1.kind Flambda_kind.print t2.kind;
+        Flambda_kind.print t1.kind Flambda_kind.print t2.kind
+    end;
     let fields1 = t1.fields in
     let fields2 = t2.fields in
     let any_bottom = ref false in
@@ -194,16 +196,22 @@ module Int_indexed = struct
     else Ok ({ fields; kind = t1.kind; }, !env_extension)
 
   let join env t1 t2 =
-    if not (Flambda_kind.equal t1.kind t2.kind) then
-      Misc.fatal_errorf "Product.Int_indexed.join between unmatching \
+    if not (Flambda_kind.equal t1.kind t2.kind) then begin
+      Misc.fatal_errorf "Product.Int_indexed.join between mismatching \
                          kinds %a and %a@."
-        Flambda_kind.print t1.kind Flambda_kind.print t2.kind;
+        Flambda_kind.print t1.kind Flambda_kind.print t2.kind
+    end;
     let fields1 = t1.fields in
     let fields2 = t2.fields in
-    let length = max (Array.length fields1) (Array.length fields2) in
+    let length1 = Array.length fields1 in
+    let length2 = Array.length fields2 in
+    let length = max length1 length2 in
     let fields =
       Array.init length (fun index ->
-        Type_grammar.join' env fields1.(index) fields2.(index))
+        if index >= length1 || index >= length2 then
+          Type_grammar.unknown t1.kind
+        else
+          Type_grammar.join' env fields1.(index) fields2.(index))
     in
     { kind = t1.kind; fields }
 

@@ -309,6 +309,11 @@ let meet env t1 t2 : _ Or_bottom.t =
   | Ok ((Ok _ | Unknown) as t, env_extension) -> Ok (t, env_extension)
 
 let join env t1 t2 : t =
+(*
+  Format.eprintf "FDT.join:@ %a@ and@ %a@ in:@ %a\n%!"
+    print t1 print t2
+    Meet_or_join_env.print env;
+    *)
   match Join.meet_or_join env t1 t2 with
   | Bottom | Ok (Bottom, _) -> Bottom
   | Ok ((Ok _ | Unknown) as t, env_extension) ->

@@ -52,3 +52,5 @@ val newer_versions_form_linear_chain
   -> Code_id.t
   -> all_code_ids_still_existing:Code_id.Set.t
   -> bool
+
+val union : t -> t -> t

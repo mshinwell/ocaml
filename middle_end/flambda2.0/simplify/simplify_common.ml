@@ -127,6 +127,7 @@ let add_wrapper_for_fixed_arity_continuation0 uacc cont_or_apply_cont
       | Expr expr -> new_wrapper expr
       end
     | Apply_cont apply_cont ->
+      let apply_cont = Apply_cont.update_continuation apply_cont cont in
       match Apply_cont_rewrite.rewrite_use rewrite use_id apply_cont with
       | Apply_cont apply_cont -> Apply_cont apply_cont
       | Expr expr -> new_wrapper expr

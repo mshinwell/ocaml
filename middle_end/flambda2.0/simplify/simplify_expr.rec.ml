@@ -339,8 +339,14 @@ and simplify_non_recursive_let_cont_handler
                   let dacc =
                     (* Arrange for lifted constants that were produced during
                        simplification of the body to be available in the
-                       environment to be used for simplifying the handler. *)
-                    DA.map_denv dacc_after_body ~f:(fun _denv_after_body ->
+                       environment to be used for simplifying the handler.
+                       Likewise for updates to the code age relation. *) 
+                    DA.map_denv dacc_after_body ~f:(fun denv_after_body ->
+                      let typing_env =
+                        TE.with_code_age_relation typing_env
+                          (TE.code_age_relation
+                            (DE.typing_env denv_after_body))
+                      in
                       DE.add_lifted_constants
                         (DE.with_typing_env denv typing_env)
                         ~lifted:(R.get_lifted_constants r))
@@ -577,10 +583,10 @@ Format.eprintf "Not inlining (%a) %a\n%!"
   in
   match inlined with
   | Some (dacc, inlined) ->
-(*
+  (*
 Format.eprintf "Simplifying inlined body with DE depth delta = %d\n%!"
   (DE.get_inlining_depth_increment (DA.denv dacc));
-*)
+  *)
     simplify_expr dacc inlined k
   | None ->
     let dacc, use_id =

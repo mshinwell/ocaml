@@ -785,30 +785,30 @@ struct
   module T_N64_meet_or_join = T_N64.Make_meet_or_join (E)
   module T_NN_meet_or_join = T_NN.Make_meet_or_join (E)
 
-  let meet_or_join (env : Meet_or_join_env.t) t1 t2 =
+  let meet_or_join ?bound_name (env : Meet_or_join_env.t) t1 t2 =
     match t1, t2 with
     | Value ty1, Value ty2 ->
-      T_V_meet_or_join.meet_or_join env t1 t2 ty1 ty2
+      T_V_meet_or_join.meet_or_join ?bound_name env t1 t2 ty1 ty2
         ~force_to_kind:force_to_kind_value
         ~to_type:(fun ty -> Value ty)
     | Naked_immediate ty1, Naked_immediate ty2 ->
-      T_NI_meet_or_join.meet_or_join env t1 t2 ty1 ty2
+      T_NI_meet_or_join.meet_or_join ?bound_name env t1 t2 ty1 ty2
         ~force_to_kind:force_to_kind_naked_immediate
         ~to_type:(fun ty -> Naked_immediate ty)
     | Naked_float ty1, Naked_float ty2 ->
-      T_Nf_meet_or_join.meet_or_join env t1 t2 ty1 ty2
+      T_Nf_meet_or_join.meet_or_join ?bound_name env t1 t2 ty1 ty2
         ~force_to_kind:force_to_kind_naked_float
         ~to_type:(fun ty -> Naked_float ty)
     | Naked_int32 ty1, Naked_int32 ty2 ->
-      T_N32_meet_or_join.meet_or_join env t1 t2 ty1 ty2
+      T_N32_meet_or_join.meet_or_join ?bound_name env t1 t2 ty1 ty2
         ~force_to_kind:force_to_kind_naked_int32
         ~to_type:(fun ty -> Naked_int32 ty)
     | Naked_int64 ty1, Naked_int64 ty2 ->
-      T_N64_meet_or_join.meet_or_join env t1 t2 ty1 ty2
+      T_N64_meet_or_join.meet_or_join ?bound_name env t1 t2 ty1 ty2
         ~force_to_kind:force_to_kind_naked_int64
         ~to_type:(fun ty -> Naked_int64 ty)
     | Naked_nativeint ty1, Naked_nativeint ty2 ->
-      T_NN_meet_or_join.meet_or_join env t1 t2 ty1 ty2
+      T_NN_meet_or_join.meet_or_join ?bound_name env t1 t2 ty1 ty2
         ~force_to_kind:force_to_kind_naked_nativeint
         ~to_type:(fun ty -> Naked_nativeint ty)
     | (Value _ | Naked_immediate _ | Naked_float _ | Naked_int32 _
@@ -831,8 +831,10 @@ let meet env t1 t2 : _ Or_bottom.t =
   if is_obviously_bottom ty then Bottom
   else Ok (ty, env_extension)
 
-let join' env left_ty right_ty =
-  let joined, env_extension = Join.meet_or_join env left_ty right_ty in
+let join' ?bound_name env left_ty right_ty =
+  let joined, env_extension =
+    Join.meet_or_join ?bound_name env left_ty right_ty
+  in
   if not (TEE.is_empty env_extension) then begin
     Misc.fatal_errorf "Non-empty environment extension produced from a \
         [join] operation:@ %a"
@@ -840,6 +842,9 @@ let join' env left_ty right_ty =
   end;
   joined
 
-let join env ~left_env ~left_ty ~right_env ~right_ty =
+let join ?bound_name env ~left_env ~left_ty ~right_env ~right_ty =
   let env = Meet_or_join_env.create_for_join env ~left_env ~right_env in
-  join' env left_ty right_ty
+  join' ?bound_name env left_ty right_ty
+
+let join' env left_ty right_ty =
+  join' ?bound_name:None env left_ty right_ty

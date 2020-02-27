@@ -383,26 +383,37 @@ let meet env t1 t2 =
 (* CR mshinwell: [env_at_fork] -> [env_at_cut] *)
 
 let join_types ~env_at_fork ~params envs_with_levels =
-  (* CR mshinwell: Add check that all [defined_vars] maps are disjoint.
-     This is important as otherwise we can have the same problems as seen
-     with symbols, where a later level in the list may not define a symbol
-     that an earlier level in the list does. *)
   let symbols_at_fork = Typing_env.defined_symbols env_at_fork in
   let joined_types =
-    (* CR mshinwell: We don't need to pass [params] for each level,
-       just once *)
-    List.fold_left (fun joined_types (env_at_use, _id, _use_kind, _t) ->
+    (* The [defined_vars] in the different levels may overlap. *)
+    List.fold_left (fun joined_types (_env_at_use, _id, _use_kind, t) ->
+        Variable.Map.fold (fun var kind joined_types ->
+            Name.Map.add (Name.var var) (Type_grammar.bottom kind) joined_types)
+          t.defined_vars
+          joined_types)
+      Name.Map.empty
+      envs_with_levels
+  in
+  let joined_types =
+    List.fold_left (fun joined_types (env_at_use, _id, _use_kind, t) ->
         let symbols_defined_during_level =
           Symbol.Set.diff (Typing_env.defined_symbols env_at_use)
             symbols_at_fork
         in
+        Symbol.Set.iter (fun symbol ->
+            if not (Name.Map.mem (Name.symbol symbol) t.equations) then begin
+              Misc.fatal_errorf "Symbol %a lacks equation in level:@ %a"
+                Symbol.print symbol
+                print t
+            end)
+          symbols_defined_during_level;
         Symbol.Set.fold (fun symbol joined_types ->
             Name.Map.add (Name.symbol symbol)
               (Type_grammar.bottom Flambda_kind.value)
               joined_types)
           symbols_defined_during_level
           joined_types)
-      Name.Map.empty
+      joined_types
       envs_with_levels
   in
   let joined_types =
@@ -425,8 +436,11 @@ let join_types ~env_at_fork ~params envs_with_levels =
       envs_with_levels
   in
   List.fold_left
-    (fun (joined_types, env_at_fork) (env_at_use, _id, _use_kind, t) ->
+    (fun (joined_types, env_at_fork, code_age_relation)
+         (env_at_use, _id, _use_kind, t) ->
+      (*
       Format.eprintf "join_types with level:@ %a\n%!" print t;
+      *)
       let env_at_fork =
         Variable.Map.fold (fun var kind env ->
             Typing_env.add_definition env
@@ -436,6 +450,10 @@ let join_types ~env_at_fork ~params envs_with_levels =
           t.defined_vars
           env_at_fork
       in
+      let code_age_relation =
+        Code_age_relation.union code_age_relation
+          (Typing_env.code_age_relation env_at_use)
+      in
       let left_env =
         let level =
           { defined_vars = Variable.Map.empty;
@@ -444,7 +462,8 @@ let join_types ~env_at_fork ~params envs_with_levels =
           }
         in
         let env_extension = Typing_env_extension.create level in
-        Typing_env.add_env_extension env_at_fork env_extension
+        let left_env = Typing_env.add_env_extension env_at_fork env_extension in
+        Typing_env.with_code_age_relation left_env code_age_relation
       in
       let equations =
         (* If the parameter is not present, it is considered as bottom
@@ -453,7 +472,8 @@ let join_types ~env_at_fork ~params envs_with_levels =
            make it explicit.
            This is not required for symbols as defined symbols are required
            not to be unknown.
-           CR pchambart: are they really ? *)
+           CR pchambart: are they really ?
+           mshinwell: have added check, above *)
         List.fold_left (fun equations param ->
           let param_name = Kinded_parameter.name param in
           if not (Name.Map.mem param_name equations) then
@@ -467,21 +487,26 @@ let join_types ~env_at_fork ~params envs_with_levels =
       in
       let joined_types =
         Name.Map.union (fun name joined_ty use_ty ->
+            (*
             Format.eprintf "Processing name:@ %a\n%!" Name.print name;
+            *)
             let joined_ty =
               (* Recall: the order of environments matters here. *)
-              Type_grammar.join env_at_fork
+              Type_grammar.join ~bound_name:name
+                env_at_fork
                 ~left_env ~left_ty:joined_ty
                 ~right_env:env_at_use ~right_ty:use_ty
             in
+            (*
             Format.eprintf "joined type:@ %a\n%!"
               Type_grammar.print joined_ty;
+            *)
             Some joined_ty)
           joined_types
           equations
       in
-      joined_types, env_at_fork)
-    (joined_types, env_at_fork)
+      joined_types, env_at_fork, code_age_relation)
+    (joined_types, env_at_fork, Typing_env.code_age_relation env_at_fork)
     envs_with_levels
 
 module Rhs_kind = struct
@@ -658,20 +683,35 @@ let construct_joined_level envs_with_levels ~allowed ~joined_types ~cse =
   }
 
 let join ~env_at_fork envs_with_levels ~params =
+  (*
   Format.eprintf "JOIN\n%!";
   Format.eprintf "At fork:@ %a\n%!" Typing_env.print env_at_fork;
   List.iter (fun (_, _, _, t) ->
       Format.eprintf "One level:@ %a\n%!" print t)
     envs_with_levels;
+  *)
   (* For each name which has an equation on at least one of the given levels,
      calculate the joined type for that name, across all the given levels.
      If no type exists on a given level then it is treated as bottom (which
      does not affect the joined type being calculated). *)
-  let joined_types, env_at_fork_with_existentials_defined =
+  let joined_types, env_at_fork_with_existentials_defined, _ =
     join_types ~env_at_fork envs_with_levels ~params
   in
+  let env_at_fork_with_existentials_defined =
+    let level =
+      { defined_vars = Variable.Map.empty;
+        equations = joined_types;
+        cse = Flambda_primitive.Eligible_for_cse.Map.empty;
+      }
+    in
+    let env_extension = Typing_env_extension.create level in
+    Typing_env.add_env_extension env_at_fork_with_existentials_defined
+      env_extension
+  in
+  (*
   Format.eprintf "joined_types:@ %a\n%!"
     (Name.Map.print Type_grammar.print) joined_types;
+  *)
   (* CSE equations have a left-hand side specifying a primitive and a
      right-hand side specifying a [Simple].  The left-hand side is matched
      against portions of terms.  As such, the [Simple]s therein must have
@@ -681,10 +721,12 @@ let join ~env_at_fork envs_with_levels ~params =
      name, cannot be propagated.  This step also canonicalises the right-hand
      sides of the CSE equations. *)
   let cse = cse_with_eligible_lhs ~env_at_fork envs_with_levels in
+  (*
   Format.eprintf "CSE with eligible LHS:@ %a\n%!"
     (Flambda_primitive.Eligible_for_cse.Map.print
       (Apply_cont_rewrite_id.Map.print Rhs_kind.print))
     cse;
+  *)
   (* Next calculate which equations (describing joined types) to propagate to
      the join point.  (Recall that the environment at the fork point includes
      the parameters of the continuation being called at the join. We wish to
@@ -696,8 +738,16 @@ let join ~env_at_fork envs_with_levels ~params =
      propagated. The definition of any such propagated name (i.e. one that
      does not occur in the environment at the fork point) will be made
      existential. *)
+  (*
+  Format.eprintf "ENV WITH EXISTENTIALS:@ %a\n%!"
+    Typing_env.print env_at_fork_with_existentials_defined;
+  *)
   let allowed =
     Name.Map.fold (fun name ty allowed ->
+        (*
+        Format.eprintf "Processing %a : %a\n%!"
+          Name.print name Type_grammar.print ty;
+        *)
         if Typing_env.mem env_at_fork name
           || Name.is_symbol name
         then
@@ -711,6 +761,9 @@ let join ~env_at_fork envs_with_levels ~params =
       joined_types
       Name_occurrences.empty
   in
+  (*
+  Format.eprintf "allowed (1):@ %a\n%!" Name_occurrences.print allowed;
+  *)
   (* To make use of a CSE equation at or after the join point, its right-hand
      side must have the same value, no matter which path is taken from the
      fork point to the join point.  We filter out equations that do not
@@ -718,13 +771,17 @@ let join ~env_at_fork envs_with_levels ~params =
      property by explicitly passing the value of the right-hand side as an
      extra parameter to the continuation at the join point. *)
   let cse, extra_params, allowed = join_cse envs_with_levels cse ~allowed in
+  (*
   Format.eprintf "Joined CSE:@ %a\n%!"
     (Flambda_primitive.Eligible_for_cse.Map.print Simple.print) cse;
-  Format.eprintf "allowed:@ %a\n%!" Name_occurrences.print allowed;
+  Format.eprintf "allowed (final):@ %a\n%!" Name_occurrences.print allowed;
+  *)
   (* Having calculated which equations to propagate, the resulting level can
      now be constructed. *)
   let t = construct_joined_level envs_with_levels ~allowed ~joined_types ~cse in
+  (*
   Format.eprintf "Join result:@ %a\n%!" print t;
+  *)
   t, extra_params
 
 let n_way_join ~env_at_fork envs_with_levels ~params =

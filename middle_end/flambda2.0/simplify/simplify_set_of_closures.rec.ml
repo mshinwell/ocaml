@@ -331,11 +331,12 @@ type simplify_function_result = {
   new_code_id : Code_id.t;
   params_and_body : Function_params_and_body.t;
   function_type : T.Function_declaration_type.t;
+  code_age_relation : Code_age_relation.t;
   r : R.t;
 }
 
 let simplify_function context r closure_id function_decl
-      ~closure_bound_names_inside_function =
+      ~closure_bound_names_inside_function code_age_relation =
   let name = Closure_id.to_string closure_id in
   Profile.record_call ~accumulate:true name (fun () ->
     let code_id = FD.code_id function_decl in
@@ -349,6 +350,11 @@ let simplify_function context r closure_id function_decl
           let dacc =
             dacc_inside_function context r ~params ~my_closure closure_id
               ~closure_bound_names_inside_function
+          in
+          let dacc =
+            DA.map_denv dacc ~f:(fun denv ->
+              DE.map_typing_env denv ~f:(fun typing_env ->
+                TE.with_code_age_relation typing_env code_age_relation))
           in
           (* CR mshinwell: DE.no_longer_defining_symbol is redundant now? *)
           match
@@ -395,10 +401,14 @@ let simplify_function context r closure_id function_decl
       function_decl_type (DA.denv dacc_after_body) function_decl
         Rec_info.initial
     in
+    let code_age_relation =
+      TE.code_age_relation (DA.typing_env dacc_after_body)
+    in
     { function_decl;
       new_code_id;
       params_and_body;
       function_type;
+      code_age_relation;
       r;
     })
 
@@ -418,13 +428,16 @@ let simplify_set_of_closures0 dacc context set_of_closures
   let dacc = DA.with_r dacc r in
   let function_decls = Set_of_closures.function_decls set_of_closures in
   let all_function_decls_in_set = Function_declarations.funs function_decls in
-  let all_function_decls_in_set, code, fun_types, r =
+  let all_function_decls_in_set, code, fun_types, code_age_relation, r =
     Closure_id.Map.fold
       (fun closure_id function_decl
-           (result_function_decls_in_set, code, fun_types, r) ->
-        let { function_decl; new_code_id; params_and_body; function_type; r; } =
+           (result_function_decls_in_set, code, fun_types,
+            code_age_relation, r) ->
+        let { function_decl; new_code_id; params_and_body; function_type;
+              code_age_relation; r; } =
           simplify_function context r closure_id function_decl
             ~closure_bound_names_inside_function:closure_bound_names_inside
+            code_age_relation
         in
         let result_function_decls_in_set =
           Closure_id.Map.add closure_id function_decl
@@ -432,9 +445,10 @@ let simplify_set_of_closures0 dacc context set_of_closures
         in
         let code = Code_id.Map.add new_code_id params_and_body code in
         let fun_types = Closure_id.Map.add closure_id function_type fun_types in
-        result_function_decls_in_set, code, fun_types, r)
+        result_function_decls_in_set, code, fun_types, code_age_relation, r)
       all_function_decls_in_set
-      (Closure_id.Map.empty, Code_id.Map.empty, Closure_id.Map.empty, DA.r dacc)
+      (Closure_id.Map.empty, Code_id.Map.empty, Closure_id.Map.empty,
+        TE.code_age_relation (DA.typing_env dacc), DA.r dacc)
   in
   let closure_types_by_bound_name =
     let closure_types_via_aliases =
@@ -466,6 +480,8 @@ let simplify_set_of_closures0 dacc context set_of_closures
   let dacc =
     DA.map_denv (DA.with_r dacc r) ~f:(fun denv ->
       denv
+      |> DE.map_typing_env ~f:(fun typing_env ->
+        TE.with_code_age_relation typing_env code_age_relation)
       |> DE.add_lifted_constants ~lifted:(R.get_lifted_constants r)
       |> Closure_id.Map.fold (fun _closure_id bound_name denv ->
              DE.define_name_if_undefined denv bound_name K.value)
@@ -588,6 +604,11 @@ let simplify_and_lift_set_of_closures dacc ~closure_bound_vars_inverse
     DE.add_lifted_constants (DA.denv dacc)
       ~lifted:[set_of_closures_lifted_constant]
   in
+  (*
+  Format.eprintf "NON LIFTED:@ %a\n%!" Static_const.print static_const;
+  Format.eprintf "CAR:@ %a\n%!"
+    Code_age_relation.print (TE.code_age_relation (DE.typing_env denv));
+  *)
   let denv, bindings =
     Closure_id.Map.fold (fun closure_id bound_var (denv, bindings) ->
         match Closure_id.Map.find closure_id closure_symbols with
@@ -768,6 +789,17 @@ let simplify_lifted_set_of_closures0 context ~closure_symbols
       R.new_lifted_constant r
         (Lifted_constant.create_pieces_of_code (DA.denv dacc)
           code ~newer_versions_of:(C.new_to_old_code_ids_all_sets context)))
+  in
+  let dacc =
+    DA.map_denv dacc ~f:(fun denv ->
+      (* CR mshinwell: factor out *)
+      Code_id.Map.fold (fun code_id params_and_body denv ->
+          let newer_version_of =
+            Code_id.Map.find code_id (C.new_to_old_code_ids_all_sets context)
+          in
+          DE.define_code ~newer_version_of denv ~code_id ~params_and_body)
+        code
+        denv)
   in
   let code =
     Code_id.Map.mapi (fun code_id params_and_body : SC.Code.t ->

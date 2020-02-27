@@ -83,7 +83,8 @@ module type S = sig
     with type typing_env_extension := typing_env_extension)
   : sig
     val meet_or_join
-       : force_to_kind:(flambda_type -> t)  (* CR mshinwell: "of_type"? *)
+       : ?bound_name:Name.t
+      -> force_to_kind:(flambda_type -> t)  (* CR mshinwell: "of_type"? *)
       -> to_type:(t -> flambda_type)
       -> meet_or_join_env
       -> flambda_type

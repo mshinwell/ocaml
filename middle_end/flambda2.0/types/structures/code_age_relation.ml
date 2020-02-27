@@ -38,6 +38,8 @@ let num_ids_up_to_root t id =
 
 (* CR mshinwell: There are no doubt better implementations than the below. *)
 
+(* CR mshinwell: We need a fatal error now if a code ID isn't in [t]. *)
+
 let meet t id1 id2 : _ Or_bottom.t =
   (* Whichever of [id1] and [id2] is newer (or the same as the other one),
      in the case where they are comparable; otherwise bottom. *)
@@ -50,25 +52,28 @@ let meet t id1 id2 : _ Or_bottom.t =
     else Bottom
 
 let join ~target_t t1 t2 id1 id2 : _ Or_unknown.t =
+(*
   Format.eprintf "Joining %a and %a@ target:@ %a@ left:@ %a@ right:@ %a\n%!"
     Code_id.print id1
     Code_id.print id2
     print target_t
     print t1
     print t2;
+    *)
   (* Lowest ("newest") common ancestor, if such exists. *)
   if Code_id.equal id1 id2 then Known id1
   else
     let id1_to_root = all_ids_up_to_root t1 id1 in
     let id2_to_root = all_ids_up_to_root t2 id2 in
     let shared_ids =
-      (* XXX We need to know all IDs present *)
-(*      Code_id.Set.inter (Code_id.Map.keys target_t) *)
+      Code_id.Set.inter (Code_id.Map.keys target_t)
         (Code_id.Set.inter id1_to_root id2_to_root)
     in
     let () = Format.eprintf "shared_ids:@ %a" Code_id.Set.print shared_ids in
     if Code_id.Set.is_empty shared_ids then
-      let () = Format.eprintf "CODE ID JOIN UNKNOWN\n%!" in Unknown
+    (*  let () = Format.eprintf "CODE ID JOIN UNKNOWN\n%s\n%!"
+        (Printexc.raw_backtrace_to_string (Printexc.get_callstack 30)) in*)
+      Unknown
     else
       let newest_shared_id, _ =
         shared_ids
@@ -104,3 +109,6 @@ let rec newer_versions_form_linear_chain t id ~all_code_ids_still_existing =
     | Exactly_one_newer_version id ->
       newer_versions_form_linear_chain t id ~all_code_ids_still_existing
     | More_than_one_newer_version -> false
+
+let union t1 t2 =
+  Code_id.Map.disjoint_union ~eq:Code_id.equal t1 t2

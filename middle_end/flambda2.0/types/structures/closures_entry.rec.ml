@@ -112,6 +112,8 @@ let join env
     Closure_id.Map.merge (fun _closure_id func_decl1 func_decl2 ->
       match func_decl1, func_decl2 with
       | None, None
+      (* CR mshinwell: Are these next two cases right?  Don't we need to
+         do the equivalent of make_suitable_for_environment? *)
       | Some _, None
       | None, Some _ -> None
       | Some func_decl1, Some func_decl2 ->

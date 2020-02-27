@@ -196,7 +196,8 @@ val meet' : Meet_env.t -> t -> t -> t * Typing_env_extension.t
     [right_ty] is to be valid in [right_env].  The result will be computed
     so as to be valid in [env]. *)
 val join
-   : Typing_env.t
+   : ?bound_name:Name.t
+  -> Typing_env.t
   -> left_env:Typing_env.t
   -> left_ty:t
   -> right_env:Typing_env.t

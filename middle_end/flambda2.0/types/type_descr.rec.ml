@@ -223,9 +223,11 @@ module Make (Head : Type_head_intf.S
         Simple.Set.add simple (
           TE.aliases_of_simple_allowable_in_types env simple)
       in
+      (*
       Format.eprintf "Aliases of %a are: %a\n%!"
         Simple.print simple
         Simple.Set.print simples;
+      *)
       Simple.Set.filter (fun simple ->
           Typing_env.mem_simple in_env simple)
         simples
@@ -444,11 +446,19 @@ module Make (Head : Type_head_intf.S
                 to_type (create_equals simple1), env_extension
           end
 
-    let join ~force_to_kind ~to_type join_env t1 t2 =
-      Format.eprintf "Joining %a and %a\n%!" print t1 print t2;
+    let join ?bound_name ~force_to_kind ~to_type join_env t1 t2 =
+      (*
+      Format.eprintf "DESCR: Joining %a and %a\n%!" print t1 print t2;
       Format.eprintf "Left:@ %a@ Right:@ %a\n%!"
+        Code_age_relation.print (Meet_or_join_env.left_join_env join_env
+          |> TE.code_age_relation)
+        Code_age_relation.print (Meet_or_join_env.right_join_env join_env
+          |> TE.code_age_relation);
+      *)
+      (*
         Typing_env.print (Meet_or_join_env.left_join_env join_env)
         Typing_env.print (Meet_or_join_env.right_join_env join_env);
+        *)
       (* CR mshinwell: Rewrite this to avoid the [option] allocations from
          [get_canonical_simples_and_expand_heads] *)
       let canonical_simple1, head1, canonical_simple2, head2 =
@@ -483,14 +493,22 @@ module Make (Head : Type_head_intf.S
           in
           Some (create_equals (List.hd shared_aliases))
       in
+      let bound_name_set =
+        match bound_name with
+        | None -> Simple.Set.empty
+        | Some bound_name -> Simple.Set.singleton (Simple.name bound_name)
+      in
+      (* CR mshinwell: Add shortcut when the canonical simples are equal *)
       let shared_aliases =
-        Simple.Set.inter
-          (all_aliases_of (Meet_or_join_env.left_join_env join_env)
-            canonical_simple1
-            ~in_env:(Meet_or_join_env.target_join_env join_env))
-          (all_aliases_of (Meet_or_join_env.right_join_env join_env)
-            canonical_simple2
-            ~in_env:(Meet_or_join_env.target_join_env join_env))
+        Simple.Set.diff
+          (Simple.Set.inter
+            (all_aliases_of (Meet_or_join_env.left_join_env join_env)
+              canonical_simple1
+              ~in_env:(Meet_or_join_env.target_join_env join_env))
+            (all_aliases_of (Meet_or_join_env.right_join_env join_env)
+              canonical_simple2
+              ~in_env:(Meet_or_join_env.target_join_env join_env)))
+          bound_name_set
       in
       (*
       Format.eprintf "Shared aliases:@ %a\n%!"
@@ -515,11 +533,11 @@ module Make (Head : Type_head_intf.S
           | Unknown -> to_type (unknown ())
           | Ok head -> to_type (create head)
 
-    let meet_or_join ~force_to_kind ~to_type env ty1 ty2 t1 t2 =
+    let meet_or_join ?bound_name ~force_to_kind ~to_type env ty1 ty2 t1 t2 =
       match E.op () with
       | Meet ->
         let env = Meet_or_join_env.meet_env env in
         meet ~force_to_kind ~to_type ty1 ty2 env t1 t2
-      | Join -> join ~force_to_kind ~to_type env t1 t2, TEE.empty ()
+      | Join -> join ?bound_name ~force_to_kind ~to_type env t1 t2, TEE.empty ()
   end
 end

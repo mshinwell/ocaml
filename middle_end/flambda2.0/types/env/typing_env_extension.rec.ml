@@ -112,10 +112,14 @@ let n_way_join ~env_at_fork envs_with_extensions ~params : t * _ =
           A.create (Typing_env_level.defined_vars level) level
         in
         abst, extra_cse_bindings
-      | (_env, id, use_kind, t)::envs_with_extensions ->
+      | (env_at_use, id, use_kind, t)::envs_with_extensions ->
         A.pattern_match t.abst ~f:(fun level ->
           let env =
             Typing_env.add_env_extension_from_level env_at_fork level
+          in
+          let env =
+            Typing_env.with_code_age_relation env
+              (Typing_env.code_age_relation env_at_use)
           in
           (* It doesn't matter that the list gets reversed. *)
           let envs_with_levels =
@@ -128,6 +132,8 @@ let n_way_join ~env_at_fork envs_with_extensions ~params : t * _ =
   { abst; }, extra_cse_bindings
 
 let join env ~params ext1 ext2 =
+  (* CR mshinwell: This may only be used now when there are no
+     variables defined in the extensions *)
   let left_env = Meet_or_join_env.left_join_env env in
   let right_env = Meet_or_join_env.right_join_env env in
   let env_at_fork = Meet_or_join_env.target_join_env env in

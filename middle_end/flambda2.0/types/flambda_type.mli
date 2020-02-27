@@ -144,7 +144,8 @@ val meet_shape
   -> Typing_env_extension.t Or_bottom.t
 
 val join
-   : Typing_env.t
+   : ?bound_name:Name.t
+  -> Typing_env.t
   -> left_env:Typing_env.t
   -> left_ty:t
   -> right_env:Typing_env.t
