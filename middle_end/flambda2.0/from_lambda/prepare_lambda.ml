@@ -519,9 +519,7 @@ let rec prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
         | Lfunction { kind; params; body = fbody; attr; loc; _ } ->
           Simplif.split_default_wrapper ~id:fun_id ~kind ~params
             ~body:fbody ~return:Pgenval ~attr ~loc
-        | _ ->
-          Misc.fatal_errorf "[Lletrec] with non-function(s):@ %a"
-            Printlambda.lambda lam)
+        | _ -> [fun_id, binding])
       (fun bindings ->
         prepare env body (fun body ->
           k (dissect_letrec ~bindings ~body)))

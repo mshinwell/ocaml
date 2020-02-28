@@ -65,12 +65,12 @@ let target_join_env t =
 let left_join_env t =
   match t with
   | Join { left_join_env; _ } -> left_join_env
-  | Meet _ -> Misc.fatal_error "Not a join environment"
+  | Meet meet_env -> Meet_env.env meet_env
 
 let right_join_env t =
   match t with
   | Join { right_join_env; _ } -> right_join_env
-  | Meet _ -> Misc.fatal_error "Not a join environment"
+  | Meet meet_env -> Meet_env.env meet_env
 
 (* CR mshinwell: fix naming, it's odd at the moment to be using
    [already_meeting]... *)
