@@ -237,6 +237,7 @@ module Make (Head : Type_head_intf.S
     let canonical_simple1 =
       match
         TE.get_alias_then_canonical_simple_exn left_env (to_type left_ty)
+          ~min_name_mode:Name_mode.in_types
       with
       | exception Not_found -> None
       | canonical_simple -> Some canonical_simple
@@ -245,6 +246,7 @@ module Make (Head : Type_head_intf.S
     let canonical_simple2 =
       match
         TE.get_alias_then_canonical_simple_exn right_env (to_type right_ty)
+          ~min_name_mode:Name_mode.in_types
       with
       | exception Not_found -> None
       | canonical_simple -> Some canonical_simple
@@ -343,10 +345,14 @@ module Make (Head : Type_head_intf.S
       let typing_env = Meet_env.env env in
       let head1 = expand_head ~force_to_kind t1 typing_env in
       let head2 = expand_head ~force_to_kind t2 typing_env in
-      match TE.get_alias_then_canonical_simple_exn typing_env (to_type t1) with
+      match
+        TE.get_alias_then_canonical_simple_exn typing_env (to_type t1)
+          ~min_name_mode:Name_mode.in_types
+      with
       | exception Not_found ->
         begin match
           TE.get_alias_then_canonical_simple_exn typing_env (to_type t2)
+            ~min_name_mode:Name_mode.in_types
         with
         | exception Not_found ->
           begin match meet_head_or_unknown_or_bottom env head1 head2 with
