@@ -371,7 +371,7 @@ let try_cse dacc prim arg ~min_name_mode ~result_var : Simplify_common.cse =
   if Name_mode.is_phantom min_name_mode then
     Not_applied dacc
   else
-    match S.simplify_simple dacc arg ~min_name_mode:Name_mode.min_in_types with
+    match S.simplify_simple dacc arg ~min_name_mode with
     | Bottom, _arg_ty -> Invalid (T.bottom result_kind)
     | Ok arg, _arg_ty ->
       let original_prim : P.t = Unary (prim, arg) in

@@ -78,16 +78,19 @@ let simplify_make_block dacc _prim dbg
 let try_cse dacc ~original_prim prim args ~min_name_mode ~result_var
       : Simplify_common.cse =
   let result_kind = P.result_kind_of_variadic_primitive' prim in
-  match S.simplify_simples' dacc args ~min_name_mode:Name_mode.min_in_types with
-  | _, Bottom -> Invalid (T.bottom result_kind)
-  | changed, Ok args ->
-    let original_prim : P.t =
-      match changed with
-      | Changed -> Variadic (prim, args)
-      | Unchanged -> original_prim
-    in
-    Simplify_common.try_cse dacc ~original_prim ~result_kind
-      ~min_name_mode ~result_var
+  if Name_mode.is_phantom min_name_mode then
+    Not_applied dacc
+  else
+    match S.simplify_simples' dacc args ~min_name_mode with
+    | _, Bottom -> Invalid (T.bottom result_kind)
+    | changed, Ok args ->
+      let original_prim : P.t =
+        match changed with
+        | Changed -> Variadic (prim, args)
+        | Unchanged -> original_prim
+      in
+      Simplify_common.try_cse dacc ~original_prim ~result_kind
+        ~min_name_mode ~result_var
 
   (* if Name_mode.is_phantom min_name_mode then
    *   (\* If this is producing the defining expr of a phantom binding,

@@ -927,19 +927,19 @@ let simplify_phys_equal (op : P.equality_comparison)
     | Fabricated -> Misc.fatal_error "Fabricated kind not expected here"
     end
 
+(* CR mshinwell: Find example that suggested we needed to allow In_types
+   name mode for CSE primitive arguments. *)
+
 let try_cse dacc prim arg1 arg2 ~min_name_mode ~result_var
       : Simplify_common.cse =
   let result_kind = P.result_kind_of_binary_primitive' prim in
   if Name_mode.is_phantom min_name_mode then
     Not_applied dacc
   else
-    match S.simplify_simple dacc arg1 ~min_name_mode:Name_mode.min_in_types with
+    match S.simplify_simple dacc arg1 ~min_name_mode with
     | Bottom, _arg1_ty -> Invalid (T.bottom result_kind)
     | Ok arg1, _arg1_ty ->
-      match
-        S.simplify_simple dacc arg2
-          ~min_name_mode:Name_mode.min_in_types
-      with
+      match S.simplify_simple dacc arg2 ~min_name_mode with
       | Bottom, _arg2_ty -> Invalid (T.bottom result_kind)
       | Ok arg2, _arg2_ty ->
         let original_prim : P.t = Binary (prim, arg1, arg2) in
