@@ -353,8 +353,10 @@ let simplify_function context r closure_id function_decl
           in
           let dacc =
             DA.map_denv dacc ~f:(fun denv ->
-              DE.map_typing_env denv ~f:(fun typing_env ->
-                TE.with_code_age_relation typing_env code_age_relation))
+              denv
+              |> DE.map_typing_env ~f:(fun typing_env ->
+                TE.with_code_age_relation typing_env code_age_relation)
+              |> DE.add_lifted_constants ~lifted:(R.get_lifted_constants r))
           in
           (* CR mshinwell: DE.no_longer_defining_symbol is redundant now? *)
           match
