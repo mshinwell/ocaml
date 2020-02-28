@@ -230,6 +230,7 @@ let rec transform_expr env (expr : Ilambda.t) : Ilambda.t =
     let id = Env.rename_variable env id in
     let consts_rev =
       List.fold_left (fun consts_rev (arm, cont, trap, args) ->
+          let args = Env.rename_variables env args in
           let extra_args = Env.extra_args_for_continuation env cont in
           (arm, cont, trap, args @ extra_args) :: consts_rev)
         []
@@ -240,6 +241,7 @@ let rec transform_expr env (expr : Ilambda.t) : Ilambda.t =
       match switch.failaction with
       | None -> None
       | Some (cont, trap, args) ->
+        let args = Env.rename_variables env args in
         let extra_args = Env.extra_args_for_continuation env cont in
         Some (cont, trap, args @ extra_args)
     in
