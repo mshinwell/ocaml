@@ -205,13 +205,10 @@ module Int_indexed = struct
     let fields2 = t2.fields in
     let length1 = Array.length fields1 in
     let length2 = Array.length fields2 in
-    let length = max length1 length2 in
+    let length = min length1 length2 in
     let fields =
       Array.init length (fun index ->
-        if index >= length1 || index >= length2 then
-          Type_grammar.unknown t1.kind
-        else
-          Type_grammar.join' env fields1.(index) fields2.(index))
+        Type_grammar.join' env fields1.(index) fields2.(index))
     in
     { kind = t1.kind; fields }
 
