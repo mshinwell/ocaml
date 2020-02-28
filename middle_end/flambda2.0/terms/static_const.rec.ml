@@ -467,7 +467,7 @@ let is_fully_static t =
   free_names t
   |> Name_occurrences.no_variables
 
-let can_share t =
+let can_share0 t =
   match t with
   | Block (_, Immutable, _)
   | Sets_of_closures _
@@ -479,6 +479,9 @@ let can_share t =
   | Immutable_string _ -> true
   | Block (_, Mutable, _)
   | Mutable_string _ -> false
+
+let can_share t =
+  can_share0 t && is_fully_static t
 
 let must_be_sets_of_closures t =
   match t with
