@@ -452,8 +452,10 @@ let add_definition t (name : Name_in_binding_pos.t) kind =
 let invariant_for_new_equation t name ty =
   if !Clflags.flambda_invariant_checks then begin
     (* CR mshinwell: This should check that precision is not decreasing. *)
-    (* XXX [domain] needs to have [defined_symbols] unioned in *)
-    let domain = Name.Map.keys (names_to_types t) in
+    let domain =
+      Name.Set.union (Name.Map.keys (names_to_types t))
+        (Name.set_of_symbol_set t.defined_symbols)
+    in
     let defined_names =
       Name_occurrences.create_names domain Name_mode.in_types
     in
