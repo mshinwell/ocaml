@@ -485,6 +485,16 @@ let join_types ~env_at_fork ~params envs_with_levels =
           t.equations
           params
       in
+      let equations =
+        Variable.Map.fold (fun var kind equations ->
+          let name = Name.var var in
+          if not (Name.Map.mem name equations) then
+            Name.Map.add name (Type_grammar.unknown kind) equations
+          else
+            equations)
+          t.defined_vars
+          equations
+      in
       let joined_types =
         Name.Map.union (fun name joined_ty use_ty ->
             (*
