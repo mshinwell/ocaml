@@ -571,22 +571,8 @@ let cse_with_eligible_lhs ~env_at_fork envs_with_levels ~params =
             with
             | exception Not_found -> None
             | arg ->
-              (* CR mshinwell: Think about whether this is the best fix.
-                 The canonical simple might end up being one of the [params]
-                 since they are defined in [env_at_fork].  However these
-                 aren't bound at the use sites, so we must choose another
-                 alias that is. *)
-              let is_param = Simple.Set.mem arg params in
-              if Typing_env.mem_simple env_at_fork arg && not is_param
+              if Typing_env.mem_simple env_at_fork arg
               then Some arg
-              else if is_param then
-                let aliases =
-                  Typing_env.aliases_of_simple env_at_use
-                    ~min_name_mode:Name_mode.normal arg
-                  |> Simple.Set.filter (fun simple ->
-                    not (Simple.Set.mem simple params))
-                in
-                Simple.Set.get_singleton aliases
               else None)
         in
         match prim with
@@ -599,7 +585,11 @@ let cse_with_eligible_lhs ~env_at_fork envs_with_levels ~params =
           | exception Not_found -> eligible
           | bound_to ->
             let bound_to =
-              (* CR mshinwell: Same as above *)
+              (* CR mshinwell: Think about whether this is the best fix.
+                 The canonical simple might end up being one of the [params]
+                 since they are defined in [env_at_fork].  However these
+                 aren't bound at the use sites, so we must choose another
+                 alias that is. *)
               if not (Simple.Set.mem bound_to params) then Some bound_to
               else
                 let aliases =
