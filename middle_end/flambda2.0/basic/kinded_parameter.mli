@@ -73,6 +73,8 @@ module List : sig
   (** As for [var_set] but returns a set of [Name]s. *)
   val name_set : t -> Name.Set.t
 
+  val simple_set : t -> Simple.Set.t
+
   val equal_vars : t -> Variable.t list -> bool
 
   val rename : t -> t

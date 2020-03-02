@@ -558,8 +558,9 @@ module Rhs_kind = struct
   end)
 end
 
-let cse_with_eligible_lhs ~env_at_fork envs_with_levels =
+let cse_with_eligible_lhs ~env_at_fork envs_with_levels ~params =
   let module EP = Flambda_primitive.Eligible_for_cse in
+  let params = Kinded_parameter.List.simple_set params in
   List.fold_left (fun eligible (env_at_use, id, _, t) ->
       EP.Map.fold (fun prim bound_to eligible ->
         let prim =
@@ -570,8 +571,23 @@ let cse_with_eligible_lhs ~env_at_fork envs_with_levels =
             with
             | exception Not_found -> None
             | arg ->
-              if not (Typing_env.mem_simple env_at_fork arg) then None
-              else Some arg)
+              (* CR mshinwell: Think about whether this is the best fix.
+                 The canonical simple might end up being one of the [params]
+                 since they are defined in [env_at_fork].  However these
+                 aren't bound at the use sites, so we must choose another
+                 alias that is. *)
+              let is_param = Simple.Set.mem arg params in
+              if Typing_env.mem_simple env_at_fork arg && not is_param
+              then Some arg
+              else if is_param then
+                let aliases =
+                  Typing_env.aliases_of_simple env_at_use
+                    ~min_name_mode:Name_mode.normal arg
+                  |> Simple.Set.filter (fun simple ->
+                    not (Simple.Set.mem simple params))
+                in
+                Simple.Set.get_singleton aliases
+              else None)
         in
         match prim with
         | None -> eligible
@@ -582,24 +598,38 @@ let cse_with_eligible_lhs ~env_at_fork envs_with_levels =
           with
           | exception Not_found -> eligible
           | bound_to ->
-            let bound_to : Rhs_kind.t =
-              if Typing_env.mem_simple env_at_fork bound_to then
-                Rhs_in_scope { bound_to; }
+            let bound_to =
+              (* CR mshinwell: Same as above *)
+              if not (Simple.Set.mem bound_to params) then Some bound_to
               else
-                Needs_extra_binding { bound_to; }
+                let aliases =
+                  Typing_env.aliases_of_simple env_at_use
+                    ~min_name_mode:Name_mode.normal bound_to
+                  |> Simple.Set.filter (fun simple ->
+                    not (Simple.Set.mem simple params))
+                in
+                Simple.Set.get_singleton aliases
             in
-            (* CR mshinwell: Add [Map.add_or_replace]. *)
-            match EP.Map.find prim eligible with
-            (* CR mshinwell: The list needs to be deduped *)
-            | exception Not_found ->
-              EP.Map.add prim
-                (Apply_cont_rewrite_id.Map.singleton id bound_to)
-                eligible
-            | from_prev_levels ->
-              let map =
-                Apply_cont_rewrite_id.Map.add id bound_to from_prev_levels
+            match bound_to with
+            | None -> eligible
+            | Some bound_to ->
+              let bound_to : Rhs_kind.t =
+                if Typing_env.mem_simple env_at_fork bound_to then
+                  Rhs_in_scope { bound_to; }
+                else
+                  Needs_extra_binding { bound_to; }
               in
-              EP.Map.add prim map eligible)
+              (* CR mshinwell: Add [Map.add_or_replace]. *)
+              match EP.Map.find prim eligible with
+              | exception Not_found ->
+                EP.Map.add prim
+                  (Apply_cont_rewrite_id.Map.singleton id bound_to)
+                  eligible
+              | from_prev_levels ->
+                let map =
+                  Apply_cont_rewrite_id.Map.add id bound_to from_prev_levels
+                in
+                EP.Map.add prim map eligible)
       t.cse
       eligible)
     EP.Map.empty
@@ -730,7 +760,10 @@ let join ~env_at_fork envs_with_levels ~params =
      involves a name not defined at the fork point, having canonicalised such
      name, cannot be propagated.  This step also canonicalises the right-hand
      sides of the CSE equations. *)
-  let cse = cse_with_eligible_lhs ~env_at_fork envs_with_levels in
+  (*
+  Format.eprintf "params:@ %a\n%!" Kinded_parameter.List.print params;
+  *)
+  let cse = cse_with_eligible_lhs ~env_at_fork envs_with_levels ~params in
   (*
   Format.eprintf "CSE with eligible LHS:@ %a\n%!"
     (Flambda_primitive.Eligible_for_cse.Map.print

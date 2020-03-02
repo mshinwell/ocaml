@@ -37,11 +37,11 @@ let build_dep_graph dacc lifted_constants =
   List.fold_left
     (fun (dep_graph, code_id_or_symbol_to_const)
          ((bound_symbols : Bound_symbols.t), defining_expr) ->
-(*
-      Format.eprintf "Input for one set: %a = %a\n%!"
+      (*
+      Format.eprintf "Input for one set: %a =@ %a\n%!"
         Bound_symbols.print bound_symbols
         Static_const.print defining_expr;
-*)
+      *)
       let bound_symbols_free_names = Bound_symbols.free_names bound_symbols in
       CIS.Set.fold
         (fun (being_defined : CIS.t)

@@ -1415,7 +1415,8 @@ and simplify_switch
               ~use_id arity
           with
           | Apply_cont action ->
-            let action =
+            let action = Some action in
+            (*
               (* First try to absorb any [Apply_cont] expression that forms the
                  entirety of the arm's action (via an intermediate zero-arity
                  continuation without trap action) into the [Switch] expression
@@ -1428,7 +1429,8 @@ and simplify_switch
                 | Unknown { arity = _; handler = Some handler; } ->
                   Continuation_params_and_handler.pattern_match
                     (Continuation_handler.params_and_handler handler)
-                    ~f:(fun _params ~handler ->
+                    ~f:(fun params ~handler ->
+                      assert (List.length params = 0);
                       match Expr.descr handler with
                       | Apply_cont action -> Some action
                       | Let _ | Let_symbol _ | Let_cont _ | Apply _
@@ -1436,6 +1438,7 @@ and simplify_switch
                 | Unknown _ -> Some action
                 | Unreachable _ -> None
             in
+            *)
             begin match action with
             | None ->
               (* The destination is unreachable; delete the [Switch] arm. *)
