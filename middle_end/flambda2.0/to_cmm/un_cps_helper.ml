@@ -210,14 +210,12 @@ let unreachable =
 
 (* Block creation *)
 
-let static_atom_table = symbol "caml_atom_table"
+let static_atom_table =
+  load Word_int Immutable (symbol "caml_atom_table")
 
 let static_atom ?(dbg=Debuginfo.none) tag =
-  if tag = 0 then
-    static_atom_table
-  else
-    Cmm.Cop (Cmm.Caddv, [static_atom_table;
-                         int ~dbg (tag * Arch.size_addr)], dbg)
+  Cmm.Cop (Cmm.Caddv, [static_atom_table;
+                       int ~dbg ((tag + 1) * Arch.size_addr)], dbg)
 
 let make_alloc_safe ?(dbg=Debuginfo.none) tag = function
   | [] -> static_atom ~dbg tag
