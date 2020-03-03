@@ -496,22 +496,49 @@ let join_types ~env_at_fork ~params envs_with_levels =
           equations
       in
       let joined_types =
-        Name.Map.union (fun name joined_ty use_ty ->
+        Name.Map.merge (fun name joined_ty use_ty ->
             (*
             Format.eprintf "Processing name:@ %a\n%!" Name.print name;
             *)
-            let joined_ty =
-              (* Recall: the order of environments matters here. *)
-              Type_grammar.join ~bound_name:name
-                env_at_fork
-                ~left_env ~left_ty:joined_ty
-                ~right_env:env_at_use ~right_ty:use_ty
-            in
-            (*
-            Format.eprintf "joined type:@ %a\n%!"
-              Type_grammar.print joined_ty;
-            *)
-            Some joined_ty)
+            match joined_ty, use_ty with
+            | None, None -> assert false
+            | Some joined_ty, Some use_ty ->
+              let joined_ty =
+                (* Recall: the order of environments matters here. *)
+                Type_grammar.join ~bound_name:name
+                  env_at_fork
+                  ~left_env ~left_ty:joined_ty
+                  ~right_env:env_at_use ~right_ty:use_ty
+              in
+              (*
+                 Format.eprintf "joined type:@ %a\n%!"
+                 Type_grammar.print joined_ty;
+              *)
+              Some joined_ty
+            | Some joined_ty, None ->
+              let joined_ty =
+                if Typing_env.mem env_at_fork name then
+                  Type_grammar.join ~bound_name:name
+                    env_at_fork
+                    ~left_env ~left_ty:joined_ty
+                    ~right_env:env_at_use
+                    ~right_ty:(Type_grammar.unknown_like joined_ty)
+                else
+                  joined_ty
+              in
+              Some joined_ty
+            | None, Some use_ty ->
+              let joined_ty =
+                if Typing_env.mem env_at_fork name then
+                  Type_grammar.join ~bound_name:name
+                    env_at_fork
+                    ~left_env ~left_ty:(Type_grammar.unknown_like use_ty)
+                    ~right_env:env_at_use ~right_ty:use_ty
+                else
+                  use_ty
+              in
+              Some joined_ty
+        )
           joined_types
           equations
       in
