@@ -355,6 +355,11 @@ let simplify_function context r closure_id function_decl
             DA.map_denv dacc ~f:(fun denv ->
               denv
               |> DE.map_typing_env ~f:(fun typing_env ->
+                let code_age_relation =
+                  (* CR mshinwell: Tidy up propagation to avoid union *)
+                  Code_age_relation.union (TE.code_age_relation typing_env)
+                    code_age_relation
+                in
                 TE.with_code_age_relation typing_env code_age_relation)
               |> DE.add_lifted_constants ~lifted:(R.get_lifted_constants r))
           in

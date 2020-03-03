@@ -23,8 +23,44 @@ module Float = Numbers.Float_by_bit_pattern
 module Int32 = Numbers.Int32
 module Int64 = Numbers.Int64
 
+(* CR mshinwell: [meet] operations should not return types that are already
+   known about.  The majority of problems like this have been fixed.
+   However it looks like there may be another hanging around somewhere.
+   In flambdatest/mlexamples/tuple_stub.ml, the [Select_closure] yields the
+   following env extension:
+
+    ((equations
+   (Tuple_stub.camlTuple_stub__thd3_2 :
+     (Val
+      ((known_tags
+        {(thd3/0 => (Known ((closures { thd3/0 thd3/1 }) (closure_vars { }))),
+          ((function_decls
+            {(thd3/0
+              (Ok (Inlinable (code_id thd3_0_tuple_stub/2) (param_arity 𝕍)
+                   (result_arity 𝕍) (stub true) (dbg ) (inline Default_inline) 
+                   (is_a_functor false) (recursive Non_recursive) (rec_info ((depth 1) (unroll_to None))))))
+             (thd3/1
+              (Ok (Inlinable (code_id thd3_0/3) (param_arity 𝕍 ⨯ 𝕍 ⨯ 𝕍)
+                   (result_arity 𝕍) (stub false) (dbg tuple_stub.ml:1,9--20) 
+                   (inline Default_inline) (is_a_functor false) (recursive Non_recursive) 
+                   (rec_info ((depth 1) (unroll_to None))))))})
+           (closure_types ((components_by_index {(thd3/0 (Val (= Tuple_stub.camlTuple_stub__thd3_2))) (thd3/1 (Val (= Tuple_stub.camlTuple_stub__thd3_3)))})))
+           (closure_var_types ((components_by_index {})))))}) (other_tags Bottom)))
+    unboxed_version/48 : (Val (= Tuple_stub.camlTuple_stub__thd3_3)))))
+
+    All that should be present here is the equation on [unboxed_version].
+    The type of the symbol appears to be the same as already known in [dacc].
+*)
+
 let simplify_select_closure ~move_from ~move_to
       dacc ~original_term ~arg:closure ~arg_ty:closure_ty ~result_var =
+  (*
+  Format.eprintf "Select_closure %a -> %a, closure type:@ %a@ dacc:@ %a\n%!"
+    Closure_id.print move_from
+    Closure_id.print move_to
+    T.print closure_ty
+    DA.print dacc;
+  *)
   let result = Simple.var (Var_in_binding_pos.var result_var) in
   let closures =
     Closure_id.Map.empty
