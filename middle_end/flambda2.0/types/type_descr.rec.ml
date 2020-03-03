@@ -388,6 +388,7 @@ module Make (Head : Type_head_intf.S
       | simple1 ->
         match
           TE.get_alias_then_canonical_simple_exn typing_env (to_type t2)
+            ~min_name_mode:Name_mode.in_types
         with
         | exception Not_found ->
           begin match meet_head_or_unknown_or_bottom env head1 head2 with
