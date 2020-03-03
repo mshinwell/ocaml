@@ -378,7 +378,39 @@ Format.eprintf "add element1 %a element2 %a:\n%s\n%!"
     end;
     add_result
 
+    (* CR mshinwell: This needs documenting.  For the moment we allow
+       relations between canonical elements that are actually incomparable
+       under the name mode ordering, and check in [get_canonical_element_exn]
+       accordingly.  However maybe we should never allow these situations to
+       arise. *)
+    (*
+    let canonical_mode =
+      E.order_within_equiv_class add_result.canonical_element
+    in
+    let alias_of_mode = E.order_within_equiv_class add_result.alias_of in
+    match
+      E.Order_within_equiv_class.compare_partial_order
+        canonical_mode alias_of_mode
+    with
+    | Some _ -> add_result
+    | None ->
+      Misc.fatal_errorf "Canonical %a has mode incomparable with %a in:@ %a"
+        E.print add_result.canonical_element
+        E.print add_result.alias_of
+        print t
+    *)
+
   let get_canonical_element_exn t element ~min_order_within_equiv_class =
+    let [@inline always] fail _case =
+    (*
+      Format.eprintf "FAIL %d: Aliases.get_canonical_element_exn %a %a in:@ %a\n%!"
+        case
+        E.print element
+        E.Order_within_equiv_class.print min_order_within_equiv_class
+        print t;
+    *)
+      raise Not_found
+    in
     match E.Map.find element t.canonical_elements with
     | exception Not_found ->
       begin match
@@ -386,22 +418,24 @@ Format.eprintf "add element1 %a element2 %a:\n%s\n%!"
           (E.order_within_equiv_class element)
           min_order_within_equiv_class
       with
-      | None -> raise Not_found
+      | None -> fail 1
       | Some c ->
         if c >= 0 then element
-        else raise Not_found
+        else fail 2
       end
     | canonical_element ->
-(*
+    (*
 Format.eprintf "looking for canonical for %a, candidate canonical %a, min order %a\n%!"
   E.print element
   E.print canonical_element
   E.Order_within_equiv_class.print min_order_within_equiv_class;
-*)
+  *)
       let find_earliest () =
         let aliases = get_aliases_of_canonical_element t ~canonical_element in
+        try
         Aliases_of_canonical_element.find_earliest_exn aliases
           ~min_order_within_equiv_class
+        with Not_found -> fail 3
       in
       match
         E.Order_within_equiv_class.compare_partial_order
