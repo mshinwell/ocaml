@@ -67,10 +67,7 @@ let tupled_function_call_stub
     Variable.rename ~append:"tupled_stub_param"
       (Closure_id.unwrap unboxed_version)
   in
-  let my_closure =
-    Variable.rename ~append:"tupled_stub"
-      (Closure_id.unwrap unboxed_version)
-  in
+  let my_closure = Variable.create "my_closure" in
   let params = List.map (fun (var, _) -> Variable.rename var) original_params in
   let unboxed_version_var = Variable.create "unboxed_version" in
   let call =
