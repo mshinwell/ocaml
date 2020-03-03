@@ -18,7 +18,7 @@ let id_switch t0 =
   | A -> x t0
   | B -> Y
   | C -> Z
-(*
+
 type t2 =
   | M
   | N
@@ -27,4 +27,3 @@ let not_switch t2 =
   match t2 with
   | M -> B
   | N -> A
-*)
