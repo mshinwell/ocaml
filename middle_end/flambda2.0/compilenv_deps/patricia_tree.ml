@@ -848,8 +848,6 @@ struct
   let bindings s =
     bindings_aux [] s
 
-  let merge _ _ _ = Misc.fatal_error "[merge] not implemented"
-
   (* XXX still wrong *)
   let rec merge' f t0 t1 =
     match t0, t1 with
@@ -960,8 +958,40 @@ struct
         | Some r -> add id r map)
       t empty
 
+  let to_list t =
+    let rec to_list' t acc =
+      match t with
+      | Empty -> acc
+      | Leaf (id, v) -> (id, v) :: acc
+      | Branch(_, _, t0, t1) -> to_list' t0 (to_list' t1 acc)
+    in
+    to_list' t []
+
   let of_list l =
     List.fold_left (fun map (id, v) -> add id v map) empty l
+
+  let merge f t0 t1 =
+    let l1 = to_list t0 in
+    let l2 = to_list t1 in
+    let rec loop l1 l2 acc =
+      let accum id a b =
+        match f id a b with
+        | None -> acc
+        | Some v -> add id v acc
+      in
+      match l1, l2 with
+      | [], [] -> acc
+      | (id, h1) :: t1, [] -> loop t1 [] (accum id (Some h1) None)
+      | [], (id, h2) :: t2 -> loop [] t2 (accum id None (Some h2))
+      | (id1, h1) :: t1, (id2, h2) :: t2 ->
+        if id1 = id2 then
+          loop t1 t2 (accum id1 (Some h1) (Some h2))
+        else if id1 < id2 then
+          loop t1 l2 (accum id1 (Some h1) None)
+        else
+          loop l1 t2 (accum id2 None (Some h2))
+    in
+    loop l1 l2 Empty
 
   (* CR mshinwell: fix this *)
   let disjoint_union ?eq ?print t1 t2 =
