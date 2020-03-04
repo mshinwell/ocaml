@@ -16,44 +16,39 @@
 
 open! Int_replace_polymorphic_compare
 
+(* We use a "big endian" representation so that the tree linearises
+   according to the usual ordering on integers. *)
+
 let zero_bit i bit =
   i land bit = 0
 
-(* Little-endian implementation (doesn't linearise to numerical order):
-
-let lowest_bit x =
-  x land (-x)
-
-let branching_bit prefix0 prefix1 =
-  lowest_bit (prefix0 lxor prefix1)
-
-let mask i bit =
-  i land (bit - 1)
-*)
-
-(* OCaml zero should cause [Clz.clz] to return [Sys.int_size]. *)
 let () = assert (Clz.clz 0 = Sys.int_size)
 
 let [@inline always] highest_bit_clz n =
   (* CR mshinwell: Remove assert or predicate on invariant checks *)
   assert (n <> 0);
-  1 lsl (63 - 1 - (Clz.clz n))
+  1 lsl ((Sys.int_size - 1) - Clz.clz n)
+
+let () = assert (highest_bit_clz min_int = min_int)
 
 let branching_bit prefix0 prefix1 =
   highest_bit_clz (prefix0 lxor prefix1)
 
 let mask i bit =
-  (i lor (bit - 1)) land (lnot bit)
+  i land ((lnot (bit - 1)) lxor bit)
 
-let match_prefix i prefix bit =
+let match_prefix i ~prefix bit =
   mask i bit = prefix
 
 let equal_prefix prefix0 bit0 prefix1 bit1 =
   bit0 = bit1 && prefix0 = prefix1
 
-let includes_prefix prefix0 bit0 prefix1 bit1 =
-  (bit1 - 1) < (bit0 - 1)
-  && match_prefix prefix1 prefix0 bit0
+let shorter bit0 ~than:bit1 =
+  Clz.clz bit0 < Clz.clz bit1
+
+let includes_prefix prefix0 bit0 ~in_:prefix1 bit1 =
+  shorter bit0 ~than:bit1
+  && match_prefix prefix1 ~prefix:prefix0 bit0
 
 let compare_prefix prefix0 bit0 prefix1 bit1 =
   let c = compare bit0 bit1 in
@@ -84,7 +79,7 @@ end) = struct
     | Empty -> false
     | Leaf j -> j = i
     | Branch(prefix, bit, t0, t1) ->
-        if not (match_prefix i prefix bit) then false
+        if not (match_prefix i ~prefix bit) then false
         else if zero_bit i bit then mem i t0
         else mem i t1
 
@@ -108,7 +103,7 @@ end) = struct
       if i = j then Leaf i
       else join i (Leaf i) j t
     | Branch(prefix, bit, t0, t1) as t ->
-      if match_prefix i prefix bit then
+      if match_prefix i ~prefix bit then
         if zero_bit i bit then
           Branch(prefix, bit, add i t0, t1)
         else
@@ -122,7 +117,7 @@ end) = struct
       if i = j then Empty
       else t
     | Branch (prefix, bit, t0, t1) as t ->
-      if match_prefix i prefix bit then
+      if match_prefix i ~prefix bit then
         if zero_bit i bit then
           branch prefix bit (remove i t0) t1
         else
@@ -137,7 +132,7 @@ end) = struct
     | Leaf i, Leaf j when i = j -> Leaf i
     | Leaf i, Leaf j -> join i (Leaf i) j t1
     | Leaf i, Branch (prefix, bit, t10, t11) ->
-      if match_prefix i prefix bit then
+      if match_prefix i ~prefix bit then
         if zero_bit i bit then
           branch prefix bit (union t0 t10) t11
         else
@@ -145,7 +140,7 @@ end) = struct
       else
         join i (Leaf i) prefix t1
     | Branch (prefix, bit, t00, t01), Leaf i ->
-      if match_prefix i prefix bit then
+      if match_prefix i ~prefix bit then
         if zero_bit i bit then
           branch prefix bit (union t1 t00) t01
         else
@@ -155,12 +150,12 @@ end) = struct
     | Branch(prefix0, bit0, t00, t01), Branch(prefix1, bit1, t10, t11) ->
       if equal_prefix prefix0 bit0 prefix1 bit1 then
         branch prefix0 bit0 (union t00 t10) (union t01 t11)
-      else if includes_prefix prefix0 bit0 prefix1 bit1 then
+      else if includes_prefix prefix0 bit0 ~in_:prefix1 bit1 then
         if zero_bit prefix1 bit0 then
           branch prefix0 bit0 (union t00 t1) t01
         else
           branch prefix0 bit0 t00 (union t01 t1)
-      else if includes_prefix prefix1 bit1 prefix0 bit0 then
+      else if includes_prefix prefix1 bit1 ~in_:prefix0 bit0 then
         if zero_bit prefix0 bit1 then
           branch prefix1 bit1 (union t0 t10) t11
         else
@@ -177,7 +172,7 @@ end) = struct
     | Branch(prefix0, bit0, t00, t01), Branch(prefix1, bit1, t10, t11) ->
         if equal_prefix prefix0 bit0 prefix1 bit1 then
           subset t00 t10 && subset t01 t11
-        else if includes_prefix prefix1 bit1 prefix0 bit0 then
+        else if includes_prefix prefix1 bit1 ~in_:prefix0 bit0 then
           if zero_bit prefix0 bit1 then
             subset t0 t10
           else
@@ -194,12 +189,12 @@ end) = struct
     | Branch(prefix0, bit0, t00, t01), Branch(prefix1, bit1, t10, t11) ->
         if equal_prefix prefix0 bit0 prefix1 bit1 then
           branch prefix0 bit0 (inter t00 t10) (inter t01 t11)
-        else if includes_prefix prefix0 bit0 prefix1 bit1 then
+        else if includes_prefix prefix0 bit0 ~in_:prefix1 bit1 then
           if zero_bit prefix1 bit0 then
             inter t00 t1
           else
             inter t01 t1
-        else if includes_prefix prefix1 bit1 prefix0 bit0 then
+        else if includes_prefix prefix1 bit1 ~in_:prefix0 bit0 then
           if zero_bit prefix0 bit1 then
             inter t0 t10
           else
@@ -216,12 +211,12 @@ end) = struct
     | Branch(prefix0, bit0, t00, t01), Branch(prefix1, bit1, t10, t11) ->
         if equal_prefix prefix0 bit0 prefix1 bit1 then
           branch prefix0 bit0 (diff t00 t10) (diff t01 t11)
-        else if includes_prefix prefix0 bit0 prefix1 bit1 then
+        else if includes_prefix prefix0 bit0 ~in_:prefix1 bit1 then
           if zero_bit prefix1 bit0 then
             branch prefix0 bit0 (diff t00 t1) t01
           else
             branch prefix0 bit0 t00 (diff t01 t1)
-        else if includes_prefix prefix1 bit1 prefix0 bit0 then
+        else if includes_prefix prefix1 bit1 ~in_:prefix0 bit0 then
           if zero_bit prefix0 bit1 then
             diff t0 t10
           else
@@ -446,7 +441,7 @@ struct
     | Empty -> false
     | Leaf(j, _) -> j = i
     | Branch(prefix, bit, t0, t1) ->
-        if not (match_prefix i prefix bit) then false
+        if not (match_prefix i ~prefix bit) then false
         else if zero_bit i bit then mem i t0
         else mem i t1
 
@@ -470,7 +465,7 @@ struct
       if i = j then Leaf (i, d)
       else join i (Leaf(i, d)) j t
     | Branch(prefix, bit, t0, t1) as t ->
-      if match_prefix i prefix bit then
+      if match_prefix i ~prefix bit then
         if zero_bit i bit then
           Branch(prefix, bit, add i d t0, t1)
         else
@@ -487,7 +482,7 @@ struct
       else
         t
     | Branch (prefix, bit, t0, t1) as t ->
-      if match_prefix key prefix bit then
+      if match_prefix key ~prefix bit then
         if zero_bit key bit then
           Branch(prefix, bit, replace key f t0, t1)
         else
@@ -513,7 +508,7 @@ struct
         | Some datum -> join key (Leaf (key, datum)) key' t
         end
     | Branch (prefix, bit, t0, t1) as t ->
-      if match_prefix key prefix bit then
+      if match_prefix key ~prefix bit then
         if zero_bit key bit then
           branch prefix bit (update key f t0) t1
         else
@@ -529,7 +524,7 @@ struct
       if i = j then Empty
       else t
     | Branch (prefix, bit, t0, t1) as t ->
-      if match_prefix i prefix bit then
+      if match_prefix i ~prefix bit then
         if zero_bit i bit then
           branch prefix bit (remove i t0) t1
         else
@@ -553,7 +548,7 @@ struct
       end
     | Leaf (i, d0), Leaf (j, _) -> join i (Leaf (i, d0)) j t1
     | Leaf (i, d), Branch (prefix, bit, t10, t11) ->
-      if match_prefix i prefix bit then
+      if match_prefix i ~prefix bit then
         if zero_bit i bit then
           branch prefix bit (union f t0 t10) t11
         else
@@ -561,7 +556,7 @@ struct
       else
         join i (Leaf(i, d)) prefix t1
     | Branch (prefix, bit, t00, t01), Leaf (i, d) ->
-      if match_prefix i prefix bit then
+      if match_prefix i ~prefix bit then
         let f i d0 d1 = f i d1 d0 in  (* CR mshinwell: add flag to disable? *)
         if zero_bit i bit then
           branch prefix bit (union f t1 t00) t01
@@ -572,12 +567,12 @@ struct
     | Branch(prefix0, bit0, t00, t01), Branch(prefix1, bit1, t10, t11) ->
       if equal_prefix prefix0 bit0 prefix1 bit1 then
         branch prefix0 bit0 (union f t00 t10) (union f t01 t11)
-      else if includes_prefix prefix0 bit0 prefix1 bit1 then
+      else if includes_prefix prefix0 bit0 ~in_:prefix1 bit1 then
         if zero_bit prefix1 bit0 then
           branch prefix0 bit0 (union f t00 t1) t01
         else
           branch prefix0 bit0 t00 (union f t01 t1)
-      else if includes_prefix prefix1 bit1 prefix0 bit0 then
+      else if includes_prefix prefix1 bit1 ~in_:prefix0 bit0 then
         if zero_bit prefix0 bit1 then
           branch prefix1 bit1 (union f t0 t10) t11
         else
@@ -596,7 +591,7 @@ struct
     | Branch(prefix0, bit0, t00, t01), Branch(prefix1, bit1, t10, t11) ->
         if equal_prefix prefix0 bit0 prefix1 bit1 then
           subset t00 t10 && subset t01 t11
-        else if includes_prefix prefix1 bit1 prefix0 bit0 then
+        else if includes_prefix prefix1 bit1 ~in_:prefix0 bit0 then
           if zero_bit prefix0 bit1 then
             subset t0 t10
           else
@@ -613,12 +608,12 @@ struct
     | Branch(prefix0, bit0, t00, t01), Branch(prefix1, bit1, t10, t11) ->
         if equal_prefix prefix0 bit0 prefix1 bit1 then
           branch prefix0 bit0 (inter_domains t00 t10) (inter_domains t01 t11)
-        else if includes_prefix prefix0 bit0 prefix1 bit1 then
+        else if includes_prefix prefix0 bit0 ~in_:prefix1 bit1 then
           if zero_bit prefix1 bit0 then
             inter_domains t00 t1
           else
             inter_domains t01 t1
-        else if includes_prefix prefix1 bit1 prefix0 bit0 then
+        else if includes_prefix prefix1 bit1 ~in_:prefix0 bit0 then
           if zero_bit prefix0 bit1 then
             inter_domains t0 t10
           else
@@ -630,7 +625,7 @@ struct
     | Empty -> raise Not_found
     | Leaf(j, d) -> if j = i then d else raise Not_found
     | Branch(prefix, bit, t0, t1) ->
-        if not (match_prefix i prefix bit) then raise Not_found
+        if not (match_prefix i ~prefix bit) then raise Not_found
         else if zero_bit i bit then find i t0
         else find i t1
 
@@ -651,12 +646,12 @@ struct
     | Branch(prefix0, bit0, t00, t01), Branch(prefix1, bit1, t10, t11) ->
         if equal_prefix prefix0 bit0 prefix1 bit1 then
           branch prefix0 bit0 (inter f t00 t10) (inter f t01 t11)
-        else if includes_prefix prefix0 bit0 prefix1 bit1 then
+        else if includes_prefix prefix0 bit0 ~in_:prefix1 bit1 then
           if zero_bit prefix1 bit0 then
             inter f t00 t1
           else
             inter f t01 t1
-        else if includes_prefix prefix1 bit1 prefix0 bit0 then
+        else if includes_prefix prefix1 bit1 ~in_:prefix0 bit0 then
           if zero_bit prefix0 bit1 then
             inter f t0 t10
           else
@@ -673,12 +668,12 @@ struct
     | Branch(prefix0, bit0, t00, t01), Branch(prefix1, bit1, t10, t11) ->
         if equal_prefix prefix0 bit0 prefix1 bit1 then
           branch prefix0 bit0 (diff t00 t10) (diff t01 t11)
-        else if includes_prefix prefix0 bit0 prefix1 bit1 then
+        else if includes_prefix prefix0 bit0 ~in_:prefix1 bit1 then
           if zero_bit prefix1 bit0 then
             branch prefix0 bit0 (diff t00 t1) t01
           else
             branch prefix0 bit0 t00 (diff t01 t1)
-        else if includes_prefix prefix1 bit1 prefix0 bit0 then
+        else if includes_prefix prefix1 bit1 ~in_:prefix0 bit0 then
           if zero_bit prefix0 bit1 then
             diff t0 t10
           else
@@ -855,7 +850,7 @@ struct
       | Some d0, Some d1 -> join i (Leaf (i, d0)) j (Leaf (j, d1))
       end
     | Leaf (i, d), Branch (prefix, bit, t10, t11) ->
-      if match_prefix i prefix bit then
+      if match_prefix i ~prefix bit then
         if zero_bit i bit then
           branch prefix bit (merge' f t0 t10) t11
         else
@@ -866,7 +861,7 @@ struct
         | Some d -> join i (Leaf(i, d)) prefix t1
         end
     | Branch (prefix, bit, t00, t01), Leaf (i, d) ->
-      if match_prefix i prefix bit then
+      if match_prefix i ~prefix bit then
         let f i d0 d1 = f i d1 d0 in  (* CR mshinwell: add flag to disable? *)
         if zero_bit i bit then
           branch prefix bit (merge' f t1 t00) t01
@@ -880,12 +875,12 @@ struct
     | Branch(prefix0, bit0, t00, t01), Branch(prefix1, bit1, t10, t11) ->
       if equal_prefix prefix0 bit0 prefix1 bit1 then
         branch prefix0 bit0 (merge' f t00 t10) (merge' f t01 t11)
-      else if includes_prefix prefix0 bit0 prefix1 bit1 then
+      else if includes_prefix prefix0 bit0 ~in_:prefix1 bit1 then
         if zero_bit prefix1 bit0 then
           branch prefix0 bit0 (merge' f t00 t1) t01
         else
           branch prefix0 bit0 t00 (merge' f t01 t1)
-      else if includes_prefix prefix1 bit1 prefix0 bit0 then
+      else if includes_prefix prefix1 bit1 ~in_:prefix0 bit0 then
         if zero_bit prefix0 bit1 then
           branch prefix1 bit1 (merge' f t0 t10) t11
         else
@@ -954,7 +949,12 @@ struct
       | Leaf (id, v) -> (id, v) :: acc
       | Branch(_, _, t0, t1) -> to_list' t0 (to_list' t1 acc)
     in
-    to_list' t []
+    let l = to_list' t [] in
+    (*
+    let sorted = List.sort (fun (id1, _) (id2, _) -> Int.compare id1 id2) l in
+    assert (Stdlib.compare l sorted = 0);
+    *)
+    l
 
   let of_list l =
     List.fold_left (fun map (id, v) -> add id v map) empty l
