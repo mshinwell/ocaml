@@ -291,6 +291,8 @@ end) = struct
       | Empty -> raise Not_found
       | Leaf i -> i
       | Branch(_, _, t0, t1) ->
+        (* CR mshinwell: I think this can be simplified now (ditto
+           max_elt) *)
         let i0 = loop t0 in
         let i1 = loop t1 in
           if i0 < i1 then i0
@@ -459,7 +461,15 @@ struct
       Branch(mask prefix0 bit, bit, t1, t0)
 
   (* CR mshinwell: This is now [add_or_replace], like [Map] *)
-  let rec add i d = function
+  let rec add i d t =
+    begin match Sys.getenv "DUMP" with
+    | exception Not_found -> ()
+    | _ ->
+      Format.eprintf "Map.add: key %a (0x%x)\n%!"
+        Key.print i
+        i
+    end;
+    match t with
     | Empty -> Leaf(i, d)
     | Leaf(j, _) as t ->
       if i = j then Leaf (i, d)
