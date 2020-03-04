@@ -1,0 +1,1 @@
+external clz : int -> int = "stub_int_clz" [@@noalloc]

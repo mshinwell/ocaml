@@ -16,6 +16,45 @@
 
 open! Int_replace_polymorphic_compare
 
+let zero_bit i bit =
+  i land bit = 0
+
+(* Little-endian implementation (doesn't linearise to numerical order):
+
+let lowest_bit x =
+  x land (-x)
+
+let branching_bit prefix0 prefix1 =
+  lowest_bit (prefix0 lxor prefix1)
+
+let mask i bit =
+  i land (bit - 1)
+*)
+
+let [@inline always] highest_bit_clz n =
+  1 lsl (63 - (Clz.clz n))
+
+let branching_bit prefix0 prefix1 =
+  highest_bit_clz (prefix0 lxor prefix1)
+
+let mask i bit =
+  (i lor (bit - 1)) land (lnot bit)
+
+let match_prefix i prefix bit =
+  mask i bit = prefix
+
+let equal_prefix prefix0 bit0 prefix1 bit1 =
+  bit0 = bit1 && prefix0 = prefix1
+
+let includes_prefix prefix0 bit0 prefix1 bit1 =
+  (bit0 - 1) < (bit1 - 1)
+  && match_prefix prefix1 prefix0 bit0
+
+let compare_prefix prefix0 bit0 prefix1 bit1 =
+  let c = compare bit0 bit1 in
+  if c = 0 then compare prefix0 prefix1
+  else c
+
 module Make_set (Elt : sig
   val print : Format.formatter -> int -> unit
 end) = struct
@@ -35,33 +74,6 @@ end) = struct
     | Branch _ -> false
 
   let singleton i = Leaf i
-
-  let zero_bit i bit =
-    i land bit = 0
-
-  let lowest_bit x =
-    x land (-x)
-
-  let branching_bit prefix0 prefix1 =
-    lowest_bit (prefix0 lxor prefix1)
-
-  let mask i bit =
-    i land (bit - 1)
-
-  let match_prefix i prefix bit =
-    mask i bit = prefix
-
-  let equal_prefix prefix0 bit0 prefix1 bit1 =
-    bit0 = bit1 && prefix0 = prefix1
-
-  let includes_prefix prefix0 bit0 prefix1 bit1 =
-    (bit0 - 1) < (bit1 - 1)
-    && match_prefix prefix1 prefix0 bit0
-
-  let compare_prefix prefix0 bit0 prefix1 bit1 =
-    let c = compare bit0 bit1 in
-    if c = 0 then compare prefix0 prefix1
-    else c
 
   let rec mem i = function
     | Empty -> false
@@ -270,7 +282,7 @@ end) = struct
     let rec loop acc = function
       | Empty -> acc
       | Leaf i -> i :: acc
-      | Branch(_, _, t0, t1) -> loop (loop acc t0) t1
+      | Branch(_, _, t0, t1) -> loop (loop acc t1) t0
     in
     loop [] t
 
@@ -424,33 +436,6 @@ struct
     | Branch _ -> false
 
   let singleton i d = Leaf(i, d)
-
-  let zero_bit i bit =
-    i land bit = 0
-
-  let lowest_bit x =
-    x land (-x)
-
-  let branching_bit prefix0 prefix1 =
-    lowest_bit (prefix0 lxor prefix1)
-
-  let mask i bit =
-    i land (bit - 1)
-
-  let match_prefix i prefix bit =
-    mask i bit = prefix
-
-  let equal_prefix prefix0 bit0 prefix1 bit1 =
-    bit0 = bit1 && prefix0 = prefix1
-
-  let includes_prefix prefix0 bit0 prefix1 bit1 =
-    (bit0 - 1) < (bit1 - 1)
-    && match_prefix prefix1 prefix0 bit0
-
-  let compare_prefix prefix0 bit0 prefix1 bit1 =
-    let c = compare bit0 bit1 in
-    if c = 0 then compare prefix0 prefix1
-    else c
 
   let rec mem i = function
     | Empty -> false
@@ -838,12 +823,11 @@ struct
     in
     loop (Empty, None, Empty) t
 
-  (* CR mshinwell: check the order in which this returns bindings *)
   let rec bindings_aux acc t =
     match t with
     | Empty -> acc
     | Leaf (key, d) -> (key, d) :: acc
-    | Branch(_, _, t0, t1) -> bindings_aux (bindings_aux acc t0) t1
+    | Branch(_, _, t0, t1) -> bindings_aux (bindings_aux acc t1) t0
 
   let bindings s =
     bindings_aux [] s
