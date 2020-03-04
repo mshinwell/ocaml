@@ -94,19 +94,23 @@ let arity t = t.arity
 let compute_handler_env t
       ~definition_typing_env_with_params_defined:typing_env
       ~params : Continuation_env_and_param_types.t =
+(*
 Format.eprintf "%d uses for %a\n%!"
   (List.length t.uses)
   Continuation.print t.continuation;
+*)
   match t.uses with
   | [] -> No_uses
   | uses ->
     let definition_scope_level = TE.current_scope typing_env in
     let use_envs_with_ids =
       List.map (fun use ->
+      (*
           Format.eprintf "Use: parameters: %a,@ arg types: %a,@ env:@ %a\n%!"
             Kinded_parameter.List.print params
             (Format.pp_print_list ~pp_sep:Format.pp_print_space T.print)
             (U.arg_types use) TE.print (U.typing_env_at_use use);
+            *)
           let use_env =
             U.typing_env_at_use use
             |> TE.add_equations_on_params ~params
@@ -115,8 +119,10 @@ Format.eprintf "%d uses for %a\n%!"
           use_env, U.id use, U.use_kind use)
         uses
     in
+    (*
 Format.eprintf "Unknown at or later than %a\n%!"
   Scope.print (Scope.next definition_scope_level);
+  *)
     let handler_typing_env, extra_params_and_args, is_single_inlinable_use,
         is_single_use =
         let env_extension, extra_params_and_args =
@@ -125,11 +131,13 @@ Format.eprintf "Unknown at or later than %a\n%!"
             ~unknown_if_defined_at_or_later_than:
               (Scope.next definition_scope_level)
         in
+        (*
 Format.eprintf "handler env extension for %a is:@ %a\n%!"
   Continuation.print t.continuation
   T.Typing_env_extension.print env_extension;
 Format.eprintf "The extra params and args are:@ %a\n%!"
   Continuation_extra_params_and_args.print extra_params_and_args;
+  *)
         let handler_env =
           typing_env
           |> TE.add_definitions_of_params
