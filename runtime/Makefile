@@ -139,6 +139,7 @@ endif
 OC_NATIVE_CPPFLAGS = -DNATIVE_CODE -DTARGET_$(ARCH)
 
 ifeq "$(UNIX_OR_WIN32)" "unix"
+OC_CFLAGS += -mlzcnt
 OC_NATIVE_CPPFLAGS += -DMODEL_$(MODEL)
 endif
 

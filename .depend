@@ -5239,17 +5239,23 @@ middle_end/flambda2.0/compilenv_deps/linkage_name.cmx : \
     middle_end/flambda2.0/compilenv_deps/linkage_name.cmi
 middle_end/flambda2.0/compilenv_deps/linkage_name.cmi : \
     utils/identifiable.cmi
+middle_end/flambda2.0/compilenv_deps/clz.cmo : \
+    middle_end/flambda2.0/compilenv_deps/clz.cmi
+middle_end/flambda2.0/compilenv_deps/clz.cmx : \
+    middle_end/flambda2.0/compilenv_deps/clz.cmi
 middle_end/flambda2.0/compilenv_deps/patricia_tree.cmo : \
     utils/numbers.cmi \
     utils/misc.cmi \
     utils/int_replace_polymorphic_compare.cmi \
     utils/identifiable.cmi \
+    middle_end/flambda2.0/compilenv_deps/clz.cmi \
     middle_end/flambda2.0/compilenv_deps/patricia_tree.cmi
 middle_end/flambda2.0/compilenv_deps/patricia_tree.cmx : \
     utils/numbers.cmx \
     utils/misc.cmx \
     utils/int_replace_polymorphic_compare.cmx \
     utils/identifiable.cmx \
+    middle_end/flambda2.0/compilenv_deps/clz.cmx \
     middle_end/flambda2.0/compilenv_deps/patricia_tree.cmi
 middle_end/flambda2.0/compilenv_deps/patricia_tree.cmi : \
     utils/numbers.cmi \

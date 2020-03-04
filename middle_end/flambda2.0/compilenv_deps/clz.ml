@@ -1,1 +1,1 @@
-external clz : int -> int = "stub_int_clz" [@@noalloc]
+external clz : int -> int = "caml_stub_int_clz" [@@noalloc]

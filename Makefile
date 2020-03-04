@@ -223,6 +223,7 @@ MIDDLE_END_CLOSURE=\
 
 MIDDLE_END_FLAMBDA2_COMPILENV_DEPS=\
   middle_end/flambda2.0/compilenv_deps/table_by_int_id.cmo \
+  middle_end/flambda2.0/compilenv_deps/clz.cmo \
   middle_end/flambda2.0/compilenv_deps/patricia_tree.cmo \
   middle_end/flambda2.0/compilenv_deps/linkage_name.cmo \
   middle_end/flambda2.0/compilenv_deps/immediate.cmo \
