@@ -475,23 +475,23 @@ let join_types ~env_at_fork ~params envs_with_levels =
            CR pchambart: are they really ?
            mshinwell: have added check, above *)
         List.fold_left (fun equations param ->
-          let param_name = Kinded_parameter.name param in
-          if not (Name.Map.mem param_name equations) then
-            Name.Map.add param_name
-              (Type_grammar.unknown (Kinded_parameter.kind param))
-              equations
-          else
-            equations)
+            let param_name = Kinded_parameter.name param in
+            if not (Name.Map.mem param_name equations) then
+              Name.Map.add param_name
+                (Type_grammar.unknown (Kinded_parameter.kind param))
+                equations
+            else
+              equations)
           t.equations
           params
       in
       let equations =
         Variable.Map.fold (fun var kind equations ->
-          let name = Name.var var in
-          if not (Name.Map.mem name equations) then
-            Name.Map.add name (Type_grammar.unknown kind) equations
-          else
-            equations)
+            let name = Name.var var in
+            if not (Name.Map.mem name equations) then
+              Name.Map.add name (Type_grammar.unknown kind) equations
+            else
+              equations)
           t.defined_vars
           equations
       in
