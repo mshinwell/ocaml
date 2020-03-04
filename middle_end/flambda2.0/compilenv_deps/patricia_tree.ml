@@ -31,8 +31,13 @@ let mask i bit =
   i land (bit - 1)
 *)
 
+(* OCaml zero should cause [Clz.clz] to return [Sys.int_size]. *)
+let () = assert (Clz.clz 0 = Sys.int_size)
+
 let [@inline always] highest_bit_clz n =
-  1 lsl (63 - (Clz.clz n))
+  (* CR mshinwell: Remove assert or predicate on invariant checks *)
+  assert (n <> 0);
+  1 lsl (63 - 1 - (Clz.clz n))
 
 let branching_bit prefix0 prefix1 =
   highest_bit_clz (prefix0 lxor prefix1)
