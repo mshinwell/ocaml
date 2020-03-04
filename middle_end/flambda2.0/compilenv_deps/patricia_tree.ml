@@ -47,7 +47,7 @@ let equal_prefix prefix0 bit0 prefix1 bit1 =
   bit0 = bit1 && prefix0 = prefix1
 
 let includes_prefix prefix0 bit0 prefix1 bit1 =
-  (bit0 - 1) < (bit1 - 1)
+  (bit1 - 1) < (bit0 - 1)
   && match_prefix prefix1 prefix0 bit0
 
 let compare_prefix prefix0 bit0 prefix1 bit1 =
