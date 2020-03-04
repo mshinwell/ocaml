@@ -5,5 +5,4 @@
   (wrapped false)
   (flags (:standard -principal -nostdlib))
   (libraries stdlib ocamlcommon ocamlbytecomp)
-  (foreign_stubs (language c) (names clz_stubs) (flags -mlzcnt))
 )
