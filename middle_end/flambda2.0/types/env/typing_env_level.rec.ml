@@ -394,19 +394,19 @@ let join_types ~env_at_fork ~params envs_with_levels =
       Name.Map.empty
       envs_with_levels
   in
-  let joined_types =
-    List.fold_left (fun joined_types (env_at_use, _id, _use_kind, t) ->
+  let envs_with_levels =
+    List.map (fun (env_at_use, id, use_kind, t) ->
         let symbols_defined_during_level =
           Symbol.Set.diff (Typing_env.defined_symbols env_at_use)
             symbols_at_fork
         in
-        Symbol.Set.iter (fun symbol ->
-            if not (Name.Map.mem (Name.symbol symbol) t.equations) then begin
-              Misc.fatal_errorf "Symbol %a lacks equation in level:@ %a"
-                Symbol.print symbol
-                print t
-            end)
-          symbols_defined_during_level;
+        env_at_use, id, use_kind, t, symbols_defined_during_level)
+      envs_with_levels
+  in
+  let joined_types =
+    List.fold_left
+      (fun joined_types
+           (_env_at_use, _id, _use_kind, _t, symbols_defined_during_level) ->
         Symbol.Set.fold (fun symbol joined_types ->
             Name.Map.add (Name.symbol symbol)
               (Type_grammar.bottom Flambda_kind.value)
@@ -423,15 +423,6 @@ let join_types ~env_at_fork ~params envs_with_levels =
           joined_types)
       joined_types
       params
-  in
-  let envs_with_levels =
-    List.map (fun (env_at_use, id, use_kind, t) ->
-        let symbols_defined_during_level =
-          Symbol.Set.diff (Typing_env.defined_symbols env_at_use)
-            symbols_at_fork
-        in
-        env_at_use, id, use_kind, t, symbols_defined_during_level)
-      envs_with_levels
   in
   let env_at_fork =
     List.fold_left
