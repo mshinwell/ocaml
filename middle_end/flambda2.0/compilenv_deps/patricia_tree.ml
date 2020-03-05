@@ -423,7 +423,7 @@ module Make_map0 (Key : sig
   val print : Format.formatter -> int -> unit
 end) (Set : Identifiable.Set with module T := Numbers.Int) =
 struct
-  type key = int
+(*  type key = int *)
 
   module Set = Set
 
@@ -1115,14 +1115,16 @@ struct
     Misc.fatal_error "fail"
 
   let invariant t =
-    let elts_pt = PT.bindings t.pt in
-    let elts_sm = SM.bindings t.sm in
-    if List.compare_lengths elts_pt elts_sm <> 0 then fail t;
-    List.iter2 (fun (key1, _data1) (key2, _data2) ->
-        let ok = key1 = key2 in
-        if not ok then fail t)
-      elts_pt elts_sm;
-    t
+    if PT.cardinal t.pt = SM.cardinal t.sm then t
+    else
+      let elts_pt = PT.bindings t.pt in
+      let elts_sm = SM.bindings t.sm in
+      if List.compare_lengths elts_pt elts_sm <> 0 then fail t;
+      List.iter2 (fun (key1, _data1) (key2, _data2) ->
+          let ok = key1 = key2 in
+          if not ok then fail t)
+        elts_pt elts_sm;
+      t
 
   let check_bool t ~pt ~sm =
     let pt = pt t.pt in
