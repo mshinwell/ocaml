@@ -831,13 +831,15 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
   | Pbigstring_load_16 false, [arg1; arg2] ->
     tag_int (bigstring_ref ~size_int Sixteen arg1 arg2 dbg)
   | Pbigstring_load_32 true, [arg1; arg2] ->
-    Binary (String_or_bigstring_load (Bigstring, Thirty_two), arg1, arg2)
+    box_bint Pint32
+      (Binary (String_or_bigstring_load (Bigstring, Thirty_two), arg1, arg2))
   | Pbigstring_load_32 false, [arg1; arg2] ->
-    bigstring_ref ~size_int Thirty_two arg1 arg2 dbg
+    box_bint Pint32 (bigstring_ref ~size_int Thirty_two arg1 arg2 dbg)
   | Pbigstring_load_64 true, [arg1; arg2] ->
-    Binary (String_or_bigstring_load (Bigstring, Sixty_four), arg1, arg2)
+    box_bint Pint64
+      (Binary (String_or_bigstring_load (Bigstring, Sixty_four), arg1, arg2))
   | Pbigstring_load_64 false, [arg1; arg2] ->
-    bigstring_ref ~size_int Sixty_four arg1 arg2 dbg
+    box_bint Pint64 (bigstring_ref ~size_int Sixty_four arg1 arg2 dbg)
   | Pbigstring_set_16 true, [bigstring; index; new_value] ->
     Ternary (Bytes_or_bigstring_set (Bigstring, Sixteen),
       bigstring, index, untag_int new_value)
