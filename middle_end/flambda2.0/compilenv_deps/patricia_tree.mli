@@ -27,10 +27,4 @@ end) (Set : Identifiable.Set with module T := Numbers.Int) : sig
   include Identifiable.Map
     with module T := Numbers.Int
     with module Set = Set
-
-  val merge'
-     : (int -> 'a option -> 'a option -> 'a option)
-    -> 'a t
-    -> 'a t
-    -> 'a t
 end

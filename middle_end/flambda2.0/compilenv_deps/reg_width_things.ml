@@ -433,9 +433,6 @@ module Name = struct
   module Set = Patricia_tree.Make_set (struct let print = print end)
   module Map = Patricia_tree.Make_map (struct let print = print end) (Set)
   module Tbl = Identifiable.Make_tbl (Numbers.Int) (Map)
-
-  (* CR mshinwell: remove hack *)
-  let merge_map = Map.merge'
 end
 
 module Simple = struct

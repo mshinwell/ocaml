@@ -99,12 +99,6 @@ module Name : sig
 
   include Identifiable.S with type t := t
 
-  val merge_map
-      : (t -> 'a option -> 'a option -> 'a option)
-    -> 'a Map.t
-    -> 'a Map.t
-    -> 'a Map.t
-
   val var : Variable.t -> t
 
   val symbol : Symbol.t -> t

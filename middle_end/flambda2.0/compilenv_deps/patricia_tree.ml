@@ -13,8 +13,12 @@
 (**************************************************************************)
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
+[@@@ocaml.warning "-32"]
 
 open! Int_replace_polymorphic_compare
+
+(* CR mshinwell: Add a [compare] value to the functor argument and use it
+   to sort the results from [elements], [bindings] etc. *)
 
 module Make_set (Elt : sig
   val print : Format.formatter -> int -> unit
@@ -54,9 +58,22 @@ end) = struct
   let equal_prefix prefix0 bit0 prefix1 bit1 =
     bit0 = bit1 && prefix0 = prefix1
 
+  let shorter bit0 bit1 =
+    match bit0 < 0, bit1 < 0 with
+    | false, false -> bit0 < bit1
+    | true, false
+    | false, true -> bit0 > bit1
+    | true, true -> assert false
+
+  let includes_prefix prefix0 bit0 prefix1 bit1 =
+    shorter bit0 bit1
+    && match_prefix prefix1 prefix0 bit0
+
+(*
   let includes_prefix prefix0 bit0 prefix1 bit1 =
     (bit0 - 1) < (bit1 - 1)
     && match_prefix prefix1 prefix0 bit0
+*)
 
   let compare_prefix prefix0 bit0 prefix1 bit1 =
     let c = compare bit0 bit1 in
@@ -402,7 +419,7 @@ end) = struct
   let disjoint _ _ = Misc.fatal_error "disjoint not yet implemented"
 end [@@@inline always]
 
-module Make_map (Key : sig
+module Make_map0 (Key : sig
   val print : Format.formatter -> int -> unit
 end) (Set : Identifiable.Set with module T := Numbers.Int) =
 struct
@@ -838,7 +855,6 @@ struct
     in
     loop (Empty, None, Empty) t
 
-  (* CR mshinwell: check the order in which this returns bindings *)
   let rec bindings_aux acc t =
     match t with
     | Empty -> acc
@@ -846,7 +862,8 @@ struct
     | Branch(_, _, t0, t1) -> bindings_aux (bindings_aux acc t0) t1
 
   let bindings s =
-    bindings_aux [] s
+    List.sort (fun (id1, _) (id2, _) -> Int.compare id1 id2)
+      (bindings_aux [] s)
 
   (* XXX still wrong *)
   let rec merge' f t0 t1 =
@@ -965,7 +982,8 @@ struct
       | Leaf (id, v) -> (id, v) :: acc
       | Branch(_, _, t0, t1) -> to_list' t0 (to_list' t1 acc)
     in
-    to_list' t []
+    List.sort (fun (id1, _) (id2, _) -> Int.compare id1 id2)
+      (to_list' t [])
 
   let of_list l =
     List.fold_left (fun map (id, v) -> add id v map) empty l
@@ -1051,3 +1069,357 @@ struct
     ignore diff;
     ignore elements
 end [@@@inline always]
+
+module Make_map (Key : sig
+  val print : Format.formatter -> int -> unit
+end) (Set : Identifiable.Set with module T := Numbers.Int) =
+struct
+  module PT = Make_map0 (Key) (Set)
+  module SM = Numbers.Int.Map
+
+  type key = int
+
+  module Set = Set
+
+  type 'a t = {
+    pt : 'a PT.t;
+    sm : 'a SM.t;
+  }
+
+  let print_datum ppf _ =
+    Format.fprintf ppf "<datum>"
+
+  let print_sm ppf map =
+    let map = SM.bindings map in
+    Format.pp_print_list ~pp_sep:Format.pp_print_space
+      (fun ppf (key, datum) ->
+        Format.fprintf ppf "@[(%a=%d(0x%x)@ %a)@]"
+          Key.print key key key print_datum datum)
+      ppf
+      map
+
+  let fail t =
+    Format.eprintf "Failure:@ \nPT =@ %a@ \nStdlib Map =@ %a\n%!"
+      (PT.print print_datum) t.pt
+      print_sm t.sm;
+    begin match SM.min_binding_opt t.sm with
+    | None -> ()
+    | Some (min, _) ->
+      Format.eprintf "Min elt of Stdlib map = %d(=0x%x)\n%!" min min
+    end;
+    begin match SM.max_binding_opt t.sm with
+    | None -> ()
+    | Some (max, _) ->
+      Format.eprintf "Max elt of Stdlib map = %d(=0x%x)\n%!" max max
+    end;
+    Misc.fatal_error "fail"
+
+  let invariant t =
+    let elts_pt = PT.bindings t.pt in
+    let elts_sm = SM.bindings t.sm in
+    if List.compare_lengths elts_pt elts_sm <> 0 then fail t;
+    List.iter2 (fun (key1, _data1) (key2, _data2) ->
+        let ok = key1 = key2 in
+        if not ok then fail t)
+      elts_pt elts_sm;
+    t
+
+  let check_bool t ~pt ~sm =
+    let pt = pt t.pt in
+    let sm = sm t.sm in
+    if not (pt == sm) then fail t;
+    pt
+
+  let empty = invariant {
+    pt = PT.empty;
+    sm = SM.empty;
+  }
+
+  let is_empty t = check_bool t ~pt:PT.is_empty ~sm:SM.is_empty
+
+  let singleton i d =
+    let t =
+      { pt = PT.singleton i d;
+        sm = SM.singleton i d;
+      }
+    in
+    invariant t
+
+  let mem i t = check_bool t ~pt:(PT.mem i) ~sm:(SM.mem i)
+
+  let add i d t =
+    let t =
+      { pt = PT.add i d t.pt;
+        sm = SM.add i d t.sm;
+      }
+    in
+    invariant t
+
+  let replace key f t =
+    let t =
+      { pt = PT.replace key f t.pt;
+        sm = SM.replace key f t.sm;
+      }
+    in
+    invariant t
+
+  let update key f t =
+    let t =
+      { pt = PT.update key f t.pt;
+        sm = SM.update key f t.sm;
+      }
+    in
+    invariant t
+
+  let remove i t =
+    let t =
+      { pt = PT.remove i t.pt;
+        sm = SM.remove i t.sm;
+      }
+    in
+    invariant t
+
+  let union f t0 t1 =
+    let t =
+      { pt = PT.union f t0.pt t1.pt;
+        sm = SM.union f t0.sm t1.sm;
+      }
+    in
+    invariant t
+
+(*
+  let subset t0 t1 =
+    let pt = PT.subset t0.pt t1.pt in
+    let sm = SM.subset t0.sm t1.sm in
+    if not (pt == sm) then fail t();
+    pt
+ *)
+
+  let find i t = PT.find i t.pt
+
+  let inter f t0 t1 =
+    let t =
+      { pt = PT.inter f t0.pt t1.pt;
+        sm = SM.inter f t0.sm t1.sm;
+      }
+    in
+    invariant t
+
+(*
+  let rec diff t0 t1 =
+    let t =
+      { pt = PT.diff t0.pt t1.pt;
+        sm = SM.diff t0.sm t1.sm;
+      }
+    in
+    invariant t
+*)
+
+  let cardinal t =
+    let pt = PT.cardinal t.pt in
+    let sm = SM.cardinal t.sm in
+    if not (pt = sm) then fail t;
+    pt
+
+  let iter f t = PT.iter f t.pt
+
+  let fold f t acc = PT.fold f t.pt acc
+
+  let for_all p t = PT.for_all p t.pt
+
+  let exists p t = PT.exists p t.pt
+
+  let filter p t =
+    let t =
+      { pt = PT.filter p t.pt;
+        sm = SM.filter p t.sm;
+      }
+    in
+    invariant t
+
+  let partition p t =
+    let pt_t, pt_f = PT.partition p t.pt in
+    let sm_t, sm_f = SM.partition p t.sm in
+    let t =
+      { pt = pt_t;
+        sm = sm_t;
+      }
+    in
+    let f =
+      { pt = pt_f;
+        sm = sm_f;
+      }
+    in
+    let t = invariant t in
+    let f = invariant f in
+    t, f
+
+  let choose t = PT.choose t.pt
+
+  let choose_opt t =
+    match choose t with
+    | exception Not_found -> None
+    | choice -> Some choice
+
+(*
+  let elements t =
+    let rec loop acc = function
+      | Empty -> acc
+      | Leaf(_, d) -> d :: acc
+      | Branch(_, _, t0, t1) -> loop (loop acc t0) t1
+    in
+    loop [] t
+*)
+
+  let min_binding t =
+    PT.min_binding t.pt
+
+  let min_binding_opt t =
+    PT.min_binding_opt t.pt
+
+  let max_binding t =
+    PT.max_binding t.pt
+
+  let max_binding_opt t =
+    PT.max_binding_opt t.pt
+
+  let equal f t0 t1 =
+    let pt = PT.equal f t0.pt t1.pt in
+    let sm = SM.equal f t0.sm t1.sm in
+    if not (pt == sm) then fail t0;
+    pt
+
+  let compare f t0 t1 =
+    let pt = PT.compare f t0.pt t1.pt in
+    let sm = SM.compare f t0.sm t1.sm in
+    if not (pt = sm) then fail t0;
+    pt
+
+  let split i t =
+    let pt_t, pt_m, pt_f = PT.split i t.pt in
+    let sm_t, _sm_m, sm_f = SM.split i t.sm in
+    let t =
+      { pt = pt_t;
+        sm = sm_t;
+      }
+    in
+    let f =
+      { pt = pt_f;
+        sm = sm_f;
+      }
+    in
+    let t = invariant t in
+    let f = invariant f in
+    t, pt_m, f
+
+  let bindings t =
+    let t = invariant t in
+    PT.bindings t.pt
+
+  let find_opt t key =
+    match find t key with
+    | exception Not_found -> None
+    | datum -> Some datum
+
+  let find_first _ _ = Misc.fatal_error "find_first not yet implemented"
+
+  let find_first_opt _ _ = Misc.fatal_error "find_first_opt not yet implemented"
+
+  let find_last _ _ = Misc.fatal_error "find_last not yet implemented"
+
+  let find_last_opt _ _ = Misc.fatal_error "find_last_opt not yet implemented"
+
+  let get_singleton t =
+    PT.get_singleton t.pt
+
+  let get_singleton_exn _ =
+    Misc.fatal_error "get_singleton_exn not yet implemented"
+
+  let map f t =
+    let t =
+      { pt = PT.map f t.pt;
+        sm = SM.map f t.sm;
+      }
+    in
+    invariant t
+
+  let mapi f t =
+    let t =
+      { pt = PT.mapi f t.pt;
+        sm = SM.mapi f t.sm;
+      }
+    in
+    invariant t
+
+  let map_sharing = map
+
+  let to_seq _ = Misc.fatal_error "to_seq not yet implemented"
+
+  let to_seq_from _ _ = Misc.fatal_error "to_seq_from not yet implemented"
+
+  let add_seq _ _ = Misc.fatal_error "add_seq not yet implemented"
+
+  let of_seq _ = Misc.fatal_error "of_seq not yet implemented"
+
+  let filter_map t ~f =
+    let t =
+      { pt = PT.filter_map t.pt ~f;
+        sm = SM.filter_map t.sm ~f;
+      }
+    in
+    invariant t
+
+  let of_list l =
+    let t =
+      { pt = PT.of_list l;
+        sm = SM.of_list l;
+      }
+    in
+    invariant t
+
+  let merge f t0 t1 =
+    let t =
+      { pt = PT.merge f t0.pt t1.pt;
+        sm = SM.merge f t0.sm t1.sm;
+      }
+    in
+    invariant t
+
+  let disjoint_union ?eq ?print t1 t2 =
+    let t =
+      { pt = PT.disjoint_union ?eq ?print t1.pt t2.pt;
+        sm = SM.disjoint_union ?eq ?print t1.sm t2.sm;
+      }
+    in
+    invariant t
+
+  let union_left _ _ = Misc.fatal_error "union_left not yet implemented"
+
+  let union_right _ _ = Misc.fatal_error "union_right not yet implemented"
+
+  let union_merge _ _ _ = Misc.fatal_error "union_merge not yet implemented"
+
+  let rename _ _ = Misc.fatal_error "rename not yet implemented"
+
+  let map_keys _ _ = Misc.fatal_error "map_keys not yet implemented"
+
+  let print print_datum ppf t = PT.print print_datum ppf t.pt
+
+  let keys map = fold (fun k _ set -> Set.add k set) map Set.empty
+
+  let data t = List.map snd (bindings t)
+
+  let of_set f set = Set.fold (fun e map -> add e (f e) map) set empty
+
+  let transpose_keys_and_data _ =
+    Misc.fatal_error "transpose_keys_and_data not yet implemented"
+
+  let transpose_keys_and_data_set _ =
+    Misc.fatal_error "transpose_keys_and_data_set not yet implemented"
+
+  let diff_domains _ _ = Misc.fatal_error "diff_domains not yet implemented"
+
+  let fold2_stop_on_key_mismatch _ _ _ _ =
+    Misc.fatal_error "fold2_stop_on_key_mismatch not yet implemented"
+end [@@@inline always]
+
