@@ -136,9 +136,11 @@ let unary_int_arith_primitive _env dbg kind op arg =
         (op : Flambda_primitive.unary_int_arith_op) with
   | Tagged_immediate, Neg -> C.negint arg dbg
   | Tagged_immediate, Swap_byte_endianness ->
+      (* CR mshinwell for gbury: This could maybe cause a fatal error now? *)
       let untagged = C.untag_int arg dbg in
       let swapped = C.bswap16 untagged dbg in
       C.tag_int swapped dbg
+  | Naked_immediate, Swap_byte_endianness -> C.bswap16 arg dbg
   (* Special case for manipulating int64 on 32-bit hosts *)
   | Naked_int64, Neg when C.arch32 ->
       C.extcall ~alloc:false "caml_int64_neg_native" typ_int64 [arg]

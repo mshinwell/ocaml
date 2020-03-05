@@ -792,7 +792,8 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
       Simple (Simple.const_zero) (* constructor 0 is the same as Native here *)
     end
   | Pbswap16, [arg] ->
-    Unary (Int_arith (Tagged_immediate, Swap_byte_endianness), arg)
+    tag_int
+      (Unary (Int_arith (Naked_immediate, Swap_byte_endianness), untag_int arg))
   | Pbbswap Pint32, [arg] ->
     Unary (Box_number Naked_int32,
       Prim (Unary (Int_arith (Naked_int32, Swap_byte_endianness),
@@ -825,9 +826,10 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
   | Pbigarraydim dimension, [arg] ->
     tag_int (Unary (Bigarray_length { dimension; }, arg))
   | Pbigstring_load_16 true, [arg1; arg2] ->
-    Binary (String_or_bigstring_load (Bigstring, Sixteen), arg1, arg2)
+    tag_int
+      (Binary (String_or_bigstring_load (Bigstring, Sixteen), arg1, arg2))
   | Pbigstring_load_16 false, [arg1; arg2] ->
-    bigstring_ref ~size_int Sixteen arg1 arg2 dbg
+    tag_int (bigstring_ref ~size_int Sixteen arg1 arg2 dbg)
   | Pbigstring_load_32 true, [arg1; arg2] ->
     Binary (String_or_bigstring_load (Bigstring, Thirty_two), arg1, arg2)
   | Pbigstring_load_32 false, [arg1; arg2] ->
