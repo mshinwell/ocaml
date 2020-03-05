@@ -144,7 +144,7 @@ let force_slash = ref false             (* for ocamldep *)
 let clambda_checks = ref false          (* -clambda-checks *)
 
 let flambda_invariant_checks =
-  ref true                              (* -flambda-(no-)invariants *)
+  ref false                             (* -flambda-(no-)invariants *)
 
 let dont_write_files = ref false        (* set to true under ocamldoc *)
 
