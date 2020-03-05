@@ -152,7 +152,7 @@ end = struct
 
   let enter_closure { backend; round; typing_env;
                       inlined_debuginfo = _; can_inline;
-                      inlining_depth_increment = _;
+                      inlining_depth_increment;
                       float_const_prop; code; at_unit_toplevel = _;
                       unit_toplevel_exn_continuation;
                       symbols_currently_being_defined;
@@ -162,7 +162,7 @@ end = struct
       typing_env = TE.create_using_resolver_and_symbol_bindings_from typing_env;
       inlined_debuginfo = Debuginfo.none;
       can_inline;
-      inlining_depth_increment = 0;
+      inlining_depth_increment;
       float_const_prop;
       code;
       at_unit_toplevel = false;
