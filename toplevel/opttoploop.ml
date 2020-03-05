@@ -82,7 +82,14 @@ let close_phrase lam =
   Ident.Set.fold (fun id l ->
     let glb, pos = toplevel_value id in
     let glob =
-      Lprim (Pfield pos,
+      Lprim (Pfield (
+               { index = pos;
+                 block_info = {
+                   tag = 0;  (* CR mshinwell: Is this right? *)
+                   size = Unknown;
+                 };
+               }, 
+               Reads_vary),
              [Lprim (Pgetglobal glb, [], Loc_unknown)],
              Loc_unknown)
     in
@@ -225,10 +232,6 @@ module Backend = struct
   (* See backend_intf.mli. *)
 
   let symbol_for_global' = Compilenv.symbol_for_global'
-  let closure_symbol = Compilenv.closure_symbol
-
-  let really_import_approx = Import_approx.really_import_approx
-  let import_symbol = Import_approx.import_symbol
 
   let size_int = Arch.size_int
   let big_endian = Arch.big_endian
@@ -258,7 +261,7 @@ let load_lambda ppf ~module_ident ~required_globals lam size =
     }
   in
   let middle_end =
-    if Config.flambda then Flambda_middle_end.lambda_to_clambda
+    if Config.flambda then Misc.fatal_error "FIXME"
     else Closure_middle_end.lambda_to_clambda
   in
   Asmgen.compile_implementation ~toplevel:need_symbol
