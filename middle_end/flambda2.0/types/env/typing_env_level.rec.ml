@@ -424,12 +424,19 @@ let join_types ~env_at_fork ~params envs_with_levels =
       joined_types
       params
   in
-  let env_at_fork =
-    List.fold_left (fun env_at_fork (env_at_use, _id, _use_kind, _t) ->
+  let envs_with_levels =
+    List.map (fun (env_at_use, id, use_kind, t) ->
         let symbols_defined_during_level =
           Symbol.Set.diff (Typing_env.defined_symbols env_at_use)
             symbols_at_fork
         in
+        env_at_use, id, use_kind, t, symbols_defined_during_level)
+      envs_with_levels
+  in
+  let env_at_fork =
+    List.fold_left
+      (fun env_at_fork
+           (_env_at_use, _id, _use_kind, _t, symbols_defined_during_level) ->
         Typing_env.add_symbol_definitions env_at_fork
           symbols_defined_during_level)
       env_at_fork
@@ -437,7 +444,7 @@ let join_types ~env_at_fork ~params envs_with_levels =
   in
   List.fold_left
     (fun (joined_types, env_at_fork, code_age_relation)
-         (env_at_use, _id, _use_kind, t) ->
+         (env_at_use, _id, _use_kind, t, symbols_defined_during_level) ->
       (*
       Format.eprintf "join_types with level:@ %a\n%!" print t;
       *)
@@ -469,11 +476,7 @@ let join_types ~env_at_fork ~params envs_with_levels =
         (* If the parameter is not present, it is considered as bottom
            by the Name.Map.union while it should be unknown.
            By default non present equations are unknown, but here we must
-           make it explicit.
-           This is not required for symbols as defined symbols are required
-           not to be unknown.
-           CR pchambart: are they really ?
-           mshinwell: have added check, above *)
+           make it explicit. *)
         List.fold_left (fun equations param ->
           let param_name = Kinded_parameter.name param in
           if not (Name.Map.mem param_name equations) then
@@ -484,6 +487,17 @@ let join_types ~env_at_fork ~params envs_with_levels =
             equations)
           t.equations
           params
+      in
+      let equations =
+        (* Same as just above, but for symbols. *)
+        Symbol.Set.fold (fun symbol equations ->
+            let name = Name.symbol symbol in
+            if not (Name.Map.mem name equations) then
+              Name.Map.add name (Type_grammar.any_value ()) equations
+            else
+              equations)
+          symbols_defined_during_level
+          equations
       in
       let equations =
         Variable.Map.fold (fun var kind equations ->
