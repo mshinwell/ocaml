@@ -136,10 +136,17 @@ module For_tagged_immediates : Int_number_kind = struct
   module Num = struct
     include Immediate
 
-    let compare_unsigned _t1 _t2 =
-      (* CR mshinwell: Implement these *)
-      Misc.fatal_error
-        "For_tagged_immediates.compare_unsigned not yet implemented"
+    let strictly_negative t =
+      compare t zero < 0
+
+    let compare_unsigned t1 t2 =
+      (* CR-someday mshinwell: Use faster implementation and/or implementation
+         in the stdlib when available. *)
+      match strictly_negative t1, strictly_negative t2 with
+      | true, true -> compare t2 t1
+      | true, false -> 1
+      | false, true -> -1
+      | false, false -> compare t1 t2
 
     let div t1 t2 =
       if Immediate.equal t2 Immediate.zero then None
@@ -195,10 +202,15 @@ module For_naked_immediates : Int_number_kind = struct
   module Num = struct
     include Immediate
 
-    let compare_unsigned _t1 _t2 =
-      (* CR mshinwell: Implement these *)
-      Misc.fatal_error
-        "For_naked_immediates.compare_unsigned not yet implemented"
+    let strictly_negative t =
+      compare t zero < 0
+
+    let compare_unsigned t1 t2 =
+      match strictly_negative t1, strictly_negative t2 with
+      | true, true -> compare t2 t1
+      | true, false -> 1
+      | false, true -> -1
+      | false, false -> compare t1 t2
 
     let div t1 t2 =
       if Immediate.equal t2 Immediate.zero then None
@@ -300,8 +312,15 @@ module For_int32s : Boxable_int_number_kind = struct
   module Num = struct
     include Int32
 
-    let compare_unsigned _t1 _t2 =
-      Misc.fatal_error "Not yet implemented (waiting on upstream stdlib change)"
+    let strictly_negative t =
+      compare t zero < 0
+
+    let compare_unsigned t1 t2 =
+      match strictly_negative t1, strictly_negative t2 with
+      | true, true -> compare t2 t1
+      | true, false -> 1
+      | false, true -> -1
+      | false, false -> compare t1 t2
 
     let xor = logxor
     let or_ = logor
@@ -357,8 +376,15 @@ module For_int64s : Boxable_int_number_kind = struct
   module Num = struct
     include Int64
 
-    let compare_unsigned _t1 _t2 =
-      Misc.fatal_error "Not yet implemented (waiting on upstream stdlib change)"
+    let strictly_negative t =
+      compare t zero < 0
+
+    let compare_unsigned t1 t2 =
+      match strictly_negative t1, strictly_negative t2 with
+      | true, true -> compare t2 t1
+      | true, false -> 1
+      | false, true -> -1
+      | false, false -> compare t1 t2
 
     let xor = logxor
     let or_ = logor
