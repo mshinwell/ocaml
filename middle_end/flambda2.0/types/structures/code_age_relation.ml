@@ -52,14 +52,6 @@ let meet t id1 id2 : _ Or_bottom.t =
     else Bottom
 
 let join ~target_t t1 t2 id1 id2 : _ Or_unknown.t =
-(*
-  Format.eprintf "Joining %a and %a@ target:@ %a@ left:@ %a@ right:@ %a\n%!"
-    Code_id.print id1
-    Code_id.print id2
-    print target_t
-    print t1
-    print t2;
-    *)
   (* Lowest ("newest") common ancestor, if such exists. *)
   if Code_id.equal id1 id2 then Known id1
   else
@@ -69,10 +61,7 @@ let join ~target_t t1 t2 id1 id2 : _ Or_unknown.t =
       Code_id.Set.inter (Code_id.Map.keys target_t)
         (Code_id.Set.inter id1_to_root id2_to_root)
     in
-    let () = Format.eprintf "shared_ids:@ %a" Code_id.Set.print shared_ids in
     if Code_id.Set.is_empty shared_ids then
-    (*  let () = Format.eprintf "CODE ID JOIN UNKNOWN\n%s\n%!"
-        (Printexc.raw_backtrace_to_string (Printexc.get_callstack 30)) in*)
       Unknown
     else
       let newest_shared_id, _ =
