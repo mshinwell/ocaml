@@ -278,7 +278,7 @@ end = struct
     in
     let dacc_inside_functions =
       env_inside_functions
-      |> DE.with_typing_env denv
+      |> DE.with_typing_env denv_inside_functions
       |> bind_existing_code_to_new_code_ids ~old_to_new_code_ids_all_sets
       |> bind_closure_types_inside_functions
            ~closure_bound_names_inside_functions_all_sets
