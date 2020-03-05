@@ -1,6 +1,6 @@
 (* TEST
 *)
-
+(*
 open Bigarray
 open Printf
 open Complex
@@ -991,3 +991,4 @@ let _ =
     prerr_endline "************* TEST FAILED ****************"; exit 2
   end else
     exit 0
+*)
