@@ -688,7 +688,7 @@ let effects_and_coeffects_of_unary_primitive p =
     (* CR mshinwell: check this is right.  (Even with safe-string off, I
        don't think changing the length of a string is possible.) *)
     Effects.No_effects, Coeffects.No_coeffects
-  | Int_as_pointer
+  | Int_as_pointer -> Effects.No_effects, Coeffects.No_coeffects
   | Opaque_identity -> Effects.Arbitrary_effects, Coeffects.Has_coeffects
   | Int_arith (_, (Neg | Swap_byte_endianness))
   | Num_conv _
