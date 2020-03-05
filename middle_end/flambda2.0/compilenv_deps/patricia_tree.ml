@@ -865,7 +865,7 @@ struct
   let bindings s =
     List.sort (fun (id1, _) (id2, _) -> Int.compare id1 id2)
       (bindings_aux [] s)
-
+(*
   (* XXX still wrong *)
   let rec merge' f t0 t1 =
     match t0, t1 with
@@ -921,6 +921,7 @@ struct
           branch prefix1 bit1 t10 (merge' f t0 t11)
       else
         join prefix0 t0 prefix1 t1
+*)
 
   let find_opt t key =
     match find t key with
