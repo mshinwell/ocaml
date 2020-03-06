@@ -731,17 +731,43 @@ and cps_function ({ kind; params; return; body; attr; loc; } : L.lfunction)
 and cps_switch (switch : proto_switch) ~scrutinee (k : Continuation.t)
       (k_exn : Continuation.t) : Ilambda.t =
   let consts_rev, wrappers =
-    List.fold_left (fun (consts_rev, wrappers) (arm, action) ->
-        let action = cps_tail action k k_exn in
+    List.fold_left (fun (consts_rev, wrappers) (arm, (action : L.lambda)) ->
         match action with
-        | Apply_cont (cont, trap, args) ->
-          let consts_rev = (arm, cont, trap, args) :: consts_rev in
+        | Lvar var ->
+          let consts_rev = (arm, k, None, [Ilambda.Var var]) :: consts_rev in
           consts_rev, wrappers
-        | Let _ | Let_mutable _ | Let_rec _ | Let_cont _ | Apply _ | Switch _ ->
-          let cont = Continuation.create () in
-          let consts_rev = (arm, cont, None, []) :: consts_rev in
-          let wrappers = (cont, action) :: wrappers in
-          consts_rev, wrappers)
+        | Lconst cst ->
+          let consts_rev = (arm, k, None, [Ilambda.Const cst]) :: consts_rev in
+          consts_rev, wrappers
+        | Lapply _
+        | Lfunction _
+        | Llet _
+        | Lletrec _
+        | Lprim _
+        | Lswitch _
+        | Lstringswitch _
+        | Lstaticraise _
+        | Lstaticcatch _
+        | Ltrywith _
+        | Lifthenelse _
+        | Lsequence _
+        | Lwhile _
+        | Lfor _
+        | Lassign _
+        | Lsend _
+        | Levent _
+        | Lifused _ ->
+          let action = cps_tail action k k_exn in
+          match action with
+          | Apply_cont (cont, trap, args) ->
+            let consts_rev = (arm, cont, trap, args) :: consts_rev in
+            consts_rev, wrappers
+          | Let _ | Let_mutable _ | Let_rec _ | Let_cont _ | Apply _
+          | Switch _ ->
+            let cont = Continuation.create () in
+            let consts_rev = (arm, cont, None, []) :: consts_rev in
+            let wrappers = (cont, action) :: wrappers in
+            consts_rev, wrappers)
       ([], [])
       switch.consts
   in
