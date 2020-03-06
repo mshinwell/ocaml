@@ -299,8 +299,8 @@ and simplify_non_recursive_let_cont_handler
                    defined in the fork environment passed to
                    [compute_handler_env].
                    The [DE] component of [dacc_after_body] is discarded since
-                   with the body now and will be moving into a different
-                   scope (that of the handler). *)
+                   we have finished with the body now and will be moving into a
+                   different scope (that of the handler). *)
                 let lifted = R.get_lifted_constants (DA.r dacc_after_body) in
                 (* CR mshinwell: We don't actually need to add equations on
                    the symbols here, since the equations giving joined types
