@@ -58,15 +58,8 @@ jobs:
     - name: Build the compiler
       run: |
         make -j $J world
-        make -j $J ocamlopt
-        make -j $J runtimeopt
-        make -j $J libraryopt
-        make -j $J compilerlibs/ocamlcommon.cmxa
-        make -j $J -C otherlibs/str allopt
-        make -j $J -C otherlibs/unix allopt
-        make -j $J -C otherlibs/bigarray allopt
-        make -j $J -C otherlibs/systhreads allopt
-        make -j $J -C tools caml-tex
+        make -j $J opt
+        make -j $J opt.opt
         make       -C testsuite tools lib
     # Generate list of tests to run
     - name: Generate test list
