@@ -308,6 +308,7 @@ module type MapT =
     val is_empty : 'a t -> bool
     val mem : key -> 'a t -> bool
     val add : key -> 'a -> 'a t -> 'a t
+    val replace : key -> ('a -> 'a) -> 'a t -> 'a t
     val update : key -> ('a option -> 'a option) -> 'a t -> 'a t
     val singleton : key -> 'a -> 'a t
     val remove : key -> 'a t -> 'a t
@@ -362,6 +363,7 @@ module SSMap :
     val is_empty : 'a t -> bool
     val mem : key -> 'a t -> bool
     val add : key -> 'a -> 'a t -> 'a t
+    val replace : key -> ('a -> 'a) -> 'a t -> 'a t
     val update : key -> ('a option -> 'a option) -> 'a t -> 'a t
     val singleton : key -> 'a -> 'a t
     val remove : key -> 'a t -> 'a t
