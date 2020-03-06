@@ -149,8 +149,8 @@ let rec bind_rec ~backend exn_cont
           ~register_const_string
           (prim : expr_primitive)
           (dbg : Debuginfo.t)
-          (cont : Named.t -> Expr.t)
-  : Expr.t =
+          (cont : Named.t -> Expr.t * _)
+  : Expr.t * _ =
   match prim with
   | Simple simple -> cont (Named.create_simple simple)
   | Unary (prim, arg) ->
@@ -195,29 +195,36 @@ let rec bind_rec ~backend exn_cont
     build_cont (List.rev args) []
   | Checked { validity_conditions; primitive; failure; dbg; } ->
     let primitive_cont = Continuation.create () in
-    let primitive_cont_handler =
-      let params_and_handler =
-        Continuation_params_and_handler.create []
-          ~handler:(bind_rec ~backend exn_cont ~register_const_string
-            primitive dbg cont)
+    let primitive_cont_handler, delayed_handlers =
+      let handler, delayed_handlers =
+        bind_rec ~backend exn_cont ~register_const_string
+          primitive dbg cont
       in
-      Continuation_handler.create ~params_and_handler
-        ~stub:false
-        ~is_exn_handler:false
+      let params_and_handler =
+        Continuation_params_and_handler.create [] ~handler
+      in
+      let cont_handler =
+        Continuation_handler.create ~params_and_handler
+          ~stub:false
+          ~is_exn_handler:false
+      in
+      cont_handler, delayed_handlers
     in
     let failure_cont = Continuation.create () in
     let failure_cont_handler =
+      let handler =
+        expression_for_failure ~backend exn_cont
+          ~register_const_string primitive dbg failure
+      in
       let params_and_handler =
-        Continuation_params_and_handler.create []
-          ~handler:(expression_for_failure ~backend exn_cont
-            ~register_const_string primitive dbg failure)
+        Continuation_params_and_handler.create [] ~handler
       in
       Continuation_handler.create ~params_and_handler
         ~stub:false
         ~is_exn_handler:false
     in
-    let check_validity_conditions =
-      List.fold_left (fun rest expr_primitive ->
+    let check_validity_conditions, delayed_handlers =
+      List.fold_left (fun (rest, delayed_handlers) expr_primitive ->
           let condition_passed_cont = Continuation.create () in
           let condition_passed_cont_handler =
             let params_and_handler =
@@ -227,35 +234,44 @@ let rec bind_rec ~backend exn_cont
               ~stub:false
               ~is_exn_handler:false
           in
-          Let_cont.create_non_recursive condition_passed_cont
-            condition_passed_cont_handler
-            ~body:(
-              bind_rec_primitive ~backend exn_cont ~register_const_string
-                (Prim expr_primitive) dbg
-                (fun prim_result ->
-                  (Expr.create_switch
-                    ~scrutinee:prim_result
-                    ~arms:(Immediate.Map.of_list [
-                      Immediate.bool_true,
-                        Apply_cont.goto condition_passed_cont;
-                      Immediate.bool_false,
-                        Apply_cont.goto failure_cont;
-                    ])))))
+          let body, delayed_handlers' =
+            bind_rec_primitive ~backend exn_cont ~register_const_string
+              (Prim expr_primitive) dbg
+              (fun prim_result ->
+                (Expr.create_switch
+                  ~scrutinee:prim_result
+                  ~arms:(Immediate.Map.of_list [
+                    Immediate.bool_true,
+                      Apply_cont.goto condition_passed_cont;
+                    Immediate.bool_false,
+                      Apply_cont.goto failure_cont;
+                  ])), Continuation.Map.empty)
+          in
+          let body =
+            Let_cont.create_non_recursive condition_passed_cont
+              condition_passed_cont_handler ~body
+          in
+          body,
+            Continuation.Map.disjoint_union delayed_handlers' delayed_handlers)
         (Expr.create_apply_cont
-           (Apply_cont.create primitive_cont ~args:[] ~dbg:Debuginfo.none))
+           (Apply_cont.create primitive_cont ~args:[] ~dbg:Debuginfo.none),
+         delayed_handlers)
         validity_conditions
     in
-    Let_cont.create_non_recursive primitive_cont
-      primitive_cont_handler
-      ~body:(
-        Let_cont.create_non_recursive failure_cont
-          failure_cont_handler
-          ~body:check_validity_conditions)
+    let expr =
+      Let_cont.create_non_recursive primitive_cont
+        primitive_cont_handler
+        ~body:(
+          Let_cont.create_non_recursive failure_cont
+            failure_cont_handler
+            ~body:check_validity_conditions)
+    in
+    expr, delayed_handlers
 
 and bind_rec_primitive ~backend exn_cont ~register_const_string
       (prim : simple_or_prim)
       (dbg : Debuginfo.t)
-      (cont : Simple.t -> Expr.t) : Expr.t =
+      (cont : Simple.t -> Expr.t * _) : Expr.t * _ =
   match prim with
   | Simple s ->
     cont s
@@ -263,6 +279,7 @@ and bind_rec_primitive ~backend exn_cont ~register_const_string
     let var = Variable.create "prim" in
     let var' = VB.create var Name_mode.normal in
     let cont named =
-      Flambda.Expr.create_let var' named (cont (Simple.var var))
+      let body, delayed_handlers = cont (Simple.var var) in
+      Flambda.Expr.create_let var' named body, delayed_handlers
     in
     bind_rec ~backend exn_cont ~register_const_string p dbg cont

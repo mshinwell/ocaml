@@ -68,5 +68,5 @@ val bind_rec
   -> register_const_string:(string -> Symbol.t)
   -> expr_primitive
   -> Debuginfo.t
-  -> (Named.t -> Expr.t)
-  -> Expr.t
+  -> (Named.t -> Expr.t * 'a Continuation.Map.t)
+  -> Expr.t * 'a Continuation.Map.t

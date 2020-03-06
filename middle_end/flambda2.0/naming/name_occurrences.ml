@@ -69,6 +69,8 @@ end) : sig
 
   val subset_domain : t -> t -> bool
 
+  val inter_domain_is_non_empty : t -> t -> bool
+
   val mem : t -> N.t -> bool
 
   val remove : t -> N.t -> t
@@ -380,6 +382,11 @@ end = struct
     | Potentially_many map1, Potentially_many map2 ->
       N.Set.subset (N.Map.keys map1) (N.Map.keys map2)
 
+  (* CR mshinwell: Provide better implementation.  Only used in closure
+     conversion at the moment. *)
+  let inter_domain_is_non_empty t1 t2 =
+    not (N.Set.is_empty (N.Set.inter (keys t1) (keys t2)))
+
   let mem t name =
     match t with
     | Empty -> false
@@ -517,6 +524,7 @@ end)
 type t = {
   names : For_names.t;
   continuations : For_continuations.t;
+  continuations_in_trap_actions : For_continuations.t;
   closure_vars : For_closure_vars.t;
   code_ids : For_code_ids.t;
   newer_version_of_code_ids : For_code_ids.t;
@@ -527,25 +535,28 @@ type t = {
 let empty = {
   names = For_names.empty;
   continuations = For_continuations.empty;
+  continuations_in_trap_actions = For_continuations.empty;
   closure_vars = For_closure_vars.empty;
   code_ids = For_code_ids.empty;
   newer_version_of_code_ids = For_code_ids.empty;
 }
 
-let print ppf ({ names; continuations; closure_vars; code_ids;
-                 newer_version_of_code_ids; } as t) =
+let print ppf ({ names; continuations; continuations_in_trap_actions;
+                 closure_vars; code_ids; newer_version_of_code_ids; } as t) =
   if t = empty then
     Format.fprintf ppf "no_occurrences"
   else
   Format.fprintf ppf "@[<hov 1>\
       @[<hov 1>(names %a)@]@ \
       @[<hov 1>(continuations %a)@]@ \
+      @[<hov 1>(continuations_in_trap_actions %a)@]@ \
       @[<hov 1>(closure_vars %a)@]@ \
       @[<hov 1>(code_ids %a)@] \
       @[<hov 1>(newer_version_of_code_ids %a)@]\
       @]"
     For_names.print names
     For_continuations.print continuations
+    For_continuations.print continuations_in_trap_actions
     For_closure_vars.print closure_vars
     For_code_ids.print code_ids
     For_code_ids.print newer_version_of_code_ids
@@ -555,9 +566,21 @@ let singleton_continuation cont =
     continuations = For_continuations.singleton cont Kind.normal;
   }
 
+let singleton_continuation_in_trap_action cont =
+  { empty with
+    continuations_in_trap_actions =
+      For_continuations.singleton cont Kind.normal;
+  }
+
 let add_continuation t cont =
   { t with
     continuations = For_continuations.add t.continuations cont Kind.normal;
+  }
+
+let add_continuation_in_trap_action t cont =
+  { t with
+    continuations_in_trap_actions =
+      For_continuations.add t.continuations_in_trap_actions cont Kind.normal;
   }
 
 let count_continuation t cont =
@@ -623,6 +646,9 @@ let create_variables vars kind =
     names;
   }
 
+let create_variables' name_mode vars =
+  create_variables vars name_mode
+
 let create_names names kind =
   let names =
     Name.Set.fold (fun name names ->
@@ -644,8 +670,8 @@ let create_closure_vars clos_vars =
   { empty with closure_vars; }
 
 let apply_name_permutation
-      ({ names; continuations; closure_vars; code_ids;
-         newer_version_of_code_ids; } as t)
+      ({ names; continuations; continuations_in_trap_actions; closure_vars;
+         code_ids; newer_version_of_code_ids; } as t)
       perm =
   if Name_permutation.is_empty perm then t
   else
@@ -655,10 +681,15 @@ let apply_name_permutation
     let continuations =
       For_continuations.apply_name_permutation continuations perm
     in
+    let continuations_in_trap_actions =
+      For_continuations.apply_name_permutation continuations_in_trap_actions
+        perm
+    in
     (* [Symbol]s, [Var_within_closure]s and [Code_id]s are never bound using
        [Name_abstraction]. *)
     { names;
       continuations;
+      continuations_in_trap_actions;
       closure_vars;
       code_ids;
       newer_version_of_code_ids;
@@ -668,37 +699,71 @@ let binary_conjunction ~for_names ~for_continuations
       ~for_closure_vars ~for_code_ids
       { names = names1;
         continuations = continuations1;
+        continuations_in_trap_actions = continuations_in_trap_actions1;
         closure_vars = closure_vars1;
         code_ids = code_ids1;
         newer_version_of_code_ids = newer_version_of_code_ids1;
       }
       { names = names2;
         continuations = continuations2;
+        continuations_in_trap_actions = continuations_in_trap_actions2;
         closure_vars = closure_vars2;
         code_ids = code_ids2;
         newer_version_of_code_ids = newer_version_of_code_ids2;
       } =
   for_names names1 names2
     && for_continuations continuations1 continuations2
+    && for_continuations continuations_in_trap_actions1
+         continuations_in_trap_actions2
     && for_closure_vars closure_vars1 closure_vars2
     && for_code_ids code_ids1 code_ids2
     && for_code_ids newer_version_of_code_ids1 newer_version_of_code_ids2
 
-let binary_op ~for_names ~for_continuations ~for_closure_vars ~for_code_ids
+let binary_disjunction ~for_names ~for_continuations
+      ~for_closure_vars ~for_code_ids
       { names = names1;
         continuations = continuations1;
+        continuations_in_trap_actions = continuations_in_trap_actions1;
         closure_vars = closure_vars1;
         code_ids = code_ids1;
         newer_version_of_code_ids = newer_version_of_code_ids1;
       }
       { names = names2;
         continuations = continuations2;
+        continuations_in_trap_actions = continuations_in_trap_actions2;
+        closure_vars = closure_vars2;
+        code_ids = code_ids2;
+        newer_version_of_code_ids = newer_version_of_code_ids2;
+      } =
+  for_names names1 names2
+    || for_continuations continuations1 continuations2
+    || for_continuations continuations_in_trap_actions1
+         continuations_in_trap_actions2
+    || for_closure_vars closure_vars1 closure_vars2
+    || for_code_ids code_ids1 code_ids2
+    || for_code_ids newer_version_of_code_ids1 newer_version_of_code_ids2
+
+let binary_op ~for_names ~for_continuations ~for_closure_vars ~for_code_ids
+      { names = names1;
+        continuations = continuations1;
+        continuations_in_trap_actions = continuations_in_trap_actions1;
+        closure_vars = closure_vars1;
+        code_ids = code_ids1;
+        newer_version_of_code_ids = newer_version_of_code_ids1;
+      }
+      { names = names2;
+        continuations = continuations2;
+        continuations_in_trap_actions = continuations_in_trap_actions2;
         closure_vars = closure_vars2;
         code_ids = code_ids2;
         newer_version_of_code_ids = newer_version_of_code_ids2;
       } =
   let names = for_names names1 names2 in
   let continuations = for_continuations continuations1 continuations2 in
+  let continuations_in_trap_actions =
+    for_continuations continuations_in_trap_actions1
+      continuations_in_trap_actions2
+  in
   let closure_vars = for_closure_vars closure_vars1 closure_vars2 in
   let code_ids = for_code_ids code_ids1 code_ids2 in
   let newer_version_of_code_ids =
@@ -706,6 +771,7 @@ let binary_op ~for_names ~for_continuations ~for_closure_vars ~for_code_ids
   in
   { names;
     continuations;
+    continuations_in_trap_actions;
     closure_vars;
     code_ids;
     newer_version_of_code_ids;
@@ -745,6 +811,13 @@ let subset_domain t1 t2 =
     ~for_code_ids:For_code_ids.subset_domain
     t1 t2
 
+let inter_domain_is_non_empty t1 t2 =
+  binary_disjunction ~for_names:For_names.inter_domain_is_non_empty
+    ~for_continuations:For_continuations.inter_domain_is_non_empty
+    ~for_closure_vars:For_closure_vars.inter_domain_is_non_empty
+    ~for_code_ids:For_code_ids.inter_domain_is_non_empty
+    t1 t2
+
 let rec union_list ts =
   match ts with
   | [] -> empty
@@ -752,6 +825,9 @@ let rec union_list ts =
 
 let closure_vars t = For_closure_vars.keys t.closure_vars
 let continuations t = For_continuations.keys t.continuations
+let continuations_including_in_trap_actions t =
+  Continuation.Set.union (For_continuations.keys t.continuations)
+    (For_continuations.keys t.continuations_in_trap_actions)
 let code_ids t = For_code_ids.keys t.code_ids
 let newer_version_of_code_ids t = For_code_ids.keys t.newer_version_of_code_ids
 
@@ -787,12 +863,26 @@ let remove_vars t vars =
       names;
     }
 
+let remove_continuation t k =
+  if For_continuations.is_empty t.continuations
+    && For_continuations.is_empty t.continuations_in_trap_actions
+  then t
+  else
+    let continuations = For_continuations.remove t.continuations k in
+    let continuations_in_trap_actions =
+      For_continuations.remove t.continuations_in_trap_actions k
+    in
+    { t with
+      continuations;
+      continuations_in_trap_actions;
+    }
+
 let greatest_name_mode_var t var =
   For_names.greatest_name_mode t.names (Name.var var)
 
 let downgrade_occurrences_at_strictly_greater_kind
-      { names; continuations; closure_vars; code_ids;
-        newer_version_of_code_ids; }
+      { names; continuations; continuations_in_trap_actions; closure_vars;
+        code_ids; newer_version_of_code_ids; }
       max_kind =
   (* CR mshinwell: Don't reallocate the record if nothing changed *)
   let names =
@@ -802,6 +892,10 @@ let downgrade_occurrences_at_strictly_greater_kind
   let continuations =
     For_continuations.downgrade_occurrences_at_strictly_greater_kind
       continuations max_kind
+  in
+  let continuations_in_trap_actions =
+    For_continuations.downgrade_occurrences_at_strictly_greater_kind
+      continuations_in_trap_actions max_kind
   in
   let closure_vars =
     For_closure_vars.downgrade_occurrences_at_strictly_greater_kind
@@ -817,9 +911,16 @@ let downgrade_occurrences_at_strictly_greater_kind
   in
   { names;
     continuations;
+    continuations_in_trap_actions;
     closure_vars;
     code_ids;
     newer_version_of_code_ids;
+  }
+
+let with_only_variables { names; _ } =
+  let names = For_names.filter names ~f:Name.is_var in
+  { empty with
+    names;
   }
 
 let without_code_ids t =

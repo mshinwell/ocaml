@@ -21,5 +21,5 @@ val convert_and_bind
   -> Lambda.primitive
   -> args:Simple.t list
   -> Debuginfo.t
-  -> (Flambda.Named.t option -> Flambda.Expr.t)
-  -> Flambda.Expr.t
+  -> (Flambda.Named.t option -> Flambda.Expr.t * 'a Continuation.Map.t)
+  -> Flambda.Expr.t * 'a Continuation.Map.t

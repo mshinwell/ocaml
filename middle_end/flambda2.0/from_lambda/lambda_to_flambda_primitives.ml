@@ -946,7 +946,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
 
 let convert_and_bind ~backend exn_cont ~register_const_string
       (prim : L.primitive) ~(args : Simple.t list) (dbg : Debuginfo.t)
-      (cont : Named.t option -> Expr.t) : Expr.t =
+      (cont : Named.t option -> Expr.t * _) : Expr.t * _ =
   let expr = convert_lprim ~backend prim args dbg in
   H.bind_rec ~backend exn_cont ~register_const_string expr dbg
     (fun named -> cont (Some named))

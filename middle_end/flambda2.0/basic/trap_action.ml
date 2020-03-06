@@ -78,10 +78,13 @@ let print_with_cache ~cache:_ ppf t = print ppf t
 
 let invariant _env _t = ()
 
+(* Continuations used in trap actions are tracked separately, since sometimes,
+   we don't want to count them as uses.  However they must be tracked for
+   lifting of continuations during [Closure_conversion]. *)
 let free_names = function
   | Push { exn_handler; }
   | Pop { exn_handler; raise_kind = _; } ->
-    Name_occurrences.singleton_continuation exn_handler
+    Name_occurrences.singleton_continuation_in_trap_action exn_handler
 
 let apply_name_permutation t perm =
   match t with

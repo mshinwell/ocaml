@@ -217,13 +217,18 @@ let trap_action t = t.trap_action
 let debuginfo t = t.dbg
 
 let free_names { k; args; trap_action; dbg=_; } =
-  (* Continuations in the trap action don't count as free occurrences, since
-     they're not actually "uses". *)
   let default =
     Name_occurrences.add_continuation (Simple.List.free_names args) k
   in
-  if Option.is_some trap_action then Name_occurrences.add_continuation default k
-  else default
+  match trap_action with
+  | None -> default
+  | Some trap_action ->
+    (* A second occurrence of [k] is added to ensure that the continuation [k]
+       is never inlined out (which cannot be done, or the trap action
+       would be lost). *)
+    Name_occurrences.add_continuation
+      (Name_occurrences.union default (Trap_action.free_names trap_action))
+      k
 
 let apply_name_permutation ({ k; args; trap_action; dbg; } as t) perm =
   let k' = Name_permutation.apply_continuation perm k in

@@ -48,7 +48,11 @@ val apply_name_permutation : t -> Name_permutation.t -> t
 
 val singleton_continuation : Continuation.t -> t
 
+val singleton_continuation_in_trap_action : Continuation.t -> t
+
 val add_continuation : t -> Continuation.t -> t
+
+val add_continuation_in_trap_action : t -> Continuation.t -> t
 
 val count_continuation : t -> Continuation.t -> Num_occurrences.t
 
@@ -78,6 +82,8 @@ val singleton_symbol : Symbol.t -> Name_mode.t -> t
 
 val create_variables : Variable.Set.t -> Name_mode.t -> t
 
+val create_variables' : Name_mode.t -> Variable.Set.t -> t
+
 val create_names : Name.Set.t -> Name_mode.t -> t
 
 val create_closure_vars : Var_within_closure.Set.t -> t
@@ -96,9 +102,13 @@ val union_list : t list -> t
     those occurrences are ignored. *)
 val subset_domain : t -> t -> bool
 
+val inter_domain_is_non_empty : t -> t -> bool
+
 val no_variables : t -> bool
 
 val continuations : t -> Continuation.Set.t
+
+val continuations_including_in_trap_actions : t -> Continuation.Set.t
 
 val closure_vars : t -> Var_within_closure.Set.t
 
@@ -112,6 +122,8 @@ val code_ids_and_newer_version_of_code_ids : t -> Code_id.Set.t
 
 val without_code_ids : t -> t
 
+val with_only_variables :  t -> t
+
 val mem_var : t -> Variable.t -> bool
 
 val mem_symbol : t -> Symbol.t -> bool
@@ -123,6 +135,8 @@ val mem_code_id : t -> Code_id.t -> bool
 val remove_var : t -> Variable.t -> t
 
 val remove_vars : t -> Variable.Set.t -> t
+
+val remove_continuation : t -> Continuation.t -> t
 
 val greatest_name_mode_var
    : t

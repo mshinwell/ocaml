@@ -994,7 +994,11 @@ and apply_cont_ret env e k = function
 and apply_cont_regular env e k args =
   match Env.get_k env k with
   | Inline { handler_params; handler_body; } ->
-      assert (Apply_cont_expr.trap_action e = None);
+      if not (Apply_cont_expr.trap_action e = None) then begin
+        Misc.fatal_errorf "This [Apply_cont] should not have a trap \
+            action:@ %a"
+          Apply_cont_expr.print e
+      end;
       apply_cont_inline env e k args handler_body handler_params
   | Jump { types; cont; } ->
       apply_cont_jump env e types cont args
@@ -1154,10 +1158,12 @@ and params_and_body env fun_name fun_dbg p =
             C.fundecl fun_name fun_args fun_body fun_flags fun_dbg
           with Misc.Fatal_error as e ->
             Format.eprintf "\n%sContext is:%s translating function %s to Cmm \
-                with body@ %a\n"
+                with return cont %a, exn cont %a and body:@ %a\n"
               (Flambda_colours.error ())
               (Flambda_colours.normal ())
               fun_name
+              Continuation.print k
+              Exn_continuation.print k_exn
               Expr.print body;
             raise e)
 

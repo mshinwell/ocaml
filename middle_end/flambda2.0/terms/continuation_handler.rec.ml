@@ -31,7 +31,11 @@ let print_using_where_with_cache (recursive : Recursive.t) ~cache ppf k
   end;
   Continuation_params_and_handler.pattern_match t.params_and_handler
     ~f:(fun params ~handler ->
-      fprintf ppf "@[<hov 0>@<0>%s%a@<0>%s@<0>%s%s@<0>%s%s@<0>%s%s@<0>%s"
+      begin match Expr.descr handler with
+      | Apply_cont _ | Invalid _ -> fprintf ppf "@[<hov 1>"
+      | _ -> fprintf ppf "@[<v 1>"
+      end;
+      fprintf ppf "@<0>%s%a@<0>%s@<0>%s%s@<0>%s%s@<0>%s%s@<0>%s"
         (Flambda_colours.continuation_definition ())
         Continuation.print k
         (Flambda_colours.normal ())

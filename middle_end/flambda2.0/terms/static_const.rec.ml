@@ -296,12 +296,12 @@ include Identifiable.Make (struct
           (Or_variable.print Numbers.Float_by_bit_pattern.print))
         fields
     | Mutable_string { initial_value = s; } ->
-      fprintf ppf "@[<hov 1>(@<0>%sMutable_string@<0>%s@ \"%S\")@]"
+      fprintf ppf "@[<hov 1>(@<0>%sMutable_string@<0>%s@ %S)@]"
         (Flambda_colours.static_part ())
         (Flambda_colours.normal ())
         s
     | Immutable_string s ->
-      fprintf ppf "@[<hov 1>(@<0>%sImmutable_string@<0>%s@ \"%S\")@]"
+      fprintf ppf "@[<hov 1>(@<0>%sImmutable_string@<0>%s@ %S)@]"
         (Flambda_colours.static_part ())
         (Flambda_colours.normal ())
         s
