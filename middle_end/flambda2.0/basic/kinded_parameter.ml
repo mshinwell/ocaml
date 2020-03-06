@@ -80,11 +80,12 @@ let apply_name_permutation ({ param = _; kind; } as t) perm =
       Misc.fatal_errorf "Illegal name permutation on [Kinded_parameter]: %a"
         Name_permutation.print perm)
 
-let add_to_name_permutation t1 t2 perm =
-  Name_permutation.add_variable perm (var t1) (var t2)
+let add_to_name_permutation t ~guaranteed_fresh perm =
+  Name_permutation.add_fresh_variable perm (var t)
+    ~guaranteed_fresh:(var guaranteed_fresh)
 
-let name_permutation t1 t2 =
-  add_to_name_permutation t1 t2 Name_permutation.empty
+let name_permutation t ~guaranteed_fresh =
+  add_to_name_permutation t ~guaranteed_fresh Name_permutation.empty
 
 let singleton_occurrence_in_terms t =
   Name_occurrences.singleton_variable (var t) Name_mode.normal

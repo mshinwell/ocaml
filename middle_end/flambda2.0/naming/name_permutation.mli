@@ -36,6 +36,8 @@ val compose : second:t -> first:t -> t
 
 val add_variable : t -> Variable.t -> Variable.t -> t
 
+val add_fresh_variable : t -> Variable.t -> guaranteed_fresh:Variable.t -> t
+
 val apply_variable : t -> Variable.t -> Variable.t
 
 val apply_variable_set : t -> Variable.Set.t -> Variable.Set.t
@@ -43,5 +45,11 @@ val apply_variable_set : t -> Variable.Set.t -> Variable.Set.t
 val apply_name : t -> Name.t -> Name.t
 
 val add_continuation : t -> Continuation.t -> Continuation.t -> t
+
+val add_fresh_continuation
+   : t
+  -> Continuation.t
+  -> guaranteed_fresh:Continuation.t
+  -> t
 
 val apply_continuation : t -> Continuation.t -> Continuation.t

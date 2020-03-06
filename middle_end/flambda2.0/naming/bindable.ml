@@ -30,11 +30,11 @@ module type S = sig
 
   val rename : t -> t
 
-  val name_permutation : t -> t -> Name_permutation.t
+  val name_permutation : t -> guaranteed_fresh:t -> Name_permutation.t
 
   val add_to_name_permutation
      : t
-    -> t
+    -> guaranteed_fresh:t
     -> Name_permutation.t
     -> Name_permutation.t
 

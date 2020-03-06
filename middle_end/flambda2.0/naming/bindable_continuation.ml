@@ -24,11 +24,11 @@ let apply_name_permutation t perm = Name_permutation.apply_continuation perm t
 
 let rename t = create ~sort:(sort t) ()
 
-let add_to_name_permutation t1 t2 perm =
-  Name_permutation.add_continuation perm t1 t2
+let add_to_name_permutation t ~guaranteed_fresh perm =
+  Name_permutation.add_fresh_continuation perm t ~guaranteed_fresh
 
-let name_permutation t1 t2 =
-  add_to_name_permutation t1 t2 Name_permutation.empty
+let name_permutation t ~guaranteed_fresh =
+  add_to_name_permutation t ~guaranteed_fresh Name_permutation.empty
 
 let singleton_occurrence_in_terms t = Name_occurrences.singleton_continuation t
 

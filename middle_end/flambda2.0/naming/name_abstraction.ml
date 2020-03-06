@@ -64,7 +64,7 @@ module Make (Bindable : Bindable.S) (Term : Term) = struct
 
   let [@inline always] pattern_match (name, term) ~f =
     let fresh_name = Bindable.rename name in
-    let perm = Bindable.name_permutation name fresh_name in
+    let perm = Bindable.name_permutation name ~guaranteed_fresh:fresh_name in
     let fresh_term = Term.apply_name_permutation term perm in
     f fresh_name fresh_term
 
@@ -104,8 +104,8 @@ module Make (Bindable : Bindable.S) (Term : Term) = struct
 
   let [@inline always] pattern_match_pair (name0, term0) (name1, term1) ~f =
     let fresh_name = Bindable.rename name0 in
-    let perm0 = Bindable.name_permutation name0 fresh_name in
-    let perm1 = Bindable.name_permutation name1 fresh_name in
+    let perm0 = Bindable.name_permutation name0 ~guaranteed_fresh:fresh_name in
+    let perm1 = Bindable.name_permutation name1 ~guaranteed_fresh:fresh_name in
     let fresh_term0 = Term.apply_name_permutation term0 perm0 in
     let fresh_term1 = Term.apply_name_permutation term1 perm1 in
     f fresh_name fresh_term0 fresh_term1
@@ -144,7 +144,8 @@ module Make_list (Bindable : Bindable.S) (Term : Term) = struct
         List.fold_left (fun (fresh_names_rev, perm) stale_name ->
             let fresh_name = Bindable.rename stale_name in
             let perm =
-              Bindable.add_to_name_permutation fresh_name stale_name perm
+              Bindable.add_to_name_permutation stale_name
+                ~guaranteed_fresh:fresh_name perm
             in
             fresh_name :: fresh_names_rev, perm)
           ([], Name_permutation.empty)
@@ -204,10 +205,12 @@ module Make_list (Bindable : Bindable.S) (Term : Term) = struct
         (fun (fresh_names_rev, perm0, perm1) stale_name0 stale_name1 ->
           let fresh_name = Bindable.rename stale_name0 in
           let perm0 =
-            Bindable.add_to_name_permutation fresh_name stale_name0 perm0
+            Bindable.add_to_name_permutation stale_name0
+              ~guaranteed_fresh:fresh_name perm0
           in
           let perm1 =
-            Bindable.add_to_name_permutation fresh_name stale_name1 perm1
+            Bindable.add_to_name_permutation stale_name1
+              ~guaranteed_fresh:fresh_name perm1
           in
           fresh_name :: fresh_names_rev, perm0, perm1)
         ([], Name_permutation.empty, Name_permutation.empty)
@@ -249,7 +252,8 @@ module Make_map (Bindable : Bindable.S) (Term : Term) = struct
         let perm =
           Bindable.Map.fold (fun stale_name _ perm ->
               let fresh_name = Bindable.rename stale_name in
-              Bindable.add_to_name_permutation fresh_name stale_name perm)
+              Bindable.add_to_name_permutation stale_name
+                ~guaranteed_fresh:fresh_name perm)
             names
             Name_permutation.empty
         in
@@ -265,7 +269,8 @@ module Make_map (Bindable : Bindable.S) (Term : Term) = struct
               let fresh_name = Bindable.rename stale_name in
               let fresh_names = Bindable.Set.add fresh_name fresh_names in
               let perm =
-                Bindable.add_to_name_permutation fresh_name stale_name perm
+                Bindable.add_to_name_permutation stale_name
+                  ~guaranteed_fresh:fresh_name perm
               in
               fresh_names, perm)
             names

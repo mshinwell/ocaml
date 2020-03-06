@@ -101,21 +101,21 @@ let rename t =
     in
     Set_of_closures { name_mode; closure_vars; }
 
-let add_to_name_permutation t1 t2 perm =
+let add_to_name_permutation t1 ~guaranteed_fresh:t2 perm =
   match t1, t2 with
   | Singleton var1, Singleton var2 ->
-    Name_permutation.add_variable perm
+    Name_permutation.add_fresh_variable perm
       (Var_in_binding_pos.var var1)
-      (Var_in_binding_pos.var var2)
+      ~guaranteed_fresh:(Var_in_binding_pos.var var2)
   | Set_of_closures { name_mode = _; closure_vars = closure_vars1; },
       Set_of_closures { name_mode = _; 
         closure_vars = closure_vars2; } ->
     let perm =
       Closure_id.Map.fold2_stop_on_key_mismatch
         (fun _closure_var var1 var2 perm ->
-          Name_permutation.add_variable perm
+          Name_permutation.add_fresh_variable perm
             (Var_in_binding_pos.var var1)
-            (Var_in_binding_pos.var var2))
+            ~guaranteed_fresh:(Var_in_binding_pos.var var2))
         closure_vars1
         closure_vars2
         perm
@@ -132,8 +132,8 @@ let add_to_name_permutation t1 t2 perm =
       print t1
       print t2
 
-let name_permutation t1 t2 =
-  add_to_name_permutation t1 t2 Name_permutation.empty
+let name_permutation t ~guaranteed_fresh =
+  add_to_name_permutation t ~guaranteed_fresh Name_permutation.empty
 
 let singleton_occurrence_in_terms t = free_names t
 

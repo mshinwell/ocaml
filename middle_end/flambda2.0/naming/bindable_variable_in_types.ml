@@ -27,11 +27,11 @@ let apply_name_permutation t perm = Name_permutation.apply_variable perm t
 
 let rename t = rename t
 
-let add_to_name_permutation t1 t2 perm =
-  Name_permutation.add_variable perm t1 t2
+let add_to_name_permutation t ~guaranteed_fresh perm =
+  Name_permutation.add_fresh_variable perm t ~guaranteed_fresh
 
-let name_permutation t1 t2 =
-  add_to_name_permutation t1 t2 Name_permutation.empty
+let name_permutation t ~guaranteed_fresh =
+  add_to_name_permutation t ~guaranteed_fresh Name_permutation.empty
 
 (* CR mshinwell: These shouldn't have "in_terms" on their names *)
 let singleton_occurrence_in_terms t =
