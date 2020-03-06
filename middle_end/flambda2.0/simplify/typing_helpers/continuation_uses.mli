@@ -40,7 +40,7 @@ val add_use
 
 val compute_handler_env
    : t
-  -> definition_typing_env_with_params_defined:Flambda_type.Typing_env.t
+  -> env_at_fork_plus_params_and_consts:Flambda_type.Typing_env.t
   -> params:Kinded_parameter.t list
   -> Continuation_env_and_param_types.t
 

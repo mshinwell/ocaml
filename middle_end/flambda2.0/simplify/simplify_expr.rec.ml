@@ -251,7 +251,6 @@ and simplify_non_recursive_let_cont_handler
   let cont_handler = Non_recursive_let_cont_handler.handler non_rec_handler in
   Non_recursive_let_cont_handler.pattern_match non_rec_handler
     ~f:(fun cont ~body ->
-      let free_names_of_body = Expr.free_names body in
       let denv = DA.denv dacc in
       let unit_toplevel_exn_cont = DE.unit_toplevel_exn_continuation denv in
       let at_unit_toplevel =
@@ -265,10 +264,14 @@ and simplify_non_recursive_let_cont_handler
         DE.at_unit_toplevel denv
           && (not (Continuation_handler.is_exn_handler cont_handler))
           && Continuation.Set.subset
-               (Name_occurrences.continuations free_names_of_body)
+               (Name_occurrences.continuations (Expr.free_names body))
                (Continuation.Set.of_list [cont; unit_toplevel_exn_cont])
       in
       let r, prior_lifted_constants =
+        (* We clear the lifted constants accumulator so that we can easily
+           obtain, below, any constants that are generated during the
+           simplification of the [body].  We will add these
+           [prior_lifted_constants] back into [r] later. *)
         R.get_and_clear_lifted_constants (DA.r dacc)
       in
       let dacc = DA.with_r dacc r in
@@ -278,19 +281,43 @@ and simplify_non_recursive_let_cont_handler
           let params_and_handler = CH.params_and_handler cont_handler in
           let is_exn_handler = CH.is_exn_handler cont_handler in
           CPH.pattern_match params_and_handler ~f:(fun params ~handler ->
-            let denv =
+            let denv_before_body =
               DE.define_parameters (DA.denv dacc) ~params
             in
             let dacc_for_body =
-              DA.with_denv dacc (DE.increment_continuation_scope_level denv)
+              DE.increment_continuation_scope_level denv_before_body
+              |> DA.with_denv dacc
             in
             simplify_expr dacc_for_body body (fun dacc_after_body ->
               let cont_uses_env = DA.continuation_uses_env dacc_after_body in
-              let r = DA.r dacc_after_body in
+              let code_age_relation_after_body =
+                TE.code_age_relation (DA.typing_env dacc_after_body)
+              in
+              let dacc =
+                (* We need any lifted constant symbols and associated code IDs
+                   that were produced during simplification of the body to be
+                   defined in the fork environment passed to
+                   [compute_handler_env].
+                   The [DE] component of [dacc_after_body] is discarded since
+                   with the body now and will be moving into a different
+                   scope (that of the handler). *)
+                let lifted = R.get_lifted_constants (DA.r dacc_after_body) in
+                (* CR mshinwell: We don't actually need to add equations on
+                   the symbols here, since the equations giving joined types
+                   will supercede them in [compute_handler_env].  However
+                   we can't just define the symbols; we also need the code IDs
+                   as well (which live in [DE]; the code age relation in [TE]
+                   is dealt with below). *)
+                DE.add_lifted_constants denv_before_body ~lifted
+                |> DA.with_denv dacc_after_body
+              in
               let uses =
                 CUE.compute_handler_env cont_uses_env cont ~params
-                  ~definition_typing_env_with_params_defined:
-                    (DE.typing_env denv)
+                  ~env_at_fork_plus_params_and_consts:(DA.typing_env dacc)
+              in
+              let dacc =
+                DA.map_r dacc ~f:(fun r ->
+                  R.add_prior_lifted_constants r prior_lifted_constants)
               in
               let handler, user_data, uacc, is_single_inlinable_use,
                   is_single_use =
@@ -300,10 +327,6 @@ and simplify_non_recursive_let_cont_handler
                      otherwise, its code will be deleted but any continuation
                      usage information collected during its simplification will
                      remain. *)
-                  let dacc =
-                    DA.map_r dacc_after_body ~f:(fun r ->
-                      R.add_prior_lifted_constants r prior_lifted_constants)
-                  in
                   let user_data, uacc = k dacc in
                   cont_handler, user_data, uacc, false, false
                 (* CR mshinwell: Refactor so we don't have the
@@ -317,6 +340,9 @@ and simplify_non_recursive_let_cont_handler
                          extra_params_and_args; is_single_inlinable_use;
                          is_single_use; } ->
                   let typing_env, extra_params_and_args =
+                    (* Unbox the parameters of the continuation if possible.
+                       Any such unboxing will induce a rewrite (or wrapper) on
+                       the application sites of the continuation. *)
                     match Continuation.sort cont with
                     | Normal when is_single_inlinable_use ->
                       assert (not is_exn_handler);
@@ -337,25 +363,24 @@ and simplify_non_recursive_let_cont_handler
                       handler_typing_env, extra_params_and_args
                   in
                   let dacc =
-                    (* Arrange for lifted constants that were produced during
-                       simplification of the body to be available in the
-                       environment to be used for simplifying the handler.
-                       Likewise for updates to the code age relation. *) 
-                    DA.map_denv dacc_after_body ~f:(fun denv_after_body ->
+                    DA.map_denv dacc ~f:(fun denv ->
+                      (* Ensure that during simplification of the handler we
+                         will know about any changes to the code age relation
+                         that arose during simplification of the body.
+                         Additionally, install the typing environment arising
+                         from the join into [dacc]. *)
                       let typing_env =
                         TE.with_code_age_relation typing_env
-                          (TE.code_age_relation
-                            (DE.typing_env denv_after_body))
+                          code_age_relation_after_body
                       in
-                      DE.add_lifted_constants
-                        (DE.with_typing_env denv typing_env)
-                        ~lifted:(R.get_lifted_constants r))
-                  in
-                  let dacc =
-                    DA.map_r dacc ~f:(fun r ->
-                      R.add_prior_lifted_constants r prior_lifted_constants)
+                      let denv = DE.with_typing_env denv typing_env in
+                      if at_unit_toplevel then denv
+                      else DE.set_not_at_unit_toplevel denv)
                   in
                   let dacc, handler =
+                    (* When still at toplevel, attempt to reify the types
+                       of the continuation's parameters, to allow more lifting
+                       (e.g. of closures with computed free variables). *)
                     match Continuation.sort cont with
                     | Normal
                        when is_single_inlinable_use
@@ -368,10 +393,6 @@ and simplify_non_recursive_let_cont_handler
                       Reify_continuation_param_types.
                         lift_via_reification_of_continuation_param_types dacc
                           ~params ~extra_params_and_args ~handler
-                  in
-                  let dacc =
-                    if at_unit_toplevel then dacc
-                    else DA.map_denv dacc ~f:DE.set_not_at_unit_toplevel
                   in
                   try
                     let handler, user_data, uacc =

@@ -92,7 +92,7 @@ let arity t = t.arity
 
 (* CR mshinwell: Move to [Generic_simplify_let_cont]? *)
 let compute_handler_env t
-      ~definition_typing_env_with_params_defined:typing_env
+      ~env_at_fork_plus_params_and_consts:typing_env
       ~params : Continuation_env_and_param_types.t =
 (*
 Format.eprintf "%d uses for %a\n%!"
