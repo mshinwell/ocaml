@@ -58,10 +58,10 @@ let fresh_var env ((name, _loc) as v) =
   { env with
     variables = VM.add v v' env.variables }
 
-let simple_ident env (s:Fexpr.simple) : Ident.t =
+let simple_ident env (s:Fexpr.simple) : Ilambda.simple =
   match s with
   | Var v ->
-      VM.find v env.variables
+      Var (VM.find v env.variables)
   | _ ->
       (* TODO: decompose *)
       Misc.fatal_error "not an ident"
@@ -78,10 +78,10 @@ let infix_binop (op:Fexpr.infix_binop) : Lambda.primitive =
 let defining_expr env (named:Fexpr.named) : Ilambda.named =
   match named with
   | Simple (Var v) ->
-      Var (VM.find v env.variables)
+      Simple (Var (VM.find v env.variables))
   | Simple (Const (Tagged_immediate i)) ->
       let i = int_of_string i in
-      Const (Const_base (Const_int i))
+      Simple (Const (Const_base (Const_int i)))
   | Prim (Infix_binop (op, a1, a2)) ->
       Prim {
         prim = infix_binop op;
@@ -244,13 +244,13 @@ let rec conv_top func_env (prog : Fexpr.program) : program =
              Prim {
                prim = Pmakeblock (tag, Immutable, None);
                args =
-                 List.map (fun v ->
-                     VM.find (of_kind_value_var v) penv.variables)
+                 List.map (fun v : Ilambda.simple ->
+                     Var (VM.find (of_kind_value_var v) penv.variables))
                    elts;
                loc = Location.none;
                exn_continuation = None;
              },
-             Apply_cont (return_continuation, None, [id]))
+             Apply_cont (return_continuation, None, [Ilambda.Var id]))
       in
       let expr : Ilambda.t =
         Let_cont {

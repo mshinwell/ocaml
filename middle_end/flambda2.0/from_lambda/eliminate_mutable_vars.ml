@@ -52,7 +52,9 @@ module Env : sig
     -> (Ident.t * Lambda.value_kind) list
 
   val rename_variable : t -> Ident.t -> Ident.t
-  val rename_variables : t -> Ident.t list -> Ident.t list
+
+  val rename_simple : t -> Ilambda.simple -> Ilambda.simple
+  val rename_simples : t -> Ilambda.simple list -> Ilambda.simple list
 end = struct
   type t = {
     current_values_of_mutables_in_scope
@@ -169,8 +171,13 @@ end = struct
     | exception Not_found -> id
     | (id, _kind) -> id
 
-  let rename_variables t ids =
-    List.map (fun id -> rename_variable t id) ids
+  let rename_simple t (simple : Ilambda.simple) : Ilambda.simple =
+    match simple with
+    | Var id -> Var (rename_variable t id)
+    | Const _ -> simple
+
+  let rename_simples t simples =
+    List.map (fun simple -> rename_simple t simple) simples
 end
 
 let transform_exn_continuation env
@@ -178,6 +185,10 @@ let transform_exn_continuation env
       : Ilambda.exn_continuation =
   let more_extra_args =
     Env.extra_args_for_continuation_with_kinds env exn_continuation.exn_handler
+  in
+  let more_extra_args =
+    List.map (fun (arg, kind) : (Ilambda.simple * _) -> Var arg, kind)
+      more_extra_args
   in
   { exn_handler = exn_continuation.exn_handler;
     extra_args = exn_continuation.extra_args @ more_extra_args;
@@ -208,6 +219,10 @@ let rec transform_expr env (expr : Ilambda.t) : Ilambda.t =
     | _::_ ->
       let wrapper_cont = Continuation.create () in
       let return_value = Ident.create_local "return_val" in
+      let args =
+        List.map (fun var : Ilambda.simple -> Var var)
+          (return_value :: extra_args)
+      in
       Let_cont {
         name = wrapper_cont;
         is_exn_handler = false;
@@ -218,20 +233,26 @@ let rec transform_expr env (expr : Ilambda.t) : Ilambda.t =
           continuation = wrapper_cont;
           exn_continuation;
         };
-        handler =
-          Apply_cont (apply.continuation, None, return_value :: extra_args);
+        handler = Apply_cont (apply.continuation, None, args);
       }
     end
   | Apply_cont (cont, trap_action, args) ->
-    let args = Env.rename_variables env args in
-    let extra_args = Env.extra_args_for_continuation env cont in
+    let args = Env.rename_simples env args in
+    let extra_args =
+      List.map (fun var : Ilambda.simple -> Var var)
+        (Env.extra_args_for_continuation env cont)
+    in
     Apply_cont (cont, trap_action, args @ extra_args)
   | Switch (id, switch) ->
     let id = Env.rename_variable env id in
     let consts_rev =
       List.fold_left (fun consts_rev (arm, cont, trap, args) ->
-          let args = Env.rename_variables env args in
+          let args = Env.rename_simples env args in
           let extra_args = Env.extra_args_for_continuation env cont in
+          let extra_args =
+            List.map (fun arg : Ilambda.simple -> Var arg)
+              extra_args
+          in
           (arm, cont, trap, args @ extra_args) :: consts_rev)
         []
         switch.consts
@@ -241,8 +262,12 @@ let rec transform_expr env (expr : Ilambda.t) : Ilambda.t =
       match switch.failaction with
       | None -> None
       | Some (cont, trap, args) ->
-        let args = Env.rename_variables env args in
+        let args = Env.rename_simples env args in
         let extra_args = Env.extra_args_for_continuation env cont in
+        let extra_args =
+          List.map (fun arg : Ilambda.simple -> Var arg)
+            extra_args
+        in
         Some (cont, trap, args @ extra_args)
     in
     let switch =
@@ -259,25 +284,27 @@ and transform_named env id user_visible kind (named : Ilambda.named) k
     Let (id, user_visible, kind, named, k env)
   in
   match named with
-  | Var id -> normal_case (Var (Env.rename_variable env id))
-  | Const _ -> normal_case named
+  | Simple (Var id) -> normal_case (Simple (Var (Env.rename_variable env id)))
+  | Simple (Const _) -> normal_case named
   | Prim { prim; args; loc; exn_continuation; } ->
-    let args = Env.rename_variables env args in
+    let args = Env.rename_simples env args in
     let exn_continuation =
       Option.map (transform_exn_continuation env) exn_continuation
     in
     normal_case (Prim { prim; args; loc; exn_continuation; })
   | Assign { being_assigned; new_value; } ->
     let env, new_id, new_kind = Env.new_id_for_mutable env being_assigned in
-    Let (new_id, User_visible, new_kind, Var (Env.rename_variable env new_value),
-      Let (id, Not_user_visible, kind, Const (Const_base (Const_int 0)), k env))
+    Let (new_id, User_visible, new_kind,
+      Simple (Env.rename_simple env new_value),
+      Let (id, Not_user_visible, kind,
+        Simple (Const (Const_base (Const_int 0))), k env))
 
 and transform_let_mutable env
       ({ id; initial_value; contents_kind; body; } : Ilambda.let_mutable)
       : Ilambda.t =
   let env, new_id = Env.add_mutable_and_make_new_id env id contents_kind in
   let body = transform_expr env body in
-  Let (new_id, User_visible, contents_kind, Var initial_value, body)
+  Let (new_id, User_visible, contents_kind, Simple initial_value, body)
 
 and transform_let_cont env
       ({ name; is_exn_handler; params; recursive; body; handler; }
@@ -307,12 +334,12 @@ and transform_apply env
     | Method { kind; obj; } ->
       Method {
         kind;
-        obj = Env.rename_variable env obj;
+        obj = Env.rename_simple env obj;
       }
   in
   { kind;
     func = Env.rename_variable env func;
-    args = Env.rename_variables env args;
+    args = Env.rename_simples env args;
     continuation;
     exn_continuation;
     loc;

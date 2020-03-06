@@ -19,9 +19,13 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+type simple =
+  | Var of Ident.t
+  | Const of Lambda.structured_constant
+
 type exn_continuation =
   { exn_handler : Continuation.t;
-    extra_args : (Ident.t * Lambda.value_kind) list;
+    extra_args : (simple * Lambda.value_kind) list;
   }
 
 type trap_action =
@@ -38,23 +42,22 @@ type t =
   | Let_rec of function_declarations * t
   | Let_cont of let_cont
   | Apply of apply
-  | Apply_cont of Continuation.t * trap_action option * Ident.t list
+  | Apply_cont of Continuation.t * trap_action option * simple list
   | Switch of Ident.t * switch
 
 and named =
-  | Var of Ident.t
-  | Const of Lambda.structured_constant
+  | Simple of simple
   | Prim of {
       prim : Lambda.primitive;
-      args : Ident.t list;
+      args : simple list;
       loc : Location.t;
       exn_continuation : exn_continuation option;
     }
-  | Assign of { being_assigned : Ident.t; new_value : Ident.t; }
+  | Assign of { being_assigned : Ident.t; new_value : simple; }
 
 and let_mutable = {
   id : Ident.t;
-  initial_value : Ident.t;
+  initial_value : simple;
   contents_kind : Lambda.value_kind;
   body : t;
 }
@@ -88,7 +91,7 @@ and let_cont = {
 and apply = {
   kind : apply_kind;
   func : Ident.t;
-  args : Ident.t list;
+  args : simple list;
   continuation : Continuation.t;
   exn_continuation : exn_continuation;
   loc : Location.t;
@@ -99,12 +102,12 @@ and apply = {
 
 and apply_kind =
   | Function
-  | Method of { kind : Lambda.meth_kind; obj : Ident.t; }
+  | Method of { kind : Lambda.meth_kind; obj : simple; }
 
 and switch = {
   numconsts : int;
-  consts : (int * Continuation.t * trap_action option * (Ident.t list)) list;
-  failaction : (Continuation.t * trap_action option * (Ident.t list)) option;
+  consts : (int * Continuation.t * trap_action option * (simple list)) list;
+  failaction : (Continuation.t * trap_action option * (simple list)) option;
 }
 
 type program = {
@@ -116,9 +119,14 @@ type program = {
 
 let fprintf = Format.fprintf
 
-let print_ident_and_value_kind ppf (id, kind) =
+let print_simple ppf simple =
+  match simple with
+  | Var id -> Ident.print ppf id
+  | Const cst -> Printlambda.structured_constant ppf cst
+
+let print_simple_and_value_kind ppf (simple, kind) =
   fprintf ppf "@[%a@ \u{2237}@ %a@]"
-    Ident.print id
+    print_simple simple
     Printlambda.value_kind' kind
 
 let rec print_function ppf
@@ -146,7 +154,7 @@ let rec print_function ppf
     fprintf ppf "<exn=%a (%a)>"
       Continuation.print exn_continuation.exn_handler
       (Format.pp_print_list ~pp_sep:Format.pp_print_space
-        print_ident_and_value_kind)
+        print_simple_and_value_kind)
       extra_args
   end;
   fprintf ppf "%a@ %a%a)@]"
@@ -156,15 +164,15 @@ let rec print_function ppf
 
 and print_named ppf (named : named) =
   match named with
-  | Var id -> Ident.print ppf id
-  | Const cst -> Printlambda.structured_constant ppf cst
+  | Simple (Var id) -> Ident.print ppf id
+  | Simple (Const cst) -> Printlambda.structured_constant ppf cst
   | Prim { prim; args; _ } ->
     fprintf ppf "@[<2>(%a %a)@]"
       Printlambda.primitive prim
-      (Format.pp_print_list ~pp_sep:Format.pp_print_space Ident.print) args
+      (Format.pp_print_list ~pp_sep:Format.pp_print_space print_simple) args
   | Assign { being_assigned; new_value; } ->
     fprintf ppf "@[<2>(assign@ %a@ %a)@]" Ident.print being_assigned
-      Ident.print new_value
+      print_simple new_value
 
 and print_trap_action ppf trap_action =
   match trap_action with
@@ -185,13 +193,13 @@ and print ppf (t : t) =
       | Method { kind; obj; } ->
         Format.fprintf ppf "send%a %a#%a"
           Printlambda.meth_kind kind
-          Ident.print obj
+          print_simple obj
           Ident.print func
     in
     fprintf ppf "@[<2>(apply@ %a<%a> %a%a%a%a)@]"
       print_func_and_kind ap.func
       Continuation.print ap.continuation
-      (Format.pp_print_list ~pp_sep:Format.pp_print_space Ident.print) ap.args
+      (Format.pp_print_list ~pp_sep:Format.pp_print_space print_simple) ap.args
       Printlambda.apply_tailcall_attribute ap.should_be_tailcall
       Printlambda.apply_inlined_attribute ap.inlined
       Printlambda.apply_specialised_attribute ap.specialised
@@ -215,7 +223,7 @@ and print ppf (t : t) =
     fprintf ppf "@[<2>(let_mutable@ @[<v 1>(@[<2>%a =%a@ %a@]"
       Ident.print id
       Printlambda.value_kind' contents_kind
-      Ident.print initial_value;
+      print_simple initial_value;
     fprintf ppf ")@]@ %a)@]" print body
   | Let_rec (id_arg_list, body) ->
     let bindings ppf id_arg_list =
@@ -242,7 +250,7 @@ and print ppf (t : t) =
               n
               print_trap_action trap
               Continuation.print cont
-              (Format.pp_print_list ~pp_sep:Format.pp_print_space Ident.print)
+              (Format.pp_print_list ~pp_sep:Format.pp_print_space print_simple)
               args)
         sw.consts;
       begin match sw.failaction with
@@ -258,7 +266,7 @@ and print ppf (t : t) =
           fprintf ppf "@[<hv 1>default:@ %aapply_cont %a %a@]"
             print_trap_action trap
             Continuation.print l
-            (Format.pp_print_list ~pp_sep:Format.pp_print_space Ident.print)
+            (Format.pp_print_list ~pp_sep:Format.pp_print_space print_simple)
             args
       end in
     fprintf ppf
@@ -297,7 +305,7 @@ and print ppf (t : t) =
     fprintf ppf "@[<2>(%aapply_cont@ %a@ %a)@]"
       print_trap_action trap_action
       Continuation.print i
-      (Format.pp_print_list ~pp_sep:Format.pp_print_space Ident.print) ls
+      (Format.pp_print_list ~pp_sep:Format.pp_print_space print_simple) ls
 
 let print_program ppf p =
   print ppf p.expr

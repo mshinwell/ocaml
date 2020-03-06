@@ -42,14 +42,10 @@ module Env : sig
   val find_name : t -> Ident.t -> Name.t
   val find_name_exn : t -> Ident.t -> Name.t
 
-  val find_simple : t -> Ident.t -> Simple.t
-  val find_simple_exn : t -> Ident.t -> Simple.t
-
   val find_var : t -> Ident.t -> Variable.t
   val find_var_exn : t -> Ident.t -> Variable.t
 
   val find_vars : t -> Ident.t list -> Variable.t list
-  val find_simples : t -> Ident.t list -> Simple.t list
 
   val add_global : t -> int -> Symbol.t -> t
   val find_global : t -> int -> Symbol.t
@@ -58,6 +54,8 @@ module Env : sig
   val not_at_toplevel : t -> t
 
   val add_simple_to_substitute : t -> Ident.t -> Simple.t -> t
+
+  val find_simple_to_substitute_exn : t -> Ident.t -> Simple.t
 end
 
 (** Used to represent information about a set of function declarations

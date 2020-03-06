@@ -131,7 +131,8 @@ let rec cps_non_tail (lam : L.lambda) (k : Ident.t -> Ilambda.t)
           (k_exn : Continuation.t) : Ilambda.t =
   match lam with
   | Lvar id -> k id
-  | Lconst const -> name_then_cps_non_tail "const" (I.Const const) k k_exn
+  | Lconst const ->
+    name_then_cps_non_tail "const" (I.Simple (Const const)) k k_exn
   | Lapply { ap_func; ap_args; ap_loc; ap_should_be_tailcall; ap_inlined;
       ap_specialised; } ->
     cps_non_tail_list ap_args (fun args ->
@@ -177,7 +178,7 @@ let rec cps_non_tail (lam : L.lambda) (k : Ident.t -> Ilambda.t)
     let defining_expr = cps_tail defining_expr after_defining_expr k_exn in
     let let_mutable : I.let_mutable =
       { id;
-        initial_value = temp_id;
+        initial_value = Var temp_id;
         contents_kind = value_kind;
         body;
       }
@@ -198,7 +199,7 @@ let rec cps_non_tail (lam : L.lambda) (k : Ident.t -> Ilambda.t)
   | Llet (_, value_kind, id, Lconst const, body) ->
     (* This case avoids extraneous continuations. *)
     let body = cps_non_tail body k k_exn in
-    I.Let (id, User_visible, value_kind, Const const, body)
+    I.Let (id, User_visible, value_kind, Simple (Const const), body)
   | Llet (_let_kind, value_kind, id, Lprim (prim, args, loc), body) ->
     (* This case avoids extraneous continuations. *)
     let exn_continuation : I.exn_continuation option =
@@ -319,7 +320,7 @@ let rec cps_non_tail (lam : L.lambda) (k : Ident.t -> Ilambda.t)
       handler = k result_var;
     };
   | Lsend (meth_kind, meth, obj, args, loc) ->
-    cps_non_tail obj (fun obj ->
+    cps_non_tail_simple obj (fun obj ->
       cps_non_tail meth (fun meth ->
         cps_non_tail_list args (fun args ->
           let continuation = Continuation.create () in
@@ -396,14 +397,14 @@ let rec cps_non_tail (lam : L.lambda) (k : Ident.t -> Ilambda.t)
                 };
               handler = Apply_cont (after_continuation,
                 Some (I.Pop { exn_handler = handler_continuation; }),
-                [body_result]);
+                [Ilambda.Var body_result]);
             };
           handler;
         };
       handler = k result_var;
     }
   | Lassign (being_assigned, new_value) ->
-    cps_non_tail new_value (fun new_value ->
+    cps_non_tail_simple new_value (fun new_value ->
         name_then_cps_non_tail "assign"
           (I.Assign { being_assigned; new_value; })
           k k_exn)
@@ -412,11 +413,36 @@ let rec cps_non_tail (lam : L.lambda) (k : Ident.t -> Ilambda.t)
     Misc.fatal_errorf "Term should have been eliminated by [Prepare_lambda]: %a"
       Printlambda.lambda lam
 
+and cps_non_tail_simple (lam : L.lambda) (k : Ilambda.simple -> Ilambda.t)
+      (k_exn : Continuation.t) : Ilambda.t =
+  match lam with
+  | Lvar id -> k (Ilambda.Var id)
+  | Lconst const -> k (Ilambda.Const const)
+  | Lapply _
+  | Lfunction _
+  | Llet _
+  | Lletrec _
+  | Lprim _
+  | Lswitch _
+  | Lstringswitch _
+  | Lstaticraise _
+  | Lstaticcatch _
+  | Ltrywith _
+  | Lifthenelse _
+  | Lsequence _
+  | Lwhile _
+  | Lfor _
+  | Lassign _
+  | Lsend _
+  | Levent _
+  | Lifused _ -> cps_non_tail lam (fun id -> k (Ilambda.Var id)) k_exn
+
 and cps_tail (lam : L.lambda) (k : Continuation.t) (k_exn : Continuation.t)
       : Ilambda.t =
   match lam with
-  | Lvar id -> Apply_cont (k, None, [id])
-  | Lconst const -> name_then_cps_tail "const" (I.Const const) k k_exn
+  | Lvar id -> Apply_cont (k, None, [Ilambda.Var id])
+  | Lconst const ->
+    name_then_cps_tail "const" (I.Simple (Const const)) k k_exn
   | Lapply apply ->
     cps_non_tail_list apply.ap_args (fun args ->
       cps_non_tail apply.ap_func (fun func ->
@@ -440,7 +466,7 @@ and cps_tail (lam : L.lambda) (k : Continuation.t) (k_exn : Continuation.t)
   | Lfunction func ->
     let id = Ident.create_local (name_for_function func) in
     let func = cps_function func in
-    Let_rec ([id, func], Apply_cont (k, None, [id]))
+    Let_rec ([id, func], Apply_cont (k, None, [Ilambda.Var id]))
   | Llet (Variable, value_kind, id, defining_expr, body) ->
     seen_let_mutable := true;
     let temp_id = Ident.create_local "let_mutable" in
@@ -451,7 +477,7 @@ and cps_tail (lam : L.lambda) (k : Continuation.t) (k_exn : Continuation.t)
     in
     let let_mutable : I.let_mutable =
       { id;
-        initial_value = temp_id;
+        initial_value = I.Var temp_id;
         contents_kind = value_kind;
         body;
       }
@@ -473,7 +499,7 @@ and cps_tail (lam : L.lambda) (k : Continuation.t) (k_exn : Continuation.t)
   | Llet (_, value_kind, id, Lconst const, body) ->
     (* This case avoids extraneous continuations. *)
     let body = cps_tail body k k_exn in
-    I.Let (id, User_visible, value_kind, Const const, body)
+    I.Let (id, User_visible, value_kind, Simple (Const const), body)
   | Llet (_let_kind, value_kind, id, Lprim (prim, args, loc), body) ->
     (* This case avoids extraneous continuations. *)
     let exn_continuation : I.exn_continuation option =
@@ -494,7 +520,7 @@ and cps_tail (lam : L.lambda) (k : Continuation.t) (k_exn : Continuation.t)
       body) ->
     (* This case is also to avoid extraneous continuations in code that
        relies on the ref-conversion optimisation. *)
-    cps_non_tail new_value (fun new_value ->
+    cps_non_tail_simple new_value (fun new_value ->
         let body = cps_tail body k k_exn in
         I.Let (id, User_visible, Pgenval,
           I.Assign { being_assigned; new_value; },
@@ -532,7 +558,7 @@ and cps_tail (lam : L.lambda) (k : Continuation.t) (k_exn : Continuation.t)
     cps_non_tail_list args (fun args ->
       I.Let (result_var, Not_user_visible, Pgenval,
         Prim { prim; args; loc; exn_continuation; },
-        Apply_cont (k, None, [result_var]))) k_exn
+        Apply_cont (k, None, [Ilambda.Var result_var]))) k_exn
   | Lswitch (scrutinee,
       { sw_numconsts; sw_consts; sw_numblocks = _; sw_blocks; sw_failaction;
         sw_tags_to_sizes = _; }, _loc) ->
@@ -581,7 +607,7 @@ and cps_tail (lam : L.lambda) (k : Continuation.t) (k_exn : Continuation.t)
       handler;
     }
   | Lsend (meth_kind, meth, obj, args, loc) ->
-    cps_non_tail obj (fun obj ->
+    cps_non_tail_simple obj (fun obj ->
       cps_non_tail meth (fun meth ->
         cps_non_tail_list args (fun args ->
           let exn_continuation : I.exn_continuation =
@@ -602,7 +628,7 @@ and cps_tail (lam : L.lambda) (k : Continuation.t) (k_exn : Continuation.t)
           } in
           I.Apply apply) k_exn) k_exn) k_exn
   | Lassign (being_assigned, new_value) ->
-    cps_non_tail new_value (fun new_value ->
+    cps_non_tail_simple new_value (fun new_value ->
         name_then_cps_tail "assign" (I.Assign { being_assigned; new_value; })
         k k_exn)
       k_exn
@@ -641,7 +667,7 @@ and cps_tail (lam : L.lambda) (k : Continuation.t) (k_exn : Continuation.t)
             };
           handler = Apply_cont (k, Some (
             I.Pop { exn_handler = handler_continuation; }),
-            [body_result]);
+            [Ilambda.Var body_result]);
         };
       handler;
     }
@@ -656,20 +682,21 @@ and name_then_cps_non_tail name defining_expr k _k_exn : I.t =
 
 and name_then_cps_tail name defining_expr k _k_exn : I.t =
   let id = Ident.create_local name in
-  Let (id, Not_user_visible, Pgenval, defining_expr, Apply_cont (k, None, [id]))
+  Let (id, Not_user_visible, Pgenval, defining_expr,
+    Apply_cont (k, None, [Ilambda.Var id]))
 
 and cps_non_tail_list lams k k_exn =
   let lams = List.rev lams in  (* Always evaluate right-to-left. *)
   cps_non_tail_list_core lams (fun ids -> k (List.rev ids)) k_exn
 
 and cps_non_tail_list_core (lams : L.lambda list)
-      (k : Ident.t list -> Ilambda.t)
+      (k : Ilambda.simple list -> Ilambda.t)
       (k_exn : Continuation.t) =
   match lams with
   | [] -> k []
   | lam::lams ->
-    cps_non_tail lam (fun id ->
-      cps_non_tail_list_core lams (fun ids -> k (id :: ids)) k_exn)
+    cps_non_tail_simple lam (fun simple ->
+      cps_non_tail_list_core lams (fun simples -> k (simple :: simples)) k_exn)
       k_exn
 
 and cps_function ({ kind; params; return; body; attr; loc; } : L.lfunction)

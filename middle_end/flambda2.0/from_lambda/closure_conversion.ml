@@ -220,14 +220,36 @@ let rec declare_const t (const : Lambda.structured_constant)
     in
     register_const t const "const_block"
 
-let close_const t (const : Lambda.structured_constant) =
+let close_const0 t (const : Lambda.structured_constant) =
   match declare_const t const with
   | Tagged_immediate c, name ->
-    Named.create_simple (Simple.const (Reg_width_const.tagged_immediate c)),
-      name
-  | Symbol s, name -> Named.create_simple (Simple.symbol s), name
+    Simple.const (Reg_width_const.tagged_immediate c), name
+  | Symbol s, name -> Simple.symbol s, name
   | Dynamically_computed _, name ->
     Misc.fatal_errorf "Declaring a computed constant %s" name
+
+let close_const t const =
+  let simple, name = close_const0 t const in
+  Named.create_simple simple, name
+
+let find_simple_from_id _t env id =
+  match Env.find_var_exn env id with
+  | exception Not_found -> raise Not_found
+  | var ->
+    match Env.find_simple_to_substitute_exn env id with
+    | exception Not_found -> Simple.var var
+    | simple -> simple
+
+(* CR mshinwell: Avoid the double lookup *)
+let find_simple t env (simple : Ilambda.simple) =
+  match simple with
+  | Const const ->
+    let simple, _ = close_const0 t const in
+    simple
+  | Var id -> find_simple_from_id t env id
+
+let find_simples t env ids =
+  List.map (fun id -> find_simple t env id) ids
 
 let close_c_call t ~let_bound_var (prim : Primitive.description)
       ~(args : Simple.t list) exn_continuation dbg
@@ -349,10 +371,10 @@ let close_c_call t ~let_bound_var (prim : Primitive.description)
     Flambda.Let_cont.create_non_recursive return_continuation after_call
       ~body:call
 
-let close_exn_continuation env (exn_continuation : Ilambda.exn_continuation) =
+let close_exn_continuation t env (exn_continuation : Ilambda.exn_continuation) =
   let extra_args =
-    List.map (fun (id, kind) ->
-        let simple = Simple.var (Env.find_var env id) in
+    List.map (fun (simple, kind) ->
+        let simple = find_simple t env simple in
         simple, LC.value_kind kind)
       exn_continuation.extra_args
   in
@@ -365,9 +387,9 @@ let close_primitive t env ~let_bound_var named (prim : Lambda.primitive) ~args
     match exn_continuation with
     | None -> None
     | Some exn_continuation ->
-      Some (close_exn_continuation env exn_continuation)
+      Some (close_exn_continuation t env exn_continuation)
   in
-  let args = Env.find_simples env args in
+  let args = find_simples t env args in
   let dbg = Debuginfo.from_location loc in
   match prim, args with
   | Pccall prim, args ->
@@ -496,14 +518,14 @@ let rec close t env (ilam : Ilambda.t) : Expr.t =
       | Function -> Call_kind.indirect_function_call_unknown_arity ()
       | Method { kind; obj; } ->
         Call_kind.method_call (LC.method_kind kind)
-          ~obj:(Env.find_simple env obj)
+          ~obj:(find_simple t env obj)
     in
-    let exn_continuation = close_exn_continuation env exn_continuation in
+    let exn_continuation = close_exn_continuation t env exn_continuation in
     let apply =
-      Flambda.Apply.create ~callee:(Env.find_simple env func)
+      Flambda.Apply.create ~callee:(find_simple_from_id t env func)
         ~continuation
         exn_continuation
-        ~args:(Env.find_simples env args)
+        ~args:(find_simples t env args)
         ~call_kind
         (Debuginfo.from_location loc)
         ~inline:(LC.inline_attribute inlined)
@@ -511,7 +533,7 @@ let rec close t env (ilam : Ilambda.t) : Expr.t =
     in
     Expr.create_apply apply
   | Apply_cont (cont, trap_action, args) ->
-    let args = Env.find_simples env args in
+    let args = find_simples t env args in
     let trap_action = close_trap_action_opt trap_action in
     let apply_cont =
       Flambda.Apply_cont.create ?trap_action cont ~args ~dbg:Debuginfo.none
@@ -521,7 +543,7 @@ let rec close t env (ilam : Ilambda.t) : Expr.t =
     let arms =
       List.map (fun (case, cont, trap_action, args) ->
           let trap_action = close_trap_action_opt trap_action in
-          let args = Env.find_simples env args in
+          let args = find_simples t env args in
           Immediate.int (Targetint.OCaml.of_int case),
             Flambda.Apply_cont.create ?trap_action cont ~args
               ~dbg:Debuginfo.none)
@@ -535,7 +557,7 @@ let rec close t env (ilam : Ilambda.t) : Expr.t =
             let case = Immediate.int (Targetint.OCaml.of_int case) in
             if Immediate.Map.mem case cases then cases
             else
-              let args = Env.find_simples env args in
+              let args = find_simples t env args in
               let trap_action = close_trap_action_opt trap_action in
               let default =
                 Flambda.Apply_cont.create ?trap_action default ~args
@@ -564,13 +586,13 @@ let rec close t env (ilam : Ilambda.t) : Expr.t =
 and close_named t env ~let_bound_var (named : Ilambda.named)
       (k : Named.t option -> Expr.t) : Expr.t =
   match named with
-  | Var id ->
+  | Simple (Var id) ->
     let simple =
       if not (Ident.is_predef id) then Simple.var (Env.find_var env id)
       else symbol_for_ident t id
     in
     k (Some (Named.create_simple simple))
-  | Const cst ->
+  | Simple (Const cst) ->
     let named, _name = close_const t cst in
     k (Some named)
   | Prim { prim; args; loc; exn_continuation; } ->
@@ -820,7 +842,7 @@ and close_one_function t ~external_env ~by_closure_id decl
       body
   in
   let exn_continuation =
-    close_exn_continuation external_env (Function_decl.exn_continuation decl)
+    close_exn_continuation t external_env (Function_decl.exn_continuation decl)
   in
   let inline = LC.inline_attribute (Function_decl.inline decl) in
   let params_and_body =

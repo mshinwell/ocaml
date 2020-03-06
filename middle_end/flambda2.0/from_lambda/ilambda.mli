@@ -34,9 +34,13 @@
    Although there's still the problem with signal handlers and Ctrl+C.  Maybe
    we should have allocation as a distinguished "named". *)
 
+type simple =
+  | Var of Ident.t
+  | Const of Lambda.structured_constant
+
 type exn_continuation =
   { exn_handler : Continuation.t;
-    extra_args : (Ident.t * Lambda.value_kind) list;
+    extra_args : (simple * Lambda.value_kind) list;
   }
 
 type trap_action =
@@ -54,27 +58,26 @@ type t =
     (** Value "let rec" has already been expanded by [Prepare_lambda]. *)
   | Let_cont of let_cont
   | Apply of apply
-  | Apply_cont of Continuation.t * trap_action option * Ident.t list
+  | Apply_cont of Continuation.t * trap_action option * simple list
     (** Unlike in Flambda, [Apply_cont] is not used for the raising of
         exceptions; use [Prim Praise] instead. *)
   | Switch of Ident.t * switch
 
 and named =
-  | Var of Ident.t
-  | Const of Lambda.structured_constant
+  | Simple of simple
   | Prim of {
       prim : Lambda.primitive;
-      args : Ident.t list;
+      args : simple list;
       loc : Location.t;
       exn_continuation : exn_continuation option;
     }
     (** Set [exn_continuation] to [None] iff the given primitive can never
         raise. *)
-  | Assign of { being_assigned : Ident.t; new_value : Ident.t; }
+  | Assign of { being_assigned : Ident.t; new_value : simple; }
 
 and let_mutable = {
   id : Ident.t;
-  initial_value : Ident.t;
+  initial_value : simple;
   contents_kind : Lambda.value_kind;
   body : t;
 }
@@ -109,7 +112,7 @@ and let_cont = {
 and apply = {
   kind : apply_kind;
   func : Ident.t;
-  args : Ident.t list;
+  args : simple list;
   continuation : Continuation.t;
   exn_continuation : exn_continuation;
   loc : Location.t;
@@ -120,12 +123,12 @@ and apply = {
 
 and apply_kind =
   | Function
-  | Method of { kind : Lambda.meth_kind; obj : Ident.t; }
+  | Method of { kind : Lambda.meth_kind; obj : simple; }
 
 and switch = {
   numconsts : int;
-  consts : (int * Continuation.t * trap_action option * (Ident.t list)) list;
-  failaction : (Continuation.t * trap_action option * (Ident.t list)) option;
+  consts : (int * Continuation.t * trap_action option * (simple list)) list;
+  failaction : (Continuation.t * trap_action option * (simple list)) option;
 }
 
 type program = {

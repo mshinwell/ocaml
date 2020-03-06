@@ -76,28 +76,8 @@ module Env = struct
   let find_name t id = Name.var (find_var t id)
   let find_name_exn t id = Name.var (find_var_exn t id)
 
-  (* CR mshinwell: Avoid the double lookup *)
-  let find_simple_exn t id =
-    match find_var_exn t id with
-    | exception Not_found -> raise Not_found
-    | var ->
-      match Ident.Map.find id t.simples_to_substitute with
-      | exception Not_found -> Simple.var var
-      | simple -> simple
-
-  let find_simple t id =
-    match find_var t id with
-    | exception Not_found -> raise Not_found
-    | var ->
-      match Ident.Map.find id t.simples_to_substitute with
-      | exception Not_found -> Simple.var var
-      | simple -> simple
-
   let find_vars t ids =
     List.map (fun id -> find_var t id) ids
-
-  let find_simples t ids =
-    List.map (fun id -> find_simple t id) ids
 
   let add_global t pos symbol =
     { t with globals = Numbers.Int.Map.add pos symbol t.globals }
@@ -120,6 +100,9 @@ module Env = struct
     { t with
       simples_to_substitute = Ident.Map.add id simple t.simples_to_substitute;
     }
+
+  let find_simple_to_substitute_exn t id =
+    Ident.Map.find id t.simples_to_substitute
 end
 
 module Function_decls = struct
