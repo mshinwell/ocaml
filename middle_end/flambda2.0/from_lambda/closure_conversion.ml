@@ -122,8 +122,7 @@ let all_continuations_transitive ~referencing ~all_handlers =
   all_continuations_transitive0 ~referencing ~all_handlers
     ~result:Continuation.Set.empty
 
-let drop_handlers ?(leaving_exn_handler = false) handlers
-      ~leaving_scope_of ~around:body =
+let drop_handlers handlers ~leaving_scope_of ~around:body =
   let to_drop =
     (* If a free variable or continuation is about to go out of scope and
        a continuation [k] depends on such variable or continuation, then the
@@ -135,8 +134,7 @@ let drop_handlers ?(leaving_exn_handler = false) handlers
             (Continuation_handler.free_names handler)
           (* CR mshinwell: The following is a temporary restriction until
              the backend has been altered: *)
-          || (leaving_exn_handler
-              && Continuation_handler.is_exn_handler handler)
+          || Continuation_handler.is_exn_handler handler
         in
         if not must_drop_this_handler then must_drop
         else
@@ -642,8 +640,7 @@ let rec close t env (ilam : Ilambda.t) : Expr.t * _ =
       let leaving_scope_of =
         Name_occurrences.singleton_continuation name
       in
-      drop_handlers ~leaving_exn_handler:is_exn_handler
-        delayed_handlers_body ~leaving_scope_of ~around:body
+      drop_handlers delayed_handlers_body ~leaving_scope_of ~around:body
     in
     let delayed_handlers =
       Continuation.Map.disjoint_union delayed_handlers_handler
