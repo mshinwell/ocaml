@@ -492,6 +492,14 @@ and simplify_recursive_let_cont_handlers
         let dacc =
           DA.map_denv dacc ~f:DE.increment_continuation_scope_level
         in
+        let r, prior_lifted_constants =
+          (* We clear the lifted constants accumulator so that we can easily
+             obtain, below, any constants that are generated during the
+             simplification of the [body].  We will add these
+             [prior_lifted_constants] back into [r] later. *)
+          R.get_and_clear_lifted_constants (DA.r dacc)
+        in
+        let dacc = DA.with_r dacc r in
         (* let set = Continuation_handlers.domain rec_handlers in *)
         let body, (handlers, user_data), uacc =
           simplify_expr dacc body (fun dacc_after_body ->
@@ -517,6 +525,21 @@ and simplify_recursive_let_cont_handlers
               (* XXX These don't have the same scope level as the
                  non-recursive case *)
               DE.add_parameters definition_denv params ~param_types:arg_types
+            in
+            let code_age_relation_after_body =
+              TE.code_age_relation (DA.typing_env dacc_after_body)
+            in
+            let denv =
+              let lifted = R.get_lifted_constants r in
+              DE.add_lifted_constants denv ~lifted
+            in
+            let typing_env =
+              TE.with_code_age_relation (DE.typing_env denv)
+                code_age_relation_after_body
+            in
+            let denv = DE.with_typing_env denv typing_env in
+            let r =
+              R.add_prior_lifted_constants r prior_lifted_constants
             in
             let dacc = DA.create denv cont_uses_env r in
             let dacc = DA.map_denv dacc ~f:DE.set_not_at_unit_toplevel in

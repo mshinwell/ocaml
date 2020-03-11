@@ -41,6 +41,7 @@ open Mach
                             or  S       S       R
      Iintop_imm(Iadd, n)/lea    R       R
      Iintop_imm(others)         S       S
+     Iintop_imm(Icomp _)        R       S
      Inegf...Idivf              R       R       S
      Ifloatofint                R       S
      Iintoffloat                R       S
