@@ -116,8 +116,12 @@ let find_rev_deps t names =
   in
   let rev_deps = transitive_closure t rev_deps in
   Continuation.Set.fold (fun cont result ->
-      let handler = Continuation.Map.find cont t.definitions in
-      Continuation.Map.add cont handler result)
+      match Continuation.Map.find cont t.definitions with
+      | exception Not_found ->
+        (* The continuation may not have an explicit handler (e.g. a
+           return continuation. *)
+        result
+      | handler -> Continuation.Map.add cont handler result)
     rev_deps
     Continuation.Map.empty
 
