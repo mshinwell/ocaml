@@ -853,10 +853,10 @@ let really_compare_programs backend comparison_tool log env =
     Filecompare.reference_filename = program;
     Filecompare.output_filename = program2
   } in
-  if Ocamltest_config.flambda && backend = Ocaml_backends.Native
+  if Ocamltest_config.flambda
   then begin
     let reason =
-      "flambda temporarily disables comparison of native programs" in
+      "flambda temporarily disables comparison of programs" in
     (Result.pass_with_reason reason, env)
   end else
   if backend = Ocaml_backends.Native &&
