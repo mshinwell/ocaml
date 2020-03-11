@@ -932,6 +932,15 @@ let without_code_ids t =
 let fold_names t ~init ~f =
   For_names.fold t.names ~init ~f
 
+let fold_variables t ~init ~f =
+  For_names.fold t.names ~init ~f:(fun acc name ->
+    Name.pattern_match name ~var:(fun var -> f acc var)
+      ~symbol:(fun _ -> acc))
+
+let fold_continuations_including_in_trap_actions t ~init ~f =
+  let init = For_continuations.fold t.continuations ~init ~f in
+  For_continuations.fold t.continuations_in_trap_actions ~init ~f
+
 let filter_names t ~f =
   let names = For_names.filter t.names ~f in
   { t with names; }

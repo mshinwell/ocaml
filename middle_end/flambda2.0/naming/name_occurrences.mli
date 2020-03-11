@@ -158,3 +158,15 @@ val fold_names
   -> init:'a
   -> f:('a -> Name.t -> 'a)
   -> 'a
+
+val fold_variables
+   : t
+  -> init:'a
+  -> f:('a -> Variable.t -> 'a)
+  -> 'a
+
+val fold_continuations_including_in_trap_actions
+   : t
+  -> init:'a
+  -> f:('a -> Continuation.t -> 'a)
+  -> 'a

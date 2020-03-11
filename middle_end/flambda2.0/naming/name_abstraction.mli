@@ -16,6 +16,9 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+(* CR mshinwell: Consider caching the free names of the whole abstraction
+   on each abstraction. *)
+
 module type Term = sig
   include Contains_names.S
   val print : Format.formatter -> t -> unit

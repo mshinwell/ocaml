@@ -245,14 +245,13 @@ let rec bind_rec ~backend exn_cont
                       Apply_cont.goto condition_passed_cont;
                     Immediate.bool_false,
                       Apply_cont.goto failure_cont;
-                  ])), Continuation.Map.empty)
+                  ])), Delayed_handlers.empty)
           in
           let body =
             Let_cont.create_non_recursive condition_passed_cont
               condition_passed_cont_handler ~body
           in
-          body,
-            Continuation.Map.disjoint_union delayed_handlers' delayed_handlers)
+          body, Delayed_handlers.union delayed_handlers' delayed_handlers)
         (Expr.create_apply_cont
            (Apply_cont.create primitive_cont ~args:[] ~dbg:Debuginfo.none),
          delayed_handlers)

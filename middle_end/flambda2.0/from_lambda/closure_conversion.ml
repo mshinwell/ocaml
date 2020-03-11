@@ -45,82 +45,36 @@ type t = {
    higher, dropping them when one of their free names is about to go out of
    scope. *)
 
-(* CR mshinwell: There is likely a more efficient way of doing this. *)
-
 module Handler_SCC = Strongly_connected_components.Make (Continuation)
 
-let drop_all_handlers handlers ~around:body =
+let drop_handlers0 handlers ~around:body =
   (* When dropping some number of handlers after a binding, we need to get
      them in the correct order, as there may be dependencies between them.
      The dependencies can only be on continuations. *)
   let top_sorted =
     let graph =
-      Continuation.Map.map (fun handler ->
-          Continuation_handler.free_names handler
+      Continuation.Map.map (fun (_handler, free_names_of_handler) ->
+          free_names_of_handler
           |> Name_occurrences.continuations)
         handlers
     in
     Handler_SCC.connected_components_sorted_from_roots_to_leaf graph
-    |> Array.to_list
   in
-  (*
-  Format.eprintf "\nHandlers:@ %a\n%!"
-    (Continuation.Map.print Continuation_handler.print) handlers;
-  Format.eprintf "Top sorted order:@ \n%!";
-  *)
-  List.fold_left (fun body (component : Handler_SCC.component) ->
+  Array.fold_left (fun body (component : Handler_SCC.component) ->
       match component with
       | No_loop cont ->
-        (*
-        Format.eprintf "No_loop(%a)@ " Continuation.print cont;
-        *)
-        let handler = Continuation.Map.find cont handlers in
+        let handler, _ = Continuation.Map.find cont handlers in
         Flambda.Let_cont.create_non_recursive cont handler ~body
       | Has_loop conts ->
-        (*
-        Format.eprintf "Has_loop(%a)@ "
-          (Format.pp_print_list ~pp_sep:Format.pp_print_space
-            Continuation.print) conts;
-        *)
         let handlers =
           conts
-          |> List.map (fun cont -> cont, Continuation.Map.find cont handlers)
+          |> List.map (fun cont ->
+               cont, fst (Continuation.Map.find cont handlers))
           |> Continuation.Map.of_list
         in
         Flambda.Let_cont.create_recursive handlers ~body)
     body
     top_sorted
-
-let rec all_continuations_transitive0 ~referencing ~all_handlers ~result =
-  (* CR mshinwell: This should stay within the [Name_occurrences] world
-     rather than converting to [Set]s *)
-  let free_continuations =
-    Continuation.Map.fold (fun cont handler result ->
-        let free_continuations =
-          handler
-          |> Continuation_handler.free_names
-          |> Name_occurrences.continuations_including_in_trap_actions
-        in
-        if Continuation.Set.mem referencing free_continuations then
-          Continuation.Set.add cont
-            (Continuation.Set.union free_continuations result)
-        else
-          result)
-      all_handlers
-      Continuation.Set.empty
-  in
-  let to_traverse = Continuation.Set.diff free_continuations result in
-  if Continuation.Set.is_empty to_traverse then result
-  else
-    Continuation.Set.fold (fun cont result ->
-        let result = Continuation.Set.add cont result in
-        all_continuations_transitive0 ~referencing:cont ~all_handlers ~result)
-      to_traverse
-      result
-
-let all_continuations_transitive ~referencing ~all_handlers =
-  all_continuations_transitive0 ~referencing ~all_handlers
-    ~result:Continuation.Set.empty
 
 let drop_handlers handlers ~leaving_scope_of ~around:body =
   let to_drop =
@@ -128,34 +82,18 @@ let drop_handlers handlers ~leaving_scope_of ~around:body =
        a continuation [k] depends on such variable or continuation, then the
        continuation [k] must be dropped just after the corresponding binding,
        together with any other continuations which have [k] free in them. *)
-    Continuation.Map.fold (fun cont handler must_drop ->
-        let must_drop_this_handler =
-          Name_occurrences.inter_domain_is_non_empty leaving_scope_of
-            (Continuation_handler.free_names handler)
-          (* CR mshinwell: The following is a temporary restriction until
-             the backend has been altered: *)
-          || Continuation_handler.is_exn_handler handler
-        in
-        if not must_drop_this_handler then must_drop
-        else
-          Continuation.Set.add cont
-            (Continuation.Set.union
-              (all_continuations_transitive ~referencing:cont
-                ~all_handlers:handlers)
-              must_drop))
-      handlers
-      Continuation.Set.empty
+    Continuation.Map.disjoint_union
+      ~eq:(fun (handler, _) (handler', _) -> handler == handler')
+      (Delayed_handlers.find_rev_deps handlers leaving_scope_of)
+      (* CR mshinwell: Remove the following when the backend is fixed: *)
+      (Delayed_handlers.exn_handlers handlers)
   in
-  (*
-  Format.eprintf "%a must be dropped here\n%!" Continuation.Set.print to_drop;
-  *)
-  let to_drop, remaining_handlers =
-    Continuation.Map.partition (fun cont _ ->
-        Continuation.Set.mem cont to_drop)
-      handlers
-  in
-  let body = drop_all_handlers to_drop ~around:body in
-  body, remaining_handlers
+  let body = drop_handlers0 to_drop ~around:body in
+  let handlers = Delayed_handlers.remove_domain_of_map handlers to_drop in
+  body, handlers
+
+let drop_all_handlers handlers ~around =
+  drop_handlers0 (Delayed_handlers.all handlers) ~around
 
 let symbol_for_ident t id =
   let symbol = t.symbol_for_global' id in
@@ -548,7 +486,7 @@ let close_primitive t env ~let_bound_var named (prim : Lambda.primitive) ~args
       Flambda.Apply_cont.create ~trap_action exn_handler ~args ~dbg
     in
     (* Since raising of an exception doesn't terminate, we don't call [k]. *)
-    Flambda.Expr.create_apply_cont apply_cont, Continuation.Map.empty
+    Flambda.Expr.create_apply_cont apply_cont, Delayed_handlers.empty
   | prim, args ->
     Lambda_to_flambda_primitives.convert_and_bind exn_continuation
       ~backend:t.backend
@@ -643,10 +581,9 @@ let rec close t env (ilam : Ilambda.t) : Expr.t * _ =
       drop_handlers delayed_handlers_body ~leaving_scope_of ~around:body
     in
     let delayed_handlers =
-      Continuation.Map.disjoint_union delayed_handlers_handler
-        delayed_handlers_body
+      Delayed_handlers.union delayed_handlers_handler delayed_handlers_body
     in
-    body, Continuation.Map.add name handler delayed_handlers
+    body, Delayed_handlers.add_handler delayed_handlers name handler
   | Apply { kind; func; args; continuation; exn_continuation;
       loc; should_be_tailcall = _; inlined; specialised = _; } ->
     let call_kind =
@@ -667,14 +604,14 @@ let rec close t env (ilam : Ilambda.t) : Expr.t * _ =
         ~inline:(LC.inline_attribute inlined)
         ~inlining_depth:0
     in
-    Expr.create_apply apply, Continuation.Map.empty
+    Expr.create_apply apply, Delayed_handlers.empty
   | Apply_cont (cont, trap_action, args) ->
     let args = find_simples t env args in
     let trap_action = close_trap_action_opt trap_action in
     let apply_cont =
       Flambda.Apply_cont.create ?trap_action cont ~args ~dbg:Debuginfo.none
     in
-    Flambda.Expr.create_apply_cont apply_cont, Continuation.Map.empty
+    Flambda.Expr.create_apply_cont apply_cont, Delayed_handlers.empty
   | Switch (scrutinee, sw) ->
     let arms =
       List.map (fun (case, cont, trap_action, args) ->
@@ -714,11 +651,11 @@ let rec close t env (ilam : Ilambda.t) : Expr.t * _ =
         Debuginfo.none
     in
     if Immediate.Map.is_empty arms then
-      Expr.create_invalid (), Continuation.Map.empty
+      Expr.create_invalid (), Delayed_handlers.empty
     else
       Expr.create_let untagged_scrutinee' untag
         (Expr.create_switch ~scrutinee:(Simple.var untagged_scrutinee) ~arms),
-      Continuation.Map.empty
+      Delayed_handlers.empty
 
 and close_named t env ~let_bound_var (named : Ilambda.named)
       (k : Named.t option -> Expr.t * _) : Expr.t * _ =
