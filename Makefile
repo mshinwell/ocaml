@@ -366,6 +366,7 @@ MIDDLE_END_FLAMBDA2_FROM_LAMBDA=\
   middle_end/flambda2.0/from_lambda/ilambda.cmo \
   middle_end/flambda2.0/from_lambda/closure_conversion_aux.cmo \
   middle_end/flambda2.0/from_lambda/lambda_conversions.cmo \
+  middle_end/flambda2.0/from_lambda/delayed_handlers.cmo \
   middle_end/flambda2.0/from_lambda/lambda_to_flambda_primitives_helpers.cmo \
   middle_end/flambda2.0/from_lambda/lambda_to_flambda_primitives.cmo \
   middle_end/flambda2.0/from_lambda/closure_conversion.cmo \
