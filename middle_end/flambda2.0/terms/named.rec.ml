@@ -29,7 +29,7 @@ let print_with_cache ~cache ppf (t : t) =
   match t with
   | Simple simple -> Simple.print ppf simple
   | Prim (prim, dbg) ->
-    fprintf ppf "@[<hov 1>(%a@<0>@<0>%s%a@<0>@<0>%s)@]"
+    fprintf ppf "@[<hov 1>(%a@<0>%s%a@<0>%s)@]"
       Flambda_primitive.print prim
       (Flambda_colours.debuginfo ())
       Debuginfo.print_or_elide dbg
