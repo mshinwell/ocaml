@@ -105,7 +105,13 @@ let lift_set_of_closures_discovered_via_reified_continuation_param_types dacc
             |> Closure_id.to_string
             |> Linkage_name.create 
           in
-          Symbol.create (Compilation_unit.get_current_exn ()) name)
+          let symbol =
+            Symbol.create (Compilation_unit.get_current_exn ()) name
+          in
+          Format.eprintf "Symbol for reified %a is %a\n%!"
+            Closure_id.print closure_id
+            Symbol.print symbol;
+          symbol)
         function_decls
     in
     let dacc =
@@ -178,14 +184,41 @@ let reify_types_of_continuation_param_types dacc ~params =
             ~disallowed_free_vars:params typing_env ~min_name_mode:NM.normal ty
         with
         | Lift to_lift ->
-          lift_non_closure_discovered_via_reified_continuation_param_types
-            dacc var to_lift ~reified_continuation_params_to_symbols
-            ~reified_definitions ~closure_symbols_by_set
+          (* There's no point in lifting constant values, as these should
+             already have been lifted. *)
+          let inconstant =
+            match to_lift with
+            | Immutable_block (_, fields) ->
+              List.exists (fun (field : T.var_or_symbol_or_tagged_immediate) ->
+                  match field with
+                  | Var _ -> true
+                  | Symbol _ | Tagged_immediate _ -> false)
+                fields
+            | Boxed_float _ | Boxed_int32 _ | Boxed_int64 _
+            | Boxed_nativeint _ -> false
+          in
+          if not inconstant then
+            dacc, reified_continuation_params_to_symbols, reified_definitions,
+              closure_symbols_by_set
+          else
+            lift_non_closure_discovered_via_reified_continuation_param_types
+              dacc var to_lift ~reified_continuation_params_to_symbols
+              ~reified_definitions ~closure_symbols_by_set
         | Lift_set_of_closures { closure_id; function_decls; closure_vars; } ->
-          lift_set_of_closures_discovered_via_reified_continuation_param_types
-            dacc var closure_id function_decls ~closure_vars
-            ~reified_continuation_params_to_symbols
-            ~reified_definitions ~closure_symbols_by_set
+          (* Same comment as above, specifically relating to the
+             environment in this case. *)
+          let inconstant_env =
+            Var_within_closure.Map.exists (fun _ simple -> Simple.is_var simple)
+              closure_vars
+          in
+          if not inconstant_env then
+            dacc, reified_continuation_params_to_symbols, reified_definitions,
+              closure_symbols_by_set
+          else
+            lift_set_of_closures_discovered_via_reified_continuation_param_types
+              dacc var closure_id function_decls ~closure_vars
+              ~reified_continuation_params_to_symbols
+              ~reified_definitions ~closure_symbols_by_set
         | Simple _ | Cannot_reify | Invalid ->
           dacc, reified_continuation_params_to_symbols, reified_definitions,
             closure_symbols_by_set)
