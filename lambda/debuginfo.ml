@@ -166,7 +166,7 @@ let print_compact ppf t =
 
 let print_or_elide ppf t =
   if not (is_none t) then begin
-    Format.fprintf ppf "@ <%a>" print_compact t
+    Format.fprintf ppf "@ @[<h><%a>@]" print_compact t
   end
 
 (* CR mshinwell: provide an sexp printer here *)

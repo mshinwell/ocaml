@@ -100,13 +100,13 @@ type make_block_kind =
 let print_make_block_kind ppf kind =
   match kind with
   | Full_of_values (tag, shape) ->
-    Format.fprintf ppf "(Full_of_values (tag %a) (%a))"
+    Format.fprintf ppf "@[<hov 1>(Full_of_values@ (tag %a)@ (%a))@]"
       Tag.Scannable.print tag
       (Format.pp_print_list ~pp_sep:Format.pp_print_space
         Value_kind.print) shape
   | Full_of_naked_floats -> Format.pp_print_string ppf "Full_of_naked_floats"
   | Generic_array generic ->
-    Format.fprintf ppf "(Generic %a)"
+    Format.fprintf ppf "@[<hov 1>(Generic@ %a)@]"
       Generic_array_specialisation.print generic
 
 let compare_make_block_kind kind1 kind2 =
@@ -1058,7 +1058,7 @@ let print_variadic_primitive ppf p =
   let fprintf = Format.fprintf in
   match p with
   | Make_block (kind, mut) ->
-    fprintf ppf "@[(Make_block %a %a)@]"
+    fprintf ppf "@[<hov 1>(Make_block@ %a@ %a)@]"
       print_make_block_kind kind
       Effects.print_mutable_or_immutable mut
   | Bigarray_set (is_safe, num_dimensions, kind, layout) ->
