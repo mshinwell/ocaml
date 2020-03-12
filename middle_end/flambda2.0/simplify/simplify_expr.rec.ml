@@ -88,7 +88,20 @@ and simplify_let_symbol
                 denv)))
   in
   let bound_symbols, defining_expr, dacc =
-    Simplify_static_const.simplify_static_const dacc bound_symbols defining_expr
+    try
+      Simplify_static_const.simplify_static_const dacc bound_symbols
+        defining_expr
+    with Misc.Fatal_error -> begin
+      if !Clflags.flambda2_context_on_error then begin
+        Format.eprintf "\n%sContext is:%s simplifying [Let_symbol] binding \
+                          of@ %a@ with downwards accumulator:@ %a\n"
+          (Flambda_colours.error ())
+          (Flambda_colours.normal ())
+          Bound_symbols.print bound_symbols
+          DA.print dacc
+        end;
+        raise Misc.Fatal_error
+    end
   in
   (* CR mshinwell: Change to be run only when invariants are on, and use
      [Name_occurrences.iter] (to be written).
