@@ -804,6 +804,8 @@ end
 
 module Int_ops_for_binary_eq_comp_tagged_immediate =
   Int_ops_for_binary_eq_comp (A.For_tagged_immediates)
+module Int_ops_for_binary_eq_comp_naked_immediate =
+  Int_ops_for_binary_eq_comp (A.For_naked_immediates)
 module Int_ops_for_binary_eq_comp_int32 =
   Int_ops_for_binary_eq_comp (A.For_int32s)
 module Int_ops_for_binary_eq_comp_int64 =
@@ -813,6 +815,8 @@ module Int_ops_for_binary_eq_comp_nativeint =
 
 module Binary_int_eq_comp_tagged_immediate =
   Binary_arith_like (Int_ops_for_binary_eq_comp_tagged_immediate)
+module Binary_int_eq_comp_naked_immediate =
+  Binary_arith_like (Int_ops_for_binary_eq_comp_naked_immediate)
 module Binary_int_eq_comp_int32 =
   Binary_arith_like (Int_ops_for_binary_eq_comp_int32)
 module Binary_int_eq_comp_int64 =
@@ -904,7 +908,20 @@ let simplify_phys_equal (op : P.equality_comparison)
         end
       end
     | Naked_number Naked_immediate ->
-      Misc.fatal_error "Not yet implemented"  (* CR mshinwell: deal with this *)
+      let typing_env = DA.typing_env dacc in
+      let proof1 = T.prove_naked_immediates typing_env arg1_ty in
+      let proof2 = T.prove_naked_immediates typing_env arg2_ty in
+      begin match proof1, proof2 with
+      | Proved _, Proved _ ->
+        Binary_int_eq_comp_naked_immediate.simplify op dacc ~original_term dbg
+          ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
+      | _, _ ->
+        let env_extension =
+          TEE.one_equation result
+            (T.these_naked_immediates Immediate.all_bools)
+        in
+        Reachable.reachable original_term, env_extension, dacc
+      end
     | Naked_number Naked_float ->
       (* CR mshinwell: Should this case be statically disallowed in the type,
          to force people to use [Float_comp]? *)
