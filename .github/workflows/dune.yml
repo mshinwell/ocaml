@@ -56,7 +56,7 @@ jobs:
       id: cache
       with:
         path: ${{ github.workspace }}/install
-        key: ${{ matrix.os }}-cache-install-ocamltest-ocaml4100-dune213
+        key: ${{ matrix.os }}-cache-install-ocamltest-ocaml4100-flambda-dune213
 
     # ### STEP 1 ###
     # Get a working 4.10 vanilla ocaml install, with dune
@@ -85,12 +85,12 @@ jobs:
       working-directory: base
       run: git apply ../test/.github/workflows/ocamltest_dune.patch
     # Build&install 4.10 vanilla ocaml
-    - name: Build&install vanilla 4.10
+    - name: Build&install 4.10+flambda
       if: steps.cache.outputs.cache-hit != 'true'
       working-directory: base
       run: |
-        ./configure --prefix=$GITHUB_WORKSPACE/install
-        make world.opt -j $J
+        ./configure --enable-flambda --prefix=$GITHUB_WORKSPACE/install
+        make -j $J
         make install
     # Build&install ocamltest
     - name: Build&install ocamltest
@@ -118,17 +118,22 @@ jobs:
 
 
     # ### STEP 2 ###
-    # Build the flambda-enabled compiler using the 4.10 vanilla
+    # Build the flambda-enabled compiler using the 4.10+flambda
     # compiler and dune.
 
     # Configure the flambda compiler
-    - name: Configure the flambda compiler (stage 1)
+    - name: Configure the flambda2 compiler (stage 1)
       working-directory: test
       run: ./configure --enable-flambda
     # Build ocamlc, ocamlopt.opt using dune
-    - name: Build the flambda compiler (stage 1)
+    - name: Build the flambda2 compiler (stage 1)
       working-directory: test
-      run: dune build --display quiet @world || (cat _build/log; exit 1)
+      run: dune build --profile release --display quiet @world
+    # Output full dune log in case of build failure
+    - name: Dump dune log if build failed
+      working-directory: test
+      if: failure()
+      run: cat _build/log
     # Override vanilla ocamlopt with the flmabda ocamlopt
     - name: Override the vanilla ocamlopt
       run: |
@@ -149,13 +154,18 @@ jobs:
       working-directory: test
       run: git apply .github/workflows/testsuite_makefile.patch
     # Configure the flambda compiler
-    - name: Configure the flambda compiler (stage 2)
+    - name: Configure the flambda2 compiler (stage 2)
       working-directory: test
       run: ./configure --enable-flambda
     # Build the flambda compiler and stdlib
-    - name: Build the flambda compiler (stage 2)
+    - name: Build the flambda2 compiler (stage 2)
       working-directory: test
-      run: dune build --profile=release --display quiet @world || (cat _build/log; exit 1)
+      run: dune build --profile=release --display quiet @world
+    # Output full dune log in case of build failure
+    - name: Dump dune log if build failed
+      working-directory: test
+      if: failure()
+      run: cat _build/log
 
     # Running the testsuite is disabled because it currently does not work:
     # - ocamlc.byte as built by dune fails to run because of some runtime errors
