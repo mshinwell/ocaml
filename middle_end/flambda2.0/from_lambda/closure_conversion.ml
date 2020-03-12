@@ -641,7 +641,7 @@ let rec close t env (ilam : Ilambda.t) : Expr.t * _ =
          which exhibited quadratic size blowup.) *)
       let compare =
         Named.create_prim
-          (Binary (Phys_equal (Flambda_kind.value, Eq),
+          (Binary (Phys_equal (Flambda_kind.naked_immediate, Eq),
             Simple.var untagged_scrutinee,
             Simple.const (Reg_width_const.naked_immediate case)))
           Debuginfo.none
