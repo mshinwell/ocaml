@@ -141,6 +141,13 @@ module Make (N : Identifiable.S) = struct
           in
           Freshening { forwards; everything_involved; }
         else
+          let () =
+            Format.eprintf "Broken freshening:@\n\
+              second: %a@ first:%a@ \nBacktrace:\n%s\n%!"
+              (N.Map.print N.print) forwards2
+              (N.Map.print N.print) forwards1
+              (Printexc.raw_backtrace_to_string (Printexc.get_callstack 20))
+          in
           Branch {
             newer = squash_freshening second;
             older = squash_freshening first;
