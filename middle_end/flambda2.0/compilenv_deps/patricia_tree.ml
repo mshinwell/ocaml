@@ -186,6 +186,28 @@ end) = struct
         else
           false
 
+  let rec intersection_is_empty t0 t1 =
+    match t0, t1 with
+    | Empty, _ -> true
+    | _, Empty -> true
+    | Leaf i, _ -> not (mem i t1)
+    | _, Leaf i -> not (mem i t0)
+    | Branch(prefix0, bit0, t00, t01), Branch(prefix1, bit1, t10, t11) ->
+        if equal_prefix prefix0 bit0 prefix1 bit1 then
+          intersection_is_empty t00 t10 && intersection_is_empty t01 t11
+        else if includes_prefix prefix0 bit0 prefix1 bit1 then
+          if zero_bit prefix1 bit0 then
+            intersection_is_empty t00 t1
+          else
+            intersection_is_empty t01 t1
+        else if includes_prefix prefix1 bit1 prefix0 bit0 then
+          if zero_bit prefix0 bit1 then
+            intersection_is_empty t0 t10
+          else
+            intersection_is_empty t0 t11
+        else
+          true
+
   let rec inter t0 t1 =
     match t0, t1 with
     | Empty, _ -> Empty

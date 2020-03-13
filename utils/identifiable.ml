@@ -36,6 +36,7 @@ module type Set = sig
   val of_list : elt list -> t
   val map : (elt -> elt) -> t -> t
   val union_list : t list -> t
+  val intersection_is_empty : t -> t -> bool
 end
 
 module type Map = sig
@@ -259,6 +260,8 @@ module Make_set (T : Thing) = struct
     match ts with
     | [] -> empty
     | t::ts -> union t (union_list ts)
+
+  let intersection_is_empty t1 t2 = is_empty (inter t1 t2)
 end [@@@inline always]
 
 module Make_tbl (T : Thing) (Map : Map with module T := T) = struct

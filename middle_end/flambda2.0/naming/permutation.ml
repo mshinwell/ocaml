@@ -21,7 +21,10 @@ let _check_invariants = false
 module Make (N : Identifiable.S) = struct
   type t =
     | Empty
-    | Freshening of N.t N.Map.t
+    | Freshening of {
+        forwards : N.t N.Map.t;
+        everything_involved : N.Set.t;
+    }
     | Leaf_branch of { n1 : N.t; n2 : N.t; older : t; }
     | Branch of { newer : t; older : t; }
 
@@ -30,14 +33,14 @@ module Make (N : Identifiable.S) = struct
   let squash_freshening t =
     match t with
     | Empty | Leaf_branch _ | Branch _ -> t
-    | Freshening map ->
+    | Freshening { forwards; _ } ->
       N.Map.fold (fun n1 n2 older ->
           Leaf_branch {
             n1;
             n2;
             older;
           })
-        map empty
+        forwards empty
 
 (*
   let to_map t =
@@ -61,8 +64,8 @@ module Make (N : Identifiable.S) = struct
   let apply t n =
     match t with
     | Empty -> n
-    | Freshening map ->
-      begin match N.Map.find n map with
+    | Freshening { forwards; _; } ->
+      begin match N.Map.find n forwards with
       | exception Not_found -> n
       | n -> n
       end
@@ -99,18 +102,52 @@ module Make (N : Identifiable.S) = struct
   let compose_one_fresh existing n1 ~fresh:n2 =
     match existing with
     | Leaf_branch _ | Branch _ -> compose_one ~first:existing n1 n2
-    | Empty -> Freshening (N.Map.singleton n1 n2)
-    | Freshening map ->
-      (* CR mshinwell: For invariant checks, ensure [n1] and [n2] are not
-         in [map]. *)
-      Freshening (N.Map.add n1 n2 map)
+    | Empty ->
+      Freshening {
+        forwards = N.Map.singleton n1 n2;
+        everything_involved = N.Set.add n1 (N.Set.singleton n2);
+      }
+    | Freshening { forwards; everything_involved; } ->
+      (* CR mshinwell: For invariant checks, ensure [n1] and [n2] are neither
+         in [forwards] or inverse. *)
+      let forwards = N.Map.add n1 n2 forwards in
+      let everything_involved =
+        N.Set.add n1 (N.Set.add n2 everything_involved)
+      in
+      Freshening { forwards; everything_involved; }
 
   let compose ~second ~first =
     if is_empty second then first
     else if is_empty first then second
     else
-      Branch {
-        newer = squash_freshening second;
-        older = squash_freshening first;
-      }
+      match second, first with
+      | Freshening {
+          forwards = forwards2;
+          everything_involved = everything_involved2;
+        },
+        Freshening {
+          forwards = forwards1;
+          everything_involved = everything_involved1;
+        } ->
+        let still_fresh =
+          N.Set.intersection_is_empty everything_involved1 everything_involved2
+        in
+        if still_fresh then
+          let forwards =
+            N.Map.union (fun _ _ _ -> assert false) forwards1 forwards2
+          in
+          let everything_involved =
+            N.Set.union everything_involved1 everything_involved2
+          in
+          Freshening { forwards; everything_involved; }
+        else
+          Branch {
+            newer = squash_freshening second;
+            older = squash_freshening first;
+          }
+      | _, _ ->
+        Branch {
+          newer = squash_freshening second;
+          older = squash_freshening first;
+        }
 end
