@@ -105,13 +105,7 @@ let lift_set_of_closures_discovered_via_reified_continuation_param_types dacc
             |> Closure_id.to_string
             |> Linkage_name.create 
           in
-          let symbol =
-            Symbol.create (Compilation_unit.get_current_exn ()) name
-          in
-          Format.eprintf "Symbol for reified %a is %a\n%!"
-            Closure_id.print closure_id
-            Symbol.print symbol;
-          symbol)
+          Symbol.create (Compilation_unit.get_current_exn ()) name)
         function_decls
     in
     let dacc =
