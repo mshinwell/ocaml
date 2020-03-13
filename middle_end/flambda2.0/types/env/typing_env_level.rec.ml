@@ -205,12 +205,14 @@ let equation_is_directly_recursive name ty =
       ~const:(fun _ -> false)
 
 let check_equation t name ty =
-  if equation_is_directly_recursive name ty then begin
-    Misc.fatal_errorf "Directly recursive equation@ %a = %a@ \
-        disallowed (Typing_env_level):@ %a"
-      Name.print name
-      Type_grammar.print ty
-      print t
+  if !Clflags.flambda_invariant_checks then begin
+    if equation_is_directly_recursive name ty then begin
+      Misc.fatal_errorf "Directly recursive equation@ %a = %a@ \
+          disallowed (Typing_env_level):@ %a"
+        Name.print name
+        Type_grammar.print ty
+        print t
+    end
   end
 
 let one_equation name ty =
