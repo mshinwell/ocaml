@@ -111,21 +111,24 @@ module Make (Head : Type_head_intf.S
   let create head = create_no_alias (Ok head)
 
   let is_obviously_bottom t =
-    match descr t with
+    match peek_descr t with
     | No_alias Bottom -> true
     | No_alias (Ok _ | Unknown)
     | Equals _ | Type _ -> false
 
   let is_obviously_unknown t =
-    match descr t with
+    match peek_descr t with
     | No_alias Unknown -> true
     | No_alias (Ok _ | Bottom)
     | Equals _ | Type _ -> false
 
   let get_alias_exn t =
-    match descr t with
-    | Equals alias -> alias
+    match peek_descr t with
     | No_alias _ | Type _ -> raise Not_found
+    | Equals _ ->
+      match descr t with
+      | Equals alias -> alias
+      | No_alias _ | Type _ -> assert false
  
   let apply_rec_info t rec_info : _ Or_bottom.t =
     match descr t with

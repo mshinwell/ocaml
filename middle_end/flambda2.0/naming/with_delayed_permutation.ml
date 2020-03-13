@@ -41,6 +41,8 @@ end) = struct
       free_names = None;
     }
 
+  let peek_descr t = t.descr
+
   let descr t =
     if Name_permutation.is_empty t.delayed_permutation then begin
       t.descr
