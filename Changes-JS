@@ -1,0 +1,25 @@
+This branch is based on the flambda/flambda2.0-stable upstream revision of OCaml.
+
+The additional patches are:
+
+patch/js-config-4.09.0
+(cherry-picked from rev 288028727b68c7e6c30587727ce888b75f65ac3c)
+
+patch/gc-tuning-4.09.0
+(cherry-picked from rev e9d6d2f145438dd6a82b56e9b41c8a01e752d81d)
+
+4.10-reraise-by-default
+(cherry-picked from rev 50e94902ca6bb84c33982db858b74322eefd9af8)
+
+PR#9090 from upstream trunk
+(cherry-picked from rev fe7c8edeaa65d81e2a787ddfa23d70a00131d8d7)
+
+PR#9097 from upstream trunk
+(cherry-picked from rev 6daaf62904df1aa92236de24c47402674e606db0)
+
+Deterministic .cmt files
+(cherry-picked from rev 6a5e266279f735d93ec9019c1d6ed314264aefcf)
+
+PR#9165 from gretay-js/fs-otherlibs
+(cherry-picked from rev 3f33022488edd8260b98bdfa1c1ea35eee3146aa)
+
