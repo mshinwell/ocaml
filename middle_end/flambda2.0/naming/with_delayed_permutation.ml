@@ -52,11 +52,9 @@ end) = struct
       let free_names =
         match t.free_names with
         | None -> Descr.free_names descr
-        | Some free_names -> free_names
-      in
-      let free_names =
-        Name_occurrences.apply_name_permutation free_names
-          t.delayed_permutation
+        | Some free_names ->
+          Name_occurrences.apply_name_permutation free_names
+            t.delayed_permutation
       in
       t.delayed_permutation <- Name_permutation.empty;
       t.free_names <- Some free_names;
