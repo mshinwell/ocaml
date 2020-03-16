@@ -16,7 +16,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-let check_invariants = true
+let check_invariants = false
 
 module Make (N : Identifiable.S) = struct
   type t = {
@@ -102,5 +102,10 @@ module Make (N : Identifiable.S) = struct
     post_swap first n1 n2
 
   let compose_one_fresh t n1 ~fresh:n2 =
-    compose_one ~first:t n1 n2
+    let n1' = apply_backwards t n1 in
+    let forwards = add_to_map n1' n2 (add_to_map n2 n1 t.forwards) in
+    let backwards = add_to_map n2 n1' (add_to_map n1 n2 t.backwards) in
+    let t = { forwards; backwards; } in
+    invariant t;
+    t
 end
