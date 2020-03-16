@@ -44,6 +44,7 @@ module type Set = sig
   val of_list : elt list -> t
   val map : (elt -> elt) -> t -> t
   val union_list : t list -> t
+  val intersection_is_empty : t -> t -> bool
 end
 
 module type Map = sig

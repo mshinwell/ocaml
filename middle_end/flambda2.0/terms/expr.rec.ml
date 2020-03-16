@@ -16,7 +16,67 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-type descr =
+module Descr = struct
+  type t =
+    | Let of Let_expr.t
+    | Let_symbol of Let_symbol_expr.t
+    | Let_cont of Let_cont_expr.t
+    | Apply of Apply.t
+    | Apply_cont of Apply_cont.t
+    | Switch of Switch.t
+    | Invalid of Invalid_term_semantics.t
+
+  let free_names t =
+    match t with
+    | Let let_expr -> Let_expr.free_names let_expr
+    | Let_symbol let_symbol_expr -> Let_symbol_expr.free_names let_symbol_expr
+    | Let_cont let_cont -> Let_cont_expr.free_names let_cont
+    | Apply apply -> Apply.free_names apply
+    | Apply_cont apply_cont -> Apply_cont.free_names apply_cont
+    | Switch switch -> Switch.free_names switch
+    | Invalid _ -> Name_occurrences.empty
+
+  let apply_name_permutation t perm =
+    match t with
+    | Let let_expr ->
+      let let_expr' = Let_expr.apply_name_permutation let_expr perm in
+      if let_expr == let_expr' then t
+      else Let let_expr'
+    | Let_symbol let_symbol_expr ->
+      let let_symbol_expr' =
+        Let_symbol_expr.apply_name_permutation let_symbol_expr perm
+      in
+      if let_symbol_expr == let_symbol_expr' then t
+      else Let_symbol let_symbol_expr'
+    | Let_cont let_cont ->
+      let let_cont' = Let_cont_expr.apply_name_permutation let_cont perm in
+      if let_cont == let_cont' then t
+      else Let_cont let_cont'
+    | Apply apply ->
+      let apply' = Apply.apply_name_permutation apply perm in
+      if apply == apply' then t
+      else Apply apply'
+    | Apply_cont apply_cont ->
+      let apply_cont' = Apply_cont.apply_name_permutation apply_cont perm in
+      if apply_cont == apply_cont' then t
+      else Apply_cont apply_cont'
+    | Switch switch ->
+      let switch' = Switch.apply_name_permutation switch perm in
+      if switch == switch' then t
+      else Switch switch'
+    | Invalid _ -> t
+end
+
+(* CR mshinwell: Work out how to use [With_delayed_permutation] here.
+   There were some problems with double vision etc. last time. *)
+
+type t = {
+  mutable descr : Descr.t;
+  mutable delayed_permutation : Name_permutation.t;
+  mutable free_names : Name_occurrences.t option;
+}
+
+type descr = Descr.t =
   | Let of Let_expr.t
   | Let_symbol of Let_symbol_expr.t
   | Let_cont of Let_cont_expr.t
@@ -25,18 +85,31 @@ type descr =
   | Switch of Switch.t
   | Invalid of Invalid_term_semantics.t
 
-type free_names =
-  | Ok of Name_occurrences.t
-[@@unboxed]
+let create descr =
+  { descr;
+    delayed_permutation = Name_permutation.empty;
+    free_names = None;
+  }
 
-type t = {
-  descr : descr;
-  free_names : free_names;
-  delayed_permutation : Name_permutation.t;
-  (* [delayed_permutation] must be applied to both [descr] and [free_names]
-     before they are used. *)
-  (* CR mshinwell: we should maybe try to statically enforce this *)
-}
+let peek_descr t = t.descr
+
+let descr t =
+  if Name_permutation.is_empty t.delayed_permutation then begin
+    t.descr
+  end else begin
+    let descr = Descr.apply_name_permutation t.descr t.delayed_permutation in
+    t.descr <- descr;
+    let free_names =
+      match t.free_names with
+      | None -> Descr.free_names descr
+      | Some free_names ->
+        Name_occurrences.apply_name_permutation free_names
+          t.delayed_permutation
+    in
+    t.delayed_permutation <- Name_permutation.empty;
+    t.free_names <- Some free_names;
+    descr
+  end
 
 let apply_name_permutation t perm =
   let delayed_permutation =
@@ -46,39 +119,14 @@ let apply_name_permutation t perm =
     delayed_permutation;
   }
 
-let descr t =
-  let perm = t.delayed_permutation in
-  if Name_permutation.is_empty perm then
-    t.descr
-  else
-    match t.descr with
-    | Let let_expr ->
-      let let_expr' = Let_expr.apply_name_permutation let_expr perm in
-      if let_expr == let_expr' then t.descr
-      else Let let_expr'
-    | Let_symbol let_symbol_expr ->
-      let let_symbol_expr' =
-        Let_symbol_expr.apply_name_permutation let_symbol_expr perm
-      in
-      if let_symbol_expr == let_symbol_expr' then t.descr
-      else Let_symbol let_symbol_expr'
-    | Let_cont let_cont ->
-      let let_cont' = Let_cont_expr.apply_name_permutation let_cont perm in
-      if let_cont == let_cont' then t.descr
-      else Let_cont let_cont'
-    | Apply apply ->
-      let apply' = Apply.apply_name_permutation apply perm in
-      if apply == apply' then t.descr
-      else Apply apply'
-    | Apply_cont apply_cont ->
-      let apply_cont' = Apply_cont.apply_name_permutation apply_cont perm in
-      if apply_cont == apply_cont' then t.descr
-      else Apply_cont apply_cont'
-    | Switch switch ->
-      let switch' = Switch.apply_name_permutation switch perm in
-      if switch == switch' then t.descr
-      else Switch switch'
-    | Invalid _ -> t.descr
+let free_names t =
+  let descr = descr t in
+  match t.free_names with
+  | Some free_names -> free_names
+  | None ->
+    let free_names = Descr.free_names descr in
+    t.free_names <- Some free_names;
+    free_names
 
 let invariant env t =
   match descr t with
@@ -114,27 +162,6 @@ let print_with_cache ~cache ppf (t : t) =
 
 let print ppf (t : t) =
   print_with_cache ~cache:(Printing_cache.create ()) ppf t
-
-let free_names t =
-  match t.free_names with
-  | Ok free_names ->
-    Name_occurrences.apply_name_permutation free_names t.delayed_permutation
-
-let create descr =
-  let free_names =
-    match descr with
-    | Let let_expr -> Let_expr.free_names let_expr
-    | Let_symbol let_symbol_expr -> Let_symbol_expr.free_names let_symbol_expr
-    | Let_cont let_cont -> Let_cont_expr.free_names let_cont
-    | Apply apply -> Apply.free_names apply
-    | Apply_cont apply_cont -> Apply_cont.free_names apply_cont
-    | Switch switch -> Switch.free_names switch
-    | Invalid _ -> Name_occurrences.empty
-  in
-  { descr;
-    delayed_permutation = Name_permutation.empty;
-    free_names = Ok free_names;
-  }
 
 type let_creation_result =
   | Have_deleted of Named.t
@@ -291,7 +318,7 @@ Format.eprintf "Free names %a for new let expr:@ %a\n%!"
     let t =
       { descr = Let let_expr;
         delayed_permutation = Name_permutation.empty;
-        free_names = Ok free_names;
+        free_names = Some free_names;
       }
     in
     if !print_result then begin
@@ -322,7 +349,7 @@ let create_set_of_closures_let ~closure_vars defining_expr body
     let t =
       { descr = Let let_expr;
         delayed_permutation = Name_permutation.empty;
-        free_names = Ok free_names;
+        free_names = Some free_names;
       }
     in
     t, Nothing_deleted

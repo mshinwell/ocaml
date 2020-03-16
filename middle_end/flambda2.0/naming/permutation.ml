@@ -16,101 +16,96 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-let _check_invariants = false
+let check_invariants = false
 
 module Make (N : Identifiable.S) = struct
-  type t =
-    | Empty
-    | Freshening of N.t N.Map.t
-    | Leaf_branch of { n1 : N.t; n2 : N.t; older : t; }
-    | Branch of { newer : t; older : t; }
+  type t = {
+    forwards : N.t N.Map.t;
+    backwards : N.t N.Map.t;
+  }
 
-  let empty = Empty
-
-  let squash_freshening t =
-    match t with
-    | Empty | Leaf_branch _ | Branch _ -> t
-    | Freshening map ->
-      N.Map.fold (fun n1 n2 older ->
-          Leaf_branch {
-            n1;
-            n2;
-            older;
-          })
-        map empty
-
-(*
-  let to_map t =
-    let rec collect t map =
-      match t with
-      | [] -> map
-      | n1::n2::t ->
-        let map = N.Map.add n1 n2 map in
-        collect t map
-      | _ -> assert false
-    in
-    collect t N.Map.empty
-
-  let print ppf t = N.Map.print N.print ppf (to_map t)
-*)
-
-  let print _ _ = Misc.fatal_error "To implement"
-
-  let [@inline always] invariant _ = ()
-
-  let apply t n =
-    match t with
-    | Empty -> n
-    | Freshening map ->
-      begin match N.Map.find n map with
-      | exception Not_found -> n
-      | n -> n
-      end
-    | Leaf_branch _ | Branch _ ->
-      let rec apply t n =
-        match t with
-        | Empty -> n
-        | Freshening _ -> assert false
-        | Leaf_branch { n1; n2; older = Empty; } ->
-          if N.equal n n1 then n2
-          else if N.equal n n2 then n1
-          else n
-        | Leaf_branch { n1; n2; older; } ->
-          let n = apply older n in
-          if N.equal n n1 then n2
-          else if N.equal n n2 then n1
-          else n
-        | Branch { newer; older; } -> apply newer (apply older n)
-      in
-      apply t n
-
-  let is_empty t =
-    match t with
-    | Empty -> true
-    | Freshening _ | Leaf_branch _ | Branch _ -> false
-
-  let compose_one ~first n1 n2 =
-    Leaf_branch {
-      n1;
-      n2;
-      older = squash_freshening first;
+  let empty =
+    { forwards = N.Map.empty;
+      backwards = N.Map.empty;
     }
 
-  let compose_one_fresh existing n1 ~fresh:n2 =
-    match existing with
-    | Leaf_branch _ | Branch _ -> compose_one ~first:existing n1 n2
-    | Empty -> Freshening (N.Map.singleton n1 n2)
-    | Freshening map ->
-      (* CR mshinwell: For invariant checks, ensure [n1] and [n2] are not
-         in [map]. *)
-      Freshening (N.Map.add n1 n2 map)
+  let print ppf { forwards; backwards; } =
+    Format.fprintf ppf "@[((forwards %a)@ (backwards %a))@]"
+      (N.Map.print N.print) forwards
+      (N.Map.print N.print) backwards
 
-  let compose ~second ~first =
-    if is_empty second then first
-    else if is_empty first then second
-    else
-      Branch {
-        newer = squash_freshening second;
-        older = squash_freshening first;
-      }
+  let is_empty t =
+    N.Map.is_empty t.forwards
+
+  let [@inline always] invariant { forwards; backwards; } =
+    if check_invariants then begin
+      let is_bijection map =
+        let domain = N.Map.keys map in
+        let range_list = N.Map.data map in
+        let range = N.Set.of_list range_list in
+        N.Set.equal domain range
+      in
+      assert (is_bijection forwards);
+      assert (N.Map.cardinal forwards = N.Map.cardinal backwards);
+      assert (N.Map.for_all (fun n1 n2 ->
+          assert (not (N.equal n1 n2));
+          match N.Map.find n2 backwards with
+          | exception Not_found -> false
+          | n1' -> N.equal n1 n1')
+        forwards)
+    end
+
+  let apply t n =
+    match N.Map.find n t.forwards with
+    | exception Not_found -> n
+    | n -> n
+
+  let apply_backwards t n =
+    match N.Map.find n t.backwards with
+    | exception Not_found -> n
+    | n -> n
+
+  let add_to_map n1 n2 map =
+    if N.equal n1 n2 then N.Map.remove n1 map
+    else N.Map.add n1 n2 map
+
+  let [@inline always] flip t =
+    { forwards = t.backwards;
+      backwards = t.forwards;
+    }
+
+  let [@inline always] post_swap t n1 n2 =
+    let n1' = apply_backwards t n1 in
+    let n2' = apply_backwards t n2 in
+    let forwards = add_to_map n1' n2 (add_to_map n2' n1 t.forwards) in
+    let backwards = add_to_map n2 n1' (add_to_map n1 n2' t.backwards) in
+    let t = { forwards; backwards; } in
+    invariant t;
+    t
+
+  let pre_swap t n1 n2 =
+    flip (post_swap (flip t) n1 n2)
+
+  let rec compose ~second ~first =
+    let t =
+      match N.Map.choose second.forwards with
+      | exception Not_found -> first
+      | n1, n2 ->
+        let first = post_swap first n1 n2 in
+        let second = pre_swap second n1 n2 in
+        compose ~second ~first
+    in
+    invariant t;
+    t
+
+  let compose_one ~first n1 n2 =
+    post_swap first n1 n2
+
+  let compose_one_fresh t n1 ~fresh:n2 =
+    let n1' = apply_backwards t n1 in
+    let forwards = add_to_map n1' n2 (add_to_map n2 n1 t.forwards) in
+    let backwards = add_to_map n2 n1' (add_to_map n1 n2 t.backwards) in
+    let t = { forwards; backwards; } in
+    invariant t;
+    t
 end
