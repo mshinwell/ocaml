@@ -88,10 +88,11 @@ let record_continuation_use t cont use_kind ~typing_env_at_use ~arg_types =
   in
   with_continuation_uses_env t cont_uses_env, id
 
-let compute_handler_env t ~env_at_fork_plus_params_and_consts cont
-      ~params =
+let compute_handler_env t ~env_at_fork_plus_params_and_consts
+      ~consts_lifted_during_body cont ~params =
   CUE.compute_handler_env t.continuation_uses_env
-    ~env_at_fork_plus_params_and_consts cont ~params
+    ~env_at_fork_plus_params_and_consts ~consts_lifted_during_body
+    cont ~params
 
 let num_continuation_uses t cont =
   CUE.num_continuation_uses t.continuation_uses_env cont

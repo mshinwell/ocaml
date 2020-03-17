@@ -34,6 +34,7 @@ type t = {
   current_unit_id : Ident.t;
   symbol_for_global' : (Ident.t -> Symbol.t);
   filename : string;
+  ilambda_exn_continuation : Continuation.t;
   mutable imported_symbols : Symbol.Set.t;
   (* All symbols in [imported_symbols] are to be of kind [Value]. *)
   mutable declared_symbols : (Symbol.t * Static_const.t) list;
@@ -554,16 +555,48 @@ let rec close t env (ilam : Ilambda.t) : Expr.t * _ =
         params
         params_with_kinds
     in
+    let body, delayed_handlers_body = close t env body in
+    (* If we are still at toplevel, don't un-nest handlers, otherwise we
+       may produce situations where reification of continuation parameters'
+       types (yielding new [Let_symbol] bindings) cause code IDs or symbols to
+       go out of syntactic scope (but not out of dominator scope). *)
+    let still_at_toplevel =
+      (* Same calculation as in [Simplify_expr]. *)
+      Env.still_at_toplevel env
+        && (not is_exn_handler)
+        && Continuation.Set.subset
+              (Name_occurrences.continuations (Expr.free_names body))
+              (Continuation.Set.of_list [name; t.ilambda_exn_continuation])
+    in
+    let body, delayed_handlers_body =
+      if still_at_toplevel then
+        drop_all_handlers delayed_handlers_body ~around:body,
+          Delayed_handlers.empty
+      else
+        let leaving_scope_of =
+          Name_occurrences.singleton_continuation name
+        in
+        drop_handlers delayed_handlers_body ~leaving_scope_of ~around:body
+    in
+    let handler_env =
+      if still_at_toplevel then handler_env
+      else Env.no_longer_at_toplevel handler_env
+    in
     let handler, delayed_handlers_handler = close t handler_env handler in
     let handler, delayed_handlers_handler =
-      let leaving_scope_of =
-        Name_occurrences.add_continuation_in_trap_action
-          (Name_occurrences.add_continuation
-            (Kinded_parameter.List.free_names params)
-            name)
-          name
-      in
-      drop_handlers delayed_handlers_handler ~leaving_scope_of ~around:handler
+      if still_at_toplevel then
+        drop_all_handlers delayed_handlers_handler ~around:handler,
+          Delayed_handlers.empty
+      else
+        let leaving_scope_of =
+          Name_occurrences.add_continuation_in_trap_action
+            (Name_occurrences.add_continuation
+              (Kinded_parameter.List.free_names params)
+              name)
+            name
+        in
+        drop_handlers delayed_handlers_handler ~leaving_scope_of
+          ~around:handler
     in
     let params_and_handler =
       Flambda.Continuation_params_and_handler.create params ~handler
@@ -573,17 +606,16 @@ let rec close t env (ilam : Ilambda.t) : Expr.t * _ =
         ~stub:false
         ~is_exn_handler:is_exn_handler
     in
-    let body, delayed_handlers_body = close t env body in
-    let body, delayed_handlers_body =
-      let leaving_scope_of =
-        Name_occurrences.singleton_continuation name
-      in
-      drop_handlers delayed_handlers_body ~leaving_scope_of ~around:body
-    in
     let delayed_handlers =
       Delayed_handlers.union delayed_handlers_handler delayed_handlers_body
     in
-    body, Delayed_handlers.add_handler delayed_handlers name handler
+    let delayed_handlers =
+      Delayed_handlers.add_handler delayed_handlers name handler
+    in
+    if still_at_toplevel then
+      drop_all_handlers delayed_handlers ~around:body, Delayed_handlers.empty
+    else
+      body, delayed_handlers
   | Apply { kind; func; args; continuation; exn_continuation;
       loc; should_be_tailcall = _; inlined; specialised = _; } ->
     let call_kind =
@@ -1005,6 +1037,7 @@ let ilambda_to_flambda ~backend ~module_ident ~module_block_size_in_words
       declared_symbols = [];
       shareable_constants = Static_const.Map.empty;
       code = [];
+      ilambda_exn_continuation = ilam.exn_continuation.exn_handler;
     }
   in
   let module_symbol = Backend.symbol_for_global' module_ident in

@@ -50,12 +50,12 @@ module Env : sig
   val add_global : t -> int -> Symbol.t -> t
   val find_global : t -> int -> Symbol.t
 
-  val at_toplevel : t -> bool
-  val not_at_toplevel : t -> t
-
   val add_simple_to_substitute : t -> Ident.t -> Simple.t -> t
 
   val find_simple_to_substitute_exn : t -> Ident.t -> Simple.t
+
+  val still_at_toplevel : t -> bool
+  val no_longer_at_toplevel : t -> t
 end
 
 (** Used to represent information about a set of function declarations

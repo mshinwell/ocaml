@@ -52,19 +52,19 @@ let add_env_var_offset env env_var offset =
       in
       { env with env_var_offsets; }
 
+(* Missing definitions for [Closure_id]s and [Var_within_closure]s are not
+   treated as errors.  Doing so would mean relying on perfect removal of
+   unused [Let_symbol] bindings. *)
+
 let closure_offset env closure =
   match Closure_id.Map.find closure env.closure_offsets with
-  | exception Not_found ->
-      Misc.fatal_errorf
-        "Closure id %a has no associated offset" Closure_id.print closure
-  | res -> res
+  | exception Not_found -> None
+  | res -> Some res
 
 let env_var_offset env env_var =
   match Var_within_closure.Map.find env_var env.env_var_offsets with
-  | exception Not_found ->
-      Misc.fatal_errorf "Var within closure id %a has no associated offset"
-        Var_within_closure.print env_var
-  | res -> res
+  | exception Not_found -> None
+  | res -> Some res
 
 
 (* Compute offsets for elements within a closure block
@@ -130,14 +130,19 @@ type layout = (int * layout_slot) list
 
 let order_closures env l acc =
   List.fold_left (fun acc closure ->
-      let o = closure_offset env closure in
-      Numbers.Int.Map.add o (Closure closure) acc
+      match closure_offset env closure with
+      | Some o -> Numbers.Int.Map.add o (Closure closure) acc
+      | None ->
+          Misc.fatal_errorf "No closure offset for %a" Closure_id.print closure
     ) acc l
 
 let order_env_vars env l acc =
   List.fold_left (fun acc env_var ->
-      let o = env_var_offset env env_var in
-      Numbers.Int.Map.add o (Env_var env_var) acc
+      match env_var_offset env env_var with
+      | Some o -> Numbers.Int.Map.add o (Env_var env_var) acc
+      | None ->
+          Misc.fatal_errorf "No closure var offset for %a"
+            Var_within_closure.print env_var
     ) acc l
 
 let order env closures env_vars =

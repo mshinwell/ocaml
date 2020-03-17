@@ -37,6 +37,7 @@ module type S = sig
   val compute_handler_env
      : t
     -> env_at_fork_plus_params_and_consts:Flambda_type.Typing_env.t
+    -> consts_lifted_during_body:Simplify_env_and_result.Lifted_constant.t list
     -> Continuation.t
     -> params:Kinded_parameter.t list
     -> Continuation_env_and_param_types.t

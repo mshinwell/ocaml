@@ -792,12 +792,6 @@ let simplify_lifted_set_of_closures0 context ~closure_symbols
       ~closure_bound_names_inside ~closure_elements ~closure_element_types
   in
   let dacc =
-    DA.map_r dacc ~f:(fun r ->
-      R.new_lifted_constant r
-        (Lifted_constant.create_pieces_of_code (DA.denv dacc)
-          code ~newer_versions_of:(C.new_to_old_code_ids_all_sets context)))
-  in
-  let dacc =
     DA.map_denv dacc ~f:(fun denv ->
       (* CR mshinwell: factor out *)
       Code_id.Map.fold (fun code_id params_and_body denv ->

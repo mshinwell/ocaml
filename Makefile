@@ -332,12 +332,12 @@ MIDDLE_END_FLAMBDA2_SIMPLIFY=\
   middle_end/flambda2.0/simplify/env/continuation_env_and_param_types.cmo \
   middle_end/flambda2.0/simplify/basic/continuation_in_env.cmo \
   middle_end/flambda2.0/simplify/basic/reachable.cmo \
+  middle_end/flambda2.0/simplify/env/simplify_env_and_result_intf.cmo \
+  middle_end/flambda2.0/simplify/env/simplify_env_and_result.cmo \
   middle_end/flambda2.0/simplify/typing_helpers/one_continuation_use.cmo \
   middle_end/flambda2.0/simplify/typing_helpers/continuation_uses.cmo \
   middle_end/flambda2.0/simplify/env/continuation_uses_env.cmo \
   middle_end/flambda2.0/simplify/env/continuation_uses_env_intf.cmo \
-  middle_end/flambda2.0/simplify/env/simplify_env_and_result_intf.cmo \
-  middle_end/flambda2.0/simplify/env/simplify_env_and_result.cmo \
   middle_end/flambda2.0/simplify/env/downwards_acc.cmo \
   middle_end/flambda2.0/simplify/env/upwards_acc.cmo \
   middle_end/flambda2.0/inlining/inlining_cost.cmo \

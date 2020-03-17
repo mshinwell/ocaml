@@ -16,6 +16,7 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
+module LC = Simplify_env_and_result.Lifted_constant
 module T = Flambda_type
 module TE = Flambda_type.Typing_env
 module U = One_continuation_use
@@ -93,6 +94,7 @@ let arity t = t.arity
 (* CR mshinwell: Move to [Generic_simplify_let_cont]? *)
 let compute_handler_env t
       ~env_at_fork_plus_params_and_consts:typing_env
+      ~consts_lifted_during_body
       ~params : Continuation_env_and_param_types.t =
 (*
 Format.eprintf "%d uses for %a\n%!"
@@ -125,6 +127,32 @@ Format.eprintf "Unknown at or later than %a\n%!"
 *)
     let handler_typing_env, extra_params_and_args, is_single_inlinable_use,
         is_single_use =
+      match use_envs_with_ids with
+      (* CR mshinwell: This [when] guard must match up with [Simplify_expr]'s
+         inlinability criterion.  Remove the duplication. *)
+      | [use_env, _, Inlinable]
+          when not (Continuation.is_exn t.continuation) ->
+        (* The use environment might not contain all of the lifted constants
+           discovered whilst simplifying the corresponding body. *)
+        let use_env =
+          List.fold_left (fun use_env const ->
+              Symbol.Map.fold (fun symbol ty use_env ->
+                  let symbol' = Name.symbol symbol in
+                  let use_env =
+                    (* CR mshinwell: Add a function in [TE] to do this.  That
+                       can in fact just blindly add to [defined_symbols]. *)
+                    if TE.mem use_env symbol' then use_env
+                    else TE.add_symbol_definition use_env symbol
+                  in
+                  TE.add_equation use_env symbol' ty)
+                (LC.types_of_symbols const)
+                use_env)
+            use_env
+            consts_lifted_during_body
+        in
+        use_env, Continuation_extra_params_and_args.empty, true, true
+      | [] | [_, _, (Inlinable | Non_inlinable)]
+      | (_, _, (Inlinable | Non_inlinable)) :: _ ->
         let env_extension, extra_params_and_args =
           TE.cut_and_n_way_join typing_env use_envs_with_ids
             ~params

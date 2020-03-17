@@ -81,6 +81,8 @@ module Typing_env : sig
 
   val add_definitions_of_params : t -> params:Kinded_parameter.t list -> t
 
+  val add_symbol_definition : t -> Symbol.t -> t
+
   val add_equation : t -> Name.t -> flambda_type -> t
 
   val add_equations_on_params
@@ -131,6 +133,11 @@ module Typing_env : sig
     -> params:Kinded_parameter.t list
     -> unknown_if_defined_at_or_later_than:Scope.t
     -> Typing_env_extension.t * Continuation_extra_params_and_args.t
+
+  val free_names_transitive
+     : t
+    -> flambda_type
+    -> Name_occurrences.t
 end
 
 val meet : Typing_env.t -> t -> t -> (t * Typing_env_extension.t) Or_bottom.t

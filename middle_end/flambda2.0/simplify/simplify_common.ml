@@ -199,6 +199,9 @@ let bind_let_bound ~bindings ~body =
 
 let create_let_symbol code_age_relation (bound_symbols : Bound_symbols.t)
       (static_const : Static_const.t) body =
+(*
+  Format.eprintf "create_let_symbol %a\n%!" Bound_symbols.print bound_symbols;
+*)
   let free_names_after = Expr.free_names body in
   match bound_symbols with
   | Singleton sym ->

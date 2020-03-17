@@ -45,8 +45,9 @@ let lift_non_closure_discovered_via_reified_continuation_param_types dacc
         R.consider_constant_for_sharing r symbol static_const)
     in
     let reified_definitions =
-      (Let_symbol.Bound_symbols.Singleton symbol, static_const)
-        :: reified_definitions
+      (Let_symbol.Bound_symbols.Singleton symbol, static_const,
+        Name_occurrences.empty)
+      :: reified_definitions
     in
     let reified_continuation_params_to_symbols =
       Variable.Map.add var symbol reified_continuation_params_to_symbols
@@ -121,13 +122,54 @@ let lift_set_of_closures_discovered_via_reified_continuation_param_types dacc
          [Let_symbol] bindings)---at that point, new code IDs may well be
          assigned. (That is also the point at which references to the closures
          being lifted, via the continuation's parameters, will be changed to go
-         via symbols.) *)
+         via symbols.)  See long comment above concerning subtle point
+         relating to dependencies that might be exposed during such
+         simplification. *)
       Let_symbol.pieces_of_code
         ~newer_versions_of:Code_id.Map.empty
         ~set_of_closures:(closure_symbols, set_of_closures)
         Code_id.Map.empty
     in
-    let reified_definitions = definition :: reified_definitions in
+    (* This reification process will result in [Let_symbol] bindings containing
+       closure symbol definitions but no code.  The code will be simplified
+       when each such [Let_symbol] binding (occurring around the handler of the
+       continuation whose parameters are being reified) is simplified.  This
+       process of simplification, by virtue of the new equalities to symbols
+       that we add into the environment, can reveal new dependencies between
+       the [Let_symbol] bindings.  This can invalidate the order of the bindings
+       even if such order was correct before the simplification.
+       As a result, we make sure that any hidden dependencies are revealed and
+       exposed to the sorting algorithm for constants (called below), with two
+       separate aims:
+       1. To ensure that the order of the [Let_symbol] bindings is correct in
+          terms of symbol scope.
+       2. To ensure that typing information flows in the expected manner.
+          We define symbols in the environment early for this transformation
+          (see above), so that we can introduce the equalities to the relevant
+          variables; as such, a reference to such a symbol that is "too early"
+          can just yield "unknown" rather than the proper type of the symbol.
+          This should be avoided.
+       Since the existing code in the [Let_symbol] bindings that we create below
+       cannot contain any of the new closure symbols---and code is closed
+       apart from symbols---the only thing we need to look at is the contents of
+       the environment of each closure.  This needs to be done transitively as
+       inlining may occur.  The aim is to discover variables that might be
+       equated to symbols and to explicitly expose them as dependencies. *)
+    let extra_deps =
+      Var_within_closure.Map.fold (fun _var simple env_free_names ->
+          let ty =
+            Simple.pattern_match simple
+              ~const:(fun const -> T.type_for_const const)
+              ~name:(fun name -> TE.find (DA.typing_env dacc) name)
+          in
+          Name_occurrences.union env_free_names
+            (TE.free_names_transitive (DA.typing_env dacc) ty))
+        closure_vars
+        Name_occurrences.empty
+    in
+    let reified_definitions =
+      (fst definition, snd definition, extra_deps) :: reified_definitions
+    in
     let closure_symbols_by_set =
       Set_of_closures.Map.add set_of_closures closure_symbols
         closure_symbols_by_set
@@ -167,6 +209,10 @@ let reify_types_of_continuation_param_types dacc ~params =
         dacc, reified_continuation_params_to_symbols, reified_definitions,
           closure_symbols_by_set
       | None ->
+        (* CR mshinwell: I'm not sure the following statement is true any
+           more, but I don't think we want to allow the [params] to appear
+           anyway, as it may cause the allocation we're trying to remove not
+           to go away.  (Try on mlexamples/lifting.ml for example.) *)
         (* Since the continuation we're dealing with might be inlined and
            we don't handle [extra_params_and_args] on such continuations at
            the [Apply_cont] site, be certain that the only variables appearing
@@ -222,6 +268,8 @@ let reify_types_of_continuation_param_types dacc ~params =
 let lift_via_reification_of_continuation_param_types dacc ~params
       ~(extra_params_and_args : Continuation_extra_params_and_args.t)
       ~(handler : Expr.t) =
+(*  Format.eprintf "-------- REIFY ------------\ndacc = @ %a\n%!"
+    DA.print dacc; *)
   let dacc, _reified_continuation_params_to_symbols, reified_definitions,
       _closure_symbols_by_set =
     let params =
@@ -241,6 +289,10 @@ let lift_via_reification_of_continuation_param_types dacc ~params
   in
   let handler =
     List.fold_left (fun handler (bound_symbols, defining_expr) ->
+        (*
+        Format.eprintf "Creating Let_symbol for:@ %a\n%!"
+          Bound_symbols.print bound_symbols;
+        *)
         Let_symbol.create bound_symbols defining_expr handler
         |> Expr.create_let_symbol)
       handler

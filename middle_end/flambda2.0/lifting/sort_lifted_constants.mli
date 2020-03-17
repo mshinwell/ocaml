@@ -27,4 +27,9 @@ type result = private {
   bindings_outermost_last : (Bound_symbols.t * Static_const.t) list;
 }
 
-val sort : DA.t -> (Bound_symbols.t * Static_const.t) list -> result
+(** The [Name_occurrences.t] values specify extra "hidden" dependencies of the
+    associated constant that must be taken into account. *)
+val sort
+   : DA.t
+  -> (Bound_symbols.t * Static_const.t * Name_occurrences.t) list
+  -> result

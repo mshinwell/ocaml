@@ -137,9 +137,10 @@ and simplify_let_symbol
     UA.map_r uacc ~f:(fun r -> R.set_lifted_constants r prior_lifted_constants)
   in
   let all_lifted_constants =
-    (bound_symbols, defining_expr)
+    (bound_symbols, defining_expr, Name_occurrences.empty)
       :: List.map (fun lifted_constant ->
-          LC.bound_symbols lifted_constant, LC.defining_expr lifted_constant)
+          LC.bound_symbols lifted_constant, LC.defining_expr lifted_constant,
+            Name_occurrences.empty)
         lifted_constants
   in
 (*
@@ -306,6 +307,9 @@ and simplify_non_recursive_let_cont_handler
               let code_age_relation_after_body =
                 TE.code_age_relation (DA.typing_env dacc_after_body)
               in
+              let consts_lifted_during_body =
+                R.get_lifted_constants (DA.r dacc_after_body)
+              in
               let dacc =
                 (* We need any lifted constant symbols and associated code IDs
                    that were produced during simplification of the body to be
@@ -314,19 +318,25 @@ and simplify_non_recursive_let_cont_handler
                    The [DE] component of [dacc_after_body] is discarded since
                    we have finished with the body now and will be moving into a
                    different scope (that of the handler). *)
-                let lifted = R.get_lifted_constants (DA.r dacc_after_body) in
                 (* CR mshinwell: We don't actually need to add equations on
                    the symbols here, since the equations giving joined types
                    will supercede them in [compute_handler_env].  However
                    we can't just define the symbols; we also need the code IDs
                    as well (which live in [DE]; the code age relation in [TE]
-                   is dealt with below). *)
-                DE.add_lifted_constants denv_before_body ~lifted
+                   is dealt with below).
+                   mshinwell: This is no longer the case if we have a single
+                   inlinable use.  We copy the equations from [dacc] into
+                   the single use's environment (which might not contain them
+                   all already, somewhat counterintuitively) and return that
+                   as the handler env. *)
+                DE.add_lifted_constants denv_before_body
+                  ~lifted:consts_lifted_during_body
                 |> DA.with_denv dacc_after_body
               in
               let uses =
                 CUE.compute_handler_env cont_uses_env cont ~params
                   ~env_at_fork_plus_params_and_consts:(DA.typing_env dacc)
+                  ~consts_lifted_during_body
               in
               let dacc =
                 DA.map_r dacc ~f:(fun r ->
@@ -438,6 +448,8 @@ and simplify_non_recursive_let_cont_handler
                 | No_uses -> uenv
                 | Uses _ ->
                   let can_inline =
+                    (* CR mshinwell: This check must line up with
+                       Continuation_uses.  Remove the duplication. *)
                     if is_single_inlinable_use && (not is_exn_handler) then
                       Some handler
                     else

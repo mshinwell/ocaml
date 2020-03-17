@@ -27,16 +27,20 @@ val empty_env : env
 val compute_offsets : Flambda_unit.t -> env
 (** Compute offsets for a whole compilation unit. *)
 
-val env_var_offset : env -> Var_within_closure.t -> int
+val env_var_offset : env -> Var_within_closure.t -> int option
 (** Returns the offset computed for an environment variable, in
-    terms of target architecture words. *)
+    terms of target architecture words.
+    If [None] is returned, there is no closure in the program containing the
+    given closure variable. *)
 
-val closure_offset : env -> Closure_id.t -> int
+val closure_offset : env -> Closure_id.t -> int option
 (** Returns the offset computed for a closure id, in terms of
     target architecture words.
     This points to the first field of the closure representation
     within the sets of closures block. Notably, if the offset is not 0,
-    an infix header should be placed just before the returned offset. *)
+    an infix header should be placed just before the returned offset.
+    If [None] is returned, there is no closure in the program containing the
+    given closure ID. *)
 
 val closure_name : Closure_id.t -> string
 (** Returns a cmm name for a closure id. *)
