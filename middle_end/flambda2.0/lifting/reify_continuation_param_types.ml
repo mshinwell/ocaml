@@ -145,15 +145,11 @@ let lift_set_of_closures_discovered_via_reified_continuation_param_types dacc
       closure_symbols_by_set
 
 let reify_types_of_continuation_param_types dacc ~params =
-  Format.eprintf "REIFY: dacc:@ %a\n%!" DA.print dacc;
   let orig_typing_env = DA.typing_env dacc in
   Variable.Set.fold
     (fun var (dacc, reified_continuation_params_to_symbols, reified_definitions,
               closure_symbols_by_set) ->
       let ty = TE.find orig_typing_env (Name.var var) in
-      Format.eprintf "%a has type:@ %a\n%!"
-        Variable.print var
-        T.print ty;
       let existing_symbol =
         (* We must avoid attempting to create aliases between symbols or
            (equivalently) defining static parts that already have symbols.
@@ -171,14 +167,17 @@ let reify_types_of_continuation_param_types dacc ~params =
         dacc, reified_continuation_params_to_symbols, reified_definitions,
           closure_symbols_by_set
       | None ->
+        (* Since the continuation we're dealing with might be inlined and
+           we don't handle [extra_params_and_args] on such continuations at
+           the [Apply_cont] site, be certain that the only variables appearing
+           in our new [Let_symbol] bindings don't involve any of those
+           (extra) parameters. *)
         let typing_env = DA.typing_env dacc in
         match
           T.reify ~allowed_if_free_vars_defined_in:typing_env
-            ~disallowed_free_vars:params
-            typing_env ~min_name_mode:NM.normal ty
+            ~disallowed_free_vars:params typing_env ~min_name_mode:NM.normal ty
         with
         | Lift to_lift ->
-          Format.eprintf "Lift\n%!";
           (* There's no point in lifting constant values, as these should
              already have been lifted. *)
           let inconstant =
@@ -200,7 +199,6 @@ let reify_types_of_continuation_param_types dacc ~params =
               dacc var to_lift ~reified_continuation_params_to_symbols
               ~reified_definitions ~closure_symbols_by_set
         | Lift_set_of_closures { closure_id; function_decls; closure_vars; } ->
-          Format.eprintf "LSOC\n%!";
           (* Same comment as above, specifically relating to the
              environment in this case. *)
           let inconstant_env =
@@ -216,7 +214,6 @@ let reify_types_of_continuation_param_types dacc ~params =
               ~reified_continuation_params_to_symbols
               ~reified_definitions ~closure_symbols_by_set
         | Simple _ | Cannot_reify | Invalid ->
-          Format.eprintf "Nothing to do\n%!";
           dacc, reified_continuation_params_to_symbols, reified_definitions,
             closure_symbols_by_set)
     params
