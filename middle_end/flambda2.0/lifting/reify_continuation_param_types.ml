@@ -167,6 +167,10 @@ let reify_types_of_continuation_param_types dacc ~params =
         dacc, reified_continuation_params_to_symbols, reified_definitions,
           closure_symbols_by_set
       | None ->
+        (* CR mshinwell: I'm not sure the following statement is true any
+           more, but I don't think we want to allow the [params] to appear
+           anyway, as it may cause the allocation we're trying to remove not
+           to go away.  (Try on mlexamples/lifting.ml for example.) *)
         (* Since the continuation we're dealing with might be inlined and
            we don't handle [extra_params_and_args] on such continuations at
            the [Apply_cont] site, be certain that the only variables appearing
