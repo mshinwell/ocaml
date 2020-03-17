@@ -456,8 +456,7 @@ let check_scope ~allow_deleted env code_id_or_symbol =
     | Symbol _ -> env
   in
   if in_scope || in_another_unit then updated_env
-  else updated_env
-  (* CR mshinwell: FIXME
+  else
     Misc.fatal_errorf "Use out of scope of %a@.Known names:@.%a@."
       Code_id_or_symbol.print code_id_or_symbol
-      Code_id_or_symbol.Set.print env.names_in_scope *)
+      Code_id_or_symbol.Set.print env.names_in_scope
