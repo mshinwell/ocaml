@@ -20,7 +20,6 @@ module Env = struct
   type t = {
     variables : Variable.t Ident.Map.t;
     globals : Symbol.t Numbers.Int.Map.t;
-    at_toplevel : bool;
     simples_to_substitute : Simple.t Ident.Map.t;
     still_at_toplevel : bool;
   }
@@ -28,7 +27,6 @@ module Env = struct
   let empty = {
     variables = Ident.Map.empty;
     globals = Numbers.Int.Map.empty;
-    at_toplevel = true;
     simples_to_substitute = Ident.Map.empty;
     still_at_toplevel = true;
   }
@@ -92,10 +90,6 @@ module Env = struct
     with Not_found ->
       Misc.fatal_error ("Closure_conversion.Env.find_global: global "
         ^ string_of_int pos)
-
-  let at_toplevel t = t.at_toplevel
-
-  let not_at_toplevel t = { t with at_toplevel = false; }
 
   let add_simple_to_substitute t id simple =
     if Ident.Map.mem id t.simples_to_substitute then begin
