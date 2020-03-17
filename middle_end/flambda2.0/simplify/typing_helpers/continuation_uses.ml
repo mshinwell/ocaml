@@ -128,7 +128,8 @@ Format.eprintf "Unknown at or later than %a\n%!"
       match use_envs_with_ids with
       (* CR mshinwell: This [when] guard must match up with [Simplify_expr]'s
          inlinability criterion.  Remove the duplication. *)
-      | [use_env, _, Inlinable] when Continuation.is_exn t.continuation ->
+      | [use_env, _, Inlinable]
+          when not (Continuation.is_exn t.continuation) ->
         use_env, Continuation_extra_params_and_args.empty, true, true
       | [] | [_, _, (Inlinable | Non_inlinable)]
       | (_, _, (Inlinable | Non_inlinable)) :: _ ->
