@@ -174,7 +174,7 @@ let reify_types_of_continuation_param_types dacc ~params =
         let typing_env = DA.typing_env dacc in
         match
           T.reify ~allowed_if_free_vars_defined_in:typing_env
-            ~disallowed_free_vars:Variable.Set.empty
+            ~disallowed_free_vars:params
             typing_env ~min_name_mode:NM.normal ty
         with
         | Lift to_lift ->

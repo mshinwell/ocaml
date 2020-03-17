@@ -561,6 +561,7 @@ let rec close t env (ilam : Ilambda.t) : Expr.t * _ =
       in
       drop_handlers delayed_handlers_body ~leaving_scope_of ~around:body
     in
+    let still_at_toplevel = Env.still_at_toplevel env in
     let handler, delayed_handlers_handler = close t handler_env handler in
     let handler, delayed_handlers_handler =
       let leaving_scope_of =
@@ -583,7 +584,17 @@ let rec close t env (ilam : Ilambda.t) : Expr.t * _ =
     let delayed_handlers =
       Delayed_handlers.union delayed_handlers_handler delayed_handlers_body
     in
-    body, Delayed_handlers.add_handler delayed_handlers name handler
+    let delayed_handlers =
+      Delayed_handlers.add_handler delayed_handlers name handler
+    in
+    (* If we are still at toplevel, don't un-nest handlers, otherwise we
+       may produce situations where reification of continuation parameters'
+       types (yielding new [Let_symbol] bindings) cause code IDs or symbols to
+       go out of syntactic scope (but not out of dominator scope). *)
+    if still_at_toplevel then
+      drop_all_handlers delayed_handlers ~around:body, Delayed_handlers.empty
+    else
+      body, delayed_handlers
   | Apply { kind; func; args; continuation; exn_continuation;
       loc; should_be_tailcall = _; inlined; specialised = _; } ->
     let call_kind =

@@ -22,6 +22,7 @@ module Env = struct
     globals : Symbol.t Numbers.Int.Map.t;
     at_toplevel : bool;
     simples_to_substitute : Simple.t Ident.Map.t;
+    still_at_toplevel : bool;
   }
 
   let empty = {
@@ -29,10 +30,14 @@ module Env = struct
     globals = Numbers.Int.Map.empty;
     at_toplevel = true;
     simples_to_substitute = Ident.Map.empty;
+    still_at_toplevel = true;
   }
 
   let clear_local_bindings env =
-    { empty with globals = env.globals }
+    { empty with
+      globals = env.globals;
+      still_at_toplevel = false;
+    }
 
   let add_var t id var = { t with variables = Ident.Map.add id var t.variables }
   let add_vars t ids vars = List.fold_left2 add_var t ids vars
@@ -103,6 +108,13 @@ module Env = struct
 
   let find_simple_to_substitute_exn t id =
     Ident.Map.find id t.simples_to_substitute
+
+  let still_at_toplevel t = t.still_at_toplevel
+
+  let no_longer_at_toplevel t =
+    { t with
+      still_at_toplevel = false;
+    }
 end
 
 module Function_decls = struct
