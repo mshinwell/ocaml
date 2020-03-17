@@ -438,6 +438,8 @@ and simplify_non_recursive_let_cont_handler
                 | No_uses -> uenv
                 | Uses _ ->
                   let can_inline =
+                    (* CR mshinwell: This check must line up with
+                       Continuation_uses.  Remove the duplication. *)
                     if is_single_inlinable_use && (not is_exn_handler) then
                       Some handler
                     else
