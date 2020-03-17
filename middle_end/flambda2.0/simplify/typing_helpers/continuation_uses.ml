@@ -125,6 +125,11 @@ Format.eprintf "Unknown at or later than %a\n%!"
 *)
     let handler_typing_env, extra_params_and_args, is_single_inlinable_use,
         is_single_use =
+      match use_envs_with_ids with
+      | [use_env, _, Inlinable] ->
+        use_env, Continuation_extra_params_and_args.empty, true, true
+      | [] | [_, _, Non_inlinable]
+      | (_, _, (Inlinable | Non_inlinable)) :: _ ->
         let env_extension, extra_params_and_args =
           TE.cut_and_n_way_join typing_env use_envs_with_ids
             ~params
