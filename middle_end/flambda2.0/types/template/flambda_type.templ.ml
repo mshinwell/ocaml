@@ -716,8 +716,11 @@ let reify ?allowed_if_free_vars_defined_in ?disallowed_free_vars env
         Row_like.For_closures_entry_by_set_of_closures_contents.
           get_singleton closures.by_closure_id
       with
-      | None -> try_canonical_simple ()
+      | None ->
+        Format.eprintf "Row_like.get_singleton bad\n%!";
+        try_canonical_simple ()
       | Some ((closure_id, contents), closures_entry) ->
+        Format.eprintf "Row_like.get_singleton OK\n%!";
         (* CR mshinwell: What about if there were multiple entries in the
            row-like structure for the same closure ID?  This is ruled out
            by [get_singleton] at the moment.  We should probably choose
@@ -738,10 +741,13 @@ let reify ?allowed_if_free_vars_defined_in ?disallowed_free_vars env
                 Closures_entry.find_function_declaration closures_entry
                   closure_id
               with
-              | Bottom -> function_decls_with_closure_vars
+              | Bottom ->
+                Format.eprintf "Exit 3\n%!";
+                function_decls_with_closure_vars
               | Ok function_decl ->
                 match function_decl with
                 | Bottom | Unknown | Ok (Non_inlinable _) ->
+                  Format.eprintf "Exit 2\n%!";
                   function_decls_with_closure_vars
                 | Ok (Inlinable inlinable_decl) ->
                   (* CR mshinwell: We're ignoring [rec_info] *)
@@ -751,11 +757,16 @@ let reify ?allowed_if_free_vars_defined_in ?disallowed_free_vars env
                   let closure_var_simples =
                     Var_within_closure.Map.filter_map closure_var_types
                       ~f:(fun _closure_var closure_var_type ->
+                        Format.eprintf "CV type:@ %a\n%!"
+                          Type_grammar.print closure_var_type;
                         match
                           prove_equals_to_var_or_symbol_or_tagged_immediate
                             env closure_var_type
                         with
                         | Proved (Var var) ->
+                          Format.eprintf "= var %a, allowed? %b\n%!"
+                            Variable.print var
+                            (var_allowed var);
                           if var_allowed var
                           then Some (Simple.var var)
                           else None
@@ -767,7 +778,9 @@ let reify ?allowed_if_free_vars_defined_in ?disallowed_free_vars env
                   in
                   if Var_within_closure.Map.cardinal closure_var_types
                     <> Var_within_closure.Map.cardinal closure_var_simples
-                  then function_decls_with_closure_vars
+                  then
+                    let () = Format.eprintf "Exit 1\n%!" in
+                    function_decls_with_closure_vars
                   else
                     Closure_id.Map.add closure_id
                       (inlinable_decl, closure_var_simples)
@@ -775,9 +788,10 @@ let reify ?allowed_if_free_vars_defined_in ?disallowed_free_vars env
             closure_ids
             Closure_id.Map.empty
         in
+        let () = Format.eprintf "****\n%!" in
         if Closure_id.Set.cardinal closure_ids
           <> Closure_id.Map.cardinal function_decls_with_closure_vars
-        then try_canonical_simple ()
+        then let () = Format.eprintf "Exit 0\n%!" in try_canonical_simple ()
         else
           let function_decls =
             Closure_id.Map.map (fun (function_decl, _) -> function_decl)

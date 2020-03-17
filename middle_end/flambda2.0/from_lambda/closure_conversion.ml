@@ -554,6 +554,13 @@ let rec close t env (ilam : Ilambda.t) : Expr.t * _ =
         params
         params_with_kinds
     in
+    let body, delayed_handlers_body = close t env body in
+    let body, delayed_handlers_body =
+      let leaving_scope_of =
+        Name_occurrences.singleton_continuation name
+      in
+      drop_handlers delayed_handlers_body ~leaving_scope_of ~around:body
+    in
     let handler, delayed_handlers_handler = close t handler_env handler in
     let handler, delayed_handlers_handler =
       let leaving_scope_of =
@@ -572,13 +579,6 @@ let rec close t env (ilam : Ilambda.t) : Expr.t * _ =
       Flambda.Continuation_handler.create ~params_and_handler
         ~stub:false
         ~is_exn_handler:is_exn_handler
-    in
-    let body, delayed_handlers_body = close t env body in
-    let body, delayed_handlers_body =
-      let leaving_scope_of =
-        Name_occurrences.singleton_continuation name
-      in
-      drop_handlers delayed_handlers_body ~leaving_scope_of ~around:body
     in
     let delayed_handlers =
       Delayed_handlers.union delayed_handlers_handler delayed_handlers_body
