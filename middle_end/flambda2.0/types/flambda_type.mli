@@ -81,6 +81,8 @@ module Typing_env : sig
 
   val add_definitions_of_params : t -> params:Kinded_parameter.t list -> t
 
+  val add_symbol_definition : t -> Symbol.t -> t
+
   val add_equation : t -> Name.t -> flambda_type -> t
 
   val add_equations_on_params

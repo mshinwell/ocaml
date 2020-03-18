@@ -40,6 +40,8 @@ val add_equation : t -> Name.t -> Type_grammar.t -> t
 
 val add_definitions_of_params : t -> params:Kinded_parameter.t list -> t
 
+val add_symbol_definition : t -> Symbol.t -> t
+
 val add_symbol_definitions : t -> Symbol.Set.t -> t
 
 val add_equations_on_params
