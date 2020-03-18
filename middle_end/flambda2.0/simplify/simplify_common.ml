@@ -199,16 +199,7 @@ let bind_let_bound ~bindings ~body =
 
 let create_let_symbol _code_age_relation (bound_symbols : Bound_symbols.t)
       (static_const : Static_const.t) body =
-  begin match Expr.descr body with
-  | Let_symbol let_sym ->
-    let bound_symbols' = Let_symbol.bound_symbols let_sym in
-    if Stdlib.compare bound_symbols bound_symbols' = 0 then begin
-      Misc.fatal_errorf "Immediate redefinition of@ %a@ around:@ %a"
-        Bound_symbols.print bound_symbols
-        Expr.print body
-    end
-  | _ -> ()
-  end;
+  Format.eprintf "create_let_symbol %a\n%!" Bound_symbols.print bound_symbols;
   Let_symbol.create bound_symbols static_const body
   |> Expr.create_let_symbol
 (*
