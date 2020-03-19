@@ -197,7 +197,7 @@ let bind_let_bound ~bindings ~body =
     body
     (List.rev bindings)
 
-let create_let_symbol _code_age_relation (bound_symbols : Bound_symbols.t)
+let create_let_symbol code_age_relation (bound_symbols : Bound_symbols.t)
       (static_const : Static_const.t) body =
 (*
   Format.eprintf "create_let_symbol %a\n%!" Bound_symbols.print bound_symbols;
