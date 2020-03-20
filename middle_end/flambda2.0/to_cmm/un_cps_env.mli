@@ -126,10 +126,10 @@ val get_jump_id : t -> Continuation.t -> int
 
 (** {2 Sets of closures and offsets} *)
 
-val closure_offset : t -> Closure_id.t -> int
+val closure_offset : t -> Closure_id.t -> int option
 (** Wrapper around {!Un_cps_closure.closure_offset}. *)
 
-val env_var_offset : t -> Var_within_closure.t -> int
+val env_var_offset : t -> Var_within_closure.t -> int option
 (** Wrapper around {!Un_cps_closure.env_var_offset}. *)
 
 val layout :

@@ -399,12 +399,17 @@ let unary_primitive env dbg f arg =
   | Box_number kind ->
       C.box_number ~dbg kind arg
   | Select_closure { move_from = c1; move_to = c2} ->
-      let diff = (Env.closure_offset env c2) - (Env.closure_offset env c1) in
-      C.infix_field_address ~dbg arg diff
+      begin match Env.closure_offset env c1, Env.closure_offset env c2 with
+      | Some c1_offset, Some c2_offset ->
+        let diff = c2_offset - c1_offset in
+        C.infix_field_address ~dbg arg diff
+      | Some _, None | None, Some _ | None, None -> C.unreachable
+      end
   | Project_var { project_from; var; } ->
-      let offset = Env.env_var_offset env var in
-      let base = Env.closure_offset env project_from in
-      C.get_field_gen Asttypes.Immutable arg (offset - base) dbg
+      match Env.env_var_offset env var, Env.closure_offset env project_from with
+      | Some offset, Some base ->
+        C.get_field_gen Asttypes.Immutable arg (offset - base) dbg
+      | Some _, None | None, Some _ | None, None -> C.unreachable
 
 let binary_primitive env dbg f x y =
   match (f : Flambda_primitive.binary_primitive) with
@@ -651,11 +656,15 @@ and let_set_of_closures env body closure_vars soc =
   let env =
     Closure_id.Map.fold (fun cid v acc ->
         let v = Var_in_binding_pos.var v in
-        let e =
-          C.infix_field_address ~dbg: Debuginfo.none
-            soc_cmm_var (Env.closure_offset env cid)
-        in
-        let_expr_bind body acc v e effs
+        match Env.closure_offset env cid with
+        | Some offset ->
+            let e =
+              C.infix_field_address ~dbg: Debuginfo.none
+                soc_cmm_var offset
+            in
+            let_expr_bind body acc v e effs
+        | None ->
+            Misc.fatal_errorf "No closure offset for %a" Closure_id.print cid
       ) closure_vars env in
   (* The set of closures, as well as the individual closures variables
      are correctly set in the env, go on translating the body. *)
