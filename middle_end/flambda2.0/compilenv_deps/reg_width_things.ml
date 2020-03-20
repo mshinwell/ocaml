@@ -186,9 +186,10 @@ module Symbol_data = struct
       Compilation_unit.print compilation_unit
       Linkage_name.print linkage_name
 
-  let hash { compilation_unit; linkage_name; } =
-    Hashtbl.hash (Compilation_unit.hash compilation_unit,
-      Linkage_name.hash linkage_name)
+  let hash { compilation_unit = _; linkage_name; } =
+    (* Linkage names are unique across a whole project, so there's no need
+       to hash the compilation unit. *)
+    Linkage_name.hash linkage_name
 
   let equal t1 t2 =
     if t1 == t2 then true

@@ -28,75 +28,64 @@ type result = {
 }
 
 let build_dep_graph dacc lifted_constants =
-  let all_symbols_being_defined =
-    Symbol.Set.union_list
-      (List.map (fun (bound_symbols, _) ->
-          Bound_symbols.being_defined bound_symbols)
-        lifted_constants)
-  in
   List.fold_left
     (fun (dep_graph, code_id_or_symbol_to_const)
          ((bound_symbols : Bound_symbols.t), defining_expr) ->
-      (*
       Format.eprintf "Input for one set: %a =@ %a\n%!"
         Bound_symbols.print bound_symbols
         Static_const.print defining_expr;
-      *)
       let bound_symbols_free_names = Bound_symbols.free_names bound_symbols in
+      let free_names =
+        (* To avoid existing sets of closures (with or without associated
+           code) being pulled apart, we add a dependency from each code ID
+           or closure symbol [being_defined] to all other code IDs and
+           symbols bound by the same binding. *)
+        match bound_symbols with
+        | Singleton _ ->
+          Static_const.free_names defining_expr
+        | Sets_of_closures _ ->
+          Name_occurrences.union bound_symbols_free_names
+            (Static_const.free_names defining_expr)
+      in
+      (* Beware: when coming from [Reify_continuation_params] the
+         sets of closures may have dependencies on variables that are
+         now equal to symbols in the environment.  (They haven't been
+         changed to symbols yet as the simplifier hasn't been run on
+         the definitions.)  Some of these symbols may be the ones
+         involved in the current SCC calculation.  For this latter set,
+         we must explicitly add them as dependencies. *)
+      let free_syms =
+        Name_occurrences.fold_names free_names
+          ~init:Symbol.Set.empty
+          ~f:(fun free_syms name ->
+            Name.pattern_match name
+              ~var:(fun var ->
+                let typing_env = DA.typing_env dacc in
+                match
+                  TE.get_canonical_simple_exn typing_env
+                    ~min_name_mode:NM.normal
+                    (Simple.var var)
+                with
+                | exception Not_found -> free_syms
+                | canonical ->
+                  Simple.pattern_match canonical
+                    ~const:(fun _ -> free_syms)
+                    ~name:(fun name ->
+                      Name.pattern_match name
+                        ~var:(fun _var -> free_syms)
+                        ~symbol:(fun sym -> Symbol.Set.add sym free_syms)))
+              ~symbol:(fun sym -> Symbol.Set.add sym free_syms))
+      in
+      let free_code_ids =
+        Name_occurrences.code_ids_and_newer_version_of_code_ids free_names
+      in
+      let deps =
+        CIS.Set.union (CIS.set_of_symbol_set free_syms)
+          (CIS.set_of_code_id_set free_code_ids)
+      in
       CIS.Set.fold
         (fun (being_defined : CIS.t)
              (dep_graph, code_id_or_symbol_to_const) ->
-          let free_names =
-            (* To avoid existing sets of closures (with or without associated
-               code) being pulled apart, we add a dependency from each code ID
-               or closure symbol [being_defined] to all other code IDs and
-               symbols bound by the same binding. *)
-            match bound_symbols with
-            | Singleton _ ->
-              Static_const.free_names defining_expr
-            | Sets_of_closures _ ->
-              Name_occurrences.union bound_symbols_free_names
-                (Static_const.free_names defining_expr)
-          in
-          (* Beware: when coming from [Reify_continuation_params] the
-             sets of closures may have dependencies on variables that are
-             now equal to symbols in the environment.  (They haven't been
-             changed to symbols yet as the simplifier hasn't been run on
-             the definitions.)  Some of these symbols may be the ones
-             involved in the current SCC calculation.  For this latter set,
-             we must explicitly add them as dependencies. *)
-          let free_syms =
-            Name_occurrences.fold_names free_names
-              ~init:Symbol.Set.empty
-              ~f:(fun free_syms name ->
-                Name.pattern_match name
-                  ~var:(fun var ->
-                    let typing_env = DA.typing_env dacc in
-                    match
-                      TE.get_canonical_simple_exn typing_env
-                        ~min_name_mode:NM.normal
-                        (Simple.var var)
-                    with
-                    | exception Not_found -> free_syms
-                    | canonical ->
-                      Simple.pattern_match canonical
-                        ~const:(fun _ -> free_syms)
-                        ~name:(fun name ->
-                          Name.pattern_match name
-                            ~var:(fun _var -> free_syms)
-                            ~symbol:(fun sym ->
-                              if Symbol.Set.mem sym all_symbols_being_defined
-                              then Symbol.Set.add sym free_syms
-                              else free_syms)))
-                  ~symbol:(fun sym -> Symbol.Set.add sym free_syms))
-          in
-          let free_code_ids =
-            Name_occurrences.code_ids_and_newer_version_of_code_ids free_names
-          in
-          let deps =
-            CIS.Set.union (CIS.set_of_symbol_set free_syms)
-              (CIS.set_of_code_id_set free_code_ids)
-          in
           let dep_graph = CIS.Map.add being_defined deps dep_graph in
           let code_id_or_symbol_to_const =
             CIS.Map.add being_defined
@@ -110,6 +99,7 @@ let build_dep_graph dacc lifted_constants =
     lifted_constants
 
 let sort dacc lifted_constants =
+  Format.eprintf "SORT LIFTED CONSTANTS\n%!";
   (* The various lifted constants may exhibit recursion between themselves
      (specifically between closures and/or code).  We use SCC to obtain a
      topological sort of groups that must be coalesced into single
@@ -117,11 +107,9 @@ let sort dacc lifted_constants =
   let lifted_constants_dep_graph, code_id_or_symbol_to_const =
     build_dep_graph dacc lifted_constants
   in
-  (*
   Format.eprintf "SCC graph is:@ %a\n%!"
     (CIS.Map.print CIS.Set.print)
     lifted_constants_dep_graph;
-  *)
   let connected_components =
     SCC_lifted_constants.connected_components_sorted_from_roots_to_leaf
       lifted_constants_dep_graph
@@ -191,10 +179,8 @@ let sort dacc lifted_constants =
        Let the list L be a topological sort of a directed graph G.
        Then the reverse of L is a topological sort of the transpose of G.
   *)
-  (*
   Format.eprintf "Result, outermost first:@ %a\n%!"
     (Format.pp_print_list ~pp_sep:Format.pp_print_space
       Bound_symbols.print)
     (List.rev (List.map fst bindings_outermost_last));
-  *)
   { bindings_outermost_last; }
