@@ -12,6 +12,32 @@ module Deps = struct
   let hostname () = "?"
   let exec_name () = Sys.executable_name
   let pid () = 0
+
+  type allocation = Gc.Memprof.allocation = private
+    { n_samples : int;
+      size : int;
+      unmarshalled : bool;
+      callstack : Printexc.raw_backtrace
+    }
+
+  let memprof_start
+    ~callstack_size
+    ~(minor_alloc_callback:allocation -> _)
+    ~(major_alloc_callback:allocation -> _)
+    ~promote_callback
+    ~minor_dealloc_callback
+    ~major_dealloc_callback
+    ~sampling_rate
+    () : unit =
+(*
+    ignore (callstack_size, minor_alloc_callback, major_alloc_callback,
+            promote_callback, minor_dealloc_callback, major_dealloc_callback, sampling_rate);
+    assert false
+*)
+    Gc.Memprof.start ~callstack_size ~minor_alloc_callback ~major_alloc_callback
+      ~promote_callback ~minor_dealloc_callback ~major_dealloc_callback ~sampling_rate
+      ()
+  let memprof_stop () : unit = Gc.Memprof.stop ()
 end
 
 (* Buffer management *)
@@ -202,7 +228,7 @@ let[@inline never] lock_tracer s =
   (* This is a maximally unfair spinlock. *)
   (* FIXME: correctness rests on dubious assumptions of atomicity *)
   (* if s.locked then Printf.fprintf stderr "contention\n%!"; *)
-  while s.locked do Thread.yield () done;
+(*  while s.locked do Thread.yield () done; *)
   s.locked <- true
 
 let[@inline never] unlock_tracer s =
@@ -929,6 +955,11 @@ module Options = Main_args.Make_optcomp_options (Main_args.Default.Optmain)
 
 let main () =
   native_code := true;
+  begin match Sys.getenv_opt "MEMTRACE" with
+  | None -> ()
+  | Some filename ->
+    trace_until_exit ~sampling_rate:0.001 ~filename
+  end;
   begin match Sys.getenv_opt "COLUMNS" with
   | None -> ()
   | Some i ->
