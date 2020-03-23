@@ -68,7 +68,7 @@ and named =
   | Prim of {
       prim : Lambda.primitive;
       args : simple list;
-      loc : Location.t;
+      loc : Lambda.scoped_location;
       exn_continuation : exn_continuation option;
     }
     (** Set [exn_continuation] to [None] iff the given primitive can never
@@ -91,7 +91,7 @@ and function_declaration = {
   body : t;
   free_idents_of_body : Ident.Set.t;
   attr : Lambda.function_attribute;
-  loc : Location.t;
+  loc : Lambda.scoped_location;
   stub : bool;
 }
 
@@ -115,7 +115,7 @@ and apply = {
   args : simple list;
   continuation : Continuation.t;
   exn_continuation : exn_continuation;
-  loc : Location.t;
+  loc : Lambda.scoped_location;
   should_be_tailcall : bool;
   inlined : Lambda.inline_attribute;
   specialised : Lambda.specialise_attribute;

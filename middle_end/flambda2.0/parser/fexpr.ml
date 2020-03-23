@@ -1,6 +1,6 @@
 [@@@ocaml.warning "-30"]
 
-type location = Location.t
+type location = Lambda.scoped_location
 
 type closure_id = string * location
 

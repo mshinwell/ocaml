@@ -131,7 +131,7 @@ let transl_store_label_init glob size f arg =
   }
   in
   method_cache := Lprim(Pfield (field_info, Reads_vary),
-                        [Lprim(Pgetglobal glob, [], Location.none)],
+                        [Lprim(Pgetglobal glob, [], Loc_unknown)],
                         Loc_unknown);
   let expr = f arg in
   let (size, expr) =

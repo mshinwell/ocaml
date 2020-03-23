@@ -50,7 +50,7 @@ and named =
   | Prim of {
       prim : Lambda.primitive;
       args : simple list;
-      loc : Location.t;
+      loc : Lambda.scoped_location;
       exn_continuation : exn_continuation option;
     }
   | Assign of { being_assigned : Ident.t; new_value : simple; }
@@ -73,7 +73,7 @@ and function_declaration = {
   (* [free_idents_of_body] saves writing a free variables function on
      Ilambda terms. *)
   attr : Lambda.function_attribute;
-  loc : Location.t;
+  loc : Lambda.scoped_location;
   stub : bool;
 }
 
@@ -94,7 +94,7 @@ and apply = {
   args : simple list;
   continuation : Continuation.t;
   exn_continuation : exn_continuation;
-  loc : Location.t;
+  loc : Lambda.scoped_location;
   should_be_tailcall : bool;
   inlined : Lambda.inline_attribute;
   specialised : Lambda.specialise_attribute;

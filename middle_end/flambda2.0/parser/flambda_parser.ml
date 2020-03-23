@@ -173,7 +173,7 @@ and _menhir_state =
   
 open Fexpr
 
-let make_loc (startpos, endpos) = {
+let make_loc (startpos, endpos) = Lambda.of_raw_location {
   Location.loc_start = startpos;
   Location.loc_end = endpos;
   Location.loc_ghost = false;

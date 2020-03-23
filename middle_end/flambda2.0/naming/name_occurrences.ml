@@ -49,8 +49,6 @@ end) : sig
 
   val equal : t -> t -> bool
 
-  val invariant : t -> unit
-
   val empty : t
 
   val is_empty : t -> bool

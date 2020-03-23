@@ -6,7 +6,7 @@ module C = struct
     Format.fprintf ppf
       "%a : %a"
       Print_fexpr.continuation c
-      Location.print_loc loc
+      Lambda.print_scoped_location loc
   let compare ((c1, _):t) ((c2, _):t) =
     String.compare c1 c2
 end
@@ -86,7 +86,7 @@ let defining_expr env (named:Fexpr.named) : Ilambda.named =
       Prim {
         prim = infix_binop op;
         args = simple_idents env [a1; a2];
-        loc = Location.none;
+        loc = Loc_unknown;
         exn_continuation = None;
       }
   | Prim (Block (tag, mut, args)) ->
@@ -98,7 +98,7 @@ let defining_expr env (named:Fexpr.named) : Ilambda.named =
       Prim {
         prim = Pmakeblock (tag, mut, None);
         args = simple_idents env args;
-        loc = Location.none;
+        loc = Loc_unknown;
         exn_continuation = None;
       }
   | _ ->
@@ -188,7 +188,7 @@ let rec conv_top func_env (prog : Fexpr.program) : program =
       let return_continuation, env = fresh_cont ~sort:Return env let_code.ret_cont 1 in
       let exn_cont, env =
         let cont = match let_code.exn_cont with
-          | None -> "*dummy*", Location.none
+          | None -> "*dummy*", Lambda.Loc_unknown
           | Some c -> c
         in
         fresh_cont ~sort:Exn env cont 1
@@ -209,7 +209,7 @@ let rec conv_top func_env (prog : Fexpr.program) : program =
         body;
         free_idents_of_body = Ident.Set.empty;
         attr = Lambda.default_function_attribute;
-        loc = Location.none;
+        loc = Loc_unknown;
         stub = false;
       } in
       let func_env = FM.add let_code.name declaration func_env in
@@ -247,7 +247,7 @@ let rec conv_top func_env (prog : Fexpr.program) : program =
                  List.map (fun v : Ilambda.simple ->
                      Var (VM.find (of_kind_value_var v) penv.variables))
                    elts;
-               loc = Location.none;
+               loc = Loc_unknown;
                exn_continuation = None;
              },
              Apply_cont (return_continuation, None, [Ilambda.Var id]))

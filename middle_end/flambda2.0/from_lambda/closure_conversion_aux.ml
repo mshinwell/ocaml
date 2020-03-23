@@ -118,7 +118,7 @@ module Function_decls = struct
       body : Ilambda.t;
       free_idents_of_body : Ident.Set.t;
       attr : Lambda.function_attribute;
-      loc : Location.t;
+      loc : Lambda.scoped_location;
       stub : bool;
       recursive : Recursive.t;
     }

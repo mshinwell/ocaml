@@ -41,8 +41,10 @@ let check_let_rec_bindings bindings =
 
 let name_for_function (func : Lambda.lfunction) =
   (* Name anonymous functions by their source location, if known. *)
-  if func.loc = Location.none then "anon-fn"
-  else Format.asprintf "anon-fn[%a]" Location.print_compact func.loc
+  match func.loc with
+  | Loc_unknown -> "anon-fn"
+  | Loc_known { loc; _ } ->
+    Format.asprintf "anon-fn[%a]" Location.print_compact loc
 
 (* CR-soon mshinwell: Remove mutable state. *)
 let static_exn_env = ref Numbers.Int.Map.empty

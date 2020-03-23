@@ -62,7 +62,7 @@ let record_field_info lbl =
       { tag; size = Known (size + (if is_ext then 1 else 0)); };
   }
 
-let transl_extension_constructor env path ext =
+let transl_extension_constructor ~scopes env path ext =
   let path =
     Printtyp.wrap_printing_env env ~error:true (fun () ->
       Option.map (Printtyp.rewrite_double_underscore_paths env) path)

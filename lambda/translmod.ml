@@ -722,7 +722,7 @@ and transl_structure ~scopes loc fields cc rootpath final_env = function
                   rebind_idents (pos + 1) (id :: newfields) ids
                 in
                 Llet(Alias, Pgenval, id,
-                     Lprim(Pfield (mod_field pos, Reads_agree), [Lvar mid],
+                     Lprim(mod_field pos, [Lvar mid],
                            of_raw_location ~scopes incl.incl_loc), body),
                 size
           in
@@ -751,7 +751,7 @@ and transl_structure ~scopes loc fields cc rootpath final_env = function
                     rebind_idents (pos + 1) (id :: newfields) ids
                   in
                   Llet(Alias, Pgenval, id,
-                      Lprim(Pfield (mod_field pos, Reads_agree), [Lvar mid],
+                      Lprim(mod_field pos, [Lvar mid],
                             of_raw_location ~scopes od.open_loc), body),
                   size
               in
@@ -1622,7 +1622,7 @@ let transl_store_package component_names target_name coercion =
                (fun pos _id ->
                  Lprim(mod_setfield pos,
                        [Lprim(Pgetglobal target_name, [], Loc_unknown);
-                        Lprim(Pfield (pos, Reads_agree), [Lvar blk], Loc_unknown)],
+                        Lprim(mod_field pos, [Lvar blk], Loc_unknown)],
                        Loc_unknown))
                0 pos_cc_list))
   (*

@@ -293,6 +293,7 @@ type scoped_location =
       { loc : Location.t;
         scopes : lambda_scopes; }
 
+val print_scoped_location : Format.formatter -> scoped_location -> unit
 val raw_location : scoped_location -> Location.t
 val of_raw_location : ?scopes:lambda_scopes -> Location.t -> scoped_location
 val string_of_scope_item : lambda_scope_item -> string

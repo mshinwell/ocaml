@@ -289,15 +289,15 @@ let class_field i =
   in
   Pfield (field_info, Reads_vary)
 
-let rec build_class_init cla cstr super inh_init cl_init msubst top cl =
+let rec build_class_init ~scopes cla cstr super inh_init cl_init msubst top cl =
   match cl.cl_desc with
   | Tcl_ident _ ->
       begin match inh_init with
       | (_, path_lam, obj_init)::inh_init ->
           (inh_init,
            Llet (Strict, Pgenval, obj_init,
-                 mkappl(Lprim(Pfield (1, Reads_vary), [path_lam], Loc_unknown), Lvar cla ::
-                        if top then [Lprim(Pfield (3, Reads_vary), [path_lam], Loc_unknown)]
+                 mkappl(Lprim(class_field 1, [path_lam], Loc_unknown), Lvar cla ::
+                        if top then [Lprim(class_field 3, [path_lam], Loc_unknown)]
                         else []),
                  bind_super cla super cl_init))
       | _ ->

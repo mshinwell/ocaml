@@ -45,11 +45,10 @@ let lsequence (lam1, lam2) : L.lambda =
   Llet (Strict, Pgenval, seq, lam1, lam2)
 
 let update_dummy var expr =
-  let loc = Location.none in
   let desc =
     Primitive.simple ~name:"caml_update_dummy" ~arity:2 ~alloc:true
   in
-  L.Lprim (Pccall desc, [L.Lvar var; expr], loc)
+  L.Lprim (Pccall desc, [L.Lvar var; expr], Loc_unknown)
 
 let build_block var size block_type expr letrec =
   let blocks =
@@ -209,7 +208,6 @@ let dissect_letrec ~bindings ~body =
       }
   in
   let preallocations =
-    let loc = Location.none in
     List.map (fun (id, block_type, size) ->
       let fn =
         match block_type with
@@ -218,7 +216,7 @@ let dissect_letrec ~bindings ~body =
       in
       let desc = Primitive.simple ~name:fn ~arity:1 ~alloc:true in
       let size : L.lambda = Lconst (Const_base (Const_int size)) in
-      id, L.Lprim (Pccall desc, [size], loc))
+      id, L.Lprim (Pccall desc, [size], Loc_unknown))
       letrec.blocks
   in
   let functions =
@@ -325,7 +323,7 @@ let switch_for_if_then_else ~cond ~ifso ~ifnot k =
       sw_tags_to_sizes = Tag.Scannable.Map.empty;
     }
   in
-  k (L.Lswitch (cond, switch, Location.none))
+  k (L.Lswitch (cond, switch, Loc_unknown))
 
 let simplify_primitive (prim : L.primitive) args loc =
   match prim, args with
@@ -602,7 +600,7 @@ let rec prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
             in
             let blocks_switch : L.lambda =
               L.Lswitch (
-               Lprim (Pgettag, [scrutinee], Location.none),
+               Lprim (Pgettag, [scrutinee], Loc_unknown),
                blocks_switch, loc)
             in
             let isint_switch : L.lambda_switch =
@@ -618,7 +616,7 @@ let rec prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
               if switch.sw_numconsts = 0 then blocks_switch
               else if switch.sw_numblocks = 0 then consts_switch
               else
-                L.Lswitch (L.Lprim (Pflambda_isint, [scrutinee], Location.none),
+                L.Lswitch (L.Lprim (Pflambda_isint, [scrutinee], Loc_unknown),
                   isint_switch, loc)
             in
             k (wrap_switch switch)))))
@@ -661,7 +659,7 @@ let rec prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
     in
     prepare env lam k
   | Lfor (ident, start, stop, dir, body) ->
-    let loc = Location.none in
+    let loc = L.Loc_unknown in
     let cont = L.next_raise_count () in
     mark_as_recursive_static_catch cont;
     let stop_ident = Ident.create_local "stop" in

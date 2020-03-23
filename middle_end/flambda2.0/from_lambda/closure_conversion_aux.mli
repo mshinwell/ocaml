@@ -75,7 +75,7 @@ module Function_decls : sig
       -> exn_continuation:Ilambda.exn_continuation
       -> body:Ilambda.t
       -> attr:Lambda.function_attribute
-      -> loc:Location.t
+      -> loc:Lambda.scoped_location
       -> free_idents_of_body:Ident.Set.t
       -> stub:bool
       -> Recursive.t
@@ -93,7 +93,7 @@ module Function_decls : sig
     val specialise : t -> Lambda.specialise_attribute
     val is_a_functor : t -> bool
     val stub : t -> bool
-    val loc : t -> Location.t
+    val loc : t -> Lambda.scoped_location
     val recursive : t -> Recursive.t
 
     (* Like [all_free_idents], but for just one function. *)

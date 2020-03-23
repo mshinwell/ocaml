@@ -413,6 +413,11 @@ type scoped_location =
       { loc : Location.t;
         scopes : lambda_scopes; }
 
+let print_scoped_location ppf loc =
+  match loc with
+  | Loc_unknown -> Format.pp_print_string ppf "Unknown"
+  | Loc_known { loc; _ } -> Location.print_loc ppf loc
+
 let raw_location = function
   | Loc_unknown -> Location.none
   | Loc_known { loc; _ } -> loc

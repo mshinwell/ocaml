@@ -1639,7 +1639,6 @@ bytecomp/bytegen.cmo : \
     typing/ident.cmi \
     typing/env.cmi \
     utils/config.cmi \
-    utils/clflags.cmi \
     parsing/asttypes.cmi \
     bytecomp/bytegen.cmi
 bytecomp/bytegen.cmx : \
@@ -1654,7 +1653,6 @@ bytecomp/bytegen.cmx : \
     typing/ident.cmx \
     typing/env.cmx \
     utils/config.cmx \
-    utils/clflags.cmx \
     parsing/asttypes.cmi \
     bytecomp/bytegen.cmi
 bytecomp/bytegen.cmi : \
@@ -1978,7 +1976,6 @@ asmcomp/asmgen.cmo : \
     asmcomp/linscan.cmi \
     middle_end/flambda2.0/compilenv_deps/linkage_name.cmi \
     asmcomp/linearize.cmi \
-    file_formats/linear_format.cmi \
     lambda/lambda.cmi \
     asmcomp/interval.cmi \
     asmcomp/interf.cmi \
@@ -2028,7 +2025,6 @@ asmcomp/asmgen.cmx : \
     asmcomp/linscan.cmx \
     middle_end/flambda2.0/compilenv_deps/linkage_name.cmx \
     asmcomp/linearize.cmx \
-    file_formats/linear_format.cmx \
     lambda/lambda.cmx \
     asmcomp/interval.cmx \
     asmcomp/interf.cmx \
@@ -2191,17 +2187,14 @@ asmcomp/branch_relaxation.cmi : \
     asmcomp/branch_relaxation_intf.cmo
 asmcomp/branch_relaxation_intf.cmo : \
     asmcomp/linear.cmi \
-    lambda/debuginfo.cmi \
     asmcomp/cmm.cmi \
     asmcomp/arch.cmo
 asmcomp/branch_relaxation_intf.cmx : \
     asmcomp/linear.cmx \
-    lambda/debuginfo.cmx \
     asmcomp/cmm.cmx \
     asmcomp/arch.cmx
 asmcomp/cmm.cmo : \
     utils/targetint.cmi \
-    utils/misc.cmi \
     lambda/lambda.cmi \
     lambda/debuginfo.cmi \
     middle_end/backend_var.cmi \
@@ -2209,7 +2202,6 @@ asmcomp/cmm.cmo : \
     asmcomp/cmm.cmi
 asmcomp/cmm.cmx : \
     utils/targetint.cmx \
-    utils/misc.cmx \
     lambda/lambda.cmx \
     lambda/debuginfo.cmx \
     middle_end/backend_var.cmx \
@@ -2350,14 +2342,12 @@ asmcomp/coloring.cmi :
 asmcomp/comballoc.cmo : \
     asmcomp/reg.cmi \
     asmcomp/mach.cmi \
-    lambda/debuginfo.cmi \
     utils/config.cmi \
     asmcomp/arch.cmo \
     asmcomp/comballoc.cmi
 asmcomp/comballoc.cmx : \
     asmcomp/reg.cmx \
     asmcomp/mach.cmx \
-    lambda/debuginfo.cmx \
     utils/config.cmx \
     asmcomp/arch.cmx \
     asmcomp/comballoc.cmi
@@ -2389,20 +2379,13 @@ asmcomp/emit.cmo : \
     asmcomp/x86_ast.cmi \
     asmcomp/reg.cmi \
     asmcomp/proc.cmi \
-<<<<<<< HEAD
-<<<<<<< HEAD
-    utils/numbers.cmi \
-=======
-    asmcomp/printmach.cmi \
->>>>>>> 75c84c18a1... Flambda 2.0 (4.10 rebase 2019-10-15)
-=======
->>>>>>> f73a5e9f1e... [WIP] Flambda2 Makefile-based compilation (#36)
     utils/misc.cmi \
     asmcomp/mach.cmi \
     asmcomp/linear.cmi \
     lambda/lambda.cmi \
     asmcomp/emitaux.cmi \
     utils/domainstate.cmi \
+    lambda/debuginfo.cmi \
     utils/config.cmi \
     middle_end/compilenv.cmi \
     asmcomp/cmm.cmi \
@@ -2418,20 +2401,13 @@ asmcomp/emit.cmx : \
     asmcomp/x86_ast.cmi \
     asmcomp/reg.cmx \
     asmcomp/proc.cmx \
-<<<<<<< HEAD
-<<<<<<< HEAD
-    utils/numbers.cmx \
-=======
-    asmcomp/printmach.cmx \
->>>>>>> 75c84c18a1... Flambda 2.0 (4.10 rebase 2019-10-15)
-=======
->>>>>>> f73a5e9f1e... [WIP] Flambda2 Makefile-based compilation (#36)
     utils/misc.cmx \
     asmcomp/mach.cmx \
     asmcomp/linear.cmx \
     lambda/lambda.cmx \
     asmcomp/emitaux.cmx \
     utils/domainstate.cmx \
+    lambda/debuginfo.cmx \
     utils/config.cmx \
     middle_end/compilenv.cmx \
     asmcomp/cmm.cmx \
@@ -2443,7 +2419,6 @@ asmcomp/emit.cmi : \
     asmcomp/linear.cmi \
     asmcomp/cmm.cmi
 asmcomp/emitaux.cmo : \
-    lambda/lambda.cmi \
     lambda/debuginfo.cmi \
     utils/config.cmi \
     asmcomp/cmm.cmi \
@@ -2451,7 +2426,6 @@ asmcomp/emitaux.cmo : \
     asmcomp/arch.cmo \
     asmcomp/emitaux.cmi
 asmcomp/emitaux.cmx : \
-    lambda/lambda.cmx \
     lambda/debuginfo.cmx \
     utils/config.cmx \
     asmcomp/cmm.cmx \
@@ -2805,7 +2779,6 @@ asmcomp/selectgen.cmi : \
     lambda/debuginfo.cmi \
     asmcomp/cmm.cmi \
     middle_end/backend_var.cmi \
-    parsing/asttypes.cmi \
     asmcomp/arch.cmo
 asmcomp/selection.cmo : \
     asmcomp/spacetime_profiling.cmi \
@@ -3132,17 +3105,14 @@ middle_end/semantics_of_primitives.cmi : \
     middle_end/clambda_primitives.cmi
 lambda/debuginfo.cmo : \
     parsing/location.cmi \
-    lambda/lambda.cmi \
     utils/int_replace_polymorphic_compare.cmi \
     lambda/debuginfo.cmi
 lambda/debuginfo.cmx : \
     parsing/location.cmx \
-    lambda/lambda.cmx \
     utils/int_replace_polymorphic_compare.cmx \
     lambda/debuginfo.cmi
 lambda/debuginfo.cmi : \
-    parsing/location.cmi \
-    lambda/lambda.cmi
+    parsing/location.cmi
 lambda/lambda.cmo : \
     typing/types.cmi \
     utils/targetint.cmi \
@@ -3225,6 +3195,7 @@ lambda/matching.cmx : \
     lambda/matching.cmi
 lambda/matching.cmi : \
     typing/typedtree.cmi \
+    parsing/location.cmi \
     lambda/lambda.cmi \
     typing/ident.cmi
 lambda/printlambda.cmo : \
@@ -3276,6 +3247,7 @@ lambda/simplif.cmx : \
     typing/annot.cmi \
     lambda/simplif.cmi
 lambda/simplif.cmi : \
+    parsing/location.cmi \
     lambda/lambda.cmi \
     typing/ident.cmi
 lambda/switch.cmo : \
@@ -3475,6 +3447,7 @@ lambda/translmod.cmi : \
 lambda/translobj.cmo : \
     typing/primitive.cmi \
     utils/misc.cmi \
+    parsing/location.cmi \
     lambda/lambda.cmi \
     typing/ident.cmi \
     typing/env.cmi \
@@ -3486,6 +3459,7 @@ lambda/translobj.cmo : \
 lambda/translobj.cmx : \
     typing/primitive.cmx \
     utils/misc.cmx \
+    parsing/location.cmx \
     lambda/lambda.cmx \
     typing/ident.cmx \
     typing/env.cmx \
@@ -3598,23 +3572,6 @@ file_formats/cmx_format.cmi : \
     middle_end/clambda.cmi
 file_formats/cmxs_format.cmi : \
     utils/misc.cmi
-file_formats/linear_format.cmo : \
-    utils/misc.cmi \
-    parsing/location.cmi \
-    asmcomp/linear.cmi \
-    utils/config.cmi \
-    asmcomp/cmm.cmi \
-    file_formats/linear_format.cmi
-file_formats/linear_format.cmx : \
-    utils/misc.cmx \
-    parsing/location.cmx \
-    asmcomp/linear.cmx \
-    utils/config.cmx \
-    asmcomp/cmm.cmx \
-    file_formats/linear_format.cmi
-file_formats/linear_format.cmi : \
-    asmcomp/linear.cmi \
-    asmcomp/cmm.cmi
 middle_end/closure/closure.cmo : \
     utils/warnings.cmi \
     lambda/switch.cmi \
@@ -3846,6 +3803,7 @@ middle_end/flambda/closure_conversion_aux.cmo : \
     middle_end/flambda2.0/compilenv_deps/symbol.cmi \
     utils/numbers.cmi \
     utils/misc.cmi \
+    parsing/location.cmi \
     lambda/lambda.cmi \
     utils/int_replace_polymorphic_compare.cmi \
     typing/ident.cmi \
@@ -3855,21 +3813,15 @@ middle_end/flambda/closure_conversion_aux.cmx : \
     middle_end/flambda2.0/compilenv_deps/symbol.cmx \
     utils/numbers.cmx \
     utils/misc.cmx \
+    parsing/location.cmx \
     lambda/lambda.cmx \
     utils/int_replace_polymorphic_compare.cmx \
     typing/ident.cmx \
     middle_end/flambda/closure_conversion_aux.cmi
 middle_end/flambda/closure_conversion_aux.cmi : \
-<<<<<<< HEAD
-    middle_end/variable.cmi \
-    middle_end/symbol.cmi \
-    middle_end/flambda/base_types/static_exception.cmi \
-    middle_end/flambda/base_types/mutable_variable.cmi \
-=======
     middle_end/flambda2.0/compilenv_deps/variable.cmi \
     middle_end/flambda2.0/compilenv_deps/symbol.cmi \
     parsing/location.cmi \
->>>>>>> f73a5e9f1e... [WIP] Flambda2 Makefile-based compilation (#36)
     lambda/lambda.cmi \
     typing/ident.cmi
 middle_end/flambda/closure_offsets.cmo : \
