@@ -435,22 +435,13 @@ let join_types ~env_at_fork ~params envs_with_levels =
       env_at_fork
       envs_with_levels
   in
-  let (joined_types, env_at_fork, code_age_relation, _) =
+  let (joined_types, code_age_relation, _) =
   List.fold_left
-    (fun (joined_types, env_at_fork, code_age_relation, is_first_join)
+    (fun (joined_types, code_age_relation, is_first_join)
          (env_at_use, _id, _use_kind, t, symbols_defined_during_level) ->
       (*
       Format.eprintf "join_types with level:@ %a\n%!" print t;
       *)
-      let env_at_fork =
-        Variable.Map.fold (fun var kind env ->
-            Typing_env.add_definition env
-              (Name_in_binding_pos.var
-                (Var_in_binding_pos.create var Name_mode.in_types))
-              kind)
-          t.defined_vars
-          env_at_fork
-      in
       let code_age_relation =
         Code_age_relation.union code_age_relation
           (Typing_env.code_age_relation env_at_use)
@@ -550,11 +541,11 @@ let join_types ~env_at_fork ~params envs_with_levels =
           joined_types
           equations
       in
-      joined_types, env_at_fork, code_age_relation, false)
-    (Name.Map.empty, env_at_fork, Typing_env.code_age_relation env_at_fork, true)
+      joined_types, code_age_relation, false)
+    (Name.Map.empty, Typing_env.code_age_relation env_at_fork, true)
     envs_with_levels
   in
-  joined_types, env_at_fork, code_age_relation
+  joined_types, code_age_relation
 
 module Rhs_kind = struct
   type t =
@@ -757,12 +748,33 @@ let join ~env_at_fork envs_with_levels ~params =
       Format.eprintf "One level:@ %a\n%!" print t)
     envs_with_levels;
   *)
+  let env_at_fork_with_existentials_defined =
+    List.fold_left (fun env_at_fork (env_at_use, _, _, level) ->
+        let defined_vars_sorted =
+          List.sort (fun (var1, _kind1) (var2, _kind2) ->
+              Typing_env.compare_binding_times env_at_use
+                (Name.var var1) (Name.var var2))
+            (Variable.Map.bindings level.defined_vars)
+        in
+        List.fold_left (fun env (var, kind) ->
+            if Typing_env.mem env (Name.var var) then env
+            else
+              Typing_env.add_definition env
+                (Name_in_binding_pos.var
+                   (Var_in_binding_pos.create var Name_mode.in_types))
+                kind)
+          env_at_fork
+          defined_vars_sorted)
+      env_at_fork
+      envs_with_levels
+  in
   (* For each name which has an equation on at least one of the given levels,
      calculate the joined type for that name, across all the given levels.
      If no type exists on a given level then it is treated as bottom (which
      does not affect the joined type being calculated). *)
-  let joined_types, env_at_fork_with_existentials_defined, _ =
-    join_types ~env_at_fork envs_with_levels ~params
+  let joined_types, _ =
+    join_types ~env_at_fork:env_at_fork_with_existentials_defined
+      envs_with_levels ~params
   in
   let env_at_fork_with_existentials_defined =
     let level =

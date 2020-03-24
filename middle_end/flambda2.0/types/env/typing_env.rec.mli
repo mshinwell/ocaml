@@ -75,6 +75,10 @@ val add_env_extension_from_level
   -> t
 
 (* CR mshinwell: clarify that this does not meet *)
+(* CR vlaviron: If the underlying level in the extension defines several
+   variables, then there is no guarantee that the binding order in the result
+   will match the binding order used to create the level. If they don't match,
+   then adding equations in the wrong order can make equations disappear. *)
 val add_env_extension
    : t
   -> Typing_env_extension.t
@@ -123,3 +127,5 @@ val cut_and_n_way_join
 val free_names_transitive : t -> Type_grammar.t -> Name_occurrences.t
 
 val defined_symbols : t -> Symbol.Set.t
+
+val compare_binding_times : t -> Name.t -> Name.t -> int

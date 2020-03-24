@@ -888,3 +888,12 @@ and free_names_transitive0 t typ ~result =
 
 let free_names_transitive t typ =
   free_names_transitive0 t typ ~result:Name_occurrences.empty
+
+let compare_binding_times t name1 name2 =
+  let (_ty1, binding_time1, _name_mode1) =
+    find_with_binding_time_and_mode t name1
+  in
+  let (_ty2, binding_time2, _name_mode2) =
+    find_with_binding_time_and_mode t name2
+  in
+  Binding_time.compare binding_time1 binding_time2
