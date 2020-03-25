@@ -30,7 +30,7 @@ type result = {
 let build_dep_graph dacc lifted_constants =
   List.fold_left
     (fun (dep_graph, code_id_or_symbol_to_const)
-         ((bound_symbols : Bound_symbols.t), defining_expr) ->
+         ((bound_symbols : Bound_symbols.t), defining_expr, extra_deps) ->
       Format.eprintf "Input for one set: %a =@ %a\n%!"
         Bound_symbols.print bound_symbols
         Static_const.print defining_expr;
@@ -47,6 +47,7 @@ let build_dep_graph dacc lifted_constants =
           Name_occurrences.union bound_symbols_free_names
             (Static_const.free_names defining_expr)
       in
+      let free_names = Name_occurrences.union free_names extra_deps in
       (* Beware: when coming from [Reify_continuation_params] the
          sets of closures may have dependencies on variables that are
          now equal to symbols in the environment.  (They haven't been

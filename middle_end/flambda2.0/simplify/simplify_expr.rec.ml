@@ -137,9 +137,10 @@ and simplify_let_symbol
     UA.map_r uacc ~f:(fun r -> R.set_lifted_constants r prior_lifted_constants)
   in
   let all_lifted_constants =
-    (bound_symbols, defining_expr)
+    (bound_symbols, defining_expr, Name_occurrences.empty)
       :: List.map (fun lifted_constant ->
-          LC.bound_symbols lifted_constant, LC.defining_expr lifted_constant)
+          LC.bound_symbols lifted_constant, LC.defining_expr lifted_constant,
+            Name_occurrences.empty)
         lifted_constants
   in
 (*
