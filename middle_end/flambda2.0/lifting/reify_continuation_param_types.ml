@@ -289,8 +289,10 @@ let lift_via_reification_of_continuation_param_types dacc ~params
   in
   let handler =
     List.fold_left (fun handler (bound_symbols, defining_expr) ->
+        (*
         Format.eprintf "Creating Let_symbol for:@ %a\n%!"
           Bound_symbols.print bound_symbols;
+        *)
         Let_symbol.create bound_symbols defining_expr handler
         |> Expr.create_let_symbol)
       handler

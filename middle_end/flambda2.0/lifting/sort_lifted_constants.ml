@@ -31,9 +31,11 @@ let build_dep_graph dacc lifted_constants =
   List.fold_left
     (fun (dep_graph, code_id_or_symbol_to_const)
          ((bound_symbols : Bound_symbols.t), defining_expr, extra_deps) ->
+      (*
       Format.eprintf "Input for one set: %a =@ %a\n%!"
         Bound_symbols.print bound_symbols
         Static_const.print defining_expr;
+      *)
       let bound_symbols_free_names = Bound_symbols.free_names bound_symbols in
       let free_names =
         (* To avoid existing sets of closures (with or without associated
@@ -100,7 +102,9 @@ let build_dep_graph dacc lifted_constants =
     lifted_constants
 
 let sort dacc lifted_constants =
+  (*
   Format.eprintf "SORT LIFTED CONSTANTS\n%!";
+  *)
   (* The various lifted constants may exhibit recursion between themselves
      (specifically between closures and/or code).  We use SCC to obtain a
      topological sort of groups that must be coalesced into single
@@ -108,9 +112,11 @@ let sort dacc lifted_constants =
   let lifted_constants_dep_graph, code_id_or_symbol_to_const =
     build_dep_graph dacc lifted_constants
   in
+  (*
   Format.eprintf "SCC graph is:@ %a\n%!"
     (CIS.Map.print CIS.Set.print)
     lifted_constants_dep_graph;
+  *)
   let connected_components =
     SCC_lifted_constants.connected_components_sorted_from_roots_to_leaf
       lifted_constants_dep_graph
@@ -180,8 +186,10 @@ let sort dacc lifted_constants =
        Let the list L be a topological sort of a directed graph G.
        Then the reverse of L is a topological sort of the transpose of G.
   *)
+  (*
   Format.eprintf "Result, outermost first:@ %a\n%!"
     (Format.pp_print_list ~pp_sep:Format.pp_print_space
       Bound_symbols.print)
     (List.rev (List.map fst bindings_outermost_last));
+  *)
   { bindings_outermost_last; }
