@@ -503,22 +503,26 @@ module Make (Head : Type_head_intf.S
           in
           Some (create_equals (List.hd shared_aliases))
       in
-      let bound_name_set =
-        match bound_name with
-        | None -> Simple.Set.empty
-        | Some bound_name -> Simple.Set.singleton (Simple.name bound_name)
-      in
       (* CR mshinwell: Add shortcut when the canonical simples are equal *)
       let shared_aliases =
-        Simple.Set.diff
-          (Simple.Set.inter
+        let shared_aliases =
+          Simple.Set.inter
             (all_aliases_of (Meet_or_join_env.left_join_env join_env)
               canonical_simple1
               ~in_env:(Meet_or_join_env.target_join_env join_env))
             (all_aliases_of (Meet_or_join_env.right_join_env join_env)
               canonical_simple2
-              ~in_env:(Meet_or_join_env.target_join_env join_env)))
-          bound_name_set
+              ~in_env:(Meet_or_join_env.target_join_env join_env))
+        in
+        match bound_name with
+        | None -> shared_aliases
+        | Some bound_name ->
+          (* CR vlaviron: this ensures that we're not creating an alias
+             to a different simple that is just bound_name with different
+             rec_info. Such an alias is forbidden. *)
+          Simple.Set.filter (fun simple ->
+              not (Simple.same simple (Simple.name bound_name)))
+            shared_aliases
       in
       (*
       Format.eprintf "Shared aliases:@ %a\n%!"

@@ -469,6 +469,17 @@ module Simple = struct
       else assert false
     else assert false
 
+  let same t1 t2 =
+    let name n1 =
+      pattern_match t2 ~name:(fun n2 -> Name.equal n1 n2)
+        ~const:(fun _ -> false)
+    in
+    let const c1 =
+      pattern_match t2 ~name:(fun _ -> false)
+        ~const:(fun c2 -> Const.equal c1 c2)
+    in
+    pattern_match t1 ~name ~const
+
   let [@inline always] rec_info t =
     let flags = Id.flags t in
     if flags = simple_flags then Some ((find_data t).rec_info)

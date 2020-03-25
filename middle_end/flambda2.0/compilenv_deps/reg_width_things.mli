@@ -134,6 +134,10 @@ module Simple : sig
     -> name:(Name.t -> 'a)
     -> const:(Const.t -> 'a)
     -> 'a
+
+   (* [same s1 s2] returns true iff they represent the same name or const
+      i.e. [same s (with_rec_info s rec_info)] returns true *)
+   val same : t -> t -> bool
 end
 
 val initialise : unit -> unit
