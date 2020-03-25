@@ -506,13 +506,19 @@ module Make (Head : Type_head_intf.S
       (* CR mshinwell: Add shortcut when the canonical simples are equal *)
       let shared_aliases =
         let shared_aliases =
-          Simple.Set.inter
-            (all_aliases_of (Meet_or_join_env.left_join_env join_env)
-              canonical_simple1
-              ~in_env:(Meet_or_join_env.target_join_env join_env))
-            (all_aliases_of (Meet_or_join_env.right_join_env join_env)
-              canonical_simple2
-              ~in_env:(Meet_or_join_env.target_join_env join_env))
+          match canonical_simple1, canonical_simple2 with
+          | None, _ | _, None -> Simple.Set.empty
+          | Some simple1, Some simple2 ->
+            if Simple.same simple1 simple2
+            then Simple.Set.singleton simple1
+            else
+              Simple.Set.inter
+                (all_aliases_of (Meet_or_join_env.left_join_env join_env)
+                  canonical_simple1
+                  ~in_env:(Meet_or_join_env.target_join_env join_env))
+                (all_aliases_of (Meet_or_join_env.right_join_env join_env)
+                  canonical_simple2
+                  ~in_env:(Meet_or_join_env.target_join_env join_env))
         in
         match bound_name with
         | None -> shared_aliases
