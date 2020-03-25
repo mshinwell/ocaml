@@ -149,5 +149,5 @@ let run test init =
 
 let () =
   for i = 0 to nb_test do
-    ignore (run ("test"^(Int.to_string i)) i);
+    ignore ((Sys.opaque_identity run) ("test"^(Int.to_string i)) i);
   done
