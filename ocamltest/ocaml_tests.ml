@@ -22,10 +22,12 @@ open Ocaml_actions
 let bytecode =
   let opt_actions =
   [
+(*
     setup_ocamlc_opt_build_env;
     ocamlc_opt;
     check_ocamlc_opt_output;
     compare_bytecode_programs
+*)
   ] in
 {
   test_name = "bytecode";
@@ -48,10 +50,12 @@ let native =
     check_ocamlopt_byte_output;
     run;
     check_program_output;
+(*
     setup_ocamlopt_opt_build_env;
     ocamlopt_opt;
     check_ocamlopt_opt_output;
     compare_native_programs;
+*)
   ] in
   {
     test_name = "native";
