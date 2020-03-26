@@ -183,6 +183,7 @@ module Make (U : Unboxing_spec) = struct
               with
               | exception Not_found ->
                 (* CR mshinwell: Think about this more *)
+                (* XXX *)
                 begin match U.unused_extra_arg index with
                 | None -> None, field_types_by_id
                 | Some simple ->
@@ -502,7 +503,7 @@ struct
     match index with
     | Is_int
     | Tag
-    | Const_ctor -> Some Simple.untagged_const_zero
+    | Const_ctor -> Some Simple.untagged_const_zero  (* XXX *)
     | Field _ -> Some Simple.const_zero
 
   let make_boxed_value variant ~param_being_unboxed ~new_params ~fields =

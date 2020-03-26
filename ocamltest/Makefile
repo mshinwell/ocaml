@@ -91,7 +91,6 @@ run := run_$(UNIX_OR_WIN32)
 core := \
   $(run).c \
   run_stubs.c \
-  ocamltest_stdlib_stubs.c \
   ocamltest_config.mli ocamltest_config.ml.in \
   ocamltest_stdlib.mli ocamltest_stdlib.ml \
   run_command.mli run_command.ml \
