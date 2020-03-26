@@ -22,20 +22,18 @@ module TE = Flambda_type.Typing_env
 type t = {
   id : Apply_cont_rewrite_id.t;
   kind : Continuation_use_kind.t;
-  args : Simple.t list;
   arg_types : T.t list;
   typing_env : TE.t;
 }
 
-let create kind ~typing_env_at_use:typing_env id ~args ~arg_types =
+let create kind ~typing_env_at_use:typing_env id ~arg_types =
   { id;
     kind;
-    args;
     arg_types;
     typing_env;
   }
 
-let print ppf { typing_env = _; id = _; kind = _; args = _; arg_types; } =
+let print ppf { typing_env = _; id = _; kind = _; arg_types; } =
   Format.fprintf ppf "@[<hov 1>(\
       @[<hov 1>(arg_types@ %a)@]@ \
       )@]"
@@ -44,6 +42,5 @@ let print ppf { typing_env = _; id = _; kind = _; args = _; arg_types; } =
 
 let id t = t.id
 let use_kind t = t.kind
-let args t = t.args
 let arg_types t = t.arg_types
 let typing_env_at_use t = t.typing_env

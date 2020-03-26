@@ -15,6 +15,7 @@
 (**************************************************************************)
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
+[@@@ocaml.warning "-60"]
 
 open! Simplify_import
 
@@ -81,14 +82,14 @@ module Make (U : Unboxing_spec) = struct
   module Index = U.Index
 
   let unbox_one_field_of_one_parameter info ~extra_param ~index
-        ~args_with_types_by_use_id =
+        ~arg_types_by_use_id =
     let param_kind = KP.kind extra_param in
     let field_var = Variable.create "field_at_use" in
     let field_name =
       Name_in_binding_pos.create (Name.var field_var) Name_mode.in_types
     in
     Apply_cont_rewrite_id.Map.fold
-      (fun id (typing_env_at_use, block, arg_type_at_use, use_info)
+      (fun id (typing_env_at_use, arg_type_at_use, use_info)
            (extra_args, field_types_by_id) ->
         let untagged_field_var = Variable.create "untagged_field_at_use" in
         let typing_env_at_use =
@@ -115,7 +116,16 @@ module Make (U : Unboxing_spec) = struct
             ~shape ~result_var ~result_kind:param_kind
         in
         let field = Simple.var field_var in
-        match env_extension with
+        let block =
+          match
+            TE.get_canonical_simple_exn typing_env_at_use
+              ~min_name_mode:Name_mode.normal
+              arg_type_at_use
+          with
+          | exception Not_found -> None
+          | block -> Some block
+        in
+        match env_extension, block with
         | Bottom ->
           let field_types_by_id =
             Apply_cont_rewrite_id.Map.add id
@@ -194,11 +204,11 @@ module Make (U : Unboxing_spec) = struct
                     Apply_cont_rewrite_id.Map.add id extra_arg extra_args
                   in
                   Some extra_args, field_types_by_id)
-      args_with_types_by_use_id
+      arg_types_by_use_id
       (Some Apply_cont_rewrite_id.Map.empty, Apply_cont_rewrite_id.Map.empty)
 
   let unbox_fields_of_one_parameter info ~new_params
-        ~args_with_types_by_use_id extra_params_and_args =
+        ~arg_types_by_use_id extra_params_and_args =
     let param_types, all_field_types_by_id_rev, extra_params_and_args =
       Index.Map.fold
         (fun index extra_param
@@ -206,7 +216,7 @@ module Make (U : Unboxing_spec) = struct
               extra_params_and_args) ->
           let extra_args, field_types_by_id =
             unbox_one_field_of_one_parameter info ~extra_param ~index
-              ~args_with_types_by_use_id
+              ~arg_types_by_use_id
           in
           let param_type =
             let param_kind = KP.kind extra_param in
@@ -233,24 +243,24 @@ module Make (U : Unboxing_spec) = struct
     param_types, List.rev all_field_types_by_id_rev,
       extra_params_and_args
 
-  let unbox_one_parameter typing_env ~depth ~args_with_types_by_use_id
+  let unbox_one_parameter typing_env ~depth ~arg_types_by_use_id
         ~param_being_unboxed ~param_type extra_params_and_args ~unbox_value
         info indexes =
-    let orig_args_with_types_by_use_id = args_with_types_by_use_id in
-    let args_with_types_by_use_id =
-      Apply_cont_rewrite_id.Map.filter_map args_with_types_by_use_id
-        ~f:(fun _ (typing_env_at_use, block, arg_type_at_use) ->
+    let orig_arg_types_by_use_id = arg_types_by_use_id in
+    let arg_types_by_use_id =
+      Apply_cont_rewrite_id.Map.filter_map arg_types_by_use_id
+        ~f:(fun _ (typing_env_at_use, arg_type_at_use) ->
           let use_info =
             U.Use_info.create typing_env_at_use ~type_at_use:arg_type_at_use
           in
           match use_info with
           | Do_not_unbox_this_parameter -> None
           | Ok use_info ->
-            Some (typing_env_at_use, block, arg_type_at_use, use_info))
+            Some (typing_env_at_use, arg_type_at_use, use_info))
     in
     let do_not_unbox =
-      Apply_cont_rewrite_id.Map.cardinal orig_args_with_types_by_use_id
-        <> Apply_cont_rewrite_id.Map.cardinal args_with_types_by_use_id
+      Apply_cont_rewrite_id.Map.cardinal orig_arg_types_by_use_id
+        <> Apply_cont_rewrite_id.Map.cardinal arg_types_by_use_id
     in
     if do_not_unbox then
       typing_env, param_type, extra_params_and_args
@@ -270,7 +280,7 @@ module Make (U : Unboxing_spec) = struct
       in
       let fields, all_field_types_by_id, extra_params_and_args =
         unbox_fields_of_one_parameter info ~new_params
-          ~args_with_types_by_use_id extra_params_and_args
+          ~arg_types_by_use_id extra_params_and_args
       in
       let block_type, env_extension =
         U.make_boxed_value info ~param_being_unboxed ~new_params ~fields
@@ -297,14 +307,14 @@ module Make (U : Unboxing_spec) = struct
               if not (U.unbox_recursively ~field_type) then
                 typing_env, extra_params_and_args
               else begin
-                let args_with_types_by_use_id =
+                let arg_types_by_use_id =
                   Apply_cont_rewrite_id.Map.map (fun (typing_env, ty) ->
                       typing_env, None, ty)
                     field_types_by_id
                 in
                 let typing_env, _, extra_params_and_args =
                   unbox_value typing_env ~depth:(depth + 1)
-                    ~args_with_types_by_use_id ~param_being_unboxed
+                    ~arg_types_by_use_id ~param_being_unboxed
                     ~param_type:field_type extra_params_and_args
                 in
                 typing_env, extra_params_and_args
@@ -798,7 +808,7 @@ let unboxed_number_decisions = [
   T.prove_is_a_boxed_nativeint, Nativeints.unbox_one_parameter, Tag.custom_tag;
 ]
 
-let rec make_unboxing_decision typing_env ~depth ~args_with_types_by_use_id
+let rec make_unboxing_decision typing_env ~depth ~arg_types_by_use_id
       ~param_being_unboxed ~param_type extra_params_and_args =
   if depth > max_unboxing_depth then
     typing_env, param_type, extra_params_and_args
@@ -814,14 +824,14 @@ let rec make_unboxing_decision typing_env ~depth ~args_with_types_by_use_id
          be [Tag.double_array_tag].  See [Row_like.For_blocks]. *)
       if Tag.equal tag Tag.double_array_tag then
         Blocks_of_naked_floats.unbox_one_parameter typing_env ~depth
-          ~args_with_types_by_use_id ~param_being_unboxed ~param_type
+          ~arg_types_by_use_id ~param_being_unboxed ~param_type
           extra_params_and_args ~unbox_value:make_unboxing_decision
           tag indexes
       else
         begin match Tag.Scannable.of_tag tag with
         | Some _ ->
           Blocks_of_values.unbox_one_parameter typing_env ~depth
-            ~args_with_types_by_use_id ~param_being_unboxed ~param_type
+            ~arg_types_by_use_id ~param_being_unboxed ~param_type
             extra_params_and_args ~unbox_value:make_unboxing_decision
             tag indexes
         | None ->
@@ -849,7 +859,7 @@ let rec make_unboxing_decision typing_env ~depth ~args_with_types_by_use_id
           |> Variant_index.Set.union fields
         in
         Variants.unbox_one_parameter typing_env ~depth
-          ~args_with_types_by_use_id ~param_being_unboxed ~param_type
+          ~arg_types_by_use_id ~param_being_unboxed ~param_type
           extra_params_and_args ~unbox_value:make_unboxing_decision
           variant indexes *)
       | Invalid | Unknown | Wrong_kind ->
@@ -865,7 +875,7 @@ let rec make_unboxing_decision typing_env ~depth ~args_with_types_by_use_id
           in
           let closure_vars = Var_within_closure.Map.keys closure_var_types in
           Closures.unbox_one_parameter typing_env ~depth
-            ~args_with_types_by_use_id ~param_being_unboxed ~param_type
+            ~arg_types_by_use_id ~param_being_unboxed ~param_type
             extra_params_and_args ~unbox_value:make_unboxing_decision
             info closure_vars
         | Proved (_, _, (Unknown | Bottom)) | Wrong_kind | Invalid | Unknown ->
@@ -880,31 +890,31 @@ let rec make_unboxing_decision typing_env ~depth ~args_with_types_by_use_id
                 let indexes =
                   Targetint.OCaml.Set.singleton Targetint.OCaml.zero
                 in
-                unboxer typing_env ~depth ~args_with_types_by_use_id
+                unboxer typing_env ~depth ~arg_types_by_use_id
                   ~param_being_unboxed ~param_type extra_params_and_args
                   ~unbox_value:make_unboxing_decision tag indexes
               | Wrong_kind | Invalid | Unknown -> try_unboxing decisions
           in
           try_unboxing unboxed_number_decisions
 
-let make_unboxing_decisions typing_env ~args_with_types_by_use_id ~params
+let make_unboxing_decisions typing_env ~arg_types_by_use_id ~params
       ~param_types extra_params_and_args =
   assert (List.compare_lengths params param_types = 0);
   let typing_env, param_types_rev, extra_params_and_args =
     List.fold_left (fun (typing_env, param_types_rev, extra_params_and_args)
-              (args_with_types_by_use_id, (param, param_type)) ->
-        let args_with_types_by_use_id =
+              (arg_types_by_use_id, (param, param_type)) ->
+        let arg_types_by_use_id =
           Apply_cont_rewrite_id.Map.map (fun (typing_env, arg, ty) ->
               typing_env, Some arg, ty)
-            args_with_types_by_use_id
+            arg_types_by_use_id
         in
         let typing_env, param_type, extra_params_and_args =
-          make_unboxing_decision typing_env ~depth:0 ~args_with_types_by_use_id
+          make_unboxing_decision typing_env ~depth:0 ~arg_types_by_use_id
             ~param_being_unboxed:param ~param_type extra_params_and_args
         in
         typing_env, param_type :: param_types_rev, extra_params_and_args)
       (typing_env, [], extra_params_and_args)
-      (List.combine args_with_types_by_use_id
+      (List.combine arg_types_by_use_id
         (List.combine params param_types))
   in
   let typing_env =

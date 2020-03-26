@@ -540,19 +540,12 @@ and simplify_recursive_let_cont_handlers
               Continuation_uses_env.t * Apply_cont_rewrite_id.t =
               (* We don't know anything, it's like it was called
                  with an arbitrary argument! *)
-              let args =
-                (* CR mshinwell: This is wrong but won't be used, as the
-                   only consumer is currently the unboxing pass.  See CR
-                   above for fixing this. *)
-                List.map (fun _ -> Simple.const_zero) arg_types
-              in
               CUE.record_continuation_use cont_uses_env cont
                 Non_inlinable (* Maybe simpler ? *)
                 ~typing_env_at_use:(
                   (* not useful as we will have only top *)
                   DE.typing_env definition_denv
                 )
-                ~args
                 ~arg_types
             in
             let denv =
@@ -670,7 +663,6 @@ Format.eprintf "Simplifying inlined body with DE depth delta = %d\n%!"
     let dacc, use_id =
       DA.record_continuation_use dacc (Apply.continuation apply) Non_inlinable
         ~typing_env_at_use:(DA.typing_env dacc)
-        ~args
         ~arg_types:(T.unknown_types_from_arity result_arity)
     in
     let dacc, exn_cont_use_id =
@@ -678,7 +670,6 @@ Format.eprintf "Simplifying inlined body with DE depth delta = %d\n%!"
         (Exn_continuation.exn_handler (Apply.exn_continuation apply))
         Non_inlinable
         ~typing_env_at_use:(DA.typing_env dacc)
-        ~args
         ~arg_types:(T.unknown_types_from_arity (
           Exn_continuation.arity (Apply.exn_continuation apply)))
     in
@@ -968,7 +959,6 @@ and simplify_function_call_where_callee's_type_unavailable
       (Exn_continuation.exn_handler (Apply.exn_continuation apply))
       Non_inlinable
       ~typing_env_at_use:(DA.typing_env dacc)
-      ~args
       ~arg_types:(T.unknown_types_from_arity (
         Exn_continuation.arity (Apply.exn_continuation apply)))
   in
@@ -984,14 +974,14 @@ and simplify_function_call_where_callee's_type_unavailable
     end;
 *)
     DA.record_continuation_use dacc cont Non_inlinable ~typing_env_at_use
-      ~args ~arg_types:(T.unknown_types_from_arity return_arity)
+      ~arg_types:(T.unknown_types_from_arity return_arity)
   in
   let call_kind, use_id, dacc =
     match call with
     | Indirect_unknown_arity ->
       let dacc, use_id =
         DA.record_continuation_use dacc (Apply.continuation apply) Non_inlinable
-          ~typing_env_at_use ~args ~arg_types:[T.any_value ()]
+          ~typing_env_at_use ~arg_types:[T.any_value ()]
       in
       Call_kind.indirect_function_call_unknown_arity (), use_id, dacc
     | Indirect_known_arity { param_arity; return_arity; } ->
@@ -1175,7 +1165,6 @@ and simplify_method_call
   let dacc, use_id =
     DA.record_continuation_use dacc (Apply.continuation apply) Non_inlinable
       ~typing_env_at_use:(DE.typing_env denv)
-      ~args
       ~arg_types:[T.any_value ()]
   in
   let dacc, exn_cont_use_id =
@@ -1183,7 +1172,6 @@ and simplify_method_call
       (Exn_continuation.exn_handler (Apply.exn_continuation apply))
       Non_inlinable
       ~typing_env_at_use:(DA.typing_env dacc)
-      ~args
       ~arg_types:(T.unknown_types_from_arity (
         Exn_continuation.arity (Apply.exn_continuation apply)))
   in
@@ -1235,7 +1223,6 @@ and simplify_c_call
   let dacc, use_id =
     DA.record_continuation_use dacc (Apply.continuation apply) Non_inlinable
       ~typing_env_at_use:(DA.typing_env dacc)
-      ~args
       ~arg_types:(T.unknown_types_from_arity return_arity)
   in
   let dacc, exn_cont_use_id =
@@ -1244,7 +1231,6 @@ and simplify_c_call
       (Exn_continuation.exn_handler (Apply.exn_continuation apply))
       Non_inlinable
       ~typing_env_at_use:(DA.typing_env dacc)
-      ~args
       ~arg_types:(T.unknown_types_from_arity (
         Exn_continuation.arity (Apply.exn_continuation apply)))
   in
@@ -1311,7 +1297,6 @@ and simplify_apply_cont
         (AC.continuation apply_cont)
         use_kind
         ~typing_env_at_use:(DA.typing_env dacc)
-        ~args
         ~arg_types
     in
     let user_data, uacc = k dacc in
@@ -1472,7 +1457,7 @@ and simplify_switch
             | [] ->
               let dacc, rewrite_id =
                 DA.record_continuation_use dacc (AC.continuation action)
-                  Non_inlinable ~typing_env_at_use ~args:[] ~arg_types:[]
+                  Non_inlinable ~typing_env_at_use ~arg_types:[]
               in
               let arms = Immediate.Map.add arm (action, rewrite_id, []) arms in
               arms, dacc
@@ -1484,7 +1469,7 @@ and simplify_switch
                 let args, arg_types = List.split args_with_types in
                 let dacc, rewrite_id =
                   DA.record_continuation_use dacc (AC.continuation action)
-                    Non_inlinable ~typing_env_at_use ~args ~arg_types
+                    Non_inlinable ~typing_env_at_use ~arg_types
                 in
                 let arity = List.map T.kind arg_types in
                 let action = Apply_cont.update_args action ~args in
