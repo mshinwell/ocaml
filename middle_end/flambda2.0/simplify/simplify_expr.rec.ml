@@ -359,7 +359,7 @@ and simplify_non_recursive_let_cont_handler
                    we won't duplicate code (i.e. if there is only one use)
                    ---but this is not a normal "inlinable" position and cannot
                    be treated as such (e.g. for join calculations). *)
-                | Uses { handler_typing_env; args_with_types_by_use_id;
+                | Uses { handler_typing_env; arg_types_by_use_id;
                          extra_params_and_args; is_single_inlinable_use;
                          is_single_use; } ->
                   let typing_env, extra_params_and_args =
@@ -376,7 +376,7 @@ and simplify_non_recursive_let_cont_handler
                         TE.find_params handler_typing_env params
                       in
                       Unbox_continuation_params.make_unboxing_decisions
-                        handler_typing_env ~args_with_types_by_use_id ~params
+                        handler_typing_env ~arg_types_by_use_id ~params
                         ~param_types extra_params_and_args
                     | Return | Toplevel_return ->
                       assert (not is_exn_handler);
@@ -950,7 +950,7 @@ and simplify_function_call_where_callee's_type_unavailable
   : 'a. DA.t -> Apply.t -> Call_kind.Function_call.t
     -> args:Simple.t list -> arg_types:T.t list
     -> 'a k -> Expr.t * 'a * UA.t
-= fun dacc apply (call : Call_kind.Function_call.t) ~args ~arg_types k ->
+= fun dacc apply (call : Call_kind.Function_call.t) ~args:_ ~arg_types k ->
   let cont = Apply.continuation apply in
   let denv = DA.denv dacc in
   let typing_env_at_use = DE.typing_env denv in
@@ -1146,7 +1146,6 @@ and simplify_method_call
     -> obj:Simple.t -> arg_types:T.t list -> 'a k
     -> Expr.t * 'a * UA.t
 = fun dacc apply ~callee_ty ~kind:_ ~obj ~arg_types k ->
-  let args = Apply.args apply in
   let callee_kind = T.kind callee_ty in
   if not (K.is_value callee_kind) then begin
     Misc.fatal_errorf "Method call with callee of wrong kind %a: %a"
@@ -1193,7 +1192,6 @@ and simplify_c_call
     -> return_arity:Flambda_arity.t -> arg_types:T.t list -> 'a k
     -> Expr.t * 'a * UA.t
 = fun dacc apply ~callee_ty ~param_arity ~return_arity ~arg_types k ->
-  let args = Apply.args apply in
   let callee_kind = T.kind callee_ty in
   if not (K.is_value callee_kind) then begin
     Misc.fatal_errorf "C callees must be of kind [value], not %a: %a"

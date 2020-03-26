@@ -58,7 +58,7 @@ let simplify_toplevel dacc expr ~return_continuation ~return_arity
       List.for_all (fun simple ->
           Simple.pattern_match simple
             ~const:(fun _ -> true)
-            ~name:(fun name -> TE.mem (DE.typing_env (DA.denv dacc)) name))
+            ~name:(fun name -> TE.mem (DA.typing_env dacc) name))
         simples
     in
     let simples =
@@ -68,19 +68,35 @@ let simplify_toplevel dacc expr ~return_continuation ~return_arity
           match simples with
           | Bottom -> Bottom
           | Ok simples ->
-            let args = One_continuation_use.args use in
-            match simples with
-            | None ->
-              if simples_in_scope args then Ok (Some args)
-              else Bottom
-            | Some simples ->
-              assert (List.compare_lengths simples args = 0);
-              if Misc.Stdlib.List.compare Simple.compare simples args = 0
-                && simples_in_scope simples
-              then
-                Ok (Some simples)
-              else
-                Bottom)
+            let arg_types = One_continuation_use.arg_types use in
+            let args =
+              List.filter_map (fun arg_type ->
+                  match T.get_alias_exn arg_type with
+                  | exception Not_found -> None
+                  | arg ->
+                    match
+                      TE.get_canonical_simple_exn (DA.typing_env dacc)
+                        ~min_name_mode:Name_mode.normal
+                        arg
+                    with
+                    | exception Not_found -> None
+                    | arg -> Some arg)
+                arg_types
+            in
+            if List.compare_lengths args arg_types <> 0 then Bottom
+            else
+              match simples with
+              | None ->
+                if simples_in_scope args then Ok (Some args)
+                else Bottom
+              | Some simples ->
+                assert (List.compare_lengths simples args = 0);
+                if Misc.Stdlib.List.compare Simple.compare simples args = 0
+                  && simples_in_scope simples
+                then
+                  Ok (Some simples)
+                else
+                  Bottom)
         (Or_bottom.Ok None)
         (Continuation_uses.get_uses uses)
     in

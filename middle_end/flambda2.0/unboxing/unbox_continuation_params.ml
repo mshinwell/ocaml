@@ -117,15 +117,19 @@ module Make (U : Unboxing_spec) = struct
         in
         let field = Simple.var field_var in
         let block =
-          match
-            TE.get_canonical_simple_exn typing_env_at_use
-              ~min_name_mode:Name_mode.normal
-              arg_type_at_use
-          with
+          (* CR mshinwell: Also done in [Simplify_toplevel], move to [TE] *)
+          match T.get_alias_exn arg_type_at_use with
           | exception Not_found -> None
-          | block -> Some block
+          | block ->
+            match
+              TE.get_canonical_simple_exn typing_env_at_use
+                ~min_name_mode:Name_mode.normal
+                block
+            with
+            | exception Not_found -> None
+            | block -> Some block
         in
-        match env_extension, block with
+        match env_extension with
         | Bottom ->
           let field_types_by_id =
             Apply_cont_rewrite_id.Map.add id
@@ -307,14 +311,9 @@ module Make (U : Unboxing_spec) = struct
               if not (U.unbox_recursively ~field_type) then
                 typing_env, extra_params_and_args
               else begin
-                let arg_types_by_use_id =
-                  Apply_cont_rewrite_id.Map.map (fun (typing_env, ty) ->
-                      typing_env, None, ty)
-                    field_types_by_id
-                in
                 let typing_env, _, extra_params_and_args =
                   unbox_value typing_env ~depth:(depth + 1)
-                    ~arg_types_by_use_id ~param_being_unboxed
+                    ~arg_types_by_use_id:field_types_by_id ~param_being_unboxed
                     ~param_type:field_type extra_params_and_args
                 in
                 typing_env, extra_params_and_args
@@ -903,11 +902,6 @@ let make_unboxing_decisions typing_env ~arg_types_by_use_id ~params
   let typing_env, param_types_rev, extra_params_and_args =
     List.fold_left (fun (typing_env, param_types_rev, extra_params_and_args)
               (arg_types_by_use_id, (param, param_type)) ->
-        let arg_types_by_use_id =
-          Apply_cont_rewrite_id.Map.map (fun (typing_env, arg, ty) ->
-              typing_env, Some arg, ty)
-            arg_types_by_use_id
-        in
         let typing_env, param_type, extra_params_and_args =
           make_unboxing_decision typing_env ~depth:0 ~arg_types_by_use_id
             ~param_being_unboxed:param ~param_type extra_params_and_args

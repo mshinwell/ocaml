@@ -372,6 +372,8 @@ val alias_type_of : Flambda_kind.t -> Simple.t -> t
 (** Determine the (unique) kind of a type. *)
 val kind : t -> Flambda_kind.t
 
+val get_alias_exn : t -> Simple.t
+
 (** For each of the kinds in an arity, create an "unknown" type. *)
 val unknown_types_from_arity : Flambda_arity.t -> t list
 
