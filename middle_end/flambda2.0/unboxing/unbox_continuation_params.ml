@@ -15,7 +15,6 @@
 (**************************************************************************)
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
-[@@@ocaml.warning "-60"]
 
 open! Simplify_import
 
@@ -841,7 +840,7 @@ let rec make_unboxing_decision typing_env ~depth ~arg_types_by_use_id
         end
     | Wrong_kind | Invalid | Unknown ->
       match T.prove_variant typing_env param_type with
-      | Proved _ (* ->
+      | Proved variant ->
         (* Format.eprintf "Starting variant unboxing\n%!"; *)
         let variant = Variant.create variant in
         let fields =
@@ -860,7 +859,7 @@ let rec make_unboxing_decision typing_env ~depth ~arg_types_by_use_id
         Variants.unbox_one_parameter typing_env ~depth
           ~arg_types_by_use_id ~param_being_unboxed ~param_type
           extra_params_and_args ~unbox_value:make_unboxing_decision
-          variant indexes *)
+          variant indexes
       | Invalid | Unknown | Wrong_kind ->
         match T.prove_single_closures_entry' typing_env param_type with
         | Proved (closure_id, closures_entry, Ok _func_decl_type) ->

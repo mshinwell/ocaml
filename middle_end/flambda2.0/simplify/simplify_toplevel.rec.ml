@@ -53,7 +53,8 @@ let simplify_toplevel dacc expr ~return_continuation ~return_arity
   let uses = Continuation_uses_env.get_uses (DA.continuation_uses_env dacc) in
   match Continuation.Map.find return_continuation uses with
   | exception Not_found -> expr, dacc, UA.r uacc
-  | uses ->
+  | _uses ->
+  (*
     let simples_in_scope simples =
       List.for_all (fun simple ->
           Simple.pattern_match simple
@@ -75,7 +76,8 @@ let simplify_toplevel dacc expr ~return_continuation ~return_arity
                   | exception Not_found -> None
                   | arg ->
                     match
-                      TE.get_canonical_simple_exn (DA.typing_env dacc)
+                      TE.get_canonical_simple_exn
+                        (One_continuation_use.typing_env_at_use use)
                         ~min_name_mode:Name_mode.normal
                         arg
                     with
@@ -107,5 +109,5 @@ let simplify_toplevel dacc expr ~return_continuation ~return_arity
         Apply_cont.create return_continuation ~args:simples
           ~dbg:Debuginfo.none
         |> Expr.create_apply_cont
-      in
+      in *)
       expr, dacc, UA.r uacc
