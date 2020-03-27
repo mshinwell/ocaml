@@ -101,7 +101,13 @@ struct
         Or_bottom_or_absorbing.of_or_bottom
           (E.switch T.meet T.join' env ty shape)
           ~f:(fun (ty, env_extension) -> Is_int ty, env_extension)
-      | _::_ -> bad_meet_or_join env t1 t2
+      | n1 :: n2 :: [] ->
+        (* Note: Set.elements returns a sorted list, so n1 = 1 && n2 = 0
+           should never occur *)
+        if I.equal n1 I.zero && I.equal n2 I.one
+        then Ok (Is_int ty, TEE.empty ())
+        else bad_meet_or_join env t1 t2
+      | _::_::_::_ -> bad_meet_or_join env t1 t2
       end
     | Naked_immediates is_int, Is_int ty ->
       begin match I.Set.elements is_int with
@@ -115,7 +121,11 @@ struct
         Or_bottom_or_absorbing.of_or_bottom
           (E.switch T.meet T.join' env shape ty)
           ~f:(fun (ty, env_extension) -> Is_int ty, env_extension)
-      | _::_ -> bad_meet_or_join env t1 t2
+      | n1 :: n2 :: [] ->
+        if I.equal n1 I.zero && I.equal n2 I.one
+        then Ok (Is_int ty, TEE.empty ())
+        else bad_meet_or_join env t1 t2
+      | _::_::_::_ -> bad_meet_or_join env t1 t2
       end
     | Get_tag ty, Naked_immediates tags ->
       (* CR mshinwell: eliminate code duplication, same above.  Or-patterns

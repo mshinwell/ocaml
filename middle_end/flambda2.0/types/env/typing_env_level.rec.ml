@@ -655,14 +655,15 @@ let cse_with_eligible_lhs ~env_at_fork envs_with_levels ~params =
 
 let join_cse envs_with_levels cse ~allowed =
   let module EP = Flambda_primitive.Eligible_for_cse in
-  EP.Map.fold (fun prim bound_to_map (cse, extra_bindings, allowed) ->
+  EP.Map.fold (fun prim bound_to_map
+                (cse, extra_bindings, extra_equations, allowed) ->
       let has_value_on_all_paths =
         List.for_all (fun (_, id, _, _) ->
             Apply_cont_rewrite_id.Map.mem id bound_to_map)
           envs_with_levels
       in
       if not has_value_on_all_paths then
-        cse, extra_bindings, allowed
+        cse, extra_bindings, extra_equations, allowed
       else
         let bound_to_set =
           Apply_cont_rewrite_id.Map.data bound_to_map
@@ -670,7 +671,7 @@ let join_cse envs_with_levels cse ~allowed =
         in
         match Rhs_kind.Set.get_singleton bound_to_set with
         | Some (Rhs_kind.Rhs_in_scope { bound_to; }) ->
-          EP.Map.add prim bound_to cse, extra_bindings, allowed
+          EP.Map.add prim bound_to cse, extra_bindings, extra_equations, allowed
         | None | Some (Rhs_kind.Needs_extra_binding { bound_to = _; }) ->
           let prim_result_kind =
             Flambda_primitive.result_kind' (EP.to_primitive prim)
@@ -691,13 +692,32 @@ let join_cse envs_with_levels cse ~allowed =
             Continuation_extra_params_and_args.add extra_bindings
               ~extra_param ~extra_args
           in
+          let extra_equations =
+            (* For the primitives Is_int and Get_tag, they're strongly linked
+               to their argument: additional information on the cse parameter
+               should translate into additional information on the argument.
+               This can be done by giving them the appropriate type. *)
+            match EP.to_primitive prim with
+            | Unary (Is_int, scrutinee) ->
+              Name.Map.add
+                (Name.var var) (Type_grammar.is_int_for_scrutinee ~scrutinee)
+                extra_equations
+            | Unary (Get_tag, block) ->
+              Name.Map.add
+                (Name.var var) (Type_grammar.get_tag_for_block ~block)
+                extra_equations
+            | _ -> extra_equations
+          in
           let allowed =
             Name_occurrences.add_name allowed (Name.var var)
               Name_mode.normal
           in
-          cse, extra_bindings, allowed)
+          cse, extra_bindings, extra_equations, allowed)
     cse
-    (EP.Map.empty, Continuation_extra_params_and_args.empty, allowed)
+    (EP.Map.empty,
+     Continuation_extra_params_and_args.empty,
+     Name.Map.empty,
+     allowed)
 
 let construct_joined_level envs_with_levels ~allowed ~joined_types ~cse =
   let module EP = Flambda_primitive.Eligible_for_cse in
@@ -859,7 +879,16 @@ let join ~env_at_fork envs_with_levels ~params =
      satisfy this.  Sometimes we can force an equation to satisfy the
      property by explicitly passing the value of the right-hand side as an
      extra parameter to the continuation at the join point. *)
-  let cse, extra_params, allowed = join_cse envs_with_levels cse ~allowed in
+  let cse, extra_params, extra_equations, allowed =
+    join_cse envs_with_levels cse ~allowed
+  in
+  let joined_types =
+    Name.Map.union (fun name _ty_join _ty_cse ->
+        Misc.fatal_errorf "Name %a from cse already present in joined_types"
+          Name.print name)
+      joined_types
+      extra_equations
+  in
   (*
   Format.eprintf "Joined CSE:@ %a\n%!"
     (Flambda_primitive.Eligible_for_cse.Map.print Simple.print) cse;
