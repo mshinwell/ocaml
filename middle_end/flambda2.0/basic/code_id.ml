@@ -52,6 +52,8 @@ module Code_id_data = struct
       =
     Int.equal name_stamp1 name_stamp2
       && Compilation_unit.equal compilation_unit1 compilation_unit2
+
+  let compare = Stdlib.compare (* TODO: do better *)
 end
 
 type t = Id.t
@@ -99,6 +101,9 @@ module T0 = struct
   let equal = Id.equal
   let hash = Id.hash
 
+  let compare_sort t1 t2 =
+    Code_id_data.compare (find_data t1) (find_data t2)
+
   let print ppf t =
     Format.fprintf ppf "@<0>%s%s/%d@<0>%s"
       (Flambda_colours.code_id ())
@@ -114,8 +119,8 @@ module T = struct
   include T0
 end
 
-module Set = Patricia_tree.Make_set (struct let print = print end)
-module Map = Patricia_tree.Make_map (struct let print = print end) (Set)
+module Set = Patricia_tree.Make_set (struct let print = print let compare_sort = compare_sort end)
+module Map = Patricia_tree.Make_map (struct let print = print let compare_sort = compare_sort end) (Set)
 module Tbl = Identifiable.Make_tbl (Numbers.Int) (Map)
 
 let invert_map map =

@@ -37,6 +37,8 @@ let to_int t = t
 
 let max t1 t2 = max t1 t2
 
-module Set = Patricia_tree.Make_set (struct let print = print end)
-module Map = Patricia_tree.Make_map (struct let print = print end) (Set)
+let compare_sort = compare
+
+module Set = Patricia_tree.Make_set (struct let print = print let compare_sort = compare_sort end)
+module Map = Patricia_tree.Make_map (struct let print = print let compare_sort = compare_sort end) (Set)
 module Tbl = Identifiable.Make_tbl (Numbers.Int) (Map)

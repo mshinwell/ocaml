@@ -168,6 +168,8 @@ module Variable_data = struct
       in
       Int.equal name_stamp1 name_stamp2
         && Compilation_unit.equal compilation_unit1 compilation_unit2
+
+  let compare = Stdlib.compare (* TODO: do better *)
 end
 
 module Symbol_data = struct
@@ -199,6 +201,8 @@ module Symbol_data = struct
       (* Linkage names are unique across a whole project, so there's no need
          to check the compilation units. *)
       Linkage_name.equal linkage_name1 linkage_name2
+
+  let compare = Stdlib.compare (* TODO: do better *)
 end
 
 module Simple_data = struct
@@ -271,6 +275,8 @@ module Const = struct
 
     let print ppf t = Const_data.print ppf (descr t)
 
+    let compare_sort t1 t2 = Const_data.compare (find_data t1) (find_data t2)
+
     let output chan t = print (Format.formatter_of_out_channel chan) t
   end
 
@@ -280,8 +286,8 @@ module Const = struct
     include T0
   end
 
-  module Set = Patricia_tree.Make_set (struct let print = print end)
-  module Map = Patricia_tree.Make_map (struct let print = print end) (Set)
+  module Set = Patricia_tree.Make_set (struct let print = print let compare_sort = compare_sort end)
+  module Map = Patricia_tree.Make_map (struct let print = print let compare_sort = compare_sort end) (Set)
   (* CR mshinwell: The [Tbl]s will still print integers! *)
   module Tbl = Identifiable.Make_tbl (Numbers.Int) (Map)
 end
@@ -327,6 +333,8 @@ module Variable = struct
     (* CR mshinwell: colour? *)
     let print ppf t = Format.fprintf ppf "%s/%d" (name t) (name_stamp t)
 
+    let compare_sort t1 t2 = Variable_data.compare (find_data t1) (find_data t2)
+
     let output chan t = print (Format.formatter_of_out_channel chan) t
   end
 
@@ -336,8 +344,8 @@ module Variable = struct
     include T0
   end
 
-  module Set = Patricia_tree.Make_set (struct let print = print end)
-  module Map = Patricia_tree.Make_map (struct let print = print end) (Set)
+  module Set = Patricia_tree.Make_set (struct let print = print let compare_sort = compare_sort end)
+  module Map = Patricia_tree.Make_map (struct let print = print let compare_sort = compare_sort end) (Set)
   module Tbl = Identifiable.Make_tbl (Numbers.Int) (Map)
 end
 
@@ -382,6 +390,8 @@ module Symbol = struct
       Linkage_name.print ppf (linkage_name t);
       Format.fprintf ppf "@<0>%s" (Flambda_colours.normal ())
 
+    let compare_sort t1 t2 = Symbol_data.compare (find_data t1) (find_data t2)
+
     let output chan t =
       print (Format.formatter_of_out_channel chan) t
   end
@@ -392,8 +402,8 @@ module Symbol = struct
     include T0
   end
 
-  module Set = Patricia_tree.Make_set (struct let print = print end)
-  module Map = Patricia_tree.Make_map (struct let print = print end) (Set)
+  module Set = Patricia_tree.Make_set (struct let print = print let compare_sort = compare_sort end)
+  module Map = Patricia_tree.Make_map (struct let print = print let compare_sort = compare_sort end) (Set)
   module Tbl = Identifiable.Make_tbl (Numbers.Int) (Map)
 end
 
@@ -419,7 +429,17 @@ module Name = struct
       pattern_match t
         ~var:(fun var -> Variable.print ppf var)
         ~symbol:(fun symbol -> Symbol.print ppf symbol);
+      (* Format.fprintf ppf "(id %d)" t; *)
       Format.fprintf ppf "@<0>%s" (Flambda_colours.normal ())
+
+    let compare_sort t1 t2 =
+      match Id.flags t1 = var_flags, Id.flags t2 = var_flags with
+      | true, true ->
+        Variable_data.compare (Variable.find_data t1) (Variable.find_data t2)
+      | false, true -> -1
+      | true, false -> 1
+      | false, false ->
+        Symbol_data.compare (Symbol.find_data t1) (Symbol.find_data t2)
 
     let output chan t =
       print (Format.formatter_of_out_channel chan) t
@@ -431,8 +451,8 @@ module Name = struct
     include T0
   end
 
-  module Set = Patricia_tree.Make_set (struct let print = print end)
-  module Map = Patricia_tree.Make_map (struct let print = print end) (Set)
+  module Set = Patricia_tree.Make_set (struct let print = print let compare_sort = compare_sort end)
+  module Map = Patricia_tree.Make_map (struct let print = print let compare_sort = compare_sort end) (Set)
   module Tbl = Identifiable.Make_tbl (Numbers.Int) (Map)
 end
 
@@ -506,6 +526,21 @@ module Simple = struct
           print t
           Rec_info.print rec_info
 
+    let rec compare_sort t1 t2 =
+      let flags1 = Id.flags t1 in
+      let flags2 = Id.flags t2 in
+      let c = compare flags1 flags2 in
+      if c <> 0 then c
+      else if flags1 = var_flags then
+        Variable_data.compare (Variable.find_data t1) (Variable.find_data t2)
+      else if flags1 = symbol_flags then
+        Symbol_data.compare (Symbol.find_data t1) (Symbol.find_data t2)
+      else if flags1 = const_flags then
+        Const_data.compare (Const.find_data t1) (Const.find_data t2)
+      else if flags1 = simple_flags then
+        compare_sort (find_data t1).simple (find_data t2).simple
+      else assert false
+
     let output chan t =
       print (Format.formatter_of_out_channel chan) t
   end
@@ -528,8 +563,8 @@ module Simple = struct
             has [Rec_info]"
           print t
 
-  module Set = Patricia_tree.Make_set (struct let print = print end)
-  module Map = Patricia_tree.Make_map (struct let print = print end) (Set)
+  module Set = Patricia_tree.Make_set (struct let print = print let compare_sort = compare_sort end)
+  module Map = Patricia_tree.Make_map (struct let print = print let compare_sort = compare_sort end) (Set)
   module Tbl = Identifiable.Make_tbl (Numbers.Int) (Map)
 end
 

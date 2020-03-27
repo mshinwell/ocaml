@@ -105,8 +105,11 @@ include Identifiable.Make (struct
     print (Format.formatter_of_out_channel chan) t
 end)
 
-module Set = Patricia_tree.Make_set (struct let print = print end)
-module Map = Patricia_tree.Make_map (struct let print = print end) (Set)
+(* With the sort as higher bits, this sorts by sort *)
+let compare_sort = Int.compare
+
+module Set = Patricia_tree.Make_set (struct let print = print let compare_sort = compare_sort end)
+module Map = Patricia_tree.Make_map (struct let print = print let compare_sort = compare_sort end) (Set)
 (* CR mshinwell: The [Tbl]s will still print integers! *)
 module Tbl = Identifiable.Make_tbl (Numbers.Int) (Map)
 

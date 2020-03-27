@@ -15,6 +15,7 @@
 [@@@ocaml.warning "+a-30-40-41-42"]
 
 module Make_set (_ : sig
+  val compare_sort : int -> int -> int
   val print : Format.formatter -> int -> unit
 end) : sig
   include Identifiable.Set
@@ -22,6 +23,7 @@ end) : sig
 end
 
 module Make_map (_ : sig
+  val compare_sort : int -> int -> int
   val print : Format.formatter -> int -> unit
 end) (Set : Identifiable.Set with module T := Numbers.Int) : sig
   include Identifiable.Map

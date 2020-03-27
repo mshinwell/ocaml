@@ -138,6 +138,10 @@ module Simple : sig
    (* [same s1 s2] returns true iff they represent the same name or const
       i.e. [same s (with_rec_info s rec_info)] returns true *)
    val same : t -> t -> bool
+
+   (* compare_sort uses the underlying data for comparison,
+      and as a result is not dependent on hashes *)
+   val compare_sort : t -> t -> int
 end
 
 val initialise : unit -> unit

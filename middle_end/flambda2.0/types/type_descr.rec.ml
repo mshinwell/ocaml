@@ -498,7 +498,7 @@ module Make (Head : Type_head_intf.S
                   | true, false -> -1
                   | false, true -> 1
                   | true, true | false, false ->
-                    Simple.compare simple1 simple2)
+                    Simple.compare_sort simple1 simple2)
               shared_aliases
           in
           Some (create_equals (List.hd shared_aliases))

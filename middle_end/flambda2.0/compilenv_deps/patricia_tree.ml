@@ -16,6 +16,11 @@
 
 open! Int_replace_polymorphic_compare
 
+(* Debug mode: if set to true, iter and fold will first gather all elements,
+   then sort them according to the compare_sort argument, then iterate.
+   This is of course much less efficient. *)
+let sort_iterators = true
+
 (* CR mshinwell: Add a [compare] value to the functor argument and use it
    to sort the results from [elements], [bindings] etc? *)
 
@@ -62,6 +67,7 @@ let compare_prefix prefix0 bit0 prefix1 bit1 =
   else c
 
 module Make_set (Elt : sig
+  val compare_sort : int -> int -> int
   val print : Format.formatter -> int -> unit
 end) = struct
   type elt = int
@@ -312,7 +318,15 @@ end) = struct
       | Leaf i -> i :: acc
       | Branch(_, _, t0, t1) -> loop (loop acc t0) t1
     in
-    loop [] t
+    List.sort Elt.compare_sort (loop [] t)
+
+  let iter f t =
+    if not sort_iterators then iter f t
+    else List.iter f (elements t)
+
+  let fold f t init =
+    if not sort_iterators then fold f t init
+    else List.fold_left (fun acc k -> f k acc) init (elements t)
 
   let min_elt t =
     let rec loop = function
@@ -443,6 +457,7 @@ end) = struct
 end [@@@inline always]
 
 module Make_map (Key : sig
+  val compare_sort : int -> int -> int
   val print : Format.formatter -> int -> unit
 end) (Set : Identifiable.Set with module T := Numbers.Int) =
 struct
@@ -885,8 +900,17 @@ struct
     | Branch(_, _, t0, t1) -> bindings_aux (bindings_aux acc t0) t1
 
   let bindings s =
-    List.sort (fun (id1, _) (id2, _) -> Int.compare id1 id2)
+    List.sort (fun (id1, _) (id2, _) -> Key.compare_sort id1 id2)
       (bindings_aux [] s)
+
+  let iter f t =
+    if not sort_iterators then iter f t
+    else List.iter (fun (k, d) -> f k d) (bindings t)
+
+  let fold f t init =
+    if not sort_iterators then fold f t init
+    else List.fold_left (fun acc (k, d) -> f k d acc) init (bindings t)
+
 (*
   (* XXX still wrong *)
   let rec merge' f t0 t1 =
