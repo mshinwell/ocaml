@@ -53,7 +53,7 @@ module type Unboxing_spec = sig
 
   val unbox_recursively : field_type:T.t -> bool
 
-  val unused_extra_arg : Index.t -> Simple.t option
+  val unused_extra_arg : Use_info.t -> Index.t -> Simple.t option
 
   val make_boxed_value
      : Info.t
@@ -82,6 +82,7 @@ module Make (U : Unboxing_spec) = struct
 
   let unbox_one_field_of_one_parameter info ~extra_param ~index
         ~arg_types_by_use_id =
+    Format.eprintf "UNBOX: %a\n%!" Index.print index;
     let param_kind = KP.kind extra_param in
     let field_var = Variable.create "field_at_use" in
     let field_name =
@@ -105,12 +106,10 @@ module Make (U : Unboxing_spec) = struct
           let result_var =
             Var_in_binding_pos.create field_var Name_mode.normal
           in
-(*
           Format.eprintf "Shape:@ %a@ arg_type_at_use:@ %a@ env:@ %a\n%!"
             T.print shape
             T.print arg_type_at_use
             TE.print typing_env_at_use;
-*)
           T.meet_shape typing_env_at_use arg_type_at_use
             ~shape ~result_var ~result_kind:param_kind
         in
@@ -130,6 +129,7 @@ module Make (U : Unboxing_spec) = struct
         in
         match env_extension with
         | Bottom ->
+          Format.eprintf "BOTTOM\n%!";
           let field_types_by_id =
             Apply_cont_rewrite_id.Map.add id
               (typing_env_at_use, T.bottom param_kind)
@@ -151,7 +151,9 @@ module Make (U : Unboxing_spec) = struct
           in
           (* CR mshinwell: hoist extra_args None check *)
           match extra_args with
-          | None -> None, field_types_by_id
+          | None ->
+            Format.eprintf "Already aborted\n%!";
+            None, field_types_by_id
           | Some extra_args ->
             match U.project_field info use_info ~block ~index with
             | Simple simple ->
@@ -176,17 +178,22 @@ module Make (U : Unboxing_spec) = struct
                    where k x y a' b'
                  mshinwell: We never add any loads now, but might in the future.
               *)
+              Format.eprintf "Getting canonical for field %a: "
+                Simple.print field;
               match
                 TE.get_canonical_simple_exn typing_env_at_use
                   ~min_name_mode:Name_mode.normal
                   field
               with
               | exception Not_found ->
-                (* CR mshinwell: Think about this more *)
-                (* XXX *)
-                begin match U.unused_extra_arg index with
-                | None -> None, field_types_by_id
+                Format.eprintf "not found\n%!";
+                begin match U.unused_extra_arg use_info index with
+                | None ->
+                  Format.eprintf "Aborting\n%!";
+                  None, field_types_by_id
                 | Some simple ->
+                  Format.eprintf "Using placeholder %a\n%!"
+                    Simple.print simple;
                   let extra_arg : EA.t = Already_in_scope simple in
                   let extra_args =
                     Apply_cont_rewrite_id.Map.add id extra_arg extra_args
@@ -194,6 +201,7 @@ module Make (U : Unboxing_spec) = struct
                   Some extra_args, field_types_by_id
                 end
               | simple ->
+                Format.eprintf "= %a\n%!" Simple.print simple;
                 if Simple.equal simple field then begin
                   None, field_types_by_id
                 end else
@@ -218,6 +226,7 @@ module Make (U : Unboxing_spec) = struct
         (fun index extra_param
              (param_types_rev, all_field_types_by_id_rev,
               extra_params_and_args) ->
+          Format.eprintf "INDEX %a\n%!" Index.print index;
           let extra_args, field_types_by_id =
             unbox_one_field_of_one_parameter info ~extra_param ~index
               ~arg_types_by_use_id
@@ -345,7 +354,7 @@ struct
 
   let kind_of_unboxed_field_of_param _index = K.value
 
-  let unused_extra_arg _index = None
+  let unused_extra_arg _ _index = None
 
   let make_boxed_value tag ~param_being_unboxed:_ ~new_params:_ ~fields =
     let fields = Index.Map.data fields in
@@ -499,12 +508,42 @@ struct
     | Is_int | Tag | Const_ctor -> K.naked_immediate
     | Field _ -> K.value
 
-  let unused_extra_arg (index : Index.t) =
+  let unused_extra_arg (use_info : Use_info.t) (index : Index.t) =
     match index with
     | Is_int
-    | Tag
-    | Const_ctor -> Some Simple.untagged_const_zero  (* XXX *)
-    | Field _ -> Some Simple.const_zero
+    | Tag ->
+      (* These arguments are filled in later via [project_field]. *)
+      Some Simple.untagged_const_zero
+    | Const_ctor ->
+      begin match use_info with
+      | Const_ctor ->
+        (* If the argument at the use is known to be a constant constructor,
+           but there is no available [Simple] corresponding to it, then we
+           cannot unbox. *)
+        None
+      | Block _ ->
+        (* There are no constant constructors in the variant at the use site.
+           We provide a dummy value. *)
+        Some Simple.untagged_const_zero
+      end
+    | Field { index; } ->
+      begin match use_info with
+      | Block { tag = _; size; } ->
+        (* If the argument at the use is known to be a block, but the field
+           at [index] has no available [Simple] corresponding to it, then we
+           cannot unbox. *)
+        if Targetint.OCaml.(<) index size then None
+        else begin
+          (* If the argument at the use is known to be a block, but it has
+             fewer fields than the maximum number of fields for the variant,
+             then we provide a dummy value. *)
+          Some Simple.const_zero
+        end
+      | Const_ctor ->
+        (* There are no blocks in the variant at the use site.  We again
+           provide a dummy value. *)
+        Some Simple.const_zero
+      end
 
   let make_boxed_value variant ~param_being_unboxed ~new_params ~fields =
     let ty =
@@ -614,7 +653,7 @@ struct
 
   let kind_of_unboxed_field_of_param _index = K.naked_float
 
-  let unused_extra_arg _index = None
+  let unused_extra_arg _ _index = None
 
   let make_boxed_value tag ~param_being_unboxed:_ ~new_params:_ ~fields =
     let fields = Index.Map.data fields in
@@ -659,7 +698,7 @@ struct
 
   let kind_of_unboxed_field_of_param _index = K.value
 
-  let unused_extra_arg _index = None
+  let unused_extra_arg _ _index = None
 
   let make_boxed_value (info : Info.t) ~param_being_unboxed:_ ~new_params:_
         ~fields:closure_vars =
@@ -713,7 +752,7 @@ end) = struct
 
   let kind_of_unboxed_field_of_param _index = N.unboxed_kind
 
-  let unused_extra_arg _index = None
+  let unused_extra_arg _ _index = None
 
   let make_boxed_value tag ~param_being_unboxed:_ ~new_params:_ ~fields =
     assert (Tag.equal tag N.tag);
@@ -915,4 +954,6 @@ let make_unboxing_decisions typing_env ~arg_types_by_use_id ~params
     TE.add_equations_on_params typing_env
       ~params ~param_types:(List.rev param_types_rev)
   in
+  Format.eprintf "Final typing env:@ %a\n%!" TE.print typing_env;
+  Format.eprintf "EPA:@ %a\n%!" EPA.print extra_params_and_args;
   typing_env, extra_params_and_args
