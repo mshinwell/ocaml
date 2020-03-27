@@ -776,17 +776,6 @@ let join ~env_at_fork envs_with_levels ~params =
     join_types ~env_at_fork:env_at_fork_with_existentials_defined
       envs_with_levels ~params
   in
-  let env_at_fork_with_existentials_defined =
-    let level =
-      { defined_vars = Variable.Map.empty;
-        equations = joined_types;
-        cse = Flambda_primitive.Eligible_for_cse.Map.empty;
-      }
-    in
-    let env_extension = Typing_env_extension.create level in
-    Typing_env.add_env_extension env_at_fork_with_existentials_defined
-      env_extension
-  in
   (*
   Format.eprintf "joined_types:@ %a\n%!"
     (Name.Map.print Type_grammar.print) joined_types;
@@ -824,6 +813,25 @@ let join ~env_at_fork envs_with_levels ~params =
   Format.eprintf "ENV WITH EXISTENTIALS:@ %a\n%!"
     Typing_env.print env_at_fork_with_existentials_defined;
   *)
+  (* CR vlaviron: We need to compute the free names of joined_types,
+     we can't use a typing environment *)
+  let free_names_transitive typ =
+    let rec free_names_transitive0 typ ~result =
+      let free_names = Type_grammar.free_names typ in
+      let to_traverse = Name_occurrences.diff free_names result in
+      Name_occurrences.fold_names to_traverse
+        ~init:result
+        ~f:(fun result name ->
+          match Name.Map.find name joined_types with
+          | exception Not_found -> result
+          | typ ->
+            let result =
+              Name_occurrences.add_name result name Name_mode.in_types
+            in
+            free_names_transitive0 typ ~result)
+    in
+    free_names_transitive0 typ ~result:Name_occurrences.empty
+  in
   let allowed =
     Name.Map.fold (fun name ty allowed ->
         (*
@@ -835,8 +843,7 @@ let join ~env_at_fork envs_with_levels ~params =
         then
           Name_occurrences.add_name
             (Name_occurrences.union allowed
-              (Typing_env.free_names_transitive
-                env_at_fork_with_existentials_defined ty))
+              (free_names_transitive ty))
             name Name_mode.in_types
         else
           allowed)
