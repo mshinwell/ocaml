@@ -77,11 +77,15 @@ module type Unboxing_spec = sig
     -> project_field_result
 end
 
+type 'a or_aborted =
+  | Continue of 'a
+  | Aborted
+
 module Make (U : Unboxing_spec) = struct
   module Index = U.Index
 
   let unbox_one_field_of_one_parameter info ~extra_param ~index
-        ~arg_types_by_use_id =
+        ~arg_types_by_use_id : _ or_aborted =
     Format.eprintf "UNBOX: %a\n%!" Index.print index;
     let param_kind = KP.kind extra_param in
     let field_var = Variable.create "field_at_use" in
@@ -90,78 +94,70 @@ module Make (U : Unboxing_spec) = struct
     in
     Apply_cont_rewrite_id.Map.fold
       (fun id (typing_env_at_use, arg_type_at_use, use_info)
-           (extra_args, field_types_by_id) ->
-        let untagged_field_var = Variable.create "untagged_field_at_use" in
-        let typing_env_at_use =
-          TE.add_definition typing_env_at_use
-            (Name_in_binding_pos.var
-              (Var_in_binding_pos.create untagged_field_var NM.normal))
-            K.naked_immediate
-        in
-        let shape =
-          U.make_boxed_value_accommodating info index ~index_var:field_var
-            ~untagged_index_var:untagged_field_var
-        in
-        let env_extension =
-          let result_var =
-            Var_in_binding_pos.create field_var Name_mode.normal
+           (acc : _ or_aborted) ->
+        match acc with
+        | Aborted ->
+          Format.eprintf "Already aborted\n%!";
+          Aborted
+        | Continue (extra_args, field_types_by_id) ->
+          let untagged_field_var = Variable.create "untagged_field_at_use" in
+          let typing_env_at_use =
+            TE.add_definition typing_env_at_use
+              (Name_in_binding_pos.var
+                (Var_in_binding_pos.create untagged_field_var NM.normal))
+              K.naked_immediate
           in
-          Format.eprintf "Shape:@ %a@ arg_type_at_use:@ %a@ env:@ %a\n%!"
-            T.print shape
-            T.print arg_type_at_use
-            TE.print typing_env_at_use;
-          T.meet_shape typing_env_at_use arg_type_at_use
-            ~shape ~result_var ~result_kind:param_kind
-        in
-        let field = Simple.var field_var in
-        let block =
-          (* CR mshinwell: Also done in [Simplify_toplevel], move to [TE] *)
-          match T.get_alias_exn arg_type_at_use with
-          | exception Not_found -> None
-          | block ->
-            match
-              TE.get_canonical_simple_exn typing_env_at_use
-                ~min_name_mode:Name_mode.normal
-                block
-            with
+          let shape =
+            U.make_boxed_value_accommodating info index ~index_var:field_var
+              ~untagged_index_var:untagged_field_var
+          in
+          let env_extension =
+            let result_var =
+              Var_in_binding_pos.create field_var Name_mode.normal
+            in
+            Format.eprintf "Shape:@ %a@ arg_type_at_use:@ %a@ env:@ %a\n%!"
+              T.print shape
+              T.print arg_type_at_use
+              TE.print typing_env_at_use;
+            T.meet_shape typing_env_at_use arg_type_at_use
+              ~shape ~result_var ~result_kind:param_kind
+          in
+          let field = Simple.var field_var in
+          let block =
+            (* CR mshinwell: Also done in [Simplify_toplevel], move to [TE] *)
+            match T.get_alias_exn arg_type_at_use with
             | exception Not_found -> None
-            | block -> Some block
-        in
-        match env_extension with
-        | Bottom ->
-          Format.eprintf "BOTTOM\n%!";
-          let field_types_by_id =
-            Apply_cont_rewrite_id.Map.add id
-              (typing_env_at_use, T.bottom param_kind)
-              field_types_by_id
+            | block ->
+              match
+                TE.get_canonical_simple_exn typing_env_at_use
+                  ~min_name_mode:Name_mode.normal
+                  block
+              with
+              | exception Not_found -> None
+              | block -> Some block
           in
-          None, field_types_by_id
-        | Ok env_extension ->
-          let typing_env_at_use =
-            TE.add_definition typing_env_at_use field_name param_kind
-          in
-          let typing_env_at_use =
-            TE.add_env_extension typing_env_at_use env_extension
-          in
-          let field_type = T.alias_type_of param_kind field in
-          let field_types_by_id =
-            Apply_cont_rewrite_id.Map.add id
-              (typing_env_at_use, field_type)
-              field_types_by_id
-          in
-          (* CR mshinwell: hoist extra_args None check *)
-          match extra_args with
-          | None ->
-            Format.eprintf "Already aborted\n%!";
-            None, field_types_by_id
-          | Some extra_args ->
+          match env_extension with
+          | Bottom -> Aborted
+          | Ok env_extension ->
+            let typing_env_at_use =
+              TE.add_definition typing_env_at_use field_name param_kind
+            in
+            let typing_env_at_use =
+              TE.add_env_extension typing_env_at_use env_extension
+            in
+            let field_type = T.alias_type_of param_kind field in
+            let field_types_by_id =
+              Apply_cont_rewrite_id.Map.add id
+                (typing_env_at_use, field_type)
+                field_types_by_id
+            in
             match U.project_field info use_info ~block ~index with
             | Simple simple ->
               let extra_arg : EA.t = Already_in_scope simple in
               let extra_args =
                 Apply_cont_rewrite_id.Map.add id extra_arg extra_args
               in
-              Some extra_args, field_types_by_id
+              Continue (extra_args, field_types_by_id)
             | Default_behaviour untag ->
               (* Don't unbox parameters unless, at all use sites, there is a
                  non-irrelevant [Simple] available for the corresponding field
@@ -190,7 +186,7 @@ module Make (U : Unboxing_spec) = struct
                 begin match U.unused_extra_arg use_info index with
                 | None ->
                   Format.eprintf "Aborting\n%!";
-                  None, field_types_by_id
+                  Aborted
                 | Some simple ->
                   Format.eprintf "Using placeholder %a\n%!"
                     Simple.print simple;
@@ -198,13 +194,12 @@ module Make (U : Unboxing_spec) = struct
                   let extra_args =
                     Apply_cont_rewrite_id.Map.add id extra_arg extra_args
                   in
-                  Some extra_args, field_types_by_id
+                  Continue (extra_args, field_types_by_id)
                 end
               | simple ->
                 Format.eprintf "= %a\n%!" Simple.print simple;
-                if Simple.equal simple field then begin
-                  None, field_types_by_id
-                end else
+                if Simple.equal simple field then Aborted
+                else
                   let extra_arg : EA.t =
                     match untag with
                     | No_untagging -> Already_in_scope simple
@@ -215,46 +210,47 @@ module Make (U : Unboxing_spec) = struct
                   let extra_args =
                     Apply_cont_rewrite_id.Map.add id extra_arg extra_args
                   in
-                  Some extra_args, field_types_by_id)
+                  Continue (extra_args, field_types_by_id))
       arg_types_by_use_id
-      (Some Apply_cont_rewrite_id.Map.empty, Apply_cont_rewrite_id.Map.empty)
+      (Continue (Apply_cont_rewrite_id.Map.empty,
+        Apply_cont_rewrite_id.Map.empty))
 
   let unbox_fields_of_one_parameter info ~new_params
-        ~arg_types_by_use_id extra_params_and_args =
-    let param_types, all_field_types_by_id_rev, extra_params_and_args =
-      Index.Map.fold
-        (fun index extra_param
-             (param_types_rev, all_field_types_by_id_rev,
+        ~arg_types_by_use_id extra_params_and_args : _ or_aborted =
+    let result =
+      Index.Map.fold (fun index extra_param acc : _ or_aborted ->
+          match acc with
+          | Aborted -> Aborted
+          | Continue (param_types_rev, all_field_types_by_id_rev,
               extra_params_and_args) ->
-          Format.eprintf "INDEX %a\n%!" Index.print index;
-          let extra_args, field_types_by_id =
-            unbox_one_field_of_one_parameter info ~extra_param ~index
-              ~arg_types_by_use_id
-          in
-          let param_type =
-            let param_kind = KP.kind extra_param in
-            match extra_args with
-            | None -> T.unknown param_kind
-            | Some _ -> T.alias_type_of param_kind (KP.simple extra_param)
-          in
-          let all_field_types_by_id_rev =
-            field_types_by_id :: all_field_types_by_id_rev
-          in
-          match extra_args with
-          | None ->
-            Index.Map.add index param_type param_types_rev,
-              all_field_types_by_id_rev, extra_params_and_args
-          | Some extra_args ->
-            let extra_params_and_args =
-              EPA.add extra_params_and_args ~extra_param ~extra_args
+            Format.eprintf "INDEX %a\n%!" Index.print index;
+            let result =
+              unbox_one_field_of_one_parameter info ~extra_param ~index
+                ~arg_types_by_use_id
             in
-            Index.Map.add index param_type param_types_rev,
-              all_field_types_by_id_rev, extra_params_and_args)
+            match result with
+            | Aborted -> Aborted
+            | Continue (extra_args, field_types_by_id) ->
+              let param_type =
+                T.alias_type_of (KP.kind extra_param) (KP.simple extra_param)
+              in
+              let all_field_types_by_id_rev =
+                field_types_by_id :: all_field_types_by_id_rev
+              in
+              let extra_params_and_args =
+                EPA.add extra_params_and_args ~extra_param ~extra_args
+              in
+              Continue (Index.Map.add index param_type param_types_rev,
+                all_field_types_by_id_rev, extra_params_and_args))
         new_params
-        (Index.Map.empty, [], extra_params_and_args)
+        (Continue (Index.Map.empty, [], extra_params_and_args))
     in
-    param_types, List.rev all_field_types_by_id_rev,
-      extra_params_and_args
+    match result with
+    | Aborted -> Aborted
+    | Continue (param_types, all_field_types_by_id_rev,
+        extra_params_and_args) ->
+      Continue (param_types, List.rev all_field_types_by_id_rev,
+        extra_params_and_args)
 
   let unbox_one_parameter typing_env ~depth ~arg_types_by_use_id
         ~param_being_unboxed ~param_type extra_params_and_args ~unbox_value
@@ -291,46 +287,51 @@ module Make (U : Unboxing_spec) = struct
           indexes
           Index.Map.empty
       in
-      let fields, all_field_types_by_id, extra_params_and_args =
+      let result =
         unbox_fields_of_one_parameter info ~new_params
           ~arg_types_by_use_id extra_params_and_args
       in
-      let block_type, env_extension =
-        U.make_boxed_value info ~param_being_unboxed ~new_params ~fields
-      in
-      let typing_env = TE.add_env_extension typing_env env_extension in
-      let typing_env =
-        TE.add_definitions_of_params typing_env
-          ~params:(Index.Map.data new_params)
-      in
-      match T.meet typing_env block_type param_type with
-      | Bottom ->
-        Misc.fatal_errorf "[meet] between %a and %a should not have \
-           failed.  Typing env:@ %a"
-          T.print block_type
-          T.print param_type
-          TE.print typing_env
-      | Ok (param_type, env_extension) ->
-        let typing_env = TE.add_env_extension typing_env env_extension in
-        assert (Index.Map.cardinal fields = List.length all_field_types_by_id);
-        let typing_env, extra_params_and_args =
-          List.fold_left2
-            (fun (typing_env, extra_params_and_args) 
-                 field_type field_types_by_id ->
-              if not (U.unbox_recursively ~field_type) then
-                typing_env, extra_params_and_args
-              else begin
-                let typing_env, _, extra_params_and_args =
-                  unbox_value typing_env ~depth:(depth + 1)
-                    ~arg_types_by_use_id:field_types_by_id ~param_being_unboxed
-                    ~param_type:field_type extra_params_and_args
-                in
-                typing_env, extra_params_and_args
-              end)
-            (typing_env, extra_params_and_args)
-            (Index.Map.data fields) all_field_types_by_id
+      match result with
+      | Aborted -> typing_env, param_type, extra_params_and_args
+      | Continue (fields, all_field_types_by_id, extra_params_and_args) ->
+        let block_type, env_extension =
+          U.make_boxed_value info ~param_being_unboxed ~new_params ~fields
         in
-        typing_env, param_type, extra_params_and_args
+        let typing_env = TE.add_env_extension typing_env env_extension in
+        let typing_env =
+          TE.add_definitions_of_params typing_env
+            ~params:(Index.Map.data new_params)
+        in
+        match T.meet typing_env block_type param_type with
+        | Bottom ->
+          Misc.fatal_errorf "[meet] between %a and %a should not have \
+            failed.  Typing env:@ %a"
+            T.print block_type
+            T.print param_type
+            TE.print typing_env
+        | Ok (param_type, env_extension) ->
+          let typing_env = TE.add_env_extension typing_env env_extension in
+          assert (Index.Map.cardinal fields =
+            List.length all_field_types_by_id);
+          let typing_env, extra_params_and_args =
+            List.fold_left2
+              (fun (typing_env, extra_params_and_args) 
+                  field_type field_types_by_id ->
+                if not (U.unbox_recursively ~field_type) then
+                  typing_env, extra_params_and_args
+                else begin
+                  let typing_env, _, extra_params_and_args =
+                    unbox_value typing_env ~depth:(depth + 1)
+                      ~arg_types_by_use_id:field_types_by_id
+                      ~param_being_unboxed
+                      ~param_type:field_type extra_params_and_args
+                  in
+                  typing_env, extra_params_and_args
+                end)
+              (typing_env, extra_params_and_args)
+              (Index.Map.data fields) all_field_types_by_id
+          in
+          typing_env, param_type, extra_params_and_args
 end
 
 module Block_of_values_spec : Unboxing_spec
