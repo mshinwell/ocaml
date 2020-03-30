@@ -86,7 +86,9 @@ module Make (U : Unboxing_spec) = struct
 
   let unbox_one_field_of_one_parameter info ~extra_param ~index
         ~arg_types_by_use_id : _ or_aborted =
+    (*
     Format.eprintf "UNBOX: %a\n%!" Index.print index;
+    *)
     let param_kind = KP.kind extra_param in
     let field_var = Variable.create "field_at_use" in
     let field_name =
@@ -97,7 +99,9 @@ module Make (U : Unboxing_spec) = struct
            (acc : _ or_aborted) ->
         match acc with
         | Aborted ->
+          (*
           Format.eprintf "Already aborted\n%!";
+          *)
           Aborted
         | Continue (extra_args, field_types_by_id) ->
           let untagged_field_var = Variable.create "untagged_field_at_use" in
@@ -115,10 +119,12 @@ module Make (U : Unboxing_spec) = struct
             let result_var =
               Var_in_binding_pos.create field_var Name_mode.normal
             in
+            (*
             Format.eprintf "Shape:@ %a@ arg_type_at_use:@ %a@ env:@ %a\n%!"
               T.print shape
               T.print arg_type_at_use
               TE.print typing_env_at_use;
+            *)
             T.meet_shape typing_env_at_use arg_type_at_use
               ~shape ~result_var ~result_kind:param_kind
           in
@@ -174,22 +180,30 @@ module Make (U : Unboxing_spec) = struct
                    where k x y a' b'
                  mshinwell: We never add any loads now, but might in the future.
               *)
+              (*
               Format.eprintf "Getting canonical for field %a: "
                 Simple.print field;
+              *)
               match
                 TE.get_canonical_simple_exn typing_env_at_use
                   ~min_name_mode:Name_mode.normal
                   field
               with
               | exception Not_found ->
+                (*
                 Format.eprintf "not found\n%!";
+                *)
                 begin match U.unused_extra_arg use_info index with
                 | None ->
+                  (*
                   Format.eprintf "Aborting\n%!";
+                  *)
                   Aborted
                 | Some simple ->
+                  (*
                   Format.eprintf "Using placeholder %a\n%!"
                     Simple.print simple;
+                  *)
                   let extra_arg : EA.t = Already_in_scope simple in
                   let extra_args =
                     Apply_cont_rewrite_id.Map.add id extra_arg extra_args
@@ -197,7 +211,9 @@ module Make (U : Unboxing_spec) = struct
                   Continue (extra_args, field_types_by_id)
                 end
               | simple ->
+                (*
                 Format.eprintf "= %a\n%!" Simple.print simple;
+                *)
                 if Simple.equal simple field then Aborted
                 else
                   let extra_arg : EA.t =
@@ -223,7 +239,9 @@ module Make (U : Unboxing_spec) = struct
           | Aborted -> Aborted
           | Continue (param_types_rev, all_field_types_by_id_rev,
               extra_params_and_args) ->
+            (*
             Format.eprintf "INDEX %a\n%!" Index.print index;
+            *)
             let result =
               unbox_one_field_of_one_parameter info ~extra_param ~index
                 ~arg_types_by_use_id
@@ -955,6 +973,8 @@ let make_unboxing_decisions typing_env ~arg_types_by_use_id ~params
     TE.add_equations_on_params typing_env
       ~params ~param_types:(List.rev param_types_rev)
   in
+  (*
   Format.eprintf "Final typing env:@ %a\n%!" TE.print typing_env;
   Format.eprintf "EPA:@ %a\n%!" EPA.print extra_params_and_args;
+  *)
   typing_env, extra_params_and_args
