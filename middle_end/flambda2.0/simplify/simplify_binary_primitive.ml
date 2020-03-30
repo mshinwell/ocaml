@@ -845,6 +845,12 @@ let simplify_immutable_block_load ~result_kind dacc ~original_term _dbg
     let n =
       Targetint.OCaml.add (Immediate.to_targetint index) Targetint.OCaml.one
     in
+    Format.eprintf "BLOCK LOAD, block %a,@ index %a,@ shape %a,@ dacc:@ %a\n%!"
+      T.print block_ty T.print index_ty
+      T.print
+      (T.immutable_block_with_size_at_least ~tag:Unknown ~n
+        ~field_kind:result_kind ~field_n_minus_one:result_var')
+      DA.print dacc;
     Simplify_common.simplify_projection
       dacc ~original_term ~deconstructing:block_ty
       ~shape:(T.immutable_block_with_size_at_least ~tag:Unknown ~n

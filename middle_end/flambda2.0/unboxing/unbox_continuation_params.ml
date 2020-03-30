@@ -106,6 +106,8 @@ module Make (U : Unboxing_spec) = struct
         | Continue (extra_args, field_types_by_id) ->
           let untagged_field_var = Variable.create "untagged_field_at_use" in
           let typing_env_at_use =
+            (* CR mshinwell: This definition is not needed unless the index
+               needs an untagging operation. *)
             TE.add_definition typing_env_at_use
               (Name_in_binding_pos.var
                 (Var_in_binding_pos.create untagged_field_var NM.normal))
@@ -128,6 +130,10 @@ module Make (U : Unboxing_spec) = struct
             T.meet_shape typing_env_at_use arg_type_at_use
               ~shape ~result_var ~result_kind:param_kind
           in
+          (*
+          Format.eprintf "Env extension from meet is:@ %a\n%!"
+            (Or_bottom.print TEE.print) env_extension;
+          *)
           let field = Simple.var field_var in
           let block =
             (* CR mshinwell: Also done in [Simplify_toplevel], move to [TE] *)
@@ -142,8 +148,37 @@ module Make (U : Unboxing_spec) = struct
               | exception Not_found -> None
               | block -> Some block
           in
+          let fail () =
+            (*
+            Format.eprintf "not found\n%!";
+            *)
+            (* CR mshinwell: This should not be called "unused" *)
+            match U.unused_extra_arg use_info index with
+            | None ->
+              (*
+              Format.eprintf "Aborting\n%!";
+              *)
+              Aborted
+            | Some simple ->
+              (*
+              Format.eprintf "Using placeholder %a\n%!"
+                Simple.print simple;
+              *)
+              let extra_arg : EA.t = Already_in_scope simple in
+              let extra_args =
+                Apply_cont_rewrite_id.Map.add id extra_arg extra_args
+              in
+              Continue (extra_args, field_types_by_id)
+          in
           match env_extension with
-          | Bottom -> Aborted
+          | Bottom ->
+            (* The shape will always match the type of the argument unless
+               we are trying to retrieve part of the argument that just
+               does not exist (e.g. a field in a variant type that does
+               not exist across all non-constant constructors). *)
+            (* CR mshinwell: [U.unused_extra_arg] should always return
+               [Some] in this case *)
+            fail ()
           | Ok env_extension ->
             let typing_env_at_use =
               TE.add_definition typing_env_at_use field_name param_kind
@@ -183,34 +218,10 @@ module Make (U : Unboxing_spec) = struct
               (*
               Format.eprintf "Getting canonical for field %a: "
                 Simple.print field;
+              Format.eprintf "Canonical lookup is in:@ %a\n%!"
+                TE.print typing_env_at_use;
               *)
-              match
-                TE.get_canonical_simple_exn typing_env_at_use
-                  ~min_name_mode:Name_mode.normal
-                  field
-              with
-              | exception Not_found ->
-                (*
-                Format.eprintf "not found\n%!";
-                *)
-                begin match U.unused_extra_arg use_info index with
-                | None ->
-                  (*
-                  Format.eprintf "Aborting\n%!";
-                  *)
-                  Aborted
-                | Some simple ->
-                  (*
-                  Format.eprintf "Using placeholder %a\n%!"
-                    Simple.print simple;
-                  *)
-                  let extra_arg : EA.t = Already_in_scope simple in
-                  let extra_args =
-                    Apply_cont_rewrite_id.Map.add id extra_arg extra_args
-                  in
-                  Continue (extra_args, field_types_by_id)
-                end
-              | simple ->
+              let found_canonical simple untag =
                 (*
                 Format.eprintf "= %a\n%!" Simple.print simple;
                 *)
@@ -226,7 +237,32 @@ module Make (U : Unboxing_spec) = struct
                   let extra_args =
                     Apply_cont_rewrite_id.Map.add id extra_arg extra_args
                   in
-                  Continue (extra_args, field_types_by_id))
+                  Continue (extra_args, field_types_by_id)
+              in
+              match
+                TE.get_canonical_simple_exn typing_env_at_use
+                  ~min_name_mode:Name_mode.normal
+                  field
+              with
+              | exception Not_found ->
+                begin match untag with
+                | No_untagging -> fail ()
+                | Untag ->
+                  (* If we need an untagged value (such as for constant
+                     constructors), then if we couldn't find a [Simple]
+                     holding the tagged value (which we can subsequently
+                     untag), try finding a [Simple] holding the untagged
+                     value. *)
+                  match
+                    TE.get_canonical_simple_exn typing_env_at_use
+                      ~min_name_mode:Name_mode.normal
+                    (Simple.var untagged_field_var)
+                  with
+                  | exception Not_found -> fail ()
+                  | untagged_simple ->
+                    found_canonical untagged_simple No_untagging
+                end
+              | simple -> found_canonical simple untag)
       arg_types_by_use_id
       (Continue (Apply_cont_rewrite_id.Map.empty,
         Apply_cont_rewrite_id.Map.empty))
@@ -584,8 +620,10 @@ struct
       T.variant ~const_ctors ~non_const_ctors
     in
     let param_being_unboxed = KP.simple param_being_unboxed in
-    let is_int = KP.simple (Index.Map.find Is_int new_params) in
-    let get_tag = KP.simple (Index.Map.find Tag new_params) in
+    let is_int_name = KP.name (Index.Map.find Is_int new_params) in
+    let get_tag_name = KP.name (Index.Map.find Tag new_params) in
+    let is_int = Simple.name is_int_name in
+    let get_tag = Simple.name get_tag_name in
     let is_int_prim =
       P.Unary (Is_int, param_being_unboxed)
       |> P.Eligible_for_cse.create_exn
@@ -598,6 +636,14 @@ struct
       TEE.empty ()
       |> TEE.add_cse ~prim:is_int_prim ~bound_to:is_int
       |> TEE.add_cse ~prim:get_tag_prim ~bound_to:get_tag
+    in
+    let env_extension =
+      TEE.add_or_replace_equation env_extension is_int_name
+        (T.is_int_for_scrutinee ~scrutinee:param_being_unboxed)
+    in
+    let env_extension =
+      TEE.add_or_replace_equation env_extension get_tag_name
+        (T.get_tag_for_block ~block:param_being_unboxed)
     in
     ty, env_extension
 
@@ -900,7 +946,9 @@ let rec make_unboxing_decision typing_env ~depth ~arg_types_by_use_id
     | Wrong_kind | Invalid | Unknown ->
       match T.prove_variant typing_env param_type with
       | Proved variant ->
-        (* Format.eprintf "Starting variant unboxing\n%!"; *)
+        (*
+        Format.eprintf "Starting variant unboxing\n%!";
+        *)
         let variant = Variant.create variant in
         let fields =
           let size = Targetint.OCaml.to_int (Variant.max_size variant) in
@@ -973,8 +1021,6 @@ let make_unboxing_decisions typing_env ~arg_types_by_use_id ~params
     TE.add_equations_on_params typing_env
       ~params ~param_types:(List.rev param_types_rev)
   in
-  (*
   Format.eprintf "Final typing env:@ %a\n%!" TE.print typing_env;
   Format.eprintf "EPA:@ %a\n%!" EPA.print extra_params_and_args;
-  *)
   typing_env, extra_params_and_args

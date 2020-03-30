@@ -1,5 +1,5 @@
 external (+) : int -> int -> int = "%addint"
-
+(*
 let f1 b x =
   let opt =
     if b then None else Some x
@@ -7,7 +7,7 @@ let f1 b x =
   match opt with
   | None -> 1
   | Some x -> x
-
+*)
 type t =
   | A
   | B
@@ -27,7 +27,7 @@ let f2 x y a b =
   | D (a, b) -> a + b
   | A -> 40
   | B -> 50
-
+(*
 (* Should work with or without unboxing *)
 let f3_returning_a x y a b =
   let t =
@@ -42,3 +42,4 @@ let f3_returning_a x y a b =
   | D (_, a) -> a
   | A
   | B -> a
+*)
