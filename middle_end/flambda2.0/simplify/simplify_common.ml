@@ -22,12 +22,8 @@ let simplify_projection dacc ~original_term ~deconstructing ~shape ~result_var
       ~result_kind =
   let env = DA.typing_env dacc in
   match T.meet_shape env deconstructing ~shape ~result_var ~result_kind with
-  | Bottom ->
-    Format.eprintf "BOTTOM\n%!";
-    Reachable.invalid (), TEE.empty (), dacc
+  | Bottom -> Reachable.invalid (), TEE.empty (), dacc
   | Ok env_extension ->
-    Format.eprintf "meet_shape extension is:@ %a\n%!"
-      TEE.print env_extension;
     Reachable.reachable original_term, env_extension, dacc
 
 type cse =

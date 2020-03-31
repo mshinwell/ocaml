@@ -1021,6 +1021,8 @@ let make_unboxing_decisions typing_env ~arg_types_by_use_id ~params
     TE.add_equations_on_params typing_env
       ~params ~param_types:(List.rev param_types_rev)
   in
+  (*
   Format.eprintf "Final typing env:@ %a\n%!" TE.print typing_env;
   Format.eprintf "EPA:@ %a\n%!" EPA.print extra_params_and_args;
+  *)
   typing_env, extra_params_and_args
