@@ -157,7 +157,6 @@ module Make (Head : Type_head_intf.S
     | Type _export_id -> Misc.fatal_error ".cmx loading not yet implemented"
     | Equals simple ->
       let min_name_mode = Name_mode.min_in_types in
-      Format.eprintf "Expanding =%a\n%!" Simple.print simple;
       match TE.get_canonical_simple_exn env simple ~min_name_mode with
       | exception Not_found ->
         (* This can happen when [simple] is of [Phantom] name mode.
@@ -165,7 +164,6 @@ module Make (Head : Type_head_intf.S
            so [Unknown] is fine here. *)
         Unknown
       | simple ->
-        Format.eprintf "Canonical is %a\n%!" Simple.print simple;
         let [@inline always] const const =
           let typ =
             match Reg_width_const.descr const with
@@ -179,9 +177,6 @@ module Make (Head : Type_head_intf.S
           force_to_head ~force_to_kind typ
         in
         let [@inline always] name name : _ Or_unknown_or_bottom.t =
-          Format.eprintf "Type lookup: %a\n!" T.print (TE.find env name);
-          Format.eprintf "Debug print:\n";
-          TE.debug_print env;
           let t = force_to_kind (TE.find env name) in
           match descr t with
           | No_alias Bottom -> Bottom
@@ -280,9 +275,6 @@ module Make (Head : Type_head_intf.S
           (head1 : _ Or_unknown_or_bottom.t)
           (head2 : _ Or_unknown_or_bottom.t)
           : meet_or_join_head_or_unknown_or_bottom_result =
-      Format.eprintf "Meet heads:@ %a@ and@ %a\n%!"
-        (Or_unknown_or_bottom.print Head.print) head1
-        (Or_unknown_or_bottom.print Head.print) head2;
       match head1, head2 with
       | _, Unknown -> Left_head_unchanged
       | Unknown, _ -> Right_head_unchanged
@@ -354,7 +346,6 @@ module Make (Head : Type_head_intf.S
 
     let meet ~force_to_kind ~to_type ty1 ty2 env t1 t2 =
       let typing_env = Meet_env.env env in
-      Format.eprintf "MEET ENV:@ %a\n%!" Typing_env.print typing_env;
       let head1 = expand_head ~force_to_kind t1 typing_env in
       let head2 = expand_head ~force_to_kind t2 typing_env in
       match
@@ -431,9 +422,6 @@ module Make (Head : Type_head_intf.S
             to_type (create_equals simple1), TEE.empty ()
           end else begin
             assert (not (Simple.equal simple1 simple2));
-            Format.eprintf "MEET: %a and %a\n%!"
-              Simple.print simple1
-              Simple.print simple2;
             let env = Meet_env.now_meeting env simple1 simple2 in
             (* In the following cases we may generate equations "pointing the
                wrong way", for example "y : =x" when [y] is the canonical

@@ -74,8 +74,10 @@ struct
       TE.print (Meet_or_join_env.target_join_env env)
 
   let meet_or_join env t1 t2 : _ Or_bottom_or_absorbing.t =
+  (*
     Format.eprintf "NN meet_or_join %a and %a\n%!"
       print t1 print t2 (*Typing_env.print (Meet_env.env env)*);
+      *)
     match t1, t2 with
     | Naked_immediates is1, Naked_immediates is2 ->
       let is = E.Immediate.Set.union_or_inter is1 is2 in

@@ -22,8 +22,6 @@ val invariant : t -> unit
 
 val print : Format.formatter -> t -> unit
 
-val debug_print : t -> unit
-
 val create : resolver:(Export_id.t -> Type_grammar.t option) -> t
 
 val create_using_resolver_and_symbol_bindings_from : t -> t

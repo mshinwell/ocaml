@@ -1426,7 +1426,6 @@ and simplify_switch
   let module AC = Apply_cont in
   let min_name_mode = Name_mode.normal in
   let scrutinee = Switch.scrutinee switch in
-  Format.eprintf "SWITCH:@ %a\n%!" DA.print dacc;
   match S.simplify_simple dacc scrutinee ~min_name_mode with
   | Bottom, _ty ->
     let user_data, uacc = k dacc in
@@ -1439,17 +1438,15 @@ and simplify_switch
             let imm = Immediate.int (Immediate.to_targetint arm) in
             T.this_naked_immediate imm
           in
-          Format.eprintf "Shape is:@ %a\nScrutinee ty:@ %a\n%!"
-            T.print shape
-            T.print scrutinee_ty;
           match T.meet typing_env_at_use scrutinee_ty shape with
           | Bottom -> arms, dacc
-          | Ok (meet_ty, env_extension) ->
-            Format.eprintf "meet_ty is:@ %a\n%!" T.print meet_ty;
+          | Ok (_meet_ty, env_extension) ->
+(*
             Format.eprintf "Scrutinee %a, action:@ %a,@ EE:@ %a\n%!"
               Simple.print scrutinee
               Apply_cont.print action
               TEE.print env_extension;
+*)
             let typing_env_at_use =
               TE.add_env_extension typing_env_at_use env_extension
             in

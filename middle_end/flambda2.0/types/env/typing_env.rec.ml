@@ -279,12 +279,6 @@ let names_to_types t =
 let aliases t =
   Cached.aliases (One_level.just_after_level t.current_level)
 
-let debug_print t =
-  Format.eprintf "names_to_types:@ %a\n%!"
-    (Name.Map.print (fun ppf (ty, _, _) -> Type_grammar.print ppf ty))
-    (names_to_types t);
-  Format.eprintf "normal printing:@ %a\n%!" print t
-
 let create ~resolver =
   { resolver;
     prev_levels = Scope.Map.empty;
