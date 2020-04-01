@@ -918,7 +918,7 @@ let mk_flambda2_lift_inconstants f =
 
 let mk_no_flambda2_lift_inconstants f =
   "-no-flambda2-lift-inconstants", Arg.Unit f,
-    "Attempt to statically-allocate values that require computations to \
+    "Never statically-allocate values that require computations to \
       initialize"
 ;;
 
