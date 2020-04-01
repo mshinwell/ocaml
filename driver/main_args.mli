@@ -193,11 +193,8 @@ module type Optcommon_options = sig
   val _no_float_const_prop : unit -> unit
 
   val _clambda_checks : unit -> unit
-  val _dprepared_lambda : unit -> unit
-  val _dilambda : unit -> unit
   val _dflambda : unit -> unit
   val _drawflambda : unit -> unit
-  val _drawflambda2 : unit -> unit
   val _dflambda_invariants : unit -> unit
   val _dflambda_no_invariants : unit -> unit
   val _dflambda_let : int -> unit
@@ -221,6 +218,19 @@ module type Optcommon_options = sig
   val _dlinear :  unit -> unit
   val _dinterval : unit -> unit
   val _dstartup :  unit -> unit
+
+  (** Flambda 2 user flags *)
+  val _flambda2_join_points : unit -> unit
+  val _no_flambda2_join_points : unit -> unit
+  val _flambda2_unbox_along_intra_function_control_flow : unit -> unit
+  val _no_flambda2_unbox_along_intra_function_control_flow : unit -> unit
+  val _flambda2_lift_inconstants : unit -> unit
+  val _no_flambda2_lift_inconstants : unit -> unit
+
+  (** Flambda 2 debugging flags *)
+  val _dprepared_lambda : unit -> unit
+  val _dilambda : unit -> unit
+  val _drawflambda2 : unit -> unit
 end;;
 
 module type Optcomp_options = sig

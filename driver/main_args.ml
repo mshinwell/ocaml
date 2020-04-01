@@ -890,6 +890,38 @@ let mk__ f =
   "<file>  Treat <file> as a file name (even if it starts with `-')"
 ;;
 
+let mk_flambda2_join_points f =
+  "-flambda2-join-points", Arg.Unit f, "Propagate information from incoming \
+    edges at a join point"
+;;
+
+let mk_no_flambda2_join_points f =
+  "-no-flambda2-join-points", Arg.Unit f, "Propagate information only from the \
+    fork point to a join point"
+;;
+
+let mk_flambda2_unbox_along_intra_function_control_flow f =
+  "-flambda2-unbox-along-intra-function-control-flow", Arg.Unit f,
+    "Pass values within a function as unboxed where possible"
+;;
+
+let mk_no_flambda2_unbox_along_intra_function_control_flow f =
+  "-no-flambda2-unbox-along-intra-function-control-flow", Arg.Unit f,
+    "Pass values within a function in their normal representation"
+;;
+
+let mk_flambda2_lift_inconstants f =
+  "-flambda2-lift-inconstants", Arg.Unit f,
+    "Attempt to statically-allocate values that require computations to \
+      initialize"
+;;
+
+let mk_no_flambda2_lift_inconstants f =
+  "-no-flambda2-lift-inconstants", Arg.Unit f,
+    "Attempt to statically-allocate values that require computations to \
+      initialize"
+;;
+
 module type Common_options = sig
   val _absname : unit -> unit
   val _alert : string -> unit
@@ -1067,11 +1099,8 @@ module type Optcommon_options = sig
   val _no_float_const_prop : unit -> unit
 
   val _clambda_checks : unit -> unit
-  val _dprepared_lambda : unit -> unit
-  val _dilambda : unit -> unit
   val _dflambda : unit -> unit
   val _drawflambda : unit -> unit
-  val _drawflambda2 : unit -> unit
   val _dflambda_invariants : unit -> unit
   val _dflambda_no_invariants : unit -> unit
   val _dflambda_let : int -> unit
@@ -1095,6 +1124,17 @@ module type Optcommon_options = sig
   val _dlinear :  unit -> unit
   val _dinterval : unit -> unit
   val _dstartup :  unit -> unit
+
+  val _flambda2_join_points : unit -> unit
+  val _no_flambda2_join_points : unit -> unit
+  val _flambda2_unbox_along_intra_function_control_flow : unit -> unit
+  val _no_flambda2_unbox_along_intra_function_control_flow : unit -> unit
+  val _flambda2_lift_inconstants : unit -> unit
+  val _no_flambda2_lift_inconstants : unit -> unit
+
+  val _dprepared_lambda : unit -> unit
+  val _dilambda : unit -> unit
+  val _drawflambda2 : unit -> unit
 end;;
 
 module type Optcomp_options = sig
@@ -1428,11 +1468,8 @@ struct
     mk_dlambda F._dlambda;
     mk_drawclambda F._drawclambda;
     mk_dclambda F._dclambda;
-    mk_dprepared_lambda F._dprepared_lambda;
-    mk_dilambda F._dilambda;
     mk_dflambda F._dflambda;
     mk_drawflambda F._drawflambda;
-    mk_drawflambda2 F._drawflambda2;
     mk_dflambda_invariants F._dflambda_invariants;
     mk_dflambda_no_invariants F._dflambda_no_invariants;
     mk_dflambda_let F._dflambda_let;
@@ -1458,6 +1495,19 @@ struct
     mk_dprofile F._dprofile;
     mk_dump_into_file F._dump_into_file;
     mk_dump_pass F._dump_pass;
+
+    mk_flambda2_join_points F._flambda2_join_points;
+    mk_no_flambda2_join_points F._no_flambda2_join_points;
+    mk_flambda2_unbox_along_intra_function_control_flow
+      F._flambda2_unbox_along_intra_function_control_flow;
+    mk_no_flambda2_unbox_along_intra_function_control_flow
+      F._no_flambda2_unbox_along_intra_function_control_flow;
+    mk_flambda2_lift_inconstants F._flambda2_lift_inconstants;
+    mk_no_flambda2_lift_inconstants F._no_flambda2_lift_inconstants;
+
+    mk_dprepared_lambda F._dprepared_lambda;
+    mk_dilambda F._dilambda;
+    mk_drawflambda2 F._drawflambda2;
 
     mk_args F._args;
     mk_args0 F._args0;
@@ -1542,7 +1592,6 @@ module Make_opttop_options (F : Opttop_options) = struct
     mk_drawclambda F._drawclambda;
     mk_dclambda F._dclambda;
     mk_drawflambda F._drawflambda;
-    mk_drawflambda2 F._drawflambda2;
     mk_dflambda F._dflambda;
     mk_dcmm F._dcmm;
     mk_dsel F._dsel;
@@ -1562,6 +1611,19 @@ module Make_opttop_options (F : Opttop_options) = struct
     mk_dinterval F._dinterval;
     mk_dstartup F._dstartup;
     mk_dump_pass F._dump_pass;
+
+    mk_flambda2_join_points F._flambda2_join_points;
+    mk_no_flambda2_join_points F._no_flambda2_join_points;
+    mk_flambda2_unbox_along_intra_function_control_flow
+      F._flambda2_unbox_along_intra_function_control_flow;
+    mk_no_flambda2_unbox_along_intra_function_control_flow
+      F._no_flambda2_unbox_along_intra_function_control_flow;
+    mk_flambda2_lift_inconstants F._flambda2_lift_inconstants;
+    mk_no_flambda2_lift_inconstants F._no_flambda2_lift_inconstants;
+
+    mk_dprepared_lambda F._dprepared_lambda;
+    mk_dilambda F._dilambda;
+    mk_drawflambda2 F._drawflambda2;
   ]
 end;;
 
@@ -1736,9 +1798,6 @@ module Default = struct
     let _dprefer = set dump_prefer
     let _drawclambda = set dump_rawclambda
     let _drawflambda = set dump_rawflambda
-    let _drawflambda2 = set dump_rawflambda2
-    let _dprepared_lambda = set dump_prepared_lambda
-    let _dilambda = set dump_ilambda
     let _dreload = set dump_reload
     let _drunavail () = debug_runavail := true
     let _dscheduling = set dump_scheduling
@@ -1817,6 +1876,19 @@ module Default = struct
     let _unbox_closures = set unbox_closures
     let _unbox_closures_factor f = unbox_closures_factor := f
     let _verbose = set verbose
+
+    let _flambda2_join_points = set Flambda_2.join_points
+    let _no_flambda2_join_points = clear Flambda_2.join_points
+    let _flambda2_unbox_along_intra_function_control_flow =
+      set Flambda_2.unbox_along_intra_function_control_flow
+    let _no_flambda2_unbox_along_intra_function_control_flow =
+      clear Flambda_2.unbox_along_intra_function_control_flow
+    let _flambda2_lift_inconstants = set Flambda_2.lift_inconstants
+    let _no_flambda2_lift_inconstants = clear Flambda_2.lift_inconstants
+
+    let _dprepared_lambda = set dump_prepared_lambda
+    let _dilambda = set dump_ilambda
+    let _drawflambda2 = set dump_rawflambda2
   end
 
   module Compiler = struct

@@ -156,10 +156,14 @@ Format.eprintf "Unknown at or later than %a\n%!"
       | [] | [_, _, (Inlinable | Non_inlinable)]
       | (_, _, (Inlinable | Non_inlinable)) :: _ ->
         let env_extension, extra_params_and_args =
-          TE.cut_and_n_way_join typing_env use_envs_with_ids
-            ~params
-            ~unknown_if_defined_at_or_later_than:
-              (Scope.next definition_scope_level)
+          if Flambda_features.join_points () then
+            TE.cut_and_n_way_join typing_env use_envs_with_ids
+              ~params
+              ~unknown_if_defined_at_or_later_than:
+                (Scope.next definition_scope_level)
+          else
+            T.Typing_env_extension.empty (),
+              Continuation_extra_params_and_args.empty
         in
 (*
 Format.eprintf "handler env extension for %a is:@ %a\n%!"

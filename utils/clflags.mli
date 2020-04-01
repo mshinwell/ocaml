@@ -243,6 +243,12 @@ val unboxed_types : bool ref
 val insn_sched : bool ref
 val insn_sched_default : bool
 
+module Flambda_2 : sig
+  val join_points : bool ref
+  val unbox_along_intra_function_control_flow : bool ref
+  val lift_inconstants : bool ref
+end
+
 module Compiler_pass : sig
   type t = Parsing | Typing
   val of_string : string -> t option

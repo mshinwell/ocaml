@@ -1005,7 +1005,7 @@ let rec make_unboxing_decision typing_env ~depth ~arg_types_by_use_id
           in
           try_unboxing unboxed_number_decisions
 
-let make_unboxing_decisions typing_env ~arg_types_by_use_id ~params
+let make_unboxing_decisions0 typing_env ~arg_types_by_use_id ~params
       ~param_types extra_params_and_args =
   assert (List.compare_lengths params param_types = 0);
   let typing_env, param_types_rev, extra_params_and_args =
@@ -1029,3 +1029,11 @@ let make_unboxing_decisions typing_env ~arg_types_by_use_id ~params
   Format.eprintf "EPA:@ %a\n%!" EPA.print extra_params_and_args;
   *)
   typing_env, extra_params_and_args
+
+let make_unboxing_decisions typing_env ~arg_types_by_use_id ~params
+      ~param_types extra_params_and_args =
+  if Flambda_features.unbox_along_intra_function_control_flow () then
+    make_unboxing_decisions0 typing_env ~arg_types_by_use_id ~params
+      ~param_types extra_params_and_args
+  else
+    typing_env, EPA.empty

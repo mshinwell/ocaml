@@ -423,6 +423,12 @@ let error_style_reader = {
 
 let unboxed_types = ref false
 
+module Flambda_2 = struct
+  let join_points = ref true
+  let unbox_along_intra_function_control_flow = ref true
+  let lift_inconstants = ref true
+end
+
 (* This is used by the -stop-after option. *)
 module Compiler_pass = struct
   (* If you add a new pass, the following must be updated:

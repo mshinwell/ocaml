@@ -265,7 +265,7 @@ let reify_types_of_continuation_param_types dacc ~params =
     params
     (dacc, Variable.Map.empty, [], Set_of_closures.Map.empty)
 
-let lift_via_reification_of_continuation_param_types dacc ~params
+let lift_via_reification_of_continuation_param_types0 dacc ~params
       ~(extra_params_and_args : Continuation_extra_params_and_args.t)
       ~(handler : Expr.t) =
 (*  Format.eprintf "-------- REIFY ------------\ndacc = @ %a\n%!"
@@ -299,3 +299,11 @@ let lift_via_reification_of_continuation_param_types dacc ~params
       reified_definitions.bindings_outermost_last
   in
   dacc, handler
+
+let lift_via_reification_of_continuation_param_types dacc ~params
+      ~extra_params_and_args ~handler =
+  if Flambda_features.lift_inconstants () then
+    lift_via_reification_of_continuation_param_types0 dacc ~params
+      ~extra_params_and_args ~handler
+  else
+    dacc, handler
