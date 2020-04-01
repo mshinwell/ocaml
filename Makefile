@@ -230,7 +230,8 @@ MIDDLE_END_FLAMBDA2_COMPILENV_DEPS=\
   middle_end/flambda2.0/compilenv_deps/rec_info.cmo \
   middle_end/flambda2.0/compilenv_deps/reg_width_things.cmo \
   middle_end/flambda2.0/compilenv_deps/symbol.cmo \
-  middle_end/flambda2.0/compilenv_deps/variable.cmo
+  middle_end/flambda2.0/compilenv_deps/variable.cmo \
+  middle_end/flambda2.0/compilenv_deps/flambda_flags.cmo
 
 MIDDLE_END_FLAMBDA2_BASIC=\
   middle_end/flambda2.0/types/kinds/flambda_kind.cmo \

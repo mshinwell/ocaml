@@ -5196,6 +5196,13 @@ middle_end/flambda2.0/compilenv_deps/flambda_colours.cmx : \
     utils/misc.cmx \
     middle_end/flambda2.0/compilenv_deps/flambda_colours.cmi
 middle_end/flambda2.0/compilenv_deps/flambda_colours.cmi :
+middle_end/flambda2.0/compilenv_deps/flambda_features.cmo : \
+    utils/clflags.cmi \
+    middle_end/flambda2.0/compilenv_deps/flambda_features.cmi
+middle_end/flambda2.0/compilenv_deps/flambda_features.cmx : \
+    utils/clflags.cmx \
+    middle_end/flambda2.0/compilenv_deps/flambda_features.cmi
+middle_end/flambda2.0/compilenv_deps/flambda_features.cmi :
 middle_end/flambda2.0/compilenv_deps/immediate.cmo : \
     utils/targetint.cmi \
     lambda/tag.cmi \
@@ -6328,6 +6335,7 @@ middle_end/flambda2.0/lifting/reify_continuation_param_types.cmo : \
     middle_end/flambda2.0/compilenv_deps/linkage_name.cmi \
     middle_end/flambda2.0/terms/function_declarations.cmi \
     middle_end/flambda2.0/terms/function_declaration.cmi \
+    middle_end/flambda2.0/compilenv_deps/flambda_features.cmi \
     middle_end/flambda2.0/basic/continuation_extra_params_and_args.cmi \
     middle_end/flambda2.0/compilenv_deps/compilation_unit.cmi \
     middle_end/flambda2.0/basic/code_id.cmi \
@@ -6348,6 +6356,7 @@ middle_end/flambda2.0/lifting/reify_continuation_param_types.cmx : \
     middle_end/flambda2.0/compilenv_deps/linkage_name.cmx \
     middle_end/flambda2.0/terms/function_declarations.cmx \
     middle_end/flambda2.0/terms/function_declaration.cmx \
+    middle_end/flambda2.0/compilenv_deps/flambda_features.cmx \
     middle_end/flambda2.0/basic/continuation_extra_params_and_args.cmx \
     middle_end/flambda2.0/compilenv_deps/compilation_unit.cmx \
     middle_end/flambda2.0/basic/code_id.cmx \
@@ -7269,16 +7278,12 @@ middle_end/flambda2.0/simplify/simplify_toplevel.rec.cmo : \
     middle_end/flambda2.0/simplify/simplify_import.cmi \
     utils/misc.cmi \
     middle_end/flambda2.0/compilenv_deps/flambda_colours.cmi \
-    middle_end/flambda2.0/simplify/env/continuation_uses_env.cmi \
-    middle_end/flambda2.0/basic/continuation.cmi \
     utils/clflags.cmi \
     middle_end/flambda2.0/simplify/simplify_toplevel.rec.cmi
 middle_end/flambda2.0/simplify/simplify_toplevel.rec.cmx : \
     middle_end/flambda2.0/simplify/simplify_import.cmx \
     utils/misc.cmx \
     middle_end/flambda2.0/compilenv_deps/flambda_colours.cmx \
-    middle_end/flambda2.0/simplify/env/continuation_uses_env.cmx \
-    middle_end/flambda2.0/basic/continuation.cmx \
     utils/clflags.cmx \
     middle_end/flambda2.0/simplify/simplify_toplevel.rec.cmi
 middle_end/flambda2.0/simplify/simplify_toplevel.rec.cmi : \
@@ -7619,6 +7624,7 @@ middle_end/flambda2.0/simplify/typing_helpers/continuation_uses.cmo : \
     middle_end/flambda2.0/basic/name.cmi \
     utils/misc.cmi \
     middle_end/flambda2.0/types/flambda_type.cmi \
+    middle_end/flambda2.0/compilenv_deps/flambda_features.cmi \
     middle_end/flambda2.0/compilenv_deps/flambda_colours.cmi \
     middle_end/flambda2.0/types/kinds/flambda_arity.cmi \
     middle_end/flambda2.0/basic/continuation_extra_params_and_args.cmi \
@@ -7635,6 +7641,7 @@ middle_end/flambda2.0/simplify/typing_helpers/continuation_uses.cmx : \
     middle_end/flambda2.0/basic/name.cmx \
     utils/misc.cmx \
     middle_end/flambda2.0/types/flambda_type.cmx \
+    middle_end/flambda2.0/compilenv_deps/flambda_features.cmx \
     middle_end/flambda2.0/compilenv_deps/flambda_colours.cmx \
     middle_end/flambda2.0/types/kinds/flambda_arity.cmx \
     middle_end/flambda2.0/basic/continuation_extra_params_and_args.cmx \
@@ -9885,6 +9892,7 @@ middle_end/flambda2.0/unboxing/unbox_continuation_params.cmo : \
     utils/misc.cmi \
     middle_end/flambda2.0/compilenv_deps/immediate.cmi \
     utils/identifiable.cmi \
+    middle_end/flambda2.0/compilenv_deps/flambda_features.cmi \
     middle_end/flambda2.0/basic/closure_id.cmi \
     middle_end/flambda2.0/basic/apply_cont_rewrite_id.cmi \
     middle_end/flambda2.0/unboxing/unbox_continuation_params.cmi
@@ -9902,6 +9910,7 @@ middle_end/flambda2.0/unboxing/unbox_continuation_params.cmx : \
     utils/misc.cmx \
     middle_end/flambda2.0/compilenv_deps/immediate.cmx \
     utils/identifiable.cmx \
+    middle_end/flambda2.0/compilenv_deps/flambda_features.cmx \
     middle_end/flambda2.0/basic/closure_id.cmx \
     middle_end/flambda2.0/basic/apply_cont_rewrite_id.cmx \
     middle_end/flambda2.0/unboxing/unbox_continuation_params.cmi
