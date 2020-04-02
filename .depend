@@ -3092,6 +3092,29 @@ lambda/debuginfo.cmx : \
     lambda/debuginfo.cmi
 lambda/debuginfo.cmi : \
     parsing/location.cmi
+lambda/dissect_letrec.cmo : \
+    typing/types.cmi \
+    lambda/printlambda.cmi \
+    typing/primitive.cmi \
+    utils/misc.cmi \
+    parsing/location.cmi \
+    lambda/lambda.cmi \
+    typing/ident.cmi \
+    parsing/asttypes.cmi \
+    lambda/dissect_letrec.cmi
+lambda/dissect_letrec.cmx : \
+    typing/types.cmx \
+    lambda/printlambda.cmx \
+    typing/primitive.cmx \
+    utils/misc.cmx \
+    parsing/location.cmx \
+    lambda/lambda.cmx \
+    typing/ident.cmx \
+    parsing/asttypes.cmi \
+    lambda/dissect_letrec.cmi
+lambda/dissect_letrec.cmi : \
+    lambda/lambda.cmi \
+    typing/ident.cmi
 lambda/lambda.cmo : \
     typing/types.cmi \
     utils/targetint.cmi \
@@ -3210,6 +3233,7 @@ lambda/simplif.cmo : \
     parsing/location.cmi \
     lambda/lambda.cmi \
     typing/ident.cmi \
+    lambda/dissect_letrec.cmi \
     utils/clflags.cmi \
     parsing/asttypes.cmi \
     typing/annot.cmi \
@@ -3221,6 +3245,7 @@ lambda/simplif.cmx : \
     parsing/location.cmx \
     lambda/lambda.cmx \
     typing/ident.cmx \
+    lambda/dissect_letrec.cmx \
     utils/clflags.cmx \
     parsing/asttypes.cmi \
     typing/annot.cmi \
@@ -3392,6 +3417,7 @@ lambda/translmod.cmo : \
     lambda/lambda.cmi \
     typing/ident.cmi \
     typing/env.cmi \
+    lambda/dissect_letrec.cmi \
     typing/ctype.cmi \
     utils/clflags.cmi \
     parsing/asttypes.cmi \
@@ -3413,6 +3439,7 @@ lambda/translmod.cmx : \
     lambda/lambda.cmx \
     typing/ident.cmx \
     typing/env.cmx \
+    lambda/dissect_letrec.cmx \
     typing/ctype.cmx \
     utils/clflags.cmx \
     parsing/asttypes.cmi \

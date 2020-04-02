@@ -90,6 +90,10 @@ module type Map = sig
         -> 'b option
 
   val inter : (key -> 'a -> 'a -> 'a) -> 'a t -> 'a t -> 'a t
+ 
+   (** [fixpoint f t] repeatedly applies [f] to every element of the set and adds
+       the results to [t], until no new elements are found *)
+   val fixpoint : (elt -> t) -> t -> t
 end
 
 module type Tbl = sig
