@@ -43,6 +43,11 @@ module type Set = sig
   val to_string : t -> string
   val of_list : elt list -> t
   val map : (elt -> elt) -> t -> t
+
+  (** [fixpoint f t] repeatedly applies [f] to every element of the set and adds
+      the results to [t], until no new elements are found *)
+  val fixpoint : (elt -> t) -> t -> t
+
   val union_list : t list -> t
   val intersection_is_empty : t -> t -> bool
 end
@@ -90,10 +95,6 @@ module type Map = sig
         -> 'b option
 
   val inter : (key -> 'a -> 'a -> 'a) -> 'a t -> 'a t -> 'a t
- 
-   (** [fixpoint f t] repeatedly applies [f] to every element of the set and adds
-       the results to [t], until no new elements are found *)
-   val fixpoint : (elt -> t) -> t -> t
 end
 
 module type Tbl = sig

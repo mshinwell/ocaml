@@ -35,6 +35,7 @@ module type Set = sig
   val to_string : t -> string
   val of_list : elt list -> t
   val map : (elt -> elt) -> t -> t
+  val fixpoint : (elt -> t) -> t -> t
   val union_list : t list -> t
   val intersection_is_empty : t -> t -> bool
 end
@@ -74,7 +75,6 @@ module type Map = sig
         -> 'b
         -> 'b option
   val inter : (key -> 'a -> 'a -> 'a) -> 'a t -> 'a t -> 'a t
-  val fixpoint : (elt -> t) -> t -> t
 end
 
 module type Tbl = sig

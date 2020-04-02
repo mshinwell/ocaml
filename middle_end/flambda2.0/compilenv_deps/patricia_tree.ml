@@ -413,6 +413,8 @@ end) = struct
 
   let of_seq _ = Misc.fatal_error "of_seq not yet implemented"
 
+  let fixpoint _ _ = Misc.fatal_error "fixpoint not yet implemented"
+
   (* CR mshinwell: copied from [Identifiable] *)
 
   let output _ _ = Misc.fatal_error "output not yet implemented"
