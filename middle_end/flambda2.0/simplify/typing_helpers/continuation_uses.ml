@@ -138,14 +138,21 @@ Format.eprintf "Unknown at or later than %a\n%!"
            discovered whilst simplifying the corresponding body. *)
         let use_env =
           List.fold_left (fun use_env const ->
+              Symbol.Map.fold (fun symbol _ty use_env ->
+                  let symbol' = Name.symbol symbol in
+                  (* CR mshinwell: Add a function in [TE] to do this.  That
+                      can in fact just blindly add to [defined_symbols]. *)
+                  if TE.mem use_env symbol' then use_env
+                  else TE.add_symbol_definition use_env symbol)
+                (LC.types_of_symbols const)
+                use_env)
+            use_env
+            consts_lifted_during_body
+        in
+        let use_env =
+          List.fold_left (fun use_env const ->
               Symbol.Map.fold (fun symbol ty use_env ->
                   let symbol' = Name.symbol symbol in
-                  let use_env =
-                    (* CR mshinwell: Add a function in [TE] to do this.  That
-                       can in fact just blindly add to [defined_symbols]. *)
-                    if TE.mem use_env symbol' then use_env
-                    else TE.add_symbol_definition use_env symbol
-                  in
                   TE.add_equation use_env symbol' ty)
                 (LC.types_of_symbols const)
                 use_env)
