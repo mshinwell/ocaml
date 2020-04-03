@@ -17,3 +17,8 @@
 val join_points : unit -> bool
 val unbox_along_intra_function_control_flow : unit -> bool
 val lift_inconstants : unit -> bool
+
+module Expert : sig
+  val denest_at_toplevel : unit -> bool
+  val code_id_and_symbol_scoping_checks : unit -> bool
+end

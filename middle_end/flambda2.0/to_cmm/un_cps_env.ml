@@ -455,7 +455,9 @@ let check_scope ~allow_deleted env code_id_or_symbol =
         }
     | Symbol _ -> env
   in
-  if in_scope || in_another_unit then updated_env
+  if in_scope || in_another_unit
+    || (not (Flambda_features.Expert.code_id_and_symbol_scoping_checks ()))
+  then updated_env
   else
     Misc.fatal_errorf "Use out of scope of %a@.Known names:@.%a@."
       Code_id_or_symbol.print code_id_or_symbol

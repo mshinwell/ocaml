@@ -563,6 +563,7 @@ let rec close t env (ilam : Ilambda.t) : Expr.t * _ =
     let still_at_toplevel =
       (* Same calculation as in [Simplify_expr]. *)
       Env.still_at_toplevel env
+        && not (Flambda_features.Expert.denest_at_toplevel ())
         && (not is_exn_handler)
         && Continuation.Set.subset
               (Name_occurrences.continuations (Expr.free_names body))

@@ -922,6 +922,26 @@ let mk_no_flambda2_lift_inconstants f =
       initialize"
 ;;
 
+let mk_flambda2_expert_denest_at_toplevel f =
+  "-flambda2-expert-denest-at-toplevel", Arg.Unit f,
+    "Denest continuations during Closure_conversion even at toplevel"
+;;
+
+let mk_no_flambda2_expert_denest_at_toplevel f =
+  "-no-flambda2-expert-denest-at-toplevel", Arg.Unit f,
+    "Never denest continuations during Closure_conversion at toplevel"
+;;
+
+let mk_flambda2_expert_code_id_and_symbol_scoping_checks f =
+  "-flambda2-expert-code-id-and-symbol-scoping-checks", Arg.Unit f,
+    "Perform checks on static scopes of code IDs and symbols during Un_cps"
+;;
+
+let mk_no_flambda2_expert_code_id_and_symbol_scoping_checks f =
+  "-no-flambda2-expert-code-id-and-symbol-scoping-checks", Arg.Unit f,
+    "Perform checks on static scopes of code IDs and symbols during Un_cps"
+;;
+
 module type Common_options = sig
   val _absname : unit -> unit
   val _alert : string -> unit
@@ -1131,6 +1151,10 @@ module type Optcommon_options = sig
   val _no_flambda2_unbox_along_intra_function_control_flow : unit -> unit
   val _flambda2_lift_inconstants : unit -> unit
   val _no_flambda2_lift_inconstants : unit -> unit
+  val _flambda2_expert_denest_at_toplevel : unit -> unit
+  val _no_flambda2_expert_denest_at_toplevel : unit -> unit
+  val _flambda2_expert_code_id_and_symbol_scoping_checks : unit -> unit
+  val _no_flambda2_expert_code_id_and_symbol_scoping_checks : unit -> unit
 
   val _dprepared_lambda : unit -> unit
   val _dilambda : unit -> unit
@@ -1504,6 +1528,14 @@ struct
       F._no_flambda2_unbox_along_intra_function_control_flow;
     mk_flambda2_lift_inconstants F._flambda2_lift_inconstants;
     mk_no_flambda2_lift_inconstants F._no_flambda2_lift_inconstants;
+    mk_flambda2_expert_denest_at_toplevel
+      F._flambda2_expert_denest_at_toplevel;
+    mk_no_flambda2_expert_denest_at_toplevel
+      F._no_flambda2_expert_denest_at_toplevel;
+    mk_flambda2_expert_code_id_and_symbol_scoping_checks
+      F._flambda2_expert_code_id_and_symbol_scoping_checks;
+    mk_no_flambda2_expert_code_id_and_symbol_scoping_checks
+      F._no_flambda2_expert_code_id_and_symbol_scoping_checks;
 
     mk_dprepared_lambda F._dprepared_lambda;
     mk_dilambda F._dilambda;
@@ -1620,6 +1652,14 @@ module Make_opttop_options (F : Opttop_options) = struct
       F._no_flambda2_unbox_along_intra_function_control_flow;
     mk_flambda2_lift_inconstants F._flambda2_lift_inconstants;
     mk_no_flambda2_lift_inconstants F._no_flambda2_lift_inconstants;
+    mk_flambda2_expert_denest_at_toplevel
+      F._flambda2_expert_denest_at_toplevel;
+    mk_no_flambda2_expert_denest_at_toplevel
+      F._no_flambda2_expert_denest_at_toplevel;
+    mk_flambda2_expert_code_id_and_symbol_scoping_checks
+      F._flambda2_expert_code_id_and_symbol_scoping_checks;
+    mk_no_flambda2_expert_code_id_and_symbol_scoping_checks
+      F._no_flambda2_expert_code_id_and_symbol_scoping_checks;
 
     mk_dprepared_lambda F._dprepared_lambda;
     mk_dilambda F._dilambda;
@@ -1885,6 +1925,14 @@ module Default = struct
       clear Flambda_2.unbox_along_intra_function_control_flow
     let _flambda2_lift_inconstants = set Flambda_2.lift_inconstants
     let _no_flambda2_lift_inconstants = clear Flambda_2.lift_inconstants
+    let _flambda2_expert_denest_at_toplevel =
+      set Flambda_2.Expert.denest_at_toplevel
+    let _no_flambda2_expert_denest_at_toplevel =
+      clear Flambda_2.Expert.denest_at_toplevel
+    let _flambda2_expert_code_id_and_symbol_scoping_checks =
+      set Flambda_2.Expert.code_id_and_symbol_scoping_checks
+    let _no_flambda2_expert_code_id_and_symbol_scoping_checks =
+      clear Flambda_2.Expert.code_id_and_symbol_scoping_checks
 
     let _dprepared_lambda = set dump_prepared_lambda
     let _dilambda = set dump_ilambda

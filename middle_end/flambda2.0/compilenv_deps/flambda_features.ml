@@ -18,3 +18,9 @@ let join_points () = !Clflags.Flambda_2.join_points
 let unbox_along_intra_function_control_flow () =
   !Clflags.Flambda_2.unbox_along_intra_function_control_flow
 let lift_inconstants () = !Clflags.Flambda_2.lift_inconstants
+
+module Expert = struct
+  let denest_at_toplevel () = !Clflags.Flambda_2.Expert.denest_at_toplevel
+  let code_id_and_symbol_scoping_checks () =
+    !Clflags.Flambda_2.Expert.code_id_and_symbol_scoping_checks
+end

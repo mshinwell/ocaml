@@ -427,6 +427,11 @@ module Flambda_2 = struct
   let join_points = ref true
   let unbox_along_intra_function_control_flow = ref true
   let lift_inconstants = ref true
+
+  module Expert = struct
+    let denest_at_toplevel = ref false
+    let code_id_and_symbol_scoping_checks = ref false
+  end
 end
 
 (* This is used by the -stop-after option. *)
