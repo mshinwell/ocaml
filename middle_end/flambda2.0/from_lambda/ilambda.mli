@@ -134,6 +134,8 @@ and switch = {
 type program = {
   expr : t;
   return_continuation : Continuation.t;
+  (** The [return_continuation] must have at most one use.  Any such use
+      must be an [Apply_cont] with no trap action. *)
   exn_continuation : exn_continuation;
   uses_mutable_variables : bool;
 }

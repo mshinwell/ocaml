@@ -217,17 +217,12 @@ let rec cps_non_tail (lam : L.lambda) (k : Ident.t -> Ilambda.t)
           body))
       k_exn
   | Llet (_let_kind, value_kind, id, defining_expr, body) ->
-    let body = cps_non_tail body k k_exn in
-    let after_defining_expr = Continuation.create () in
-    let defining_expr = cps_tail defining_expr after_defining_expr k_exn in
-    Let_cont {
-      name = after_defining_expr;
-      is_exn_handler = false;
-      params = [id, I.User_visible, value_kind];
-      recursive = Nonrecursive;
-      body = defining_expr;
-      handler = body;
-    }
+    cps_non_tail defining_expr (fun defining_expr_var ->
+        let body = cps_non_tail body k k_exn in
+        I.Let (id, User_visible, value_kind,
+          Simple (Var defining_expr_var),
+          body))
+      k_exn
   | Lletrec (bindings, body) ->
     let idents, bindings = List.split bindings in
     let bindings = List.map cps_function (check_let_rec_bindings bindings) in
@@ -527,17 +522,12 @@ and cps_tail (lam : L.lambda) (k : Continuation.t) (k_exn : Continuation.t)
           body))
       k_exn
   | Llet (_let_kind, value_kind, id, defining_expr, body) ->
-    let body = cps_tail body k k_exn in
-    let after_defining_expr = Continuation.create () in
-    let defining_expr = cps_tail defining_expr after_defining_expr k_exn in
-    Let_cont {
-      name = after_defining_expr;
-      is_exn_handler = false;
-      params = [id, User_visible, value_kind];
-      recursive = Nonrecursive;
-      body = defining_expr;
-      handler = body;
-    }
+    cps_non_tail defining_expr (fun defining_expr_var ->
+        let body = cps_tail body k k_exn in
+        I.Let (id, User_visible, value_kind,
+          Simple (Var defining_expr_var),
+          body))
+      k_exn
   | Lletrec (bindings, body) ->
     let idents, bindings = List.split bindings in
     let bindings = List.map cps_function (check_let_rec_bindings bindings) in
@@ -810,6 +800,22 @@ let lambda_to_ilambda lam ~recursive_static_catches:recursive_static_catches'
   seen_let_mutable := false;
   let the_end = Continuation.create ~sort:Define_root_symbol () in
   let the_end_exn = Continuation.create ~sort:Exn () in
+  (*
+  let ilam =
+    (* We need to make sure that the code added by [Closure_conversion] to
+       build the module block is placed at the point where the return
+       continuation [the_end] is called.  It cannot simply be wrapped around
+       the whole compilation unit, since it might cause symbols and code IDs
+       that occur in the type of the module block to be used out of scope.
+       To ensure the placement is done correctly, we make sure there is
+       always an explicit unique [Apply_cont] of the return continuation,
+       such expression then being replaced in [Closure_conversion] with the
+       appropriate code. *)
+    cps_non_tail lam
+      (fun return_value -> I.Apply_cont (the_end, None, [Var return_value]))
+      the_end_exn
+  in
+  *)
   let ilam = cps_tail lam the_end the_end_exn in
   let exn_continuation : I.exn_continuation =
     { exn_handler = the_end_exn;

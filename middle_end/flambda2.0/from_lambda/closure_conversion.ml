@@ -34,13 +34,74 @@ type t = {
   current_unit_id : Ident.t;
   symbol_for_global' : (Ident.t -> Symbol.t);
   filename : string;
+  module_ident : Ident.t;
+  module_block_size_in_words : int;
+  ilambda_return_continuation : Continuation.t;
   ilambda_exn_continuation : Continuation.t;
+  flambda_return_continuation : Continuation.t;
   mutable imported_symbols : Symbol.Set.t;
   (* All symbols in [imported_symbols] are to be of kind [Value]. *)
   mutable declared_symbols : (Symbol.t * Static_const.t) list;
   mutable shareable_constants : Symbol.t Static_const.Map.t;
   mutable code : (Code_id.t * Function_params_and_body.t) list;
+  mutable seen_return_continuation : bool;
 }
+
+let code_to_build_module_block t ~module_block =
+  (* [module_block] is a [Simple] that specifies a tuple with fields indexed
+     from zero to t.[module_block_size_in_words].  This function builds code
+     that extracts the fields and creates a [Let_symbol] using them to
+     define the module block symbol. *)
+  let module Backend = (val t.backend : Flambda2_backend_intf.S) in
+  let module_symbol = Backend.symbol_for_global' t.module_ident in
+  let module_block_tag = Tag.Scannable.zero in
+  let field_vars =
+    List.init t.module_block_size_in_words (fun pos ->
+      let pos_str = string_of_int pos in
+      pos, Variable.create ("field_" ^ pos_str))
+  in
+  let load_fields_body =
+    let static_const : Static_const.t =
+      let field_vars =
+        List.map (fun (_, var) : Static_const.Field_of_block.t ->
+            Dynamically_computed var)
+          field_vars
+      in
+      Block (module_block_tag, Immutable, field_vars)
+    in
+    let return =
+      (* Module initialisers return unit, but since that is taken care of
+         during Cmm generation, we can instead "return" [module_symbol]
+         here to ensure that its associated [Let_symbol] doesn't get
+         deleted. *)
+      Flambda.Apply_cont.create t.flambda_return_continuation
+        ~args:[Simple.symbol module_symbol]
+        ~dbg:Debuginfo.none
+      |> Expr.create_apply_cont
+    in
+    Let_symbol.create (Singleton module_symbol) static_const return
+    |> Flambda.Expr.create_let_symbol
+  in
+  let block_access : P.Block_access_kind.t =
+    Block {
+      elt_kind = Value Anything;
+      tag = Tag.zero;
+      size = Known t.module_block_size_in_words;
+    }
+  in
+  List.fold_left (fun body (pos, var) ->
+      let var = VB.create var Name_mode.normal in
+      let pos = Immediate.int (Targetint.OCaml.of_int pos) in
+      Expr.create_let var
+        (Named.create_prim
+          (Binary (
+            Block_load (block_access, Immutable),
+            module_block,
+            Simple.const (Reg_width_const.tagged_immediate pos)))
+          Debuginfo.none)
+        body)
+    load_fields_body
+    (List.rev field_vars)
 
 (* To avoid excessive nesting of continuations, we lift [Let_cont] expressions
    higher, dropping them when one of their free names is about to go out of
@@ -641,10 +702,30 @@ let rec close t env (ilam : Ilambda.t) : Expr.t * _ =
   | Apply_cont (cont, trap_action, args) ->
     let args = find_simples t env args in
     let trap_action = close_trap_action_opt trap_action in
-    let apply_cont =
-      Flambda.Apply_cont.create ?trap_action cont ~args ~dbg:Debuginfo.none
-    in
-    Flambda.Expr.create_apply_cont apply_cont, Delayed_handlers.empty
+    if Continuation.equal cont t.ilambda_return_continuation then begin
+      (* This check will catch multiple occurrences of the return
+         continuation in [Apply_cont].  Any other occurrence, which would be
+         erroneous, will lead to an error about the continuation being
+         unbound in the simplifier. *)
+      if t.seen_return_continuation then begin
+        Misc.fatal_error "Non-linear use of Ilambda return continuation"
+      end;
+      if Option.is_some trap_action then begin
+        Misc.fatal_error "Return continuation cannot have a trap action"
+      end;
+      t.seen_return_continuation <- true;
+      match args with
+      | [module_block] ->
+        code_to_build_module_block t ~module_block, Delayed_handlers.empty
+      | [] | _::_::_ ->
+        Misc.fatal_error "Ilambda return continuation application must \
+          have exactly one argument"
+    end else begin
+      let apply_cont =
+        Flambda.Apply_cont.create ?trap_action cont ~args ~dbg:Debuginfo.none
+      in
+      Flambda.Expr.create_apply_cont apply_cont, Delayed_handlers.empty
+    end
   | Switch (scrutinee, sw) ->
     let scrutinee = Simple.name (Env.find_name env scrutinee) in
     let untagged_scrutinee = Variable.create "untagged" in
@@ -1044,6 +1125,7 @@ let ilambda_to_flambda ~backend ~module_ident ~module_block_size_in_words
       ~filename (ilam : Ilambda.program) =
   let module Backend = (val backend : Flambda2_backend_intf.S) in
   let compilation_unit = Compilation_unit.get_current_exn () in
+  let return_cont = Continuation.create ~sort:Toplevel_return () in
   let t =
     { backend;
       current_unit_id = Compilation_unit.get_persistent_ident compilation_unit;
@@ -1053,81 +1135,17 @@ let ilambda_to_flambda ~backend ~module_ident ~module_block_size_in_words
       declared_symbols = [];
       shareable_constants = Static_const.Map.empty;
       code = [];
+      module_ident;
+      module_block_size_in_words;
+      ilambda_return_continuation = ilam.return_continuation;
       ilambda_exn_continuation = ilam.exn_continuation.exn_handler;
+      flambda_return_continuation = return_cont;
+      seen_return_continuation = false;
     }
   in
-  let module_symbol = Backend.symbol_for_global' module_ident in
-  let module_block_tag = Tag.Scannable.zero in
-  let module_block_var = Variable.create "module_block" in
-  let return_cont = Continuation.create ~sort:Toplevel_return () in
-  let load_fields_body =
-    let field_vars =
-      List.init module_block_size_in_words (fun pos ->
-        let pos_str = string_of_int pos in
-        pos, Variable.create ("field_" ^ pos_str))
-    in
-    let body =
-      let static_const : Static_const.t =
-        let field_vars =
-          List.map (fun (_, var) : Static_const.Field_of_block.t ->
-              Dynamically_computed var)
-            field_vars
-        in
-        Block (module_block_tag, Immutable, field_vars)
-      in
-      let return =
-        (* Module initialisers return unit, but since that is taken care of
-           during Cmm generation, we can instead "return" [module_symbol]
-           here to ensure that its associated [Let_symbol] doesn't get
-           deleted. *)
-        Flambda.Apply_cont.create return_cont
-          ~args:[Simple.symbol module_symbol]
-          ~dbg:Debuginfo.none
-        |> Expr.create_apply_cont
-      in
-      Let_symbol.create (Singleton module_symbol) static_const return
-      |> Flambda.Expr.create_let_symbol
-    in
-    let block_access : P.Block_access_kind.t =
-      Block { elt_kind = Value Anything;
-              tag = Tag.zero;
-              size = Known module_block_size_in_words;
-            }
-    in
-    List.fold_left (fun body (pos, var) ->
-        let var = VB.create var Name_mode.normal in
-        let pos = Immediate.int (Targetint.OCaml.of_int pos) in
-        Expr.create_let var
-          (Named.create_prim
-            (Binary (
-              Block_load (block_access, Immutable),
-              Simple.var module_block_var,
-              Simple.const (Reg_width_const.tagged_immediate pos)))
-            Debuginfo.none)
-          body)
-      body (List.rev field_vars)
-  in
-  let load_fields_cont_handler =
-    let param = Kinded_parameter.create module_block_var K.value in
-    let params_and_handler =
-      Flambda.Continuation_params_and_handler.create [param]
-        ~handler:load_fields_body;
-    in
-    Flambda.Continuation_handler.create ~params_and_handler
-      ~stub:false  (* CR mshinwell: remove "stub" notion *)
-      ~is_exn_handler:false
-  in
   let body =
-    (* This binds the return continuation that is free (or, at least, not bound)
-       in the incoming Ilambda code. The handler for the continuation receives a
-       tuple with fields indexed from zero to [module_block_size_in_words]. The
-       handler extracts the fields; the variables bound to such fields are then
-       used to define the module block symbol. *)
     let body, handlers = close t Env.empty ilam.expr in
-    let body = drop_all_handlers handlers ~around:body in
-    Flambda.Let_cont.create_non_recursive ilam.return_continuation
-      load_fields_cont_handler
-      ~body
+    drop_all_handlers handlers ~around:body
   in
   begin match ilam.exn_continuation.extra_args with
   | [] -> ()
