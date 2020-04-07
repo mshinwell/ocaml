@@ -1247,7 +1247,7 @@ let unit (unit : Flambda_unit.t) =
         let fun_name = Compilenv.make_symbol (Some "entry") in
         let fun_codegen =
           [ Cmm.Reduce_code_size;
-            Cmm.No_CSE ]
+            (* Cmm.No_CSE *) ]
         in
         C.cfunction (C.fundecl fun_name [] body fun_codegen dbg)
       in
