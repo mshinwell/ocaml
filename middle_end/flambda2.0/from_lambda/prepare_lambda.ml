@@ -216,6 +216,57 @@ let simplify_primitive (prim : L.primitive) args loc =
       }
     in
     L.Lapply apply
+  | Pmakeblock (_, Immutable, _), fields ->
+    (* This simplification cannot currently be done in Flambda's simplifier,
+       but patterns like this have been seen to occur in the Lambda input,
+       notably in large toplevel initialisers where they cause unnecessary
+       computation and difficulty with register allocation. *)
+    let block, _ =
+      List.fold_left (fun (block, index) (field : L.lambda) ->
+          let block =
+            match block with
+            | None -> None
+            | Some block ->
+              match field with
+              | Lprim (Pfield ({ index = index'; block_info = _; },
+                  Reads_agree), [Lvar block'], _loc) ->
+                if index <> index' then None
+                else
+                  begin match block with
+                  | None -> Some (Some block')
+                  | Some block ->
+                    if Ident.same block block' then Some (Some block)
+                    else None
+                  end
+              | Lvar _
+              | Lconst _
+              | Lapply _
+              | Lfunction _
+              | Llet _
+              | Lletrec _
+              | Lprim _
+              | Lswitch _
+              | Lstringswitch _
+              | Lstaticraise _
+              | Lstaticcatch _
+              | Ltrywith _
+              | Lifthenelse _
+              | Lsequence _
+              | Lwhile _
+              | Lfor _
+              | Lassign _
+              | Lsend _
+              | Levent _
+              | Lifused _ -> None
+          in
+          block, index + 1)
+        (Some None, 0)
+        fields
+    in
+    begin match block with
+    | None | Some None -> L.Lprim (prim, args, loc)
+    | Some (Some block) -> L.Lvar block
+    end
   | _, _ -> L.Lprim (prim, args, loc)
 
 let rec prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
