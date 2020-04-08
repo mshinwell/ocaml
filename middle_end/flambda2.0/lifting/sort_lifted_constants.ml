@@ -64,19 +64,32 @@ let build_dep_graph dacc lifted_constants =
             Name.pattern_match name
               ~var:(fun var ->
                 let typing_env = DA.typing_env dacc in
-                match
-                  TE.get_canonical_simple_exn typing_env
-                    ~min_name_mode:NM.normal
-                    (Simple.var var)
-                with
-                | exception Not_found -> free_syms
-                | canonical ->
-                  Simple.pattern_match canonical
-                    ~const:(fun _ -> free_syms)
-                    ~name:(fun name ->
-                      Name.pattern_match name
-                        ~var:(fun _var -> free_syms)
-                        ~symbol:(fun sym -> Symbol.Set.add sym free_syms)))
+                try
+                  match
+                    TE.get_canonical_simple_exn typing_env
+                      ~min_name_mode:NM.normal
+                      (Simple.var var)
+                  with
+                  | exception Not_found -> free_syms
+                  | canonical ->
+                    Simple.pattern_match canonical
+                      ~const:(fun _ -> free_syms)
+                      ~name:(fun name ->
+                        Name.pattern_match name
+                          ~var:(fun _var -> free_syms)
+                          ~symbol:(fun sym -> Symbol.Set.add sym free_syms))
+                with Misc.Fatal_error -> begin
+                  if !Clflags.flambda2_context_on_error then begin
+                    Format.eprintf "\n%sContext is:%s finding canonical for \
+                        %a,@ current constant binding is@ %a =@ %a"
+                      (Flambda_colours.error ())
+                      (Flambda_colours.normal ())
+                      Variable.print var
+                      Bound_symbols.print bound_symbols
+                      Static_const.print defining_expr
+                  end;
+                  raise Misc.Fatal_error
+                end)
               ~symbol:(fun sym -> Symbol.Set.add sym free_syms))
       in
       let free_code_ids =
