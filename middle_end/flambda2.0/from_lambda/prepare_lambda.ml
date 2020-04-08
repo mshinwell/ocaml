@@ -216,11 +216,12 @@ let simplify_primitive (prim : L.primitive) args loc =
       }
     in
     L.Lapply apply
-  | Pmakeblock (_, Immutable, _), fields ->
+  | Pmakeblock (tag, Immutable, _), fields ->
     (* This simplification cannot currently be done in Flambda's simplifier,
        but patterns like this have been seen to occur in the Lambda input,
        notably in large toplevel initialisers where they cause unnecessary
        computation and difficulty with register allocation. *)
+    let size = List.length fields in
     let block, _ =
       List.fold_left (fun (block, index) (field : L.lambda) ->
           let block =
@@ -228,8 +229,15 @@ let simplify_primitive (prim : L.primitive) args loc =
             | None -> None
             | Some block ->
               match field with
-              | Lprim (Pfield ({ index = index'; block_info = _; },
-                  Reads_agree), [Lvar block'], _loc) ->
+              | Lprim (Pfield ({
+                      index = index';
+                      block_info = {
+                        tag = tag';
+                        size = Known size';
+                      };
+                    },
+                    Reads_agree),
+                  [Lvar block'], _loc) when tag = tag' && size = size' ->
                 if index <> index' then None
                 else
                   begin match block with
