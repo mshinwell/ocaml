@@ -1036,4 +1036,4 @@ let make_unboxing_decisions typing_env ~arg_types_by_use_id ~params
     make_unboxing_decisions0 typing_env ~arg_types_by_use_id ~params
       ~param_types extra_params_and_args
   else
-    typing_env, EPA.empty
+    typing_env, extra_params_and_args
