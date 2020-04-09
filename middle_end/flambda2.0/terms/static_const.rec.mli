@@ -32,6 +32,9 @@ module Field_of_block : sig
   include Identifiable.S with type t := t
 end
 
+(* CR mshinwell: Somewhere there should be an invariant check that
+   code has no free names. *)
+
 (** A piece of code, comprising of the parameters and body of a function,
     together with a field indicating whether the piece of code is a newer
     version of one that existed previously (and may still exist), for

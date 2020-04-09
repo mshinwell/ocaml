@@ -222,6 +222,25 @@ Format.eprintf "About to simplify handler %a, params %a, EPA %a\n%!"
           Name_occurrences.mem_var free_names (KP.var extra_param))
         extra_params_and_args.extra_params
     in
+    let deleted_params =
+      let all_params =
+        KP.Set.union (KP.Set.of_list params)
+          (KP.Set.of_list extra_params_and_args.extra_params)
+      in
+      let used_params =
+        KP.Set.union (KP.Set.of_list used_params)
+          (KP.Set.of_list used_extra_params)
+      in
+      KP.Set.diff all_params used_params
+    in
+    if not (KP.Set.is_empty deleted_params) then begin
+      match Sys.getenv "FLAMBDA_DEBUG" with
+      | exception Not_found -> ()
+      | _ ->
+        Format.eprintf "Deleting params:@ %a@ free_names:@ %a\n%!"
+          KP.Set.print deleted_params
+          Name_occurrences.print free_names
+    end;
     (*
     let () =
       Format.eprintf "For %a: free names %a, \

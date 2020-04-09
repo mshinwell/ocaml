@@ -81,12 +81,14 @@ let build_dep_graph dacc lifted_constants =
                 with Misc.Fatal_error -> begin
                   if !Clflags.flambda2_context_on_error then begin
                     Format.eprintf "\n%sContext is:%s finding canonical for \
-                        %a,@ current constant binding is@ %a =@ %a"
+                        %a,@ current constant binding is@ %a =@ %a@ with \
+                        free names:@ %a"
                       (Flambda_colours.error ())
                       (Flambda_colours.normal ())
                       Variable.print var
                       Bound_symbols.print bound_symbols
                       Static_const.print defining_expr
+                      Name_occurrences.print free_names
                   end;
                   raise Misc.Fatal_error
                 end)
