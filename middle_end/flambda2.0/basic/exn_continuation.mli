@@ -43,3 +43,5 @@ val extra_args : t -> (Simple.t * Flambda_kind.t) list
 val arity : t -> Flambda_arity.t
 
 val with_exn_handler : t -> Continuation.t -> t
+
+val without_extra_args : t -> t

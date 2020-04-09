@@ -17,6 +17,9 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module T0 = Name_abstraction.Make_list (Kinded_parameter) (Expr)
+(* CR mshinwell: This should use [Bindable_continuation].
+   [Exn_continuation] involves extra args, but we never have extra args
+   here! *)
 module T1 = Name_abstraction.Make (Bindable_exn_continuation) (T0)
 module A = Name_abstraction.Make (Bindable_continuation) (T1)
 

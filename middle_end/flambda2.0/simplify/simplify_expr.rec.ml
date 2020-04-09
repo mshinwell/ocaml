@@ -753,30 +753,32 @@ and simplify_direct_partial_application
         ((Apply.callee apply) :: applied_args)
     in
     let my_closure = Variable.create "my_closure" in
+    let exn_continuation =
+      Apply.exn_continuation apply
+      |> Exn_continuation.without_extra_args
+    in
     let body =
       let full_application =
         Apply.create ~callee:(Apply.callee apply)
           ~continuation:return_continuation
-          (Apply.exn_continuation apply)
+          exn_continuation
           ~args
           ~call_kind
           dbg
           ~inline:Default_inline
           ~inlining_depth:(Apply.inlining_depth apply)
       in
-      List.fold_left (fun expr (closure_var, applied_arg) ->
-          match Simple.must_be_var applied_arg with
+      List.fold_left (fun expr (closure_var, arg) ->
+          match Simple.must_be_var arg with
           | None -> expr
-          | Some applied_arg ->
-            let applied_arg =
-              VB.create applied_arg Name_mode.normal
-            in
-            Expr.create_let applied_arg
+          | Some arg ->
+            let arg = VB.create arg Name_mode.normal in
+            Expr.create_let arg
               (Named.create_prim
                 (Unary (Project_var {
-                   project_from = wrapper_closure_id;
-                   var = closure_var;
-                 }, Simple.var my_closure))
+                  project_from = wrapper_closure_id;
+                  var = closure_var;
+                }, Simple.var my_closure))
                 dbg)
               expr)
         (Expr.create_apply full_application)
@@ -784,7 +786,7 @@ and simplify_direct_partial_application
     in
     let params_and_body =
       Function_params_and_body.create ~return_continuation
-        (Apply.exn_continuation apply)
+        exn_continuation
         remaining_params
         ~body
         ~dbg

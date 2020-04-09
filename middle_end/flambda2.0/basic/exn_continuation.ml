@@ -115,3 +115,6 @@ let arity t =
 
 let with_exn_handler t exn_handler =
   { t with exn_handler; }
+
+let without_extra_args t =
+  { t with extra_args = []; }
