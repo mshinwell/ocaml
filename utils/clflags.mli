@@ -247,6 +247,7 @@ module Flambda_2 : sig
   val join_points : bool ref
   val unbox_along_intra_function_control_flow : bool ref
   val lift_inconstants : bool ref
+  val backend_cse_at_toplevel : bool ref
 
   module Expert : sig
     val denest_at_toplevel : bool ref

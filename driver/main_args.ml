@@ -891,23 +891,23 @@ let mk__ f =
 ;;
 
 let mk_flambda2_join_points f =
-  "-flambda2-join-points", Arg.Unit f, "Propagate information from incoming \
+  "-flambda2-join-points", Arg.Unit f, " Propagate information from incoming \
     edges at a join point"
 ;;
 
 let mk_no_flambda2_join_points f =
-  "-no-flambda2-join-points", Arg.Unit f, "Propagate information only from the \
-    fork point to a join point"
+  "-no-flambda2-join-points", Arg.Unit f, " Propagate information only from \
+    the fork point to a join point"
 ;;
 
 let mk_flambda2_unbox_along_intra_function_control_flow f =
   "-flambda2-unbox-along-intra-function-control-flow", Arg.Unit f,
-    "Pass values within a function as unboxed where possible"
+    " Pass values within a function as unboxed where possible"
 ;;
 
 let mk_no_flambda2_unbox_along_intra_function_control_flow f =
   "-no-flambda2-unbox-along-intra-function-control-flow", Arg.Unit f,
-    "Pass values within a function in their normal representation"
+    " Pass values within a function in their normal representation"
 ;;
 
 let mk_flambda2_lift_inconstants f =
@@ -918,28 +918,38 @@ let mk_flambda2_lift_inconstants f =
 
 let mk_no_flambda2_lift_inconstants f =
   "-no-flambda2-lift-inconstants", Arg.Unit f,
-    "Never statically-allocate values that require computations to \
+    " Never statically-allocate values that require computations to \
       initialize"
 ;;
 
 let mk_flambda2_expert_denest_at_toplevel f =
   "-flambda2-expert-denest-at-toplevel", Arg.Unit f,
-    "Denest continuations during Closure_conversion even at toplevel"
+    " Denest continuations during Closure_conversion even at toplevel"
 ;;
 
 let mk_no_flambda2_expert_denest_at_toplevel f =
   "-no-flambda2-expert-denest-at-toplevel", Arg.Unit f,
-    "Never denest continuations during Closure_conversion at toplevel"
+    " Never denest continuations during Closure_conversion at toplevel"
 ;;
 
 let mk_flambda2_expert_code_id_and_symbol_scoping_checks f =
   "-flambda2-expert-code-id-and-symbol-scoping-checks", Arg.Unit f,
-    "Perform checks on static scopes of code IDs and symbols during Un_cps"
+    " Perform checks on static scopes of code IDs and symbols during Un_cps"
 ;;
 
 let mk_no_flambda2_expert_code_id_and_symbol_scoping_checks f =
   "-no-flambda2-expert-code-id-and-symbol-scoping-checks", Arg.Unit f,
-    "Perform checks on static scopes of code IDs and symbols during Un_cps"
+    " Perform checks on static scopes of code IDs and symbols during Un_cps"
+;;
+
+let mk_flambda2_backend_cse_at_toplevel f =
+  "-flambda2-backend-cse-at-toplevel", Arg.Unit f,
+    " Apply the backend CSE pass to module initializers"
+;;
+
+let mk_no_flambda2_backend_cse_at_toplevel f =
+  "-no-flambda2-backend-cse-at-toplevel", Arg.Unit f,
+    " Do not apply the backend CSE pass to module initializers"
 ;;
 
 module type Common_options = sig
@@ -1151,6 +1161,8 @@ module type Optcommon_options = sig
   val _no_flambda2_unbox_along_intra_function_control_flow : unit -> unit
   val _flambda2_lift_inconstants : unit -> unit
   val _no_flambda2_lift_inconstants : unit -> unit
+  val _flambda2_backend_cse_at_toplevel : unit -> unit
+  val _no_flambda2_backend_cse_at_toplevel : unit -> unit
   val _flambda2_expert_denest_at_toplevel : unit -> unit
   val _no_flambda2_expert_denest_at_toplevel : unit -> unit
   val _flambda2_expert_code_id_and_symbol_scoping_checks : unit -> unit
@@ -1482,6 +1494,26 @@ struct
     mk_where F._where;
     mk__ F.anonymous;
 
+    mk_flambda2_join_points F._flambda2_join_points;
+    mk_no_flambda2_join_points F._no_flambda2_join_points;
+    mk_flambda2_unbox_along_intra_function_control_flow
+      F._flambda2_unbox_along_intra_function_control_flow;
+    mk_no_flambda2_unbox_along_intra_function_control_flow
+      F._no_flambda2_unbox_along_intra_function_control_flow;
+    mk_flambda2_lift_inconstants F._flambda2_lift_inconstants;
+    mk_no_flambda2_lift_inconstants F._no_flambda2_lift_inconstants;
+    mk_flambda2_backend_cse_at_toplevel F._flambda2_backend_cse_at_toplevel;
+    mk_no_flambda2_backend_cse_at_toplevel
+      F._no_flambda2_backend_cse_at_toplevel;
+    mk_flambda2_expert_denest_at_toplevel
+      F._flambda2_expert_denest_at_toplevel;
+    mk_no_flambda2_expert_denest_at_toplevel
+      F._no_flambda2_expert_denest_at_toplevel;
+    mk_flambda2_expert_code_id_and_symbol_scoping_checks
+      F._flambda2_expert_code_id_and_symbol_scoping_checks;
+    mk_no_flambda2_expert_code_id_and_symbol_scoping_checks
+      F._no_flambda2_expert_code_id_and_symbol_scoping_checks;
+
     mk_match_context_rows F._match_context_rows;
     mk_dno_unique_ids F._dno_unique_ids;
     mk_dunique_ids F._dunique_ids;
@@ -1519,23 +1551,6 @@ struct
     mk_dprofile F._dprofile;
     mk_dump_into_file F._dump_into_file;
     mk_dump_pass F._dump_pass;
-
-    mk_flambda2_join_points F._flambda2_join_points;
-    mk_no_flambda2_join_points F._no_flambda2_join_points;
-    mk_flambda2_unbox_along_intra_function_control_flow
-      F._flambda2_unbox_along_intra_function_control_flow;
-    mk_no_flambda2_unbox_along_intra_function_control_flow
-      F._no_flambda2_unbox_along_intra_function_control_flow;
-    mk_flambda2_lift_inconstants F._flambda2_lift_inconstants;
-    mk_no_flambda2_lift_inconstants F._no_flambda2_lift_inconstants;
-    mk_flambda2_expert_denest_at_toplevel
-      F._flambda2_expert_denest_at_toplevel;
-    mk_no_flambda2_expert_denest_at_toplevel
-      F._no_flambda2_expert_denest_at_toplevel;
-    mk_flambda2_expert_code_id_and_symbol_scoping_checks
-      F._flambda2_expert_code_id_and_symbol_scoping_checks;
-    mk_no_flambda2_expert_code_id_and_symbol_scoping_checks
-      F._no_flambda2_expert_code_id_and_symbol_scoping_checks;
 
     mk_dprepared_lambda F._dprepared_lambda;
     mk_dilambda F._dilambda;
@@ -1617,6 +1632,26 @@ module Make_opttop_options (F : Opttop_options) = struct
     mk_color F._color;
     mk_error_style F._error_style;
 
+    mk_flambda2_join_points F._flambda2_join_points;
+    mk_no_flambda2_join_points F._no_flambda2_join_points;
+    mk_flambda2_unbox_along_intra_function_control_flow
+      F._flambda2_unbox_along_intra_function_control_flow;
+    mk_no_flambda2_unbox_along_intra_function_control_flow
+      F._no_flambda2_unbox_along_intra_function_control_flow;
+    mk_flambda2_lift_inconstants F._flambda2_lift_inconstants;
+    mk_no_flambda2_lift_inconstants F._no_flambda2_lift_inconstants;
+    mk_flambda2_backend_cse_at_toplevel F._flambda2_backend_cse_at_toplevel;
+    mk_no_flambda2_backend_cse_at_toplevel
+      F._no_flambda2_backend_cse_at_toplevel;
+    mk_flambda2_expert_denest_at_toplevel
+      F._flambda2_expert_denest_at_toplevel;
+    mk_no_flambda2_expert_denest_at_toplevel
+      F._no_flambda2_expert_denest_at_toplevel;
+    mk_flambda2_expert_code_id_and_symbol_scoping_checks
+      F._flambda2_expert_code_id_and_symbol_scoping_checks;
+    mk_no_flambda2_expert_code_id_and_symbol_scoping_checks
+      F._no_flambda2_expert_code_id_and_symbol_scoping_checks;
+
     mk_dsource F._dsource;
     mk_dparsetree F._dparsetree;
     mk_dtypedtree F._dtypedtree;
@@ -1643,23 +1678,6 @@ module Make_opttop_options (F : Opttop_options) = struct
     mk_dinterval F._dinterval;
     mk_dstartup F._dstartup;
     mk_dump_pass F._dump_pass;
-
-    mk_flambda2_join_points F._flambda2_join_points;
-    mk_no_flambda2_join_points F._no_flambda2_join_points;
-    mk_flambda2_unbox_along_intra_function_control_flow
-      F._flambda2_unbox_along_intra_function_control_flow;
-    mk_no_flambda2_unbox_along_intra_function_control_flow
-      F._no_flambda2_unbox_along_intra_function_control_flow;
-    mk_flambda2_lift_inconstants F._flambda2_lift_inconstants;
-    mk_no_flambda2_lift_inconstants F._no_flambda2_lift_inconstants;
-    mk_flambda2_expert_denest_at_toplevel
-      F._flambda2_expert_denest_at_toplevel;
-    mk_no_flambda2_expert_denest_at_toplevel
-      F._no_flambda2_expert_denest_at_toplevel;
-    mk_flambda2_expert_code_id_and_symbol_scoping_checks
-      F._flambda2_expert_code_id_and_symbol_scoping_checks;
-    mk_no_flambda2_expert_code_id_and_symbol_scoping_checks
-      F._no_flambda2_expert_code_id_and_symbol_scoping_checks;
 
     mk_dprepared_lambda F._dprepared_lambda;
     mk_dilambda F._dilambda;
@@ -1925,6 +1943,10 @@ module Default = struct
       clear Flambda_2.unbox_along_intra_function_control_flow
     let _flambda2_lift_inconstants = set Flambda_2.lift_inconstants
     let _no_flambda2_lift_inconstants = clear Flambda_2.lift_inconstants
+    let _flambda2_backend_cse_at_toplevel =
+      set Flambda_2.backend_cse_at_toplevel
+    let _no_flambda2_backend_cse_at_toplevel =
+      clear Flambda_2.backend_cse_at_toplevel
     let _flambda2_expert_denest_at_toplevel =
       set Flambda_2.Expert.denest_at_toplevel
     let _no_flambda2_expert_denest_at_toplevel =

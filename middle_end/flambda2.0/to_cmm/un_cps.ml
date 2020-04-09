@@ -1246,8 +1246,10 @@ let unit (unit : Flambda_unit.t) =
         let dbg = Debuginfo.none in
         let fun_name = Compilenv.make_symbol (Some "entry") in
         let fun_codegen =
-          [ Cmm.Reduce_code_size;
-            Cmm.No_CSE ]
+          if Flambda_features.backend_cse_at_toplevel () then
+            [ Cmm.Reduce_code_size; ]
+          else
+            [ Cmm.Reduce_code_size; Cmm.No_CSE; ]
         in
         C.cfunction (C.fundecl fun_name [] body fun_codegen dbg)
       in
