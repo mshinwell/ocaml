@@ -197,7 +197,7 @@ let bind_let_bound ~bindings ~body =
     body
     (List.rev bindings)
 
-let create_let_symbol code_age_relation (bound_symbols : Bound_symbols.t)
+let create_let_symbol0 code_age_relation (bound_symbols : Bound_symbols.t)
       (static_const : Static_const.t) body =
 (*
   Format.eprintf "create_let_symbol %a\n%!" Bound_symbols.print bound_symbols;
@@ -207,7 +207,7 @@ let create_let_symbol code_age_relation (bound_symbols : Bound_symbols.t)
   | Singleton sym ->
     if not (Name_occurrences.mem_symbol free_names_after sym) then body
     else
-      Let_symbol.create bound_symbols static_const body
+      Let_symbol.create Syntactic bound_symbols static_const body
       |> Expr.create_let_symbol
   | Sets_of_closures _ ->
     let bound_names_unused =
@@ -282,5 +282,14 @@ let create_let_symbol code_age_relation (bound_symbols : Bound_symbols.t)
                 else code))
           (Static_const.must_be_sets_of_closures static_const)
       in
-      Let_symbol.create bound_symbols (Sets_of_closures sets) body
+      Let_symbol.create Syntactic bound_symbols (Sets_of_closures sets) body
       |> Expr.create_let_symbol
+
+let create_let_symbol (scoping_rule : Let_symbol.Scoping_rule.t)
+      code_age_relation bound_symbols static_const body =
+  match scoping_rule with
+  | Syntactic ->
+    create_let_symbol0 code_age_relation bound_symbols static_const body
+  | Dominator ->
+    Let_symbol.create Dominator bound_symbols static_const body
+    |> Expr.create_let_symbol

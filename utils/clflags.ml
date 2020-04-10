@@ -431,7 +431,7 @@ module Flambda_2 = struct
   let cse_depth = ref 2
 
   module Expert = struct
-    let denest_at_toplevel = ref false
+    let denest_at_toplevel = ref true
     let code_id_and_symbol_scoping_checks = ref false
   end
 end

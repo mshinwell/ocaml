@@ -296,7 +296,7 @@ let lift_via_reification_of_continuation_param_types0 dacc ~params
         Format.eprintf "Creating Let_symbol for:@ %a\n%!"
           Bound_symbols.print bound_symbols;
         *)
-        Let_symbol.create bound_symbols defining_expr handler
+        Let_symbol.create Dominator bound_symbols defining_expr handler
         |> Expr.create_let_symbol)
       handler
       reified_definitions.bindings_outermost_last

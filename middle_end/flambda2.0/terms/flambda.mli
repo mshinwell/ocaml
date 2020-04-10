@@ -248,9 +248,22 @@ end and Let_symbol_expr : sig
     include Expr_std.S with type t := t
   end
 
+  module Scoping_rule : sig
+    type t =
+      | Syntactic
+      | Dominator
+  end
+
   type t
 
-  val create : Bound_symbols.t -> Static_const.t -> Expr.t -> t
+  val create
+     : Scoping_rule.t
+    -> Bound_symbols.t
+    -> Static_const.t
+    -> Expr.t
+    -> t
+
+  val scoping_rule : t -> Scoping_rule.t
 
   val bound_symbols : t -> Bound_symbols.t
 

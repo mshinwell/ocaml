@@ -149,18 +149,32 @@ module Bound_symbols = struct
         (List.map Code_and_set_of_closures.free_names sets)
 end
 
+module Scoping_rule = struct
+  type t =
+    | Syntactic
+    | Dominator
+
+  let print ppf t =
+    match t with
+    | Syntactic -> Format.fprintf ppf "Syntactic"
+    | Dominator -> Format.fprintf ppf "Dominator"
+end
+
 type t = {
+  scoping_rule : Scoping_rule.t;
   bound_symbols : Bound_symbols.t;
   defining_expr : Static_const.t;
   body : Expr.t;
 }
 
-let create bound_symbols defining_expr body =
-  { bound_symbols;
+let create scoping_rule bound_symbols defining_expr body =
+  { scoping_rule;
+    bound_symbols;
     defining_expr;
     body;
   }
 
+let scoping_rule t = t.scoping_rule
 let bound_symbols t = t.bound_symbols
 let defining_expr t = t.defining_expr
 let body t = t.body
@@ -174,19 +188,21 @@ type flattened_for_printing = {
   second_or_later_binding_within_one_set : bool;
   second_or_later_set_of_closures : bool;
   descr : flattened_for_printing_descr;
+  scoping_rule : Scoping_rule.t;
 }
 
-let triangle_colour descr =
+let shape_colour descr =
   match descr with
   | Code _ -> Flambda_colours.code_id ()
   | Set_of_closures _ | Other _ -> Flambda_colours.symbol ()
 
-let flatten_for_printing { bound_symbols; defining_expr; _ } =
+let flatten_for_printing { scoping_rule; bound_symbols; defining_expr; _ } =
   match bound_symbols with
   | Singleton symbol ->
     [{ second_or_later_binding_within_one_set = false;
        second_or_later_set_of_closures = false;
        descr = Other (symbol, defining_expr);
+       scoping_rule;
     }]
   | Sets_of_closures bound_symbol_components ->
     let code_and_sets_of_closures =
@@ -205,6 +221,7 @@ let flatten_for_printing { bound_symbols; defining_expr; _ } =
                   { second_or_later_binding_within_one_set = not first;
                     second_or_later_set_of_closures;
                     descr = Code (code_id, code);
+                    scoping_rule;
                   }
                 in
                 flattened :: flattened', false)
@@ -220,6 +237,7 @@ let flatten_for_printing { bound_symbols; defining_expr; _ } =
               [{ second_or_later_binding_within_one_set;
                  second_or_later_set_of_closures;
                  descr = Set_of_closures (closure_symbols, set_of_closures);
+                 scoping_rule;
               }]
           in
           let flattened_acc =
@@ -264,6 +282,7 @@ let print_flattened ppf
       { second_or_later_binding_within_one_set;
         second_or_later_set_of_closures;
         descr;
+        scoping_rule;
       } =
   fprintf ppf "@[<hov 1>";
   if second_or_later_set_of_closures
@@ -277,8 +296,14 @@ let print_flattened ppf
       (Flambda_colours.elide ())
       (Flambda_colours.normal ())
   end else begin
-    fprintf ppf "@<0>%s@<1>\u{25b6} @<0>%s"
-      (triangle_colour descr)
+    let shape =
+      match scoping_rule with
+      | Syntactic -> "\u{25b6}" (* filled triangle *)
+      | Dominator -> "\u{25b7}" (* unfilled triangle *)
+    in
+    fprintf ppf "@<0>%s@<1>%s @<0>%s"
+      shape
+      (shape_colour descr)
       (Flambda_colours.normal ())
   end;
   fprintf ppf
@@ -323,11 +348,12 @@ let print_with_cache ~cache ppf t =
 
 let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
-let invariant env { bound_symbols = _; defining_expr = _; body; } =
+let invariant env
+      { scoping_rule = _; bound_symbols = _; defining_expr = _; body; } =
   (* Static_const.invariant env defining_expr; *) (* CR mshinwell: FIXME *)
   Expr.invariant env body
 
-let free_names { bound_symbols; defining_expr; body; } =
+let free_names { scoping_rule = _; bound_symbols; defining_expr; body; } =
   let from_bound_symbols = Bound_symbols.free_names bound_symbols in
   let from_defining_expr =
     match bound_symbols with
@@ -339,12 +365,14 @@ let free_names { bound_symbols; defining_expr; body; } =
   Name_occurrences.union from_defining_expr
     (Name_occurrences.diff (Expr.free_names body) from_bound_symbols)
 
-let apply_name_permutation ({ bound_symbols; defining_expr; body; } as t) perm =
+let apply_name_permutation
+      ({ scoping_rule; bound_symbols; defining_expr; body; } as t) perm =
   let defining_expr' = Static_const.apply_name_permutation defining_expr perm in
   let body' = Expr.apply_name_permutation body perm in
   if defining_expr == defining_expr' && body == body' then t
   else
-    { bound_symbols;
+    { scoping_rule;
+      bound_symbols;
       defining_expr = defining_expr';
       body = body';
     }

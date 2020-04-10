@@ -49,6 +49,7 @@ and simplify_let_symbol
       LS.print let_symbol_expr
   end;
   let module Bound_symbols = LS.Bound_symbols in
+  let scoping_rule = LS.scoping_rule let_symbol_expr in
   let bound_symbols = LS.bound_symbols let_symbol_expr in
   (* CR mshinwell: We can't do this in conjunction with the current
      reification scheme for continuation parameters; that has to put the
@@ -159,8 +160,8 @@ Format.eprintf "All bindings:@ %a\n%!"
   in
   let expr =
     List.fold_left (fun body (bound_symbols, defining_expr) ->
-        Simplify_common.create_let_symbol (UA.code_age_relation uacc)
-          bound_symbols defining_expr body)
+        Simplify_common.create_let_symbol scoping_rule
+          (UA.code_age_relation uacc) bound_symbols defining_expr body)
       body
       sorted_lifted_constants.bindings_outermost_last
   in

@@ -1085,7 +1085,7 @@ let ilambda_to_flambda ~backend ~module_ident ~module_block_size_in_words
           ~dbg:Debuginfo.none
         |> Expr.create_apply_cont
       in
-      Let_symbol.create (Singleton module_symbol) static_const return
+      Let_symbol.create Syntactic (Singleton module_symbol) static_const return
       |> Flambda.Expr.create_let_symbol
     in
     let block_access : P.Block_access_kind.t =
@@ -1155,7 +1155,7 @@ let ilambda_to_flambda ~backend ~module_ident ~module_block_size_in_words
             set_of_closures = Set_of_closures.empty; 
           }]
         in
-        Let_symbol.create bound_symbols static_const body
+        Let_symbol.create Syntactic bound_symbols static_const body
         |> Flambda.Expr.create_let_symbol)
       body
       t.code
@@ -1176,7 +1176,7 @@ let ilambda_to_flambda ~backend ~module_ident ~module_block_size_in_words
   end;
   let body =
     List.fold_left (fun body (symbol, static_const) ->
-        Let_symbol.create (Singleton symbol) static_const body
+        Let_symbol.create Syntactic (Singleton symbol) static_const body
         |> Flambda.Expr.create_let_symbol)
       body
       t.declared_symbols
