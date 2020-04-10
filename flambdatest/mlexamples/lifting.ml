@@ -7,4 +7,4 @@ let r1 = rand ()
 
 let r2 = rand ()
 
-let f x = x + r0 + r1 + r2
+let [@inline always] f x = x + r0 + r1 + r2
