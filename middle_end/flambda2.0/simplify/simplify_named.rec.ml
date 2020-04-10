@@ -51,6 +51,9 @@ let simplify_named0 dacc ~(bound_vars : Bindable_let_bound.t)
     (* CR mshinwell: Add check along the lines of: types are unknown
        whenever [not (P.With_fixed_value.eligible prim)] holds. *)
     let defining_expr, dacc, ty =
+      (* CR mshinwell: We should be able to do the equivalent of
+         [Reify_continuation_param_types] here so long as we are
+         at toplevel. *)
       Reification.try_to_reify dacc term ~bound_to:bound_var
     in
     let defining_expr =
