@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2013--2019 OCamlPro SAS                                    *)
-(*   Copyright 2014--2019 Jane Street Group LLC                           *)
+(*   Copyright 2013--2020 OCamlPro SAS                                    *)
+(*   Copyright 2014--2020 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -30,41 +30,6 @@ let inline dacc ~callee ~args function_decl
   let params_and_body = DE.find_code denv (I.code_id function_decl) in
   Function_params_and_body.pattern_match params_and_body
     ~f:(fun ~return_continuation exn_continuation params ~body ~my_closure ->
-(*
-      let typing_env = DE.typing_env denv in
-      (* XXX The following is a hack until we work out more of the theory
-         about [Rec_info] *)
-      let canonical_callee =
-        T.Typing_env.get_canonical_simple typing_env callee
-          ~min_name_mode:Name_mode.normal
-      in
-      match canonical_callee with
-      | None ->
-        Misc.fatal_errorf "No canonical callee for %a" Simple.print callee
-      | Some canonical_callee ->
-        (* CR mshinwell: Move to [Typing_env.map_type_of_canonical] or
-           similar.  (Can we actually hide [find] from the Typing_env
-           external interface?) *)
-        let typing_env : _ Or_bottom.t =
-          match Simple.to_name canonical_callee with
-          | None -> Ok typing_env
-          | Some (rec_info, callee_name) ->
-            let callee_ty = T.Typing_env.find typing_env callee_name in
-            let newer_rec_info = Rec_info.create ~depth:1 ~unroll_to in
-            let rec_info =
-              match rec_info with
-              | None -> newer_rec_info
-              | Some rec_info -> Rec_info.merge rec_info ~newer:newer_rec_info
-            in
-            Or_bottom.map (T.apply_rec_info callee_ty rec_info)
-              ~f:(fun callee_ty ->
-                T.Typing_env.add_equation typing_env callee_name callee_ty)
-        in
-        match typing_env with
-        | Bottom -> dacc, Expr.create_invalid ()
-        | Ok typing_env ->
-          let denv = DE.with_typing_env denv typing_env in
-*)
           let denv =
             DE.set_inlining_depth_increment
               (DE.set_inlined_debuginfo denv dbg)
