@@ -302,8 +302,8 @@ let print_flattened ppf
       | Dominator -> "\u{25b7}" (* unfilled triangle *)
     in
     fprintf ppf "@<0>%s@<1>%s @<0>%s"
-      shape
       (shape_colour descr)
+      shape
       (Flambda_colours.normal ())
   end;
   fprintf ppf
