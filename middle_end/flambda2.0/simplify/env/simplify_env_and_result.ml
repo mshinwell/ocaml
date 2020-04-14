@@ -413,6 +413,11 @@ end = struct
           Symbol.Map.fold (fun sym typ typing_env ->
               let sym = Name.symbol sym in
               let env_extension =
+                (* CR mshinwell: Sometimes we might already have the types
+                   "made suitable" in the [closure_env] field of the typing
+                   environment, perhaps?  For example when lifted constants'
+                   types are coming out of a closure into the enclosing
+                   scope. *)
                 T.make_suitable_for_environment typ
                   denv_at_definition.typing_env
                   ~suitable_for:typing_env
