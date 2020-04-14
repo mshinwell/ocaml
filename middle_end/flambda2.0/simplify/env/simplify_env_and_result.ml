@@ -159,7 +159,7 @@ end = struct
                     } =
     { backend;
       round;
-      typing_env = TE.create_using_resolver_and_symbol_bindings_from typing_env;
+      typing_env = TE.closure_env typing_env;
       inlined_debuginfo = Debuginfo.none;
       can_inline;
       inlining_depth_increment;

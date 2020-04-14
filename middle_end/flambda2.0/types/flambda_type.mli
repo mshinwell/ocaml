@@ -69,7 +69,7 @@ module Typing_env : sig
 
   val create : resolver:(Export_id.t -> flambda_type option) -> t
 
-  val create_using_resolver_and_symbol_bindings_from : t -> t
+  val closure_env : t -> t
 
   val resolver : t -> (Export_id.t -> flambda_type option)
 

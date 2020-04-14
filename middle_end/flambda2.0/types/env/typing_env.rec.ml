@@ -191,10 +191,9 @@ type t = {
   defined_symbols : Symbol.Set.t;
   code_age_relation : Code_age_relation.t;
   prev_levels : One_level.t Scope.Map.t;
-  (* CR mshinwell: hold list of symbol definitions, then change defined_names
-     to variables, then remove artificial symbol precedence *)
   current_level : One_level.t;
   next_binding_time : Binding_time.t;
+  closure_env : t option;
 }
 
 let is_empty t =
@@ -206,7 +205,7 @@ let is_empty t =
 (* CR mshinwell: Add option to print [aliases] *)
 let print_with_cache ~cache ppf
       ({ resolver = _; prev_levels; current_level; next_binding_time = _;
-         defined_symbols; code_age_relation;
+         defined_symbols; code_age_relation; closure_env = _;
        } as t) =
   if is_empty t then
     Format.pp_print_string ppf "Empty"
@@ -284,9 +283,16 @@ let create ~resolver =
     next_binding_time = Binding_time.earliest_var;
     defined_symbols = Symbol.Set.empty;
     code_age_relation = Code_age_relation.empty;
+    closure_env = Some {
+      resolver;
+      prev_levels = Scope.Map.empty;
+      current_level = One_level.create_empty Scope.initial;
+      next_binding_time = Binding_time.earliest_var;
+      defined_symbols = Symbol.Set.empty;
+      code_age_relation = Code_age_relation.empty;
+      closure_env = None;
+    };
   }
-
-let create_using_resolver_from t = create ~resolver:t.resolver
 
 let increment_scope t =
   let current_scope = current_scope t in
@@ -382,6 +388,11 @@ let with_current_level t ~current_level =
   invariant t;
   t
 
+let with_current_level_and_closure_env t ~current_level ~closure_env =
+  let t = { t with current_level; closure_env; } in
+  invariant t;
+  t
+
 let with_current_level_and_next_binding_time t ~current_level
       next_binding_time =
   let t = { t with current_level; next_binding_time; } in
@@ -413,15 +424,27 @@ let add_variable_definition t var kind name_mode =
   with_current_level_and_next_binding_time t ~current_level
     (Binding_time.succ t.next_binding_time)
 
-let add_symbol_definition t sym =
+let rec add_symbol_definition t sym =
   (* CR mshinwell: check for redefinition when invariants enabled? *)
+  let closure_env =
+    match t.closure_env with
+    | None -> None
+    | Some closure_env -> Some (add_symbol_definition closure_env sym)
+  in
   { t with
     defined_symbols = Symbol.Set.add sym t.defined_symbols;
+    closure_env;
   }
 
-let add_symbol_definitions t syms =
+let rec add_symbol_definitions t syms =
+  let closure_env =
+    match t.closure_env with
+    | None -> None
+    | Some closure_env -> Some (add_symbol_definitions closure_env syms)
+  in
   { t with
     defined_symbols = Symbol.Set.union syms t.defined_symbols;
+    closure_env;
   }
 
 let kind_of_simple t simple =
@@ -492,22 +515,42 @@ let rec add_equation0 t aliases name ty =
     Typing_env_level.add_or_replace_equation
       (One_level.level t.current_level) name ty
   in
-  let just_after_level =
+  let just_after_level, closure_env =
     Name.pattern_match name
       ~var:(fun var ->
-        Cached.replace_variable_binding 
-          (One_level.just_after_level t.current_level)
-          var ty ~new_aliases:aliases)
+        let just_after_level =
+          Cached.replace_variable_binding 
+            (One_level.just_after_level t.current_level)
+            var ty ~new_aliases:aliases
+        in
+        just_after_level, t.closure_env)
       ~symbol:(fun _ ->
-        Cached.add_or_replace_binding 
-          (One_level.just_after_level t.current_level)
-          name ty Binding_time.symbols Name_mode.normal
-          ~new_aliases:aliases)
+        let just_after_level =
+          Cached.add_or_replace_binding 
+            (One_level.just_after_level t.current_level)
+            name ty Binding_time.symbols Name_mode.normal
+            ~new_aliases:aliases
+        in
+        let closure_env =
+          match t.closure_env with
+          | None -> None
+          | Some closure_env ->
+            let level, ty =
+              Type_grammar.make_suitable_for_environment0 ty t
+                ~suitable_for:closure_env (Typing_env_level.empty ())
+            in
+            let closure_env =
+              add_equation (add_env_extension_from_level closure_env level)
+                name ty
+            in
+            Some closure_env
+        in
+        just_after_level, closure_env)
   in
   let current_level =
     One_level.create (current_scope t) level ~just_after_level
   in
-  with_current_level t ~current_level
+  with_current_level_and_closure_env t ~current_level ~closure_env
 
 and add_equation t name ty =
   if !Clflags.flambda_invariant_checks then begin
@@ -848,27 +891,17 @@ let aliases_of_simple t ~min_name_mode simple =
 let aliases_of_simple_allowable_in_types t simple =
   aliases_of_simple t ~min_name_mode:Name_mode.in_types simple
 
-let create_using_resolver_and_symbol_bindings_from t =
-  let original_t = t in
-  let names_to_types = names_to_types t in
-  let t =
-    { (create_using_resolver_from t) with
-      defined_symbols = original_t.defined_symbols;
+let closure_env t =
+  match t.closure_env with
+  | None -> create ~resolver:t.resolver
+  | Some closure_env ->
+    assert (Option.is_none closure_env.closure_env);
+    { closure_env with
+      closure_env = Some {
+        closure_env with
+        closure_env = None;
+      };
     }
-  in
-  Symbol.Set.fold (fun sym t ->
-      let name = Name.symbol sym in
-      match Name.Map.find name names_to_types with
-      | exception Not_found -> t
-      | typ, _binding_time, _name_mode ->
-        let level, typ =
-          Type_grammar.make_suitable_for_environment0 typ original_t
-            ~suitable_for:t (Typing_env_level.empty ())
-        in
-        let t = add_env_extension_from_level t level in
-        add_equation t name typ)
-    original_t.defined_symbols
-    t
 
 let rec free_names_transitive_of_type_of_name t name ~result =
   let result = Name_occurrences.add_name result name Name_mode.in_types in
