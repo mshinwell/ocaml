@@ -242,6 +242,9 @@ module Backend = struct
 end
 let backend = (module Backend : Backend_intf.S)
 
+let flambda2_backend =
+  (module Asmgen.Flambda2_backend : Flambda2_backend_intf.S)
+
 let load_lambda ppf ~module_ident ~required_globals lam size =
   if !Clflags.dump_rawlambda then fprintf ppf "%a@." Printlambda.lambda lam;
   let slam = Simplif.simplify_lambda lam in
@@ -252,21 +255,32 @@ let load_lambda ppf ~module_ident ~required_globals lam size =
     else Filename.temp_file ("caml" ^ !phrase_name) ext_dll
   in
   let filename = Filename.chop_extension dll in
-  let program =
-    { Lambda.
-      code = slam;
-      main_module_block_size = size;
-      module_ident;
-      required_globals;
-    }
-  in
-  let middle_end =
-    if Config.flambda then Misc.fatal_error "FIXME"
-    else Closure_middle_end.lambda_to_clambda
-  in
-  Asmgen.compile_implementation ~toplevel:need_symbol
-    ~backend ~filename ~prefixname:filename
-    ~middle_end ~ppf_dump:ppf program;
+  begin
+    if Config.flambda then
+      Asmgen.compile_implementation2 ~toplevel:need_symbol
+        ~backend:flambda2_backend
+        ~filename
+        ~prefixname:filename
+        ~size
+        ~module_ident
+        ~module_initializer:slam
+        ~middle_end:Flambda2_middle_end.middle_end
+        ~ppf_dump:ppf
+        required_globals
+    else
+      let program =
+        { Lambda.
+          code = slam;
+          main_module_block_size = size;
+          module_ident;
+          required_globals;
+        }
+      in
+      Asmgen.compile_implementation ~toplevel:need_symbol
+        ~backend ~filename ~prefixname:filename
+        ~middle_end:Closure_middle_end.lambda_to_clambda
+        ~ppf_dump:ppf program
+  end;
   Asmlink.call_linker_shared [filename ^ ext_obj] dll;
   Sys.remove (filename ^ ext_obj);
 

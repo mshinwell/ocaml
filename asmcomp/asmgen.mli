@@ -57,7 +57,7 @@ val compile_implementation2
   -> module_initializer:Lambda.lambda
   -> middle_end:middle_end2
   -> ppf_dump:Format.formatter
-  -> Ident.Set.t
+  -> Ident.Set.t (* CR mshinwell: label this *)
   -> unit
 
 (** Flambda2 backend *)
