@@ -355,8 +355,11 @@ let prove_naked_immediates env t : Immediate.Set.t proof =
           Immediate.Set.empty
       in
       Proved is
-    | Unknown -> Unknown
-    | Invalid -> Invalid
+    | Unknown | Invalid ->
+      (* We must not return [Invalid] here even if [block_ty] doesn't
+         correspond to a block -- that might happen if we lose precision
+         for some reason, which should be harmless. *)
+      Unknown
     end
   | Naked_immediate Unknown -> Unknown
   | Naked_immediate Bottom -> Invalid
