@@ -140,7 +140,7 @@ type bigarray_layout = (* Unknown | *) C | Fortran
 
 (* CR xclerc: We can use array_kind instead
 type block_set_kind =
-  | Immediate
+  | Target_imm
   | Pointer
   | Float
 

@@ -40,9 +40,9 @@ module type S = sig
     end
   end
 
-  module Immediate : sig
+  module Target_imm : sig
     module Set : sig
-      type t = Immediate.Set.t
+      type t = Target_imm.Set.t
 
       val union_or_inter : t -> t -> t
     end

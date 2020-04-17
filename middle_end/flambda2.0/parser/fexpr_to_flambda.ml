@@ -130,10 +130,10 @@ let const (c:Fexpr.const) : Reg_width_const.t =
   match c with
   | Tagged_immediate i ->
     let i = Targetint.of_string i in
-    Tagged_immediate (Immediate.int (Targetint.OCaml.of_targetint i))
+    Tagged_immediate (Target_imm.int (Targetint.OCaml.of_targetint i))
   | Naked_immediate i ->
     let i = Targetint.of_string i in
-    Naked_immediate (Immediate.int (Targetint.OCaml.of_targetint i))
+    Naked_immediate (Target_imm.int (Targetint.OCaml.of_targetint i))
 
   (*
    * | Naked_float of Numbers.Float_by_bit_pattern.t
@@ -180,7 +180,7 @@ let of_kind_value env (v:Fexpr.of_kind_value) : Flambda_static.Of_kind_value.t =
   | Tagged_immediate i ->
     let i = Targetint.of_string i in
     Tagged_immediate
-      (Immediate.int (Targetint.OCaml.of_targetint i))
+      (Target_imm.int (Targetint.OCaml.of_targetint i))
   | Dynamically_computed var ->
     let var = find_var env var in
     Dynamically_computed var
@@ -322,11 +322,11 @@ let rec expr env (e : Fexpr.expr) : E.t =
 
   | Switch { scrutinee; cases } ->
     let arms =
-      Immediate.Map.of_list
+      Target_imm.Map.of_list
         (List.map (fun (case, (arm, _loc)) ->
            let c, arity = CM.find arm env.continuations in
            assert(arity = 0);
-           Immediate.int (Targetint.OCaml.of_int case), c)
+           Target_imm.int (Targetint.OCaml.of_int case), c)
            cases)
     in
     Flambda.Expr.create_switch

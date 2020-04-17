@@ -386,19 +386,19 @@ type switch_creation_result =
   | Nothing_deleted
 
 let create_switch0 ~scrutinee ~arms : t * switch_creation_result =
-  if Immediate.Map.cardinal arms < 1 then
+  if Target_imm.Map.cardinal arms < 1 then
     create_invalid (), Have_deleted_comparison_and_branch
   else
     let change_to_apply_cont action =
       create_apply_cont action, Have_deleted_comparison_but_not_branch
     in
-    match Immediate.Map.get_singleton arms with
+    match Target_imm.Map.get_singleton arms with
     | Some (_discriminant, action) -> change_to_apply_cont action
     | None ->
       (* CR mshinwell: We should do a partial invariant check here (one
          which doesn't require [Invariant_env.t]. *)
       let actions =
-        Apply_cont_expr.Set.of_list (Immediate.Map.data arms)
+        Apply_cont_expr.Set.of_list (Target_imm.Map.data arms)
       in
       match Apply_cont_expr.Set.get_singleton actions with
       | Some action -> change_to_apply_cont action
@@ -412,9 +412,9 @@ let create_switch ~scrutinee ~arms =
 
 let create_if_then_else ~scrutinee ~if_true ~if_false =
   let arms =
-    Immediate.Map.of_list [
-      Immediate.bool_true, if_true;
-      Immediate.bool_false, if_false;
+    Target_imm.Map.of_list [
+      Target_imm.bool_true, if_true;
+      Target_imm.bool_false, if_false;
     ]
   in
   create_switch ~scrutinee ~arms

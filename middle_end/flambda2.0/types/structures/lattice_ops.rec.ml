@@ -33,7 +33,7 @@ module For_meet = struct
   end
 
   module String_info = Make (String_info)
-  module Immediate = Make (Immediate)
+  module Target_imm = Make (Target_imm)
   module Float = Make (Float)
   module Int32 = Make (Int32)
   module Int64 = Make (Int64)
@@ -69,7 +69,7 @@ module For_join = struct
   end
 
   module String_info = Make (String_info)
-  module Immediate = Make (Immediate)
+  module Target_imm = Make (Target_imm)
   module Float = Make (Float)
   module Int32 = Make (Int32)
   module Int64 = Make (Int64)

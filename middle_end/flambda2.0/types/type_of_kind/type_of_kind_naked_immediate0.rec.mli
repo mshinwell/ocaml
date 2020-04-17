@@ -17,7 +17,7 @@
 [@@@ocaml.warning "+a-30-40-41-42"]
 
 type t =
-  | Naked_immediates of Immediate.Set.t
+  | Naked_immediates of Target_imm.Set.t
   | Is_int of Type_grammar.t
   | Get_tag of Type_grammar.t
 

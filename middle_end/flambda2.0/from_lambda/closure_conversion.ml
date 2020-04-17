@@ -152,7 +152,7 @@ let tupled_function_call_stub
   let _, body =
     List.fold_left (fun (pos, body) param ->
         let defining_expr =
-          let pos = Immediate.int (Targetint.OCaml.of_int pos) in
+          let pos = Target_imm.int (Targetint.OCaml.of_int pos) in
           let block_access : P.Block_access_kind.t =
             Block { elt_kind = Value Anything;
                     tag = Tag.zero;
@@ -227,11 +227,11 @@ let rec declare_const t (const : Lambda.structured_constant)
       : Static_const.Field_of_block.t * string =
   match const with
   | Const_base (Const_int c) ->
-    Tagged_immediate (Immediate.int (Targetint.OCaml.of_int c)), "int"
+    Tagged_immediate (Target_imm.int (Targetint.OCaml.of_int c)), "int"
   | Const_pointer p ->
     (* CR mshinwell: This needs to be removed. *)
-    Tagged_immediate (Immediate.int (Targetint.OCaml.of_int p)), "const_ptr"
-  | Const_base (Const_char c) -> Tagged_immediate (Immediate.char c), "char"
+    Tagged_immediate (Target_imm.int (Targetint.OCaml.of_int p)), "const_ptr"
+  | Const_base (Const_char c) -> Tagged_immediate (Target_imm.char c), "char"
   | Const_base (Const_string (s, _)) ->
     let const, name =
       if Config.safe_string then
@@ -660,7 +660,7 @@ let rec close t env (ilam : Ilambda.t) : Expr.t * _ =
       List.map (fun (case, cont, trap_action, args) ->
           let trap_action = close_trap_action_opt trap_action in
           let args = find_simples t env args in
-          Immediate.int (Targetint.OCaml.of_int case),
+          Target_imm.int (Targetint.OCaml.of_int case),
             Flambda.Apply_cont.create ?trap_action cont ~args
               ~dbg:Debuginfo.none)
         sw.consts
@@ -689,8 +689,8 @@ let rec close t env (ilam : Ilambda.t) : Expr.t * _ =
       in
       let switch =
         let arms =
-          Immediate.Map.singleton Immediate.bool_false default_action
-          |> Immediate.Map.add Immediate.bool_true action
+          Target_imm.Map.singleton Target_imm.bool_false default_action
+          |> Target_imm.Map.add Target_imm.bool_true action
         in
         Expr.create_switch ~scrutinee:(Simple.var comparison_result) ~arms
       in
@@ -700,11 +700,11 @@ let rec close t env (ilam : Ilambda.t) : Expr.t * _ =
     | _, _ ->
       let arms =
         match sw.failaction with
-        | None -> Immediate.Map.of_list arms
+        | None -> Target_imm.Map.of_list arms
         | Some (default, trap_action, args) ->
           Numbers.Int.Set.fold (fun case cases ->
-              let case = Immediate.int (Targetint.OCaml.of_int case) in
-              if Immediate.Map.mem case cases then cases
+              let case = Target_imm.int (Targetint.OCaml.of_int case) in
+              if Target_imm.Map.mem case cases then cases
               else
                 let args = find_simples t env args in
                 let trap_action = close_trap_action_opt trap_action in
@@ -712,11 +712,11 @@ let rec close t env (ilam : Ilambda.t) : Expr.t * _ =
                   Flambda.Apply_cont.create ?trap_action default ~args
                     ~dbg:Debuginfo.none
                 in
-                Immediate.Map.add case default cases)
+                Target_imm.Map.add case default cases)
             (Numbers.Int.zero_to_n (sw.numconsts - 1))
-            (Immediate.Map.of_list arms)
+            (Target_imm.Map.of_list arms)
       in
-      if Immediate.Map.is_empty arms then
+      if Target_imm.Map.is_empty arms then
         Expr.create_invalid (), Delayed_handlers.empty
       else
         Expr.create_let untagged_scrutinee' untag
@@ -1096,7 +1096,7 @@ let ilambda_to_flambda ~backend ~module_ident ~module_block_size_in_words
     in
     List.fold_left (fun body (pos, var) ->
         let var = VB.create var Name_mode.normal in
-        let pos = Immediate.int (Targetint.OCaml.of_int pos) in
+        let pos = Target_imm.int (Targetint.OCaml.of_int pos) in
         Expr.create_let var
           (Named.create_prim
             (Binary (

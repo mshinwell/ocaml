@@ -436,7 +436,7 @@ module Variant : sig
 
   val max_size : t -> Targetint.OCaml.t
 
-  val const_ctors : t -> Immediate.Set.t
+  val const_ctors : t -> Target_imm.Set.t
 
   val non_const_ctors_with_sizes : t -> Targetint.OCaml.t Tag.Scannable.Map.t
 end = struct
@@ -841,7 +841,7 @@ end) = struct
     Default_behaviour No_untagging
 end
 
-module Immediate_spec : Unboxing_spec
+module Target_imm_spec : Unboxing_spec
   with module Info = Tag
   with module Index = Targetint.OCaml =
 Make_unboxed_number_spec (struct
@@ -900,14 +900,14 @@ module Blocks_of_values = Make (Block_of_values_spec)
 module Blocks_of_naked_floats = Make (Block_of_naked_floats_spec)
 module Variants = Make (Variants_spec)
 module Closures = Make (Closures_spec)
-module Immediates = Make (Immediate_spec)
+module Target_imms = Make (Target_imm_spec)
 module Floats = Make (Float_spec)
 module Int32s = Make (Int32_spec)
 module Int64s = Make (Int64_spec)
 module Nativeints = Make (Nativeint_spec)
 
 let unboxed_number_decisions = [
-  T.prove_is_a_tagged_immediate, Immediates.unbox_one_parameter, Tag.zero;
+  T.prove_is_a_tagged_immediate, Target_imms.unbox_one_parameter, Tag.zero;
   T.prove_is_a_boxed_float, Floats.unbox_one_parameter, Tag.double_tag;
   T.prove_is_a_boxed_int32, Int32s.unbox_one_parameter, Tag.custom_tag;
   T.prove_is_a_boxed_int64, Int64s.unbox_one_parameter, Tag.custom_tag;

@@ -39,7 +39,7 @@ let symbol s =
 
 let tag_targetint t = Targetint.(add (shift_left t 1) one)
 
-let targetint_of_imm i = Targetint.OCaml.to_targetint i.Immediate.value
+let targetint_of_imm i = Targetint.OCaml.to_targetint i.Target_imm.value
 
 let nativeint_of_targetint t =
   match Targetint.repr t with

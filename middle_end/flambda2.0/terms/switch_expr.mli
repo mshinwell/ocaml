@@ -28,7 +28,7 @@ include Expr_std.S with type t := t
 
 val create
    : scrutinee:Simple.t
-  -> arms:Apply_cont_expr.t Immediate.Map.t
+  -> arms:Apply_cont_expr.t Target_imm.Map.t
   -> t
 
 (** The scrutinee of the switch. *)
@@ -36,10 +36,10 @@ val scrutinee : t -> Simple.t
 
 (** Call the given function [f] on each (discriminant, action) pair
     in the switch. *)
-val iter : t -> f:(Immediate.t -> Apply_cont_expr.t -> unit) -> unit
+val iter : t -> f:(Target_imm.t -> Apply_cont_expr.t -> unit) -> unit
 
 (** What the switch will do for each possible value of the discriminant. *)
-val arms : t -> Apply_cont_expr.t Immediate.Map.t
+val arms : t -> Apply_cont_expr.t Target_imm.Map.t
 
 (** How many cases the switch has.  (Note that this is not the number of
     destinations reached by the switch, which may be a smaller number.) *)

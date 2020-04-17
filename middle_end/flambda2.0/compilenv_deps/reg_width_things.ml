@@ -27,8 +27,8 @@ let simple_flags = 3
 
 module Const_data = struct
   type t =
-    | Naked_immediate of Immediate.t
-    | Tagged_immediate of Immediate.t
+    | Naked_immediate of Target_imm.t
+    | Tagged_immediate of Target_imm.t
     | Naked_float of Numbers.Float_by_bit_pattern.t
     | Naked_int32 of Int32.t
     | Naked_int64 of Int64.t
@@ -44,12 +44,12 @@ module Const_data = struct
       | Naked_immediate i ->
         Format.fprintf ppf "@<0>%s#%a@<0>%s"
           (Flambda_colours.naked_number ())
-          Immediate.print i
+          Target_imm.print i
           (Flambda_colours.normal ())
       | Tagged_immediate i ->
         Format.fprintf ppf "@<0>%s%a@<0>%s"
           (Flambda_colours.tagged_immediate ())
-          Immediate.print i
+          Target_imm.print i
           (Flambda_colours.normal ())
       | Naked_float f ->
         Format.fprintf ppf "@<0>%s#%a@<0>%s"
@@ -77,9 +77,9 @@ module Const_data = struct
     let compare t1 t2 =
       match t1, t2 with
       | Naked_immediate i1, Naked_immediate i2 ->
-        Immediate.compare i1 i2
+        Target_imm.compare i1 i2
       | Tagged_immediate i1, Tagged_immediate i2 ->
-        Immediate.compare i1 i2
+        Target_imm.compare i1 i2
       | Naked_float f1, Naked_float f2 ->
         Numbers.Float_by_bit_pattern.compare f1 f2
       | Naked_int32 n1, Naked_int32 n2 ->
@@ -104,9 +104,9 @@ module Const_data = struct
       else
         match t1, t2 with
         | Naked_immediate i1, Naked_immediate i2 ->
-          Immediate.equal i1 i2
+          Target_imm.equal i1 i2
         | Tagged_immediate i1, Tagged_immediate i2 ->
-          Immediate.equal i1 i2
+          Target_imm.equal i1 i2
         | Naked_float f1, Naked_float f2 ->
           Numbers.Float_by_bit_pattern.equal f1 f2
         | Naked_int32 n1, Naked_int32 n2 ->
@@ -120,8 +120,8 @@ module Const_data = struct
 
     let hash t =
       match t with
-      | Naked_immediate n -> Immediate.hash n
-      | Tagged_immediate n -> Immediate.hash n
+      | Naked_immediate n -> Target_imm.hash n
+      | Tagged_immediate n -> Target_imm.hash n
       | Naked_float n -> Numbers.Float_by_bit_pattern.hash n
       | Naked_int32 n -> Hashtbl.hash n
       | Naked_int64 n -> Hashtbl.hash n
@@ -250,20 +250,20 @@ module Const = struct
   let naked_int64 i = create (Naked_int64 i)
   let naked_nativeint i = create (Naked_nativeint i)
 
-  let const_true = tagged_immediate Immediate.bool_true
-  let const_false = tagged_immediate Immediate.bool_false
+  let const_true = tagged_immediate Target_imm.bool_true
+  let const_false = tagged_immediate Target_imm.bool_false
 
-  let untagged_const_true = naked_immediate Immediate.bool_true
-  let untagged_const_false = naked_immediate Immediate.bool_false
+  let untagged_const_true = naked_immediate Target_imm.bool_true
+  let untagged_const_false = naked_immediate Target_imm.bool_false
 
-  let untagged_const_zero = naked_immediate Immediate.zero
+  let untagged_const_zero = naked_immediate Target_imm.zero
 
-  let untagged_const_int i = naked_immediate (Immediate.int i)
+  let untagged_const_int i = naked_immediate (Target_imm.int i)
 
-  let const_int i = tagged_immediate (Immediate.int i)
+  let const_int i = tagged_immediate (Target_imm.int i)
 
-  let const_zero = tagged_immediate Immediate.zero
-  let const_one = tagged_immediate Immediate.one
+  let const_zero = tagged_immediate Target_imm.zero
+  let const_one = tagged_immediate Target_imm.one
   let const_unit = const_zero
 
   let descr t = find_data t

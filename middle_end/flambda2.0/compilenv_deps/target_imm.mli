@@ -14,7 +14,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Immediate constants that can be held in registers. *)
+(** Target_imm constants that can be held in registers. *)
 
 type 'a or_wrong = private
   | Ok of 'a

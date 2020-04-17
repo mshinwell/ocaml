@@ -174,7 +174,7 @@ let simplify_string_length dacc ~original_term ~arg:_ ~arg_ty:str_ty
         let ty = T.unknown K.naked_immediate in
         Reachable.reachable original_term, TEE.one_equation name ty, dacc
       | Some str ->
-        let length = Immediate.int (String_info.size str) in
+        let length = Target_imm.int (String_info.size str) in
         let ty = T.this_naked_immediate length in
         Reachable.reachable original_term, TEE.one_equation name ty, dacc
       end
@@ -254,9 +254,9 @@ module Make_simplify_int_conv (N : A.Number_kind) = struct
         | Tagged_immediate ->
           let imms =
             Num.Set.fold (fun i imms ->
-                Immediate.Set.add (Num.to_immediate i) imms)
+                Target_imm.Set.add (Num.to_immediate i) imms)
               is
-              Immediate.Set.empty
+              Target_imm.Set.empty
           in
           let ty = T.these_tagged_immediates imms in
           let env_extension = TEE.one_equation result ty in
@@ -264,9 +264,9 @@ module Make_simplify_int_conv (N : A.Number_kind) = struct
         | Naked_immediate ->
           let imms =
             Num.Set.fold (fun i imms ->
-                Immediate.Set.add (Num.to_immediate i) imms)
+                Target_imm.Set.add (Num.to_immediate i) imms)
               is
-              Immediate.Set.empty
+              Target_imm.Set.empty
           in
           let ty = T.these_naked_immediates imms in
           let env_extension = TEE.one_equation result ty in
@@ -342,19 +342,19 @@ let simplify_boolean_not dacc ~original_term ~arg:_ ~arg_ty ~result_var =
   match proof with
   | Proved imms ->
     let imms_ok =
-      Immediate.Set.for_all (fun imm ->
-          Immediate.equal imm Immediate.zero
-            || Immediate.equal imm Immediate.one)
+      Target_imm.Set.for_all (fun imm ->
+          Target_imm.equal imm Target_imm.zero
+            || Target_imm.equal imm Target_imm.one)
         imms
     in
     if not imms_ok then result_invalid ()
     else
       let imms =
-        Immediate.Set.map (fun imm ->
-            if Immediate.equal imm Immediate.zero then
-              Immediate.one
+        Target_imm.Set.map (fun imm ->
+            if Target_imm.equal imm Target_imm.zero then
+              Target_imm.one
             else
-              Immediate.zero)
+              Target_imm.zero)
           imms
       in
       let ty = T.these_tagged_immediates imms in
@@ -363,7 +363,7 @@ let simplify_boolean_not dacc ~original_term ~arg:_ ~arg_ty ~result_var =
   | Unknown ->
     (* CR-someday mshinwell: This could say something like (in the type) "when
        the input is 0, the value is 1" and vice-versa. *)
-    let ty = T.these_tagged_immediates Immediate.all_bools in
+    let ty = T.these_tagged_immediates Target_imm.all_bools in
     let env_extension = TEE.one_equation result ty in
     Reachable.reachable original_term, env_extension, dacc
   | Invalid -> result_invalid ()

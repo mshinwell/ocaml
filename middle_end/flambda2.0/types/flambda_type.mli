@@ -250,13 +250,13 @@ val any_naked_nativeint : unit -> t
 
 (** Building of types representing tagged / boxed values from specified
     constants. *)
-val this_tagged_immediate : Immediate.t -> t
+val this_tagged_immediate : Target_imm.t -> t
 val this_boxed_float : Numbers.Float_by_bit_pattern.t -> t
 val this_boxed_int32 : Int32.t -> t
 val this_boxed_int64 : Int64.t -> t
 val this_boxed_nativeint : Targetint.t -> t
 
-val these_tagged_immediates : Immediate.Set.t -> t
+val these_tagged_immediates : Target_imm.Set.t -> t
 val these_boxed_floats : Numbers.Float_by_bit_pattern.Set.t -> t
 val these_boxed_int32s : Int32.Set.t -> t
 val these_boxed_int64s : Int64.Set.t -> t
@@ -264,13 +264,13 @@ val these_boxed_nativeints : Targetint.Set.t -> t
 
 (** Building of types representing untagged / unboxed values from
     specified constants. *)
-val this_naked_immediate : Immediate.t -> t
+val this_naked_immediate : Target_imm.t -> t
 val this_naked_float : Numbers.Float_by_bit_pattern.t -> t
 val this_naked_int32 : Int32.t -> t
 val this_naked_int64 : Int64.t -> t
 val this_naked_nativeint : Targetint.t -> t
 
-val these_naked_immediates : Immediate.Set.t -> t
+val these_naked_immediates : Target_imm.Set.t -> t
 val these_naked_floats : Numbers.Float_by_bit_pattern.Set.t -> t
 val these_naked_int32s : Int32.Set.t -> t
 val these_naked_int64s : Int64.Set.t -> t
@@ -402,17 +402,17 @@ type 'a proof_allowing_kind_mismatch = private
 val prove_equals_tagged_immediates
    : Typing_env.t
   -> t
-  -> Immediate.Set.t proof
+  -> Target_imm.Set.t proof
 
 val prove_naked_immediates
    : Typing_env.t
   -> t
-  -> Immediate.Set.t proof
+  -> Target_imm.Set.t proof
 
 val prove_equals_single_tagged_immediate
    : Typing_env.t
   -> t
-  -> Immediate.t proof
+  -> Target_imm.t proof
 
 val prove_naked_floats
    : Typing_env.t
@@ -426,7 +426,7 @@ val prove_naked_int64s : Typing_env.t -> t -> Numbers.Int64.Set.t proof
 val prove_naked_nativeints : Typing_env.t -> t -> Targetint.Set.t proof
 
 type variant_proof = private {
-  const_ctors : Immediate.Set.t;
+  const_ctors : Target_imm.Set.t;
   non_const_ctors_with_sizes : Targetint.OCaml.t Tag.Scannable.Map.t;
 }
 
@@ -497,7 +497,7 @@ val prove_strings : Typing_env.t -> t -> String_info.Set.t proof
 type var_or_symbol_or_tagged_immediate = private
   | Var of Variable.t
   | Symbol of Symbol.t
-  | Tagged_immediate of Immediate.t
+  | Tagged_immediate of Target_imm.t
 
 type to_lift = (* private *) (* CR mshinwell: resurrect *)
   | Immutable_block of

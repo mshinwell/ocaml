@@ -27,7 +27,7 @@ type empty_naked_nativeint = private Naked_nativeint
 
 (** GADT indexes. *)
 type value = private Value
-type naked_immediate = empty_naked_immediate * Immediate.Set.t
+type naked_immediate = empty_naked_immediate * Target_imm.Set.t
 type naked_float = empty_naked_float * Numbers.Float_by_bit_pattern.Set.t
 type naked_int32 = empty_naked_int32 * Numbers.Int32.Set.t
 type naked_int64 = empty_naked_int64 * Numbers.Int64.Set.t

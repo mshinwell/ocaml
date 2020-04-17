@@ -44,8 +44,8 @@ module Const : sig
       integers of width [n - 1] bits, where [n] is the native machine
       width. (By contrast, [naked_nativeint] represents integers of
       width [n] bits.) *)
-  val naked_immediate : Immediate.t -> t
-  val tagged_immediate : Immediate.t -> t
+  val naked_immediate : Target_imm.t -> t
+  val tagged_immediate : Target_imm.t -> t
   val naked_float : Numbers.Float_by_bit_pattern.t -> t
   val naked_int32 : Int32.t -> t
   val naked_int64 : Int64.t -> t
@@ -53,8 +53,8 @@ module Const : sig
 
   module Descr : sig
     type t = private
-      | Naked_immediate of Immediate.t
-      | Tagged_immediate of Immediate.t
+      | Naked_immediate of Target_imm.t
+      | Tagged_immediate of Target_imm.t
       | Naked_float of Numbers.Float_by_bit_pattern.t
       | Naked_int32 of Int32.t
       | Naked_int64 of Int64.t

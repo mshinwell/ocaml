@@ -28,7 +28,7 @@ type bounds_check_result =
 
 let bounds_check ~width ~string_length_in_bytes ~index_in_bytes
       : bounds_check_result =
-  let index_in_bytes = Immediate.to_targetint index_in_bytes in
+  let index_in_bytes = Target_imm.to_targetint index_in_bytes in
   if Targetint.OCaml.compare index_in_bytes Targetint.OCaml.zero < 0 then
     Out_of_range
   else
@@ -240,10 +240,10 @@ let rec bind_rec ~backend exn_cont
               (fun prim_result ->
                 (Expr.create_switch
                   ~scrutinee:prim_result
-                  ~arms:(Immediate.Map.of_list [
-                    Immediate.bool_true,
+                  ~arms:(Target_imm.Map.of_list [
+                    Target_imm.bool_true,
                       Apply_cont.goto condition_passed_cont;
-                    Immediate.bool_false,
+                    Target_imm.bool_false,
                       Apply_cont.goto failure_cont;
                   ])), Delayed_handlers.empty)
           in

@@ -23,7 +23,7 @@ module K = Flambda_kind
 module Field_of_block = struct
   type t =
     | Symbol of Symbol.t
-    | Tagged_immediate of Immediate.t
+    | Tagged_immediate of Target_imm.t
     | Dynamically_computed of Variable.t
 
   include Identifiable.Make (struct
@@ -33,7 +33,7 @@ module Field_of_block = struct
       match t1, t2 with
       | Symbol s1, Symbol s2 -> Symbol.compare s1 s2
       | Tagged_immediate t1, Tagged_immediate t2 ->
-        Immediate.compare t1 t2
+        Target_imm.compare t1 t2
       | Dynamically_computed v1, Dynamically_computed v2 ->
         Variable.compare v1 v2
       | Symbol _, Tagged_immediate _ -> -1
@@ -50,13 +50,13 @@ module Field_of_block = struct
       match t with
       | Symbol symbol -> Hashtbl.hash (0, Symbol.hash symbol)
       | Tagged_immediate immediate ->
-        Hashtbl.hash (1, Immediate.hash immediate)
+        Hashtbl.hash (1, Target_imm.hash immediate)
       | Dynamically_computed var -> Hashtbl.hash (2, Variable.hash var)
 
     let print ppf t =
       match t with
       | Symbol symbol -> Symbol.print ppf symbol
-      | Tagged_immediate immediate -> Immediate.print ppf immediate
+      | Tagged_immediate immediate -> Target_imm.print ppf immediate
       | Dynamically_computed var -> Variable.print ppf var
 
     let output chan t =

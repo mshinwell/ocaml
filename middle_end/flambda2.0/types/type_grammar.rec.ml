@@ -293,10 +293,10 @@ let this_naked_nativeint i : t =
     Reg_width_const.naked_nativeint i)))
 
 let these_naked_immediates0 ~no_alias is =
-  match Immediate.Set.get_singleton is with
+  match Target_imm.Set.get_singleton is with
   | Some i when not no_alias -> this_naked_immediate i
   | _ ->
-    if Immediate.Set.is_empty is then bottom K.naked_immediate
+    if Target_imm.Set.is_empty is then bottom K.naked_immediate
     else Naked_immediate (T_NI.create_no_alias (Ok (Naked_immediates is)))
 
 let these_naked_floats0 ~no_alias fs =
@@ -328,7 +328,7 @@ let these_naked_nativeints0 ~no_alias is =
     else Naked_nativeint (T_NN.create_no_alias (Ok is))
 
 let this_naked_immediate_without_alias i =
-  these_naked_immediates0 ~no_alias:true (Immediate.Set.singleton i)
+  these_naked_immediates0 ~no_alias:true (Target_imm.Set.singleton i)
 
 let this_naked_float_without_alias f =
   these_naked_floats0 ~no_alias:true (Float.Set.singleton f)
@@ -390,10 +390,10 @@ let this_tagged_immediate imm : t =
     Reg_width_const.tagged_immediate imm)))
 
 let these_tagged_immediates0 ~no_alias imms : t =
-  match Immediate.Set.get_singleton imms with
+  match Target_imm.Set.get_singleton imms with
   | Some imm when not no_alias -> this_tagged_immediate imm
   | _ ->
-    if Immediate.Set.is_empty imms then bottom K.value
+    if Target_imm.Set.is_empty imms then bottom K.value
     else
       Value (T_V.create_no_alias (Ok (Variant (Variant.create
         ~immediates:(Known (these_naked_immediates imms))
@@ -403,7 +403,7 @@ let these_tagged_immediates imms =
   these_tagged_immediates0 ~no_alias:false imms
 
 let this_tagged_immediate_without_alias imm =
-  these_tagged_immediates0 ~no_alias:true (Immediate.Set.singleton imm)
+  these_tagged_immediates0 ~no_alias:true (Target_imm.Set.singleton imm)
 
 let tag_immediate t : t =
   match t with
@@ -431,7 +431,7 @@ let is_int_for_scrutinee ~scrutinee : t =
 let get_tag_for_block ~block : t =
   Naked_immediate (T_NI.create (Get_tag (alias_type_of K.value block)))
 
-let any_tagged_bool () = these_tagged_immediates Immediate.all_bools
+let any_tagged_bool () = these_tagged_immediates Target_imm.all_bools
 
 let this_boxed_float f = box_float (this_naked_float f)
 let this_boxed_int32 i = box_int32 (this_naked_int32 i)

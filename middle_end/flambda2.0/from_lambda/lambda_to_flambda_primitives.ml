@@ -62,7 +62,7 @@ let length_offset_of_size size =
     | Thirty_two -> 3
     | Sixty_four -> 7
   in
-  Immediate.int (Targetint.OCaml.of_int offset)
+  Target_imm.int (Targetint.OCaml.of_int offset)
 
 (* This computes the maximum of a given value [x] with zero,
    in an optimized way. It takes as named argument the size (in bytes)
@@ -71,7 +71,7 @@ let length_offset_of_size size =
 let max_with_zero ~size_int x =
   let register_bitsize_minus_one =
     H.Simple (Simple.const (Reg_width_const.naked_immediate (
-        Immediate.int (Targetint.OCaml.of_int (size_int * 8 - 1)))))
+        Target_imm.int (Targetint.OCaml.of_int (size_int * 8 - 1)))))
   in
   let sign =
     H.Prim (Binary (Int_shift (Naked_nativeint, Asr),
@@ -575,13 +575,13 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
     let const =
       Simple.const
         (Reg_width_const.tagged_immediate
-           (Immediate.int (Targetint.OCaml.of_int n)))
+           (Target_imm.int (Targetint.OCaml.of_int n)))
     in
     Binary (Int_arith (I.Tagged_immediate, Add), arg, Simple const)
   | Pfield ({ index; block_info = { tag; size; }; }, sem), [arg] ->
     (* CR mshinwell: Cause fatal error if the field value is < 0.
        We can't do this once we convert to Flambda *)
-    let imm = Immediate.int (Targetint.OCaml.of_int index) in
+    let imm = Target_imm.int (Targetint.OCaml.of_int index) in
     let field = Simple.const (Reg_width_const.tagged_immediate imm) in
     let mutability = C.convert_field_read_semantics sem in
     let block_access : P.Block_access_kind.t =
@@ -590,7 +590,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
     Binary (Block_load (block_access, mutability), arg,
       Simple field)
   | Pfloatfield (field, sem), [arg] ->
-    let imm = Immediate.int (Targetint.OCaml.of_int field) in
+    let imm = Target_imm.int (Targetint.OCaml.of_int field) in
     let field = Simple.const (Reg_width_const.tagged_immediate imm) in
     let mutability = C.convert_field_read_semantics sem in
     let block_access : P.Block_access_kind.t =
@@ -603,7 +603,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
     [block; value] ->
     let { index; block_info = { tag; size; }; } : Lambda.field_info = fi in
     let access_kind = C.convert_access_kind immediate_or_pointer in
-    let imm = Immediate.int (Targetint.OCaml.of_int index) in
+    let imm = Target_imm.int (Targetint.OCaml.of_int index) in
     let field = Simple.const (Reg_width_const.tagged_immediate imm) in
     let block_access : P.Block_access_kind.t =
       Block { elt_kind = access_kind; tag = Tag.create_exn tag; size; }
@@ -612,7 +612,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
          C.convert_init_or_assign initialization_or_assignment),
        block, Simple field, value)
   | Psetfloatfield (field, init_or_assign), [block; value] ->
-    let imm = Immediate.int (Targetint.OCaml.of_int field) in
+    let imm = Target_imm.int (Targetint.OCaml.of_int field) in
     let field = Simple.const (Reg_width_const.tagged_immediate imm) in
     let block_access : P.Block_access_kind.t =
       Block { elt_kind = Naked_float; tag = Tag.double_array_tag;
@@ -632,7 +632,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
                 Simple
                   (Simple.const
                      (Reg_width_const.tagged_immediate
-                        (Immediate.int (Targetint.OCaml.zero)))));
+                        (Target_imm.int (Targetint.OCaml.zero)))));
       ];
       failure = Division_by_zero;
       dbg;
@@ -646,7 +646,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
                 Simple
                   (Simple.const
                      (Reg_width_const.tagged_immediate
-                        (Immediate.int (Targetint.OCaml.zero)))));
+                        (Target_imm.int (Targetint.OCaml.zero)))));
       ];
       failure = Division_by_zero;
       dbg;
@@ -757,7 +757,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
       validity_conditions = [
         Binary (Int_comp (Tagged_immediate, Signed, Ge), index,
           Simple (Simple.const (Reg_width_const.tagged_immediate
-            (Immediate.int (Targetint.OCaml.zero)))));
+            (Target_imm.int (Targetint.OCaml.zero)))));
         Binary (Int_comp (Tagged_immediate, Signed, Lt), index,
           Prim (Unary (Array_length (Array (Value Anything)), array)));
       ];
@@ -772,7 +772,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
       validity_conditions = [
         Binary (Int_comp (Tagged_immediate, Signed, Ge), index,
           Simple (Simple.const (Reg_width_const.tagged_immediate
-            (Immediate.int (Targetint.OCaml.zero)))));
+            (Target_imm.int (Targetint.OCaml.zero)))));
         Binary (Int_comp (Tagged_immediate, Signed, Lt), index,
           Prim (Unary (Array_length (Array Naked_float), array)));
       ];
@@ -795,7 +795,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
       validity_conditions = [
         Binary (Int_comp (Tagged_immediate, Signed, Ge), index,
           Simple (Simple.const (Reg_width_const.tagged_immediate
-            (Immediate.int (Targetint.OCaml.zero)))));
+            (Target_imm.int (Targetint.OCaml.zero)))));
         Binary (Int_comp (Tagged_immediate, Signed, Lt), index,
           Prim (Unary (Array_length (Array (Value Anything)), array)));
       ];
@@ -810,7 +810,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
       validity_conditions = [
         Binary (Int_comp (Tagged_immediate, Signed, Ge), index,
           Simple (Simple.const (Reg_width_const.tagged_immediate
-            (Immediate.int (Targetint.OCaml.zero)))));
+            (Target_imm.int (Targetint.OCaml.zero)))));
         Binary (Int_comp (Tagged_immediate, Signed, Lt), index,
           Prim (Unary (Array_length (Array Naked_float), array)));
       ];

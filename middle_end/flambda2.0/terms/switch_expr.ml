@@ -18,20 +18,20 @@
 
 type t = {
   scrutinee : Simple.t;
-  arms : Apply_cont_expr.t Immediate.Map.t;
+  arms : Apply_cont_expr.t Target_imm.Map.t;
 }
 
 let fprintf = Format.fprintf
 
 let print_arms ppf arms =
   let arms =
-    Immediate.Map.fold (fun discr action arms_inverse ->
+    Target_imm.Map.fold (fun discr action arms_inverse ->
         match Apply_cont_expr.Map.find action arms_inverse with
         | exception Not_found ->
-          Apply_cont_expr.Map.add action (Immediate.Set.singleton discr)
+          Apply_cont_expr.Map.add action (Target_imm.Set.singleton discr)
             arms_inverse
         | discrs ->
-          Apply_cont_expr.Map.add action (Immediate.Set.add discr discrs)
+          Apply_cont_expr.Map.add action (Target_imm.Set.add discr discrs)
             arms_inverse)
       arms
       Apply_cont_expr.Map.empty
@@ -39,22 +39,22 @@ let print_arms ppf arms =
   let spc = ref false in
   let arms =
     List.sort (fun (action1, discrs1) (action2, discrs2) ->
-        let min1 = Immediate.Set.min_elt_opt discrs1 in
-        let min2 = Immediate.Set.min_elt_opt discrs2 in
+        let min1 = Target_imm.Set.min_elt_opt discrs1 in
+        let min2 = Target_imm.Set.min_elt_opt discrs2 in
         match min1, min2 with
         | None, None -> Apply_cont_expr.compare action1 action2
         | None, Some _ -> -1
         | Some _, None -> 1
-        | Some min1, Some min2 -> Immediate.compare min1 min2)
+        | Some min1, Some min2 -> Target_imm.compare min1 min2)
       (Apply_cont_expr.Map.bindings arms)
   in
   List.iter (fun (action, discrs) ->
       if !spc then fprintf ppf "@ " else spc := true;
-      let discrs = Immediate.Set.elements discrs in
+      let discrs = Target_imm.Set.elements discrs in
       fprintf ppf "@[<hov 2>@[<hov 0>| %a @<0>%s\u{21a6}@<0>%s@ @]%a@]"
         (Format.pp_print_list
           ~pp_sep:(fun ppf () -> Format.fprintf ppf "@ | ")
-          Immediate.print)
+          Target_imm.print)
         discrs
         (Flambda_colours.elide ())
         (Flambda_colours.normal ())
@@ -83,7 +83,7 @@ let invariant env ({ scrutinee; arms; } as t) =
       print t
   in
   E.check_simple_is_bound_and_of_kind env scrutinee K.fabricated;
-  assert (Immediate.Map.cardinal arms >= 2);
+  assert (Target_imm.Map.cardinal arms >= 2);
   let check _arm k =
     match E.find_continuation_opt env k with
     | None ->
@@ -108,22 +108,22 @@ let invariant env ({ scrutinee; arms; } as t) =
           Flambda_arity.print arity
       end
   in
-  Immediate.Map.iter check arms
+  Target_imm.Map.iter check arms
 *)
 
 let create ~scrutinee ~arms =
   { scrutinee; arms; }
 
-let iter t ~f = Immediate.Map.iter f t.arms
+let iter t ~f = Target_imm.Map.iter f t.arms
 
-let num_arms t = Immediate.Map.cardinal t.arms
+let num_arms t = Target_imm.Map.cardinal t.arms
 
 let scrutinee t = t.scrutinee
 let arms t = t.arms
 
 let free_names { scrutinee; arms; } =
   let free_names_in_arms =
-    Immediate.Map.fold (fun _discr action free_names ->
+    Target_imm.Map.fold (fun _discr action free_names ->
         Name_occurrences.union (Apply_cont_expr.free_names action)
           free_names)
       arms
@@ -134,7 +134,7 @@ let free_names { scrutinee; arms; } =
 let apply_name_permutation ({ scrutinee; arms; } as t) perm =
   let scrutinee' = Simple.apply_name_permutation scrutinee perm in
   let arms' =
-    Immediate.Map.map_sharing (fun action ->
+    Target_imm.Map.map_sharing (fun action ->
         Apply_cont_expr.apply_name_permutation action perm)
       arms
   in

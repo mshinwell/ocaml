@@ -89,14 +89,14 @@ type switch_creation_result = private
     to [Invalid], and one-arm switches to [Apply_cont]. *)
 val create_switch0
    : scrutinee:Simple.t
-  -> arms:Apply_cont_expr.t Immediate.Map.t
+  -> arms:Apply_cont_expr.t Target_imm.Map.t
   -> Expr.t * switch_creation_result
 
 (** Like [create_switch0], but for use when the caller isn't interested in
     whether something got deleted. *)
 val create_switch
    : scrutinee:Simple.t
-  -> arms:Apply_cont_expr.t Immediate.Map.t
+  -> arms:Apply_cont_expr.t Target_imm.Map.t
   -> Expr.t
 
 (** Build a [Switch] corresponding to a traditional if-then-else. *)

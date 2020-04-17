@@ -66,27 +66,27 @@ val any_naked_int32 : unit -> t
 val any_naked_int64 : unit -> t
 val any_naked_nativeint : unit -> t
 
-val this_tagged_immediate : Immediate.t -> t
+val this_tagged_immediate : Target_imm.t -> t
 val this_boxed_float : Numbers.Float_by_bit_pattern.t -> t
 val this_boxed_int32 : Int32.t -> t
 val this_boxed_int64 : Int64.t -> t
 val this_boxed_nativeint : Targetint.t -> t
 
-val these_tagged_immediates : Immediate.Set.t -> t
-val these_naked_immediates : Immediate.Set.t -> t
+val these_tagged_immediates : Target_imm.Set.t -> t
+val these_naked_immediates : Target_imm.Set.t -> t
 val these_boxed_floats : Numbers.Float_by_bit_pattern.Set.t -> t
 val these_boxed_int32s : Int32.Set.t -> t
 val these_boxed_int64s : Int64.Set.t -> t
 val these_boxed_nativeints : Targetint.Set.t -> t
 
-val this_naked_immediate : Immediate.t -> t
+val this_naked_immediate : Target_imm.t -> t
 val this_naked_float : Numbers.Float_by_bit_pattern.t -> t
 val this_naked_int32 : Int32.t -> t
 val this_naked_int64 : Int64.t -> t
 val this_naked_nativeint : Targetint.t -> t
 
-val this_tagged_immediate_without_alias : Immediate.t -> t
-val this_naked_immediate_without_alias : Immediate.t -> t
+val this_tagged_immediate_without_alias : Target_imm.t -> t
+val this_naked_immediate_without_alias : Target_imm.t -> t
 val this_naked_float_without_alias : Numbers.Float_by_bit_pattern.t -> t
 val this_naked_int32_without_alias : Int32.t -> t
 val this_naked_int64_without_alias : Int64.t -> t

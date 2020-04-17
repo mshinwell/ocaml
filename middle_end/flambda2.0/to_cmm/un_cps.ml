@@ -75,7 +75,7 @@ let name env name =
 (* Constants *)
 
 let tag_targetint t = Targetint.(add (shift_left t 1) one)
-let targetint_of_imm i = Targetint.OCaml.to_targetint i.Immediate.value
+let targetint_of_imm i = Targetint.OCaml.to_targetint i.Target_imm.value
 
 let const _env cst =
   match Reg_width_const.descr cst with
@@ -1053,8 +1053,8 @@ and switch env s =
   let e, env, _ = simple env (Switch.scrutinee s) in
   let wrap, env = Env.flush_delayed_lets env in
   let ints, exprs =
-    Immediate.Map.fold (fun d action (ints, exprs) ->
-      let i = Targetint.OCaml.to_int (Immediate.to_targetint d) in
+    Target_imm.Map.fold (fun d action (ints, exprs) ->
+      let i = Targetint.OCaml.to_int (Target_imm.to_targetint d) in
       let e = apply_cont env action in
       (i :: ints, e :: exprs)
       ) (Switch.arms s) ([], [])
@@ -1082,8 +1082,8 @@ and switch env s =
         (* The transl_switch_clambda expects an index array such that
            index.(i) is the index in [cases] of the expression to
            execute when [e] matches [i]. *)
-        let d, _ = Immediate.Map.max_binding (Switch.arms s) in
-        let n = Targetint.OCaml.to_int (Immediate.to_targetint d) in
+        let d, _ = Target_imm.Map.max_binding (Switch.arms s) in
+        let n = Targetint.OCaml.to_int (Target_imm.to_targetint d) in
         let index = Array.make (n + 2) c in
         Array.iteri (fun i j -> index.(j) <- i) ints;
         wrap (C.transl_switch_clambda Location.none e index cases)

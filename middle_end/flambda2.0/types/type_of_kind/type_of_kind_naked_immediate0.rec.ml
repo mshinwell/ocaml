@@ -16,7 +16,7 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
-module I = Immediate
+module I = Target_imm
 module T = Type_grammar
 module TE = Typing_env
 module TEE = Typing_env_extension
@@ -80,7 +80,7 @@ struct
       *)
     match t1, t2 with
     | Naked_immediates is1, Naked_immediates is2 ->
-      let is = E.Immediate.Set.union_or_inter is1 is2 in
+      let is = E.Target_imm.Set.union_or_inter is1 is2 in
       if I.Set.is_empty is then Bottom
       else Ok (Naked_immediates is, TEE.empty ())
     | Is_int ty1, Is_int ty2 ->
@@ -131,8 +131,8 @@ struct
       (* CR mshinwell: eliminate code duplication, same above.  Or-patterns
          aren't the answer, since join depends on the left/right envs! *)
       let tags =
-        Immediate.Set.fold (fun tag tags ->
-            match Immediate.to_tag tag with
+        Target_imm.Set.fold (fun tag tags ->
+            match Target_imm.to_tag tag with
             | Some tag -> Tag.Set.add tag tags
             | None -> bad_meet_or_join env t1 t2)
           tags
@@ -145,8 +145,8 @@ struct
     | (Is_int _ | Get_tag _), (Is_int _ | Get_tag _) -> Absorbing
     | Naked_immediates tags, Get_tag ty ->
       let tags =
-        Immediate.Set.fold (fun tag tags ->
-            match Immediate.to_tag tag with
+        Target_imm.Set.fold (fun tag tags ->
+            match Target_imm.to_tag tag with
             | Some tag -> Tag.Set.add tag tags
             | None -> bad_meet_or_join env t1 t2)
           tags

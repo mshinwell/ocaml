@@ -383,7 +383,7 @@ module Int_ops_for_binary_shift (I : A.Int_number_kind) : sig
     with type op = P.int_shift_op
 end = struct
   module Lhs = I.Num
-  module Rhs = Immediate
+  module Rhs = Target_imm
   module Result = I.Num
 
   type op = P.int_shift_op
@@ -437,7 +437,7 @@ end = struct
   let op_lhs_unknown (op : P.int_shift_op) ~rhs
         : Num.t binary_arith_outcome_for_one_side_only =
     let module O = Targetint.OCaml in
-    let rhs = Immediate.to_targetint rhs in
+    let rhs = Target_imm.to_targetint rhs in
     match op with
     | Lsl | Lsr | Asr ->
       (* Shifting either way by [Targetint.size] or above, or by a negative
@@ -496,7 +496,7 @@ module Int_ops_for_binary_comp (I : A.Int_number_kind) : sig
 end = struct
   module Lhs = I.Num
   module Rhs = I.Num
-  module Result = Immediate
+  module Result = Target_imm
 
   type op = P.ordered_comparison
 
@@ -520,7 +520,7 @@ end = struct
   module Num = I.Num
 
   let op (op : P.ordered_comparison) n1 n2 =
-    let bool b = Immediate.bool b in
+    let bool b = Target_imm.bool b in
     match op with
     | Lt -> Some (bool (Num.compare n1 n2 < 0))
     | Gt -> Some (bool (Num.compare n1 n2 > 0))
@@ -559,7 +559,7 @@ module Int_ops_for_binary_comp_unsigned (I : A.Int_number_kind) : sig
 end = struct
   module Lhs = I.Num
   module Rhs = I.Num
-  module Result = Immediate
+  module Result = Target_imm
 
   type op = P.ordered_comparison
 
@@ -583,7 +583,7 @@ end = struct
   module Num = I.Num
 
   let op (op : P.ordered_comparison) n1 n2 =
-    let bool b = Immediate.bool b in
+    let bool b = Target_imm.bool b in
     match op with
     | Lt -> Some (bool (Num.compare_unsigned n1 n2 < 0))
     | Gt -> Some (bool (Num.compare_unsigned n1 n2 > 0))
@@ -716,7 +716,7 @@ end = struct
 
   module Lhs = F
   module Rhs = F
-  module Result = Immediate
+  module Result = Target_imm
 
   type op = P.comparison
 
@@ -738,7 +738,7 @@ end = struct
   let cross_product = F.cross_product
 
   let op (op : op) n1 n2 =
-    let bool b = Immediate.bool b in
+    let bool b = Target_imm.bool b in
     match op with
     | Eq -> Some (bool (F.IEEE_semantics.equal n1 n2))
     | Neq -> Some (bool (not (F.IEEE_semantics.equal n1 n2)))
@@ -749,8 +749,8 @@ end = struct
 
   let result_of_comparison_with_nan (op : op) =
     match op with
-    | Neq -> Exactly Immediate.bool_true
-    | Eq | Lt | Gt | Le | Ge -> Exactly Immediate.bool_false
+    | Neq -> Exactly Target_imm.bool_true
+    | Eq | Lt | Gt | Le | Ge -> Exactly Target_imm.bool_false
 
   let op_lhs_unknown op ~rhs : _ binary_arith_outcome_for_one_side_only =
     if F.is_any_nan rhs then result_of_comparison_with_nan op
@@ -769,7 +769,7 @@ module Int_ops_for_binary_eq_comp (I : A.Int_number_kind) : sig
 end = struct
   module Lhs = I.Num
   module Rhs = I.Num
-  module Result = Immediate
+  module Result = Target_imm
 
   type op = P.equality_comparison
 
@@ -793,7 +793,7 @@ end = struct
   module Num = I.Num
 
   let op (op : P.equality_comparison) n1 n2 =
-    let bool b = Immediate.bool b in
+    let bool b = Target_imm.bool b in
     match op with
     | Eq -> Some (bool (Num.compare n1 n2 = 0))
     | Neq -> Some (bool (Num.compare n1 n2 <> 0))
@@ -843,7 +843,7 @@ let simplify_immutable_block_load ~result_kind dacc ~original_term _dbg
   | Unknown -> unchanged ()
   | Proved index ->
     let n =
-      Targetint.OCaml.add (Immediate.to_targetint index) Targetint.OCaml.one
+      Targetint.OCaml.add (Target_imm.to_targetint index) Targetint.OCaml.one
     in
     Simplify_common.simplify_projection
       dacc ~original_term ~deconstructing:block_ty
@@ -858,7 +858,7 @@ let simplify_phys_equal (op : P.equality_comparison)
   let const bool =
     let env_extension =
       TEE.one_equation result
-        (T.this_naked_immediate (Immediate.bool bool))
+        (T.this_naked_immediate (Target_imm.bool bool))
     in
     Reachable.reachable (Named.create_simple (Simple.const_bool bool)),
       env_extension, dacc
@@ -902,7 +902,7 @@ let simplify_phys_equal (op : P.equality_comparison)
         | _, _, _ ->
           let env_extension =
             TEE.one_equation result
-              (T.these_naked_immediates Immediate.all_bools)
+              (T.these_naked_immediates Target_imm.all_bools)
           in
           Reachable.reachable original_term, env_extension, dacc
         end
@@ -918,7 +918,7 @@ let simplify_phys_equal (op : P.equality_comparison)
       | _, _ ->
         let env_extension =
           TEE.one_equation result
-            (T.these_naked_immediates Immediate.all_bools)
+            (T.these_naked_immediates Target_imm.all_bools)
         in
         Reachable.reachable original_term, env_extension, dacc
       end
