@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2013--2019 OCamlPro SAS                                    *)
-(*   Copyright 2014--2019 Jane Street Group LLC                           *)
+(*   Copyright 2013--2020 OCamlPro SAS                                    *)
+(*   Copyright 2014--2020 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -18,8 +18,8 @@
 
 open! Simplify_import
 
-let simplify_named0 dacc ~(bound_vars : Bindable_let_bound.t)
-      (named : Named.t) =
+let simplify_named dacc ~(bound_vars : Bindable_let_bound.t)
+      (named : Named.t) ~after_traversal =
   match named with
   | Simple simple ->
     let bound_var = Bindable_let_bound.must_be_singleton bound_vars in
@@ -28,14 +28,18 @@ let simplify_named0 dacc ~(bound_vars : Bindable_let_bound.t)
     | Bottom, ty ->
       let dacc = DA.add_variable dacc bound_var (T.bottom (T.kind ty)) in
       let defining_expr = Reachable.invalid () in
-      [bound_vars, defining_expr], dacc
+      after_traversal dacc ~rebuild:(fun uacc ~after_rebuild ->
+        let bindings_outermost_first = [bound_vars, defining_expr] in
+        after_rebuild ~bindings_outermost_first uacc)
     | Ok new_simple, ty ->
       let dacc = DA.add_variable dacc bound_var ty in
       let defining_expr =
         if simple == new_simple then Reachable.reachable named
         else Reachable.reachable (Named.create_simple simple)
       in
-      [bound_vars, defining_expr], dacc
+      after_traversal dacc ~rebuild:(fun uacc ~after_rebuild ->
+        let bindings_outermost_first = [bound_vars, defining_expr] in
+        after_rebuild ~bindings_outermost_first uacc)
     end
   | Prim (prim, dbg) ->
     let bound_var = Bindable_let_bound.must_be_singleton bound_vars in
@@ -60,33 +64,9 @@ let simplify_named0 dacc ~(bound_vars : Bindable_let_bound.t)
       if T.is_bottom (DA.typing_env dacc) ty then Reachable.invalid ()
       else defining_expr
     in
-    [bound_vars, defining_expr], dacc
+    after_traversal dacc ~rebuild:(fun uacc ~after_rebuild ->
+      let bindings_outermost_first = [bound_vars, defining_expr] in
+      after_rebuild ~bindings_outermost_first uacc)
   | Set_of_closures set_of_closures ->
     Simplify_set_of_closures.simplify_non_lifted_set_of_closures dacc
-      ~bound_vars set_of_closures
-
-type simplify_named_result = {
-  bindings_outermost_first : (Bindable_let_bound.t * Reachable.t) list;
-  dacc : Downwards_acc.t;
-}
-
-let simplify_named dacc ~bound_vars named =
-  try
-    let bindings_outermost_first, dacc =
-      simplify_named0 dacc ~bound_vars named
-    in
-    { bindings_outermost_first;
-      dacc;
-    }
-  with Misc.Fatal_error -> begin
-    if !Clflags.flambda2_context_on_error then begin
-      Format.eprintf "\n%sContext is:%s simplifying [Let] binding@ %a =@ %a@ \
-          with downwards accumulator:@ %a\n"
-        (Flambda_colours.error ())
-        (Flambda_colours.normal ())
-        Bindable_let_bound.print bound_vars
-        Named.print named
-        DA.print dacc
-    end;
-    raise Misc.Fatal_error
-  end
+      ~bound_vars set_of_closures ~after_traversal

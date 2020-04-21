@@ -16,24 +16,45 @@
 
 (** Simplification of recursive groups of sets of closures. *)
 
-[@@@ocaml.warning "+a-4-30-40-41-42"]
+[@@@ocaml.warning "+a-30-40-41-42"]
 
 open! Simplify_import
 
 (** Simplify a single, non-lifted set of closures, as may occur on the
     right-hand side of a [Let] binding. *)
 val simplify_non_lifted_set_of_closures
-   : Downwards_acc.t
+   : DA.t
   -> bound_vars:Bindable_let_bound.t
   -> Set_of_closures.t
-  -> (Bindable_let_bound.t * Reachable.t) list * Downwards_acc.t
+  -> after_traversal:(
+       DA.t
+    -> rebuild:(
+         UA.t
+      -> after_rebuild:(
+           bindings_outermost_first:(Bindable_let_bound.t * Reachable.t) list
+        -> UA.t
+        -> 'a)
+      -> 'a)
+    -> 'b)
+  -> 'b
 
 (** Simplify a group of possibly-recursive sets of closures, as may occur on
     the right-hand side of a [Let_symbol] binding. *)
 val simplify_lifted_sets_of_closures
-   : Downwards_acc.t
+   : DA.t
   -> orig_bound_symbols:Bound_symbols.t
   -> orig_static_const:Static_const.t
   -> Bound_symbols.Code_and_set_of_closures.t list
   -> Static_const.Code_and_set_of_closures.t list
-  -> Bound_symbols.t * Static_const.t * Downwards_acc.t
+  -> after_traversal:(
+       DA.t
+    -> rebuild:(
+         UA.t
+      -> after_rebuild:(
+           Bound_symbols.t
+        -> Static_const.t
+        -> UA.t
+        -> 'a)
+      -> 'a)
+    -> 'b)
+  -> 'b

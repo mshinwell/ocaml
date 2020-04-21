@@ -73,6 +73,12 @@ module Bound_symbols = struct
           Name_occurrences.add_symbol bound_names closure_sym Name_mode.normal)
         closure_symbols
         from_code_ids
+
+    let equal
+          { code_ids = code_ids1; closure_symbols = closure_symbols1; }
+          { code_ids = code_ids2; closure_symbols = closure_symbols2; } =
+      Code_id.Set.equal code_ids1 code_ids2
+        && Closure_id.Map.equal Symbol.equal closure_symbols1 closure_symbols2
   end
 
   type t =
@@ -147,6 +153,14 @@ module Bound_symbols = struct
     | Sets_of_closures sets ->
       Name_occurrences.union_list
         (List.map Code_and_set_of_closures.free_names sets)
+
+  let equal t1 t2 =
+    match t1, t2 with
+    | Singleton sym1, Singleton sym2 -> Symbol.equal sym1 sym2
+    | Sets_of_closures sets1, Sets_of_closures sets2 ->
+      Misc.Stdlib.List.equal Code_and_set_of_closures.equal sets1 sets2
+    | Singleton _, Sets_of_closures _ | Sets_of_closures _, Singleton _ ->
+      false
 end
 
 module Scoping_rule = struct

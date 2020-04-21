@@ -63,6 +63,12 @@ let build_dep_graph dacc lifted_constants =
           ~f:(fun free_syms name ->
             Name.pattern_match name
               ~var:(fun var ->
+                let dacc =
+                  match dacc with
+                  | Some dacc -> dacc
+                  | None ->
+                    Misc.fatal_error "dacc not available in this context"
+                in
                 let typing_env = DA.typing_env dacc in
                 try
                   match

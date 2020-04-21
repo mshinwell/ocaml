@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2013--2019 OCamlPro SAS                                    *)
-(*   Copyright 2014--2019 Jane Street Group LLC                           *)
+(*   Copyright 2013--2020 OCamlPro SAS                                    *)
+(*   Copyright 2014--2020 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -66,19 +66,21 @@ let run ~backend ~round unit =
   let denv = DE.increment_continuation_scope_level denv in
   let r = R.create ~resolver:(DE.resolver denv) in
   let dacc = DA.create denv Continuation_uses_env.empty r in
-  let body, _cont_uses_env, r =
-    let exn_continuation =
-      Exn_continuation.create ~exn_handler:exn_continuation ~extra_args:[]
-    in
-    Simplify_toplevel.simplify_toplevel dacc (FU.body unit) ~return_continuation
-      ~return_arity:[K.value] exn_continuation ~return_cont_scope
-      ~exn_cont_scope
+  let exn_continuation' =
+    Exn_continuation.create ~exn_handler:exn_continuation ~extra_args:[]
   in
-  let imported_symbols = R.imported_symbols r in
-  check_imported_symbols_don't_overlap_predef_exns
-    ~imported_symbols:imported_symbols ~predef_exn_symbols
-    ~descr:"after simplification";
-  FU.create ~imported_symbols
-    ~return_continuation
-    ~exn_continuation
-    ~body
+  Simplify_toplevel.simplify_toplevel dacc (FU.body unit) ~return_continuation
+    ~return_arity:[K.value] exn_continuation' ~return_cont_scope
+    ~exn_cont_scope ~after_traversal:(fun dacc ~rebuild ->
+      let uacc =
+        UA.create UE.empty (DA.code_age_relation dacc) (DA.r dacc)
+      in
+      rebuild uacc ~after_rebuild:(fun body uacc ->
+        let imported_symbols = R.imported_symbols (UA.r uacc) in
+        check_imported_symbols_don't_overlap_predef_exns
+          ~imported_symbols:imported_symbols ~predef_exn_symbols
+          ~descr:"after simplification";
+        FU.create ~imported_symbols
+          ~return_continuation
+          ~exn_continuation
+          ~body))

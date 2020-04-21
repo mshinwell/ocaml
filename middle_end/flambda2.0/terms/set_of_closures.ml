@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2013--2019 OCamlPro SAS                                    *)
-(*   Copyright 2014--2019 Jane Street Group LLC                           *)
+(*   Copyright 2013--2020 OCamlPro SAS                                    *)
+(*   Copyright 2014--2020 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -14,7 +14,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-30-40-41-42"]
+[@@@ocaml.warning "+a-30-40-41-42"]
 
 type t = {
   function_decls : Function_declarations.t;
@@ -22,7 +22,7 @@ type t = {
 }
 
 let print_with_cache ~cache ppf
-      { function_decls; 
+      { function_decls;
         closure_elements;
       } =
   Format.fprintf ppf "@[<hov 1>(%sset_of_closures%s@ \
@@ -89,7 +89,7 @@ let environment_doesn't_mention_variables t =
     t.closure_elements
 
 let print_with_cache ~cache ppf
-      { function_decls; 
+      { function_decls;
         closure_elements;
       } =
   if Var_within_closure.Map.is_empty closure_elements then
@@ -121,7 +121,7 @@ let free_names
   ]
 
 let apply_name_permutation
-      ({ function_decls; 
+      ({ function_decls;
          closure_elements;
        } as t) perm =
   let function_decls' =
@@ -147,3 +147,10 @@ let filter_function_declarations t ~f =
   { t with
     function_decls;
   }
+
+let same_closure_vars
+      { closure_elements = closure_elements1; _ }
+      { closure_elements = closure_elements2; _ } =
+  let closure_vars1 = Var_within_closure.Map.keys closure_elements1 in
+  let closure_vars2 = Var_within_closure.Map.keys closure_elements2 in
+  Var_within_closure.Set.equal closure_vars1 closure_vars2

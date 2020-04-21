@@ -14,12 +14,26 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Simplification of statically-allocated constants bound to symbols. *)
+(** Simplification of statically-allocated constants bound to symbols
+    (i.e. the right-hand sides of [Let_symbol] expressions). *)
 
-[@@@ocaml.warning "+a-4-30-40-41-42"]
+[@@@ocaml.warning "+a-30-40-41-42"]
+
+open! Simplify_import
 
 val simplify_static_const
    : Downwards_acc.t
   -> Flambda.Let_symbol_expr.Bound_symbols.t
   -> Static_const.t
-  -> Flambda.Let_symbol_expr.Bound_symbols.t * Static_const.t * Downwards_acc.t
+  -> after_traversal:(
+       DA.t
+    -> rebuild:(
+         UA.t
+      -> after_rebuild:(
+           Bound_symbols.t
+        -> Static_const.t
+        -> UA.t
+        -> 'a)
+      -> 'a)
+    -> 'b)
+  -> 'b

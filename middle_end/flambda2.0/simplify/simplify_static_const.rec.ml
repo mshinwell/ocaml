@@ -14,11 +14,10 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-30-40-41-42"]
+[@@@ocaml.warning "+a-30-40-41-42"]
 
 open! Simplify_import
 
-module Bound_symbols = Let_symbol.Bound_symbols
 module Field_of_block = Static_const.Field_of_block
 
 (* CR-someday mshinwell: Finish improved simplification using types *)
@@ -147,15 +146,16 @@ let simplify_static_const_of_kind_value dacc
       SC.print static_const
 
 let simplify_static_const dacc (bound_symbols : Bound_symbols.t)
-      (static_const : SC.t) : Bound_symbols.t * SC.t * DA.t =
+      (static_const : SC.t) ~after_traversal =
   match bound_symbols with
   | Singleton result_sym ->
     let static_const, dacc =
       simplify_static_const_of_kind_value dacc static_const ~result_sym
     in
-    bound_symbols, static_const, dacc
+    after_traversal dacc ~rebuild:(fun uacc ~after_rebuild ->
+      after_rebuild bound_symbols static_const uacc)
   | Sets_of_closures bound_symbols' ->
     let sets = SC.must_be_sets_of_closures static_const in
     Simplify_set_of_closures.simplify_lifted_sets_of_closures dacc
       ~orig_bound_symbols:bound_symbols ~orig_static_const:static_const
-      bound_symbols' sets
+      bound_symbols' sets ~after_traversal

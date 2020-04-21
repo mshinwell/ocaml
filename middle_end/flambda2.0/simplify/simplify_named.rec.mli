@@ -16,15 +16,22 @@
 
 (** Simplification of the right-hand sides of [Let] bindings. *)
 
-[@@@ocaml.warning "+a-4-30-40-41-42"]
+[@@@ocaml.warning "+a-30-40-41-42"]
 
-type simplify_named_result = private {
-  bindings_outermost_first : (Bindable_let_bound.t * Reachable.t) list;
-  dacc : Downwards_acc.t;
-}
+open! Simplify_import
 
 val simplify_named
-   : Downwards_acc.t
+   : DA.t
   -> bound_vars:Bindable_let_bound.t
-  -> Flambda.Named.t
-  -> simplify_named_result
+  -> Named.t
+  -> after_traversal:(
+       DA.t
+    -> rebuild:(
+         UA.t
+      -> after_rebuild:(
+           bindings_outermost_first:(Bindable_let_bound.t * Reachable.t) list
+        -> UA.t
+        -> 'a)
+      -> 'a)
+    -> 'b)
+  -> 'b

@@ -107,7 +107,7 @@ let lift_set_of_closures_discovered_via_reified_continuation_param_types dacc
             closure_id
             |> Closure_id.rename
             |> Closure_id.to_string
-            |> Linkage_name.create 
+            |> Linkage_name.create
           in
           Symbol.create (Compilation_unit.get_current_exn ()) name)
         function_decls
@@ -288,7 +288,7 @@ let lift_via_reification_of_continuation_param_types0 dacc ~params
      Cmm translation phase). (Any SCC class containing >1 set of closures is
      maybe a bug?) *)
   let reified_definitions =
-    Sort_lifted_constants.sort dacc reified_definitions
+    Sort_lifted_constants.sort (Some dacc) reified_definitions
   in
   let handler =
     List.fold_left (fun handler (bound_symbols, defining_expr) ->

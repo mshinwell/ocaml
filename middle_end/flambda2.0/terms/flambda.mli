@@ -253,6 +253,8 @@ end and Let_symbol_expr : sig
 
     val everything_being_defined : t -> Code_id_or_symbol.Set.t
 
+    val equal : t -> t -> bool
+
     include Expr_std.S with type t := t
   end
 

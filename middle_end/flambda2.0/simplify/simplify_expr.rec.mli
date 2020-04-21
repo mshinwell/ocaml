@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2013--2019 OCamlPro SAS                                    *)
-(*   Copyright 2014--2019 Jane Street Group LLC                           *)
+(*   Copyright 2013--2020 OCamlPro SAS                                    *)
+(*   Copyright 2014--2020 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -14,12 +14,17 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-30-40-41-42"]
+(** Simplification of expressions. *)
 
-type 'a k = Downwards_acc.t -> ('a * Upwards_acc.t)
+[@@@ocaml.warning "+a-30-40-41-42"]
+
+open! Simplify_import
 
 val simplify_expr
-   : Downwards_acc.t
-  -> Flambda.Expr.t
-  -> 'a k
-  -> Flambda.Expr.t * 'a * Upwards_acc.t
+   : DA.t
+  -> Expr.t
+  -> after_traversal:(
+       DA.t
+    -> rebuild:(UA.t -> after_rebuild:(Expr.t -> UA.t -> 'a) -> 'a)
+    -> 'b)
+  -> 'b

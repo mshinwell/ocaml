@@ -51,4 +51,6 @@ val filter_function_declarations
   -> f:(Closure_id.t -> Function_declaration.t -> bool)
   -> t
 
+val same_closure_vars : t -> t -> bool
+
 include Identifiable.S with type t := t
