@@ -102,6 +102,9 @@ type error =
   | Unrefuted_pattern of pattern
   | Invalid_extension_constructor_payload
   | Not_an_extension_constructor
+  | Probe_format
+  | Probe_name_format of string
+  | Probe_is_enabled_format
   | Literal_overflow of string
   | Unknown_literal of string * char
   | Illegal_letrec_pat
@@ -169,6 +172,14 @@ type recarg =
   | Required
   | Rejected
 
+let check_probe_name name loc env =
+  if String.length name > 100 then
+    Location.prerr_warning loc (Warnings.Probe_name_too_long name);
+  String.iter (fun c ->
+    match c with
+    | 'a'..'z' | 'A'..'Z' | '0'..'9' | '_' -> ()
+    | _ -> raise (Error (loc, env, (Probe_name_format name)))
+  ) name
 
 let mk_expected ?explanation ty = { ty; explanation; }
 
@@ -1829,6 +1840,7 @@ let rec is_nonexpansive exp =
   | Texp_constant _
   | Texp_unreachable
   | Texp_function _
+  | Texp_probe_is_enabled _
   | Texp_array [] -> true
   | Texp_let(_rec_flag, pat_exp_list, body) ->
       List.for_all (fun vb -> is_nonexpansive vb.vb_expr) pat_exp_list &&
@@ -1854,6 +1866,7 @@ let rec is_nonexpansive exp =
            is_nonexpansive_opt c_guard && is_nonexpansive c_rhs
            && not (contains_exception_pat c_lhs)
         ) cases
+  | Texp_probe {handler} -> is_nonexpansive handler
   | Texp_tuple el ->
       List.for_all is_nonexpansive el
   | Texp_construct( _, _, el) ->
@@ -2115,6 +2128,7 @@ let check_partial_application statement exp =
             | Texp_setinstvar _ | Texp_override _ | Texp_assert _
             | Texp_lazy _ | Texp_object _ | Texp_pack _ | Texp_unreachable
             | Texp_extension_constructor _ | Texp_ifthenelse (_, _, None)
+            | Texp_probe _ | Texp_probe_is_enabled _
             | Texp_function _ ->
                 check_statement ()
             | Texp_match (_, cases, _) ->
@@ -3448,8 +3462,52 @@ and type_expect_
       | _ ->
           raise (Error (loc, env, Invalid_extension_constructor_payload))
       end
+  | Pexp_extension ({ txt = ("probe" | "ocaml.probe"); _ }, payload) ->
+      begin match payload with
+      | PStr
+          ([{ pstr_desc =
+                Pstr_eval
+                  ({ pexp_desc =
+                       (Pexp_apply
+                          ({ pexp_desc=
+                               (Pexp_constant (Pconst_string(name,None)));
+                             pexp_loc = name_loc;
+                             _ }
+                          , [Nolabel, ({pexp_loc = arg_loc; _ } as arg)]))
+                   ; _ }
+                  , _)}]) ->
+        check_probe_name name name_loc env;
+        if Config.with_frame_pointers then
+          Location.prerr_warning arg_loc Warnings.Probe_handler_ignored;
+        let exp = type_expect env arg (mk_expected Predef.type_unit) in
+        rue {
+          exp_desc = Texp_probe {name; handler=exp};
+          exp_loc = loc; exp_extra = [];
+          exp_type = instance Predef.type_unit;
+          exp_attributes = sexp.pexp_attributes;
+          exp_env = env }
+      | _ -> raise (Error (loc, env, Probe_format))
+    end
+  | Pexp_extension ({ txt = ("probe_is_enabled"
+                            |"ocaml.probe_is_enabled"); _ }, payload) ->
+      begin match payload with
+      | PStr ([{ pstr_desc =
+                   Pstr_eval
+                     ({pexp_desc=(Pexp_constant (Pconst_string(name,None)));
+                       pexp_loc = name_loc;
+                       _ } ,
+                      _)}]) ->
+        check_probe_name name name_loc env;
+        rue {
+          exp_desc = Texp_probe_is_enabled {name};
+          exp_loc = loc; exp_extra = [];
+          exp_type = instance Predef.type_bool;
+          exp_attributes = sexp.pexp_attributes;
+          exp_env = env }
+      | _ -> raise (Error (loc, env, Probe_is_enabled_format))
+    end
   | Pexp_extension ext ->
-      raise (Error_forward (Builtin_attributes.error_of_extension ext))
+    raise (Error_forward (Builtin_attributes.error_of_extension ext))
 
   | Pexp_unreachable ->
       re { exp_desc = Texp_unreachable;
@@ -5205,6 +5263,18 @@ let report_error ~loc env = function
   | Not_an_extension_constructor ->
       Location.errorf ~loc
         "This constructor is not an extension constructor."
+  | Probe_name_format name ->
+      Location.errorf ~loc
+        "Illegal characters in %s. \
+         Probe name must consist of alphanumeric characters or underscores."
+        name
+  | Probe_format ->
+      Location.errorf ~loc
+        "Probe should consist of a string literal name followed by\
+         a single expression of type unit."
+  | Probe_is_enabled_format ->
+      Location.errorf ~loc
+        "Extension probe_is_enabled should consist of a string literal name"
   | Literal_overflow ty ->
       Location.errorf ~loc
         "Integer literal exceeds the range of representable integers of type %s"

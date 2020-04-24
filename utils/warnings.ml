@@ -92,6 +92,10 @@ type t =
   | Redefining_unit of string               (* 65 *)
   | Unused_open_bang of string              (* 66 *)
   | Unused_functor_parameter of string      (* 67 *)
+  | Probe_too_many_args of int              (* 68 *)
+  | Probe_name_too_long of string           (* 69 *)
+  | Probe_handler_ignored                   (* 70 *)
+  | Probe_ignored                           (* 71 *)
 ;;
 
 (* If you remove a warning, leave a hole in the numbering.  NEVER change
@@ -170,9 +174,13 @@ let number = function
   | Redefining_unit _ -> 65
   | Unused_open_bang _ -> 66
   | Unused_functor_parameter _ -> 67
+  | Probe_too_many_args _ -> 68
+  | Probe_name_too_long _ -> 69
+  | Probe_handler_ignored -> 70
+  | Probe_ignored -> 71
 ;;
 
-let last_warning_number = 67
+let last_warning_number = 71
 ;;
 
 (* Must be the max number returned by the [number] function. *)
@@ -631,6 +639,22 @@ let message = function
          which shadows the existing one.\n\
          Hint: Did you mean 'type %s = unit'?" name
   | Unused_functor_parameter s -> "unused functor parameter " ^ s ^ "."
+  | Probe_too_many_args n ->
+      Printf.sprintf
+        "Probe with %d arguments.\n\
+         Probes with more than 12 arguments might not be supported \
+         in kernel mode.\n" n
+  | Probe_name_too_long name ->
+      Printf.sprintf
+        "Probe name is too long: %s.\n\
+         Probes names over 100 character long might not be supported \
+         in kernel mode.\n" name
+  | Probe_handler_ignored ->
+      "Probe handler is ignored. No support for ocaml probe handlers \
+        when the compiler is configured with frame pointers. \
+        Generating probes for external tools, such as SystemTap and Dtrace.\n"
+  | Probe_ignored ->
+      "Probe is ignored. Not supported on this target."
 ;;
 
 let nerrors = ref 0;;
@@ -775,6 +799,7 @@ let descriptions =
    64, "-unsafe used with a preprocessor returning a syntax tree";
    65, "Type declaration defining a new '()' constructor";
    66, "Unused open! statement";
+   67, "More than 12 arguments to probe."
   ]
 ;;
 

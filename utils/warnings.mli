@@ -94,6 +94,10 @@ type t =
   | Redefining_unit of string               (* 65 *)
   | Unused_open_bang of string              (* 66 *)
   | Unused_functor_parameter of string      (* 67 *)
+  | Probe_too_many_args of int              (* 68 *)
+  | Probe_name_too_long of string           (* 69 *)
+  | Probe_handler_ignored                   (* 70 *)
+  | Probe_ignored                           (* 71 *)
 ;;
 
 type alert = {kind:string; message:string; def:loc; use:loc}
