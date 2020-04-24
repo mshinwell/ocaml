@@ -341,6 +341,7 @@ let primitive ppf = function
   | Pbbswap(bi) -> print_boxed_integer "bswap" ppf bi
   | Pint_as_pointer -> fprintf ppf "int_as_pointer"
   | Popaque -> fprintf ppf "opaque"
+  | Pprobe_is_enabled {name} -> fprintf ppf "probe_is_enabled[%s]" name
 
 let name_of_primitive = function
   | Pidentity -> "Pidentity"
@@ -444,6 +445,7 @@ let name_of_primitive = function
   | Pbbswap _ -> "Pbbswap"
   | Pint_as_pointer -> "Pint_as_pointer"
   | Popaque -> "Popaque"
+  | Pprobe_is_enabled _ -> "Pprobe_is_enabled"
 
 let function_attribute ppf { inline; specialise; local; is_a_functor; stub } =
   if is_a_functor then
@@ -482,6 +484,10 @@ let apply_specialised_attribute ppf = function
   | Always_specialise -> fprintf ppf " always_specialise"
   | Never_specialise -> fprintf ppf " never_specialise"
 
+let apply_probe ppf = function
+  | None -> ()
+  | Some {name} -> fprintf ppf " (probe %s)" name
+
 let rec lam ppf = function
   | Lvar id ->
       Ident.print ppf id
@@ -490,28 +496,12 @@ let rec lam ppf = function
   | Lapply ap ->
       let lams ppf largs =
         List.iter (fun l -> fprintf ppf "@ %a" lam l) largs in
-      fprintf ppf "@[<2>(apply@ %a%a%a%a%a)@]" lam ap.ap_func lams ap.ap_args
+      fprintf ppf "@[<2>(apply@ %a%a%a%a%a%a)@]" lam ap.ap_func lams ap.ap_args
         apply_tailcall_attribute ap.ap_should_be_tailcall
         apply_inlined_attribute ap.ap_inlined
         apply_specialised_attribute ap.ap_specialised
-  | Lfunction{kind; params; return; body; attr} ->
-      let pr_params ppf params =
-        match kind with
-        | Curried ->
-            List.iter (fun (param, k) ->
-                fprintf ppf "@ %a%a" Ident.print param value_kind k) params
-        | Tupled ->
-            fprintf ppf " (";
-            let first = ref true in
-            List.iter
-              (fun (param, k) ->
-                if !first then first := false else fprintf ppf ",@ ";
-                Ident.print ppf param;
-                value_kind ppf k)
-              params;
-            fprintf ppf ")" in
-      fprintf ppf "@[<2>(function%a@ %a%a%a)@]" pr_params params
-        function_attribute attr return_kind return lam body
+        apply_probe ap.ap_probe
+  | Lfunction lf -> lfunction ppf lf
   | Llet(str, k, id, arg, body) ->
       let kind = function
           Alias -> "a" | Strict -> "" | StrictOpt -> "o" | Variable -> "v"
@@ -640,6 +630,25 @@ and sequence ppf = function
       fprintf ppf "%a@ %a" sequence l1 sequence l2
   | l ->
       lam ppf l
+
+and lfunction ppf ({kind; params; return; body; attr} : Lambda.lfunction) =
+  let pr_params ppf params =
+    match kind with
+    | Curried ->
+      List.iter (fun (param, k) ->
+        fprintf ppf "@ %a%a" Ident.print param value_kind k) params
+    | Tupled ->
+      fprintf ppf " (";
+      let first = ref true in
+      List.iter
+        (fun (param, k) ->
+           if !first then first := false else fprintf ppf ",@ ";
+           Ident.print ppf param;
+           value_kind ppf k)
+        params;
+      fprintf ppf ")" in
+  fprintf ppf "@[<2>(function%a@ %a%a%a)@]" pr_params params
+    function_attribute attr return_kind return lam body
 
 let structured_constant = struct_const
 

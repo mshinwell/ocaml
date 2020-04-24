@@ -142,6 +142,8 @@ type primitive =
   | Pint_as_pointer
   (* Inhibition of optimisation *)
   | Popaque
+  (* Statically-defined probes *)
+  | Pprobe_is_enabled of { name: string }
 
 and integer_comparison =
     Ceq | Cne | Clt | Cgt | Cle | Cge
@@ -229,6 +231,9 @@ let equal_inline_attribute x y =
   | (Always_inline | Never_inline | Unroll _ | Default_inline), _ ->
     false
 
+type probe_desc = { name: string }
+type probe = probe_desc option
+
 type specialise_attribute =
   | Always_specialise (* [@specialise] or [@specialise always] *)
   | Never_specialise (* [@specialise never] *)
@@ -308,7 +313,9 @@ and lambda_apply =
     ap_loc : Location.t;
     ap_should_be_tailcall : bool;
     ap_inlined : inline_attribute;
-    ap_specialised : specialise_attribute; }
+    ap_specialised : specialise_attribute;
+    ap_probe : probe;
+  }
 
 and lambda_switch =
   { sw_numconsts: int;
@@ -760,7 +767,7 @@ let shallow_map f = function
   | Lvar _
   | Lconst _ as lam -> lam
   | Lapply { ap_func; ap_args; ap_loc; ap_should_be_tailcall;
-             ap_inlined; ap_specialised } ->
+             ap_inlined; ap_specialised; ap_probe; } ->
       Lapply {
         ap_func = f ap_func;
         ap_args = List.map f ap_args;
@@ -768,6 +775,7 @@ let shallow_map f = function
         ap_should_be_tailcall;
         ap_inlined;
         ap_specialised;
+        ap_probe;
       }
   | Lfunction { kind; params; return; body; attr; loc; } ->
       Lfunction { kind; params; return; body = f body; attr; loc; }

@@ -97,6 +97,15 @@ let slot_offset loc cl =
       else !stack_offset + (num_stack_slots.(0) + n) * 8
   | Outgoing n -> n
 
+let emit_stack_offset n =
+  if n < 0
+  then I.add (int (-n)) rsp
+  else if n > 0
+  then I.sub (int n) rsp;
+  if n <> 0
+  then cfi_adjust_cfa_offset n;
+  stack_offset := !stack_offset + n
+
 (* Symbols *)
 
 let symbol_prefix = if system = S_macosx then "_" else ""
@@ -487,6 +496,14 @@ let emit_global_label s =
   D.global lbl;
   _label lbl
 
+let move (src : Reg.t) (dst : Reg.t) =
+  if src.loc <> dst.loc then
+    begin match src.typ, src.loc, dst.loc with
+    | Float, Reg.Reg _, Reg.Reg _ -> I.movapd (reg src) (reg dst)
+    | Float, _, _ -> I.movsd (reg src) (reg dst)
+    | _ -> I.mov (reg src) (reg dst)
+    end
+
 (* Output .text section directive, or named .text.caml.<name> if enabled and
    supported on the target system. *)
 
@@ -514,6 +531,95 @@ let function_name = ref ""
 (* Entry point for tail recursive calls *)
 let tailrec_entry_point = ref 0
 
+(* Emit tracing probes *)
+type probe =
+  {
+    probe_label: label;
+    probe_name: string;
+    probe_handler : string;
+    probe_insn: Linear.instruction;
+  }
+
+let probe_handler_wrapper_name probe_label =
+  let w = Printf.sprintf "probe_wrapper_%d" probe_label in
+  Compilenv.make_symbol (Some w)
+  |> emit_symbol
+
+let probes = ref []
+
+let probe_semaphores = ref String.Map.empty
+
+let reset_probes () =
+  probes := [];
+  probe_semaphores := String.Map.empty
+
+let find_or_add_semaphore name =
+  match String.Map.find_opt name !probe_semaphores with
+  | Some label -> label
+  | None ->
+    let sym = Compilenv.make_symbol (Some ("semaphore_"^name)) in
+    add_def_symbol sym;
+    let lbl = emit_symbol sym in
+    probe_semaphores := String.Map.add name lbl !probe_semaphores;
+    lbl
+
+let is_stack (r : Reg.t) =
+  match r.loc with
+  | Stack _ -> true
+  | _ -> false
+
+let is_reg (r : Reg.t) =
+  match r.loc with
+  | Reg _ -> true
+  | _ -> false
+
+let emit_call_probe_handler i ~probe_label =
+  let wrap_label = probe_handler_wrapper_name probe_label in
+  (* Next, emit cmp that is effectively a nop:
+     it only sets flags that are not read anywhere.
+     To enable the probe, cmp is replaced with call
+     by changing the first byte of the encoding from 3d to e8.
+     The target of the call is a displacement relative to
+     the next instruction. Hence, the immediate operand
+     of cmp is set up to have that value. *)
+  if !Clflags.pic_code then begin
+    (* Emit cmp and explicit relocation on it, as for a call instruction.
+
+       When the immediate operand of cmp is a symbol with "@PLT",
+       the assembler generates the relocation we need,
+       but not the encoding we need for cmp.
+       A different, longer, encoding is generated because the symbol is
+       interpreted as a memory operand, not an immediate.
+       Therefore, we emit the relocation manually, using .reloc directive,
+       on the immediate operand of "cmp $0, %eax".
+       However, the assembler does not generate the encoding we need for this cmp.
+       It generates a shorter encoding, because the immediate value 0 is small
+       enough for it, but 0 is the expected value for a "standard" plt relocation.
+
+       If cmp instruction is assembled differently from what we expect,
+       then applying the relocation might the change the meaning of the program. *)
+    let offset = ConstSub(ConstThis,(Const 4L)) in
+    let name = R_X86_64_PLT32 in
+    let sym = ConstLabel wrap_label in
+    let expr = ConstSub (sym, (Const 4L)) in
+    (* Emit the required encoding of "cmp $0, %eax" directly, using .byte *)
+    D.byte (Const 0x3dL);
+    D.byte (Const 0L);
+    D.byte (Const 0L);
+    D.byte (Const 0L);
+    D.byte (Const 0L);
+    D.reloc ~offset ~name ~expr;
+  end else begin
+    (* Emit absolute value, no relocation.
+       The immediate operand of cmp is the offset of the wrapper
+       from the current instruction's address "."
+       minus the length of the current instruction, which is 5,
+       and the wrapper is emitted at the end of the compilation unit. *)
+    I.cmp (sym (Printf.sprintf "%s - . - 5" wrap_label)) eax
+  end;
+  let stack_live = Reg.Set.filter is_stack i.live in
+  record_frame stack_live false i.dbg
+
 (* Emit an instruction *)
 let emit_instr fallthrough i =
   emit_debug_info i.dbg;
@@ -535,13 +641,7 @@ let emit_instr fallthrough i =
       end;
     end
   | Lop(Imove | Ispill | Ireload) ->
-      let src = i.arg.(0) and dst = i.res.(0) in
-      if src.loc <> dst.loc then
-        begin match src.typ, src.loc, dst.loc with
-        | Float, Reg.Reg _, Reg.Reg _ -> I.movapd (reg src) (reg dst)
-        | Float, _, _ -> I.movsd (reg src) (reg dst)
-        | _ -> I.mov (reg src) (reg dst)
-        end
+      move i.arg.(0) i.res.(0)
   | Lop(Iconst_int n) ->
       if n = 0n then begin
         match i.res.(0).loc with
@@ -613,13 +713,7 @@ let emit_instr fallthrough i =
         end
       end
   | Lop(Istackoffset n) ->
-      if n < 0
-      then I.add (int (-n)) rsp
-      else if n > 0
-      then I.sub (int n) rsp;
-      if n <> 0
-      then cfi_adjust_cfa_offset n;
-      stack_offset := !stack_offset + n
+      emit_stack_offset n
   | Lop(Iload(chunk, addr)) ->
       let dest = res i 0 in
       begin match chunk with
@@ -799,6 +893,34 @@ let emit_instr fallthrough i =
   | Lop(Ispecific(Isextend32)) ->
       I.movsxd (arg32 i 0) (res i 0)
   | Lop (Iname_for_debugger _) -> ()
+  | Lop (Iprobe {name; handler_code_sym}) ->
+    if windows then begin
+      Location.prerr_warning (Debuginfo.to_location i.dbg)
+        Warnings.Probe_ignored
+    end else begin
+      let probe_label = new_label () in
+      let p = { probe_label;
+                probe_name = name;
+                probe_handler = handler_code_sym;
+                probe_insn = i;
+              } in
+      probes := p :: !probes;
+      def_label probe_label;
+      I.nop (); (* for uprobes and usdt probes as well *)
+      if not fp then emit_call_probe_handler i ~probe_label
+    end
+  | Lop (Iprobe_is_enabled {name}) ->
+    if windows then begin
+      Location.prerr_warning (Debuginfo.to_location i.dbg)
+        Warnings.Probe_ignored;
+      I.mov (int 1) (res i 0); (*always returns false *)
+    end else begin
+      let semaphore_label = find_or_add_semaphore name in
+      add_used_symbol semaphore_label;
+      I.movzx (mem64_rip WORD semaphore_label) (res i 0);
+      I.sal (int 1) (res i 0);
+      I.or_ (int 1) (res i 0)
+    end
   | Lreloadretaddr ->
       ()
   | Lreturn ->
@@ -932,6 +1054,16 @@ let rec emit_all fallthrough i =
 
 let all_functions = ref []
 
+let emit_function_type_and_size fun_name =
+  match system with
+  | S_gnu | S_linux ->
+    D.type_ (emit_symbol fun_name) "@function";
+    D.size (emit_symbol fun_name)
+      (ConstSub (
+         ConstThis,
+         ConstLabel (emit_symbol fun_name)))
+  | _ -> ()
+
 (* Emission of a function declaration *)
 
 let fundecl fundecl =
@@ -972,15 +1104,8 @@ let fundecl fundecl =
     end;
   end;
   cfi_endproc ();
-  begin match system with
-  | S_gnu | S_linux ->
-      D.type_ (emit_symbol fundecl.fun_name) "@function";
-      D.size (emit_symbol fundecl.fun_name)
-        (ConstSub (
-            ConstThis,
-            ConstLabel (emit_symbol fundecl.fun_name)))
-  | _ -> ()
-  end
+  emit_function_type_and_size fundecl.fun_name;
+  ()
 
 (* Emission of data *)
 
@@ -1009,6 +1134,7 @@ let begin_assembly() =
   X86_proc.reset_asm_code ();
   reset_debug_info();                   (* PR#5603 *)
   reset_imp_table();
+  reset_probes ();
   float_constants := [];
   all_functions := [];
   used_labels := Int.Set.empty;
@@ -1091,6 +1217,248 @@ let emit_spacetime_shapes () =
   D.qword (Const 0L);
   D.comment "End of Spacetime shapes."
 
+let reg_size (reg : Reg.t) =
+  match reg.typ with
+  | Float -> Arch.size_float
+  | Addr | Int | Val -> Arch.size_int
+
+
+(* Compare registers based on their locations only (not stamps). *)
+module RegLocOrder =
+  struct
+    type t = Reg.t
+    let compare s1 s2 =
+      (* Local < Incoming < Outgoing *)
+      match s1, s2 with
+      | Local n1, Local n2
+      | Incoming n1, Incoming n2
+      | Outgoing n1, Outgoing n2
+        -> n1 - n2
+      | Local _, _ -> (-1)
+      | _, Local _ -> 1
+      | Outgoing _, _ -> 1
+      | _, Outgoing _ -> (-1)
+
+    let compare l1 l2 =
+      (* Reg < Stack  < Unknown *)
+      match l1,l2 with
+      | Reg n1, Reg n2 -> n1 - n2
+      | Stack s1, Stack s2 -> compare s1 s2
+      | Unknown, _ -> 1
+      | _, Unknown -> (-1)
+      | Reg _, _ -> (-1)
+      | _,  Reg _ -> 1
+
+    let compare r1 r2 = compare r1.loc r2.loc
+  end
+
+module RegLocSet = Stdlib.Set.Make(RegLocOrder)
+module RegLocMap = Stdlib.Map.Make(RegLocOrder)
+let to_reglocset s =
+  Reg.Set.elements s |> RegLocSet.of_list
+
+let emit_probe_handler_wrapper p =
+  let wrap_label = probe_handler_wrapper_name p.probe_label in
+  D.comment (Printf.sprintf "probe %s %s" p.probe_name p.probe_handler);
+  D.align 16;
+  _label wrap_label;
+  (* CR gyorsh: does cfi_startproc reset the cfi offset?
+     does it matter if stack_offset and cfi offset get out of sync ? *)
+  cfi_startproc ();
+  (* Account for the return address that is now pushed on the stack,
+     but reuse the caller's frame for the wrapper, because
+     the wrapper may refer to handler args on caller's stack frame. *)
+  stack_offset := !stack_offset + 8;
+  (* Prepare to call the handler: calculate and allocate stack space. *)
+  let (loc_args, _) = Proc.loc_arguments p.probe_insn.arg in
+  (* Ignore the stack offset returned by loc_arguments, to avoid
+     extra padding twice due to alignment needed again for saved regs. *)
+  let args_ofs = Array.fold_right
+                   (fun r acc ->
+                      if is_stack r then acc + reg_size r
+                      else acc
+                   ) loc_args 0 in
+  (* Save arguments passed in registers to the handler,
+     even if they are not in the live set at the probe site,
+     because it simplifies the code below
+     that moves the args to the correct registers to pass to the handler.  *)
+  let live = to_reglocset p.probe_insn.live in
+  let dsts = Array.to_seq loc_args |> RegLocSet.of_seq in
+  let reg_args = ref RegLocSet.empty in
+  let same_loc src dst =
+    (RegLocOrder.compare src dst) = 0
+  in
+  Array.iteri (fun i (src: Reg.t) ->
+    let dst = loc_args.(i) in
+    if is_reg src &&
+       RegLocSet.mem src dsts &&
+       not (is_stack dst) &&
+       not (same_loc src dst) &&
+       not (RegLocSet.mem src live)
+    then
+      reg_args := RegLocSet.add src !reg_args)
+    p.probe_insn.arg;
+  (* Calculate stack slots for all saved registers (live and args). *)
+  let stack_ofs, saved_reg =
+    RegLocSet.fold (fun reg (n, saved_reg) ->
+      if is_reg reg then begin
+        (* manufacture stack entry for this reg *)
+        let st = Reg.clone reg in
+        st.loc <- Stack (Outgoing n); (* pretend, for float slot_offset *)
+        (n + (reg_size reg), RegLocMap.add reg st saved_reg)
+      end
+      else (n, saved_reg))
+      (RegLocSet.union !reg_args live)
+      (args_ofs, RegLocMap.empty)
+  in
+  (* Ensure stack before the call is 16 byte aligned.
+     Stack here is 8 not 16 aligned because return address has been pushed.  *)
+  let stack_ofs = if stack_ofs mod 16 = 0 then stack_ofs + 8 else stack_ofs in
+  emit_stack_offset stack_ofs;
+  (* save all live regs. *)
+  RegLocMap.iter move saved_reg;
+
+  (* Pass arguments to handler *)
+  (* arrange arguments passed on the stack *)
+  Array.iteri (fun i (src: Reg.t) ->
+    let dst = loc_args.(i) in
+    if is_stack dst && not (same_loc dst src) then begin
+      if is_stack src then begin
+        (* use a temporary for this memory to memory move *)
+        (* first available register is safe to use (not live here),
+           because if any arguments are passed on the stack,
+           then some arguments are passed in that register. *)
+        let loc = Reg (Proc.(first_available_register.(register_class src))) in
+        let tmp = Reg.at_location src.typ loc in
+        move src tmp;
+        move tmp dst
+      end else move src dst
+    end)
+    p.probe_insn.arg;
+  (* arrange arguments passed in registers *)
+  Array.iteri (fun i (src: Reg.t) ->
+    let dst = loc_args.(i) in
+    if is_reg dst && not (same_loc dst src) then begin
+      let src =
+        if is_reg src then begin
+          match RegLocMap.find_opt src saved_reg with
+          | None ->
+            assert (not (RegLocSet.mem src dsts));
+            src
+          | Some s -> s
+        end else src
+      in
+      move src dst
+    end)
+    p.probe_insn.arg;
+  add_used_symbol p.probe_handler;
+  emit_call p.probe_handler;
+  (* record a fake frame description for the wrapper *)
+  let live_offset =
+    RegLocMap.fold (fun _ st acc ->
+      match st.loc with
+      | Stack (Outgoing n) -> n :: acc
+      | _ -> assert false)
+      saved_reg []
+  in
+  let label = new_label () in
+  record_frame_descr ~label ~frame_size:(stack_ofs+8) ~live_offset
+    ~raise_frame:false p.probe_insn.dbg;
+  def_label label;
+
+  (* restore all live regs *)
+  RegLocMap.iter (fun r s -> if not (RegLocSet.mem r !reg_args) then move s r) saved_reg;
+  emit_stack_offset (-stack_ofs);
+  I.ret ();
+  cfi_endproc ();
+  emit_function_type_and_size wrap_label;
+  ()
+
+let emit_probe_notes () =
+  match !probes with
+  | [] -> ()
+  | _ ->
+    begin match system with
+    | S_macosx -> D.section ["__DATA";"__note_stapsdt"] None ["regular"]
+    | _ -> D.section [".note.stapsdt"] (Some "?") [ "\"note\"" ]
+    end;
+    let stap_arg arg =
+      let arg_name =
+        match arg.loc with
+        | Stack s -> Printf.sprintf "%d(%%rsp)"
+                       (slot_offset s (register_class arg))
+        | Reg reg -> Proc.register_name reg
+        | Unknown -> Misc.fatal_error "Cannot create probe: illegal argument."
+      in
+      Printf.sprintf "%d@%s" (reg_size arg) arg_name
+    in
+    let names =
+      List.fold_left (fun names p ->
+        let args =
+          Array.fold_right
+            (fun arg acc -> (stap_arg arg)::acc)
+            p.probe_insn.arg
+            []
+          |> String.concat " "
+        in
+        let semaphore_label = find_or_add_semaphore p.probe_name in
+        D.align 4;
+        let a = new_label() in
+        let b = new_label() in
+        let c = new_label() in
+        let d = new_label() in
+        D.long (ConstSub(ConstLabel(emit_label b),ConstLabel(emit_label a)));
+        D.long (ConstSub(ConstLabel(emit_label d),ConstLabel(emit_label c)));
+        D.long (const_32 3l);
+        def_label a;
+        D.bytes "stapsdt\000";
+        def_label b;
+        D.align 4;
+        def_label c;
+        D.qword (ConstLabel (emit_label p.probe_label));
+        (* CR-soon gyorsh: emit dtrace format on mac  *)
+        if (system = S_macosx) then
+          D.qword (const 0)
+        else
+          D.qword (ConstLabel "_.stapsdt.base");
+        D.qword (ConstLabel semaphore_label);
+        D.bytes "ocaml\000";
+        D.bytes (p.probe_name ^ "\000");
+        D.bytes (args ^ "\000");
+        def_label d;
+        D.align 4;
+        String.Set.add p.probe_name names
+      )
+        String.Set.empty
+        !probes
+    in
+
+    if not (system = S_macosx) then begin
+        D.section [".stapsdt.base"] (Some "aG") ["\"progbits\""; ".stapsdt.base"; "comdat"];
+        D.weak "_.stapsdt.base";
+        D.hidden "_.stapsdt.base";
+        D.label "_.stapsdt.base";
+        D.space 1;
+        D.size "_.stapsdt.base" (const 1);
+        ()
+    end;
+
+    begin match system with
+    | S_macosx -> D.section ["__TEXT";"__probes"] None ["regular"]
+    | _ -> D.section [".probes"] (Some "wa") ["\"progbits\""];
+    end;
+
+    D.align 2;
+    String.Map.iter (fun name label ->
+      if not (String.Set.mem name names) then
+        (* CR gyorsh: emit a warning instead? *)
+        Misc.fatal_errorf "semphore referes to an undefined probe %s" name ();
+      D.global label;
+      _label label;
+      D.word (const 0))
+      !probe_semaphores;
+    ()
+
 let end_assembly() =
   if !float_constants <> [] then begin
     begin match system with
@@ -1100,6 +1468,12 @@ let end_assembly() =
     | _ -> D.section [".rodata.cst8"] (Some "a") ["@progbits"]
     end;
     List.iter (fun (cst,lbl) -> emit_float_constant cst lbl) !float_constants
+  end;
+
+  (* emit probe handler wrappers *)
+  if not fp && not windows then begin
+    D.text ();
+    List.iter emit_probe_handler_wrapper !probes
   end;
 
   emit_named_text_section (Compilenv.make_symbol (Some "code_end"));
@@ -1148,6 +1522,8 @@ let end_assembly() =
   if Config.spacetime then begin
     emit_spacetime_shapes ()
   end;
+
+  if not windows then emit_probe_notes ();
 
   if system = S_linux then
     (* Mark stack as non-executable, PR#4564 *)

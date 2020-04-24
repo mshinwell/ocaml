@@ -70,6 +70,7 @@ method reload_operation op arg res =
       | _ ->
           (arg, res)
       end
+  | Iprobe _ -> (arg, res) (* no constraints *)
   | _ ->
       (self#makeregs arg, self#makeregs res)
 

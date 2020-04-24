@@ -223,7 +223,9 @@ let simplify_exits lam =
                                      ap_func=f;
                                      ap_args=[x];
                                      ap_inlined=Default_inline;
-                                     ap_specialised=Default_specialise}
+                                     ap_specialised=Default_specialise;
+                                     ap_probe=None;
+                                    }
 
         (* Simplify %apply, for n-ary functions with n > 1 *)
       | Pdirapply, [Lapply ap; x]
@@ -234,7 +236,9 @@ let simplify_exits lam =
                                      ap_func=f;
                                      ap_args=[x];
                                      ap_inlined=Default_inline;
-                                     ap_specialised=Default_specialise}
+                                     ap_specialised=Default_specialise;
+                                     ap_probe=None
+                                    }
         (* Simplify %identity *)
       | Pidentity, [e] -> e
 
@@ -383,6 +387,7 @@ let simplify_lets lam =
   | Lconst _ -> ()
   | Lvar v ->
       use_var bv v 1
+
   | Lapply{ap_func = Lfunction{kind = Curried; params; body}; ap_args = args}
     when optimize && List.length params = List.length args ->
       count bv (beta_reduce params body args)
@@ -695,6 +700,7 @@ let split_default_wrapper ~id:fun_id ~kind ~params ~return ~body ~attr ~loc =
             ap_should_be_tailcall = false;
             ap_inlined = Default_inline;
             ap_specialised = Default_specialise;
+            ap_probe=None;
           }
         in
         let inner_params = List.map map_param (List.map fst params) in

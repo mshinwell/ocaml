@@ -48,3 +48,7 @@ val transl_module :
       (module_coercion -> Path.t option -> module_expr -> lambda) ref
 val transl_object :
       (Ident.t -> string list -> class_expr -> lambda) ref
+
+(* Declarations to be wrap around the entire body *)
+val clear_probe_handlers : unit -> unit
+val declare_probe_handlers : lambda -> lambda

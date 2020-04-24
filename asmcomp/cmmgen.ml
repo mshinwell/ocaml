@@ -2040,7 +2040,10 @@ let rec transl env e =
       if offset = 0
       then ptr
       else Cop(Caddv, [ptr; Cconst_int(offset * size_addr, dbg)], dbg)
-  | Udirect_apply(lbl, args, dbg) ->
+  | Udirect_apply(handler_code_sym, args, Some {name}, dbg) ->
+      return_unit dbg
+        (Cop(Cprobe {name; handler_code_sym}, List.map (transl env) args, dbg))
+  | Udirect_apply(lbl, args, None, dbg) ->
       Cop(Capply typ_val,
         Cconst_symbol (lbl, dbg) :: List.map (transl env) args,
         dbg)
@@ -2177,7 +2180,9 @@ let rec transl env e =
           let dim_ofs = 4 + n in
           tag_int (Cop(Cload (Word_int, Mutable),
             [field_address (transl env b) dim_ofs dbg],
-            dbg)) dbg
+                       dbg)) dbg
+      | (Pprobe_is_enabled {name}, []) ->
+          Cop(Cprobe_is_enabled {name}, [], dbg)
       | (p, [arg]) ->
           transl_prim_1 env p arg dbg
       | (p, [arg1; arg2]) ->
@@ -2188,6 +2193,7 @@ let rec transl env e =
       | (Pbigarrayset (_, _, _, _), [])
       | (Pbigarrayref (_, _, _, _), [])
       | ((Pbigarraydim _ | Pduparray (_, _)), ([] | _::_::_::_::_))
+      | (Pprobe_is_enabled _, _)
         ->
           fatal_error "Cmmgen.transl:prim, wrong arity"
       | ((Pfield_computed|Psequand
@@ -2502,7 +2508,7 @@ and transl_prim_1 env p arg dbg =
     | Plslbint _ | Plsrbint _ | Pasrbint _ | Pbintcomp (_, _)
     | Pbigarrayref (_, _, _, _) | Pbigarrayset (_, _, _, _)
     | Pbigarraydim _ | Pstring_load _ | Pbytes_load _ | Pbytes_set _
-    | Pbigstring_load _ | Pbigstring_set _)
+    | Pbigstring_load _ | Pbigstring_set _ | Pprobe_is_enabled _)
     ->
       fatal_errorf "Cmmgen.transl_prim_1: %a"
         Printclambda_primitives.primitive p
@@ -2791,6 +2797,7 @@ and transl_prim_2 env p arg1 arg2 dbg =
   | Parraysets _ | Pbintofint _ | Pintofbint _ | Pcvtbint (_, _)
   | Pnegbint _ | Pbigarrayref (_, _, _, _) | Pbigarrayset (_, _, _, _)
   | Pbigarraydim _ | Pbytes_set _ | Pbigstring_set _ | Pbbswap _
+  | Pprobe_is_enabled _
     ->
       fatal_errorf "Cmmgen.transl_prim_2: %a"
         Printclambda_primitives.primitive p
@@ -2941,6 +2948,7 @@ and transl_prim_3 env p arg1 arg2 arg3 dbg =
   | Pxorbint _ | Plslbint _ | Plsrbint _ | Pasrbint _ | Pbintcomp (_, _)
   | Pbigarrayref (_, _, _, _) | Pbigarrayset (_, _, _, _) | Pbigarraydim _
   | Pstring_load _ | Pbytes_load _ | Pbigstring_load _ | Pbbswap _
+  | Pprobe_is_enabled _
     ->
       fatal_errorf "Cmmgen.transl_prim_3: %a"
         Printclambda_primitives.primitive p

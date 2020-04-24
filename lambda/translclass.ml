@@ -53,7 +53,8 @@ let mkappl (func, args) =
           ap_func=func;
           ap_args=args;
           ap_inlined=Default_inline;
-          ap_specialised=Default_specialise};;
+          ap_specialised=Default_specialise;
+          ap_probe=None};;
 
 let lsequence l1 l2 =
   if l2 = lambda_unit then l1 else Lsequence(l1, l2)
@@ -475,7 +476,8 @@ let transl_class_rebind cl vf =
               ap_func=Lvar obj_init;
               ap_args=[Lvar self];
               ap_inlined=Default_inline;
-              ap_specialised=Default_specialise}
+              ap_specialised=Default_specialise;
+              ap_probe=None}
     in
     let _, path_lam, obj_init' = transl_class_rebind_0 self obj_init0 cl vf in
     let id = (obj_init' = lfunction [self, Pgenval] obj_init0) in

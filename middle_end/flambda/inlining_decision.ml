@@ -46,6 +46,7 @@ let inline env r ~lhs_of_application
     ~(args : Variable.t list) ~size_from_approximation ~dbg ~simplify
     ~(inline_requested : Lambda.inline_attribute)
     ~(specialise_requested : Lambda.specialise_attribute)
+    ~(probe_requested : Lambda.probe)
     ~fun_vars ~set_of_closures_origin
     ~self_call ~fun_cost ~inlining_threshold =
   let toplevel = E.at_toplevel env in
@@ -192,6 +193,7 @@ let inline env r ~lhs_of_application
       Inlining_transforms.inline_by_copying_function_body ~env
         ~r:(R.reset_benefit r) ~lhs_of_application
         ~closure_id_being_applied ~specialise_requested ~inline_requested
+        ~probe_requested
         ~function_decl ~function_body ~fun_vars ~args ~dbg ~simplify
     in
     let num_direct_applications_seen =
@@ -304,7 +306,9 @@ let specialise env r ~lhs_of_application
       ~(value_set_of_closures : A.value_set_of_closures)
       ~args ~args_approxs ~dbg ~simplify ~original ~recursive ~self_call
       ~inlining_threshold ~fun_cost
-      ~inline_requested ~specialise_requested =
+      ~inline_requested ~specialise_requested
+      ~probe_requested
+  =
   let invariant_params = value_set_of_closures.invariant_params in
   let free_vars = value_set_of_closures.free_vars in
   let has_no_useful_approxes =
@@ -379,6 +383,7 @@ let specialise env r ~lhs_of_application
           ~args ~args_approxs
           ~invariant_params:invariant_params
           ~specialised_args:value_set_of_closures.specialised_args
+          ~probe_requested
           ~free_vars:value_set_of_closures.free_vars
           ~direct_call_surrogates:value_set_of_closures.direct_call_surrogates
           ~dbg ~simplify ~inline_requested
@@ -476,7 +481,7 @@ let for_call_site ~env ~r ~(function_decls : A.function_declarations)
       ~(function_decl : A.function_declaration)
       ~(value_set_of_closures : A.value_set_of_closures)
       ~args ~args_approxs ~dbg ~simplify ~inline_requested
-      ~specialise_requested =
+      ~specialise_requested ~probe_requested =
   if List.length args <> List.length args_approxs then begin
     Misc.fatal_error "Inlining_decision.for_call_site: inconsistent lengths \
         of [args] and [args_approxs]"
@@ -504,6 +509,7 @@ let for_call_site ~env ~r ~(function_decls : A.function_declarations)
       dbg;
       inline = inline_requested;
       specialise = specialise_requested;
+      probe = probe_requested;
     }
   in
   let original_r =
@@ -519,6 +525,7 @@ let for_call_site ~env ~r ~(function_decls : A.function_declarations)
         Inlining_transforms.inline_by_copying_function_body ~env
           ~r ~fun_vars ~lhs_of_application
           ~closure_id_being_applied ~specialise_requested ~inline_requested
+          ~probe_requested
           ~function_decl ~function_body ~args ~dbg ~simplify
       in
       simplify env r body
@@ -557,6 +564,7 @@ let for_call_site ~env ~r ~(function_decls : A.function_declarations)
               Inlining_transforms.inline_by_copying_function_body ~env
                 ~r ~function_body ~lhs_of_application
                 ~closure_id_being_applied ~specialise_requested
+                ~probe_requested
                 ~inline_requested ~function_decl ~fun_vars ~args ~dbg ~simplify
             in
             let env = E.note_entering_inlined env in
@@ -676,7 +684,7 @@ let for_call_site ~env ~r ~(function_decls : A.function_declarations)
               ~lhs_of_application ~recursive ~closure_id_being_applied
               ~value_set_of_closures ~args ~args_approxs ~dbg ~simplify
               ~original ~inline_requested ~specialise_requested ~fun_cost
-              ~self_call ~inlining_threshold
+              ~self_call ~inlining_threshold ~probe_requested
           in
           match specialise_result with
           | Changed (res, spec_reason) ->
@@ -706,7 +714,7 @@ let for_call_site ~env ~r ~(function_decls : A.function_declarations)
               inline env r ~lhs_of_application
                 ~closure_id_being_applied ~function_decl ~value_set_of_closures
                 ~only_use_of_function ~original ~recursive
-                ~inline_requested ~specialise_requested
+                ~inline_requested ~specialise_requested ~probe_requested
                 ~fun_vars ~set_of_closures_origin ~args
                 ~size_from_approximation ~dbg ~simplify ~fun_cost ~self_call
                 ~inlining_threshold ~function_body
