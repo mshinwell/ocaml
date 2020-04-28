@@ -311,6 +311,15 @@ let mk_no_keep_locs f =
   "-no-keep-locs", Arg.Unit f, " Do not keep locations in .cmi files"
 ;;
 
+let mk_probes f =
+    "-probes", Arg.Unit f, " Emit tracing probes as specified using [%%probe ..]"
+;;
+
+let mk_no_probes f =
+    "-no-probes", Arg.Unit f, " Ignore [%%probe ..]"
+;;
+
+
 let mk_labels f =
   "-labels", Arg.Unit f, " Use commuting label mode"
 ;;
@@ -1120,6 +1129,8 @@ module type Optcomp_options = sig
   val _afl_inst_ratio : int -> unit
   val _function_sections : unit -> unit
   val _save_ir_after : string -> unit
+  val _probes : unit -> unit
+  val _no_probes : unit -> unit
 end;;
 
 module type Opttop_options = sig
@@ -1347,6 +1358,8 @@ struct
     mk_stop_after ~native:true F._stop_after;
     mk_save_ir_after ~native:true F._save_ir_after;
     mk_start_from ~native:true F._start_from;
+    mk_probes F._probes;
+    mk_no_probes F._no_probes;
     mk_i F._i;
     mk_I F._I;
     mk_impl F._impl;
@@ -1950,6 +1963,8 @@ module Default = struct
          OCaml 4.08.0"
     let _shared () = shared := true; dlcode := true
     let _v () = print_version_and_library "native-code compiler"
+    let _no_probes = clear probes
+    let _probes = set probes
   end
 
   module Odoc_args = struct
