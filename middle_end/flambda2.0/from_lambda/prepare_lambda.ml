@@ -463,11 +463,21 @@ let rec prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
     let loc = L.Loc_unknown in
     let cont = L.next_raise_count () in
     mark_as_recursive_static_catch cont;
+    let start_ident = Ident.create_local "start" in
     let stop_ident = Ident.create_local "stop" in
-    let test =
+    let first_test : L.lambda =
       match dir with
-      | Upto -> L.Lprim (Pintcomp Cle, [L.Lvar ident; L.Lvar stop_ident], loc)
-      | Downto -> L.Lprim (Pintcomp Cge, [L.Lvar ident; L.Lvar stop_ident], loc)
+      | Upto ->
+        Lprim (Pintcomp Cle, [L.Lvar start_ident; L.Lvar stop_ident], loc)
+      | Downto ->
+        Lprim (Pintcomp Cge, [L.Lvar start_ident; L.Lvar stop_ident], loc)
+    in
+    let subsequent_test : L.lambda =
+      match dir with
+      | Upto ->
+        Lprim (Pintcomp Clt, [L.Lvar ident; L.Lvar stop_ident], loc)
+      | Downto ->
+        Lprim (Pintcomp Cgt, [L.Lvar ident; L.Lvar stop_ident], loc)
     in
     let one : L.lambda = Lconst (Const_base (Const_int 1)) in
     let next_value_of_counter =
@@ -476,16 +486,21 @@ let rec prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
       | Downto -> L.Lprim (Psubint, [L.Lvar ident; one], loc)
     in
     let lam : L.lambda =
-      (* CR mshinwell: check evaluation order of start vs. end *)
-      Llet (Strict, Pgenval, stop_ident, stop,
-        Lstaticcatch (
-          Lstaticraise (cont, [start]),
-          (cont, [ident, Pgenval]),
-          Lifthenelse (test,
-            Lsequence (
-              body,
-              Lstaticraise (cont, [next_value_of_counter])),
-            Lconst (Const_base (Const_int 0)))))
+      (* Care needs to be taken here not to cause overflow if, for an
+         incrementing for-loop, the upper bound is [max_int]; likewise, for
+         a decrementing for-loop, if the lower bound is [min_int]. *)
+      Llet (Strict, Pgenval, start_ident, start,
+        Llet (Strict, Pgenval, stop_ident, stop,
+          Lifthenelse (first_test,
+            Lstaticcatch (
+              Lstaticraise (cont, [start]),
+              (cont, [ident, Pgenval]),
+              Lsequence (
+                body,
+                Lifthenelse (subsequent_test,
+                  Lstaticraise (cont, [next_value_of_counter]),
+                  L.lambda_unit))),
+            L.lambda_unit)))
     in
     prepare env lam k
   | Lassign (ident, lam) ->
