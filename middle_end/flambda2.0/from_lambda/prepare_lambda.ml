@@ -473,11 +473,7 @@ let rec prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
         Lprim (Pintcomp Cge, [L.Lvar start_ident; L.Lvar stop_ident], loc)
     in
     let subsequent_test : L.lambda =
-      match dir with
-      | Upto ->
-        Lprim (Pintcomp Clt, [L.Lvar ident; L.Lvar stop_ident], loc)
-      | Downto ->
-        Lprim (Pintcomp Cgt, [L.Lvar ident; L.Lvar stop_ident], loc)
+      Lprim (Pintcomp Cne, [L.Lvar ident; L.Lvar stop_ident], loc)
     in
     let one : L.lambda = Lconst (Const_base (Const_int 1)) in
     let next_value_of_counter =
