@@ -281,7 +281,8 @@ let prove_is_int env t : bool proof =
         if is_bottom env imms then Proved false
         else Unknown
     end
-  | Value (Ok _) -> Invalid
+  | Value (Ok (Boxed_float _ | Boxed_int32 _ | Boxed_int64 _
+      | Boxed_nativeint _ | Closures _ | String _ | Array _)) -> Proved true
   | Value Unknown -> Unknown
   | Value Bottom -> Invalid
   | Naked_immediate _ -> wrong_kind ()
@@ -315,7 +316,11 @@ let prove_tags_must_be_a_block env t : Tag.Set.t proof =
             if Tag.Set.is_empty tags then Invalid
             else Proved tags
     end
-  | Value (Ok _) -> Invalid
+  | Value (Ok (Boxed_float _ | Boxed_int32 _ | Boxed_int64 _
+      | Boxed_nativeint _)) -> Proved (Tag.Set.singleton Tag.custom_tag)
+  | Value (Ok (Closures _)) -> Proved (Tag.Set.singleton Tag.closure_tag)
+  | Value (Ok (String _)) -> Proved (Tag.Set.singleton Tag.string_tag)
+  | Value (Ok (Array _)) -> Proved (Tag.Set.singleton Tag.zero)
   | Value Unknown -> Unknown
   | Value Bottom -> Invalid
   (* CR mshinwell: Here and elsewhere, use or-patterns. *)
@@ -654,7 +659,7 @@ let prove_strings env t : String_info.Set.t proof =
   | Const _ ->
     if K.equal (kind t) K.value then Invalid
     else wrong_kind ()
-  | Value (Ok (String strs)) -> Proved strs      
+  | Value (Ok (String strs)) -> Proved strs
   | Value (Ok _) -> Invalid
   | Value Unknown -> Unknown
   | Value Bottom -> Invalid
