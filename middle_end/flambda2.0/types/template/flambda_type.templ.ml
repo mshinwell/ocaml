@@ -282,7 +282,7 @@ let prove_is_int env t : bool proof =
         else Unknown
     end
   | Value (Ok (Boxed_float _ | Boxed_int32 _ | Boxed_int64 _
-      | Boxed_nativeint _ | Closures _ | String _ | Array _)) -> Proved true
+      | Boxed_nativeint _ | Closures _ | String _ | Array _)) -> Proved false
   | Value Unknown -> Unknown
   | Value Bottom -> Invalid
   | Naked_immediate _ -> wrong_kind ()
