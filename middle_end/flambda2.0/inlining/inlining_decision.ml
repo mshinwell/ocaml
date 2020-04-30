@@ -14,7 +14,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-30-40-41-42"]
+[@@@ocaml.warning "+a-30-40-41-42"]
 
 open! Flambda.Import
 
@@ -131,27 +131,30 @@ let make_decision_for_call_site denv ~function_decl_rec_info
   if (not (DE.can_inline denv)) then
     Environment_says_never_inline
   else
-    match Rec_info.unroll_to function_decl_rec_info with
-    | Some unroll_to ->
-      if Rec_info.depth function_decl_rec_info >= unroll_to then
-        Unrolling_depth_exceeded
-      else
-        Inline { attribute = None; unroll_to = None; }
-    | None ->
-      if apply_inlining_depth >= max_inlining_depth then
-        Max_inlining_depth_exceeded
-      else
-        match inline with
-        | Never_inline -> Never_inline_attribute
-        | Default_inline ->
-          if Rec_info.depth function_decl_rec_info >= max_rec_depth then
-            Recursion_depth_exceeded
-          else
-            Inline { attribute = None; unroll_to = None; }
-        | Unroll unroll_to ->
-          let unroll_to =
-            Rec_info.depth function_decl_rec_info + unroll_to
-          in
-          Inline { attribute = Some Unroll; unroll_to = Some unroll_to; }
-        | Always_inline ->
-          Inline { attribute = Some Always; unroll_to = None; }
+    match inline with
+    | Never_inline -> Never_inline_attribute
+    | Default_inline | Unroll _ | Always_inline ->
+      match Rec_info.unroll_to function_decl_rec_info with
+      | Some unroll_to ->
+        if Rec_info.depth function_decl_rec_info >= unroll_to then
+          Unrolling_depth_exceeded
+        else
+          Inline { attribute = None; unroll_to = None; }
+      | None ->
+        if apply_inlining_depth >= max_inlining_depth then
+          Max_inlining_depth_exceeded
+        else
+          match inline with
+          | Never_inline -> assert false
+          | Default_inline ->
+            if Rec_info.depth function_decl_rec_info >= max_rec_depth then
+              Recursion_depth_exceeded
+            else
+              Inline { attribute = None; unroll_to = None; }
+          | Unroll unroll_to ->
+            let unroll_to =
+              Rec_info.depth function_decl_rec_info + unroll_to
+            in
+            Inline { attribute = Some Unroll; unroll_to = Some unroll_to; }
+          | Always_inline ->
+            Inline { attribute = Some Always; unroll_to = None; }
