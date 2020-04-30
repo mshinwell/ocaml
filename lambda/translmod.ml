@@ -737,12 +737,11 @@ let transl_implementation_flambda module_name (str, cc) =
   Translcore.clear_probe_handlers ();
   let module_id = Ident.create_persistent module_name in
   let body, size =
-    Translobj.transl_label_init
-      (fun () ->
-         let body, size =
-           transl_struct Location.none [] cc (global_path module_id) str in
-         Translcore.declare_probe_handlers body, size
-      )
+    Translobj.transl_label_init (fun () ->
+      let body, size =
+        transl_struct Location.none [] cc (global_path module_id) str
+      in
+      Translcore.declare_probe_handlers body, size)
   in
   { module_ident = module_id;
     main_module_block_size = size;
@@ -1254,6 +1253,12 @@ let build_ident_map restr idlist more_ids =
 (* Compile an implementation using transl_store_structure
    (for the native-code compiler). *)
 
+(* CR mshinwell: Check that in bytecode mode nothing goes wrong if
+   probes are present.  (They should just be ignored.)  I have some
+   feeling we might get an unbound variable error at present.  We
+   could probably add a check in Translcore when probes are
+   encountered and just not register them if in bytecode. *)
+
 let transl_store_gen module_name ({ str_items = str }, restr) topl =
   reset_labels ();
   primitive_declarations := [];
@@ -1425,6 +1430,11 @@ let transl_toplevel_item item =
   | Tstr_class_type _
   | Tstr_attribute _ ->
       lambda_unit
+
+(* CR mshinwell: I think the next two are only used for the toplevel,
+   which is bytecode, so won't have probes.  Although we should make
+   these work with ocamlnat, the native toplevel.  Please check whether
+   that ends up using these functions (maybe you already have)? *)
 
 let transl_toplevel_item_and_close itm =
   close_toplevel_term

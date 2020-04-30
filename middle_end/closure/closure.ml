@@ -143,6 +143,9 @@ let prim_size prim args =
   | Parraysets kind -> if kind = Pgenarray then 22 else 10
   | Pbigarrayref(_, ndims, _, _) -> 4 + ndims * 6
   | Pbigarrayset(_, ndims, _, _) -> 4 + ndims * 6
+  (* CR mshinwell: I'm not sure this is right---I was expecting more
+     (reading the field, comparison, etc).  Please check again versus
+     the emitter *)
   | Pprobe_is_enabled _ (* Similar to Pgetglobal *)
   | _ -> 2 (* arithmetic and comparisons *)
 
@@ -158,8 +161,9 @@ let lambda_smaller lam threshold =
     | Udirect_apply(_, args, None, _) ->
         size := !size + 4; lambda_list_size args
     | Udirect_apply _ -> ()
-    (* Do not affect inlining decision.
-       Actual cost is either 1, 5 or 6 bytes, depending on their kind. *)
+    (* We aim for probe points to not affect inlining decisions.
+       Actual cost is either 1, 5 or 6 bytes, depending on their kind,
+       on x86-64. *)
     | Ugeneric_apply(fn, args, _) ->
         size := !size + 6; lambda_size fn; lambda_list_size args
     | Uclosure _ ->
@@ -764,6 +768,8 @@ let direct_apply ~backend fundesc ufunct uargs ~probe ~loc ~attribute =
   let app_args =
     if fundesc.fun_closed then uargs else uargs @ [ufunct] in
   let app =
+    (* CR mshinwell: We should check that if [probe] is [Some _] then
+       [fundesc.fun_inline] is [Never_inline]. *)
     match fundesc.fun_inline, attribute with
     | _, Never_inline | None, _ ->
       let dbg = Debuginfo.from_location loc in

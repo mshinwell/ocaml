@@ -636,18 +636,19 @@ let message = function
       Printf.sprintf
         "Probe with %d arguments.\n\
          Probes with more than 12 arguments might not be supported \
-         in kernel mode.\n" n
+         by external tools such as SystemTap and Dtrace.\n" n
   | Probe_name_too_long name ->
       Printf.sprintf
         "Probe name is too long: %s.\n\
-         Probes names over 100 character long might not be supported \
-         in kernel mode.\n" name
+         Probe names over 100 characters long might not be supported \
+         by external tools such as SystemTap and Dtrace.\n" name
   | Probe_handler_ignored ->
-      "Probe handler is ignored. No support for ocaml probe handlers \
-        when the compiler is configured with frame pointers. \
-        Generating probes for external tools, such as SystemTap and Dtrace.\n"
+      "Probe handler ignored. There is no support for executing OCaml \
+        code upon hitting an enabled probe when the compiler is \
+        configured with frame pointers.  Probe locations will still \
+        be emitted for external tools such as SystemTap and Dtrace.\n"
   | Probe_ignored ->
-      "Probe is ignored. Not supported on this target."
+      "Probe ignored. Probes are not supported on this target."
 ;;
 
 let nerrors = ref 0;;

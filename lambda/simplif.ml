@@ -387,7 +387,6 @@ let simplify_lets lam =
   | Lconst _ -> ()
   | Lvar v ->
       use_var bv v 1
-
   | Lapply{ap_func = Lfunction{kind = Curried; params; body}; ap_args = args}
     when optimize && List.length params = List.length args ->
       count bv (beta_reduce params body args)

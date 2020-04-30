@@ -185,7 +185,8 @@ type instruction =
   | XORPD of arg * arg
 
 (* ELF specific *)
-type reloc_type = R_X86_64_PLT32
+type reloc_type =
+  | R_X86_64_PLT32
 
 type reloc =
   { offset : constant;

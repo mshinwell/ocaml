@@ -2090,6 +2090,8 @@ let check_partial_application statement exp =
             | Texp_extension_constructor _ | Texp_ifthenelse (_, _, None)
             | Texp_probe _ | Texp_probe_is_enabled _
             | Texp_function _ ->
+                (* CR mshinwell: Not sure if this is correct for probes,
+                   please ask Leo *)
                 check_statement ()
             | Texp_match (_, cases, _) ->
                 List.iter (fun {c_rhs; _} -> check c_rhs) cases
@@ -3440,6 +3442,7 @@ and type_expect_
       | _ ->
           raise (Error (loc, env, Invalid_extension_constructor_payload))
       end
+    (* CR mshinwell: Please ask Leo to review these two cases *)
   | Pexp_extension ({ txt = ("probe" | "ocaml.probe"); _ }, payload) ->
       begin match payload with
       | PStr
@@ -5263,16 +5266,18 @@ let report_error ~loc env = function
         "This constructor is not an extension constructor."
   | Probe_name_format name ->
       Location.errorf ~loc
-        "Illegal characters in %s. \
-         Probe name must consist of alphanumeric characters or underscores."
+        "Illegal characters in probe name `%s'. \
+         Probe names may only contain alphanumeric characters or \
+         underscores."
         name
   | Probe_format ->
       Location.errorf ~loc
-        "Probe should consist of a string literal name followed by\
-         a single expression of type unit."
+        "Probe points must consist of a name, as a string \
+         literal, followed by a single expression of type unit."
   | Probe_is_enabled_format ->
       Location.errorf ~loc
-        "Extension probe_is_enabled should consist of a string literal name"
+        "%probe_is_enabled points must specify a single probe name as a \
+         string literal"
   | Literal_overflow ty ->
       Location.errorf ~loc
         "Integer literal exceeds the range of representable integers of type %s"
