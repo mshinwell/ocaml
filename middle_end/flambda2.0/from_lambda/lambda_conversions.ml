@@ -20,6 +20,12 @@ module K = Flambda_kind
 module L = Lambda
 module P = Flambda_primitive
 
+let check_float_array_optimisation_enabled () =
+  if not Config.flat_float_array then begin
+    Misc.fatal_error "[Pgenarray] is not expected when the float array \
+      optimisation is disabled"
+  end
+
 let value_kind (value_kind : L.value_kind) =
   match value_kind with
   | Pgenval
@@ -57,10 +63,20 @@ let raise_kind (kind : L.raise_kind) : Trap_action.raise_kind =
   | Raise_reraise -> Reraise
   | Raise_notrace -> No_trace
 
+let convert_block_of_values_field (value_kind : L.value_kind)
+      : P.Block_of_values_field.t =
+  match value_kind with
+  | Pgenval -> Any_value
+  | Pfloatval -> Boxed_float
+  | Pboxedintval Pint32 -> Boxed_int32
+  | Pboxedintval Pint64 -> Boxed_int64
+  | Pboxedintval Pnativeint -> Boxed_nativeint
+  | Pintval -> Immediate
+
 let convert_block_shape (shape : L.block_shape) ~num_fields =
   match shape with
   | None ->
-    List.init num_fields (fun _field : P.Value_kind.t -> Anything)
+    List.init num_fields (fun _field : P.Block_of_values_field.t -> Any_value)
   | Some shape ->
     let shape_length = List.length shape in
     if num_fields <> shape_length then begin
@@ -69,15 +85,10 @@ let convert_block_shape (shape : L.block_shape) ~num_fields =
         num_fields
         shape_length
     end;
-    List.map (fun (kind : L.value_kind) : P.Value_kind.t ->
-        match kind with
-        | Pgenval -> Anything
-        | Pfloatval | Pboxedintval _ -> Definitely_pointer
-        | Pintval -> Definitely_immediate)
-      shape
+    List.map convert_block_of_values_field shape
 
 let convert_mutable_flag (flag : Asttypes.mutable_flag)
-      : Effects.mutable_or_immutable =
+      : Mutable_or_immutable.t =
   match flag with
   | Mutable -> Mutable
   | Immutable -> Immutable
@@ -148,60 +159,37 @@ let standard_int_or_float_of_boxed_integer (bint : L.boxed_integer)
   | Pint32 -> Naked_int32
   | Pint64 -> Naked_int64
 
-(* let const_of_boxed_integer (i:int32) (bint : L.boxed_integer) *)
-(*   : Reg_width_const.t = *)
-(*   match bint with *)
-(*   | Pnativeint -> Naked_nativeint (Targetint.of_int32 i) *)
-(*   | Pint32 -> Naked_int32 i *)
-(*   | Pint64 -> Naked_int64 (Int64.of_int32 i) *)
-
-(* let convert_record_representation (repr : Types.record_representation) *)
-(*    : P.record_representation = *)
-(*   match repr with *)
-(*   | Record_regular -> Regular *)
-(*   | Record_float -> Float *)
-(*   | Record_unboxed inlined -> Unboxed { inlined } *)
-(*   | Record_inlined tag -> Inlined (Tag.Scannable.create_exn tag) *)
-(*   | Record_extension -> Extension *)
-
-let convert_access_kind i_or_p : P.Block_access_kind.t0 =
+let convert_block_access_field_kind i_or_p : P.Block_access_field_kind.t =
   match i_or_p with
-  | L.Immediate -> Value Definitely_immediate
-  | L.Pointer -> Value Anything
+  | L.Immediate -> Immediate
+  | L.Pointer -> Any_value
 
 let convert_init_or_assign (i_or_a : L.initialization_or_assignment)
-   : P.init_or_assign =
+   : P.Init_or_assign.t =
   match i_or_a with
   | Assignment -> Assignment
   | Heap_initialization -> Initialization
-  (* Root initialization cannot exist in lambda. This is
-     represented by the static part of expressions in flambda. *)
-  | Root_initialization -> assert false
+  | Root_initialization ->
+    Misc.fatal_error "[Root_initialization] should not appear in Flambda input"
 
-let convert_array_kind (kind : L.array_kind)
-   : P.Block_access_kind.t =
+let convert_array_kind (kind : L.array_kind) : P.Array_kind.t =
   match kind with
   | Pgenarray ->
-    Generic_array
-      (P.Generic_array_specialisation.no_specialisation ())
-  | Paddrarray -> Array (Value Anything)
-  | Pintarray -> Array (Value Definitely_immediate)
-  | Pfloatarray -> Array Naked_float
+    check_float_array_optimisation_enabled ();
+    Float_array_opt_dynamic
+  | Paddrarray -> Values
+  | Pintarray -> Immediates
+  | Pfloatarray -> Naked_floats
 
-let convert_array_kind_to_duplicate_block_kind (kind : L.array_kind)
-      : P.duplicate_block_kind =
+let convert_array_kind_to_duplicate_array_kind (kind : L.array_kind)
+      : P.Duplicate_array_kind.t =
   match kind with
   | Pgenarray ->
-    Generic_array
-      (P.Generic_array_specialisation.no_specialisation ())
-    (* CR mshinwell: Are these next two cases correct?  Should they be under
-       "generic array"? *)
-  | Paddrarray ->
-    Generic_array (P.Generic_array_specialisation.
-      full_of_arbitrary_values_but_not_floats ())
-  | Pintarray ->
-    Generic_array (P.Generic_array_specialisation.full_of_immediates ())
-  | Pfloatarray -> Full_of_naked_floats { length = None; }
+    check_float_array_optimisation_enabled ();
+    Float_array_opt_dynamic
+  | Paddrarray -> Values
+  | Pintarray -> Immediates
+  | Pfloatarray -> Naked_floats { length = None; }
 
 let convert_bigarray_kind (kind : L.bigarray_kind) : P.bigarray_kind option =
   match kind with
@@ -226,7 +214,12 @@ let convert_bigarray_layout (layout : L.bigarray_layout) : P.bigarray_layout opt
   | Pbigarray_fortran_layout -> Some Fortran
 
 let convert_field_read_semantics (sem : L.field_read_semantics)
-      : Effects.mutable_or_immutable =
+      : Mutable_or_immutable.t =
   match sem with
   | Reads_agree -> Immutable
   | Reads_vary -> Mutable
+
+let convert_lambda_block_size (size : L.block_size) : _ Or_unknown.t =
+  match size with
+  | Unknown -> Unknown
+  | Known size -> Known (Targetint.OCaml.of_int size)

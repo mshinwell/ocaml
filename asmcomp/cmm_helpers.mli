@@ -189,6 +189,16 @@ val field_address : expression -> int -> Debuginfo.t -> expression
 val get_field_gen :
   Asttypes.mutable_flag -> expression -> int -> Debuginfo.t -> expression
 
+(** Get the field of the given [block] whose index is specified by the
+    Cmm expresson [index] (in words). *)
+val get_field_computed
+   : Lambda.immediate_or_pointer
+  -> Asttypes.mutable_flag
+  -> block:expression
+  -> index:expression
+  -> Debuginfo.t
+  -> expression
+
 (** [set_field ptr n newval init dbg] returns an expression for setting the
     [n]th field of the block pointed to by [ptr] to [newval] *)
 val set_field :

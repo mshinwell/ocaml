@@ -76,14 +76,21 @@ val targetint : ?dbg:Debuginfo.t -> Targetint.t -> Cmm.expression
 
 (** {2 Block creation} *)
 
+val make_array :
+  ?dbg:Debuginfo.t -> Flambda_primitive.Array_kind.t ->
+  Cmm.expression list -> Cmm.expression
+(** Create an array using the given fields. *)
+
 val make_block :
-  ?dbg:Debuginfo.t -> Flambda_primitive.make_block_kind ->
+  ?dbg:Debuginfo.t -> Flambda_primitive.Block_kind.t ->
   Cmm.expression list -> Cmm.expression
 (** Create a block using the given fields. *)
 
 val make_closure_block :
   ?dbg:Debuginfo.t -> Cmm.expression list -> Cmm.expression
 (** Create a closure block. *)
+
+(** {2 Boxed numbers} *)
 
 val box_number :
   ?dbg:Debuginfo.t ->
@@ -94,6 +101,11 @@ val box_number :
 val box_int64 : ?dbg:Debuginfo.t -> Cmm.expression -> Cmm.expression
 (** Shortcut for [box_number Flambda_kind.Boxable_number.Naked_int64] *)
 
+val unbox_number :
+  ?dbg:Debuginfo.t ->
+  Flambda_kind.Boxable_number.t ->
+  Cmm.expression -> Cmm.expression
+(** Unbox a boxed number. *)
 
 (** {2 Block access} *)
 
@@ -105,17 +117,58 @@ val infix_field_address :
     header, so that the returned address is in fact a correct ocaml value. *)
 
 val block_length :
-  ?dbg:Debuginfo.t -> Flambda_primitive.Block_access_kind.t ->
-  Cmm.expression -> Cmm.expression
+  ?dbg:Debuginfo.t -> Cmm.expression -> Cmm.expression
 (** Return an expression that computes the length of the given block. *)
 
 val block_load :
   ?dbg:Debuginfo.t -> Flambda_primitive.Block_access_kind.t ->
+  Mutable_or_immutable.t ->
   Cmm.expression -> Cmm.expression -> Cmm.expression
-(** Load a field from a block. Cmm arguments order:
+(** Load a field from a block. Cmm argument order:
     - block
     - field number as a tagged integer
 *)
+
+val block_set :
+  ?dbg:Debuginfo.t ->
+  Flambda_primitive.Block_access_kind.t ->
+  Flambda_primitive.Init_or_assign.t ->
+  Cmm.expression -> Cmm.expression -> Cmm.expression -> Cmm.expression
+(* CR mshinwell: These functions should have labelled arguments so we don't
+   need comments *)
+(** Set a field in a block. Cmm argument order:
+    - block
+    - field number as a tagged integer
+    - new value for the field.
+*)
+
+(** {2 Array access} *)
+
+val array_length :
+  ?dbg:Debuginfo.t -> Flambda_primitive.Array_kind.t ->
+  Cmm.expression -> Cmm.expression
+(** Return an expression that computes the length of the given array. *)
+
+val array_load :
+  ?dbg:Debuginfo.t -> Flambda_primitive.Array_kind.t ->
+  Cmm.expression -> Cmm.expression -> Cmm.expression
+(** Load a field from an array. Cmm argument order:
+    - array
+    - field number as a tagged integer
+*)
+
+val array_set :
+  ?dbg:Debuginfo.t ->
+  Flambda_primitive.Array_kind.t ->
+  Flambda_primitive.Init_or_assign.t ->
+  Cmm.expression -> Cmm.expression -> Cmm.expression -> Cmm.expression
+(** Set a field in an array. Cmm argument order:
+    - array
+    - field number as a tagged integer
+    - new value for the field.
+*)
+
+(** {2 String and Bytes access} *)
 
 val string_like_load :
   ?dbg:Debuginfo.t ->
@@ -126,17 +179,6 @@ val string_like_load :
     bigstring). Cmm arguments order:
     - string-like value
     - index within the string as a tagged integer
-*)
-
-val block_set :
-  ?dbg:Debuginfo.t ->
-  Flambda_primitive.Block_access_kind.t ->
-  Flambda_primitive.init_or_assign ->
-  Cmm.expression -> Cmm.expression -> Cmm.expression -> Cmm.expression
-(** Set a field from a block. Cmm arguments order:
-    - block
-    - field number as a tagged integer
-    - new value for the field.
 *)
 
 val bytes_like_set :
@@ -150,13 +192,6 @@ val bytes_like_set :
     - index within the string as a tagged integer
     - new value for the bits set
 *)
-
-val unbox_number :
-  ?dbg:Debuginfo.t ->
-  Flambda_kind.Boxable_number.t ->
-  Cmm.expression -> Cmm.expression
-(** Unbox a boxed number. *)
-
 
 (** {2 Bigarrays} *)
 

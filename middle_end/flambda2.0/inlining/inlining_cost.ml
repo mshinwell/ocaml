@@ -19,7 +19,6 @@
 open! Flambda.Import
 
 module DE = Simplify_env_and_result.Downwards_env
-module BAK = Flambda_primitive.Block_access_kind
 
 let arch32 = Targetint.size = 32 (* are we compiling for a 32-bit arch *)
 let arch64 = Targetint.size = 64 (* are we compiling for a 64-bit arch *)
@@ -44,15 +43,19 @@ let indirect_call_size = 6
 let alloc_extcall_size = 10
 let nonalloc_extcall_size = 4
 
-
 (* Helper functions for computing sizes of primitives *)
 
-let array_length_size kind =
-  match BAK.to_lambda_array_kind kind with
-  | Pgenarray -> 6
-  | Pfloatarray
-  | Pintarray
-  | Paddrarray -> 2
+let array_length_size (kind : Flambda_primitive.Array_kind.t) =
+  match kind with
+  | Float_array_opt_dynamic ->
+    (* CR mshinwell: If Arch.size_float = Arch.size_addr then this should be
+       the same as the other cases.  Unfortunately we haven't got access to
+       Arch here I don't think, it would have to come via a [backend]
+       parameter *)
+    6
+  | Immediates
+  | Naked_floats
+  | Values -> 2
 
 let unary_int_prim_size kind op =
   match (kind : Flambda_kind.Standard_int.t),
@@ -116,23 +119,32 @@ let box_number kind =
   | Naked_int32 when not arch32 -> 1 + alloc_size (* shift/sextend + alloc *)
   | Naked_int32 | Naked_int64 | Naked_nativeint -> alloc_size (* alloc *)
 
-let block_load kind =
-  match BAK.to_lambda_array_kind kind with
-  | Pintarray -> 1 (* cadda + load *)
-  | Paddrarray -> 1
-  | Pfloatarray -> 1
-  | Pgenarray -> 11 (* tag inspection + rest.. *)
+let block_load (kind : Flambda_primitive.Block_access_kind.t) =
+  match kind with
+  | Values _
+  | Naked_floats _ -> 1
 
-let block_set kind init =
-  match BAK.to_lambda_array_kind kind,
-        (init : Flambda_primitive.init_or_assign) with
-  | Pintarray, (Assignment | Initialization) -> 1 (* cadda + store *)
-  | Pfloatarray, (Assignment | Initialization) -> 1
-  | Paddrarray, Assignment -> 1
-  | Paddrarray, Initialization -> 4
-  | Pgenarray, Initialization -> 12 (* tag inspection + rest.. *)
-  | Pgenarray, Assignment -> 16 (* tag inspection + rest.. *)
+let array_load (kind : Flambda_primitive.Array_kind.t) =
+  match kind with
+  | Float_array_opt_dynamic -> 11  (* tag inspection etc. *)
+  | Immediates -> 1  (* cadda + load *)
+  | Naked_floats -> 1
+  | Values -> 1
 
+let block_set (kind : Flambda_primitive.Block_access_kind.t)
+      (init : Flambda_primitive.Init_or_assign.t) =
+  match kind, init with
+  | Values _, (Assignment | Initialization) -> 1 (* cadda + store *)
+  | Naked_floats _, (Assignment | Initialization) -> 1
+
+let array_set (kind : Flambda_primitive.Array_kind.t)
+      (_init : Flambda_primitive.Init_or_assign.t) =
+  (* CR mshinwell: Check whether [init] should matter *)
+  match kind with
+  | Immediates -> 1  (* cadda + store *)
+  | Naked_floats -> 1
+  | Values -> 1
+  | Float_array_opt_dynamic -> 16 (* tag inspection + rest.. *)
 
 let string_or_bigstring_load kind width =
   let start_address_load =
@@ -286,7 +298,7 @@ let binary_float_comp_primitive _op = 2
 
 let unary_prim_size prim =
   match (prim : Flambda_primitive.unary_primitive) with
-  | Duplicate_block _ -> alloc_extcall_size + 1
+  | Duplicate_array _ | Duplicate_block _ -> alloc_extcall_size + 1
   | Is_int -> 1
   | Get_tag -> 2
   | Array_length kind -> array_length_size kind
@@ -306,6 +318,7 @@ let unary_prim_size prim =
 let binary_prim_size prim =
   match (prim : Flambda_primitive.binary_primitive) with
   | Block_load (kind, _) -> block_load kind
+  | Array_load (kind, _mut) -> array_load kind
   | String_or_bigstring_load (kind, width) ->
     string_or_bigstring_load kind width
   | Bigarray_load (_dims, (Complex32 | Complex64) , _layout) ->
@@ -327,10 +340,9 @@ let binary_prim_size prim =
 
 let ternary_prim_size prim =
   match (prim : Flambda_primitive.ternary_primitive) with
-  | Block_set (block_access, init) ->
-    block_set block_access init
-  | Bytes_or_bigstring_set (kind, width) ->
-    bytes_like_set kind width
+  | Block_set (block_access, init) -> block_set block_access init
+  | Array_set (kind, init) -> array_set kind init
+  | Bytes_or_bigstring_set (kind, width) -> bytes_like_set kind width
   | Bigarray_set (_dims, (Complex32 | Complex64), _layout) ->
     5 (* ~ 3 block_load + 2 block_set *)
   | Bigarray_set (_dims, _kind, _layout) ->
@@ -338,7 +350,10 @@ let ternary_prim_size prim =
 
 let variadic_prim_size prim args =
   match (prim : Flambda_primitive.variadic_primitive) with
-  | Make_block (_kind, _mut) -> alloc_size + List.length args
+  | Make_block (_, _mut)
+  (* CR mshinwell: I think Make_array for a generic array ("Anything") is
+     more expensive than the other cases *)
+  | Make_array (_, _mut) -> alloc_size + List.length args
 
 let prim_size (prim : Flambda_primitive.t) =
   match prim with

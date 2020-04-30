@@ -27,214 +27,246 @@ type classification_for_printing =
   | Destructive
   | Neither
 
-module Value_kind = struct
+module Block_of_values_field = struct
   type t =
-    | Anything
-    | Definitely_pointer
-    | Definitely_immediate
+    | Any_value
+    | Immediate
+    | Boxed_float
+    | Boxed_int32
+    | Boxed_int64
+    | Boxed_nativeint
 
   let print ppf t =
     match t with
-    | Anything -> Format.pp_print_string ppf "Anything"
-    | Definitely_pointer -> Format.pp_print_string ppf "Definitely_pointer"
-    | Definitely_immediate -> Format.pp_print_string ppf "Definitely_immediate"
-
-  let to_int t =
-    match t with
-    | Anything -> 0
-    | Definitely_pointer -> 1
-    | Definitely_immediate -> 2
-
-  let compare t1 t2 = (to_int t1) - (to_int t2)
-end
-
-module Generic_array_specialisation = struct
-  type t =
-    | No_specialisation
-    | Full_of_naked_floats
-    | Full_of_immediates
-    | Full_of_arbitrary_values_but_not_floats
-
-  let check () =
-    if not Config.flat_float_array then begin
-      Misc.fatal_errorf "Generic arrays cannot be used unless the \
-        float array optimisation has been enabled at compiler configuration \
-        time"
-    end
-
-  let no_specialisation () =
-    check ();
-    No_specialisation
-
-  let full_of_naked_floats () =
-    check ();
-    Full_of_naked_floats
-
-  let full_of_immediates () =
-    check ();
-    Full_of_immediates
-
-  let full_of_arbitrary_values_but_not_floats () =
-    check ();
-    Full_of_arbitrary_values_but_not_floats
-
-  let print ppf t =
-    match t with
-    | No_specialisation -> Format.pp_print_string ppf "not-specialised"
-    | Full_of_naked_floats -> Format.pp_print_string ppf "floats"
-    | Full_of_immediates -> Format.pp_print_string ppf "imms"
-    | Full_of_arbitrary_values_but_not_floats ->
-      Format.pp_print_string ppf "non-floats"
+    | Any_value -> Format.fprintf ppf "Any_value"
+    | Immediate -> Format.fprintf ppf "Immediate"
+    | Boxed_float -> Format.fprintf ppf "Boxed_float"
+    | Boxed_int32 -> Format.fprintf ppf "Boxed_int32"
+    | Boxed_int64 -> Format.fprintf ppf "Boxed_int64"
+    | Boxed_nativeint -> Format.fprintf ppf "Boxed_nativeint"
 
   let compare = Stdlib.compare
 end
 
-(* CR mshinwell: These types should probably go in their own modules with
-   a comparison function next to each. *)
-
-type make_block_kind =
-  | Full_of_values of Tag.Scannable.t * (Value_kind.t list)
-  | Full_of_naked_floats
-  | Generic_array of Generic_array_specialisation.t
-
-let print_make_block_kind ppf kind =
-  match kind with
-  | Full_of_values (tag, shape) ->
-    Format.fprintf ppf "@[<hov 1>(Full_of_values@ (tag %a)@ (%a))@]"
-      Tag.Scannable.print tag
-      (Format.pp_print_list ~pp_sep:Format.pp_print_space
-        Value_kind.print) shape
-  | Full_of_naked_floats -> Format.pp_print_string ppf "Full_of_naked_floats"
-  | Generic_array generic ->
-    Format.fprintf ppf "@[<hov 1>(Generic@ %a)@]"
-      Generic_array_specialisation.print generic
-
-let compare_make_block_kind kind1 kind2 =
-  match kind1, kind2 with
-  | Full_of_values (tag1, shape1), Full_of_values (tag2, shape2) ->
-    let c = Tag.Scannable.compare tag1 tag2 in
-    if c <> 0 then c
-    else Misc.Stdlib.List.compare Value_kind.compare shape1 shape2
-  | Full_of_values _, _ -> -1
-  | _, Full_of_values _ -> 1
-  | Full_of_naked_floats, Full_of_naked_floats -> 0
-  | Generic_array spec1, Generic_array spec2 ->
-    Generic_array_specialisation.compare spec1 spec2
-  | _, Generic_array _ -> -1
-  | Generic_array _, _ -> 1
-
-type duplicate_block_kind =
-  | Full_of_values_known_length of Tag.Scannable.t
-  | Full_of_values_unknown_length of Tag.Scannable.t
-  | Full_of_naked_floats of { length : Targetint.OCaml.t option; }
-  | Generic_array of Generic_array_specialisation.t
-
-let print_duplicate_block_kind ppf (kind : duplicate_block_kind) =
-  match kind with
-  | Full_of_values_known_length tag ->
-    Format.fprintf ppf "%a" Tag.Scannable.print tag
-  | Full_of_values_unknown_length tag ->
-    Format.fprintf ppf "%a" Tag.Scannable.print tag
-  | Full_of_naked_floats { length = None; } ->
-    Format.pp_print_string ppf "floats"
-  | Full_of_naked_floats { length = Some length; } ->
-    Format.fprintf ppf "%a floats"
-      Targetint.OCaml.print length
-  | Generic_array spec ->
-    Format.fprintf ppf "generic %a"
-      Generic_array_specialisation.print spec
-
-(* CR-someday mshinwell: We should have unboxed arrays of int32, int64 and
-   nativeint. *)
-
-module Block_access_kind = struct
-  type t0 =
-    | Value of Value_kind.t
-    | Naked_float
-
+module Block_kind = struct
   type t =
-    | Block of { elt_kind : t0; tag : Tag.t; size : Lambda.block_size; }
-    | Array of t0
-    | Generic_array of Generic_array_specialisation.t
+    | Values of Tag.Scannable.t * (Block_of_values_field.t list)
+    | Naked_floats
 
-  let element_kind t =
+   let print ppf t =
     match t with
-    | Block { elt_kind = Value _; _ } | Array (Value _) -> K.value
-    | Block { elt_kind = Naked_float; _ } | Array Naked_float -> K.naked_float
-    | Generic_array _ -> Misc.fatal_error "Not yet implemented"
-
-  let compare_t0 (t0_1 : t0) t0_2 = Stdlib.compare t0_1 t0_2
+    | Values (tag, shape) ->
+      Format.fprintf ppf
+        "@[<hov 1>(Values@ \
+          @[<hov 1>(tag %a)@]@ \
+          @[<hov 1>(shape@ @[<hov 1>(%a)@])@])@]"
+        Tag.Scannable.print tag
+        (Format.pp_print_list ~pp_sep:Format.pp_print_space
+          Block_of_values_field.print) shape
+    | Naked_floats ->
+      Format.pp_print_string ppf "Naked_floats"
 
   let compare t1 t2 =
     match t1, t2 with
-    | Block _, Array _ -> -1
-    | Block _, Generic_array _ -> -1
-    | Array _, Block _ -> 1
-    | Array _, Generic_array _ -> -1
-    | Generic_array _, Block _ -> 1
-    | Generic_array _, Array _ -> 1
-    | Block { elt_kind = ek_1; tag = tag1; size = size1; },
-      Block { elt_kind = ek_2; tag = tag2; size = size2; } ->
-      let c = compare_t0 ek_1 ek_2 in
-      if c <> 0 then c else
-      let c = Tag.compare tag1 tag2 in
-      if c <> 0 then c else
-      Stdlib.compare (size1: Lambda.block_size) size2
-    | Array t0_1, Array t0_2 -> compare_t0 t0_1 t0_2
-    | Generic_array spec1, Generic_array spec2 ->
-      Generic_array_specialisation.compare spec1 spec2
+    | Values (tag1, shape1), Values (tag2, shape2) ->
+      let c = Tag.Scannable.compare tag1 tag2 in
+      if c <> 0 then c
+      else Misc.Stdlib.List.compare Block_of_values_field.compare shape1 shape2
+    | Naked_floats, Naked_floats
+    | Values _, _ -> -1
+    | _, Values _ -> 1
 
-  let print_t0 ppf t0 =
-    match t0 with
-    | Value kind ->
-      Format.fprintf ppf "@[(Value %a)@]" Value_kind.print kind
-    | Naked_float -> Format.pp_print_string ppf "Naked_float"
+  let element_kind t =
+    match t with
+    | Values _ -> K.value
+    | Naked_floats -> K.naked_float
+end
 
-  let print_block_size ppf (size: Lambda.block_size) =
-    match size with
-    | Unknown -> Format.pp_print_string ppf "unknown"
-    | Known sz -> Format.pp_print_int ppf sz
+module Array_kind = struct
+  type t =
+    | Immediates
+    | Values
+    | Naked_floats
+    | Float_array_opt_dynamic
 
-  let print ppf kind =
-    match kind with
-    | Block { elt_kind; tag; size; } ->
-      Format.fprintf ppf "(Block %a tag %a size %a)"
-        print_t0 elt_kind
-        Tag.print tag
-        print_block_size size
-    | Array t0 -> Format.fprintf ppf "(Array %a)" print_t0 t0
-    | Generic_array spec ->
-      Format.fprintf ppf "(Generic %a)"
-        Generic_array_specialisation.print spec
+  let print ppf t =
+    match t with
+    | Immediates -> Format.pp_print_string ppf "Immediates"
+    | Naked_floats -> Format.pp_print_string ppf "Naked_floats"
+    | Values -> Format.pp_print_string ppf "Values"
+    | Float_array_opt_dynamic ->
+      Format.pp_print_string ppf "Float_array_opt_dynamic"
 
-  let to_lambda_array_kind kind =
-    match (kind : t) with
-    (* Full naked float arrays *)
-    | Block { elt_kind = Naked_float; _ }
-    | Array Naked_float
-    | Generic_array Full_of_naked_floats -> Lambda.Pfloatarray
-    (* Arrays (or accesses) to immediate integers *)
-    | Block { elt_kind = Value Definitely_immediate; _ }
-    | Array Value Definitely_immediate
-    | Generic_array Full_of_immediates -> Lambda.Pintarray
-    (* Arrays of caml values (i.e specifically not naked floats) *)
-    | Block { elt_kind = Value (Anything|Definitely_pointer); _ }
-    | Array Value Definitely_pointer
-    | Generic_array Full_of_arbitrary_values_but_not_floats -> Lambda.Paddrarray
-    (* General case: the array might contain naked floats *)
-    | _ -> Lambda.Pgenarray
+  let compare = Stdlib.compare
 
+  let element_kind_for_set t =
+    match t with
+    | Immediates | Values | Float_array_opt_dynamic -> K.value
+    | Naked_floats -> K.naked_float
+
+  let element_kind_for_creation = element_kind_for_set
+  let element_kind_for_load = element_kind_for_set
+
+  let to_lambda t : Lambda.array_kind =
+    match t with
+    | Immediates -> Pintarray
+    | Values -> Paddrarray
+    | Naked_floats -> Pfloatarray
+    | Float_array_opt_dynamic -> Pgenarray
+end
+
+module Duplicate_block_kind = struct
+  type t =
+    | Values of { tag : Tag.Scannable.t; length : Targetint.OCaml.t; }
+    | Naked_floats of { length : Targetint.OCaml.t; }
+
+  let print ppf t =
+    match t with
+    | Values { tag; length; } ->
+      Format.fprintf ppf
+        "@[<hov 1>(Block_of_values \
+          @[<hov 1>(tag@ %a)@]@ \
+          @[<hov 1>(length@ %a)@]\
+          )@]"
+        Tag.Scannable.print tag
+        Targetint.OCaml.print length
+    | Naked_floats { length; } ->
+      Format.fprintf ppf
+        "@[<hov 1>(Block_of_naked_floats@ \
+          @[<hov 1>(length@ %a)@]\
+          )@]"
+        Targetint.OCaml.print length
+
+  let compare t1 t2 =
+    match t1, t2 with
+    | Values { tag = tag1; length = length1; },
+        Values { tag = tag2; length = length2; } ->
+      let c = Tag.Scannable.compare tag1 tag2 in
+      if c <> 0 then c
+      else Targetint.OCaml.compare length1 length2
+    | Naked_floats { length = length1; }, Naked_floats { length = length2; } ->
+      Targetint.OCaml.compare length1 length2
+    | Values _, Naked_floats _ -> -1
+    | Naked_floats _, Values _ -> 1
+end
+
+module Duplicate_array_kind = struct
+  type t =
+    | Immediates
+    | Values
+    | Naked_floats of { length : Targetint.OCaml.t option; }
+    | Float_array_opt_dynamic
+
+  let print ppf t =
+    match t with
+    | Immediates -> Format.pp_print_string ppf "Immediates"
+    | Values -> Format.pp_print_string ppf "Values"
+    | Naked_floats { length; } ->
+      Format.fprintf ppf
+        "@[<hov 1>(Naked_floats@ \
+          @[<hov 1>(length@ %a)@]\
+          )@]"
+        (Misc.Stdlib.Option.print Targetint.OCaml.print) length
+    | Float_array_opt_dynamic ->
+      Format.pp_print_string ppf "Float_array_opt_dynamic"
+
+  let compare t1 t2 =
+    match t1, t2 with
+    | Immediates, Immediates
+    | Values, Values
+    | Float_array_opt_dynamic, Float_array_opt_dynamic -> 0
+    | Naked_floats { length = length1; }, Naked_floats { length = length2; } ->
+      Option.compare Targetint.OCaml.compare length1 length2
+    | Immediates, _ -> -1
+    | _, Immediates -> 1
+    | Values, _ -> -1
+    | _, Values -> 1
+    | Naked_floats _, _ -> -1
+    | _, Naked_floats _ -> 1
+end
+
+module Block_access_field_kind = struct
+  type t =
+    | Any_value
+    | Immediate
+
+  let print ppf t =
+    match t with
+    | Any_value -> Format.pp_print_string ppf "Any_value"
+    | Immediate -> Format.pp_print_string ppf "Immediate"
+
+  let compare = Stdlib.compare
+end
+
+module Block_access_kind = struct
+  type t =
+    | Values of {
+        tag : Tag.Scannable.t;
+        size : Targetint.OCaml.t Or_unknown.t;
+        field_kind : Block_access_field_kind.t;
+      }
+    | Naked_floats of { size : Targetint.OCaml.t Or_unknown.t; }
+
+  let print ppf t =
+    match t with
+    | Values { tag; size; field_kind; } ->
+      Format.fprintf ppf
+        "@[<hov 1>(Values@ \
+          @[<hov 1>(tag@ %a)@]@ \
+          @[<hov 1>(size@ %a)@]@ \
+          @[<hov 1>(field_kind@ %a)@]\
+          )@]"
+        Tag.Scannable.print tag
+        (Or_unknown.print Targetint.OCaml.print) size
+        Block_access_field_kind.print field_kind
+    | Naked_floats { size; } ->
+      Format.fprintf ppf
+        "@[<hov 1>(Naked_floats@ \
+          @[<hov 1>(size@ %a)@]@\
+          )@]"
+        (Or_unknown.print Targetint.OCaml.print) size
+
+  let element_kind_for_load t =
+    match t with
+    | Values _ -> K.value
+    | Naked_floats _ -> K.naked_float
+
+  let element_kind_for_set = element_kind_for_load
+
+  let compare t1 t2 =
+    match t1, t2 with
+    | Values { tag = tag1; size = size1; field_kind = field_kind1; },
+        Values { tag = tag2; size = size2; field_kind = field_kind2; } ->
+      let c = Tag.Scannable.compare tag1 tag2 in
+      if c <> 0 then c
+      else
+        let c = Or_unknown.compare Targetint.OCaml.compare size1 size2 in
+        if c <> 0 then c
+        else Block_access_field_kind.compare field_kind1 field_kind2
+    | Naked_floats { size = size1; }, Naked_floats { size = size2; } ->
+      Or_unknown.compare Targetint.OCaml.compare size1 size2
+    | Values _, Naked_floats _ -> -1
+    | Naked_floats _, Values _ -> 1
 end
 
 type string_or_bytes = String | Bytes
 
-type init_or_assign = Initialization | Assignment
+module Init_or_assign = struct
+  type t = Initialization | Assignment
 
-let print_init_or_assign ppf init_or_assign =
-  let fprintf = Format.fprintf in
-  match init_or_assign with
-  | Initialization -> fprintf ppf "Init"
-  | Assignment -> fprintf ppf "Assign"
+  let print ppf t =
+    let fprintf = Format.fprintf in
+    match t with
+    | Initialization -> fprintf ppf "Init"
+    | Assignment -> fprintf ppf "Assign"
+
+  let compare = Stdlib.compare
+
+  let to_lambda t : Lambda.initialization_or_assignment =
+    match t with
+    | Initialization -> Heap_initialization
+    | Assignment -> Assignment
+end
 
 type array_like_operation = Reading | Writing
 
@@ -243,27 +275,39 @@ let effects_of_operation operation =
   | Reading -> Effects.No_effects
   | Writing -> Effects.Arbitrary_effects
 
-let reading_from_an_array_like_thing mutable_or_immutable =
+let reading_from_a_block mutable_or_immutable =
   let effects = effects_of_operation Reading in
   let coeffects =
-    match (mutable_or_immutable : Effects.mutable_or_immutable) with
+    match (mutable_or_immutable : Mutable_or_immutable.t) with
     | Immutable -> Coeffects.No_coeffects
     | Mutable -> Coeffects.Has_coeffects
   in
   effects, coeffects
 
-let writing_to_an_array_like_thing =
+let reading_from_an_array mutable_or_immutable =
+  reading_from_a_block mutable_or_immutable
+
+let reading_from_a_string_or_bigstring mutable_or_immutable =
+  reading_from_a_block mutable_or_immutable
+
+let writing_to_a_block =
   let effects = effects_of_operation Writing in
   effects, Coeffects.No_coeffects
 
-let array_like_thing_index_kind = K.value
-
+let writing_to_an_array = writing_to_a_block
+let writing_to_bytes_or_bigstring = writing_to_a_block
 
 (* CR mshinwell: Improve naming *)
 let bigarray_kind = K.value
 let bigstring_kind = K.value
 let block_kind = K.value
+let array_kind = K.value
 let string_or_bytes_kind = K.value
+
+let block_index_kind = K.value
+let array_index_kind = K.value
+let string_or_bigstring_index_kind = K.value
+let bytes_or_bigstring_index_kind = K.value
 
 type comparison = Eq | Neq | Lt | Gt | Le | Ge
 
@@ -465,13 +509,18 @@ type result_kind =
 
 type unary_primitive =
   | Duplicate_block of {
-      kind : duplicate_block_kind;
-      source_mutability : Effects.mutable_or_immutable;
-      destination_mutability : Effects.mutable_or_immutable;
+      kind : Duplicate_block_kind.t;
+      source_mutability : Mutable_or_immutable.t;
+      destination_mutability : Mutable_or_immutable.t;
+    }
+  | Duplicate_array of {
+      kind : Duplicate_array_kind.t;
+      source_mutability : Mutable_or_immutable.t;
+      destination_mutability : Mutable_or_immutable.t;
     }
   | Is_int
   | Get_tag
-  | Array_length of Block_access_kind.t
+  | Array_length of Array_kind.t
   | Bigarray_length of { dimension : int; }
   | String_length of string_or_bytes
   | Int_as_pointer
@@ -498,12 +547,17 @@ type unary_primitive =
    eligible for CSE, since we deal with projections through types. *)
 let unary_primitive_eligible_for_cse p ~arg =
   match p with
-  | Duplicate_block {
+  | Duplicate_array {
+      kind = _;
       source_mutability = Immutable;
       destination_mutability = Immutable;
-      _
+    }
+  | Duplicate_block {
+      kind = _;
+      source_mutability = Immutable;
+      destination_mutability = Immutable;
     } -> true
-  | Duplicate_block _ -> false
+  | Duplicate_array _ | Duplicate_block _ -> false
   | Is_int
   | Get_tag -> true
   | Array_length _ -> true
@@ -528,9 +582,10 @@ let unary_primitive_eligible_for_cse p ~arg =
 let compare_unary_primitive p1 p2 =
   let unary_primitive_numbering p =
     match p with
-    | Duplicate_block _ -> 0
-    | Is_int -> 1
-    | Get_tag -> 2
+    | Duplicate_array _ -> 0
+    | Duplicate_block _ -> 1
+    | Is_int -> 2
+    | Get_tag -> 3
     | Array_length _ -> 4
     | Bigarray_length _ -> 5
     | String_length _ -> 6
@@ -546,6 +601,21 @@ let compare_unary_primitive p1 p2 =
     | Project_var _ -> 16
   in
   match p1, p2 with
+  | Duplicate_array { kind = kind1;
+        source_mutability = source_mutability1;
+        destination_mutability = destination_mutability1;
+      },
+    Duplicate_array { kind = kind2;
+        source_mutability = source_mutability2;
+        destination_mutability = destination_mutability2;
+      } ->
+    let c = Duplicate_array_kind.compare kind1 kind2 in
+    if c <> 0 then c
+    else
+      let c = Stdlib.compare source_mutability1 source_mutability2 in
+      if c <> 0 then c
+      else
+        Stdlib.compare destination_mutability1 destination_mutability2
   | Duplicate_block { kind = kind1;
         source_mutability = source_mutability1;
         destination_mutability = destination_mutability1;
@@ -554,7 +624,7 @@ let compare_unary_primitive p1 p2 =
         source_mutability = source_mutability2;
         destination_mutability = destination_mutability2;
       } ->
-    let c = Stdlib.compare kind1 kind2 in
+    let c = Duplicate_block_kind.compare kind1 kind2 in
     if c <> 0 then c
     else
       let c = Stdlib.compare source_mutability1 source_mutability2 in
@@ -599,7 +669,8 @@ let compare_unary_primitive p1 p2 =
       let c = Closure_id.compare closure_id1 closure_id2 in
       if c <> 0 then c
       else Var_within_closure.compare var_within_closure1 var_within_closure2
-  | (Duplicate_block _
+  | (Duplicate_array _
+    | Duplicate_block _
     | Is_int
     | Get_tag
     | String_length _
@@ -622,10 +693,15 @@ let print_unary_primitive ppf p =
   let fprintf = Format.fprintf in
   match p with
   | Duplicate_block { kind; source_mutability; destination_mutability; } ->
-    fprintf ppf "(Duplicate_array %a (source %a) (dest %a))"
-      print_duplicate_block_kind kind
-      Effects.print_mutable_or_immutable source_mutability
-      Effects.print_mutable_or_immutable destination_mutability
+    fprintf ppf "@[<hov 1>(Duplicate_block %a (source %a) (dest %a))@]"
+      Duplicate_block_kind.print kind
+      Mutable_or_immutable.print source_mutability
+      Mutable_or_immutable.print destination_mutability
+  | Duplicate_array { kind; source_mutability; destination_mutability; } ->
+    fprintf ppf "@[<hov 1>(Duplicate_array %a (source %a) (dest %a))@]"
+      Duplicate_array_kind.print kind
+      Mutable_or_immutable.print source_mutability
+      Mutable_or_immutable.print destination_mutability
   | Is_int -> fprintf ppf "Is_int"
   | Get_tag -> fprintf ppf "Get_tag"
   | String_length _ -> fprintf ppf "String_length"
@@ -638,7 +714,9 @@ let print_unary_primitive ppf p =
       Flambda_kind.Standard_int_or_float.print_lowercase dst
   | Boolean_not -> fprintf ppf "Boolean_not"
   | Float_arith o -> print_unary_float_arith_op ppf o
-  | Array_length _ -> fprintf ppf "Array_length"
+  | Array_length kind ->
+    fprintf ppf "@[<hov 1>(Array_length@ %a)@]"
+      Array_kind.print kind
   | Bigarray_length { dimension; } ->
     fprintf ppf "Bigarray_length %a" print_num_dimensions dimension
   | Unbox_number Untagged_immediate -> fprintf ppf "Untag_imm"
@@ -661,6 +739,7 @@ let print_unary_primitive ppf p =
 
 let arg_kind_of_unary_primitive p =
   match p with
+  | Duplicate_array _
   | Duplicate_block _ -> K.value
   | Is_int -> K.value
   | Get_tag -> K.value
@@ -680,6 +759,7 @@ let arg_kind_of_unary_primitive p =
 
 let result_kind_of_unary_primitive p : result_kind =
   match p with
+  | Duplicate_array _
   | Duplicate_block _ -> Singleton K.value
   | Is_int
   | Get_tag -> Singleton K.naked_immediate
@@ -704,14 +784,18 @@ let result_kind_of_unary_primitive p : result_kind =
 
 let effects_and_coeffects_of_unary_primitive p =
   match p with
+  | Duplicate_array { kind = _;
+      source_mutability; destination_mutability; _ }
   | Duplicate_block { kind = _;
       source_mutability; destination_mutability; _ } ->
     begin match source_mutability with
     | Immutable ->
       (* [Obj.truncate] has now been removed. *)
-      Effects.Only_generative_effects destination_mutability, Coeffects.No_coeffects
+      Effects.Only_generative_effects destination_mutability,
+        Coeffects.No_coeffects
     | Mutable ->
-      Effects.Only_generative_effects destination_mutability, Coeffects.Has_coeffects
+      Effects.Only_generative_effects destination_mutability,
+        Coeffects.Has_coeffects
     end
   | Is_int -> Effects.No_effects, Coeffects.No_coeffects
   | Get_tag ->
@@ -733,9 +817,9 @@ let effects_and_coeffects_of_unary_primitive p =
   | Bigarray_length { dimension = _; } ->
     (* This is pretty much a direct access to a field of the bigarray,
        different from reading one of the values actually stored inside
-       the array, hence the array_like_thing (i.e. this has the same
+       the array, hence [reading_from_a_block] (i.e. this has the same
        behaviour as a regular Block_load). *)
-    reading_from_an_array_like_thing Mutable
+    reading_from_a_block Mutable
   | Unbox_number _ ->
     Effects.No_effects, Coeffects.No_coeffects
   | Box_number _ ->
@@ -745,6 +829,7 @@ let effects_and_coeffects_of_unary_primitive p =
 
 let unary_classify_for_printing p =
   match p with
+  | Duplicate_array _
   | Duplicate_block _ -> Constructive
   | String_length _
   | Get_tag -> Destructive
@@ -797,7 +882,8 @@ let print_binary_float_arith_op ppf o =
   | Div -> fprintf ppf "/."
 
 type binary_primitive =
-  | Block_load of Block_access_kind.t * Effects.mutable_or_immutable
+  | Block_load of Block_access_kind.t * Mutable_or_immutable.t
+  | Array_load of Array_kind.t * Mutable_or_immutable.t
   | String_or_bigstring_load of string_like_value * string_accessor_width
   | Bigarray_load of num_dimensions * bigarray_kind * bigarray_layout
   | Phys_equal of Flambda_kind.t * equality_comparison
@@ -810,6 +896,7 @@ type binary_primitive =
 
 let binary_primitive_eligible_for_cse p =
   match p with
+  | Array_load _
   | Block_load _ -> false
   | String_or_bigstring_load _ -> false  (* CR mshinwell: review *)
   | Bigarray_load _ -> false
@@ -832,21 +919,26 @@ let binary_primitive_eligible_for_cse p =
 let compare_binary_primitive p1 p2 =
   let binary_primitive_numbering p =
     match p with
-    | Block_load _ -> 0
-    | String_or_bigstring_load _ -> 1
-    | Bigarray_load _ -> 2
-    | Phys_equal _ -> 3
-    | Int_arith _ -> 4
-    | Int_shift _ -> 5
-    | Int_comp _ -> 6
-    | Float_arith _ -> 7
-    | Float_comp _ -> 8
+    | Array_load _ -> 0
+    | Block_load _ -> 1
+    | String_or_bigstring_load _ -> 2
+    | Bigarray_load _ -> 3
+    | Phys_equal _ -> 4
+    | Int_arith _ -> 5
+    | Int_shift _ -> 6
+    | Int_comp _ -> 7
+    | Float_arith _ -> 8
+    | Float_comp _ -> 9
   in
   match p1, p2 with
   | Block_load (kind1, mut1), Block_load (kind2, mut2) ->
     let c = Block_access_kind.compare kind1 kind2 in
     if c <> 0 then c
-    else Effects.compare_mutable_or_immutable mut1 mut2
+    else Mutable_or_immutable.compare mut1 mut2
+  | Array_load (kind1, mut1), Array_load (kind2, mut2) ->
+    let c = Array_kind.compare kind1 kind2 in
+    if c <> 0 then c
+    else Mutable_or_immutable.compare mut1 mut2
   | String_or_bigstring_load (string_like1, width1),
       String_or_bigstring_load (string_like2, width2) ->
     let c = Stdlib.compare string_like1 string_like2 in
@@ -885,6 +977,7 @@ let compare_binary_primitive p1 p2 =
   | Float_comp comp1, Float_comp comp2 ->
     Stdlib.compare comp1 comp2
   | (Block_load _
+    | Array_load _
     | String_or_bigstring_load _
     | Bigarray_load _
     | Phys_equal _
@@ -900,9 +993,13 @@ let print_binary_primitive ppf p =
   let fprintf = Format.fprintf in
   match p with
   | Block_load (kind, mut) ->
-    fprintf ppf "@[(Block_load %a %a)@]"
+    fprintf ppf "@[(Block_load@ %a@ %a)@]"
       Block_access_kind.print kind
-      Effects.print_mutable_or_immutable mut
+      Mutable_or_immutable.print mut
+  | Array_load (kind, mut) ->
+    fprintf ppf "@[(Array_load@ %a@ %a)@]"
+      Array_kind.print kind
+      Mutable_or_immutable.print mut
   | String_or_bigstring_load (string_like, width) ->
     fprintf ppf "@[(String_load %a %a)@]"
       print_string_like_value string_like
@@ -928,12 +1025,12 @@ let print_binary_primitive ppf p =
 
 let args_kind_of_binary_primitive p =
   match p with
-  | Block_load _ ->
-    block_kind, array_like_thing_index_kind
+  | Block_load _ -> block_kind, block_index_kind
+  | Array_load _ -> array_kind, array_index_kind
   | String_or_bigstring_load ((String | Bytes), _) ->
-    string_or_bytes_kind, array_like_thing_index_kind
+    string_or_bytes_kind, string_or_bigstring_index_kind
   | String_or_bigstring_load (Bigstring, _) ->
-    bigstring_kind, array_like_thing_index_kind
+    bigstring_kind, string_or_bigstring_index_kind
   | Bigarray_load (_, _, _) ->
     bigarray_kind, bigarray_index_kind
   | Phys_equal (kind, _) -> kind, kind
@@ -951,7 +1048,9 @@ let args_kind_of_binary_primitive p =
 let result_kind_of_binary_primitive p : result_kind =
   match p with
   | Block_load (block_access_kind, _) ->
-    Singleton (Block_access_kind.element_kind block_access_kind)
+    Singleton (Block_access_kind.element_kind_for_load block_access_kind)
+  | Array_load (kind, _) ->
+    Singleton (Array_kind.element_kind_for_load kind)
   | String_or_bigstring_load (_, (Eight | Sixteen)) ->
     Singleton K.naked_immediate
   | String_or_bigstring_load (_, Thirty_two) ->
@@ -969,12 +1068,13 @@ let result_kind_of_binary_primitive p : result_kind =
 
 let effects_and_coeffects_of_binary_primitive p =
   match p with
-  | Block_load (_, mut) -> reading_from_an_array_like_thing mut
+  | Block_load (_, mut) -> reading_from_a_block mut
+  | Array_load (_, mut) -> reading_from_an_array mut
   | Bigarray_load (_, kind, _) -> reading_from_a_bigarray kind
   | String_or_bigstring_load (String, _) ->
-    reading_from_an_array_like_thing Immutable
+    reading_from_a_string_or_bigstring Immutable
   | String_or_bigstring_load ((Bytes | Bigstring), _) ->
-    reading_from_an_array_like_thing Mutable
+    reading_from_a_string_or_bigstring Mutable
   | Phys_equal _ -> Effects.No_effects, Coeffects.No_coeffects
   | Int_arith (_kind, (Add | Sub | Mul | Div | Mod | And | Or | Xor)) ->
     Effects.No_effects, Coeffects.No_coeffects
@@ -985,7 +1085,8 @@ let effects_and_coeffects_of_binary_primitive p =
 
 let binary_classify_for_printing p =
   match p with
-  | Block_load _ -> Destructive
+  | Block_load _
+  | Array_load _ -> Destructive
   | Phys_equal _
   | Int_arith _
   | Int_shift _
@@ -996,13 +1097,15 @@ let binary_classify_for_printing p =
   | String_or_bigstring_load _ -> Neither
 
 type ternary_primitive =
-  | Block_set of Block_access_kind.t * init_or_assign
+  | Block_set of Block_access_kind.t * Init_or_assign.t
+  | Array_set of Array_kind.t * Init_or_assign.t
   | Bytes_or_bigstring_set of bytes_like_value * string_accessor_width
   | Bigarray_set of num_dimensions * bigarray_kind * bigarray_layout
 
 let ternary_primitive_eligible_for_cse p =
   match p with
   | Block_set _
+  | Array_set _
   | Bytes_or_bigstring_set _
   | Bigarray_set _ -> false
 
@@ -1010,15 +1113,20 @@ let compare_ternary_primitive p1 p2 =
   let ternary_primitive_numbering p =
     match p with
     | Block_set _ -> 0
-    | Bytes_or_bigstring_set _ -> 1
-    | Bigarray_set _ -> 2
+    | Array_set _ -> 1
+    | Bytes_or_bigstring_set _ -> 2
+    | Bigarray_set _ -> 3
   in
   match p1, p2 with
   | Block_set (kind1, init_or_assign1),
       Block_set (kind2, init_or_assign2) ->
     let c = Block_access_kind.compare kind1 kind2 in
     if c <> 0 then c
-    else Stdlib.compare init_or_assign1 init_or_assign2
+    else Init_or_assign.compare init_or_assign1 init_or_assign2
+  | Array_set (kind1, init_or_assign1), Array_set (kind2, init_or_assign2) ->
+    let c = Array_kind.compare kind1 kind2 in
+    if c <> 0 then c
+    else Init_or_assign.compare init_or_assign1 init_or_assign2
   | Bytes_or_bigstring_set (kind1, width1),
       Bytes_or_bigstring_set (kind2, width2) ->
     let c = Stdlib.compare kind1 kind2 in
@@ -1033,6 +1141,7 @@ let compare_ternary_primitive p1 p2 =
       if c <> 0 then c
       else Stdlib.compare layout1 layout2
   | (Block_set _
+    | Array_set _
     | Bytes_or_bigstring_set _
     | Bigarray_set _ ), _ ->
     Stdlib.compare (ternary_primitive_numbering p1)
@@ -1044,7 +1153,11 @@ let print_ternary_primitive ppf p =
   | Block_set (kind, init) ->
     fprintf ppf "(Block_set %a %a)"
       Block_access_kind.print kind
-      print_init_or_assign init
+      Init_or_assign.print init
+  | Array_set (kind, init) ->
+    fprintf ppf "(Array_set %a %a)"
+      Array_kind.print kind
+      Init_or_assign.print init
   | Bytes_or_bigstring_set (kind, string_accessor_width) ->
     fprintf ppf "(Bytes_set %a %a)"
       print_bytes_like_value kind
@@ -1061,103 +1174,108 @@ let print_ternary_primitive ppf p =
 
 let args_kind_of_ternary_primitive p =
   match p with
-  | Block_set (block_access_kind, _) ->
-    block_kind, array_like_thing_index_kind,
-      Block_access_kind.element_kind block_access_kind
+  | Block_set (access_kind, _) ->
+    block_kind, block_index_kind,
+      Block_access_kind.element_kind_for_set access_kind
+  | Array_set (kind, _) ->
+    array_kind, array_index_kind, Array_kind.element_kind_for_set kind
   | Bytes_or_bigstring_set (Bytes, (Eight | Sixteen)) ->
-    string_or_bytes_kind, array_like_thing_index_kind,
-      K.naked_immediate
+    string_or_bytes_kind, bytes_or_bigstring_index_kind, K.naked_immediate
   | Bytes_or_bigstring_set (Bytes, Thirty_two) ->
-    string_or_bytes_kind, array_like_thing_index_kind,
-      K.naked_int32
+    string_or_bytes_kind, bytes_or_bigstring_index_kind, K.naked_int32
   | Bytes_or_bigstring_set (Bytes, Sixty_four) ->
-    string_or_bytes_kind, array_like_thing_index_kind,
-      K.naked_int64
+    string_or_bytes_kind, bytes_or_bigstring_index_kind, K.naked_int64
   | Bytes_or_bigstring_set (Bigstring, (Eight | Sixteen)) ->
-    bigstring_kind, array_like_thing_index_kind,
-      K.naked_immediate
+    bigstring_kind, bytes_or_bigstring_index_kind, K.naked_immediate
   | Bytes_or_bigstring_set (Bigstring, Thirty_two) ->
-    bigstring_kind, array_like_thing_index_kind,
-      K.naked_int32
+    bigstring_kind, bytes_or_bigstring_index_kind, K.naked_int32
   | Bytes_or_bigstring_set (Bigstring, Sixty_four) ->
-    bigstring_kind, array_like_thing_index_kind,
-      K.naked_int64
+    bigstring_kind, bytes_or_bigstring_index_kind, K.naked_int64
   | Bigarray_set (_, kind, _) ->
-    let new_value = element_kind_of_bigarray_kind kind in
-    bigarray_kind, bigarray_index_kind, new_value
+    bigarray_kind, bigarray_index_kind, element_kind_of_bigarray_kind kind
 
 let result_kind_of_ternary_primitive p : result_kind =
   match p with
   | Block_set _
+  | Array_set _
   | Bytes_or_bigstring_set _
   | Bigarray_set _ -> Unit
 
 let effects_and_coeffects_of_ternary_primitive p =
   match p with
-  | Block_set _
-  | Bytes_or_bigstring_set _ -> writing_to_an_array_like_thing
+  | Block_set _ -> writing_to_a_block
+  | Array_set _ -> writing_to_an_array
+  | Bytes_or_bigstring_set _ -> writing_to_bytes_or_bigstring
   | Bigarray_set (_, kind, _) -> writing_to_a_bigarray kind
 
 let ternary_classify_for_printing p =
   match p with
   | Block_set _
+  | Array_set _
   | Bytes_or_bigstring_set _
   | Bigarray_set _ -> Neither
 
 type variadic_primitive =
-  | Make_block of make_block_kind * Effects.mutable_or_immutable
+  | Make_block of Block_kind.t * Mutable_or_immutable.t
+  | Make_array of Array_kind.t * Mutable_or_immutable.t
 
 let variadic_primitive_eligible_for_cse p ~args =
   match p with
-  | Make_block (_, Immutable) ->
+  | Make_block (_, Immutable) | Make_array (_, Immutable) ->
     (* See comment in [unary_primitive_eligible_for_cse], above, on
        [Box_number] case. *)
     List.exists (fun arg -> Simple.is_var arg) args
-  | Make_block (_, Mutable) -> false
+  | Make_block (_, Mutable) | Make_array (_, Mutable) -> false
 
 let compare_variadic_primitive p1 p2 =
   match p1, p2 with
   | Make_block (kind1, mut1), Make_block (kind2, mut2) ->
-    let c = compare_make_block_kind kind1 kind2 in
+    let c = Block_kind.compare kind1 kind2 in
     if c <> 0 then c
     else Stdlib.compare mut1 mut2
+  | Make_array (kind1, mut1), Make_array (kind2, mut2) ->
+    let c = Array_kind.compare kind1 kind2 in
+    if c <> 0 then c
+    else Stdlib.compare mut1 mut2
+  | Make_block _, Make_array _ -> -1
+  | Make_array _, Make_block _ -> 1
 
 let print_variadic_primitive ppf p =
   let fprintf = Format.fprintf in
   match p with
   | Make_block (kind, mut) ->
     fprintf ppf "@[<hov 1>(Make_block@ %a@ %a)@]"
-      print_make_block_kind kind
-      Effects.print_mutable_or_immutable mut
+      Block_kind.print kind
+      Mutable_or_immutable.print mut
+  | Make_array (kind, mut) ->
+    fprintf ppf "@[<hov 1>(Make_array@ %a@ %a)@]"
+      Array_kind.print kind
+      Mutable_or_immutable.print mut
 
 let args_kind_of_variadic_primitive p : arg_kinds =
   match p with
-  | Make_block (Full_of_values (_tag, _shape), _) ->
-    Variadic_all_of_kind K.value
-  | Make_block (Full_of_naked_floats, _) ->
-    Variadic_all_of_kind K.naked_float
-  | Make_block (Generic_array No_specialisation, _) ->
-    Variadic_all_of_kind K.value
-  | Make_block (Generic_array Full_of_naked_floats, _) ->
-    Variadic_all_of_kind K.naked_float
-  | Make_block (Generic_array Full_of_immediates, _) ->
-    Variadic_all_of_kind K.value
-  | Make_block (Generic_array Full_of_arbitrary_values_but_not_floats, _) ->
-    Variadic_all_of_kind K.value
+  | Make_block (kind, _) ->
+    Variadic_all_of_kind (Block_kind.element_kind kind)
+  | Make_array (kind, _) ->
+    Variadic_all_of_kind (Array_kind.element_kind_for_creation kind)
 
 let result_kind_of_variadic_primitive p : result_kind =
   match p with
-  | Make_block _ -> Singleton K.value
+  | Make_block _
+  | Make_array _ -> Singleton K.value
 
-let effects_and_coeffects_of_variadic_primitive p =
+let effects_and_coeffects_of_variadic_primitive p ~args =
   match p with
-  (* CR mshinwell: Arrays of size zero? *)
-  | Make_block (_, mut) ->
-    Effects.Only_generative_effects mut, Coeffects.No_coeffects
+  | Make_block (_, mut) | Make_array (_, mut) ->
+    if List.length args >= 1 then
+      Effects.Only_generative_effects mut, Coeffects.No_coeffects
+    else  (* zero-sized blocks and arrays are preallocated ("atoms"). *)
+      Effects.No_effects, Coeffects.No_coeffects
 
 let variadic_classify_for_printing p =
   match p with
-  | Make_block _ -> Constructive
+  | Make_block _
+  | Make_array _ -> Constructive
 
 type t =
   | Unary of unary_primitive * Simple.t
@@ -1182,6 +1300,7 @@ let invariant env t =
       E.add_use_of_closure_id env project_from;
       E.add_use_of_var_within_closure env var;
       E.check_simple_is_bound_and_of_kind env closure K.value
+    | Duplicate_array _, _
     | Duplicate_block _, _
     | Is_int, _
     | Get_tag, _
@@ -1205,6 +1324,7 @@ let invariant env t =
     (* None of these currently contain names: this is here so that we
        are reminded to check upon adding a new primitive. *)
     | Block_load _
+    | Array_load _
     | String_or_bigstring_load _
     | Bigarray_load _
     | Phys_equal _
@@ -1221,6 +1341,7 @@ let invariant env t =
     E.check_simple_is_bound_and_of_kind env x2 kind2;
     begin match prim with
     | Block_set _
+    | Array_set _
     | Bytes_or_bigstring_set _
     | Bigarray_set _ -> ()
     end
@@ -1235,7 +1356,8 @@ let invariant env t =
         E.check_simple_is_bound_and_of_kind env var kind)
       xs kinds;
     begin match prim with
-    | Make_block _ -> ()
+    | Make_block _
+     | Make_array _ -> ()
     end
 
 let classify_for_printing t =
@@ -1411,7 +1533,8 @@ let effects_and_coeffects (t : t) =
   | Unary (prim, _) -> effects_and_coeffects_of_unary_primitive prim
   | Binary (prim, _, _) -> effects_and_coeffects_of_binary_primitive prim
   | Ternary (prim, _, _, _) -> effects_and_coeffects_of_ternary_primitive prim
-  | Variadic (prim, _) -> effects_and_coeffects_of_variadic_primitive prim
+  | Variadic (prim, args) ->
+    effects_and_coeffects_of_variadic_primitive prim ~args
 
 let no_effects_or_coeffects t =
   match effects_and_coeffects t with

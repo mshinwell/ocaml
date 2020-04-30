@@ -16,21 +16,10 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Mutable or immutable *)
-type mutable_or_immutable =
-  | Immutable
-  | Mutable
+[@@@ocaml.warning "+a-30-40-41-42"]
 
-val print_mutable_or_immutable :
-  Format.formatter -> mutable_or_immutable -> unit
-(** Printing function. *)
+(** Things that a primitive does to the world, or expects from the world. *)
 
-val compare_mutable_or_immutable :
-  mutable_or_immutable -> mutable_or_immutable -> int
-(** Comparison function. *)
-
-
-(** Things that a primitive application does to the world. *)
 type t =
   | No_effects
   (** The primitive does not change the observable state of the world. For
@@ -48,7 +37,7 @@ type t =
       "effects out of the ether" and thus ignored for our determination here
       of effectfulness.  The same goes for floating point operations that may
       cause hardware traps on some platforms. *)
-  | Only_generative_effects of mutable_or_immutable
+  | Only_generative_effects of Mutable_or_immutable.t
   (** The primitive does not change the observable state of the world save for
       possibly affecting the state of the garbage collector by performing an
       allocation. Applications of primitives that only have generative effects

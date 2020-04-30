@@ -255,38 +255,46 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
   let module B = (val backend : Flambda2_backend_intf.S) in
   let size_int = B.size_int in
   match prim, args with
-  | Pmakeblock (tag, flag, shape), _ ->
-    let flag = C.convert_mutable_flag flag in
+  | Pmakeblock (tag, mutability, shape), _ ->
+    let tag = Tag.Scannable.create_exn tag in
     let shape = C.convert_block_shape shape ~num_fields:(List.length args) in
-    Variadic (Make_block (
-        Full_of_values (Tag.Scannable.create_exn tag, shape), flag),
-      args)
-  | Pmakearray (kind, mutability), _ ->
-    let flag = C.convert_mutable_flag mutability in
-    let kind, args =
-      let module S = P.Generic_array_specialisation in
-      match kind with
-      | Pgenarray -> S.no_specialisation (), args
-      | Paddrarray -> S.full_of_arbitrary_values_but_not_floats (), args
-      | Pintarray -> S.full_of_immediates (), args
-      | Pfloatarray -> S.full_of_naked_floats (), List.map unbox_float args
+    let mutability = C.convert_mutable_flag mutability in
+    Variadic (Make_block (Values (tag, shape), mutability), args)
+  | Pmakearray (array_kind, mutability), _ ->
+    let array_kind = C.convert_array_kind array_kind in
+    let mutability = C.convert_mutable_flag mutability in
+    let args =
+      match array_kind with
+      | Float_array_opt_dynamic | Immediates | Values -> args
+      | Naked_floats -> List.map unbox_float args
     in
-    Variadic (Make_block (Generic_array kind, flag), args)
+    Variadic (Make_array (array_kind, mutability), args)
   | Popaque, [arg] ->
     Unary (Opaque_identity, arg)
   | Pduprecord (repr, num_fields), [arg] ->
-    let kind : P.duplicate_block_kind =
+    let kind : P.Duplicate_block_kind.t =
       match repr with
-      | Record_regular -> Full_of_values_known_length Tag.Scannable.zero
+      | Record_regular ->
+        Values {
+          tag = Tag.Scannable.zero;
+          length = Targetint.OCaml.of_int num_fields;
+        }
       | Record_float ->
-        Full_of_naked_floats
-          { length = Some (Targetint.OCaml.of_int num_fields) }
+        Naked_floats {
+          length = Targetint.OCaml.of_int num_fields;
+        }
       | Record_unboxed _ ->
         Misc.fatal_error "Pduprecord of unboxed record"
       | Record_inlined tag ->
-        Full_of_values_known_length (Tag.Scannable.create_exn tag)
+        Values {
+          tag = Tag.Scannable.create_exn tag;
+          length = Targetint.OCaml.of_int num_fields;
+        }
       | Record_extension _ ->
-        Full_of_values_known_length Tag.Scannable.zero
+        Values {
+          tag = Tag.Scannable.zero;
+          length = Targetint.OCaml.of_int num_fields;
+        }
     in
     Unary (Duplicate_block {
       kind;
@@ -349,27 +357,33 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
     let block_access : P.Block_access_kind.t =
       (* Pfield_computed is only used for class access, on blocks of tag 0.
          Obj.field uses Parrayref. *)
-      Block { elt_kind = Value Anything; tag = Tag.zero; size = Unknown; }
+      (* CR mshinwell: For robustness, Pfield_computed should carry the
+         tag, as this condition is not obvious. *)
+      Values {
+        tag = Tag.Scannable.zero;
+        size = Unknown;
+        field_kind = Any_value;
+      }
     in
     Binary (Block_load (block_access,
       C.convert_field_read_semantics sem), obj, field)
   | Psetfield_computed (imm_or_pointer, init_or_assign), [obj; field; value] ->
-    let access_kind =
-      C.convert_access_kind imm_or_pointer
-    in
+    let field_kind = C.convert_block_access_field_kind imm_or_pointer in
     let block_access : P.Block_access_kind.t =
-      Block { elt_kind = access_kind; tag = Tag.zero; size = Unknown; }
+      Values {
+        tag = Tag.Scannable.zero;
+        size = Unknown;
+        field_kind;
+      }
     in
     Ternary
-      (Block_set
-         (block_access, C.convert_init_or_assign init_or_assign),
+      (Block_set (block_access, C.convert_init_or_assign init_or_assign),
        obj, field, value)
   | Parraylength kind, [arg] ->
     Unary (Array_length (C.convert_array_kind kind), arg)
   | Pduparray (kind, mutability), [arg] ->
-    Unary (Duplicate_block {
-      (* CR mshinwell: fix this next function *)
-      kind = C.convert_array_kind_to_duplicate_block_kind kind;
+    Unary (Duplicate_array {
+      kind = C.convert_array_kind_to_duplicate_array_kind kind;
       (* CR mshinwell: Check that [Pduparray] is only applied to immutable
          arrays *)
       source_mutability = Immutable;
@@ -579,34 +593,37 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
     in
     Binary (Int_arith (I.Tagged_immediate, Add), arg, Simple const)
   | Pfield ({ index; block_info = { tag; size; }; }, sem), [arg] ->
-    (* CR mshinwell: Cause fatal error if the field value is < 0.
-       We can't do this once we convert to Flambda *)
     let imm = Target_imm.int (Targetint.OCaml.of_int index) in
+    if not (Target_imm.is_non_negative imm) then begin
+      Misc.fatal_errorf "Pfield with negative index %a"
+        Target_imm.print imm
+    end;
     let field = Simple.const (Reg_width_const.tagged_immediate imm) in
     let mutability = C.convert_field_read_semantics sem in
+    let tag = Tag.Scannable.create_exn tag in
+    let size = C.convert_lambda_block_size size in
     let block_access : P.Block_access_kind.t =
-      Block { elt_kind = Value Anything; tag = Tag.create_exn tag; size; }
+      Values { tag; size; field_kind = Any_value; }
     in
-    Binary (Block_load (block_access, mutability), arg,
-      Simple field)
+    Binary (Block_load (block_access, mutability), arg, Simple field)
   | Pfloatfield (field, sem), [arg] ->
     let imm = Target_imm.int (Targetint.OCaml.of_int field) in
     let field = Simple.const (Reg_width_const.tagged_immediate imm) in
     let mutability = C.convert_field_read_semantics sem in
     let block_access : P.Block_access_kind.t =
-      Block { elt_kind = Naked_float; tag = Tag.double_array_tag;
-              size = Unknown; }
+      Naked_floats { size = Unknown; }
     in
     box_float
       (Binary (Block_load (block_access, mutability), arg, Simple field))
   | Psetfield (fi, immediate_or_pointer, initialization_or_assignment),
-    [block; value] ->
+      [block; value] ->
     let { index; block_info = { tag; size; }; } : Lambda.field_info = fi in
-    let access_kind = C.convert_access_kind immediate_or_pointer in
+    let field_kind = C.convert_block_access_field_kind immediate_or_pointer in
     let imm = Target_imm.int (Targetint.OCaml.of_int index) in
     let field = Simple.const (Reg_width_const.tagged_immediate imm) in
+    let size = C.convert_lambda_block_size size in
     let block_access : P.Block_access_kind.t =
-      Block { elt_kind = access_kind; tag = Tag.create_exn tag; size; }
+      Values { tag = Tag.Scannable.create_exn tag; size; field_kind; }
     in
     Ternary (Block_set (block_access,
          C.convert_init_or_assign initialization_or_assignment),
@@ -615,8 +632,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
     let imm = Target_imm.int (Targetint.OCaml.of_int field) in
     let field = Simple.const (Reg_width_const.tagged_immediate imm) in
     let block_access : P.Block_access_kind.t =
-      Block { elt_kind = Naked_float; tag = Tag.double_array_tag;
-              size = Unknown; }
+      Naked_floats { size = Unknown; }
     in
     Ternary (Block_set (block_access,
         C.convert_init_or_assign init_or_assign),
@@ -744,22 +760,24 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
       failure = Division_by_zero;
       dbg;
     }
-  | Parrayrefu (Pgenarray | Paddrarray | Pintarray), [array; index] ->
-    (* CR mshinwell: Review all these cases.  Isn't this supposed to
-       produce [Generic_array]? *)
-    Binary (Block_load (Array (Value Anything), Mutable), array, index)
+  | Parrayrefu ((Pgenarray | Paddrarray | Pintarray) as array_kind),
+      [array; index] ->
+    let array_kind = C.convert_array_kind array_kind in
+    Binary (Array_load (array_kind, Mutable), array, index)
   | Parrayrefu Pfloatarray, [array; index] ->
-    box_float (Binary (Block_load (Array Naked_float, Mutable), array, index))
-  | Parrayrefs (Pgenarray | Paddrarray | Pintarray), [array; index] ->
+    box_float (Binary (Array_load (Naked_floats, Mutable), array, index))
+  | Parrayrefs ((Pgenarray | Paddrarray | Pintarray) as array_kind),
+      [array; index] ->
+    let array_kind = C.convert_array_kind array_kind in
     Checked {
       primitive =
-        Binary (Block_load (Array (Value Anything), Mutable), array, index);
+        Binary (Array_load (array_kind, Mutable), array, index);
       validity_conditions = [
         Binary (Int_comp (Tagged_immediate, Signed, Ge), index,
           Simple (Simple.const (Reg_width_const.tagged_immediate
             (Target_imm.int (Targetint.OCaml.zero)))));
         Binary (Int_comp (Tagged_immediate, Signed, Lt), index,
-          Prim (Unary (Array_length (Array (Value Anything)), array)));
+          Prim (Unary (Array_length array_kind, array)));
       ];
       failure = Index_out_of_bounds;
       dbg;
@@ -768,36 +786,36 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
     Checked {
       primitive =
        box_float (
-         Binary (Block_load (Array Naked_float, Mutable), array, index));
+         Binary (Array_load (Naked_floats, Mutable), array, index));
       validity_conditions = [
         Binary (Int_comp (Tagged_immediate, Signed, Ge), index,
           Simple (Simple.const (Reg_width_const.tagged_immediate
             (Target_imm.int (Targetint.OCaml.zero)))));
         Binary (Int_comp (Tagged_immediate, Signed, Lt), index,
-          Prim (Unary (Array_length (Array Naked_float), array)));
+          Prim (Unary (Array_length Naked_floats, array)));
       ];
       failure = Index_out_of_bounds;
       dbg;
     }
-  | Parraysetu (Pgenarray | Paddrarray | Pintarray),
+  | Parraysetu ((Pgenarray | Paddrarray | Pintarray) as array_kind),
       [array; index; new_value] ->
-    Ternary (Block_set (Array (Value Anything), Assignment),
-      array, index, new_value)
+    let array_kind = C.convert_array_kind array_kind in
+    Ternary (Array_set (array_kind, Assignment), array, index, new_value)
   | Parraysetu Pfloatarray, [array; index; new_value] ->
-    Ternary (Block_set (Array Naked_float, Assignment),
-      array, index, unbox_float new_value)
-  | Parraysets (Pgenarray | Paddrarray | Pintarray),
+    let new_value = unbox_float new_value in
+    Ternary (Array_set (Naked_floats, Assignment), array, index, new_value)
+  | Parraysets ((Pgenarray | Paddrarray | Pintarray) as array_kind),
       [array; index; new_value] ->
+    let array_kind = C.convert_array_kind array_kind in
     Checked {
       primitive =
-        Ternary (Block_set (Array (Value Anything), Assignment),
-          array, index, new_value);
+        Ternary (Array_set (array_kind, Assignment), array, index, new_value);
       validity_conditions = [
         Binary (Int_comp (Tagged_immediate, Signed, Ge), index,
           Simple (Simple.const (Reg_width_const.tagged_immediate
             (Target_imm.int (Targetint.OCaml.zero)))));
         Binary (Int_comp (Tagged_immediate, Signed, Lt), index,
-          Prim (Unary (Array_length (Array (Value Anything)), array)));
+          Prim (Unary (Array_length array_kind, array)));
       ];
       failure = Index_out_of_bounds;
       dbg;
@@ -805,14 +823,14 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
   | Parraysets Pfloatarray, [array; index; new_value] ->
     Checked {
       primitive =
-        Ternary (Block_set (Array Naked_float, Assignment),
+        Ternary (Array_set (Naked_floats, Assignment),
           array, index, unbox_float new_value);
       validity_conditions = [
         Binary (Int_comp (Tagged_immediate, Signed, Ge), index,
           Simple (Simple.const (Reg_width_const.tagged_immediate
             (Target_imm.int (Targetint.OCaml.zero)))));
         Binary (Int_comp (Tagged_immediate, Signed, Lt), index,
-          Prim (Unary (Array_length (Array Naked_float), array)));
+          Prim (Unary (Array_length Naked_floats, array)));
       ];
       failure = Index_out_of_bounds;
       dbg;
@@ -833,8 +851,11 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
     }
   | Poffsetref n, [block] ->
     let block_access : P.Block_access_kind.t =
-      Block { elt_kind = Value Definitely_immediate; tag = Tag.zero;
-              size = Known 1; }
+      Values {
+        tag = Tag.Scannable.zero;
+        size = Known Targetint.OCaml.one;
+        field_kind = Immediate;
+      }
     in
     Ternary (Block_set (block_access, Assignment),
       block,

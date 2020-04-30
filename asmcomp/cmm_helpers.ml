@@ -703,6 +703,17 @@ let float_array_set arr ofs newval dbg =
   Cop(Cstore (Double_u, Lambda.Assignment),
     [array_indexing log2_size_float arr ofs dbg; newval], dbg)
 
+(* Get the field of a block given a possibly inconstant index *)
+
+let get_field_computed imm_or_ptr mut ~block ~index dbg =
+  let kind =
+    match imm_or_ptr with
+    | Lambda.Immediate -> Word_int
+    | Lambda.Pointer -> Word_val
+  in
+  let field_address = array_indexing log2_size_addr block index dbg in
+  Cop (Cload (kind, mut), [field_address], dbg)
+
 (* String length *)
 
 (* Length of string block *)

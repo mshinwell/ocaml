@@ -37,12 +37,12 @@ module Int64 = Numbers.Int64
           ((function_decls
             {(thd3/0
               (Ok (Inlinable (code_id thd3_0_tuple_stub/2) (param_arity 𝕍)
-                   (result_arity 𝕍) (stub true) (dbg ) (inline Default_inline) 
+                   (result_arity 𝕍) (stub true) (dbg ) (inline Default_inline)
                    (is_a_functor false) (recursive Non_recursive) (rec_info ((depth 1) (unroll_to None))))))
              (thd3/1
               (Ok (Inlinable (code_id thd3_0/3) (param_arity 𝕍 ⨯ 𝕍 ⨯ 𝕍)
-                   (result_arity 𝕍) (stub false) (dbg tuple_stub.ml:1,9--20) 
-                   (inline Default_inline) (is_a_functor false) (recursive Non_recursive) 
+                   (result_arity 𝕍) (stub false) (dbg tuple_stub.ml:1,9--20)
+                   (inline Default_inline) (is_a_functor false) (recursive Non_recursive)
                    (rec_info ((depth 1) (unroll_to None))))))})
            (closure_types ((components_by_index {(thd3/0 (Val (= Tuple_stub.camlTuple_stub__thd3_2))) (thd3/1 (Val (= Tuple_stub.camlTuple_stub__thd3_3)))})))
            (closure_var_types ((components_by_index {})))))}) (other_tags Bottom)))
@@ -467,6 +467,7 @@ let simplify_unary_primitive dacc (prim : P.unary_primitive)
         | Boolean_not -> simplify_boolean_not
         | Int_as_pointer
         | Bigarray_length _
+        | Duplicate_array _
         | Duplicate_block _
         | Opaque_identity ->
           (* CR mshinwell: In these cases, the type of the argument should

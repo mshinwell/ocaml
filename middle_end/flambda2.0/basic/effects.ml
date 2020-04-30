@@ -16,36 +16,11 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(* Mutable or immutable *)
-
-type mutable_or_immutable =
-  | Immutable
-  | Mutable
-
-let print_mutable_or_immutable ppf mut =
-  match mut with
-  | Immutable -> Format.pp_print_string ppf "Immutable"
-  | Mutable -> Format.pp_print_string ppf "Mutable"
-
-let compare_mutable_or_immutable mut1 mut2 =
-  match mut1, mut2 with
-  | Immutable, Immutable
-  | Mutable, Mutable -> 0
-  | Immutable, Mutable -> -1
-  | Mutable, Immutable -> 1
-
-let join_mutable_or_immutable mut1 mut2 =
-  match mut1, mut2 with
-  | Immutable, Immutable -> Immutable
-  | Mutable, Mutable
-  | Immutable, Mutable
-  | Mutable, Immutable -> Mutable
-
-(* Effects *)
+[@@@ocaml.warning "+a-30-40-41-42"]
 
 type t =
   | No_effects
-  | Only_generative_effects of mutable_or_immutable
+  | Only_generative_effects of Mutable_or_immutable.t
   | Arbitrary_effects
 
 let print ppf eff =
@@ -54,7 +29,7 @@ let print ppf eff =
       Format.fprintf ppf "no effects"
   | Only_generative_effects mut ->
       Format.fprintf ppf "only generative effects %a"
-        print_mutable_or_immutable mut
+        Mutable_or_immutable.print mut
   | Arbitrary_effects ->
       Format.fprintf ppf "Arbitrary effects"
 
@@ -64,7 +39,7 @@ let compare eff1 eff2 =
   | No_effects, (Only_generative_effects _ | Arbitrary_effects) -> -1
   | Only_generative_effects mut1,
     Only_generative_effects mut2 ->
-      compare_mutable_or_immutable mut1 mut2
+      Mutable_or_immutable.compare mut1 mut2
   | Only_generative_effects _, No_effects -> 1
   | Only_generative_effects _, Arbitrary_effects -> -1
   | Arbitrary_effects, Arbitrary_effects -> 0
@@ -78,7 +53,7 @@ let join eff1 eff2 =
   | Only_generative_effects _, No_effects -> eff1
   | Only_generative_effects mut1,
     Only_generative_effects mut2 ->
-      Only_generative_effects (join_mutable_or_immutable mut1 mut2)
+      Only_generative_effects (Mutable_or_immutable.join mut1 mut2)
   | Only_generative_effects _, Arbitrary_effects -> eff2
   | Arbitrary_effects, No_effects
   | Arbitrary_effects, Only_generative_effects _

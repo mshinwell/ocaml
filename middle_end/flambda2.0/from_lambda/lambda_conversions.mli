@@ -33,9 +33,9 @@ val raise_kind : Lambda.raise_kind -> Trap_action.raise_kind
 val convert_block_shape
    : Lambda.block_shape
   -> num_fields:int
-  -> Flambda_primitive.Value_kind.t list
+  -> Flambda_primitive.Block_of_values_field.t list
 
-val convert_mutable_flag : Asttypes.mutable_flag -> Effects.mutable_or_immutable
+val convert_mutable_flag : Asttypes.mutable_flag -> Mutable_or_immutable.t
 
 val convert_integer_comparison_prim
    : Lambda.integer_comparison
@@ -62,21 +62,21 @@ val standard_int_or_float_of_boxed_integer
    : Lambda.boxed_integer
   -> Flambda_kind.Standard_int_or_float.t
 
-val convert_access_kind
+val convert_block_access_field_kind
    : Lambda.immediate_or_pointer
-  -> Flambda_primitive.Block_access_kind.t0
+  -> Flambda_primitive.Block_access_field_kind.t
 
 val convert_init_or_assign
    : Lambda.initialization_or_assignment
-  -> Flambda_primitive.init_or_assign
+  -> Flambda_primitive.Init_or_assign.t
 
 val convert_array_kind
    : Lambda.array_kind
-  -> Flambda_primitive.Block_access_kind.t
+  -> Flambda_primitive.Array_kind.t
 
-val convert_array_kind_to_duplicate_block_kind
+val convert_array_kind_to_duplicate_array_kind
    : Lambda.array_kind
-  -> Flambda_primitive.duplicate_block_kind
+  -> Flambda_primitive.Duplicate_array_kind.t
 
 val convert_bigarray_kind
    : Lambda.bigarray_kind
@@ -88,4 +88,8 @@ val convert_bigarray_layout
 
 val convert_field_read_semantics
    : Lambda.field_read_semantics
-  -> Effects.mutable_or_immutable
+  -> Mutable_or_immutable.t
+
+val convert_lambda_block_size
+   : Lambda.block_size
+  -> Targetint.OCaml.t Or_unknown.t

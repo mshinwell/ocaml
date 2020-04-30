@@ -260,6 +260,7 @@ MIDDLE_END_FLAMBDA2_BASIC=\
   middle_end/flambda2.0/basic/coeffects.cmo \
   middle_end/flambda2.0/basic/effects.cmo \
   middle_end/flambda2.0/basic/export_id.cmo \
+  middle_end/flambda2.0/types/basic/or_unknown.cmo \
   middle_end/flambda2.0/terms/flambda_primitive.cmo \
   middle_end/flambda2.0/basic/recursive.cmo \
   middle_end/flambda2.0/basic/scope.cmo \
@@ -296,7 +297,6 @@ MIDDLE_END_FLAMBDA2_TYPES=\
   middle_end/flambda2.0/types/basic/string_info.cmo \
   middle_end/flambda2.0/types/structures/lattice_ops_intf.cmo \
   middle_end/flambda2.0/types/basic/or_bottom_or_absorbing.cmo \
-  middle_end/flambda2.0/types/basic/or_unknown.cmo \
   middle_end/flambda2.0/types/basic/or_unknown_or_bottom.cmo \
   middle_end/flambda2.0/types/structures/code_age_relation.cmo \
   middle_end/flambda2.0/types/structures/type_structure_intf.cmo \

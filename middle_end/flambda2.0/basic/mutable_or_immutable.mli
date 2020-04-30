@@ -21,3 +21,7 @@ type t = Mutable | Immutable
 val print : Format.formatter -> t -> unit
 
 val compare : t -> t -> int
+
+val join : t -> t -> t
+
+val to_lambda : t -> Asttypes.mutable_flag

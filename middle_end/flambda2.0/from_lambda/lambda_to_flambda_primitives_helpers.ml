@@ -106,8 +106,7 @@ let expression_for_failure ~backend exn_cont ~register_const_string
       let extra_let_binding =
         Var_in_binding_pos.create exn_bucket Name_mode.normal,
           Named.create_prim (Variadic (Make_block (
-              Full_of_values (Tag.Scannable.zero,
-                  [Definitely_pointer; Definitely_pointer]),
+              Values (Tag.Scannable.zero, [Any_value; Any_value]),
                 Immutable),
               contents_of_exn_bucket))
             dbg

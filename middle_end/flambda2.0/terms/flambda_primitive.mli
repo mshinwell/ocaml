@@ -28,83 +28,103 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Value_kind : sig
+module Block_of_values_field : sig
   type t =
-    | Anything
-    | Definitely_pointer  (* CR mshinwell: Is this for "addr" arrays? Name? *)
-    | Definitely_immediate
+    | Any_value
+    | Immediate
+    | Boxed_float
+    | Boxed_int32
+    | Boxed_int64
+    | Boxed_nativeint
 
   val compare : t -> t -> int
 
   val print : Format.formatter -> t -> unit
 end
 
-module Generic_array_specialisation : sig
-  type t = private
-    | No_specialisation
-    | Full_of_naked_floats
-    | Full_of_immediates
-    | Full_of_arbitrary_values_but_not_floats
+module Block_kind : sig
+  type t =
+    | Values of Tag.Scannable.t * (Block_of_values_field.t list)
+    | Naked_floats
 
-  val no_specialisation : unit -> t
-  val full_of_naked_floats : unit -> t
-  val full_of_immediates : unit -> t
-  val full_of_arbitrary_values_but_not_floats : unit -> t
+  val print : Format.formatter -> t -> unit
+
+  val compare : t -> t -> int
 end
 
-type make_block_kind =
-  | Full_of_values of Tag.Scannable.t * (Value_kind.t list)
-  | Full_of_naked_floats
-  | Generic_array of Generic_array_specialisation.t
+module Array_kind : sig
+  type t =
+    | Immediates
+      (** An array consisting only of immediate values. *)
+    | Values
+      (** An array consisting of elements of kind [value].  With the float
+          array optimisation enabled, such elements must never be [float]s. *)
+    | Naked_floats
+      (** An array consisting of naked floats, represented using
+          [Double_array_tag]. *)
+    | Float_array_opt_dynamic
+      (** Only used when the float array optimisation is enabled.  Arrays of
+          this form either consist of elements of kind [value] that are not
+          [float]s; or consist entirely of naked floats (represented using
+          [Double_array_tag]). *)
 
-type duplicate_block_kind =
-  | Full_of_values_known_length of Tag.Scannable.t
-  | Full_of_values_unknown_length of Tag.Scannable.t
-  (* CR mshinwell: An "int" case? *)
-  | Full_of_naked_floats of { length : Targetint.OCaml.t option; }
-  | Generic_array of Generic_array_specialisation.t
+  val print : Format.formatter -> t -> unit
+
+  val compare : t -> t -> int
+
+  val to_lambda : t -> Lambda.array_kind
+end
+
+module Duplicate_block_kind : sig
+  type t =
+    | Values of { tag : Tag.Scannable.t; length : Targetint.OCaml.t; }
+    | Naked_floats of { length : Targetint.OCaml.t; }
+
+  val print : Format.formatter -> t -> unit
+
+  val compare : t -> t -> int
+end
+
+module Duplicate_array_kind : sig
+  type t =
+    | Immediates
+    | Values
+    | Naked_floats of { length : Targetint.OCaml.t option; }
+    | Float_array_opt_dynamic
+
+  val print : Format.formatter -> t -> unit
+
+  val compare : t -> t -> int
+end
+
+module Block_access_field_kind : sig
+  type t =
+    | Any_value
+    | Immediate
+
+  val print : Format.formatter -> t -> unit
+
+  val compare : t -> t -> int
+end
+
+module Block_access_kind : sig
+  type t =
+    | Values of {
+        tag : Tag.Scannable.t;
+        size : Targetint.OCaml.t Or_unknown.t;
+        field_kind : Block_access_field_kind.t;
+      }
+    | Naked_floats of { size : Targetint.OCaml.t Or_unknown.t; }
+
+  val print : Format.formatter -> t -> unit
+
+  val compare : t -> t -> int
+end
 
 (* CR-someday mshinwell: We should have unboxed arrays of int32, int64 and
    nativeint. *)
 
-module Block_access_kind : sig
-  (* CR mshinwell: This module needs documenting well to avoid any
-     misconceptions about the semantics of the various constructors *)
-
-  type t0 =
-    | Value of Value_kind.t
-    | Naked_float
-
-  type t =
-    | Block of { elt_kind : t0; tag : Tag.t; size : Lambda.block_size; }
-    | Array of t0
-    | Generic_array of Generic_array_specialisation.t
-
-  val element_kind : t -> Flambda_kind.t
-
-  val to_lambda_array_kind : t -> Lambda.array_kind
-end
-
-(* CR mshinwell:
-   Notes for producing [make_block_kind] / [Duplicate_scannable_block] from
-   [Pduparray] and [Pduprecord]:  (Now out of date)
-
-   - For Pduparray:
-     - Pgenarray --> Choose_tag_at_runtime
-     - Paddrarray --> Full_of_values (tag zero, [Must_scan, ...])
-     - Pintarray --> Full_of_values (tag_zero, [Definitely_immediate, ...])
-     - Pfloatarray --> Full_of_naked_floats
-
-   - For Pduprecord:
-
-     - Record_regular --> Must_scan (unless none of the contents need
-         value_kind in which case, Definitely_immediate)
-     - Record_float --> Naked_float
-     - Record_unboxed --> suspect this is never generated?
-     - Record_inlined --> Must_scan.  Pduprecord doesn't seem to ever change
-         the tag, so the new tag doesn't need specifying.
-     - Record_extension --> Must_scan, even if the record elements don't need
-         value_kind (the first field is a block with tag [Object_tag]).
+(* CR mshinwell: Some old comments:
 
   * We should check Pgenarray doesn't occur when the float array optimization
     is disabled.
@@ -117,7 +137,11 @@ end
 
 type string_or_bytes = String | Bytes
 
-type init_or_assign = Initialization | Assignment
+module Init_or_assign : sig
+  type t = Initialization | Assignment
+
+  val to_lambda : t -> Lambda.initialization_or_assignment
+end
 
 type comparison = Eq | Neq | Lt | Gt | Le | Ge
 
@@ -137,15 +161,6 @@ type bigarray_kind =
 val element_kind_of_bigarray_kind : bigarray_kind -> Flambda_kind.t
 
 type bigarray_layout = (* Unknown | *) C | Fortran
-
-(* CR xclerc: We can use array_kind instead
-type block_set_kind =
-  | Immediate
-  | Pointer
-  | Float
-
-val kind_of_block_set_kind : block_set_kind -> Flambda_kind.t
-*)
 
 type string_accessor_width =
   | Eight
@@ -186,17 +201,22 @@ type unary_float_arith_op = Abs | Neg
 (** Primitives taking exactly one argument. *)
 type unary_primitive =
   | Duplicate_block of {
-      kind : duplicate_block_kind;
-      source_mutability : Effects.mutable_or_immutable;
-      destination_mutability : Effects.mutable_or_immutable;
+      kind : Duplicate_block_kind.t;
+      source_mutability : Mutable_or_immutable.t;
+      destination_mutability : Mutable_or_immutable.t;
     }
     (** [Duplicate_block] may not be used to change the tag of a block. *)
+  | Duplicate_array of {
+      kind : Duplicate_array_kind.t;
+      source_mutability : Mutable_or_immutable.t;
+      destination_mutability : Mutable_or_immutable.t;
+    }
   | Is_int
   | Get_tag
-  | Array_length of Block_access_kind.t
+  | Array_length of Array_kind.t
   | Bigarray_length of { dimension : int; }
     (** This primitive is restricted by type-checking to bigarrays that have
-        at least the correct number of dimensions. More specificaly, they
+        at least the correct number of dimensions. More specifically, they
         come from `%caml_ba_dim_x` primitives (for x=1,2,3), and only exposed
         in the Bigarray.ArrayX modules (incidentally, `dimension` should then
         be one of 1,2,3). *)
@@ -252,12 +272,10 @@ type int_shift_op = Lsl | Lsr | Asr
 (** Naked float binary arithmetic operations. *)
 type binary_float_arith_op = Add | Sub | Mul | Div
 
-(* CR mshinwell: Note that the backend primitives for string/bigstring
-   access will need a new flag to return (or take) unboxed numbers. *)
-
 (** Primitives taking exactly two arguments. *)
 type binary_primitive =
-  | Block_load of Block_access_kind.t * Effects.mutable_or_immutable
+  | Block_load of Block_access_kind.t * Mutable_or_immutable.t
+  | Array_load of Array_kind.t * Mutable_or_immutable.t
   | String_or_bigstring_load of string_like_value * string_accessor_width
   | Bigarray_load of num_dimensions * bigarray_kind * bigarray_layout
   | Phys_equal of Flambda_kind.t * equality_comparison
@@ -270,14 +288,15 @@ type binary_primitive =
 
 (** Primitives taking exactly three arguments. *)
 type ternary_primitive =
-  | Block_set of Block_access_kind.t * init_or_assign
+  | Block_set of Block_access_kind.t * Init_or_assign.t
+  | Array_set of Array_kind.t * Init_or_assign.t
   | Bytes_or_bigstring_set of bytes_like_value * string_accessor_width
   | Bigarray_set of num_dimensions * bigarray_kind * bigarray_layout
 
 (** Primitives taking zero or more arguments. *)
 type variadic_primitive =
-  (* CR pchambart / mshinwell: Effects of Make_block? *)
-  | Make_block of make_block_kind * Effects.mutable_or_immutable
+  | Make_block of Block_kind.t * Mutable_or_immutable.t
+  | Make_array of Array_kind.t * Mutable_or_immutable.t
   (* CR mshinwell: Invariant checks -- e.g. that the number of arguments
      matches [num_dimensions] *)
 
@@ -347,7 +366,6 @@ val result_kind_of_ternary_primitive' : ternary_primitive -> Flambda_kind.t
 val result_kind_of_variadic_primitive' : variadic_primitive -> Flambda_kind.t
 val result_kind' : t -> Flambda_kind.t
 
-
 (** Describe the effects and coeffects that the application of the given
     primitive may have. *)
 val effects_and_coeffects : t -> Effects.t * Coeffects.t
@@ -391,10 +409,6 @@ module Eligible_for_cse : sig
 
   (** Total ordering, equality, printing, sets, maps etc. *)
   include Identifiable.S with type t := t
-
-(*
-  val apply_name_permutation_set : Set.t -> Name_permutation.t -> Set.t
-*)
 end
 
 (** Total ordering, printing, sets, maps etc. *)

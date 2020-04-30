@@ -14,7 +14,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+[@@@ocaml.warning "+a-30-40-41-42"]
 
 open! Simplify_import
 
@@ -66,6 +66,7 @@ let simplify_ternary_primitive dacc (prim : P.ternary_primitive)
         | Ok arg3, _arg3_ty ->
           match prim with
           | Block_set _
+          | Array_set _
           | Bytes_or_bigstring_set _
           | Bigarray_set _ ->
             let named =

@@ -18,9 +18,8 @@
 
 open! Simplify_import
 
-let simplify_make_block dacc _prim dbg
-      ~(make_block_kind : P.make_block_kind)
-      ~(mutable_or_immutable : Effects.mutable_or_immutable)
+let simplify_make_block_of_values dacc _prim dbg tag ~shape
+      ~(mutable_or_immutable : Mutable_or_immutable.t)
       args_with_tys ~result_var =
   let denv = DA.denv dacc in
   let args, _arg_tys = List.split args_with_tys in
@@ -29,51 +28,47 @@ let simplify_make_block dacc _prim dbg
     let env_extension = TEE.one_equation (Name.var result_var) ty in
     Reachable.invalid (), env_extension, dacc
   in
-  match make_block_kind with
-  | Full_of_values (tag, value_kinds) ->
-    if List.compare_lengths value_kinds args <> 0 then begin
-      (* CR mshinwell: improve message *)
-      Misc.fatal_errorf "GC value_kind indications in [Make_block] don't \
-          match up 1:1 with arguments: %a"
-        Simple.List.print args
-    end;
-    (* CR mshinwell: This could probably be done more neatly. *)
-    let found_bottom = ref false in
-    let fields =
-      assert (List.compare_lengths value_kinds args_with_tys = 0);
-      List.map2 (fun ((arg : Simple.t), arg_ty) _value_kind ->
-          if T.is_bottom (DE.typing_env denv) arg_ty then begin
-           found_bottom := true
-          end;
-          Simple.pattern_match arg
-            ~const:(fun _ -> arg_ty)
-            ~name:(fun name -> T.alias_type_of K.value (Simple.name name)))
-        args_with_tys value_kinds
+  if List.compare_lengths shape args <> 0 then begin
+    (* CR mshinwell: improve message *)
+    Misc.fatal_errorf "GC value_kind indications in [Make_block] don't \
+        match up 1:1 with arguments: %a"
+      Simple.List.print args
+  end;
+  (* CR mshinwell: This could probably be done more neatly. *)
+  let found_bottom = ref false in
+  let fields =
+    assert (List.compare_lengths shape args_with_tys = 0);
+    List.map2 (fun ((arg : Simple.t), arg_ty) _block_of_values_kind ->
+        (* CR mshinwell: There should be a meet against a skeleton type
+           computed from [block_of_values_kind]. *)
+        if T.is_bottom (DE.typing_env denv) arg_ty then begin
+          found_bottom := true
+        end;
+        Simple.pattern_match arg
+          ~const:(fun _ -> arg_ty)
+          ~name:(fun name -> T.alias_type_of K.value (Simple.name name)))
+      args_with_tys shape
+  in
+  if !found_bottom then begin
+    invalid ()
+  end else begin
+    assert (List.compare_lengths fields shape = 0);
+    let term : Named.t =
+      Named.create_prim
+        (Variadic (
+          Make_block (Values (tag, shape), mutable_or_immutable),
+          args))
+        dbg
     in
-    if !found_bottom then begin
-      invalid ()
-    end else begin
-      assert (List.compare_lengths fields value_kinds = 0);
-      let term : Named.t =
-        Named.create_prim
-          (Variadic (
-            Make_block (Full_of_values (tag, value_kinds),
-              mutable_or_immutable),
-            args))
-          dbg
-      in
-      let tag = Tag.Scannable.to_tag tag in
-      let ty =
-        match mutable_or_immutable with
-        | Immutable -> T.immutable_block tag ~field_kind:K.value ~fields
-        | Mutable -> T.any_value ()
-      in
-      let env_extension = TEE.one_equation (Name.var result_var) ty in
-      Reachable.reachable term, env_extension, dacc
-    end
-  (* CR mshinwell: Implement these *)
-  | Full_of_naked_floats -> Misc.fatal_error "Not yet implemented"
-  | Generic_array _spec -> Misc.fatal_error "Not yet implemented"
+    let tag = Tag.Scannable.to_tag tag in
+    let ty =
+      match mutable_or_immutable with
+      | Immutable -> T.immutable_block tag ~field_kind:K.value ~fields
+      | Mutable -> T.any_value ()
+    in
+    let env_extension = TEE.one_equation (Name.var result_var) ty in
+    Reachable.reachable term, env_extension, dacc
+  end
 
 let try_cse dacc ~original_prim prim args ~min_name_mode ~result_var
       : Simplify_common.cse =
@@ -128,11 +123,12 @@ let simplify_variadic_primitive dacc ~original_named ~original_prim
       invalid (T.bottom result_kind)
     | args_changed, Ok args_with_tys ->
       match prim with
-      | Make_block ((Full_of_values _) as make_block_kind,
-          mutable_or_immutable) ->
-        simplify_make_block dacc prim dbg ~make_block_kind ~mutable_or_immutable
+      | Make_block (Values (tag, shape), mutable_or_immutable) ->
+        simplify_make_block_of_values dacc prim dbg tag ~shape
+          ~mutable_or_immutable
           args_with_tys ~result_var:result_var'
-      | Make_block _ ->
+      | Make_block (Naked_floats, _) | Make_array _ ->
+        (* CR mshinwell: The typing here needs to be improved *)
         let named =
           match args_changed with
           | Changed ->

@@ -15,6 +15,7 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 open Cmm_helpers
+module P = Flambda_primitive
 
 (* Are we compiling on/for a 32-bit architecture ? *)
 let arch32 = Arch.size_int = 4
@@ -223,18 +224,15 @@ let make_alloc_safe ?(dbg=Debuginfo.none) tag = function
   | [] -> static_atom ~dbg tag
   | args -> make_alloc dbg tag args
 
-let make_block ?(dbg=Debuginfo.none) kind args =
-  match (kind : Flambda_primitive.make_block_kind) with
-  | Full_of_values (tag, _) ->
-      make_alloc_safe ~dbg (Tag.Scannable.to_int tag) args
-  | Full_of_naked_floats
-  | Generic_array Full_of_naked_floats ->
+let make_array ?(dbg=Debuginfo.none) kind args =
+  match (kind : Flambda_primitive.Array_kind.t) with
+  | Naked_floats ->
       begin match args with
       | [] -> static_atom ~dbg 0 (* 0-size arrays, even float arrays, should have
                                     tag 0, see runtime/array.c:caml_make_vec *)
       | _ -> make_float_alloc dbg (Tag.to_int Tag.double_array_tag) args
       end
-  | Generic_array No_specialisation ->
+  | Float_array_opt_dynamic ->
       begin match args with
       | [] -> static_atom ~dbg 0
       | _ ->
@@ -242,8 +240,13 @@ let make_block ?(dbg=Debuginfo.none) kind args =
             "caml_make_array" Cmm.typ_val
             [make_alloc dbg 0 args]
       end
-  | _ ->
+  | Immediates | Values ->
       make_alloc_safe ~dbg 0 args
+
+let make_block ?(dbg=Debuginfo.none) kind args =
+  match (kind : Flambda_primitive.Block_kind.t) with
+  | Values (tag, _) -> make_alloc_safe ~dbg (Tag.Scannable.to_int tag) args
+  | Naked_floats -> make_array ~dbg Naked_floats args
 
 let make_closure_block ?(dbg=Debuginfo.none) l =
   assert (List.compare_length_with l 0 > 0);
@@ -252,42 +255,68 @@ let make_closure_block ?(dbg=Debuginfo.none) l =
 
 (* Block access *)
 
-let array_kind_of_block_access =
-  Flambda_primitive.Block_access_kind.to_lambda_array_kind
+let block_length ?(dbg=Debuginfo.none) block = get_size block dbg
 
-let block_length ?(dbg=Debuginfo.none) block_access_kind block =
-  arraylength (array_kind_of_block_access block_access_kind) block dbg
+let block_load ?(dbg=Debuginfo.none) (kind : P.Block_access_kind.t)
+      (mutability : Mutable_or_immutable.t) block index =
+  let mutability = Mutable_or_immutable.to_lambda mutability in
+  match kind with
+  | Values { field_kind = Any_value; _ } ->
+    get_field_computed Pointer mutability ~block ~index dbg
+  | Values { field_kind = Immediate; _ } ->
+    get_field_computed Immediate mutability ~block ~index dbg
+  | Naked_floats _ -> unboxed_float_array_ref block index dbg
 
-let block_load ?(dbg=Debuginfo.none) kind block index =
-  match array_kind_of_block_access kind with
-  | Lambda.Pintarray -> int_array_ref block index dbg
-  | Lambda.Paddrarray -> addr_array_ref block index dbg
-  | Lambda.Pfloatarray -> unboxed_float_array_ref block index dbg
-  | Lambda.Pgenarray ->
-      ite ~dbg (is_addr_array_ptr block dbg)
-        ~then_:(addr_array_ref block index dbg) ~then_dbg:dbg
-        ~else_:(float_array_ref block index dbg) ~else_dbg:dbg
+let block_set ?(dbg=Debuginfo.none) (kind : P.Block_access_kind.t)
+      (init : P.Init_or_assign.t) block index new_value =
+  let init_or_assign = P.Init_or_assign.to_lambda init in
+  match kind with
+  | Values { field_kind = Any_value; _ } ->
+    setfield_computed Pointer init_or_assign block index new_value dbg
+    |> return_unit dbg
+  | Values { field_kind = Immediate; _ } ->
+    setfield_computed Immediate init_or_assign block index new_value dbg
+    |> return_unit dbg
+  | Naked_floats _ ->
+    float_array_set block index new_value dbg
+    |> return_unit dbg
 
-let addr_array_store init block index value dbg =
-  match (init : Flambda_primitive.init_or_assign) with
-  | Assignment -> addr_array_set block index value dbg
-  | Initialization -> addr_array_initialize block index value dbg
+(* Array access *)
 
-let block_set ?(dbg=Debuginfo.none) kind init block index value =
-  match (array_kind_of_block_access kind : Lambda.array_kind) with
-  | Pintarray ->
-      return_unit dbg (int_array_set block index value dbg)
-  | Pfloatarray ->
-      return_unit dbg (float_array_set block index value dbg)
-  | Paddrarray ->
-      return_unit dbg (addr_array_store init block index value dbg)
-  | Pgenarray ->
-      return_unit dbg (
-        ite ~dbg (is_addr_array_ptr block dbg)
-          ~then_:(addr_array_store init block index value dbg) ~then_dbg:dbg
-          ~else_:(float_array_set block index (unbox_float dbg value) dbg) ~else_dbg:dbg
-      )
+let array_length ?(dbg=Debuginfo.none) kind arr =
+  arraylength (P.Array_kind.to_lambda kind) arr dbg
 
+let array_load ?(dbg=Debuginfo.none) (kind : P.Array_kind.t) arr index =
+  match kind with
+  | Immediates -> int_array_ref arr index dbg
+  | Values -> addr_array_ref arr index dbg
+  | Naked_floats -> unboxed_float_array_ref arr index dbg
+  | Float_array_opt_dynamic ->
+    ite ~dbg (is_addr_array_ptr arr dbg)
+      ~then_:(addr_array_ref arr index dbg) ~then_dbg:dbg
+      ~else_:(float_array_ref arr index dbg) ~else_dbg:dbg
+
+let addr_array_store init arr index value dbg =
+  match (init : P.Init_or_assign.t) with
+  | Assignment -> addr_array_set arr index value dbg
+  | Initialization -> addr_array_initialize arr index value dbg
+
+let array_set ?(dbg=Debuginfo.none) (kind : P.Array_kind.t)
+      (init : P.Init_or_assign.t) arr index value =
+  match kind with
+  | Immediates -> return_unit dbg (int_array_set arr index value dbg)
+  | Values -> return_unit dbg (addr_array_store init arr index value dbg)
+  | Naked_floats -> return_unit dbg (float_array_set arr index value dbg)
+  | Float_array_opt_dynamic ->
+    ite ~dbg
+      (is_addr_array_ptr arr dbg)
+      ~then_:(addr_array_store init arr index value dbg)
+      ~then_dbg:dbg
+      ~else_:(float_array_set arr index (unbox_float dbg value) dbg)
+      ~else_dbg:dbg
+    |> return_unit dbg
+
+(* String and bytes access *)
 
 (* here, block and ptr are different only for bigstrings, because the
    extcall must apply to the whole bigstring block (variable [block]),

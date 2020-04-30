@@ -28,3 +28,15 @@ let compare t1 t2 =
   | Mutable, Mutable | Immutable, Immutable -> 0
   | Mutable, Immutable -> -1
   | Immutable, Mutable -> 1
+
+let join t1 t2 =
+  match t1, t2 with
+  | Immutable, Immutable -> Immutable
+  | Mutable, Mutable
+  | Immutable, Mutable
+  | Mutable, Immutable -> Mutable
+
+let to_lambda t : Asttypes.mutable_flag =
+  match t with
+  | Mutable -> Mutable
+  | Immutable -> Immutable

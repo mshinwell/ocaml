@@ -396,14 +396,16 @@ let binary_float_comp_primitive _env dbg op x y =
 
 let unary_primitive env dbg f arg =
   match (f : Flambda_primitive.unary_primitive) with
+  | Duplicate_array _ ->
+      C.extcall ~alloc:true "caml_obj_dup" typ_val [arg]
   | Duplicate_block _ ->
       C.extcall ~alloc:true "caml_obj_dup" typ_val [arg]
   | Is_int ->
       C.and_ ~dbg arg (C.int ~dbg 1)
   | Get_tag ->
       C.get_tag arg dbg
-  | Array_length block_access_kind ->
-      C.block_length ~dbg block_access_kind arg
+  | Array_length array_kind ->
+      C.array_length ~dbg array_kind arg
   | Bigarray_length { dimension } ->
       C.load ~dbg Cmm.Word_int Asttypes.Mutable
         (C.field_address arg (4 + dimension) dbg)
@@ -440,8 +442,10 @@ let unary_primitive env dbg f arg =
 
 let binary_primitive env dbg f x y =
   match (f : Flambda_primitive.binary_primitive) with
-  | Block_load (kind, _) ->
-      C.block_load ~dbg kind x y
+  | Block_load (kind, mut) ->
+      C.block_load ~dbg kind mut x y
+  | Array_load (kind, _mut) ->
+      C.array_load ~dbg kind x y
   | String_or_bigstring_load (kind, width) ->
       C.string_like_load ~dbg kind width x y
   | Bigarray_load (dimensions, kind, layout) ->
@@ -463,6 +467,8 @@ let ternary_primitive _env dbg f x y z =
   match (f : Flambda_primitive.ternary_primitive) with
   | Block_set (block_access, init) ->
       C.block_set ~dbg block_access init x y z
+  | Array_set (array_kind, init) ->
+      C.array_set ~dbg array_kind init x y z
   | Bytes_or_bigstring_set (kind, width) ->
       C.bytes_like_set ~dbg kind width x y z
   | Bigarray_set (dimensions, kind, layout) ->
@@ -472,6 +478,8 @@ let variadic_primitive _env dbg f args =
   match (f : Flambda_primitive.variadic_primitive) with
   | Make_block (kind, _mut) ->
       C.make_block ~dbg kind args
+  | Make_array (kind, _mut) ->
+      C.make_array ~dbg kind args
 
 let arg_list env l =
   let aux (list, env, effs) x =
