@@ -171,8 +171,7 @@ let spacetime_node_hole_pointer_is_live_before insn =
   match insn.desc with
   | Iop op ->
     begin match op with
-    | Icall_ind _ | Icall_imm _ | Itailcall_ind _ | Itailcall_imm _
-    | Iprobe _ | Iprobe_is_enabled _ -> true
+    | Icall_ind _ | Icall_imm _ | Itailcall_ind _ | Itailcall_imm _ -> true
     | Iextcall { alloc; } -> alloc
     | Ialloc _ ->
       (* Allocations are special: the call to [caml_call_gc] requires some
@@ -198,6 +197,8 @@ let spacetime_node_hole_pointer_is_live_before insn =
     | Inegf | Iabsf | Iaddf | Isubf | Imulf | Idivf
     | Ifloatofint | Iintoffloat
     | Iname_for_debugger _ -> false
+    (* Probe call sites are not instrumented by Spacetime. *)
+    | Iprobe _ | Iprobe_is_enabled _ -> false
     end
   | Iend | Ireturn | Iifthenelse _ | Iswitch _ | Icatch _
   | Iexit _ | Itrywith _ | Iraise _ -> false

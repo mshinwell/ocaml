@@ -473,6 +473,8 @@ module Make (T : S) = struct
           probe = None;
         }
       in
+      (* CR mshinwell: This looks like debugging output that needs to
+         be turned off *)
       if !Clflags.inlining_report then
         Format.(fprintf std_formatter "\n!!Augment: %a\n" Flambda.print apply);
       Variable.Map.fold (fun new_inner_var definition (wrapper_body, benefit) ->

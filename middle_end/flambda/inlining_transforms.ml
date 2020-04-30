@@ -115,6 +115,10 @@ let inline_by_copying_function_body ~env ~r
     let default_specialise =
       Lambda.equal_specialise_attribute specialise_requested Default_specialise
     in
+    (* CR mshinwell: I'm not sure what this [probe_requested] condition
+       is checking.  We should not have [function_body.stub] set for a
+       probe handler I don't think -- the stubs are Flambda-generated
+       wrappers for things such as unused parameter removal. *)
     if function_body.stub
     && ((not default_inline) || (not default_specialise) ||
         Option.is_some probe_requested) then
@@ -582,6 +586,11 @@ let update_projections ~state projections =
       in
       { spec_to with projection })
     projections
+
+(* CR-soon mshinwell: Somewhere there should be a description about
+   the specialisation of probe handlers.  This file is probably a
+   reasonable place, with a short comment citing this file to be added
+   in [Translcore] where [Always_specialise] is set. *)
 
 let inline_by_copying_function_declaration
     ~(env : Inline_and_simplify_aux.Env.t)

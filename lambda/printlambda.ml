@@ -645,6 +645,7 @@ and sequence ppf = function
   | l ->
       lam ppf l
 
+(* CR mshinwell: Why was this code moved out of the matching above? *)
 and lfunction ppf ({kind; params; return; body; attr} : Lambda.lfunction) =
   let pr_params ppf params =
     match kind with

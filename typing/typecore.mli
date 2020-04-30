@@ -170,6 +170,7 @@ type error =
   | Not_an_extension_constructor
   | Probe_format
   | Probe_name_format of string
+  (* CR-soon mshinwell: Use an inlined record *)
   | Probe_is_enabled_format
   | Literal_overflow of string
   | Unknown_literal of string * char

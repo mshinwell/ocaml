@@ -1106,8 +1106,7 @@ let fundecl fundecl =
     end;
   end;
   cfi_endproc ();
-  emit_function_type_and_size fundecl.fun_name;
-  ()
+  emit_function_type_and_size fundecl.fun_name
 
 (* Emission of data *)
 
@@ -1216,17 +1215,23 @@ let emit_spacetime_shapes () =
   D.qword (Const 0L);
   D.comment "End of Spacetime shapes."
 
+(* CR mshinwell: Move to [Reg.mli].  Rename to
+   [size_of_contents_in_bytes] or similar. *)
 let reg_size (reg : Reg.t) =
   match reg.typ with
   | Float -> Arch.size_float
-  | Addr | Int | Val -> Arch.size_int
+  | Addr ->
+    assert (Arch.size_addr = Arch.size_int);
+    Arch.size_addr
+  | Int | Val -> Arch.size_int
 
-
+(* CR mshinwell: Move the following to reg.ml{,i} *)
 (* Compare registers based on their locations only (not stamps). *)
 module RegLocOrder =
   struct
     type t = Reg.t
-    let compare s1 s2 =
+
+    let compare_stack_locations s1 s2 =
       (* Local < Incoming < Outgoing *)
       match s1, s2 with
       | Local n1, Local n2
@@ -1239,14 +1244,14 @@ module RegLocOrder =
       | _, Outgoing _ -> (-1)
 
     let compare l1 l2 =
-      (* Reg < Stack  < Unknown *)
-      match l1,l2 with
+      (* Reg < Stack < Unknown *)
+      match l1, l2 with
       | Reg n1, Reg n2 -> n1 - n2
-      | Stack s1, Stack s2 -> compare s1 s2
-      | Unknown, _ -> 1
-      | _, Unknown -> (-1)
+      | Stack s1, Stack s2 -> compare_stack_locations s1 s2
       | Reg _, _ -> (-1)
       | _,  Reg _ -> 1
+      | Unknown, _ -> 1
+      | _, Unknown -> (-1)
 
     let compare r1 r2 = compare r1.loc r2.loc
   end
@@ -1262,7 +1267,10 @@ let emit_probe_handler_wrapper p =
   D.align 16;
   _label wrap_label;
   (* CR gyorsh: does cfi_startproc reset the cfi offset?
-     does it matter if stack_offset and cfi offset get out of sync ? *)
+     does it matter if stack_offset and cfi offset get out of sync ?
+     mshinwell: Yes, they must not, unless completely unavoidable
+     (e.g. in the middle of an exception raise when the stack pointer
+     is reset). *)
   cfi_startproc ();
   (* Account for the return address that is now pushed on the stack,
      but reuse the caller's frame for the wrapper, because
@@ -1470,7 +1478,7 @@ let end_assembly() =
   end;
 
   (* emit probe handler wrappers *)
-  if not fp && not windows then begin
+  if (not fp) && (not windows) then begin
     D.text ();
     List.iter emit_probe_handler_wrapper !probes
   end;
