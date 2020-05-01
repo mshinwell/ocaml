@@ -318,9 +318,11 @@ let prove_tags_must_be_a_block env t : Tag.Set.t proof =
     end
   | Value (Ok (Boxed_float _ | Boxed_int32 _ | Boxed_int64 _
       | Boxed_nativeint _)) -> Proved (Tag.Set.singleton Tag.custom_tag)
-  | Value (Ok (Closures _)) -> Proved (Tag.Set.singleton Tag.closure_tag)
+  | Value (Ok (Closures _)) ->
+    Proved (Tag.Set.of_list [Tag.closure_tag; Tag.infix_tag])
   | Value (Ok (String _)) -> Proved (Tag.Set.singleton Tag.string_tag)
-  | Value (Ok (Array _)) -> Proved (Tag.Set.singleton Tag.zero)
+  | Value (Ok (Array _)) ->
+    Proved (Tag.Set.of_list [Tag.zero; Tag.double_array_tag])
   | Value Unknown -> Unknown
   | Value Bottom -> Invalid
   (* CR mshinwell: Here and elsewhere, use or-patterns. *)

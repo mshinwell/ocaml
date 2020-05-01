@@ -36,6 +36,7 @@ val zero : t
 (* CR mshinwell: Remove "_tag" suffixes *)
 val string_tag : t
 val closure_tag : t
+val infix_tag : t
 val double_tag : t
 val double_array_tag : t
 val custom_tag : t

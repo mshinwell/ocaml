@@ -63,6 +63,7 @@ let string_tag = Obj.string_tag
 let double_tag = Obj.double_tag
 let double_array_tag = Obj.double_array_tag
 let custom_tag = Obj.custom_tag
+let infix_tag = Obj.infix_tag
 let closure_tag = Obj.closure_tag
 let object_tag = Obj.object_tag
 

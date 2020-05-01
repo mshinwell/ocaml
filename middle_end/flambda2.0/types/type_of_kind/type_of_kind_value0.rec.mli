@@ -26,6 +26,7 @@ type t =
       by_closure_id : Row_like.For_closures_entry_by_set_of_closures_contents.t;
     }
   | String of String_info.Set.t
+  (* CR-someday mshinwell: [Array] should know what kind of array it is. *)
   | Array of { length : Type_grammar.t; }
 
 include Type_head_intf.S
