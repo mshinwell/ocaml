@@ -37,7 +37,6 @@ let simplify_make_block_of_values dacc _prim dbg tag ~shape
   (* CR mshinwell: This could probably be done more neatly. *)
   let found_bottom = ref false in
   let fields =
-    assert (List.compare_lengths shape args_with_tys = 0);
     List.map2 (fun ((arg : Simple.t), arg_ty) _block_of_values_kind ->
         (* CR mshinwell: There should be a meet against a skeleton type
            computed from [block_of_values_kind]. *)

@@ -72,7 +72,7 @@ module Block_kind = struct
       let c = Tag.Scannable.compare tag1 tag2 in
       if c <> 0 then c
       else Misc.Stdlib.List.compare Block_of_values_field.compare shape1 shape2
-    | Naked_floats, Naked_floats
+    | Naked_floats, Naked_floats -> 0
     | Values _, _ -> -1
     | _, Values _ -> 1
 

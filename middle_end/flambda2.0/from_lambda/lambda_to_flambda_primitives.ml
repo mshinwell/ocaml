@@ -293,7 +293,9 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
       | Record_extension _ ->
         Values {
           tag = Tag.Scannable.zero;
-          length = Targetint.OCaml.of_int num_fields;
+          (* The "+1" is because there is an extra field containing the
+             hashed constructor. *)
+          length = Targetint.OCaml.of_int (num_fields + 1);
         }
     in
     Unary (Duplicate_block {
@@ -355,12 +357,10 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
       unbox_float arg1, unbox_float arg2))
   | Pfield_computed sem, [obj; field] ->
     let block_access : P.Block_access_kind.t =
-      (* Pfield_computed is only used for class access, on blocks of tag 0.
-         Obj.field uses Parrayref. *)
-      (* CR mshinwell: For robustness, Pfield_computed should carry the
-         tag, as this condition is not obvious. *)
+      (* Pfield_computed is only used for class access, on blocks of tag
+         [Object_tag], created in [CamlinternalOO]. *)
       Values {
-        tag = Tag.Scannable.zero;
+        tag = Tag.Scannable.object_tag;
         size = Unknown;
         field_kind = Any_value;
       }
@@ -368,10 +368,11 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
     Binary (Block_load (block_access,
       C.convert_field_read_semantics sem), obj, field)
   | Psetfield_computed (imm_or_pointer, init_or_assign), [obj; field; value] ->
+    (* Same note as for [Pfield_computed] above. *)
     let field_kind = C.convert_block_access_field_kind imm_or_pointer in
     let block_access : P.Block_access_kind.t =
       Values {
-        tag = Tag.Scannable.zero;
+        tag = Tag.Scannable.object_tag;
         size = Unknown;
         field_kind;
       }
