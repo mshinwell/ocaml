@@ -855,22 +855,19 @@ let simplify_immutable_block_load (access_kind : P.Block_access_kind.t)
        to constrain the type of the block *)
     let tag : _ Or_unknown.t =
       match access_kind with
+      | Values { tag; _ } -> Known (Tag.Scannable.to_tag tag)
       | Naked_floats { size; } ->
-        (* Arrays of naked floats, whether or not the float array
-           optimisation is in effect, always have tag zero.  This means that
-           if we don't know the size here, we don't know the tag. *)
-        begin match size with
+        match size with
         | Known size ->
+          (* We don't expect blocks of naked floats of size zero (it doesn't
+             seem that the frontend currently emits code to create such blocks)
+             and so it isn't clear whether such blocks should have tag zero
+             (like zero-sized naked float arrays) or another tag. *)
           if Targetint.OCaml.equal size Targetint.OCaml.zero then
-            Known Tag.zero
+            Unknown
           else
             Known Tag.double_array_tag
         | Unknown -> Unknown
-        end
-      | Values { tag; _ } ->
-        (* We are dealing here with blocks, not arrays, so even if the size
-           of the block is zero the tag is still as expected. *)
-        Known (Tag.Scannable.to_tag tag)
     in
     Simplify_common.simplify_projection
       dacc ~original_term ~deconstructing:block_ty
