@@ -262,7 +262,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
     Variadic (Make_block (Values (tag, shape), mutability), args)
   | Pmakefloatblock mutability, _ ->
     let mutability = C.convert_mutable_flag mutability in
-    Variadic (Make_block (Naked_floats, mutability), args)
+    Variadic (Make_block (Naked_floats, mutability), List.map unbox_float args)
   | Pmakearray (array_kind, mutability), _ ->
     let array_kind = C.convert_array_kind array_kind in
     let mutability = C.convert_mutable_flag mutability in
