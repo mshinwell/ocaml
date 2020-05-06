@@ -246,7 +246,12 @@ let make_array ?(dbg=Debuginfo.none) kind args =
 let make_block ?(dbg=Debuginfo.none) kind args =
   match (kind : Flambda_primitive.Block_kind.t) with
   | Values (tag, _) -> make_alloc_safe ~dbg (Tag.Scannable.to_int tag) args
-  | Naked_floats -> make_array ~dbg Naked_floats args
+  | Naked_floats ->
+    if List.length args < 1 then begin
+      Misc.fatal_error "Don't know what tag to put on zero-sized blocks \
+        of naked floats"
+    end;
+    make_array ~dbg Naked_floats args
 
 let make_closure_block ?(dbg=Debuginfo.none) l =
   assert (List.compare_length_with l 0 > 0);
