@@ -338,6 +338,8 @@ let rec prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
   | Lprim (Pmakeblock (tag, _, _), _, _)
       when tag < 0 || tag >= Obj.no_scan_tag ->
     Misc.fatal_errorf "Pmakeblock with wrong or non-scannable block tag %d" tag
+  | Lprim (Pmakefloatblock _mut, args, _) when List.length args < 1 ->
+    Misc.fatal_errorf "Pmakefloatblock must have at least one argument"
   | Lprim (prim, args, loc) ->
     prepare_list env args (fun args ->
       k (simplify_primitive prim args loc))

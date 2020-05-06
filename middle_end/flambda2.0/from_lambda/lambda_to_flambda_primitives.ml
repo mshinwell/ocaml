@@ -260,6 +260,9 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
     let shape = C.convert_block_shape shape ~num_fields:(List.length args) in
     let mutability = C.convert_mutable_flag mutability in
     Variadic (Make_block (Values (tag, shape), mutability), args)
+  | Pmakefloatblock mutability, _ ->
+    let mutability = C.convert_mutable_flag mutability in
+    Variadic (Make_block (Naked_floats, mutability), args)
   | Pmakearray (array_kind, mutability), _ ->
     let array_kind = C.convert_array_kind array_kind in
     let mutability = C.convert_mutable_flag mutability in

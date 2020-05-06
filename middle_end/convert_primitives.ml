@@ -26,6 +26,10 @@ let convert (prim : Lambda.primitive) : Clambda_primitives.primitive =
   match prim with
   | Pmakeblock (tag, mutability, shape) ->
       Pmakeblock (tag, mutability, shape)
+  | Pmakefloatblock mutability ->
+      (* CR mshinwell: Decide if the backend primitives should have
+         [Pmakefloatblock] too *)
+      Pmakearray (Pfloatarray, mutability)
   | Pfield ({ index = field; _ }, _) -> Pfield field
   | Pfield_computed _sem -> Pfield_computed
   | Psetfield ({ index = field; _ }, imm_or_pointer, init_or_assign) ->
