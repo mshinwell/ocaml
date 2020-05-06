@@ -949,7 +949,7 @@ and transl_record ~scopes loc env fields repres opt_init_expr =
         | Record_inlined tag -> Lconst(Const_block(tag, cl))
         | Record_unboxed _ -> Lconst(match cl with [v] -> v | _ -> assert false)
         | Record_float ->
-            Lconst(Const_float_array(List.map extract_float cl))
+            Lconst(Const_float_block(List.map extract_float cl))
         | Record_extension _ ->
             raise Not_constant
       with Not_constant ->

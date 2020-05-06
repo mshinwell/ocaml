@@ -146,7 +146,7 @@ module Code = struct
           Function_params_and_body.apply_name_permutation
             params_and_body_inner perm
         in
-        if params_and_body_inner == params_and_body_inner' then 
+        if params_and_body_inner == params_and_body_inner' then
           params_and_body
         else
           Present params_and_body_inner'
@@ -196,7 +196,7 @@ module Code_and_set_of_closures = struct
         (Code_id.Map.print (Code.print_with_cache ~cache)) code
         (Set_of_closures.print_with_cache ~cache) set_of_closures
 
-  let compare { code = code1; set_of_closures = set1; } 
+  let compare { code = code1; set_of_closures = set1; }
         { code = code2; set_of_closures = set2; } =
     let c =
       Code_id.Set.compare (Code_id.Map.keys code1)
@@ -247,6 +247,7 @@ type t =
   | Boxed_int32 of Int32.t Or_variable.t
   | Boxed_int64 of Int64.t Or_variable.t
   | Boxed_nativeint of Targetint.t Or_variable.t
+  | Immutable_float_block of Numbers.Float_by_bit_pattern.t Or_variable.t list
   | Immutable_float_array of Numbers.Float_by_bit_pattern.t Or_variable.t list
   | Mutable_string of { initial_value : string; }
   | Immutable_string of string
@@ -287,6 +288,14 @@ include Identifiable.Make (struct
         (Flambda_colours.static_part ())
         (Flambda_colours.normal ())
         (Or_variable.print Targetint.print) or_var
+    | Immutable_float_block fields ->
+      fprintf ppf "@[<hov 1>(@<0>%sImmutable_float_block@<0>%s@ @[[| %a |]@])@]"
+        (Flambda_colours.static_part ())
+        (Flambda_colours.normal ())
+        (Format.pp_print_list
+          ~pp_sep:(fun ppf () -> Format.pp_print_string ppf "@; ")
+          (Or_variable.print Numbers.Float_by_bit_pattern.print))
+        fields
     | Immutable_float_array fields ->
       fprintf ppf "@[<hov 1>(@<0>%sImmutable_float_array@<0>%s@ @[[| %a |]@])@]"
         (Flambda_colours.static_part ())
@@ -328,6 +337,10 @@ include Identifiable.Make (struct
       Or_variable.compare Numbers.Int64.compare or_var1 or_var2
     | Boxed_nativeint or_var1, Boxed_nativeint or_var2 ->
       Or_variable.compare Targetint.compare or_var1 or_var2
+    | Immutable_float_block fields1, Immutable_float_array fields2 ->
+      Misc.Stdlib.List.compare
+        (Or_variable.compare Numbers.Float_by_bit_pattern.compare)
+        fields1 fields2
     | Immutable_float_array fields1, Immutable_float_array fields2 ->
       Misc.Stdlib.List.compare
         (Or_variable.compare Numbers.Float_by_bit_pattern.compare)
@@ -347,6 +360,8 @@ include Identifiable.Make (struct
     | _, Boxed_int64 _ -> 1
     | Boxed_nativeint _, _ -> -1
     | _, Boxed_nativeint _ -> 1
+    | Immutable_float_block _, _ -> -1
+    | _, Immutable_float_block _ -> 1
     | Immutable_float_array _, _ -> -1
     | _, Immutable_float_array _ -> 1
     | Mutable_string _, _ -> -1
@@ -373,6 +388,7 @@ let get_pieces_of_code t =
   | Boxed_int32 _
   | Boxed_int64 _
   | Boxed_nativeint _
+  | Immutable_float_block _
   | Immutable_float_array _
   | Mutable_string _
   | Immutable_string _ -> Code_id.Map.empty
@@ -393,7 +409,7 @@ let free_names t =
   | Boxed_nativeint or_var -> Or_variable.free_names or_var
   | Mutable_string { initial_value = _; }
   | Immutable_string _ -> Name_occurrences.empty
-  | Immutable_float_array fields ->
+  | Immutable_float_block fields | Immutable_float_array fields ->
     List.fold_left (fun fns (field : _ Or_variable.t) ->
         match field with
         | Var v ->
@@ -445,6 +461,23 @@ let apply_name_permutation t perm =
       else Boxed_nativeint or_var'
     | Mutable_string { initial_value = _; }
     | Immutable_string _ -> t
+    | Immutable_float_block fields ->
+      let changed = ref false in
+      let fields =
+        List.map (fun (field : _ Or_variable.t) ->
+            let field' : _ Or_variable.t =
+              match field with
+              | Var v -> Var (Name_permutation.apply_variable perm v)
+              | Const _ -> field
+            in
+            if not (field == field') then begin
+              changed := true
+            end;
+            field')
+          fields
+      in
+      if not !changed then t
+      else Immutable_float_block fields
     | Immutable_float_array fields ->
       let changed = ref false in
       let fields =
@@ -475,6 +508,7 @@ let can_share0 t =
   | Boxed_int32 _
   | Boxed_int64 _
   | Boxed_nativeint _
+  | Immutable_float_block _
   | Immutable_float_array _
   | Immutable_string _ -> true
   | Block (_, Mutable, _)
@@ -491,6 +525,7 @@ let must_be_sets_of_closures t =
   | Boxed_int32 _
   | Boxed_int64 _
   | Boxed_nativeint _
+  | Immutable_float_block _
   | Immutable_float_array _
   | Immutable_string _
   | Mutable_string _ -> Misc.fatal_errorf "Not set(s) of closures:@ %a" print t

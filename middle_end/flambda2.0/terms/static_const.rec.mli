@@ -79,6 +79,7 @@ type t =
   | Boxed_int32 of Int32.t Or_variable.t
   | Boxed_int64 of Int64.t Or_variable.t
   | Boxed_nativeint of Targetint.t Or_variable.t
+  | Immutable_float_block of Numbers.Float_by_bit_pattern.t Or_variable.t list
   | Immutable_float_array of Numbers.Float_by_bit_pattern.t Or_variable.t list
   | Mutable_string of { initial_value : string; }
   | Immutable_string of string

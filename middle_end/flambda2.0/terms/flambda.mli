@@ -438,7 +438,7 @@ end and Continuation_params_and_handler : sig
       -> handler:Expr.t
       -> 'a)
     -> 'a
-  
+
   (** Choose members of two bindings' alpha-equivalence classes using the same
       parameters. *)
   val pattern_match_pair
@@ -613,6 +613,7 @@ end and Static_const : sig
     | Boxed_int32 of Int32.t Or_variable.t
     | Boxed_int64 of Int64.t Or_variable.t
     | Boxed_nativeint of Targetint.t Or_variable.t
+    | Immutable_float_block of Numbers.Float_by_bit_pattern.t Or_variable.t list
     | Immutable_float_array of Numbers.Float_by_bit_pattern.t Or_variable.t list
     | Mutable_string of { initial_value : string; }
     | Immutable_string of string

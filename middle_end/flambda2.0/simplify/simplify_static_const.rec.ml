@@ -110,6 +110,15 @@ let simplify_static_const_of_kind_value dacc
     in
     let dacc = bind_result_sym ty in
     Boxed_nativeint or_var, dacc
+  | Immutable_float_block fields ->
+    let fields_with_tys =
+      List.map (fun field ->
+          simplify_or_variable dacc (fun f -> T.this_naked_float f) field)
+        fields
+    in
+    let fields, _field_tys = List.split fields_with_tys in
+    let dacc = bind_result_sym (T.any_value ()) in
+    Immutable_float_block fields, dacc
   | Immutable_float_array fields ->
     let fields_with_tys =
       List.map (fun field ->

@@ -353,7 +353,8 @@ let static_const0 env r ~params_and_body (bound_symbols : Bound_symbols.t)
           Cmm.Word_int env s default C.emit_nativeint_constant transl v r
       in
       env, r, updates
-  | Singleton s, Immutable_float_array fields ->
+  | Singleton s,
+    (Immutable_float_block fields | Immutable_float_array fields) ->
       let name = symbol s in
       let aux =
         Or_variable.value_map ~default:0.
@@ -376,8 +377,8 @@ let static_const0 env r ~params_and_body (bound_symbols : Bound_symbols.t)
         SC.print static_const
   | Sets_of_closures _,
     (Block _ | Boxed_float _ | Boxed_int32 _ | Boxed_int64 _
-      | Boxed_nativeint _ | Immutable_float_array _ | Mutable_string _
-      | Immutable_string _) ->
+      | Boxed_nativeint _ | Immutable_float_block _
+      | Immutable_float_array _ | Mutable_string _ | Immutable_string _) ->
       Misc.fatal_errorf "Only [Code_and_set_of_closures] can be bound by a \
           [Code_and_set_of_closures] binding:@ %a"
         SC.print static_const

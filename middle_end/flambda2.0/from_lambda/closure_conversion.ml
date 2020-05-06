@@ -254,8 +254,14 @@ let rec declare_const t (const : Lambda.structured_constant)
     register_const t (Boxed_nativeint (Const c)) "nativeint"
   | Const_immstring c ->
     register_const t (Immutable_string c) "immstring"
+  | Const_float_block c ->
+    register_const t
+      (Immutable_float_block
+         (List.map (fun s ->
+           let f = Numbers.Float_by_bit_pattern.create (float_of_string s) in
+           Or_variable.Const f) c))
+      "float_block"
   | Const_float_array c ->
-    (* CR mshinwell: check that Const_float_array is always immutable *)
     register_const t
       (Immutable_float_array
          (List.map (fun s ->
