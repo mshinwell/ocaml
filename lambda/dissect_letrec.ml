@@ -228,7 +228,8 @@ let rec prepare_letrec
       | None -> dead_code lam letrec
       (* We know that [args] are all "simple" at this point, so no effects *)
     end
-  | Lprim (Pmakearray (Pfloatarray, _), args, _) -> begin
+  | Lprim (Pmakearray (Pfloatarray, _), args, _)
+  | Lprim (Pmakefloatblock _, args, _) -> begin
       match current_let with
       | Some cl -> build_block cl (List.length args) Boxed_float lam letrec
       | None -> dead_code lam letrec
