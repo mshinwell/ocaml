@@ -1124,7 +1124,8 @@ let rec size_of_lambda' env = function
   | Lprim(Pmakeblock _, args, _) -> RHS_block (List.length args)
   | Lprim (Pmakearray ((Paddrarray|Pintarray), _), args, _) ->
       RHS_block (List.length args)
-  | Lprim (Pmakearray (Pfloatarray, _), args, _) ->
+  | Lprim (Pmakearray (Pfloatarray, _), args, _)
+  | Lprim (Pmakefloatblock _, args, _) ->
       RHS_floatblock (List.length args)
   | Lprim (Pmakearray (Pgenarray, _), _, _) ->
      (* Pgenarray is excluded from recursive bindings by the
