@@ -532,11 +532,15 @@ let function_name = ref ""
 let tailrec_entry_point = ref 0
 
 (* Emit tracing probes *)
+(* CR mshinwell: Add comments explaining what these record fields are
+   for, since it's not obvious at first sight. *)
 type probe =
   {
     probe_label: label;
     probe_name: string;
-    probe_handler : string;
+    (* CR mshinwell: Rename probe_handler -> probe_handler_code_sym or
+       similar, to make clear this is a symbol. *)
+    probe_handler: string;
     probe_insn: Linear.instruction;
   }
 
@@ -563,6 +567,8 @@ let find_or_add_semaphore name =
     probe_semaphores := String.Map.add name lbl !probe_semaphores;
     lbl
 
+(* CR mshinwell: These should move into [Reg] *)
+
 let is_stack (r : Reg.t) =
   match r.loc with
   | Stack _ -> true
@@ -575,14 +581,22 @@ let is_reg (r : Reg.t) =
 
 let emit_call_probe_handler i ~probe_label =
   let wrap_label = probe_handler_wrapper_name probe_label in
-  (* Next, emit cmp that is effectively a nop:
+  (* We emit a cmp instruction that is effectively a nop:
      it only sets flags that are not read anywhere.
      To enable the probe, cmp is replaced with call
      by changing the first byte of the encoding from 3d to e8.
-     The target of the call is a displacement relative to
+     The operand of the call is a displacement relative to
      the next instruction. Hence, the immediate operand
      of cmp is set up to have that value. *)
+  (* CR mshinwell: Have both the PIC and non-PIC code paths been
+     tested to an equivalent standard? *)
   if !Clflags.pic_code then begin
+    (* CR mshinwell: This comment starts to fall apart at "However".
+       Can it be reworded to be more concise?  I'm not sure it's
+       necessary to really say anything other than the fact that we
+       manually emit the cmp and the explicit relocation to be certain
+       the correct result is obtained, given that assemblers make
+       choices as to instruction encodings. *)
     (* Emit cmp and explicit relocation on it, as for a call instruction.
 
        When the immediate operand of cmp is a symbol with "@PLT",
@@ -598,17 +612,15 @@ let emit_call_probe_handler i ~probe_label =
 
        If cmp instruction is assembled differently from what we expect,
        then applying the relocation might the change the meaning of the program. *)
-    let offset = ConstSub(ConstThis,(Const 4L)) in
-    let name = R_X86_64_PLT32 in
-    let sym = ConstLabel wrap_label in
-    let expr = ConstSub (sym, (Const 4L)) in
+    (* CR mshinwell: The magic constant 4L that appears twice needs
+       a comment *)
     (* Emit the required encoding of "cmp $0, %eax" directly, using .byte *)
     D.byte (Const 0x3dL);
-    D.byte (Const 0L);
-    D.byte (Const 0L);
-    D.byte (Const 0L);
-    D.byte (Const 0L);
-    D.reloc ~offset ~name ~expr;
+    D.quad (Const 0L);
+    (* Emit the relocation for the call target *)
+    D.reloc ~offset:(ConstSub (ConstThis, Const 4L))
+      ~name:R_X86_64_PLT32
+      ~expr:(ConstSub (ConstLabel wrap_label, Const 4L));
   end else begin
     (* Emit absolute value, no relocation.
        The immediate operand of cmp is the offset of the wrapper
@@ -617,6 +629,8 @@ let emit_call_probe_handler i ~probe_label =
        and the wrapper is emitted at the end of the compilation unit. *)
     I.cmp (sym (Printf.sprintf "%s - . - 5" wrap_label)) eax
   end;
+  (* CR mshinwell: This needs a comment as to why the filtering is
+     necessary *)
   let stack_live = Reg.Set.filter is_stack i.live in
   record_frame stack_live false i.dbg
 
@@ -917,7 +931,15 @@ let emit_instr fallthrough i =
     end else begin
       let semaphore_label = find_or_add_semaphore name in
       add_used_symbol semaphore_label;
+      (* CR mshinwell: I think it would be better to use exactly the
+         same code as for Iload, above, here.  Form the correct
+         addressing expression first.  Also, why was this movzx?
+         Isn't this a full-width integer load? *)
       I.movzx (mem64_rip WORD semaphore_label) (res i 0);
+      (* CR mshinwell: Are we happy assuming that this never
+         overflows?  Maybe the sign bit should be cleared explicitly
+         after the [sal], which would have the effect of saturating
+         rather than wrapping round? *)
       I.sal (int 1) (res i 0);
       I.or_ (int 1) (res i 0)
     end
@@ -1262,6 +1284,9 @@ module RegLocMap = Stdlib.Map.Make(RegLocOrder)
 let to_reglocset s =
   Reg.Set.elements s |> RegLocSet.of_list
 
+(* CR mshinwell: Not now, but after code review, it would be better to
+   move this code so it's contiguous with the other probe code above. *)
+
 let emit_probe_handler_wrapper p =
   let wrap_label = probe_handler_wrapper_name p.probe_label in
   D.comment (Printf.sprintf "probe %s %s" p.probe_name p.probe_handler);
@@ -1359,6 +1384,8 @@ let emit_probe_handler_wrapper p =
       move src dst
     end)
     p.probe_insn.arg;
+  (* CR mshinwell: I don't think [add_def_symbol] was ever called for
+     this symbol *)
   add_used_symbol p.probe_handler;
   emit_call p.probe_handler;
   (* record a fake frame description for the wrapper *)
@@ -1460,7 +1487,7 @@ let emit_probe_notes () =
     String.Map.iter (fun name label ->
       if not (String.Set.mem name names) then
         (* CR gyorsh: emit a warning instead? *)
-        Misc.fatal_errorf "semphore referes to an undefined probe %s" name ();
+        Misc.fatal_errorf "semaphore referes to an undefined probe %s" name ();
       D.global label;
       _label label;
       D.word (const 0))
