@@ -559,7 +559,7 @@ end = struct
           since the two continuations differ in arity"
         Continuation.print cont
         Flambda_arity.print arity
-        Continuation.print alias_for 
+        Continuation.print alias_for
         Flambda_arity.print alias_for_arity
     end;
     if Continuation.Map.mem cont t.continuation_aliases then begin
@@ -646,27 +646,31 @@ end = struct
       imported_symbols : Flambda_kind.t Symbol.Map.t;
       lifted_constants_innermost_last : Lifted_constant.t list;
       shareable_constants : Symbol.t Static_const.Map.t;
+      used_closure_vars : Var_within_closure.Set.t;
     }
 
   let print ppf { resolver = _; imported_symbols;
                   lifted_constants_innermost_last;
-                  shareable_constants;
+                  shareable_constants; used_closure_vars;
                 } =
     Format.fprintf ppf "@[<hov 1>(\
         @[<hov 1>(imported_symbols@ %a)@]@ \
         @[<hov 1>(lifted_constants_innermost_last@ %a)@]@ \
-        @[<hov 1>(shareable_constants@ %a)@]\
+        @[<hov 1>(shareable_constants@ %a)@]@ \
+        @[<hov 1>(used_closure_vars@ %a)@]\
         )@]"
       (Symbol.Map.print Flambda_kind.print) imported_symbols
       (Format.pp_print_list ~pp_sep:Format.pp_print_space Lifted_constant.print)
         lifted_constants_innermost_last
       (Static_const.Map.print Symbol.print) shareable_constants
+      Var_within_closure.Set.print used_closure_vars
 
   let create ~resolver =
     { resolver;
       imported_symbols = Symbol.Map.empty;
       lifted_constants_innermost_last = [];
       shareable_constants = Static_const.Map.empty;
+      used_closure_vars = Var_within_closure.Set.empty;
     }
 
   let imported_symbols t = t.imported_symbols
@@ -708,6 +712,14 @@ end = struct
         shareable_constants =
           Static_const.Map.add static_const symbol t.shareable_constants;
       }
+
+  let add_use_of_closure_var t closure_var =
+    { t with
+      used_closure_vars =
+        Var_within_closure.Set.add closure_var t.used_closure_vars;
+    }
+
+  let used_closure_vars t = t.used_closure_vars
 end and Lifted_constant : sig
   include Simplify_env_and_result_intf.Lifted_constant
     with type downwards_env := Downwards_env.t

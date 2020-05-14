@@ -160,7 +160,7 @@ Format.eprintf "All bindings:@ %a\n%!"
   in
   let expr =
     List.fold_left (fun body (bound_symbols, defining_expr) ->
-        Simplify_common.create_let_symbol scoping_rule
+        Simplify_common.create_let_symbol (UA.r uacc) scoping_rule
           (UA.code_age_relation uacc) bound_symbols defining_expr body)
       body
       sorted_lifted_constants.bindings_outermost_last
@@ -175,11 +175,11 @@ and simplify_one_continuation_handler :
   -> params:KP.t list
   -> handler:Expr.t
   -> extra_params_and_args:Continuation_extra_params_and_args.t
-  -> 'a k 
+  -> 'a k
   -> Continuation_handler.t * 'a * UA.t
 = fun dacc cont (recursive : Recursive.t) (cont_handler : CH.t) ~params
       ~(handler : Expr.t) ~(extra_params_and_args : EPA.t) k ->
-  (* 
+  (*
 Format.eprintf "handler:@.%a@."
   Expr.print cont_handler.handler;
   *)
@@ -1544,7 +1544,7 @@ and simplify_switch
                     else if
                       (Target_imm.equal arm Target_imm.bool_true
                         && Target_imm.equal arg Target_imm.bool_false)
-                      || 
+                      ||
                         (Target_imm.equal arm Target_imm.bool_false
                           && Target_imm.equal arg Target_imm.bool_true)
                     then

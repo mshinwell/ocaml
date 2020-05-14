@@ -287,6 +287,10 @@ module type Result = sig
   val imported_symbols : t -> Flambda_kind.t Symbol.Map.t
 
   val clear_lifted_constants : t -> t
+
+  val add_use_of_closure_var : t -> Var_within_closure.t -> t
+
+  val used_closure_vars : t -> Var_within_closure.Set.t
 end
 
 module type Lifted_constant = sig

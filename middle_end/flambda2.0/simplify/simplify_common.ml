@@ -285,8 +285,43 @@ let create_let_symbol0 code_age_relation (bound_symbols : Bound_symbols.t)
       Let_symbol.create Syntactic bound_symbols (Sets_of_closures sets) body
       |> Expr.create_let_symbol
 
-let create_let_symbol (scoping_rule : Let_symbol.Scoping_rule.t)
+let remove_unused_closure_vars0 r
+      ({ code; set_of_closures; } : Static_const.Code_and_set_of_closures.t)
+      : Static_const.Code_and_set_of_closures.t =
+  let closure_elements =
+    Set_of_closures.closure_elements set_of_closures
+    |> Var_within_closure.Map.filter (fun closure_var _ ->
+      Var_within_closure.Set.mem closure_var (R.used_closure_vars r))
+  in
+  let set_of_closures =
+    Set_of_closures.create (Set_of_closures.function_decls set_of_closures)
+      ~closure_elements
+  in
+  { code;
+    set_of_closures;
+  }
+
+let remove_unused_closure_vars r (static_const : Static_const.t)
+      : Static_const.t =
+  match static_const with
+  | Sets_of_closures code_and_sets ->
+    let code_and_sets =
+      List.map (remove_unused_closure_vars0 r) code_and_sets
+    in
+    Sets_of_closures code_and_sets
+  | Block _
+  | Boxed_float _
+  | Boxed_int32 _
+  | Boxed_int64 _
+  | Boxed_nativeint _
+  | Immutable_float_block _
+  | Immutable_float_array _
+  | Mutable_string _
+  | Immutable_string _ -> static_const
+
+let create_let_symbol r (scoping_rule : Let_symbol.Scoping_rule.t)
       code_age_relation bound_symbols static_const body =
+  let static_const = remove_unused_closure_vars r static_const in
   match scoping_rule with
   | Syntactic ->
     create_let_symbol0 code_age_relation bound_symbols static_const body

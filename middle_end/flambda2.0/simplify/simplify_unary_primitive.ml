@@ -72,17 +72,49 @@ let simplify_select_closure ~move_from ~move_to
     ~shape:(T.at_least_the_closures_with_ids ~this_closure:move_from closures)
     ~result_var ~result_kind:K.value
 
-let simplify_project_var closure_id closure_element dacc ~original_term
-      ~arg:_closure ~arg_ty:closure_ty ~result_var =
-  (* CR pchambart: the shape should assert that the closure contains
-     the closure_id we are projecting from *)
-  Simplify_common.simplify_projection
-    dacc ~original_term ~deconstructing:closure_ty
-    ~shape:(T.closure_with_at_least_this_closure_var
-              ~this_closure:closure_id
-              closure_element
-              ~closure_element_var:(Var_in_binding_pos.var result_var))
-    ~result_var ~result_kind:K.value
+let simplify_project_var closure_id closure_element ~min_name_mode dacc
+      ~original_term ~arg:_closure ~arg_ty:closure_ty ~result_var =
+  let reachable, env_extension, dacc =
+    Simplify_common.simplify_projection
+      dacc ~original_term ~deconstructing:closure_ty
+      ~shape:(T.closure_with_at_least_this_closure_var
+                ~this_closure:closure_id
+                closure_element
+                ~closure_element_var:(Var_in_binding_pos.var result_var))
+      ~result_var ~result_kind:K.value
+  in
+  let reachable, removed_var =
+    (* CR-someday mshinwell: Perhaps a more elegant way than this could be
+       found.  One possibility is that [simplify_projection] should try to
+       return a [Simple] rather than the original term, but that might be
+       unnecessary work, since the [Simple] will appear in subsequent places
+       by virtue of the typing anyway. *)
+    match reachable with
+    | Reachable _ ->
+      let typing_env =
+        TE.add_definition (DA.typing_env dacc)
+          (Name_in_binding_pos.var result_var)
+          K.value
+      in
+      let typing_env = TE.add_env_extension typing_env env_extension in
+      let name = Name.var (Var_in_binding_pos.var result_var) in
+      let ty = TE.find typing_env name in
+      begin match T.get_alias_exn ty with
+      | exception Not_found -> reachable, false
+      | alias ->
+        match TE.get_canonical_simple_exn ~min_name_mode typing_env alias with
+        | exception Not_found -> reachable, false
+        | canonical ->
+          let reachable = Reachable.reachable (Named.create_simple canonical) in
+          reachable, true
+      end
+    | Invalid _ -> reachable, false
+  in
+  let dacc =
+    if removed_var then dacc
+    else DA.map_r dacc ~f:(fun r -> R.add_use_of_closure_var r closure_element)
+  in
+  reachable, env_extension, dacc
 
 let simplify_unbox_number (boxable_number_kind : K.Boxable_number.t)
       dacc ~original_term ~arg ~arg_ty:boxed_number_ty ~result_var =
@@ -435,7 +467,7 @@ let simplify_unary_primitive dacc (prim : P.unary_primitive)
       let simplifier =
         match prim with
         | Project_var { project_from; var; } ->
-          simplify_project_var project_from var
+          simplify_project_var project_from var ~min_name_mode
         | Select_closure { move_from; move_to; } ->
           simplify_select_closure ~move_from ~move_to
         | Unbox_number boxable_number_kind ->
