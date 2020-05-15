@@ -406,12 +406,12 @@ and simplify_non_recursive_let_cont_handler dacc handler ~after_traversal =
             cont_handler ~params ~handler ~prior_lifted_constants
             ~after_traversal:(fun dacc ~rebuild:rebuild_handler ->
               after_traversal dacc ~rebuild:(fun uacc ~after_rebuild ->
-                let uenv_to_return = UA.uenv uacc in
-                rebuild_handler uacc ~after_rebuild:(fun handler uacc ->
-                  rebuild_body uacc ~after_rebuild:(fun body uacc ->
-                    (* The upwards environment of [uacc] is replaced so
-                       that out-of-scope continuation bindings do not end up
-                       in the accumulator. *)
+                rebuild_body uacc ~after_rebuild:(fun body uacc ->
+                  let uenv_to_return = UA.uenv uacc in
+                  (* The upwards environment of [uacc] is replaced so
+                      that out-of-scope continuation bindings do not end up
+                      in the accumulator. *)
+                  rebuild_handler uacc ~after_rebuild:(fun handler uacc ->
                     let expr =
                       Let_cont.create_non_recursive cont handler ~body
                     in
