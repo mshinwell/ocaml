@@ -397,6 +397,12 @@ let simplify_function context r closure_id function_decl
               exn_continuation
               ~return_cont_scope:Scope.initial
               ~exn_cont_scope:(Scope.next Scope.initial)
+              ~after_traversal:(fun dacc_after_body ~rebuild ->
+                let uacc =
+                  UA.create UE.empty (DA.code_age_relation dacc) (DA.r dacc)
+                in
+                rebuild uacc ~after_rebuild:(fun body uacc ->
+                  body, dacc_after_body, UA.r uacc))
           with
           | body, dacc_after_body, r ->
             let dbg = Function_params_and_body.debuginfo params_and_body in
@@ -770,7 +776,7 @@ let type_closure_elements_for_previously_lifted_set dacc
     set_of_closures
 
 let simplify_non_lifted_set_of_closures dacc
-      ~(bound_vars : Bindable_let_bound.t) set_of_closures =
+      ~(bound_vars : Bindable_let_bound.t) set_of_closures ~after_traversal =
   let closure_bound_vars =
     Bindable_let_bound.must_be_set_of_closures bound_vars
   in
@@ -791,12 +797,16 @@ let simplify_non_lifted_set_of_closures dacc
     type_closure_elements_and_make_lifting_decision_for_one_set dacc
       ~min_name_mode ~closure_bound_vars_inverse set_of_closures
   in
-  if can_lift then
-    simplify_and_lift_set_of_closures dacc ~closure_bound_vars_inverse
-      ~closure_bound_vars set_of_closures ~closure_elements
-  else
-    simplify_non_lifted_set_of_closures0 dacc ~bound_vars ~closure_bound_vars
-      set_of_closures ~closure_elements ~closure_element_types
+  let bindings_outermost_first, dacc =
+    if can_lift then
+      simplify_and_lift_set_of_closures dacc ~closure_bound_vars_inverse
+        ~closure_bound_vars set_of_closures ~closure_elements
+    else
+      simplify_non_lifted_set_of_closures0 dacc ~bound_vars ~closure_bound_vars
+        set_of_closures ~closure_elements ~closure_element_types
+  in
+  after_traversal dacc ~rebuild:(fun uacc ~after_rebuild ->
+    after_rebuild bindings_outermost_first uacc)
 
 let simplify_lifted_set_of_closures0 context ~closure_symbols
       ~closure_bound_names_inside ~closure_elements ~closure_element_types
@@ -853,7 +863,8 @@ let simplify_lifted_set_of_closures0 context ~closure_symbols
 
 let simplify_lifted_sets_of_closures dacc ~orig_bound_symbols ~orig_static_const
       (bound_symbols_components : Bound_symbols.Code_and_set_of_closures.t list)
-      (code_and_sets_of_closures : SC.Code_and_set_of_closures.t list) =
+      (code_and_sets_of_closures : SC.Code_and_set_of_closures.t list)
+      ~after_traversal =
   if List.compare_lengths bound_symbols_components code_and_sets_of_closures
        <> 0
   then begin
@@ -973,4 +984,5 @@ let simplify_lifted_sets_of_closures dacc ~orig_bound_symbols ~orig_static_const
   let static_const : SC.t =
     Sets_of_closures (List.rev code_and_sets_of_closures_rev)
   in
-  bound_symbols, static_const, dacc
+  after_traversal dacc ~rebuild:(fun uacc ~after_rebuild ->
+    after_rebuild bound_symbols static_const uacc)
