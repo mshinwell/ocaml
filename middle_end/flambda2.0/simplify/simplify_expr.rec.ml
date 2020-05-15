@@ -24,6 +24,9 @@ open! Simplify_import
    be made more transparent (e.g. through [find_continuation]). Tricky
    potentially in conjunction with the rewrites. *)
 
+(* CR-someday mshinwell: Consider defunctionalising, which should be
+   straightforward now this is in CPS form. *)
+
 let rec simplify_expr dacc expr ~after_traversal =
   match Expr.descr expr with
   | Let let_expr ->
