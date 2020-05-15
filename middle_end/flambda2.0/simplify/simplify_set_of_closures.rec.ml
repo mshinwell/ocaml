@@ -248,7 +248,7 @@ end = struct
     in
     let env_inside_functions,
         closure_element_types_all_sets_inside_functions_rev =
-      List.fold_left 
+      List.fold_left
         (fun (env_inside_functions,
               closure_element_types_all_sets_inside_functions_rev)
              closure_element_types ->
@@ -325,6 +325,32 @@ let dacc_inside_function context r ~params ~my_closure closure_id
         denv)
   in
   DA.with_r dacc r
+
+(* The traversal order for a set of closures binding (either [Let] or
+   [Let_symbol]) is as follows:
+
+   1. Downwards traversal of the code of the function(s) named in the binding.
+   2. Upwards traversal of the code of the function(s), rebuilding the
+      body/bodies.
+   3. Calculation of the type(s) of the function(s), including making the
+      inlining decision.
+   4. Downwards traversal of the expression subsequent to the set of closures
+      binding.
+   5. Upwards traversal of the same.
+
+   We cannot do the downwards traversal of the expression subsequent to the
+   set of closures before the upwards rebuilding of the functions' bodies,
+   since we need the simplified versions of the bodies to compute the
+   function's types, which are in turn required in the environment for such
+   downwards traversal.
+
+   As a result of this ordering we can only guarantee to have seen all uses
+   of a closure variable named in a set of closures definition if that
+   definition is not itself under a lambda.  It follows that closure variable
+   removal is only performed in these circumstances.  (Set-of-closures
+   definitions that are lifted will have their variables removed, as by
+   the time they are placed, we are never under a lambda.)
+*)
 
 type simplify_function_result = {
   function_decl : FD.t;
@@ -521,7 +547,7 @@ let simplify_and_lift_set_of_closures dacc ~closure_bound_vars_inverse
           closure_id
           |> Closure_id.rename
           |> Closure_id.to_string
-          |> Linkage_name.create 
+          |> Linkage_name.create
         in
         Symbol.create (Compilation_unit.get_current_exn ()) name)
       (Function_declarations.funs function_decls)
