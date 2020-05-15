@@ -352,6 +352,10 @@ let dacc_inside_function context r ~params ~my_closure closure_id
    the time they are placed, we are never under a lambda.)
 *)
 
+(* CR-someday mshinwell: Consider making the iterations over functions in
+   a given set of closures tail recursive.  (Probably an unusual situation to
+   have trouble with stack usage as a result of this, mind.) *)
+
 type simplify_function_result = {
   function_decl : FD.t;
   new_code_id : Code_id.t;
