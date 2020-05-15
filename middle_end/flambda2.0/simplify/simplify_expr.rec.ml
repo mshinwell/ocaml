@@ -116,16 +116,18 @@ and simplify_let_symbol dacc let_symbol_expr ~after_traversal =
             R.consider_constant_for_sharing r symbol defining_expr)
         | Sets_of_closures _ -> dacc
       in
+      let dacc_before_body = dacc in
       simplify_expr dacc body
         ~after_traversal:(fun dacc ~rebuild:rebuild_body ->
           after_traversal dacc ~rebuild:(fun uacc ~after_rebuild ->
             rebuild_body uacc ~after_rebuild:(fun body uacc ->
               rebuild_defining_expr uacc
-                ~after_rebuild:(rebuild_let_symbol ~prior_lifted_constants
+                ~after_rebuild:(rebuild_let_symbol ~dacc_before_body
+                  ~prior_lifted_constants
                   ~scoping_rule ~body ~after_rebuild)))))
 
-and rebuild_let_symbol ~prior_lifted_constants ~scoping_rule ~body
-      ~after_rebuild bound_symbols defining_expr uacc =
+and rebuild_let_symbol ~dacc_before_body ~prior_lifted_constants ~scoping_rule
+      ~body ~after_rebuild bound_symbols defining_expr uacc =
   let lifted_constants = R.get_lifted_constants (UA.r uacc) in
   let uacc =
     UA.map_r uacc ~f:(fun r ->
@@ -140,7 +142,10 @@ and rebuild_let_symbol ~prior_lifted_constants ~scoping_rule ~body
         lifted_constants
   in
   let sorted_lifted_constants =
-    Sort_lifted_constants.sort None all_lifted_constants
+    (* CR mshinwell: Should each lifted constant have its own typing env
+       associated with it, for use during sorting, or is [dacc_after_body]
+       ok for all of them? *)
+    Sort_lifted_constants.sort dacc_before_body all_lifted_constants
   in
   let expr =
     List.fold_left (fun body (bound_symbols, defining_expr) ->
@@ -205,7 +210,7 @@ and simplify_one_continuation_handler dacc cont handler
           after_rebuild handler uacc)))
 
 and simplify_handler_of_non_recursive_let_cont ~dacc_after_body
-      ~denv_before_body ~at_unit_toplevel cont ~scope ~is_exn_handler
+      ~denv_before_body ~at_unit_toplevel (cont, scope) ~is_exn_handler
       cont_handler ~params ~handler ~prior_lifted_constants ~after_traversal =
   (* We get here after having traversed the body (i.e. the scope) of a
      non-recursive continuation defined by a [Let_cont] expression (but before
@@ -397,7 +402,7 @@ and simplify_non_recursive_let_cont_handler dacc handler ~after_traversal =
       simplify_expr dacc_for_body body
         ~after_traversal:(fun dacc_after_body ~rebuild:rebuild_body ->
           simplify_handler_of_non_recursive_let_cont ~dacc_after_body
-            ~denv_before_body ~at_unit_toplevel cont ~scope ~is_exn_handler
+            ~denv_before_body ~at_unit_toplevel (cont, scope) ~is_exn_handler
             cont_handler ~params ~handler ~prior_lifted_constants
             ~after_traversal:(fun dacc ~rebuild:rebuild_handler ->
               after_traversal dacc ~rebuild:(fun uacc ~after_rebuild ->
@@ -414,8 +419,8 @@ and simplify_non_recursive_let_cont_handler dacc handler ~after_traversal =
                     after_rebuild expr uacc)))))))
 
 and simplify_handler_of_recursive_let_cont ~dacc_after_body ~definition_denv
-      cont ~original_cont_scope_level ~arity ~params ~handler cont_handler
-      ~prior_lifted_constants ~after_traversal =
+      (cont, scope) ~arity ~params ~handler cont_handler ~prior_lifted_constants
+      ~after_traversal =
   let cont_uses_env = DA.continuation_uses_env dacc_after_body in
   let r = DA.r dacc_after_body in
   let arg_types =
@@ -460,15 +465,13 @@ and simplify_handler_of_recursive_let_cont ~dacc_after_body ~definition_denv
       after_traversal dacc ~rebuild:(fun uacc ~after_rebuild ->
         rebuild_handler uacc
           ~after_rebuild:(register_recursive_let_cont_handler
-            cont ~original_cont_scope_level ~arity ~after_rebuild)))
+            cont scope ~arity ~after_rebuild)))
 
-and register_recursive_let_cont_handler cont ~original_cont_scope_level ~arity
-      ~after_rebuild handler uacc =
+and register_recursive_let_cont_handler cont scope ~arity ~after_rebuild
+      handler uacc =
   let uacc =
     UA.map_uenv uacc ~f:(fun uenv ->
-      UE.add_continuation_with_handler uenv cont
-        original_cont_scope_level
-        arity handler)
+      UE.add_continuation_with_handler uenv cont scope arity handler)
   in
   let handlers = Continuation.Map.singleton cont handler in
   after_rebuild handlers uacc
@@ -507,7 +510,7 @@ and simplify_recursive_let_cont_handlers dacc handlers ~after_traversal =
       simplify_expr dacc body
         ~after_traversal:(fun dacc_after_body ~rebuild:rebuild_body ->
           simplify_handler_of_recursive_let_cont ~dacc_after_body
-            ~definition_denv cont ~original_cont_scope_level
+            ~definition_denv (cont, original_cont_scope_level)
             ~arity ~params ~handler cont_handler ~prior_lifted_constants
             ~after_traversal:(fun dacc ~rebuild:rebuild_handlers ->
               after_traversal dacc ~rebuild:(fun uacc ~after_rebuild ->

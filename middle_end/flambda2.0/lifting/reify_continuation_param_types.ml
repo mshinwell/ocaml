@@ -288,7 +288,7 @@ let lift_via_reification_of_continuation_param_types0 dacc ~params
      Cmm translation phase). (Any SCC class containing >1 set of closures is
      maybe a bug?) *)
   let reified_definitions =
-    Sort_lifted_constants.sort (Some dacc) reified_definitions
+    Sort_lifted_constants.sort dacc reified_definitions
   in
   let handler =
     List.fold_left (fun handler (bound_symbols, defining_expr) ->

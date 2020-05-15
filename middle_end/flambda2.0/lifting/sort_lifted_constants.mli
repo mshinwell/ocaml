@@ -30,6 +30,6 @@ type result = private {
 (** The [Name_occurrences.t] values specify extra "hidden" dependencies of the
     associated constant that must be taken into account. *)
 val sort
-   : DA.t option
+   : DA.t
   -> (Bound_symbols.t * Static_const.t * Name_occurrences.t) list
   -> result
