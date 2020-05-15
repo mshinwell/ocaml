@@ -806,7 +806,7 @@ let simplify_non_lifted_set_of_closures dacc
         set_of_closures ~closure_elements ~closure_element_types
   in
   after_traversal dacc ~rebuild:(fun uacc ~after_rebuild ->
-    after_rebuild bindings_outermost_first uacc)
+    after_rebuild ~bindings_outermost_first uacc)
 
 let simplify_lifted_set_of_closures0 context ~closure_symbols
       ~closure_bound_names_inside ~closure_elements ~closure_element_types
