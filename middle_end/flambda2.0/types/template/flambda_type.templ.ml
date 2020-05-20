@@ -303,7 +303,7 @@ let prove_tags_must_be_a_block env t : Tag.Set.t proof =
     | Unknown -> Unknown
     | Known imms ->
       if not (is_bottom env imms) then
-        Invalid
+        Unknown
       else
         match blocks_imms.blocks with
         | Unknown -> Unknown
