@@ -609,12 +609,14 @@ let emit_call_probe_handler i ~probe_label =
        interpreted as a memory operand, not an immediate.
        Therefore, we emit the relocation manually, using .reloc directive,
        on the immediate operand of "cmp $0, %eax".
-       However, the assembler does not generate the encoding we need for this cmp.
-       It generates a shorter encoding, because the immediate value 0 is small
-       enough for it, but 0 is the expected value for a "standard" plt relocation.
+       However, the assembler does not generate the encoding we need for this
+       cmp.  It generates a shorter encoding, because the immediate value 0 is
+       small enough for it, but 0 is the expected value for a "standard" plt
+       relocation.
 
        If cmp instruction is assembled differently from what we expect,
-       then applying the relocation might the change the meaning of the program. *)
+       then applying the relocation might the change the meaning of the
+       program. *)
     (* CR mshinwell: The magic constant 4L that appears twice needs
        a comment *)
     (* Emit the required encoding of "cmp $0, %eax" directly, using .byte *)
