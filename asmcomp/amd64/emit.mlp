@@ -616,7 +616,11 @@ let emit_call_probe_handler i ~probe_label =
        a comment *)
     (* Emit the required encoding of "cmp $0, %eax" directly, using .byte *)
     D.byte (Const 0x3dL);
-    D.quad (Const 0L);
+    D.byte (Const 0L);
+    D.byte (Const 0L);
+    D.byte (Const 0L);
+    D.byte (Const 0L);
+    D.byte (Const 0L);
     (* Emit the relocation for the call target *)
     D.reloc ~offset:(ConstSub (ConstThis, Const 4L))
       ~name:R_X86_64_PLT32
@@ -1332,15 +1336,15 @@ let emit_probe_handler_wrapper p =
       reg_args := RegLocSet.add src !reg_args)
     p.probe_insn.arg;
   (* Calculate stack slots for all saved registers (live and args). *)
-  let stack_ofs, saved_reg =
-    RegLocSet.fold (fun reg (n, saved_reg) ->
+  let stack_ofs, saved_regs =
+    RegLocSet.fold (fun reg (n, saved_regs) ->
       if is_reg reg then begin
         (* manufacture stack entry for this reg *)
         let st = Reg.clone reg in
         st.loc <- Stack (Outgoing n); (* pretend, for float slot_offset *)
-        (n + (reg_size reg), RegLocMap.add reg st saved_reg)
+        (n + (reg_size reg), RegLocMap.add reg st saved_regs)
       end
-      else (n, saved_reg))
+      else (n, saved_regs))
       (RegLocSet.union !reg_args live)
       (args_ofs, RegLocMap.empty)
   in
@@ -1349,8 +1353,7 @@ let emit_probe_handler_wrapper p =
   let stack_ofs = if stack_ofs mod 16 = 0 then stack_ofs + 8 else stack_ofs in
   emit_stack_offset stack_ofs;
   (* save all live regs. *)
-  RegLocMap.iter move saved_reg;
-
+  RegLocMap.iter move saved_regs;
   (* Pass arguments to handler *)
   (* arrange arguments passed on the stack *)
   Array.iteri (fun i (src: Reg.t) ->
@@ -1374,7 +1377,7 @@ let emit_probe_handler_wrapper p =
     if is_reg dst && not (same_loc dst src) then begin
       let src =
         if is_reg src then begin
-          match RegLocMap.find_opt src saved_reg with
+          match RegLocMap.find_opt src saved_regs with
           | None ->
             assert (not (RegLocSet.mem src dsts));
             src
@@ -1394,105 +1397,117 @@ let emit_probe_handler_wrapper p =
       match st.loc with
       | Stack (Outgoing n) -> n :: acc
       | _ -> assert false)
-      saved_reg []
+      saved_regs []
   in
   let label = new_label () in
   record_frame_descr ~label ~frame_size:(stack_ofs+8) ~live_offset
     ~raise_frame:false p.probe_insn.dbg;
   def_label label;
-
-  (* restore all live regs *)
-  RegLocMap.iter (fun r s -> if not (RegLocSet.mem r !reg_args) then move s r) saved_reg;
+  (* Restore all live regs *)
+  RegLocMap.iter (fun r s ->
+      if not (RegLocSet.mem r !reg_args) then move s r)
+    saved_regs;
   emit_stack_offset (-stack_ofs);
   I.ret ();
   cfi_endproc ();
-  emit_function_type_and_size wrap_label;
-  ()
+  emit_function_type_and_size wrap_label
+
+let emit_probe_notes0 () =
+  begin match system with
+  | S_gnu | S_cygwin | S_solaris | S_win32 | S_linux_elf | S_bsd_elf
+  | S_beos | S_mingw | S_win64 | S_linux | S_mingw64 | S_unknown ->
+    D.section [".note.stapsdt"] (Some "?") [ "\"note\"" ]
+  | S_macosx -> D.section ["__DATA";"__note_stapsdt"] None ["regular"]
+  end;
+  let stap_arg arg =
+    let arg_name =
+      match arg.loc with
+      | Stack s ->
+        Printf.sprintf "%d(%%rsp)" (slot_offset s (register_class arg))
+      | Reg reg -> Proc.register_name reg
+      | Unknown ->
+        Misc.fatal_errorf "Cannot create probe: illegal argument: %a"
+          Printmach.reg arg
+    in
+    Printf.sprintf "%d@%s" (reg_size arg) arg_name
+  in
+  let describe_one_probe names p =
+    let args =
+      Array.fold_right (fun arg acc -> (stap_arg arg)::acc)
+        p.probe_insn.arg
+        []
+      |> String.concat " "
+    in
+    let semaphore_label = find_or_add_semaphore p.probe_name in
+    D.align 4;
+    let a = new_label() in
+    let b = new_label() in
+    let c = new_label() in
+    let d = new_label() in
+    D.long (ConstSub (ConstLabel (emit_label b),
+      ConstLabel(emit_label a)));
+    D.long (ConstSub (ConstLabel (emit_label d),
+      ConstLabel (emit_label c)));
+    D.long (const_32 3l);
+    def_label a;
+    D.bytes "stapsdt\000";
+    def_label b;
+    D.align 4;
+    def_label c;
+    D.qword (ConstLabel (emit_label p.probe_label));
+    begin match system with
+    | S_gnu | S_cygwin | S_solaris | S_win32 | S_linux_elf | S_bsd_elf
+    | S_beos | S_mingw | S_win64 | S_linux | S_mingw64 | S_unknown ->
+      D.qword (ConstLabel "_.stapsdt.base")
+    | S_macosx ->
+      (* CR-soon gyorsh: emit dtrace format on mac  *)
+      D.qword (const 0)
+    end;
+    D.qword (ConstLabel semaphore_label);
+    D.bytes "ocaml\000";
+    D.bytes (p.probe_name ^ "\000");
+    D.bytes (args ^ "\000");
+    def_label d;
+    D.align 4;
+    String.Set.add p.probe_name names
+  in
+  let names =
+    List.fold_left describe_one_probe String.Set.empty !probes
+  in
+  begin match system with
+  | S_gnu | S_cygwin | S_solaris | S_win32 | S_linux_elf | S_bsd_elf
+  | S_beos | S_mingw | S_win64 | S_linux | S_mingw64 | S_unknown ->
+    D.section [".stapsdt.base"] (Some "aG")
+      ["\"progbits\""; ".stapsdt.base"; "comdat"];
+    D.weak "_.stapsdt.base";
+    D.hidden "_.stapsdt.base";
+    D.label "_.stapsdt.base";
+    D.space 1;
+    D.size "_.stapsdt.base" (const 1)
+  | S_macosx -> ()
+  end;
+  begin match system with
+  | S_gnu | S_cygwin | S_solaris | S_win32 | S_linux_elf | S_bsd_elf
+  | S_beos | S_mingw | S_win64 | S_linux | S_mingw64 | S_unknown ->
+    D.section [".probes"] (Some "wa") ["\"progbits\""];
+  | S_macosx -> D.section ["__TEXT";"__probes"] None ["regular"]
+  end;
+  D.align 2;
+  String.Map.iter (fun name label ->
+    if not (String.Set.mem name names) then begin
+      (* CR-soon gyorsh: emit a warning instead? *)
+      Misc.fatal_errorf "Semaphore refers to an undefined probe %s"
+        name ()
+    end;
+    D.global label;
+    _label label;
+    D.word (const 0))
+    !probe_semaphores
 
 let emit_probe_notes () =
   match !probes with
   | [] -> ()
-  | _ ->
-    begin match system with
-    | S_macosx -> D.section ["__DATA";"__note_stapsdt"] None ["regular"]
-    | _ -> D.section [".note.stapsdt"] (Some "?") [ "\"note\"" ]
-    end;
-    let stap_arg arg =
-      let arg_name =
-        match arg.loc with
-        | Stack s -> Printf.sprintf "%d(%%rsp)"
-                       (slot_offset s (register_class arg))
-        | Reg reg -> Proc.register_name reg
-        | Unknown -> Misc.fatal_error "Cannot create probe: illegal argument."
-      in
-      Printf.sprintf "%d@%s" (reg_size arg) arg_name
-    in
-    let names =
-      List.fold_left (fun names p ->
-        let args =
-          Array.fold_right
-            (fun arg acc -> (stap_arg arg)::acc)
-            p.probe_insn.arg
-            []
-          |> String.concat " "
-        in
-        let semaphore_label = find_or_add_semaphore p.probe_name in
-        D.align 4;
-        let a = new_label() in
-        let b = new_label() in
-        let c = new_label() in
-        let d = new_label() in
-        D.long (ConstSub(ConstLabel(emit_label b),ConstLabel(emit_label a)));
-        D.long (ConstSub(ConstLabel(emit_label d),ConstLabel(emit_label c)));
-        D.long (const_32 3l);
-        def_label a;
-        D.bytes "stapsdt\000";
-        def_label b;
-        D.align 4;
-        def_label c;
-        D.qword (ConstLabel (emit_label p.probe_label));
-        (* CR-soon gyorsh: emit dtrace format on mac  *)
-        if (system = S_macosx) then
-          D.qword (const 0)
-        else
-          D.qword (ConstLabel "_.stapsdt.base");
-        D.qword (ConstLabel semaphore_label);
-        D.bytes "ocaml\000";
-        D.bytes (p.probe_name ^ "\000");
-        D.bytes (args ^ "\000");
-        def_label d;
-        D.align 4;
-        String.Set.add p.probe_name names
-      )
-        String.Set.empty
-        !probes
-    in
-
-    if not (system = S_macosx) then begin
-        D.section [".stapsdt.base"] (Some "aG") ["\"progbits\""; ".stapsdt.base"; "comdat"];
-        D.weak "_.stapsdt.base";
-        D.hidden "_.stapsdt.base";
-        D.label "_.stapsdt.base";
-        D.space 1;
-        D.size "_.stapsdt.base" (const 1);
-        ()
-    end;
-
-    begin match system with
-    | S_macosx -> D.section ["__TEXT";"__probes"] None ["regular"]
-    | _ -> D.section [".probes"] (Some "wa") ["\"progbits\""];
-    end;
-
-    D.align 2;
-    String.Map.iter (fun name label ->
-      if not (String.Set.mem name names) then
-        (* CR gyorsh: emit a warning instead? *)
-        Misc.fatal_errorf "semaphore referes to an undefined probe %s" name ();
-      D.global label;
-      _label label;
-      D.word (const 0))
-      !probe_semaphores;
-    ()
+  | _ -> emit_probe_notes0 ()
 
 let end_assembly() =
   if !float_constants <> [] then begin
@@ -1504,13 +1519,11 @@ let end_assembly() =
     end;
     List.iter (fun (cst,lbl) -> emit_float_constant cst lbl) !float_constants
   end;
-
-  (* emit probe handler wrappers *)
+  (* Emit probe handler wrappers *)
   if (not fp) && (not windows) then begin
     D.text ();
     List.iter emit_probe_handler_wrapper !probes
   end;
-
   emit_named_text_section (Compilenv.make_symbol (Some "code_end"));
   if system = S_macosx then I.nop ();
   (* suppress "ld warning: atom sorting error" *)
