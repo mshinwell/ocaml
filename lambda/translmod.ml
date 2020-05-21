@@ -1253,11 +1253,15 @@ let build_ident_map restr idlist more_ids =
 (* Compile an implementation using transl_store_structure
    (for the native-code compiler). *)
 
-(* CR mshinwell: Check that in bytecode mode nothing goes wrong if
+(* XCR mshinwell: Check that in bytecode mode nothing goes wrong if
    probes are present.  (They should just be ignored.)  I have some
    feeling we might get an unbound variable error at present.  We
    could probably add a check in Translcore when probes are
-   encountered and just not register them if in bytecode. *)
+   encountered and just not register them if in bytecode.
+
+   gyorsh: this is checked in the new branch, to be merged with this after
+   review.
+*)
 
 let transl_store_gen module_name ({ str_items = str }, restr) topl =
   reset_labels ();
@@ -1431,11 +1435,18 @@ let transl_toplevel_item item =
   | Tstr_attribute _ ->
       lambda_unit
 
-(* CR mshinwell: I think the next two are only used for the toplevel,
+(* XCR mshinwell: I think the next two are only used for the toplevel,
    which is bytecode, so won't have probes.  Although we should make
    these work with ocamlnat, the native toplevel.  Please check whether
-   that ends up using these functions (maybe you already have)? *)
+   that ends up using these functions (maybe you already have)?
 
+   gyorsh: [transl_toplevel_definition] is used in toplevel but not in
+   native toplevel ocamlnat.
+   I tested a probe with toplevel and ocamlnat - code with
+   probes works correctly, and probes are always disabled.
+   Haven't tested with enabled probes, It shouldn't be possible
+   to enable them (at least in a normal single threaded scenario).
+*)
 let transl_toplevel_item_and_close itm =
   close_toplevel_term
     (transl_label_init

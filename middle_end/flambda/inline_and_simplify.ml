@@ -747,7 +747,7 @@ and simplify_apply env r ~(apply : Flambda.apply) : Flambda.t * R.t =
           in
           let nargs = List.length args in
           let arity = A.function_arity function_decl in
-          (* CR mshinwell: Doesn't the presence of this check mean that
+          (* XCR mshinwell: Doesn't the presence of this check mean that
              [probe_requested] will always be [None] when we are calling
              [simplify_over_application] or [simplify_partial_application]
              below?  If so then we don't need to pass those functions that
@@ -771,11 +771,11 @@ and simplify_apply env r ~(apply : Flambda.apply) : Flambda.t * R.t =
               simplify_over_application env r ~args ~args_approxs
                 ~function_decls ~lhs_of_application ~closure_id_being_applied
                 ~function_decl ~value_set_of_closures ~dbg ~inline_requested
-                ~specialise_requested ~probe_requested
+                ~specialise_requested
             else if nargs > 0 && nargs < arity then
               simplify_partial_application env r ~lhs_of_application
                 ~closure_id_being_applied ~function_decl ~args ~dbg
-                ~inline_requested ~specialise_requested ~probe_requested
+                ~inline_requested ~specialise_requested
             else
               Misc.fatal_errorf "Function with arity %d when simplifying \
                   application expression: %a"
@@ -802,7 +802,6 @@ and simplify_full_application env r ~function_decls ~lhs_of_application
 and simplify_partial_application env r ~lhs_of_application
       ~closure_id_being_applied ~function_decl ~args ~dbg
       ~inline_requested ~specialise_requested
-      ~probe_requested
   =
   let arity = A.function_arity function_decl in
   assert (arity > List.length args);
@@ -846,7 +845,7 @@ and simplify_partial_application env r ~lhs_of_application
         dbg;
         inline = Default_inline;
         specialise = Default_specialise;
-        probe = probe_requested;
+        probe = None;
       }
     in
     let closure_variable =
@@ -870,7 +869,6 @@ and simplify_partial_application env r ~lhs_of_application
 and simplify_over_application env r ~args ~args_approxs ~function_decls
       ~lhs_of_application ~closure_id_being_applied ~function_decl
       ~value_set_of_closures ~dbg ~inline_requested ~specialise_requested
-      ~probe_requested
   =
   let arity = A.function_arity function_decl in
   assert (arity < List.length args);
@@ -885,14 +883,14 @@ and simplify_over_application env r ~args ~args_approxs ~function_decls
     simplify_full_application env r ~function_decls ~lhs_of_application
       ~closure_id_being_applied ~function_decl ~value_set_of_closures
       ~args:full_app_args ~args_approxs:full_app_approxs ~dbg
-      ~inline_requested ~specialise_requested ~probe_requested
+      ~inline_requested ~specialise_requested ~probe_requested:None
   in
   let func_var = Variable.create Internal_variable_names.full_apply in
   let expr : Flambda.t =
     Flambda.create_let func_var (Expr expr)
       (Apply { func = func_var; args = remaining_args; kind = Indirect; dbg;
                inline = inline_requested; specialise = specialise_requested;
-               probe = probe_requested})
+               probe = None})
   in
   let expr = Lift_code.lift_lets_expr expr ~toplevel:true in
   simplify (E.set_never_inline env) r expr
