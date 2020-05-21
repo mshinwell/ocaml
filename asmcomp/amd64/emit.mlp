@@ -1312,11 +1312,12 @@ let emit_probe_handler_wrapper p =
   let (loc_args, _) = Proc.loc_arguments p.probe_insn.arg in
   (* Ignore the stack offset returned by loc_arguments, to avoid
      extra padding twice due to alignment needed again for saved regs. *)
-  let args_ofs = Array.fold_right
-                   (fun r acc ->
-                      if is_stack r then acc + reg_size r
-                      else acc
-                   ) loc_args 0 in
+  let args_ofs =
+    Array.fold_right (fun r acc ->
+        if is_stack r then acc + reg_size r
+        else acc)
+      loc_args 0
+  in
   (* Save arguments passed in registers to the handler,
      even if they are not in the live set at the probe site,
      because it simplifies the code below
@@ -1324,29 +1325,27 @@ let emit_probe_handler_wrapper p =
   let live = to_reglocset p.probe_insn.live in
   let dsts = Array.to_seq loc_args |> RegLocSet.of_seq in
   let reg_args = ref RegLocSet.empty in
-  let same_loc src dst =
-    (RegLocOrder.compare src dst) = 0
-  in
-  Array.iteri (fun i (src: Reg.t) ->
-    let dst = loc_args.(i) in
-    if is_reg src &&
-       RegLocSet.mem src dsts &&
-       not (is_stack dst) &&
-       not (same_loc src dst) &&
-       not (RegLocSet.mem src live)
-    then
-      reg_args := RegLocSet.add src !reg_args)
+  let same_loc src dst = (RegLocOrder.compare src dst) = 0 in
+  Array.iteri (fun i (src : Reg.t) ->
+      let dst = loc_args.(i) in
+      if is_reg src &&
+        RegLocSet.mem src dsts &&
+        not (is_stack dst) &&
+        not (same_loc src dst) &&
+        not (RegLocSet.mem src live)
+      then
+        reg_args := RegLocSet.add src !reg_args)
     p.probe_insn.arg;
   (* Calculate stack slots for all saved registers (live and args). *)
   let stack_ofs, saved_regs =
     RegLocSet.fold (fun reg (n, saved_regs) ->
-      if is_reg reg then begin
-        (* manufacture stack entry for this reg *)
-        let st = Reg.clone reg in
-        st.loc <- Stack (Outgoing n); (* pretend, for float slot_offset *)
-        (n + (reg_size reg), RegLocMap.add reg st saved_regs)
-      end
-      else (n, saved_regs))
+        if is_reg reg then begin
+          (* manufacture stack entry for this reg *)
+          let st = Reg.clone reg in
+          st.loc <- Stack (Outgoing n); (* pretend, for float slot_offset *)
+          (n + (reg_size reg), RegLocMap.add reg st saved_regs)
+        end
+        else (n, saved_regs))
       (RegLocSet.union !reg_args live)
       (args_ofs, RegLocMap.empty)
   in
@@ -1358,36 +1357,38 @@ let emit_probe_handler_wrapper p =
   RegLocMap.iter move saved_regs;
   (* Pass arguments to handler *)
   (* arrange arguments passed on the stack *)
-  Array.iteri (fun i (src: Reg.t) ->
-    let dst = loc_args.(i) in
-    if is_stack dst && not (same_loc dst src) then begin
-      if is_stack src then begin
-        (* use a temporary for this memory to memory move *)
-        (* first available register is safe to use (not live here),
-           because if any arguments are passed on the stack,
-           then some arguments are passed in that register. *)
-        let loc = Reg (Proc.(first_available_register.(register_class src))) in
-        let tmp = Reg.at_location src.typ loc in
-        move src tmp;
-        move tmp dst
-      end else move src dst
-    end)
+  Array.iteri (fun i (src : Reg.t) ->
+      let dst = loc_args.(i) in
+      if is_stack dst && not (same_loc dst src) then begin
+        if is_stack src then begin
+          (* use a temporary for this memory to memory move *)
+          (* first available register is safe to use (not live here),
+            because if any arguments are passed on the stack,
+            then some arguments are passed in that register. *)
+          let loc =
+            Reg (Proc.(first_available_register.(register_class src)))
+          in
+          let tmp = Reg.at_location src.typ loc in
+          move src tmp;
+          move tmp dst
+        end else move src dst
+      end)
     p.probe_insn.arg;
   (* arrange arguments passed in registers *)
-  Array.iteri (fun i (src: Reg.t) ->
-    let dst = loc_args.(i) in
-    if is_reg dst && not (same_loc dst src) then begin
-      let src =
-        if is_reg src then begin
-          match RegLocMap.find_opt src saved_regs with
-          | None ->
-            assert (not (RegLocSet.mem src dsts));
-            src
-          | Some s -> s
-        end else src
-      in
-      move src dst
-    end)
+  Array.iteri (fun i (src : Reg.t) ->
+      let dst = loc_args.(i) in
+      if is_reg dst && not (same_loc dst src) then begin
+        let src =
+          if is_reg src then begin
+            match RegLocMap.find_opt src saved_regs with
+            | None ->
+              assert (not (RegLocSet.mem src dsts));
+              src
+            | Some s -> s
+          end else src
+        in
+        move src dst
+      end)
     p.probe_insn.arg;
   (* CR mshinwell: I don't think [add_def_symbol] was ever called for
      this symbol *)
@@ -1396,9 +1397,9 @@ let emit_probe_handler_wrapper p =
   (* record a fake frame description for the wrapper *)
   let live_offset =
     RegLocMap.fold (fun _ st acc ->
-      match st.loc with
-      | Stack (Outgoing n) -> n :: acc
-      | _ -> assert false)
+        match st.loc with
+        | Stack (Outgoing n) -> n :: acc
+        | _ -> assert false)
       saved_regs []
   in
   let label = new_label () in
