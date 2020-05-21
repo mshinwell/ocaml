@@ -911,23 +911,25 @@ let emit_instr fallthrough i =
   | Lop(Ispecific(Izextend32)) ->
       I.mov (arg32 i 0) (res32 i 0)
   | Lop (Iname_for_debugger _) -> ()
-  | Lop (Iprobe {name; handler_code_sym}) ->
+  | Lop (Iprobe { name; handler_code_sym; }) ->
     if windows then begin
       Location.prerr_warning (Debuginfo.to_location i.dbg)
         Warnings.Probe_ignored
     end else begin
       let probe_label = new_label () in
-      let p = { probe_label;
-                probe_name = name;
-                probe_handler = handler_code_sym;
-                probe_insn = i;
-              } in
-      probes := p :: !probes;
+      let probe =
+        { probe_label;
+          probe_name = name;
+          probe_handler = handler_code_sym;
+          probe_insn = i;
+        }
+      in
+      probes := probe :: !probes;
       def_label probe_label;
       I.nop (); (* for uprobes and usdt probes as well *)
       if not fp then emit_call_probe_handler i ~probe_label
     end
-  | Lop (Iprobe_is_enabled {name}) ->
+  | Lop (Iprobe_is_enabled { name; }) ->
     if windows then begin
       Location.prerr_warning (Debuginfo.to_location i.dbg)
         Warnings.Probe_ignored;
@@ -1305,10 +1307,11 @@ let emit_probe_handler_wrapper p =
   cfi_startproc ();
   (* Account for the return address that is now pushed on the stack,
      but reuse the caller's frame for the wrapper, because
-     the wrapper may refer to handler args on caller's stack frame. *)
+     the wrapper may refer to handler args (i.e. free variables of the
+     user's probe handler expression) on the caller's stack frame. *)
   stack_offset := !stack_offset + 8;
   (* Prepare to call the handler: calculate and allocate stack space. *)
-  let (loc_args, _) = Proc.loc_arguments p.probe_insn.arg in
+  let loc_args, _ = Proc.loc_arguments p.probe_insn.arg in
   (* Ignore the stack offset returned by loc_arguments, to avoid
      extra padding twice due to alignment needed again for saved regs. *)
   let args_ofs =
@@ -1362,15 +1365,17 @@ let emit_probe_handler_wrapper p =
         if is_stack src then begin
           (* use a temporary for this memory to memory move *)
           (* first available register is safe to use (not live here),
-            because if any arguments are passed on the stack,
-            then some arguments are passed in that register. *)
+             because if any arguments are passed on the stack,
+             then some arguments are passed in that register. *)
           let loc =
             Reg (Proc.(first_available_register.(register_class src)))
           in
           let tmp = Reg.at_location src.typ loc in
           move src tmp;
           move tmp dst
-        end else move src dst
+        end else begin
+          move src dst
+        end
       end)
     p.probe_insn.arg;
   (* arrange arguments passed in registers *)
