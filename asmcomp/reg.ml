@@ -121,6 +121,24 @@ let name t =
 
 let first_virtual_reg_stamp = ref (-1)
 
+let is_stack t =
+  match t.loc with
+  | Stack _ -> true
+  | _ -> false
+
+let is_reg t =
+  match t.loc with
+  | Reg _ -> true
+  | _ -> false
+
+let size_of_contents_in_bytes t =
+  match t.typ with
+  | Float -> Arch.size_float
+  | Addr ->
+    assert (Arch.size_addr = Arch.size_int);
+    Arch.size_addr
+  | Int | Val -> Arch.size_int
+
 let reset() =
   (* When reset() is called for the first time, the current stamp reflects
      all hard pseudo-registers that have been allocated by Proc, so
@@ -154,6 +172,40 @@ module RegOrder =
 
 module Set = Set.Make(RegOrder)
 module Map = Map.Make(RegOrder)
+
+(* Compare registers based on their locations only (not stamps). *)
+module RegLocOrder =
+  struct
+    type t = reg
+
+    let compare_stack_locations s1 s2 =
+      (* Local < Incoming < Outgoing *)
+      match s1, s2 with
+      | Local n1, Local n2
+      | Incoming n1, Incoming n2
+      | Outgoing n1, Outgoing n2
+        -> n1 - n2
+      | Local _, _ -> (-1)
+      | _, Local _ -> 1
+      | Outgoing _, _ -> 1
+      | _, Outgoing _ -> (-1)
+
+    let compare l1 l2 =
+      (* Reg < Stack < Unknown *)
+      match l1, l2 with
+      | Reg n1, Reg n2 -> n1 - n2
+      | Stack s1, Stack s2 -> compare_stack_locations s1 s2
+      | Reg _, _ -> (-1)
+      | _,  Reg _ -> 1
+      | Unknown, _ -> 1
+      | _, Unknown -> (-1)
+
+    let compare r1 r2 = compare r1.loc r2.loc
+  end
+
+let same_location src dst = (RegLocOrder.compare src dst) = 0
+module LocSet = Stdlib.Set.Make(RegLocOrder)
+module LocMap = Stdlib.Map.Make(RegLocOrder)
 
 let add_set_array s v =
   match Array.length v with

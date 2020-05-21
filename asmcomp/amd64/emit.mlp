@@ -535,16 +535,24 @@ let function_name = ref ""
 let tailrec_entry_point = ref 0
 
 (* Emit tracing probes *)
-(* CR mshinwell: Add comments explaining what these record fields are
-   for, since it's not obvious at first sight. *)
+(* XCR mshinwell: Add comments explaining what these record fields are
+   for, since it's not obvious at first sight.
+*)
+(* XCR mshinwell: Rename probe_handler -> probe_handler_code_sym or
+   similar, to make clear this is a symbol.
+
+   gyorsh: no need to record name and handler, they in probe_insn.
+   Renamed the corresponding local variables.
+*)
+
 type probe =
   {
     probe_label: label;
-    probe_name: string;
-    (* CR mshinwell: Rename probe_handler -> probe_handler_code_sym or
-       similar, to make clear this is a symbol. *)
-    probe_handler: string;
+    (* Probe site, recorded in .note.stapsdt section
+       for enabling and disabling the probes  *)
     probe_insn: Linear.instruction;
+    (* Iprobe instruction, recorded at probe site and used for emitting
+       the notes and the wrapper code at the end of the compilation unit. *)
   }
 
 let probe_handler_wrapper_name probe_label =
@@ -566,21 +574,10 @@ let find_or_add_semaphore name =
   | None ->
     let sym = Compilenv.make_symbol (Some ("semaphore_"^name)) in
     add_def_symbol sym;
-    let lbl = emit_symbol sym in
-    probe_semaphores := String.Map.add name lbl !probe_semaphores;
-    lbl
+    probe_semaphores := String.Map.add name sym !probe_semaphores;
+    sym
 
-(* CR mshinwell: These should move into [Reg] *)
-
-let is_stack (r : Reg.t) =
-  match r.loc with
-  | Stack _ -> true
-  | _ -> false
-
-let is_reg (r : Reg.t) =
-  match r.loc with
-  | Reg _ -> true
-  | _ -> false
+(* XCR mshinwell: These should move into [Reg] *)
 
 let emit_call_probe_handler i ~probe_label =
   let wrap_label = probe_handler_wrapper_name probe_label in
@@ -591,33 +588,25 @@ let emit_call_probe_handler i ~probe_label =
      The operand of the call is a displacement relative to
      the next instruction. Hence, the immediate operand
      of cmp is set up to have that value. *)
-  (* CR mshinwell: Have both the PIC and non-PIC code paths been
-     tested to an equivalent standard? *)
+  (* XCR mshinwell: Have both the PIC and non-PIC code paths been
+     tested to an equivalent standard?
+
+     gyorsh: yes, we had non-PIC version only first, and it worked
+     because the code was not dynamic. PIC version was tested
+     with and without PIE. *)
   if !Clflags.pic_code then begin
-    (* CR mshinwell: This comment starts to fall apart at "However".
+    (* XCR mshinwell: This comment starts to fall apart at "However".
        Can it be reworded to be more concise?  I'm not sure it's
        necessary to really say anything other than the fact that we
        manually emit the cmp and the explicit relocation to be certain
        the correct result is obtained, given that assemblers make
        choices as to instruction encodings. *)
-    (* Emit cmp and explicit relocation on it, as for a call instruction.
-
-       When the immediate operand of cmp is a symbol with "@PLT",
-       the assembler generates the relocation we need,
-       but not the encoding we need for cmp.
-       A different, longer, encoding is generated because the symbol is
-       interpreted as a memory operand, not an immediate.
-       Therefore, we emit the relocation manually, using .reloc directive,
-       on the immediate operand of "cmp $0, %eax".
-       However, the assembler does not generate the encoding we need for this
-       cmp.  It generates a shorter encoding, because the immediate value 0 is
-       small enough for it, but 0 is the expected value for a "standard" plt
-       relocation.
-
-       If cmp instruction is assembled differently from what we expect,
-       then applying the relocation might the change the meaning of the
-       program. *)
-    (* CR mshinwell: The magic constant 4L that appears twice needs
+    (* Manually emit encoding of cmp and an explicit relocation on it
+       as needed for a call instruction, to ensure that correct
+       result, instead of relying on an assembler that might choose a different
+       encoding which produces an incorrect relocation and changes the meaning
+       of the program. *)
+    (* XCR mshinwell: The magic constant 4L that appears twice needs
        a comment *)
     (* Emit the required encoding of "cmp $0, %eax" directly, using .byte *)
     D.byte (Const 0x3dL);
@@ -626,9 +615,19 @@ let emit_call_probe_handler i ~probe_label =
     D.byte (Const 0L);
     D.byte (Const 0L);
     (* Emit the relocation for the call target *)
-    D.reloc ~offset:(ConstSub (ConstThis, Const 4L))
+    (* [rel_size] is the number of bytes taken by the operand of cmp/call
+       that needs to be relocated. It is used to form reloc's offset.
+       [rel_offset_from_next] is the distance from the start of the relocated
+       bytes to the start to the next instruction after the call.
+       It used to form reloc's expr for call's operand (see above).
+       [rel_size] is equal [rel_offset_from_next] because
+       the relocated operand is the last one and arch is little endian. *)
+    let rel_size = 4L in
+    let rel_offset_from_next = 4L in
+    D.reloc ~offset:(ConstSub (ConstThis, Const rel_size))
       ~name:R_X86_64_PLT32
-      ~expr:(ConstSub (ConstLabel wrap_label, Const 4L));
+      ~expr:(ConstSub (ConstLabel wrap_label,
+                       Const rel_offset_from_next));
   end else begin
     (* Emit absolute value, no relocation.
        The immediate operand of cmp is the offset of the wrapper
@@ -637,10 +636,12 @@ let emit_call_probe_handler i ~probe_label =
        and the wrapper is emitted at the end of the compilation unit. *)
     I.cmp (sym (Printf.sprintf "%s - . - 5" wrap_label)) eax
   end;
-  (* CR mshinwell: This needs a comment as to why the filtering is
+  (* XCR mshinwell: This needs a comment as to why the filtering is
      necessary *)
-  let stack_live = Reg.Set.filter is_stack i.live in
-  record_frame stack_live  (Dbg_other i.dbg)
+  (* Live registers are saved by the probe wrapper,
+     so they are not recorded as gc roots at the probe site. *)
+  let stack_live = Reg.Set.filter Reg.is_stack i.live in
+  record_frame stack_live (Dbg_other i.dbg)
 
 (* Emit an instruction *)
 let emit_instr fallthrough i =
@@ -910,7 +911,7 @@ let emit_instr fallthrough i =
   | Lop(Ispecific(Izextend32)) ->
       I.mov (arg32 i 0) (res32 i 0)
   | Lop (Iname_for_debugger _) -> ()
-  | Lop (Iprobe { name; handler_code_sym; }) ->
+  | Lop (Iprobe _) ->
     if windows then begin
       Location.prerr_warning (Debuginfo.to_location i.dbg)
         Warnings.Probe_ignored
@@ -918,8 +919,6 @@ let emit_instr fallthrough i =
       let probe_label = new_label () in
       let probe =
         { probe_label;
-          probe_name = name;
-          probe_handler = handler_code_sym;
           probe_insn = i;
         }
       in
@@ -934,19 +933,34 @@ let emit_instr fallthrough i =
         Warnings.Probe_ignored;
       I.mov (int 1) (res i 0); (*always returns false *)
     end else begin
-      let semaphore_label = find_or_add_semaphore name in
-      add_used_symbol semaphore_label;
-      (* CR mshinwell: I think it would be better to use exactly the
+      let semaphore_sym = find_or_add_semaphore name in
+      (* XCR mshinwell: I think it would be better to use exactly the
          same code as for Iload, above, here.  Form the correct
          addressing expression first.  Also, why was this movzx?
-         Isn't this a full-width integer load? *)
-      I.movzx (mem64_rip WORD semaphore_label) (res i 0);
-      (* CR mshinwell: Are we happy assuming that this never
+         Isn't this a full-width integer load?
+
+         gyorsh: do you mean factor out Iload into a function
+         and call it? For now, I just fixed adddressing to match Iload.
+         According to the documentation [1],
+         semaphores are of type unsigned short.
+         [1] https://sourceware.org/systemtap/wiki/UserSpaceProbeImplementation
+      *)
+      (* load *)
+      I.movzx (addressing (Ibased(semaphore_sym, 0)) WORD i 0) (res i 0);
+      (* XCR mshinwell: Are we happy assuming that this never
          overflows?  Maybe the sign bit should be cleared explicitly
          after the [sal], which would have the effect of saturating
-         rather than wrapping round? *)
+         rather than wrapping round?
+
+         gyorsh: it is zero-extending a 2-byte value, so won't overflow.
+      *)
+      (* Shift left won't overflow, because res holds zero-extended 2-bytes. *)
       I.sal (int 1) (res i 0);
       I.or_ (int 1) (res i 0)
+      (* CR gyorsh: returns ocaml representation of the value of the semaphore
+         instead of a boolean value represented as 1 or 3.
+         Add conversion int to bool for strict interpretation that may be needed
+         for flambda2. *)
     end
   | Lreloadretaddr ->
       ()
@@ -1244,58 +1258,24 @@ let emit_spacetime_shapes () =
   D.qword (Const 0L);
   D.comment "End of Spacetime shapes."
 
-(* CR mshinwell: Move to [Reg.mli].  Rename to
+(* XCR mshinwell: Move to [Reg.mli].  Rename to
    [size_of_contents_in_bytes] or similar. *)
-let reg_size (reg : Reg.t) =
-  match reg.typ with
-  | Float -> Arch.size_float
-  | Addr ->
-    assert (Arch.size_addr = Arch.size_int);
-    Arch.size_addr
-  | Int | Val -> Arch.size_int
 
-(* CR mshinwell: Move the following to reg.ml{,i} *)
-(* Compare registers based on their locations only (not stamps). *)
-module RegLocOrder =
-  struct
-    type t = Reg.t
-
-    let compare_stack_locations s1 s2 =
-      (* Local < Incoming < Outgoing *)
-      match s1, s2 with
-      | Local n1, Local n2
-      | Incoming n1, Incoming n2
-      | Outgoing n1, Outgoing n2
-        -> n1 - n2
-      | Local _, _ -> (-1)
-      | _, Local _ -> 1
-      | Outgoing _, _ -> 1
-      | _, Outgoing _ -> (-1)
-
-    let compare l1 l2 =
-      (* Reg < Stack < Unknown *)
-      match l1, l2 with
-      | Reg n1, Reg n2 -> n1 - n2
-      | Stack s1, Stack s2 -> compare_stack_locations s1 s2
-      | Reg _, _ -> (-1)
-      | _,  Reg _ -> 1
-      | Unknown, _ -> 1
-      | _, Unknown -> (-1)
-
-    let compare r1 r2 = compare r1.loc r2.loc
-  end
-
-module RegLocSet = Stdlib.Set.Make(RegLocOrder)
-module RegLocMap = Stdlib.Map.Make(RegLocOrder)
+(* XCR mshinwell: Move the following to reg.ml{,i} *)
 let to_reglocset s =
-  Reg.Set.elements s |> RegLocSet.of_list
+  Reg.Set.elements s |> Reg.LocSet.of_list
 
 (* CR mshinwell: Not now, but after code review, it would be better to
    move this code so it's contiguous with the other probe code above. *)
 
 let emit_probe_handler_wrapper p =
   let wrap_label = probe_handler_wrapper_name p.probe_label in
-  D.comment (Printf.sprintf "probe %s %s" p.probe_name p.probe_handler);
+  let probe_name, handler_code_sym =
+    match p.probe_insn.desc with
+    | Lop (Iprobe { name; handler_code_sym; }) -> name, handler_code_sym
+    | _ -> assert false
+  in
+  D.comment (Printf.sprintf "probe %s %s" probe_name handler_code_sym);
   D.align 16;
   _label wrap_label;
   (* CR gyorsh: does cfi_startproc reset the cfi offset?
@@ -1315,7 +1295,7 @@ let emit_probe_handler_wrapper p =
      extra padding twice due to alignment needed again for saved regs. *)
   let args_ofs =
     Array.fold_right (fun r acc ->
-        if is_stack r then acc + reg_size r
+        if Reg.is_stack r then acc + Reg.size_of_contents_in_bytes r
         else acc)
       loc_args 0
   in
@@ -1324,44 +1304,43 @@ let emit_probe_handler_wrapper p =
      because it simplifies the code below
      that moves the args to the correct registers to pass to the handler.  *)
   let live = to_reglocset p.probe_insn.live in
-  let dsts = Array.to_seq loc_args |> RegLocSet.of_seq in
-  let reg_args = ref RegLocSet.empty in
-  let same_loc src dst = (RegLocOrder.compare src dst) = 0 in
+  let dsts = Array.to_seq loc_args |> Reg.LocSet.of_seq in
+  let reg_args = ref Reg.LocSet.empty in
   Array.iteri (fun i (src : Reg.t) ->
       let dst = loc_args.(i) in
-      if is_reg src &&
-        RegLocSet.mem src dsts &&
-        not (is_stack dst) &&
-        not (same_loc src dst) &&
-        not (RegLocSet.mem src live)
+      if Reg.is_reg src &&
+        Reg.LocSet.mem src dsts &&
+        not (Reg.is_stack dst) &&
+        not (Reg.same_location src dst) &&
+        not (Reg.LocSet.mem src live)
       then
-        reg_args := RegLocSet.add src !reg_args)
+        reg_args := Reg.LocSet.add src !reg_args)
     p.probe_insn.arg;
   (* Calculate stack slots for all saved registers (live and args). *)
   let stack_ofs, saved_regs =
-    RegLocSet.fold (fun reg (n, saved_regs) ->
-        if is_reg reg then begin
+    Reg.LocSet.fold (fun reg (n, saved_regs) ->
+        if Reg.is_reg reg then begin
           (* manufacture stack entry for this reg *)
           let st = Reg.clone reg in
           st.loc <- Stack (Outgoing n); (* pretend, for float slot_offset *)
-          (n + (reg_size reg), RegLocMap.add reg st saved_regs)
+          (n + (Reg.size_of_contents_in_bytes reg), Reg.LocMap.add reg st saved_regs)
         end
         else (n, saved_regs))
-      (RegLocSet.union !reg_args live)
-      (args_ofs, RegLocMap.empty)
+      (Reg.LocSet.union !reg_args live)
+      (args_ofs, Reg.LocMap.empty)
   in
   (* Ensure stack before the call is 16 byte aligned.
      Stack here is 8 not 16 aligned because return address has been pushed.  *)
   let stack_ofs = if stack_ofs mod 16 = 0 then stack_ofs + 8 else stack_ofs in
   emit_stack_offset stack_ofs;
   (* save all live regs. *)
-  RegLocMap.iter move saved_regs;
+  Reg.LocMap.iter move saved_regs;
   (* Pass arguments to handler *)
   (* arrange arguments passed on the stack *)
   Array.iteri (fun i (src : Reg.t) ->
       let dst = loc_args.(i) in
-      if is_stack dst && not (same_loc dst src) then begin
-        if is_stack src then begin
+      if Reg.is_stack dst && not (Reg.same_location dst src) then begin
+        if Reg.is_stack src then begin
           (* use a temporary for this memory to memory move *)
           (* first available register is safe to use (not live here),
              because if any arguments are passed on the stack,
@@ -1380,12 +1359,12 @@ let emit_probe_handler_wrapper p =
   (* arrange arguments passed in registers *)
   Array.iteri (fun i (src : Reg.t) ->
       let dst = loc_args.(i) in
-      if is_reg dst && not (same_loc dst src) then begin
+      if Reg.is_reg dst && not (Reg.same_location dst src) then begin
         let src =
-          if is_reg src then begin
-            match RegLocMap.find_opt src saved_regs with
+          if Reg.is_reg src then begin
+            match Reg.LocMap.find_opt src saved_regs with
             | None ->
-              assert (not (RegLocSet.mem src dsts));
+              assert (not (Reg.LocSet.mem src dsts));
               src
             | Some s -> s
           end else src
@@ -1393,13 +1372,18 @@ let emit_probe_handler_wrapper p =
         move src dst
       end)
     p.probe_insn.arg;
-  (* CR mshinwell: I don't think [add_def_symbol] was ever called for
-     this symbol *)
-  add_used_symbol p.probe_handler;
-  emit_call p.probe_handler;
+  (* XCR mshinwell: I don't think [add_def_symbol] was ever called for
+     this symbol
+
+     gyorsh: p.probe_handler is the function that the wrapper calls,
+     the function symbol itself is emitted by fundecl which
+     invokes [add_def_symbol] on it.
+  *)
+  add_used_symbol handler_code_sym;
+  emit_call handler_code_sym;
   (* record a fake frame description for the wrapper *)
   let live_offset =
-    RegLocMap.fold (fun _ st acc ->
+    Reg.LocMap.fold (fun _ st acc ->
         match st.loc with
         | Stack (Outgoing n) -> n :: acc
         | _ -> assert false)
@@ -1410,8 +1394,8 @@ let emit_probe_handler_wrapper p =
     (Dbg_other p.probe_insn.dbg);
   def_label label;
   (* Restore all live regs *)
-  RegLocMap.iter (fun r s ->
-      if not (RegLocSet.mem r !reg_args) then move s r)
+  Reg.LocMap.iter (fun r s ->
+      if not (Reg.LocSet.mem r !reg_args) then move s r)
     saved_regs;
   emit_stack_offset (-stack_ofs);
   I.ret ();
@@ -1435,16 +1419,21 @@ let emit_probe_notes0 () =
         Misc.fatal_errorf "Cannot create probe: illegal argument: %a"
           Printmach.reg arg
     in
-    Printf.sprintf "%d@%s" (reg_size arg) arg_name
+    Printf.sprintf "%d@%s" (Reg.size_of_contents_in_bytes arg) arg_name
   in
   let describe_one_probe names p =
+    let probe_name =
+      match p.probe_insn.desc with
+      | Lop (Iprobe { name; _; }) -> name
+      | _ -> assert false
+    in
     let args =
       Array.fold_right (fun arg acc -> (stap_arg arg)::acc)
         p.probe_insn.arg
         []
       |> String.concat " "
     in
-    let semaphore_label = find_or_add_semaphore p.probe_name in
+    let semaphore_label = emit_symbol (find_or_add_semaphore probe_name) in
     D.align 4;
     let a = new_label() in
     let b = new_label() in
@@ -1471,11 +1460,11 @@ let emit_probe_notes0 () =
     end;
     D.qword (ConstLabel semaphore_label);
     D.bytes "ocaml\000";
-    D.bytes (p.probe_name ^ "\000");
+    D.bytes (probe_name ^ "\000");
     D.bytes (args ^ "\000");
     def_label d;
     D.align 4;
-    String.Set.add p.probe_name names
+    String.Set.add probe_name names
   in
   let names =
     List.fold_left describe_one_probe String.Set.empty !probes

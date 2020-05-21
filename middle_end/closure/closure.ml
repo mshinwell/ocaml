@@ -143,10 +143,16 @@ let prim_size prim args =
   | Parraysets kind -> if kind = Pgenarray then 22 else 10
   | Pbigarrayref(_, ndims, _, _) -> 4 + ndims * 6
   | Pbigarrayset(_, ndims, _, _) -> 4 + ndims * 6
-  (* CR mshinwell: I'm not sure this is right---I was expecting more
+  (* XCR mshinwell: I'm not sure this is right---I was expecting more
      (reading the field, comparison, etc).  Please check again versus
-     the emitter *)
-  | Pprobe_is_enabled _ (* Similar to Pgetglobal *)
+     the emitter
+
+     gyorsh: it's just reading a global symbol and then tagging it.
+     It is not currently doing a comparison, but it should,
+     I added a CR  to fix it in emit.mlp.
+     I added +2 to account for the arithmetic operations.
+  *)
+  | Pprobe_is_enabled _ -> 4 (* Pgetglobal and a comparison *)
   | _ -> 2 (* arithmetic and comparisons *)
 
 (* Very raw approximation of switch cost *)
@@ -787,7 +793,7 @@ let fail_if_probe ~probe msg =
   | None -> ()
   | Some {name} ->
     Misc.fatal_error
-      (Printf.sprintf "Closure.close probe %s handler: %s" name msg)
+      (Printf.sprintf "Closure probe %s handler: %s" name msg)
 
 (* Generate a direct application *)
 
@@ -796,13 +802,26 @@ let direct_apply env fundesc ufunct uargs ~probe ~loc ~attribute =
     if fundesc.fun_closed then uargs else uargs @ [ufunct] in
   let app =
     (* CR mshinwell: We should check that if [probe] is [Some _] then
-       [fundesc.fun_inline] is [Never_inline]. *)
+       [fundesc.fun_inline] is [Never_inline].
+
+       gyorsh: I can't figure out how to do it, I don't understand
+       how to check the complex value [fundesc.fun_inline]
+       if it is [Never_inline] or not. I added a check using
+       [attribute] instead of [fundesc.fun_inline], is it ok?
+    *)
     match fundesc.fun_inline, attribute with
     | _, Never_inline | None, _ ->
       let dbg = Debuginfo.from_location loc in
         warning_if_forced_inline ~loc ~attribute
           "Function information unavailable";
         if not fundesc.fun_closed then fail_if_probe ~probe "Not closed";
+        begin match probe, attribute with
+        | None, _ -> ()
+        | Some _, Never_inline -> ()
+        | Some {name}, _ ->
+          Misc.fatal_error
+            (Printf.sprintf "Closure probe %s handler: not closed" name);
+        end;
         Udirect_apply(fundesc.fun_label, app_args, probe, dbg)
     | Some(params, body), _  ->
         bind_params env loc fundesc.fun_float_const_prop params app_args
