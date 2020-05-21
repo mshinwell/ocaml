@@ -622,7 +622,6 @@ let emit_call_probe_handler i ~probe_label =
     D.byte (Const 0L);
     D.byte (Const 0L);
     D.byte (Const 0L);
-    D.byte (Const 0L);
     (* Emit the relocation for the call target *)
     D.reloc ~offset:(ConstSub (ConstThis, Const 4L))
       ~name:R_X86_64_PLT32
