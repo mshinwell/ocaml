@@ -479,8 +479,8 @@ method select_operation op args _dbg =
     let extra_args = self#select_checkbound_extra_args () in
     let op = self#select_checkbound () in
     self#select_arith op (args @ extra_args)
-  | (Cprobe {name;handler_code_sym}, _) ->
-    Iprobe {name;handler_code_sym}, args
+  | (Cprobe { name; handler_code_sym; }, _) ->
+    Iprobe { name; handler_code_sym; }, args
   | (Cprobe_is_enabled {name}, _) -> Iprobe_is_enabled {name}, []
   | _ -> Misc.fatal_error "Selection.select_oper"
 
