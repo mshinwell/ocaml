@@ -5278,7 +5278,7 @@ let report_error ~loc env = function
          literal, followed by a single expression of type unit."
   | Probe_is_enabled_format ->
       Location.errorf ~loc
-        "%probe_is_enabled points must specify a single probe name as a \
+        "%%probe_is_enabled points must specify a single probe name as a \
          string literal"
   | Literal_overflow ty ->
       Location.errorf ~loc
