@@ -604,7 +604,7 @@ and transl_exp0 ~scopes e =
                !transl_module ~scopes Tcoerce_none None od.open_expr, body)
       end
   | Texp_probe {name; handler=exp} ->
-    if !Clflags.probes then begin
+    if !Clflags.native_code && !Clflags.probes then begin
       let lam = transl_exp ~scopes exp in
       let map =
         Ident.Set.fold (fun v acc -> Ident.Map.add v (Ident.rename v) acc)
@@ -656,7 +656,7 @@ and transl_exp0 ~scopes e =
       lambda_unit
     end
   | Texp_probe_is_enabled {name} ->
-    if !Clflags.probes then
+    if !Clflags.native_code && !Clflags.probes then
       Lprim(Pprobe_is_enabled {name}, [],  of_raw_location ~scopes e.exp_loc)
     else
       lambda_unit
