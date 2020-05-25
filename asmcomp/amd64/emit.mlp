@@ -1277,6 +1277,7 @@ let emit_probe_handler_wrapper p =
     | _ -> assert false
   in
   D.comment (Printf.sprintf "probe %s %s" probe_name handler_code_sym);
+  emit_named_text_section wrap_label;
   D.align 16;
   _label wrap_label;
   (* CR gyorsh: does cfi_startproc reset the cfi offset?
@@ -1517,7 +1518,6 @@ let end_assembly() =
   end;
   (* Emit probe handler wrappers *)
   if (not fp) && (not windows) then begin
-    D.text ();
     List.iter emit_probe_handler_wrapper !probes
   end;
   emit_named_text_section (Compilenv.make_symbol (Some "code_end"));
