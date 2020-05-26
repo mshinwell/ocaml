@@ -236,6 +236,7 @@ let arg16 i n = emit_subreg reg_low_16_name WORD i.arg.(n)
 let arg32 i n = emit_subreg reg_low_32_name DWORD i.arg.(n)
 let arg64 i n = reg64 i.arg.(n)
 
+let res8 i n = emit_subreg reg_low_8_name BYTE i.res.(n)
 let res16 i n = emit_subreg reg_low_16_name WORD i.res.(n)
 let res32 i n = emit_subreg reg_low_32_name DWORD i.res.(n)
 
@@ -920,10 +921,6 @@ let emit_instr fallthrough i =
       (* Tag the result. *)
       I.sal (int 1) (res i 0);
       I.or_ (int 1) (res i 0)
-      (* CR gyorsh: returns ocaml representation of the value of the semaphore
-         instead of a boolean value represented as 1 or 3.
-         Add conversion int to bool for strict interpretation that may be needed
-         for flambda2. *)
     end
   | Lreloadretaddr ->
       ()
