@@ -565,7 +565,6 @@ let find_or_add_semaphore name =
   | Some label -> label
   | None ->
     let sym = Compilenv.make_symbol (Some ("semaphore_"^name)) in
-    add_def_symbol sym;
     probe_semaphores := String.Map.add name sym !probe_semaphores;
     sym
 
@@ -1446,12 +1445,13 @@ let emit_probe_notes0 () =
     end;
     D.global label;
     _label label;
-    D.word (const 0))
+    D.word (const 0);
+    add_def_symbol label)
     !probe_semaphores
 
 let emit_probe_notes () =
-  match !probes with
-  | [] -> ()
+  match !probes, String.Map.is_empty !probe_semaphores with
+  | [], true -> ()
   | _ -> emit_probe_notes0 ()
 
 let end_assembly() =
