@@ -747,11 +747,6 @@ and simplify_apply env r ~(apply : Flambda.apply) : Flambda.t * R.t =
           in
           let nargs = List.length args in
           let arity = A.function_arity function_decl in
-          (* XCR mshinwell: Doesn't the presence of this check mean that
-             [probe_requested] will always be [None] when we are calling
-             [simplify_over_application] or [simplify_partial_application]
-             below?  If so then we don't need to pass those functions that
-             parameter. *)
           begin match probe_requested with
           | None -> ()
           | Some {name} ->

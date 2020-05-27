@@ -662,11 +662,6 @@ and sequence ppf = function
   | l ->
       lam ppf l
 
-(* XCR mshinwell: Why was this code moved out of the matching above?
-
-   gyorsh: fixed. The change was left over from a previous implementation of
-   probes. *)
-
 let structured_constant = struct_const
 
 let lambda = lam

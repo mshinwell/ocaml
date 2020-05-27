@@ -70,7 +70,6 @@ method reload_operation op arg res =
       | _ ->
           (arg, res)
       end
-  (* XCR mshinwell: This comment needs a more detailed explanation. *)
   | Iprobe _ ->
     (* No constraints on where the arguments reside,
        so that the presence of a probe does not affect

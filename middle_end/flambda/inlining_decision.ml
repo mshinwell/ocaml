@@ -49,10 +49,6 @@ let inline env r ~lhs_of_application
     ~(probe_requested : Lambda.probe)
     ~fun_vars ~set_of_closures_origin
     ~self_call ~fun_cost ~inlining_threshold =
-  (* XCR mshinwell: If I understand correctly we should never get here
-     with [probe_requested] being [Some], since probe application sites
-     are always marked as [Never_inline] in Translcore.  If that is
-     correct we should add a check here. *)
   let toplevel = E.at_toplevel env in
   let branch_depth = E.branch_depth env in
   let unrolling, always_inline, never_inline, env =

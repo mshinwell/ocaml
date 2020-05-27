@@ -115,18 +115,6 @@ let inline_by_copying_function_body ~env ~r
     let default_specialise =
       Lambda.equal_specialise_attribute specialise_requested Default_specialise
     in
-    (* XCR mshinwell: I'm not sure what this [probe_requested] condition
-       is checking.  We should not have [function_body.stub] set for a
-       probe handler I don't think -- the stubs are Flambda-generated
-       wrappers for things such as unused parameter removal.
-
-       Probe handler may have an unused parameters that we want to optimize
-       with flambda. Initially, user-specified handler expression may have
-       free variables that are functions. If these functions turn into
-       direct calls, the closure argument to the generated handler becomes
-       unused. I think that flambda generates a stub out of it and
-       we want that thing to not loose it's probe annotation.
-    *)
     if function_body.stub
     && ((not default_inline) || (not default_specialise) ||
         Option.is_some probe_requested) then
