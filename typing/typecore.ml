@@ -2090,8 +2090,6 @@ let check_partial_application statement exp =
             | Texp_extension_constructor _ | Texp_ifthenelse (_, _, None)
             | Texp_probe _ | Texp_probe_is_enabled _
             | Texp_function _ ->
-                (* XCR mshinwell: Not sure if this is correct for probes,
-                   please ask Leo *)
                 check_statement ()
             | Texp_match (_, cases, _) ->
                 List.iter (fun {c_rhs; _} -> check c_rhs) cases
@@ -3442,7 +3440,6 @@ and type_expect_
       | _ ->
           raise (Error (loc, env, Invalid_extension_constructor_payload))
       end
-    (* XCR mshinwell: Please ask Leo to review these two cases *)
   | Pexp_extension ({ txt = ("probe" | "ocaml.probe"); _ }, payload) ->
       begin match payload with
       | PStr

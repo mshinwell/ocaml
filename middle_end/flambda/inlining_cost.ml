@@ -56,7 +56,6 @@ let prim_size (prim : Clambda_primitives.primitive) args =
   | Psequand | Psequor ->
     Misc.fatal_error "Psequand and Psequor are not allowed in Prim \
         expressions; translate out instead (cf. closure_conversion.ml)"
-  (* XCR mshinwell: Same comment as in Closure *)
   | Pprobe_is_enabled _ -> 4 (* Similar to Pgetglobal and comparison *)
   (* CR-soon mshinwell: This match must be made exhaustive.
      mshinwell: Let's do this when we have the new size computation. *)

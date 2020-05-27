@@ -820,14 +820,6 @@ let rec expression : Typedtree.expression -> term_judg =
       path pth << Dereference
     | Texp_open (od, e) ->
       open_declaration od >> expression e
-    (* XCR mshinwell: I'm unsure if this change is correct.  Please ask
-       someone familiar with this code (e.g. Leo).  Likewise for the
-       change earlier in this file.
-
-       gyorsh: this was added after a discussion with Leo,
-       but I'll ask him to review this and typecore changes
-       after merging this branch into master that alters this code slightly.
-    *)
     | Texp_probe {handler} ->
       expression handler << Dereference
     | Texp_probe_is_enabled _ -> empty

@@ -473,8 +473,6 @@ module Make (T : S) = struct
           probe = None;
         }
       in
-      (* XCR mshinwell: This looks like debugging output that needs to
-         be turned off *)
       Variable.Map.fold (fun new_inner_var definition (wrapper_body, benefit) ->
           let definition : Definition.t =
             match (definition : Definition.t) with
