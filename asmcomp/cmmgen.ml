@@ -528,7 +528,7 @@ let rec transl env e =
             [field_address (transl env b) dim_ofs dbg],
                        dbg)) dbg
       | (Pprobe_is_enabled {name}, []) ->
-          Cop(Cprobe_is_enabled {name}, [], dbg)
+          tag_int (Cop(Cprobe_is_enabled {name}, [], dbg)) dbg
       | (p, [arg]) ->
           transl_prim_1 env p arg dbg
       | (p, [arg1; arg2]) ->

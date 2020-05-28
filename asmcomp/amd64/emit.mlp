@@ -914,10 +914,7 @@ let emit_instr fallthrough i =
       (* If the semaphore is 0, then the result is 0, otherwise 1. *)
       I.cmp (int 0) (res16 i 0);
       I.set (cond (Iunsigned Cne)) (res8 i 0);
-      I.movzx (res8 i 0) (res i 0);
-      (* Tag the result. *)
-      I.sal (int 1) (res i 0);
-      I.or_ (int 1) (res i 0)
+      I.movzx (res8 i 0) (res i 0)
     end
   | Lreloadretaddr ->
       ()
