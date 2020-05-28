@@ -312,7 +312,7 @@ let mk_no_keep_locs f =
 ;;
 
 let mk_probes f =
-    "-probes", Arg.Unit f, " Emit tracing probes as specified using [%%probe ..]"
+    "-probes", Arg.Unit f, " Emit tracing probes as specified by [%%probe ..]"
 ;;
 
 let mk_no_probes f =
