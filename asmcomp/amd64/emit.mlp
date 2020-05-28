@@ -528,8 +528,6 @@ let emit_named_text_section func_name =
     end
   else D.text ()
 
-(* Output the assembly code for an instruction *)
-
 (* Name of current function *)
 let function_name = ref ""
 (* Entry point for tail recursive calls *)
@@ -1217,12 +1215,12 @@ let emit_spacetime_shapes () =
   D.qword (Const 0L);
   D.comment "End of Spacetime shapes."
 
-let to_reglocset s =
-  Reg.Set.elements s |> Reg.LocSet.of_list
-
 (* CR mshinwell: Not now, but after code review, it would be better to
    move this code so it's contiguous with the other probe code above. *)
 
+(* Calls to wrapper do not follow the standard calling convention for ocaml.
+   Instead, all registers are callee saved: the wrapper saves and restores
+   all registers that are live across its (unique) call site. *)
 let emit_probe_handler_wrapper p =
   let wrap_label = probe_handler_wrapper_name p.probe_label in
   let probe_name, handler_code_sym =
@@ -1234,11 +1232,6 @@ let emit_probe_handler_wrapper p =
   emit_named_text_section wrap_label;
   D.align 16;
   _label wrap_label;
-  (* CR gyorsh: does cfi_startproc reset the cfi offset?
-     does it matter if stack_offset and cfi offset get out of sync ?
-     mshinwell: Yes, they must not, unless completely unavoidable
-     (e.g. in the middle of an exception raise when the stack pointer
-     is reset). *)
   cfi_startproc ();
   (* Account for the return address that is now pushed on the stack,
      but reuse the caller's frame for the wrapper, because
@@ -1259,30 +1252,25 @@ let emit_probe_handler_wrapper p =
      even if they are not in the live set at the probe site,
      because it simplifies the code below
      that moves the args to the correct registers to pass to the handler.  *)
-  let live = to_reglocset p.probe_insn.live in
-  let dsts = Array.to_seq loc_args |> Reg.LocSet.of_seq in
-  let reg_args = ref Reg.LocSet.empty in
-  Array.iteri (fun i (src : Reg.t) ->
-      let dst = loc_args.(i) in
-      if Reg.is_reg src &&
-        Reg.LocSet.mem src dsts &&
-        not (Reg.is_stack dst) &&
-        not (Reg.same_location src dst) &&
-        not (Reg.LocSet.mem src live)
-      then
-        reg_args := Reg.LocSet.add src !reg_args)
-    p.probe_insn.arg;
+  let live = Reg.Set.elements p.probe_insn.live |> Reg.LocSet.of_list in
+  let args = Array.to_list p.probe_insn.arg |> Reg.LocSet.of_list in
   (* Calculate stack slots for all saved registers (live and args). *)
   let stack_ofs, saved_regs =
     Reg.LocSet.fold (fun reg (n, saved_regs) ->
-        if Reg.is_reg reg then begin
-          (* manufacture stack entry for this reg *)
-          let st = Reg.clone reg in
-          st.loc <- Stack (Outgoing n); (* pretend, for float slot_offset *)
-          (n + (Reg.size_of_contents_in_bytes reg), Reg.LocMap.add reg st saved_regs)
-        end
-        else (n, saved_regs))
-      (Reg.LocSet.union !reg_args live)
+      if Reg.is_reg reg then begin
+        (* manufacture stack entry for this reg *)
+        let st = Reg.clone reg in
+        (* Use "Outgoing" stack locations, instead of "Local",
+           because [slot_offset] emits (Outgoing n) directly
+           as offset [n] from the stack pointer,
+           rather than a calculation relative to the stack frame,
+           which is incorrect for floats in the wrapper's fake frame. *)
+        st.loc <- Stack (Outgoing n);
+        (n + (Reg.size_of_contents_in_bytes reg),
+         Reg.LocMap.add reg st saved_regs)
+      end
+      else (n, saved_regs))
+      (Reg.LocSet.union args live)
       (args_ofs, Reg.LocMap.empty)
   in
   (* Ensure stack before the call is 16 byte aligned.
@@ -1291,37 +1279,39 @@ let emit_probe_handler_wrapper p =
   emit_stack_offset stack_ofs;
   (* save all live regs. *)
   Reg.LocMap.iter move saved_regs;
-  (* Pass arguments to handler *)
-  (* arrange arguments passed on the stack *)
+  (* Arrange arguments to handler in separate passes,
+     to avoid clobbering the registers:
+     (1) src in reg, dest on stack
+     (2) src on stack, dest on stack
+     (3) dest in reg
+  *)
   Array.iteri (fun i (src : Reg.t) ->
       let dst = loc_args.(i) in
-      if Reg.is_stack dst && not (Reg.same_location dst src) then begin
-        if Reg.is_stack src then begin
-          (* use a temporary for this memory to memory move *)
-          (* first available register is safe to use (not live here),
-             because if any arguments are passed on the stack,
-             then some arguments are passed in that register. *)
+      if Reg.is_reg src && Reg.is_stack dst then move src dst)
+    p.probe_insn.arg;
+  Array.iteri (fun i (src : Reg.t) ->
+      let dst = loc_args.(i) in
+      if Reg.is_stack src && Reg.is_stack dst then begin
+        (* Use a temporary for this memory to memory move.
+           First available register is safe to use (not live here):
+           If any arguments are passed on the stack,
+           then some arguments are passed in that register,
+           and its value has already been saved. *)
           let loc =
             Reg (Proc.(first_available_register.(register_class src)))
           in
           let tmp = Reg.at_location src.typ loc in
           move src tmp;
           move tmp dst
-        end else begin
-          move src dst
-        end
       end)
     p.probe_insn.arg;
-  (* arrange arguments passed in registers *)
   Array.iteri (fun i (src : Reg.t) ->
       let dst = loc_args.(i) in
-      if Reg.is_reg dst && not (Reg.same_location dst src) then begin
+      if Reg.is_reg dst then begin
         let src =
           if Reg.is_reg src then begin
             match Reg.LocMap.find_opt src saved_regs with
-            | None ->
-              assert (not (Reg.LocSet.mem src dsts));
-              src
+            | None -> assert false
             | Some s -> s
           end else src
         in
@@ -1344,7 +1334,7 @@ let emit_probe_handler_wrapper p =
   def_label label;
   (* Restore all live regs *)
   Reg.LocMap.iter (fun r s ->
-      if not (Reg.LocSet.mem r !reg_args) then move s r)
+      if (Reg.LocSet.mem r live) then move s r)
     saved_regs;
   emit_stack_offset (-stack_ofs);
   I.ret ();
