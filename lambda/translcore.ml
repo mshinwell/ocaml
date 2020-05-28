@@ -609,16 +609,17 @@ and transl_exp0 ~scopes e =
       let map =
         Ident.Set.fold (fun v acc -> Ident.Map.add v (Ident.rename v) acc)
           (free_variables lam)
-          Ident.Map.empty in
+          Ident.Map.empty
+      in
       let arg_idents, param_idents = Ident.Map.bindings map |> List.split in
       let body = Lambda.rename map lam in
-      let attr = {
-        inline = Never_inline;
-        specialise = Always_specialise;
-        local = Never_local;
-        is_a_functor = false;
-        stub = false;
-      } in
+      let attr =
+        { inline = Never_inline;
+          specialise = Always_specialise;
+          local = Never_local;
+          is_a_functor = false;
+          stub = false;
+        } in
       let funcid = Ident.create_local ("probe_handler_" ^ name) in
       let handler_scope = Ls_value_definition funcid in
       let handler =
@@ -628,28 +629,27 @@ and transl_exp0 ~scopes e =
           body;
           loc = of_raw_location ~scopes:(handler_scope::scopes) exp.exp_loc;
           attr;
-        } in
+        }
+      in
       let app =
-        {
-          ap_func = Lvar funcid;
+        { ap_func = Lvar funcid;
           ap_args = List.map (fun id -> Lvar id) arg_idents;
           ap_loc = of_raw_location e.exp_loc ~scopes;
           ap_should_be_tailcall = false;
           ap_inlined = Never_inline;
           ap_specialised = Always_specialise;
           ap_probe = Some {name};
-        } in
+        }
+      in
       begin match Config.flambda with
       | true ->
-        Llet(Strict, Pgenval, funcid,
-             Lfunction handler,
-             Lapply app)
+          Llet(Strict, Pgenval, funcid, Lfunction handler, Lapply app)
       | false ->
         (* Needs to be lifted to top level manually here,
            because functions that contain other function declarations
-           are not inlined. For example, adding a probe into the body
-           of function foo will prevent foo from being inlined into
-           another function. *)
+           are not inlined by Closure. For example, adding a probe into
+           the body of function foo will prevent foo from being inlined
+           into another function. *)
         probe_handlers := (funcid, Lfunction handler)::!probe_handlers;
         Lapply app
       end
@@ -658,7 +658,7 @@ and transl_exp0 ~scopes e =
     end
   | Texp_probe_is_enabled {name} ->
     if !Clflags.native_code && !Clflags.probes then
-      Lprim(Pprobe_is_enabled {name}, [],  of_raw_location ~scopes e.exp_loc)
+      Lprim(Pprobe_is_enabled {name}, [], of_raw_location ~scopes e.exp_loc)
     else
       lambda_unit
 
