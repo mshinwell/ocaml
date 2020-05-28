@@ -1215,7 +1215,7 @@ let emit_spacetime_shapes () =
 (* CR mshinwell: Not now, but after code review, it would be better to
    move this code so it's contiguous with the other probe code above. *)
 
-(* Calls to wrapper do not follow the standard calling convention for ocaml.
+(* Calls to wrappers do not follow the standard calling convention for OCaml.
    Instead, all registers are callee saved: the wrapper saves and restores
    all registers that are live across its (unique) call site. *)
 let emit_probe_handler_wrapper p =
@@ -1289,6 +1289,7 @@ let emit_probe_handler_wrapper p =
   Array.iteri (fun i (src : Reg.t) ->
       let dst = loc_args.(i) in
       if Reg.is_stack src && Reg.is_stack dst then begin
+        (* CR mshinwell: There needs to be an assertion to check this. *)
         (* Use a temporary for this memory to memory move.
            First available register is safe to use (not live here):
            If any arguments are passed on the stack,
@@ -1330,8 +1331,7 @@ let emit_probe_handler_wrapper p =
     (Dbg_other p.probe_insn.dbg);
   def_label label;
   (* Restore all live regs *)
-  Reg.LocMap.iter (fun r s ->
-      if (Reg.LocSet.mem r live) then move s r)
+  Reg.LocMap.iter (fun r s -> if Reg.LocSet.mem r live then move s r)
     saved_regs;
   emit_stack_offset (-stack_ofs);
   I.ret ();
