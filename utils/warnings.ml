@@ -93,9 +93,8 @@ type t =
   | Unused_open_bang of string              (* 66 *)
   | Unused_functor_parameter of string      (* 67 *)
   | Probe_too_many_args of int              (* 68 *)
-  | Probe_name_too_long of string           (* 69 *)
-  | Probe_handler_ignored                   (* 70 *)
-  | Probe_ignored                           (* 71 *)
+  | Probe_handler_ignored                   (* 69 *)
+  | Probe_ignored                           (* 70 *)
 ;;
 
 (* If you remove a warning, leave a hole in the numbering.  NEVER change
@@ -175,12 +174,11 @@ let number = function
   | Unused_open_bang _ -> 66
   | Unused_functor_parameter _ -> 67
   | Probe_too_many_args _ -> 68
-  | Probe_name_too_long _ -> 69
-  | Probe_handler_ignored -> 70
-  | Probe_ignored -> 71
+  | Probe_handler_ignored -> 69
+  | Probe_ignored -> 70
 ;;
 
-let last_warning_number = 71
+let last_warning_number = 70
 ;;
 
 (* Must be the max number returned by the [number] function. *)
@@ -644,11 +642,6 @@ let message = function
         "Probe with %d arguments.\n\
          Probes with more than 12 arguments might not be supported \
          by external tools such as SystemTap and Dtrace.\n" n
-  | Probe_name_too_long name ->
-      Printf.sprintf
-        "Probe name is too long: %s.\n\
-         Probe names over 100 characters long might not be supported \
-         by external tools such as SystemTap and Dtrace.\n" name
   | Probe_handler_ignored ->
       "Probe handler ignored. There is no support for executing OCaml \
         code upon hitting an enabled probe when the compiler is \
