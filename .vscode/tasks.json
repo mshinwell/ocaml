@@ -53,6 +53,18 @@
                 "isDefault": true
             },
             "problemMatcher": []
+        },
+        {
+            "label": "Build Flambda 2.0 unit tests",
+            "type": "shell",
+            "command": "/Users/mark/dev/dune/dune-4.10-flambda.sh build @world --profile=release",
+            "options": {
+                "cwd": "${workspaceFolder}/middle_end/flambda2.0/tests"
+            },
+            "group": "build",
+            "problemMatcher": [
+                "$ocamlc"
+            ]
         }
     ]
 }
