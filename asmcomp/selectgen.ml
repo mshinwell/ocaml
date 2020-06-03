@@ -410,7 +410,7 @@ method mark_tailcall = ()
 method mark_c_tailcall = ()
 
 method mark_instr = function
-  | Iop (Icall_ind _ | Icall_imm _ | Iextcall _) ->
+  | Iop (Icall_ind _ | Icall_imm _ | Iextcall _ | Iprobe _) ->
       self#mark_call
   | Iop (Itailcall_ind _ | Itailcall_imm _) ->
       self#mark_tailcall
