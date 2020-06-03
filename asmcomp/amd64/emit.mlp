@@ -896,7 +896,7 @@ let emit_instr fallthrough i =
       probes := probe :: !probes;
       def_label probe_label;
       I.nop (); (* for uprobes and usdt probes as well *)
-      if not fp then emit_call_probe_handler i ~probe_label
+      emit_call_probe_handler i ~probe_label
     end
   | Lop (Iprobe_is_enabled { name; }) ->
     if windows then begin
@@ -1230,6 +1230,12 @@ let emit_probe_handler_wrapper p =
   D.align 16;
   _label wrap_label;
   cfi_startproc ();
+  if fp then begin
+    I.push rbp;
+    cfi_adjust_cfa_offset 8;
+    stack_offset := !stack_offset + 8;
+    I.mov rsp rbp;
+  end;
   (* Account for the return address that is now pushed on the stack,
      but reuse the caller's frame for the wrapper, because
      the wrapper may refer to handler args (i.e. free variables of the
@@ -1334,6 +1340,9 @@ let emit_probe_handler_wrapper p =
       if (Reg.LocSet.mem r live) then move s r)
     saved_regs;
   emit_stack_offset (-stack_ofs);
+  if fp then begin
+    I.pop rbp; (* No need to adjust stack offset at the end of the function *)
+  end;
   I.ret ();
   cfi_endproc ();
   emit_function_type_and_size wrap_label
@@ -1452,7 +1461,7 @@ let end_assembly() =
     List.iter (fun (cst,lbl) -> emit_float_constant cst lbl) !float_constants
   end;
   (* Emit probe handler wrappers *)
-  if (not fp) && (not windows) then begin
+  if (not windows) then begin
     List.iter emit_probe_handler_wrapper !probes
   end;
   emit_named_text_section (Compilenv.make_symbol (Some "code_end"));

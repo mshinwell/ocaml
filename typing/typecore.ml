@@ -3475,12 +3475,10 @@ and type_expect_
                                (Pexp_constant (Pconst_string(name,None)));
                              pexp_loc = name_loc;
                              _ }
-                          , [Nolabel, ({pexp_loc = arg_loc; _ } as arg)]))
+                          , [Nolabel, arg]))
                    ; _ }
                   , _)}]) ->
         check_probe_name name name_loc env;
-        if Config.with_frame_pointers then
-          Location.prerr_warning arg_loc Warnings.Probe_handler_ignored;
         let exp = type_expect env arg (mk_expected Predef.type_unit) in
         rue {
           exp_desc = Texp_probe {name; handler=exp};
