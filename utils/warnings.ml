@@ -92,9 +92,7 @@ type t =
   | Redefining_unit of string               (* 65 *)
   | Unused_open_bang of string              (* 66 *)
   | Unused_functor_parameter of string      (* 67 *)
-  | Probe_too_many_args of int              (* 68 *)
-  | Probe_handler_ignored                   (* 69 *)
-  | Probe_ignored                           (* 70 *)
+  | Probe_ignored                           (* 68 *)
 ;;
 
 (* If you remove a warning, leave a hole in the numbering.  NEVER change
@@ -173,12 +171,10 @@ let number = function
   | Redefining_unit _ -> 65
   | Unused_open_bang _ -> 66
   | Unused_functor_parameter _ -> 67
-  | Probe_too_many_args _ -> 68
-  | Probe_handler_ignored -> 69
-  | Probe_ignored -> 70
+  | Probe_ignored -> 68
 ;;
 
-let last_warning_number = 70
+let last_warning_number = 68
 ;;
 
 (* Must be the max number returned by the [number] function. *)
@@ -637,16 +633,6 @@ let message = function
          which shadows the existing one.\n\
          Hint: Did you mean 'type %s = unit'?" name
   | Unused_functor_parameter s -> "unused functor parameter " ^ s ^ "."
-  | Probe_too_many_args n ->
-      Printf.sprintf
-        "Probe with %d arguments.\n\
-         Probes with more than 12 arguments might not be supported \
-         by external tools such as SystemTap and Dtrace.\n" n
-  | Probe_handler_ignored ->
-      "Probe handler ignored. There is no support for executing OCaml \
-        code upon hitting an enabled probe when the compiler is \
-        configured with frame pointers.  Probe locations will still \
-        be emitted for external tools such as SystemTap and Dtrace.\n"
   | Probe_ignored ->
       "Probe ignored. Probes are not supported on this target."
 ;;
