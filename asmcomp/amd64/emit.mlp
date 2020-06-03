@@ -537,6 +537,9 @@ let tailrec_entry_point = ref 0
 
 type probe =
   {
+    stack_offset: int;
+    num_stack_slots: int array;
+    (* Record frame info held in the corresponding mutable variables. *)
     probe_label: label;
     (* Probe site, recorded in .note.stapsdt section
        for enabling and disabling the probes  *)
@@ -567,6 +570,7 @@ let find_or_add_semaphore name =
     sym
 
 let emit_call_probe_handler i ~probe_label =
+  assert !frame_required;
   let wrap_label = probe_handler_wrapper_name probe_label in
   (* We emit a cmp instruction that is effectively a nop:
      it only sets flags that are not read anywhere.
@@ -891,6 +895,8 @@ let emit_instr fallthrough i =
       let probe =
         { probe_label;
           probe_insn = i;
+          stack_offset = !stack_offset;
+          num_stack_slots = Array.copy num_stack_slots;
         }
       in
       probes := probe :: !probes;
@@ -1225,6 +1231,13 @@ let emit_probe_handler_wrapper p =
     | Lop (Iprobe { name; handler_code_sym; }) -> name, handler_code_sym
     | _ -> assert false
   in
+  (* Restore stack frame info at probe's site to refer to values
+     in its frame correctly. *)
+  frame_required := true;
+  stack_offset := p.stack_offset;
+  for i = 0 to Proc.num_register_classes - 1 do
+    num_stack_slots.(i) <- p.num_stack_slots.(i);
+  done;
   D.comment (Printf.sprintf "probe %s %s" probe_name handler_code_sym);
   emit_named_text_section wrap_label;
   D.align 16;
