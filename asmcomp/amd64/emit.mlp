@@ -887,41 +887,30 @@ let emit_instr fallthrough i =
       I.mov (arg32 i 0) (res32 i 0)
   | Lop (Iname_for_debugger _) -> ()
   | Lop (Iprobe _) ->
-    if windows then begin
-      Location.prerr_warning (Debuginfo.to_location i.dbg)
-        Warnings.Probe_ignored
-    end else begin
-      let probe_label = new_label () in
-      let probe =
-        { probe_label;
-          probe_insn = i;
-          stack_offset = !stack_offset;
-          num_stack_slots = Array.copy num_stack_slots;
-        }
-      in
-      probes := probe :: !probes;
-      def_label probe_label;
-      I.nop (); (* for uprobes and usdt probes as well *)
-      emit_call_probe_handler i ~probe_label
-    end
+    let probe_label = new_label () in
+    let probe =
+      { probe_label;
+        probe_insn = i;
+        stack_offset = !stack_offset;
+        num_stack_slots = Array.copy num_stack_slots;
+      }
+    in
+    probes := probe :: !probes;
+    def_label probe_label;
+    I.nop (); (* for uprobes and usdt probes as well *)
+    emit_call_probe_handler i ~probe_label
   | Lop (Iprobe_is_enabled { name; }) ->
-    if windows then begin
-      Location.prerr_warning (Debuginfo.to_location i.dbg)
-        Warnings.Probe_ignored;
-      I.mov (int 1) (res i 0); (*always returns false *)
-    end else begin
-      let semaphore_sym = find_or_add_semaphore name in
-      (* Load unsigned 2-byte integer value of the semaphore.
-         According to the documentation [1],
-         semaphores are of type unsigned short.
-         [1] https://sourceware.org/systemtap/wiki/UserSpaceProbeImplementation
-      *)
-      I.mov (addressing (Ibased(semaphore_sym, 0)) WORD i 0) (res16 i 0);
-      (* If the semaphore is 0, then the result is 0, otherwise 1. *)
-      I.cmp (int 0) (res16 i 0);
-      I.set (cond (Iunsigned Cne)) (res8 i 0);
-      I.movzx (res8 i 0) (res i 0)
-    end
+    let semaphore_sym = find_or_add_semaphore name in
+    (* Load unsigned 2-byte integer value of the semaphore.
+       According to the documentation [1],
+       semaphores are of type unsigned short.
+       [1] https://sourceware.org/systemtap/wiki/UserSpaceProbeImplementation
+    *)
+    I.mov (addressing (Ibased(semaphore_sym, 0)) WORD i 0) (res16 i 0);
+    (* If the semaphore is 0, then the result is 0, otherwise 1. *)
+    I.cmp (int 0) (res16 i 0);
+    I.set (cond (Iunsigned Cne)) (res8 i 0);
+    I.movzx (res8 i 0) (res i 0)
   | Lreloadretaddr ->
       ()
   | Lreturn ->
@@ -1473,10 +1462,10 @@ let end_assembly() =
     end;
     List.iter (fun (cst,lbl) -> emit_float_constant cst lbl) !float_constants
   end;
+
   (* Emit probe handler wrappers *)
-  if (not windows) then begin
-    List.iter emit_probe_handler_wrapper !probes
-  end;
+  List.iter emit_probe_handler_wrapper !probes
+
   emit_named_text_section (Compilenv.make_symbol (Some "code_end"));
   if system = S_macosx then I.nop ();
   (* suppress "ld warning: atom sorting error" *)
@@ -1530,7 +1519,7 @@ let end_assembly() =
     emit_spacetime_shapes ()
   end;
 
-  if not windows then emit_probe_notes ();
+  emit_probe_notes ();
 
   if system = S_linux then
     (* Mark stack as non-executable, PR#4564 *)
