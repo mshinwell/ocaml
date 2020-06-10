@@ -134,16 +134,5 @@ module Non_scannable = struct
     else Some tag
 end
 
-let scannable_but_not_tuple_like =
-  Numbers.Int.Set.of_list [
-    forward_tag;
-    infix_tag;
-    object_tag;
-    closure_tag;
-    lazy_tag;
-  ]
-
 let is_structured_block_but_not_a_variant t =
-  let result = Numbers.Int.Set.mem t scannable_but_not_tuple_like in
-  assert ((not result) || is_structured_block t);
-  result
+  is_structured_block t && t > Obj.last_non_constant_constructor_tag
