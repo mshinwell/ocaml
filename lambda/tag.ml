@@ -66,6 +66,8 @@ let custom_tag = Obj.custom_tag
 let infix_tag = Obj.infix_tag
 let closure_tag = Obj.closure_tag
 let object_tag = Obj.object_tag
+let forward_tag = Obj.forward_tag
+let lazy_tag = Obj.lazy_tag
 
 let arbitrary = max_int
 
@@ -131,3 +133,17 @@ module Non_scannable = struct
     if tag < min_tag || tag >= Obj.no_scan_tag then None
     else Some tag
 end
+
+let scannable_but_not_tuple_like =
+  Numbers.Int.Set.of_list [
+    forward_tag;
+    infix_tag;
+    object_tag;
+    closure_tag;
+    lazy_tag;
+  ]
+
+let is_structured_block_but_not_a_variant t =
+  let result = Numbers.Int.Set.mem t scannable_but_not_tuple_like in
+  assert ((not result) || is_structured_block t);
+  result

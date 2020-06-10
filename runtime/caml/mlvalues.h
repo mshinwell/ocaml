@@ -186,11 +186,12 @@ bits  63        (64-P) (63-P)        10 9     8 7   0
                                                  /* Also an l-value. */
 #endif
 
+/* Please update lambda/tag.ml{,i} if you add more tag definitions. */
+
 /* The lowest tag for blocks containing no value. */
 #define No_scan_tag 251
 
-
-/* 1- If tag < No_scan_tag : a tuple of fields.  */
+/* 1- If tag < No_scan_tag : a tuple of fields. */
 
 /* Pointer to the first field. */
 #define Op_val(x) ((value *) (x))
