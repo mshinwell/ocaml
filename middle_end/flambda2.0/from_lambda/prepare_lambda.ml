@@ -398,6 +398,14 @@ let rec prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
                   sw_tag)
                 block_nums
             in
+            if switch.sw_numblocks > Obj.last_non_constant_constructor_tag + 1
+            then begin
+              Misc.fatal_errorf "Too many blocks (%d) in [Lswitch], would \
+                  overlap into tag space for blocks that are not treated \
+                  like variants; [Lswitch] can only be used for variant \
+                  matching"
+                switch.sw_numblocks
+            end;
             let blocks_switch : L.lambda_switch =
               { sw_numconsts = switch.sw_numblocks;
                 sw_consts = List.combine block_nums sw_blocks;
