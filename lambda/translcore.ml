@@ -619,20 +619,21 @@ and transl_exp0 ~scopes e =
         is_a_functor = false;
         stub = false;
       } in
+      let funcid = Ident.create_local ("probe_handler_" ^ name) in
+      let handler_scope = Ls_value_definition funcid in
       let handler =
         { kind = Curried;
           params = List.map (fun v -> v, Pgenval) param_idents;
           return = Pgenval;
           body;
-          loc = of_raw_location ~scopes exp.exp_loc;
+          loc = of_raw_location ~scopes:(handler_scope::scopes) exp.exp_loc;
           attr;
         } in
-      let funcid = Ident.create_local ("probe_handler_" ^ name) in
       let app =
         {
           ap_func = Lvar funcid;
           ap_args = List.map (fun id -> Lvar id) arg_idents;
-          ap_loc = of_raw_location ~scopes e.exp_loc;
+          ap_loc = of_raw_location e.exp_loc ~scopes;
           ap_should_be_tailcall = false;
           ap_inlined = Never_inline;
           ap_specialised = Always_specialise;

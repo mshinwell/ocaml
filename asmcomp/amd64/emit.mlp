@@ -1334,8 +1334,9 @@ let emit_probe_handler_wrapper p =
       saved_regs []
   in
   let label = new_label () in
-  record_frame_descr ~label ~frame_size:(stack_ofs+8) ~live_offset
-    (Dbg_other p.probe_insn.dbg);
+  let frame_size = stack_ofs + 8 + (if fp then 8 else 0) in
+  record_frame_descr ~label ~frame_size ~live_offset
+    (Dbg_other Debuginfo.none);
   def_label label;
   (* Restore all live regs *)
   Reg.LocMap.iter (fun r s ->
@@ -1464,7 +1465,7 @@ let end_assembly() =
   end;
 
   (* Emit probe handler wrappers *)
-  List.iter emit_probe_handler_wrapper !probes
+  List.iter emit_probe_handler_wrapper !probes;
 
   emit_named_text_section (Compilenv.make_symbol (Some "code_end"));
   if system = S_macosx then I.nop ();
