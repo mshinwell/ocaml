@@ -92,7 +92,6 @@ type t =
   | Redefining_unit of string               (* 65 *)
   | Unused_open_bang of string              (* 66 *)
   | Unused_functor_parameter of string      (* 67 *)
-  | Probe_ignored                           (* 68 *)
 ;;
 
 (* If you remove a warning, leave a hole in the numbering.  NEVER change
@@ -171,10 +170,9 @@ let number = function
   | Redefining_unit _ -> 65
   | Unused_open_bang _ -> 66
   | Unused_functor_parameter _ -> 67
-  | Probe_ignored -> 68
 ;;
 
-let last_warning_number = 68
+let last_warning_number = 67
 ;;
 
 (* Must be the max number returned by the [number] function. *)
@@ -633,8 +631,6 @@ let message = function
          which shadows the existing one.\n\
          Hint: Did you mean 'type %s = unit'?" name
   | Unused_functor_parameter s -> "unused functor parameter " ^ s ^ "."
-  | Probe_ignored ->
-      "Probe ignored. Probes are not supported on this target."
 ;;
 
 let nerrors = ref 0;;
