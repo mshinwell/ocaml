@@ -310,3 +310,40 @@ let lift_via_reification_of_continuation_param_types dacc ~params
       ~extra_params_and_args ~handler
   else
     dacc, handler
+
+let reify_primitive_at_toplevel dacc bound_var ty =
+  let typing_env = DA.typing_env dacc in
+  match
+    T.reify ~allowed_if_free_vars_defined_in:typing_env
+      typing_env ~min_name_mode:NM.normal ty
+  with
+  | Lift to_lift ->
+    (* There's no point in lifting constant values, as these should
+       already have been lifted. *)
+    let inconstant =
+      match to_lift with
+      | Immutable_block (_, fields) ->
+        List.exists (fun (field : T.var_or_symbol_or_tagged_immediate) ->
+            match field with
+            | Var _ -> true
+            | Symbol _ | Tagged_immediate _ -> false)
+          fields
+      | Boxed_float _ | Boxed_int32 _ | Boxed_int64 _
+      | Boxed_nativeint _ -> false
+    in
+    if not inconstant then
+      dacc, None
+    else begin
+      let static_const = Reification.create_static_const to_lift in
+      let symbol =
+        Symbol.create (Compilation_unit.get_current_exn ())
+          (Linkage_name.create
+             (Variable.unique_name (Var_in_binding_pos.var bound_var)))
+      in
+      let reified_definition =
+        Some (symbol, static_const)
+      in
+      dacc, reified_definition
+    end
+  | Lift_set_of_closures _ | Simple _ | Cannot_reify | Invalid ->
+    dacc, None

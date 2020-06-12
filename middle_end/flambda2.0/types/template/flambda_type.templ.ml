@@ -813,6 +813,12 @@ let reify ?allowed_if_free_vars_defined_in ?disallowed_free_vars env
             Closure_id.print closure_id
             print t
         end;
+        (* Format.eprintf "Reifying closure %a@.Contents:@.%a@.Entry:@.%a@.Typing env:@.%a@.Backtrace:@.%s@."
+         *   Closure_id.print closure_id
+         *   Set_of_closures_contents.print contents
+         *   Closures_entry.print closures_entry
+         *   Typing_env.print env
+         *   Printexc.(raw_backtrace_to_string (get_callstack 10)); *)
         let function_decls_with_closure_vars =
           Closure_id.Set.fold
             (fun closure_id function_decls_with_closure_vars ->

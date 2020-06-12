@@ -16,27 +16,18 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
-type t = Mutable | Immutable
+type t = Mutable | Immutable | Immutable_unique
+(** Mutable means that contents may vary at any moment.
+    Immutable means that not only contents will never vary,
+    but we're also allowed to share or duplicate identical values at will.
+    Immutable_unique means that the contents will never vary,
+    but physical equality is meaningful so the value must not be duplicated,
+    nor shared. *)
 
-let print ppf t =
-  match t with
-  | Mutable -> Format.pp_print_string ppf "Mutable"
-  | Immutable -> Format.pp_print_string ppf "Immutable"
+val print : Format.formatter -> t -> unit
 
-let compare t1 t2 =
-  match t1, t2 with
-  | Mutable, Mutable | Immutable, Immutable -> 0
-  | Mutable, Immutable -> -1
-  | Immutable, Mutable -> 1
+val compare : t -> t -> int
 
-let join t1 t2 =
-  match t1, t2 with
-  | Immutable, Immutable -> Immutable
-  | Mutable, Mutable
-  | Immutable, Mutable
-  | Mutable, Immutable -> Mutable
+val join : t -> t -> t
 
-let to_lambda t : Asttypes.mutable_flag =
-  match t with
-  | Mutable -> Mutable
-  | Immutable -> Immutable
+val to_lambda : t -> Asttypes.mutable_flag
