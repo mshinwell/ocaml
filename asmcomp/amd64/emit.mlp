@@ -1344,7 +1344,9 @@ let emit_probe_handler_wrapper p =
     saved_regs;
   emit_stack_offset (-stack_ofs);
   if fp then begin
-    I.pop rbp; (* No need to adjust stack offset at the end of the function *)
+    I.pop rbp;
+    cfi_adjust_cfa_offset (-8);
+    stack_offset := !stack_offset - 8;
   end;
   I.ret ();
   cfi_endproc ();
