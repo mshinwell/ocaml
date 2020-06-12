@@ -1369,7 +1369,7 @@ let emit_probe_notes0 () =
     in
     Printf.sprintf "%d@%s" (Reg.size_of_contents_in_bytes arg) arg_name
   in
-  let describe_one_probe names p =
+  let describe_one_probe p =
     let probe_name =
       match p.probe_insn.desc with
       | Lop (Iprobe { name; _; }) -> name
@@ -1412,11 +1412,8 @@ let emit_probe_notes0 () =
     D.bytes (args ^ "\000");
     def_label d;
     D.align 4;
-    String.Set.add probe_name names
   in
-  let names =
-    List.fold_left describe_one_probe String.Set.empty !probes
-  in
+  List.iter describe_one_probe !probes;
   begin match system with
   | S_gnu | S_cygwin | S_solaris | S_win32 | S_linux_elf | S_bsd_elf
   | S_beos | S_mingw | S_win64 | S_linux | S_mingw64 | S_unknown ->
@@ -1436,12 +1433,7 @@ let emit_probe_notes0 () =
   | S_macosx -> D.section ["__TEXT";"__probes"] None ["regular"]
   end;
   D.align 2;
-  String.Map.iter (fun name label ->
-    if not (String.Set.mem name names) then begin
-      (* CR-soon gyorsh: emit a warning instead? *)
-      Misc.fatal_errorf "Semaphore refers to an undefined probe %s"
-        name ()
-    end;
+  String.Map.iter (fun _ label ->
     D.global label;
     _label label;
     D.word (const 0);
@@ -1449,8 +1441,8 @@ let emit_probe_notes0 () =
     !probe_semaphores
 
 let emit_probe_notes () =
-  match !probes, String.Map.is_empty !probe_semaphores with
-  | [], true -> ()
+  match !probes with
+  | [] -> ()
   | _ -> emit_probe_notes0 ()
 
 let end_assembly() =
