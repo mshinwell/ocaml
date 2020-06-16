@@ -31,6 +31,8 @@ let rec simplify_let
   : 'a. DA.t -> Let.t -> 'a k -> Expr.t * 'a * UA.t
 = fun dacc let_expr k ->
   let module L = Flambda.Let in
+  (* CR mshinwell: I think this binding can be removed, dacc isn't
+     shadowed where [original_dacc] is used below. *)
   let original_dacc = dacc in
   (* CR mshinwell: Find out if we need the special fold function for lets. *)
   L.pattern_match let_expr ~f:(fun ~bound_vars ~body ->
@@ -1626,7 +1628,9 @@ and simplify_switch
           { bindings_outermost_first = bindings; dacc = _; } ->
         let body = k ~tagged_scrutinee:(Simple.var bound_to) in
         Simplify_common.bind_let_bound ~bindings ~body, user_data, uacc
-      | Reified _ -> assert false
+      | Reified _ ->
+        (* CR mshinwell: This should have a proper Misc.fatal_errorf *)
+        assert false
     in
     let body, user_data, uacc =
       match switch_is_identity with

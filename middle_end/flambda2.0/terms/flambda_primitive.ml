@@ -794,8 +794,11 @@ let effects_and_coeffects_of_unary_primitive p =
       Effects.Only_generative_effects destination_mutability,
         Coeffects.No_coeffects
     | Immutable_unique ->
-      (* CR vlaviron: this should never occur, but it's hard to express it
-         without duplicating the mutability type *)
+      (* XCR vlaviron: this should never occur, but it's hard to express it
+         without duplicating the mutability type
+         mshinwell: Adding a second mutability type seems like a good thing to
+         avoid confusion in the future.  It could maybe be a submodule of
+         [Mutability]. *)
       Effects.Only_generative_effects destination_mutability,
         Coeffects.No_coeffects
     | Mutable ->
