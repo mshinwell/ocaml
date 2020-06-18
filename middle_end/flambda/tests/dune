@@ -2,7 +2,7 @@
  (name meet_test)
  (modes native)
  (flags (:standard -principal -nostdlib -cclib "-I ../../runtime"))
- (libraries ocamloptcomp ocamloptcommon ocamlmiddleend flambda2 ocamlcommon runtimeopt stdlib)
+ (libraries ocamloptcomp ocamloptcommon ocamlmiddleend flambda ocamlcommon runtimeopt stdlib)
  (modules meet_test))
 
 (include_subdirs no)

@@ -1,8 +1,8 @@
 (include_subdirs no)
 
 (library
-  (name flambda2_to_cmm)
+  (name flambda_to_cmm)
   (flags (:standard -principal -nostdlib))
   (libraries stdlib ocamlcommon ocamlbytecomp ocamlmiddleend ocamloptcommon
-             flambda2deps flambda2)
+             flambdadeps flambda)
 )
