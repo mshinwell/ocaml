@@ -28,7 +28,7 @@ type simplify_result = {
 }
 
 let predefined_exception_typing_env ~backend ~resolver ~get_imported_names =
-  let module Backend = (val backend : Flambda2_backend_intf.S) in
+  let module Backend = (val backend : Flambda_backend_intf.S) in
   let comp_unit = Compilation_unit.get_current_exn () in
   Compilation_unit.set_current (Compilation_unit.predefined_exception ());
   let typing_env =
@@ -43,7 +43,7 @@ let predefined_exception_typing_env ~backend ~resolver ~get_imported_names =
   typing_env
 
 let run ~backend ~round unit =
-  let module Backend = (val backend : Flambda2_backend_intf.S) in
+  let module Backend = (val backend : Flambda_backend_intf.S) in
   let return_continuation = FU.return_continuation unit in
   let exn_continuation = FU.exn_continuation unit in
   let module_symbol = FU.module_symbol unit in

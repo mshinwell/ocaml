@@ -54,7 +54,7 @@ val print_list_of_simple_or_prim
   -> unit
 
 val expression_for_failure
-   : backend:(module Flambda2_backend_intf.S)
+   : backend:(module Flambda_backend_intf.S)
   -> Exn_continuation.t option
   -> register_const_string:(string -> Symbol.t)
   -> expr_primitive
@@ -63,7 +63,7 @@ val expression_for_failure
   -> Expr.t
 
 val bind_rec
-   : backend:(module Flambda2_backend_intf.S)
+   : backend:(module Flambda_backend_intf.S)
   -> Exn_continuation.t option
   -> register_const_string:(string -> Symbol.t)
   -> expr_primitive

@@ -12,7 +12,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Cmm helpers for flambda2 to cmm translation. *)
+(** Cmm helpers for flambda to cmm translation. *)
 
 (** {2 Useful misc values} *)
 

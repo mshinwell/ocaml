@@ -38,7 +38,7 @@ module type Downwards_env = sig
       compilation unit. *)
   val create
      : round:int
-    -> backend:(module Flambda2_backend_intf.S)
+    -> backend:(module Flambda_backend_intf.S)
     -> resolver:resolver
     -> get_imported_names:get_imported_names
     -> get_imported_code:get_imported_code
@@ -48,7 +48,7 @@ module type Downwards_env = sig
 
   (** Obtain the first-class module that gives information about the
       compiler backend being used for compilation. *)
-  val backend : t -> (module Flambda2_backend_intf.S)
+  val backend : t -> (module Flambda_backend_intf.S)
 
   val resolver : t -> (Compilation_unit.t -> Flambda_type.Typing_env.t option)
 

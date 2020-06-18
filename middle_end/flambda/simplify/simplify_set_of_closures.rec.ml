@@ -381,7 +381,7 @@ let simplify_function context r closure_id function_decl
             in
             params_and_body, dacc_after_body, r
           | exception Misc.Fatal_error ->
-            if !Clflags.flambda2_context_on_error then begin
+            if !Clflags.flambda_context_on_error then begin
               Format.eprintf "\n%sContext is:%s simplifying function \
                   with closure ID %a,@ params %a,@ return continuation %a,@ \
                   exn continuation %a,@ my_closure %a,@ body:@ %a@ \

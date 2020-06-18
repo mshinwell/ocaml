@@ -19,7 +19,7 @@
 (** Introduce closures into Ilambda code, producing Flambda. *)
 
 val ilambda_to_flambda
-   : backend:(module Flambda2_backend_intf.S)
+   : backend:(module Flambda_backend_intf.S)
   -> module_ident:Ident.t
   -> module_block_size_in_words:int
   -> filename:string  (* CR mshinwell: Filename of what? *)

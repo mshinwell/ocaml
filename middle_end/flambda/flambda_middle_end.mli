@@ -27,7 +27,7 @@ type middle_end_result = private {
 val middle_end
    : ppf_dump:Format.formatter
   -> prefixname:string
-  -> backend:(module Flambda2_backend_intf.S)
+  -> backend:(module Flambda_backend_intf.S)
   -> filename:string
   -> module_ident:Ident.t
   -> module_block_size_in_words:int

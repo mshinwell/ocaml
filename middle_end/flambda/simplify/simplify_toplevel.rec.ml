@@ -34,7 +34,7 @@ let simplify_toplevel dacc expr ~return_continuation ~return_arity
           in
           dacc, UA.create uenv (DA.code_age_relation dacc) (DA.r dacc))
     with Misc.Fatal_error -> begin
-      if !Clflags.flambda2_context_on_error then begin
+      if !Clflags.flambda_context_on_error then begin
         Format.eprintf "\n%sContext is:%s simplifying toplevel \
             expression:@ %a@ in downwards accumulator:@ %a"
           (Flambda_colours.error ())

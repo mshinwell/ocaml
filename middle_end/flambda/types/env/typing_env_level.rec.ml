@@ -364,7 +364,7 @@ let meet_equation0 env t name typ =
 let meet_equation env t name typ =
   try meet_equation0 env t name typ
   with Misc.Fatal_error ->
-    if !Clflags.flambda2_context_on_error then begin
+    if !Clflags.flambda_context_on_error then begin
       Format.eprintf "\n%sContext is:%s meeting equation %a : %a@ in \
           level@ %a@ and environment@ %a\n"
         (Flambda_colours.error ())

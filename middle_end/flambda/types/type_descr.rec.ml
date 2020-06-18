@@ -37,13 +37,13 @@ module Make (Head : Type_head_intf.S
       let colour = Flambda_colours.top_or_bottom_type () in
       match t with
       | No_alias Unknown ->
-        if !Clflags.flambda2_unicode then
+        if !Clflags.flambda_unicode then
           Format.fprintf ppf "@<0>%s@<1>\u{22a4}@<0>%s"
             colour (Flambda_colours.normal ())
         else
           Format.fprintf ppf "@<0>%sT@<0>%s" colour (Flambda_colours.normal ())
       | No_alias Bottom ->
-        if !Clflags.flambda2_unicode then
+        if !Clflags.flambda_unicode then
           Format.fprintf ppf "@<0>%s@<1>\u{22a5}@<0>%s"
             colour (Flambda_colours.normal ())
         else

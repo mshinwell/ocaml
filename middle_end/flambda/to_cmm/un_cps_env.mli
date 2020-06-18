@@ -12,24 +12,24 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(* Environment for flambda2 to cmm translation *)
+(* Environment for flambda to cmm translation *)
 
 (** {1 Translation environment} *)
 
 type t
-(** Environment for flambda2 to cmm translation *)
+(** Environment for flambda to cmm translation *)
 
 val mk :
   Exported_offsets.t ->
   Continuation.t -> Continuation.t ->
   Var_within_closure.Set.t -> t
 (** [mk offsets k k_exn used_closure_vars] creates a local environment for
-    translating a flambda2 expression, with return continuation [k], exception
+    translating a flambda expression, with return continuation [k], exception
     continuation [k_exn], and which uses the given closures variables. *)
 
 val enter_function_def : t -> Continuation.t -> Continuation.t -> t
 (** [enter_function_def env k k_exn] creates a local environment for
-    translating a flambda2 expression, with return continuation [k], exception
+    translating a flambda expression, with return continuation [k], exception
     continuation [k_exn], preserving the global info from [env]. *)
 
 val dummy : Exported_offsets.t -> Var_within_closure.Set.t -> t
@@ -69,7 +69,7 @@ type extra_info =
     for the translation, but useful to enable certain optimization. *)
 
 val create_variable : t -> Variable.t -> t * Backend_var.With_provenance.t
-(** Create (and bind) a cmm variable for the given flambda2 variable, and return
+(** Create (and bind) a cmm variable for the given flambda variable, and return
     the new environment, and the created variable. Will fail (i.e. assertion
     failure) if the given variable is already bound. *)
 
@@ -84,14 +84,14 @@ val bind_variable :
 (** Bind a variable to the given cmm expression, to allow for delaying the let-binding. *)
 
 val get_variable : t -> Variable.t -> Cmm.expression
-(** Get the cmm variable bound to a flambda2 variable.
+(** Get the cmm variable bound to a flambda variable.
     Will fail (i.e. assertion failure) if the variable is not bound.
     Be careful: in general you do *NOT* want to use this function but
     instead the {inline_variable} function, as it will correctly
     perform the inlining of used exactly once variables. *)
 
 val inline_variable : t -> Variable.t -> Cmm.expression * t * Effects_and_coeffects.t
-(** Try and inline an flambda2 variable using the delayed let-bindings. *)
+(** Try and inline an flambda variable using the delayed let-bindings. *)
 
 val flush_delayed_lets : t -> (Cmm.expression -> Cmm.expression) * t
 (** Wrap the given cmm expression with all the delayed let bindings accumulated

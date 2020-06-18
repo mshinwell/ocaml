@@ -79,7 +79,7 @@ let build_dep_graph dacc lifted_constants =
                           ~var:(fun _var -> free_syms)
                           ~symbol:(fun sym -> Symbol.Set.add sym free_syms))
                 with Misc.Fatal_error -> begin
-                  if !Clflags.flambda2_context_on_error then begin
+                  if !Clflags.flambda_context_on_error then begin
                     Format.eprintf "\n%sContext is:%s finding canonical for \
                         %a,@ current constant binding is@ %a =@ %a@ with \
                         free names:@ %a"

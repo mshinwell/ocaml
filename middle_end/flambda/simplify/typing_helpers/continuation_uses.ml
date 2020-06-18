@@ -58,7 +58,7 @@ let add_use t kind ~typing_env_at_use id ~arg_types =
       uses = use :: t.uses;
     }
   with Misc.Fatal_error -> begin
-    if !Clflags.flambda2_context_on_error then begin
+    if !Clflags.flambda_context_on_error then begin
       Format.eprintf "\n%sContext is:%s adding use of %a with \
             arg types@ (%a);@ existing uses:@ %a; environment:@ %a"
         (Flambda_colours.error ())

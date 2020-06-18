@@ -54,7 +54,7 @@ let flambda i typed =
     |> (fun ((module_ident, main_module_block_size), code) ->
         Asmgen.compile_implementation_flambda
           ~required_globals
-          ~backend:flambda2_backend
+          ~backend:flambda_backend
           ~prefixname:i.output_prefix
           ~size:main_module_block_size
           ~filename:i.source_file
@@ -88,7 +88,7 @@ let implementation ~backend ~source_file ~output_prefix =
   let backend info typed =
     Compilenv.reset ?packname:!Clflags.for_package info.module_name;
     if Config.flambda then
-      flambda2 info typed
+      flambda info typed
     else clambda info backend typed
   in
   with_info ~source_file ~output_prefix ~dump_ext:"cmx" @@ fun info ->

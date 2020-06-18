@@ -131,7 +131,7 @@ val dump_lambda : bool ref
 val dump_rawclambda : bool ref
 val dump_clambda : bool ref
 val dump_rawflambda : bool ref
-val dump_rawflambda2 : bool ref
+val dump_rawflambda : bool ref
 val dump_prepared_lambda : bool ref
 val dump_ilambda : bool ref
 val dump_flambda : bool ref
@@ -221,8 +221,8 @@ val set_dumped_pass : string -> bool -> unit
 
 val dump_into_file : bool ref
 
-val flambda2_unicode : bool ref
-val flambda2_context_on_error : bool ref
+val flambda_unicode : bool ref
+val flambda_context_on_error : bool ref
 
 (* Support for flags that can also be set from an environment variable *)
 type 'a env_reader = {

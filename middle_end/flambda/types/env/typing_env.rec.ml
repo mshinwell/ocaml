@@ -1206,7 +1206,7 @@ let get_canonical_simple_with_kind_exn t ?min_name_mode simple =
       ~min_name_mode
   with
   | exception Misc.Fatal_error ->
-    if !Clflags.flambda2_context_on_error then begin
+    if !Clflags.flambda_context_on_error then begin
       Format.eprintf "\n%sContext is:%s typing environment@ %a\n"
         (Flambda_colours.error ())
         (Flambda_colours.normal ())
@@ -1309,7 +1309,7 @@ let get_canonical_simple_exn t ?min_name_mode simple =
       ~min_name_mode
   with
   | exception Misc.Fatal_error ->
-    if !Clflags.flambda2_context_on_error then begin
+    if !Clflags.flambda_context_on_error then begin
       Format.eprintf "\n%sContext is:%s typing environment@ %a\n"
         (Flambda_colours.error ())
         (Flambda_colours.normal ())

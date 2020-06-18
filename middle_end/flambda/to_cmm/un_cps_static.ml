@@ -171,7 +171,7 @@ let rec static_set_of_closures env symbs set prev_update =
   in
   let block =
     match l with
-    (* Closures can be deleted by flambda2 but still appear in let_symbols,
+    (* Closures can be deleted by flambda but still appear in let_symbols,
        hence we may end up with empty sets of closures. *)
     | [] -> []
     (* Regular case. *)
@@ -416,7 +416,7 @@ let static_const
        [data_item] lists and this increases readability of the generated Cmm. *)
     env, R.archive_data r, update_opt
   with Misc.Fatal_error as e ->
-    if !Clflags.flambda2_context_on_error then begin
+    if !Clflags.flambda_context_on_error then begin
       (* Create a new let_symbol with a dummy body to better
          print the ound symbols and static const. *)
       let dummy_body = Expr.create_invalid () in

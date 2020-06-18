@@ -188,7 +188,7 @@ type middle_end_flambda =
 
 let compile_implementation_flambda ?toplevel ~backend ~filename ~prefixname
     ~size:module_block_size_in_words ~module_ident ~module_initializer
-    ~middle_end ~ppf_dump required_globals =
+    ~middle_end ~ppf_dump ~required_globals =
   let asmfile =
     if !keep_asm_file || !Emitaux.binary_backend_available
     then prefixname ^ ext_asm
@@ -274,7 +274,7 @@ module Flambda_backend = struct
   let max_sensible_number_of_arguments =
     Proc.max_arguments_for_tailcalls - 1
 
-  let set_global_info info = Compilenv.set_global_info (Flambda2 info)
+  let set_global_info info = Compilenv.set_global_info (Flambda info)
 
   let get_global_info comp_unit =
     (* The Flambda simplifier should have returned the typing information
@@ -289,7 +289,7 @@ module Flambda_backend = struct
       in
       match Compilenv.get_global_info' id with
       | None -> None
-      | Some (Flambda2 info) -> Some info
+      | Some (Flambda info) -> Some info
       | Some (Clambda _) ->
         (* CR mshinwell: This should be a user error, not a fatal error. *)
         Misc.fatal_errorf "The .cmx file for unit %a was compiled with \

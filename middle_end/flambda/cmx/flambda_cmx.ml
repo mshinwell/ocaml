@@ -23,7 +23,7 @@ let rec load_cmx_file_contents backend comp_unit ~imported_units ~imported_names
   match Compilation_unit.Map.find comp_unit !imported_units with
   | typing_env_or_none -> typing_env_or_none
   | exception Not_found ->
-    let module Backend = (val backend : Flambda2_backend_intf.S) in
+    let module Backend = (val backend : Flambda_backend_intf.S) in
     match Backend.get_global_info comp_unit with
     | None ->
       (* To make things easier to think about, we never retry after a .cmx

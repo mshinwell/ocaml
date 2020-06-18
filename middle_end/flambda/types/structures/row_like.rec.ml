@@ -67,7 +67,7 @@ struct
     if is_bottom t then
       (* CR mshinwell: factor out (also in [Type_descr]) *)
       let colour = Flambda_colours.top_or_bottom_type () in
-      if !Clflags.flambda2_unicode then
+      if !Clflags.flambda_unicode then
         Format.fprintf ppf "@<0>%s@<1>\u{22a5}@<0>%s"
           colour (Flambda_colours.normal ())
       else

@@ -64,7 +64,7 @@ let print_ilambda_after_mutable_variable_elimination ppf
   end
 
 let print_rawflambda ppf unit =
-  if !Clflags.dump_rawflambda2 then begin
+  if !Clflags.dump_rawflambda then begin
     Format.fprintf ppf "\n%sAfter closure conversion:%s@ %a@."
       (Flambda_colours.each_file ())
       (Flambda_colours.normal ())
@@ -83,7 +83,7 @@ let print_flambda name ppf unit =
 let middle_end0 ppf ~prefixname:_ ~backend ~filename ~module_ident
       ~module_block_size_in_words ~module_initializer =
   Misc.Color.setup !Clflags.color;
-  Profile.record_call "flambda2.0" (fun () ->
+  Profile.record_call "flambda.0" (fun () ->
     let prepared_lambda, recursive_static_catches =
       Profile.record_call "prepare_lambda" (fun () ->
         Prepare_lambda.run module_initializer)

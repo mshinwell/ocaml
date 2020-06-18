@@ -117,7 +117,7 @@ type t = {
 
   (* Local information.
 
-     These are relative to the flambda2 expression being currently
+     These are relative to the flambda expression being currently
      translated, i.e. either the unit initialization code, or the
      body of a function.
      Thus they are reset when entering a new function. *)
@@ -130,9 +130,9 @@ type t = {
      (used to determine where to insert try-with blocks) *)
 
   vars  : Cmm.expression Variable.Map.t;
-  (* Map from flambda2 variables to cmm expressions *)
+  (* Map from flambda variables to cmm expressions *)
   vars_extra : extra_info Variable.Map.t;
-  (* Map from flambda2 variables to extra info *)
+  (* Map from flambda variables to extra info *)
   conts : cont Continuation.Map.t;
   (* Map from continuations to handlers (i.e variables bound by the
      continuation and expression of the continuation handler). *)

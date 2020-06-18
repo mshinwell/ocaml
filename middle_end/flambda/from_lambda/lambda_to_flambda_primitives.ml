@@ -256,7 +256,7 @@ let bigarray_set ~dbg ~unsafe kind layout b indexes value =
 let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
       (dbg : Debuginfo.t) : H.expr_primitive =
   let args = List.map (fun arg : H.simple_or_prim -> Simple arg) args in
-  let module B = (val backend : Flambda2_backend_intf.S) in
+  let module B = (val backend : Flambda_backend_intf.S) in
   let size_int = B.size_int in
   match prim, args with
   | Pmakeblock (tag, mutability, shape), _ ->

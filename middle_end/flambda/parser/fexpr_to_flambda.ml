@@ -83,7 +83,7 @@ let declare_symbol ~backend:_ (env:func_env) (name, loc) =
     Misc.fatal_errorf "Redefinition of symbol %s: %a"
       name Location.print_loc loc
   else
-    (* let module Backend = (val backend : Flambda2_backend_intf.S) in
+    (* let module Backend = (val backend : Flambda_backend_intf.S) in
      * let symbol = Backend.symbol_for_global' (Ident.create_persistent name) in *)
     let symbol =
       Symbol.create
@@ -487,7 +487,7 @@ let rec conv_top ~backend (func_env:func_env) (prog : Fexpr.program) : Program_b
   | Root (_, _loc) :: _ :: _ ->
     Misc.fatal_errorf "Root must be the last construction of the file"
   | [ Root s ] ->
-    (* let module Backend = (val backend : Flambda2_backend_intf.S) in
+    (* let module Backend = (val backend : Flambda_backend_intf.S) in
      * let symbol = Backend.symbol_for_global' (Ident.create_persistent s) in *)
     let symbol = get_symbol (init_env func_env) s in
     Program_body.root symbol

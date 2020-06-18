@@ -235,12 +235,12 @@ type unary_primitive =
       dst : Flambda_kind.Standard_int_or_float.t;
     }
   (* CR gbury: check that chains of conversions are not simplified away
-     by flambda2, particularly those involving an int32. Indeed, a chain
+     by flambda, particularly those involving an int32. Indeed, a chain
      of conversions int64 -> int32 -> float that would be "simplified" into
      a int64 -> float converison would be wrong given that the int64 -> int32
      conversion needs to introduce a sign-extension, and simplifying it away
      would remove that sign_extension, leading to incorrect overflow behavior *)
-  (* CR gbury: add test for this as soon as we can write tests in flambda2 *)
+  (* CR gbury: add test for this as soon as we can write tests in flambda *)
   | Boolean_not
   (* CR-someday mshinwell: We should maybe change int32.ml and friends to
      use a %-primitive instead of directly calling C stubs for conversions;

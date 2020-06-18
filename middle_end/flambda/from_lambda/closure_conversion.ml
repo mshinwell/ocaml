@@ -30,7 +30,7 @@ module P = Flambda_primitive
 module VB = Var_in_binding_pos
 
 type t = {
-  backend : (module Flambda2_backend_intf.S);
+  backend : (module Flambda_backend_intf.S);
   current_unit_id : Ident.t;
   symbol_for_global' : (Ident.t -> Symbol.t);
   filename : string;
@@ -968,7 +968,7 @@ and close_one_function t ~external_env ~by_closure_id decl
   let body, handlers =
     try close t closure_env body
     with Misc.Fatal_error -> begin
-      if !Clflags.flambda2_context_on_error then begin
+      if !Clflags.flambda_context_on_error then begin
         Format.eprintf "\n%sContext is:%s closure converting \
           function@ with [our_let_rec_ident] %a (closure ID %a)@ \
           and body:@ %a"
@@ -1061,7 +1061,7 @@ and close_one_function t ~external_env ~by_closure_id decl
 
 let ilambda_to_flambda ~backend ~module_ident ~module_block_size_in_words
       ~filename (ilam : Ilambda.program) =
-  let module Backend = (val backend : Flambda2_backend_intf.S) in
+  let module Backend = (val backend : Flambda_backend_intf.S) in
   let compilation_unit = Compilation_unit.get_current_exn () in
   let t =
     { backend;

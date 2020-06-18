@@ -90,7 +90,7 @@ let print_list_of_simple_or_prim ppf simple_or_prim_list =
 
 let expression_for_failure ~backend exn_cont ~register_const_string
       primitive dbg (failure : failure) =
-  let module B = (val backend : Flambda2_backend_intf.S) in
+  let module B = (val backend : Flambda_backend_intf.S) in
   let exn_bucket, extra_let_binding =
     match failure with
     | Division_by_zero -> Simple.symbol B.division_by_zero, None

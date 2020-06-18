@@ -34,7 +34,7 @@ module rec Downwards_env : sig
     with type lifted_constant := Lifted_constant.t
 end = struct
   type t = {
-    backend : (module Flambda2_backend_intf.S);
+    backend : (module Flambda_backend_intf.S);
     round : int;
     typing_env : TE.t;
     get_imported_code : (unit -> Function_params_and_body.t Code_id.Map.t);

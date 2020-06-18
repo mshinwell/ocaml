@@ -789,7 +789,7 @@ and let_cont_jump env res k h body =
   end
 
 (* Exception continuations, translated using delayed trywith blocks.
-   Additionally, exn continuations in flambda2 can have extra args, which
+   Additionally, exn continuations in flambda can have extra args, which
    are passed through the trywith using mutable cmm variables. Thus the
    exn handler must first read the contents of thos extra args (eagerly
    in order to minmize the lifetime of the mutable variables) *)
@@ -1368,21 +1368,21 @@ and params_and_body env res fun_name p =
 
 (* Compilation units *)
 
-let unit (middle_end_result : Flambda2_middle_end.middle_end_result) =
+let unit (middle_end_result : Flambda_middle_end.middle_end_result) =
   let unit = middle_end_result.unit in
   let offsets =
     match middle_end_result.cmx with
     | None -> Exported_offsets.imported_offsets ()
     | Some cmx -> Flambda_cmx_format.exported_offsets cmx
   in
-  Profile.record_call "flambda2_to_cmm" (fun () ->
+  Profile.record_call "flambda_to_cmm" (fun () ->
     let offsets = Un_cps_closure.compute_offsets offsets unit in
     begin match middle_end_result.cmx with
     | None -> () (* Either opaque was passed, or there is no need to export
                     offsets *)
     | Some cmx ->
       let cmx = Flambda_cmx_format.with_exported_offsets cmx offsets in
-      Compilenv.(set_global_info (Flambda2 cmx))
+      Compilenv.(set_global_info (Flambda cmx))
     end;
     let used_closure_vars = Flambda_unit.used_closure_vars unit in
     let dummy_k = Continuation.create () in

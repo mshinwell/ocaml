@@ -29,7 +29,7 @@ type simplify_result = private {
 }
 
 val run
-   : backend:(module Flambda2_backend_intf.S)
+   : backend:(module Flambda_backend_intf.S)
   -> round:int
   -> Flambda_unit.t
   -> simplify_result

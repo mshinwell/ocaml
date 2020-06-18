@@ -112,7 +112,7 @@ let simplify_named dacc ~bound_vars named =
   try
     simplify_named0 dacc ~bound_vars named
   with Misc.Fatal_error -> begin
-    if !Clflags.flambda2_context_on_error then begin
+    if !Clflags.flambda_context_on_error then begin
       Format.eprintf "\n%sContext is:%s simplifying [Let] binding@ %a =@ %a@ \
           with downwards accumulator:@ %a\n"
         (Flambda_colours.error ())

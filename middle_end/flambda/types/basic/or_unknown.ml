@@ -26,7 +26,7 @@ let print f ppf t =
   | Known contents -> Format.fprintf ppf "@[<hov 1>%a@]" f contents
     (* Format.fprintf ppf "@[<hov 1>(Known@ %a)@]" f contents *)
   | Unknown ->
-    if !Clflags.flambda2_unicode then
+    if !Clflags.flambda_unicode then
       Format.fprintf ppf "%s@<1>\u{22a4}%s" colour (Flambda_colours.normal ())
     else
       Format.fprintf ppf "%sT%s" colour (Flambda_colours.normal ())

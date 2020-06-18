@@ -122,7 +122,7 @@ and simplify_let_symbol
       Simplify_static_const.simplify_static_const dacc bound_symbols
         defining_expr
     with Misc.Fatal_error -> begin
-      if !Clflags.flambda2_context_on_error then begin
+      if !Clflags.flambda_context_on_error then begin
         Format.eprintf "\n%sContext is:%s simplifying [Let_symbol] binding \
                           of@ %a@ with downwards accumulator:@ %a\n"
           (Flambda_colours.error ())
@@ -456,7 +456,7 @@ and simplify_non_recursive_let_cont_handler
                     handler, user_data, uacc, is_single_inlinable_use,
                       is_single_use
                   with Misc.Fatal_error -> begin
-                    if !Clflags.flambda2_context_on_error then begin
+                    if !Clflags.flambda_context_on_error then begin
                       Format.eprintf "\n%sContext is:%s simplifying \
                           continuation handler (inlinable? %b)@ %a@ with \
                           [extra_params_and_args]@ %a@ \

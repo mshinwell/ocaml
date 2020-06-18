@@ -557,7 +557,7 @@ let flush_cmmgen_state () =
         cdata (define_symbol ~global:true name @ l) :: acc
     | Const_closure _ ->
         Misc.fatal_errorf
-          "There shouldn't be any closure in cmmgen_state during flambda2 to cmm translation"
+          "There shouldn't be any closure in cmmgen_state during flambda to cmm translation"
   in
   match Cmmgen_state.get_and_clear_data_items () with
   | [] ->
@@ -565,5 +565,5 @@ let flush_cmmgen_state () =
       Misc.Stdlib.String.Map.fold aux cst_map []
   | _ ->
       Misc.fatal_errorf
-        "There shouldn't be any data item in cmmgen_state during flambda2 to cmm translation"
+        "There shouldn't be any data item in cmmgen_state during flambda to cmm translation"
 
