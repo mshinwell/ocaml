@@ -79,7 +79,7 @@ jobs:
       with:
         repository: 'ocaml-flambda/ocaml'
         path: 'base'
-        ref: 'flambda.0-first-stage-build-4.10-memprof'
+        ref: 'flambda2.0-first-stage-build-4.10-memprof'
     # Apply ocamltest patch to 4.10 repo
     - name: Apply ocamltest patch
       if: steps.cache.outputs.cache-hit != 'true'
