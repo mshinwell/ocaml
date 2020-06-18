@@ -290,7 +290,7 @@ module Flambda2_backend = struct
   let max_sensible_number_of_arguments =
     Proc.max_arguments_for_tailcalls - 1
 
-  let set_global_info info = Compilenv.set_global_info (Flambda2 info)
+  let set_global_info info = Compilenv.set_global_info (Flambda (Some info))
 
   let get_global_info comp_unit =
     (* The Flambda 2.0 simplifier should have returned the typing information
@@ -304,8 +304,8 @@ module Flambda2_backend = struct
         Compilation_unit.get_persistent_ident comp_unit
       in
       match Compilenv.get_global_info' id with
-      | None -> None
-      | Some (Flambda2 info) -> Some info
+      | None | Some (Flambda None) -> None
+      | Some (Flambda (Some info)) -> Some info
       | Some (Clambda _) ->
         (* CR mshinwell: This should be a user error, not a fatal error. *)
         Misc.fatal_errorf "The .cmx file for unit %a was compiled with \

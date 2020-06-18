@@ -61,7 +61,8 @@ let structured_constants = ref structured_constants_empty
 let exported_constants = Hashtbl.create 17
 
 let default_ui_export_info =
-  Cmx_format.Clambda Value_unknown
+  if Config.flambda then Cmx_format.Flambda None
+  else Cmx_format.Clambda Value_unknown
 
 let current_unit =
   { ui_name = "";
@@ -208,7 +209,7 @@ let get_clambda_approx ui =
   assert(not Config.flambda);
   match ui.ui_export_info with
   | Clambda approx -> approx
-  | Flambda2 _ -> Misc.fatal_error "Not a Closure approx"
+  | Flambda _ -> Misc.fatal_error "Not a Closure approx"
 
 let toplevel_approx :
   (string, Clambda.value_approximation) Hashtbl.t = Hashtbl.create 16

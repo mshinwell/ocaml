@@ -158,13 +158,13 @@ let get_export_info ui =
   assert(Config.flambda);
   match ui.ui_export_info with
   | Clambda _ -> assert false
-  | Flambda2 info -> info
+  | Flambda info -> info
 
 let get_approx ui =
   assert(not Config.flambda);
   match ui.ui_export_info with
   | Clambda info -> info
-  | Flambda2 _ -> assert false
+  | Flambda _ -> assert false
 
 let build_package_cmx members cmxfile =
   let unit_names =
@@ -203,7 +203,7 @@ let build_package_cmx members cmxfile =
              (get_export_info ui))
           units
       in
-      Flambda2 flambda2_export_info
+      Flambda flambda2_export_info
     else
       Clambda (get_approx ui)
   in

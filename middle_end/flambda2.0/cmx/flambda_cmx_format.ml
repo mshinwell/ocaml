@@ -206,11 +206,17 @@ let update_for_pack0 ~pack_units ~pack t =
   in
   { t with table_data; }
 
-let update_for_pack ~pack_units ~pack t =
-  List.map (update_for_pack0 ~pack_units ~pack) t
+let update_for_pack ~pack_units ~pack t_opt =
+  match t_opt with
+  | None -> None
+  | Some t -> Some (List.map (update_for_pack0 ~pack_units ~pack) t)
 
-let merge t1 t2 =
-  t1 @ t2
+let merge t1_opt t2_opt =
+  match t1_opt, t2_opt with
+  | None, None -> None
+  | Some t1, None -> Some t1
+  | None, Some t2 -> Some t2
+  | Some t1, Some t2 -> Some (t1 @ t2)
 
 let print0 ppf t =
   Format.fprintf ppf "@[<hov>Original unit:@ %a@]@;"
