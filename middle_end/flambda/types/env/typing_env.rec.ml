@@ -866,7 +866,7 @@ let add_cse t prim ~bound_to =
   | _bound_to -> t
 
 let rec add_equation0 t aliases name ty =
-  if !Clflags.Flambda_2.Debug.concrete_types_only_on_canonicals then begin
+  if !Clflags.Flambda.Debug.concrete_types_only_on_canonicals then begin
     let is_concrete =
       match Type_grammar.get_alias_exn ty with
       | exception Not_found -> true

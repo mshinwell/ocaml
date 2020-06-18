@@ -1983,35 +1983,35 @@ module Default = struct
     let _unbox_closures_factor f = unbox_closures_factor := f
     let _verbose = set verbose
 
-    let _flambda_join_points = set Flambda_2.join_points
-    let _no_flambda_join_points = clear Flambda_2.join_points
+    let _flambda_join_points = set Flambda.join_points
+    let _no_flambda_join_points = clear Flambda.join_points
     let _flambda_unbox_along_intra_function_control_flow =
-      set Flambda_2.unbox_along_intra_function_control_flow
+      set Flambda.unbox_along_intra_function_control_flow
     let _no_flambda_unbox_along_intra_function_control_flow =
-      clear Flambda_2.unbox_along_intra_function_control_flow
-    let _flambda_lift_inconstants = set Flambda_2.lift_inconstants
-    let _no_flambda_lift_inconstants = clear Flambda_2.lift_inconstants
+      clear Flambda.unbox_along_intra_function_control_flow
+    let _flambda_lift_inconstants = set Flambda.lift_inconstants
+    let _no_flambda_lift_inconstants = clear Flambda.lift_inconstants
     let _flambda_backend_cse_at_toplevel =
-      set Flambda_2.backend_cse_at_toplevel
+      set Flambda.backend_cse_at_toplevel
     let _no_flambda_backend_cse_at_toplevel =
-      clear Flambda_2.backend_cse_at_toplevel
-    let _flambda_cse_depth n = Flambda_2.cse_depth := n
+      clear Flambda.backend_cse_at_toplevel
+    let _flambda_cse_depth n = Flambda.cse_depth := n
     let _flambda_expert_denest_at_toplevel =
-      set Flambda_2.Expert.denest_at_toplevel
+      set Flambda.Expert.denest_at_toplevel
     let _no_flambda_expert_denest_at_toplevel =
-      clear Flambda_2.Expert.denest_at_toplevel
+      clear Flambda.Expert.denest_at_toplevel
     let _flambda_expert_code_id_and_symbol_scoping_checks =
-      set Flambda_2.Expert.code_id_and_symbol_scoping_checks
+      set Flambda.Expert.code_id_and_symbol_scoping_checks
     let _no_flambda_expert_code_id_and_symbol_scoping_checks =
-      clear Flambda_2.Expert.code_id_and_symbol_scoping_checks
+      clear Flambda.Expert.code_id_and_symbol_scoping_checks
     let _flambda_expert_fallback_inlining_heuristic =
-      set Flambda_2.Expert.fallback_inlining_heuristic
+      set Flambda.Expert.fallback_inlining_heuristic
     let _no_flambda_expert_fallback_inlining_heuristic =
-      clear Flambda_2.Expert.fallback_inlining_heuristic
+      clear Flambda.Expert.fallback_inlining_heuristic
     let _flambda_debug_concrete_types_only_on_canonicals =
-      set Flambda_2.Debug.concrete_types_only_on_canonicals
+      set Flambda.Debug.concrete_types_only_on_canonicals
     let _no_flambda_debug_concrete_types_only_on_canonicals =
-      clear Flambda_2.Debug.concrete_types_only_on_canonicals
+      clear Flambda.Debug.concrete_types_only_on_canonicals
 
     let _dprepared_lambda = set dump_prepared_lambda
     let _dilambda = set dump_ilambda

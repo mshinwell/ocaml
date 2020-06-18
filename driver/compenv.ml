@@ -450,27 +450,27 @@ let read_one_param ppf position name v =
   | "flambda-context-on-error" ->
     set "flambda-context-on-error" [ flambda_context_on_error ] v
   | "flambda-join-points" ->
-    set "flambda-join-points" [ Flambda_2.join_points ] v
+    set "flambda-join-points" [ Flambda.join_points ] v
   | "flambda-unbox-along-intra-function-control-flow" ->
     set "flambda-unbox-along-intra-function-control-flow"
-      [ Flambda_2.unbox_along_intra_function_control_flow ] v
+      [ Flambda.unbox_along_intra_function_control_flow ] v
   | "flambda-lift-inconstants" ->
-    set "flambda-lift-inconstants" [ Flambda_2.lift_inconstants ] v
+    set "flambda-lift-inconstants" [ Flambda.lift_inconstants ] v
   | "flambda-backend-cse-at-toplevel" ->
     set "flambda-backend-cse-at-toplevel"
-      [ Flambda_2.backend_cse_at_toplevel ] v
+      [ Flambda.backend_cse_at_toplevel ] v
   | "flambda-expert-denest-at-toplevel" ->
     set "flambda-expert-denest-at-toplevel"
-      [ Flambda_2.Expert.denest_at_toplevel ] v
+      [ Flambda.Expert.denest_at_toplevel ] v
   | "flambda-expert-code-id-and-symbol-scoping-checks" ->
     set "flambda-expert-code-id-and-symbol-scoping-checks"
-      [ Flambda_2.Expert.code_id_and_symbol_scoping_checks ] v
+      [ Flambda.Expert.code_id_and_symbol_scoping_checks ] v
   | "flambda-expert-fallback-inlining-heuristic" ->
     set "flambda-expert-fallback-inlining-heuristic"
-      [ Flambda_2.Expert.fallback_inlining_heuristic ] v
+      [ Flambda.Expert.fallback_inlining_heuristic ] v
   | "flambda-debug-concrete-types-only-on-canonicals" ->
     set "flambda-debug-concrete-types-only-on-canonicals"
-      [ Flambda_2.Debug.concrete_types_only_on_canonicals ] v
+      [ Flambda.Debug.concrete_types_only_on_canonicals ] v
   | _ ->
     if not (List.mem name !can_discard) then begin
       can_discard := name :: !can_discard;

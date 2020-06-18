@@ -422,7 +422,7 @@ let error_style_reader = {
 
 let unboxed_types = ref false
 
-module Flambda_2 = struct
+module Flambda = struct
   let join_points = ref true
   let unbox_along_intra_function_control_flow = ref true
   let lift_inconstants = ref true

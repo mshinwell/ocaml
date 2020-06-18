@@ -1028,7 +1028,7 @@ and close_one_function t ~external_env ~by_closure_id decl
        been lifted by our other check in [Inlining_cost] (thus preventing us
        seeing they were originally there). *)
     if contains_closures
-      && !Clflags.Flambda_2.Expert.fallback_inlining_heuristic
+      && !Clflags.Flambda.Expert.fallback_inlining_heuristic
     then Never_inline
     else LC.inline_attribute (Function_decl.inline decl)
   in
