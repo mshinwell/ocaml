@@ -122,7 +122,8 @@ let make_package_object ~ppf_dump members targetobj targetname coercion
         let backend =
           (module Asmgen.Flambda2_backend : Flambda2_backend_intf.S)
         in
-        Asmgen.compile_implementation2 program.required_globals
+        Asmgen.compile_implementation_flambda
+          ~required_globals:program.required_globals
           ~backend
           ~prefixname
           ~size:program.main_module_block_size

@@ -176,17 +176,17 @@ let compile_implementation ?toplevel ~backend ~filename ~prefixname ~middle_end
       end_gen_implementation ?toplevel ~ppf_dump Cmmgen.compunit
         clambda_with_constants)
 
-type middle_end2 =
+type middle_end_flambda =
      ppf_dump:Format.formatter
   -> prefixname:string
-  -> backend:(module Flambda2_backend_intf.S)
+  -> backend:(module Flambda_backend_intf.S)
   -> filename:string
   -> module_ident:Ident.t
   -> module_block_size_in_words:int
   -> module_initializer:Lambda.lambda
-  -> Flambda2_middle_end.middle_end_result
+  -> Flambda_middle_end.middle_end_result
 
-let compile_implementation2 ?toplevel ~backend ~filename ~prefixname
+let compile_implementation_flambda ?toplevel ~backend ~filename ~prefixname
     ~size:module_block_size_in_words ~module_ident ~module_initializer
     ~middle_end ~ppf_dump required_globals =
   let asmfile =
@@ -198,13 +198,13 @@ let compile_implementation2 ?toplevel ~backend ~filename ~prefixname
     (fun () ->
       Ident.Set.iter Compilenv.require_global required_globals;
       let translated_program =
-        (middle_end : middle_end2) ~backend ~module_block_size_in_words
+        (middle_end : middle_end_flambda) ~backend ~module_block_size_in_words
           ~filename ~prefixname ~ppf_dump ~module_ident ~module_initializer
       in
       end_gen_implementation ?toplevel ~ppf_dump Un_cps.unit
         translated_program)
 
-let compile_implementation_flambda ?toplevel ~prefixname
+let compile_implementation_flambda_for_ilambdac ?toplevel ~prefixname
     ~ppf_dump ~required_globals program =
   let asmfile =
     if !keep_asm_file || !Emitaux.binary_backend_available
@@ -217,23 +217,7 @@ let compile_implementation_flambda ?toplevel ~prefixname
       end_gen_implementation ?toplevel ~ppf_dump
         Un_cps.unit program)
 
-(* Error report *)
-
-let report_error ppf = function
-  | Assembler_error file ->
-      fprintf ppf "Assembler error, input left in file %a"
-        Location.print_filename file
-
-let () =
-  Location.register_error_of_exn
-    (function
-      | Error err -> Some (Location.error_of_printer_file report_error err)
-      | _ -> None
-    )
-
-(* Flambda2 backend *)
-
-module Flambda2_backend = struct
+module Flambda_backend = struct
   let symbol_for_module_block id =
     assert (Ident.global id);
     assert (not (Ident.is_predef id));
@@ -293,7 +277,7 @@ module Flambda2_backend = struct
   let set_global_info info = Compilenv.set_global_info (Flambda2 info)
 
   let get_global_info comp_unit =
-    (* The Flambda 2.0 simplifier should have returned the typing information
+    (* The Flambda simplifier should have returned the typing information
        for the predefined exception compilation unit before getting here. *)
     assert (not (Compilation_unit.is_predefined_exception comp_unit));
     if Compilation_unit.is_external_symbols comp_unit then None
@@ -312,3 +296,17 @@ module Flambda2_backend = struct
             the Closure middle-end, not Flambda, and cannot be loaded"
           Compilation_unit.print comp_unit
 end
+
+(* Error report *)
+
+let report_error ppf = function
+  | Assembler_error file ->
+      fprintf ppf "Assembler error, input left in file %a"
+        Location.print_filename file
+
+let () =
+  Location.register_error_of_exn
+    (function
+      | Error err -> Some (Location.error_of_printer_file report_error err)
+      | _ -> None
+    )
