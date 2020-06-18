@@ -4,14 +4,15 @@
 name: main
 
 # Configure when to run the workflows. Currently only when
-# it affects the `flambda.0` branch (either pushes to the branch, or pull request against it).
+# it affects the `flambda2.0-stable` branch (either pushes to the branch,
+# or pull request against it).
 on:
   push:
     branches:
-      - flambda.0-stable
+      - flambda2.0-stable
   pull_request:
     branches:
-      - flambda.0-stable
+      - flambda2.0-stable
 
 jobs:
   # Makefile-based: compile & run the testsuite
