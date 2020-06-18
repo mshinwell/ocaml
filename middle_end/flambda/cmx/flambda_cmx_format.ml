@@ -214,8 +214,11 @@ let update_for_pack ~pack_units ~pack t_opt =
 let merge t1_opt t2_opt =
   match t1_opt, t2_opt with
   | None, None -> None
-  | Some t1, None -> Some t1
-  | None, Some t2 -> Some t2
+  | Some _, None
+  | None, Some _ ->
+    (* CR vlaviron: turn this into a proper user error *)
+    Misc.fatal_error "Some pack units do not have their export info set.\n\
+      Flambda doesn't support packing opaque and normal units together."
   | Some t1, Some t2 -> Some (t1 @ t2)
 
 let print0 ppf t =
