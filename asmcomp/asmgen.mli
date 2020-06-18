@@ -59,6 +59,7 @@ val compile_implementation_flambda
   -> ppf_dump:Format.formatter
   -> required_globals:Ident.Set.t
   -> unit
+  -> unit
 
 (** Specialised version of [compile_implementation_flambda] for ilambdac. *)
 val compile_implementation_flambda_for_ilambdac

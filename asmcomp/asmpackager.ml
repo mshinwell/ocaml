@@ -118,7 +118,6 @@ let make_package_object ~ppf_dump members targetobj targetname coercion
     in
     let () =
       if Config.flambda then begin
-        let middle_end = Flambda_middle_end.middle_end in
         let backend =
           (module Asmgen.Flambda_backend : Flambda_backend_intf.S)
         in
@@ -131,13 +130,13 @@ let make_package_object ~ppf_dump members targetobj targetname coercion
           ~module_ident:program.module_ident
           ~module_initializer:program.code
           ~ppf_dump
-          ~middle_end
+          ~middle_end:Flambda_middle_end.middle_end
+          ()
       end else begin
-        let middle_end = Closure_middle_end.lambda_to_clambda in
         Asmgen.compile_implementation ~backend
           ~filename:targetname
           ~prefixname
-          ~middle_end
+          ~middle_end:Closure_middle_end.lambda_to_clambda
           ~ppf_dump
           program
       end

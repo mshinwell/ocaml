@@ -188,7 +188,7 @@ type middle_end_flambda =
 
 let compile_implementation_flambda ?toplevel ~backend ~filename ~prefixname
     ~size:module_block_size_in_words ~module_ident ~module_initializer
-    ~middle_end ~ppf_dump ~required_globals =
+    ~middle_end ~ppf_dump ~required_globals () =
   let asmfile =
     if !keep_asm_file || !Emitaux.binary_backend_available
     then prefixname ^ ext_asm
