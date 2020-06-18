@@ -143,7 +143,7 @@
 (library
  (name ocamloptcomp)
  (wrapped false)
- (flags (:standard -principal -nostdlib -open Flambda2_to_cmm))
+ (flags (:standard -principal -nostdlib -open Flambda_to_cmm))
  (libraries stdlib ocamlcommon ocamlmiddleend ocamloptcommon flambdadeps
             flambda flambda_to_cmm)
  (modules

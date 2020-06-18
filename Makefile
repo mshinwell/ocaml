@@ -1287,7 +1287,7 @@ ocamltest.opt: ocamlc.opt ocamlyacc ocamllex
 partialclean::
 	$(MAKE) -C ocamltest clean
 
-# Flambda2 recursive modules black magic
+# Flambda recursive modules black magic
 
 FLAMBDA_TYPE0_DEPS=$(shell sed -e "s|^\(.*\)|middle_end/flambda/types/\1 middle_end/flambda/types/\1i|g" \
   middle_end/flambda/types/rec_modules | tr '\n' ' ')
