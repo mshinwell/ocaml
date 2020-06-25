@@ -81,13 +81,6 @@ let rec simplify_let
       else
         dacc
     in
-    (*
-    if place_lifted_constants_immediately then begin
-      Format.eprintf "Simplifying Let: %a = %a\n%!"
-        Bindable_let_bound.print bound_vars
-        Named.print (L.defining_expr let_expr)
-    end;
-  *)
     let simplify_named_result =
       Simplify_named.simplify_named dacc ~bound_vars (L.defining_expr let_expr)
     in
@@ -101,23 +94,6 @@ let rec simplify_let
         else DA.map_r dacc ~f:R.clear_lifted_constants
       in
       let body, user_data, uacc = simplify_expr dacc body k in
-      (*
-      let lifted_constants_after_body =
-        R.get_lifted_constants (UA.r uacc)
-      in
-      if place_lifted_constants_immediately then begin
-        Format.eprintf "Rebuilding Let for %a\n%!"
-          Bindable_let_bound.print bound_vars;
-        Format.eprintf "LCs after defining expr were:@ %a\n%!"
-          (Format.pp_print_list ~pp_sep:Format.pp_print_space
-            Lifted_constant.print)
-            lifted_constants_after_defining_expr;
-        Format.eprintf "LCs after body were:@ %a\n%!"
-          (Format.pp_print_list ~pp_sep:Format.pp_print_space
-            Lifted_constant.print)
-            lifted_constants_after_body
-      end;
-    *)
       let body = Simplify_common.bind_let_bound ~bindings ~body in
       if place_lifted_constants_immediately then
         let extra_lifted_constants =
