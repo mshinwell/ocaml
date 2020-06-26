@@ -904,20 +904,6 @@ and simplify_direct_partial_application
     let closure_elements =
       Var_within_closure.Map.of_list applied_args_with_closure_vars
     in
-    (*
-    Var_within_closure.Map.iter (fun closure_var closure_elt ->
-        if not (TE.mem_simple ~min_name_mode:NM.normal
-          (DA.typing_env dacc) closure_elt)
-        then begin
-          Misc.fatal_errorf "Closure variable %a bound to %a in@ partial \
-              application closure for application of:@ %a@ is unbound in:@ %a"
-            Var_within_closure.print closure_var
-            Simple.print closure_elt
-            Apply.print apply
-            DA.print dacc
-        end)
-      closure_elements;
-      *)
     (* CR mshinwell: Factor out this next part into a helper function *)
     let code =
       Lifted_constant.create_piece_of_code (DA.denv dacc) code_id
