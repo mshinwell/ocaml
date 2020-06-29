@@ -61,14 +61,8 @@ val is_stack :  t -> bool
 
 val size_of_contents_in_bytes : t -> int
 
-(* Compare registers based on their stamps. *)
 module Set: Set.S with type elt = t
 module Map: Map.S with type key = t
-
-(* Compare registers based on their locations. *)
-val same_location : t -> t -> bool
-module LocSet: Stdlib.Set.S with type elt = t
-module LocMap: Stdlib.Map.S with type key = t
 
 val add_set_array: Set.t -> t array -> Set.t
 val diff_set_array: Set.t -> t array -> Set.t
