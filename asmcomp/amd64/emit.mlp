@@ -107,6 +107,16 @@ let emit_stack_offset n =
   then cfi_adjust_cfa_offset n;
   stack_offset := !stack_offset + n
 
+let push r =
+  I.push r;
+  cfi_adjust_cfa_offset 8;
+  stack_offset := !stack_offset + 8
+
+let pop r =
+  I.pop r;
+  cfi_adjust_cfa_offset (-8);
+  stack_offset := !stack_offset - 8
+
 (* Symbols *)
 
 let symbol_prefix = if system = S_macosx then "_" else ""
@@ -508,6 +518,24 @@ let move (src : Reg.t) (dst : Reg.t) =
     | _ -> I.mov (reg src) (reg dst)
     end
 
+let stack_to_stack_move (src : Reg.t) (dst : Reg.t) =
+  assert (src.typ = dst.typ);
+  if (src.loc <> dst.loc) then begin
+    match src.typ with
+    | Int | Addr | Val ->
+      (* Not calling move because r15 is not in int_reg_name. *)
+      I.mov (reg src) r15;
+      I.mov r15 (reg dst)
+    | Float ->
+      I.movsd (reg src) xmm15;
+      I.movsd xmm15 (reg dst)
+  end
+
+let move_allowing_stack_to_stack src dst =
+  match Reg.is_stack src, Reg.is_stack dst with
+  | true, true -> stack_to_stack_move src dst
+  | _ -> move src dst
+
 (* Output .text section directive, or named .text.caml.<name> if enabled and
    supported on the target system. *)
 
@@ -569,7 +597,7 @@ let find_or_add_semaphore name =
     probe_semaphores := String.Map.add name sym !probe_semaphores;
     sym
 
-let emit_call_probe_handler i ~probe_label =
+let emit_call_probe_handler_wrapper i ~probe_label =
   assert !frame_required;
   let wrap_label = probe_handler_wrapper_name probe_label in
   (* We emit a cmp instruction that is effectively a nop:
@@ -898,7 +926,11 @@ let emit_instr fallthrough i =
     probes := probe :: !probes;
     def_label probe_label;
     I.nop (); (* for uprobes and usdt probes as well *)
-    emit_call_probe_handler i ~probe_label
+    (* A probe site does not directly call the probe handler.  There is an
+       intervening wrapper that deals with getting the arguments to the probe
+       in the correct place and managing the spilling/reloading of live
+       registers.  See [emit_probe_handler_wrapper] below. *)
+    emit_call_probe_handler_wrapper i ~probe_label
   | Lop (Iprobe_is_enabled { name; }) ->
     let semaphore_sym = find_or_add_semaphore name in
     (* Load unsigned 2-byte integer value of the semaphore.
@@ -1207,63 +1239,45 @@ let emit_spacetime_shapes () =
   D.qword (Const 0L);
   D.comment "End of Spacetime shapes."
 
-let push r =
-  I.push r;
-  cfi_adjust_cfa_offset 8;
-  stack_offset := !stack_offset + 8
-
-let pop r =
-  I.pop r;
-  cfi_adjust_cfa_offset (-8);
-  stack_offset := !stack_offset - 8
-
 let make_stack_loc ~offset i (r : Reg.t) =
   (* Use "Outgoing" stack locations, instead of "Local",
      because [slot_offset] emits (Outgoing n) directly
      as offset [n] from the stack pointer,
      rather than a calculation relative to the stack frame,
-     which is incorrect for floats in the wrapper's fake frame. *)
+     which is incorrect for floats in the wrapper's frame. *)
+  (* CR mshinwell: I don't understand why we would ever have floats here.
+     See two CRs below. *)
   let loc = Stack (Outgoing (offset + (8*i))) in
   (* Manufacture stack entry with this register's type *)
   Reg.at_location r.typ loc
 
-let stack_to_stack_move (src : Reg.t) (dst : Reg.t) =
-  assert (src.typ = dst.typ);
-  if (src.loc <> dst.loc) then begin
-    match src.typ with
-    | Int | Addr | Val ->
-      (* Not calling move because r15 is not in int_reg_name. *)
-      I.mov (reg src) r15;
-      I.mov r15 (reg dst)
-    | Float ->
-      I.movsd (reg src) xmm15;
-      I.movsd xmm15 (reg dst)
-  end
-
-let emit_move src dst =
-  match Reg.is_stack src, Reg.is_stack dst with
-  | true, true -> stack_to_stack_move src dst
-  | _ -> move src dst
-
 (* CR mshinwell: Not now, but after code review, it would be better to
    move this code so it's contiguous with the other probe code above. *)
 
-(* Calls to wrappers do not follow the standard calling convention for OCaml.
-   Instead, all registers are callee saved: the wrapper saves and restores
-   all registers that are live across its (unique) call site.
+(* Calls to probe handler wrappers do not follow the standard calling
+   convention for OCaml.  Instead, all registers are callee saved: the wrapper
+   saves and restores all registers that are live across its (unique) call site.
 
-   The current strategy for argument passing to handler is to spill
-   all arguments of the probe to stack and then reload them into locations
-   expected by the handler.
+   There is one wrapper per probe site in the code.  Probe wrappers can never
+   be called from anywhere except their unique probe site, since they make
+   assumptions about the layout of their caller's stack frame.  Probe wrappers
+   create their own stack frames; these will be elided in OCaml backtraces
+   but may be displayed in platform debuggers such as gdb.
+
+   The current strategy for argument passing to a probe handler is to spill
+   all arguments of the probe, plus all live registers, to stack and then
+   reload the arguments into locations expected by the handler.
    This is gratuitously inefficient but easier to reason about correctness.
-   This problem is a variation of sequentialization of a parallel
-   assignment problem, which admits an optimal and efficient solution.
+   This problem is a variation of the "sequentialization of a parallel
+   assignment" problem, which admits an optimal and efficient solution.
 
-   The stack layout of the wrapper, before the call to handler:
-   |------------|<--stack at probe site, 16-byte aligned by caller
+   The stack layout of the wrapper, before the call to the handler, is as
+   follows:
+   |     ...    |
+   |------------|<-- %rsp at probe site, 16-byte aligned by caller
    | ret        |
    |------------|
-   | fp         | optional, depends on Config.with_frame_pointer
+   | fp         | only present when Config.with_frame_pointers is true
    |------------|
    | live       | saved live registers
    |------------|
@@ -1271,14 +1285,21 @@ let emit_move src dst =
    | r15        |
    |------------|
    | tmp        | spilled reg and stack arguments of the wrapper
-   |------------|<-- 16-byte aligned (1)
+   |------------|<-- 16-byte aligned [1]
    | stack args | arguments passed to handler on the stack (size in loc_offset)
-   |------------|<---stack at the call from wrapper to handler, 16-byte aligned
+   |------------|<-- %rsp at the call from wrapper to handler, 16-byte aligned
 
-   To ensure that the stack before the call is 16-byte aligned,
-   we align this separately. It is a little wasteful,
+   [1] To ensure that the stack before the call from the wrapper to the handler
+   is 16-byte aligned, we align this explicitly. It is a little wasteful,
    but reuses the calculation made by [Proc.loc_arguments].
 *)
+
+(* Can't be called from any other place
+   Has a normal frame
+   Global state is just to grab the caller's slots
+   Won't appear in OCaml backtrace as Debuginfo.none
+   Will probably appear in gdb backtrace *)
+
 let emit_probe_handler_wrapper p =
   let wrap_label = probe_handler_wrapper_name p.probe_label in
   let probe_name, handler_code_sym =
@@ -1286,17 +1307,15 @@ let emit_probe_handler_wrapper p =
     | Lop (Iprobe { name; handler_code_sym; }) -> name, handler_code_sym
     | _ -> assert false
   in
-  (* Restore stack frame info at probe's site to refer to values
-     in its frame correctly. *)
+  (* Restore stack frame info as it was at the probe site, so we can easily
+     refer to slots in the corresponding frame.  (As per the comment above,
+     recall that the wrapper does however have its own frame.) *)
   frame_required := true;
   stack_offset := p.stack_offset;
   for i = 0 to Proc.num_register_classes - 1 do
     num_stack_slots.(i) <- p.num_stack_slots.(i);
   done;
-  (* Account for the return address that is now pushed on the stack,
-     but reuse the caller's frame for the wrapper, because
-     the wrapper may refer to handler args (i.e. free variables of the
-     user's probe handler expression) on the caller's stack frame. *)
+  (* Account for the return address that is now pushed on the stack. *)
   stack_offset := !stack_offset + 8;
   (* Emit function entry code *)
   D.comment (Printf.sprintf "probe %s %s" probe_name handler_code_sym);
@@ -1309,72 +1328,98 @@ let emit_probe_handler_wrapper p =
     I.mov rsp rbp;
   end;
   (* Prepare to call the handler: calculate and allocate stack space.
-     The calculations are simplified using the following property from Arch:
-     size_addr = 8 && size_int = 8 && size_float = 8  *)
-  (* Calculate and allocate stack slots for all live registers *)
-  let live = Reg.Set.elements p.probe_insn.live
-             |> List.filter Reg.is_reg
-             |> Array.of_list in
+     The calculations are simplified using the following property. *)
+  assert (size_addr = 8 && size_int = 8 && size_float = 8);
+  (* Compute the size of stack slots for all live hard registers. *)
+  let live =
+    Reg.Set.elements p.probe_insn.live
+    |> List.filter Reg.is_reg
+    |> Array.of_list
+  in
   let live_offset = 8 * (Array.length live) in
-  (* Calculate stack slots for spilling all arguments of the probe. *)
-  let aux_offset = 8*2 (* for saving r15 and xmm15 *) in
+  (* Compute the size of stack slots for spilling all arguments of the probe.
+     r15 and xmm15 are also spilled (see below). *)
+  let aux_offset = 8 * 2 (* for saving r15 and xmm15 *) in
   let tmp_offset = 8 * (Array.length p.probe_insn.arg) in
   let loc_args, loc_offset = Proc.loc_arguments p.probe_insn.arg in
   (* Ensure the stack is aligned.
-     Assuming that the stack at probe site is 16-byte aligned,
-     [loc_arguments] ensures that loc_offset is 16-byte aligned,
-     all temporaries are 8 bytes long,
-     return address is already pushed, and
-     optionally the frame pointer is already pushed on the stack. *)
-  let wrapper_frame_size k =  8 + (if fp then 8 else 0) + k in
+     Assuming that the stack at the probe site is 16-byte aligned,
+     [loc_arguments] ensures that [loc_offset] is 16-byte aligned.
+     All temporaries are 8 bytes long, the return address is already pushed,
+     and optionally the frame pointer is already pushed on the stack. *)
+  let wrapper_frame_size k = 8 + (if fp then 8 else 0) + k in
   let n =
     let k = live_offset + aux_offset + tmp_offset + loc_offset in
     assert (k mod 8 = 0);
-    if ((wrapper_frame_size k) mod 16) = 0 then k else k+8
+    if ((wrapper_frame_size k) mod 16) = 0 then k else k + 8
   in
   (* Allocate stack space *)
   emit_stack_offset n;
-  (* Save all live registers *)
-  let saved_live = Array.mapi (make_stack_loc ~offset:(n-live_offset)) live in
+  (* Save all live hard registers *)
+  (* CR mshinwell: It might be clearer if [offset] was set to
+     [tmp_offset + loc_offset + aux_offset].  I was expecting to then check:
+        n - live_offset = tmp_offset + loc_offset + aux_offset
+     but in fact this doesn't hold, because there might be another 8 bytes of
+     padding (which strangely gets put at the lowest address, leaving a gap
+     between the two temporary register spills and the live reg spills.
+     I think it's probably clearest to have the padding at the
+     highest address, which means [offset] here should be just
+     [tmp_offset + loc_offset + aux_offset].  Then all of the following offset
+     calculations look uniform. *)
+  let saved_live = Array.mapi (make_stack_loc ~offset:(n - live_offset)) live in
   Array.iteri (fun i reg -> move reg saved_live.(i)) live;
   (* Spill r15 and xmm15 to free them to be used as temporary registers
      for stack to stack copying. *)
-  let offset = tmp_offset+loc_offset in
+  let offset = tmp_offset + loc_offset in
   let saved_r15 = make_stack_loc 0 (Reg.dummy) ~offset in
+  (* CR mshinwell: I don't think we need saved_xmm15.  If the probe is being
+     treated like a call then all of its arguments must be valid OCaml
+     values, not naked floats.  See also CR below about register types. *)
   let saved_xmm15 = make_stack_loc 1 (phys_reg 115) ~offset in
   I.mov r15 (reg saved_r15);
   I.movsd xmm15 (reg saved_xmm15);
-  (* Spill all arguments of the probe. *)
+  (* Spill all arguments of the probe.  Some of these may already be on the
+     stack, in which case a temporary is used for the move. *)
   let tmp = Array.mapi (make_stack_loc ~offset:loc_offset) p.probe_insn.arg in
-  Array.iteri (fun i reg -> emit_move reg (tmp.(i))) p.probe_insn.arg;
+  Array.iteri (fun i reg -> move_allowing_stack_to_stack reg (tmp.(i)))
+    p.probe_insn.arg;
   (* Load probe arguments to correct locations for the handler *)
-  Array.iteri (fun i reg -> emit_move tmp.(i) reg) loc_args;
-  (* Reload spilled registers *)
+  Array.iteri (fun i reg -> move_allowing_stack_to_stack tmp.(i) reg) loc_args;
+  (* Reload spilled registers used as temporaries *)
   I.mov (reg saved_r15) r15;
   I.movsd (reg saved_xmm15) xmm15;
   (* Emit call to handler *)
   add_used_symbol handler_code_sym;
   emit_call handler_code_sym;
-  (* Record a fake frame description for the wrapper *)
+  (* Record a frame description for the wrapper *)
   let label = new_label () in
-  let list = Array.fold_right (fun (r:Reg.t) acc ->
-    match r.loc with
-    | Stack (Outgoing k) ->
-      (match r.typ with
-       | Val -> k::acc
-       | _ -> acc)
-    | _ -> assert false)
+  let live_offset =
+    Array.fold_right (fun (r:Reg.t) acc ->
+      match r.loc with
+      | Stack (Outgoing k) ->
+        (match r.typ with
+        | Val -> k::acc
+        (* CR mshinwell: I'm unsure about this next line.  The possible cases
+           are: Val, Addr, Int, Float.
+           Val and Int should both be in the previous case, I think.
+           I don't think Addr or Float should ever arise here; the arguments
+           to a call should always be valid OCaml values.  However it would
+           be best to have a proper error (Misc.fatal_errorf). *)
+        | _ -> acc)
+      | _ -> assert false)
     saved_live
     []
   in
-  record_frame_descr ~label ~frame_size:(wrapper_frame_size n) ~live_offset:list
+  record_frame_descr ~label ~frame_size:(wrapper_frame_size n) ~live_offset
     (Dbg_other Debuginfo.none);
   def_label label;
-  (* Restore all live registers and free stack space they occupied. *)
+  (* After the probe handler has finished executing, restore all live registers
+     and free stack space. *)
   Array.iteri (fun i reg -> move saved_live.(i) reg) live;
-  (* Free stack space *)
   emit_stack_offset (-n);
-  if fp then pop rbp;
+  if fp then begin
+    pop rbp
+  end;
   I.ret ();
   cfi_endproc ();
   emit_function_type_and_size wrap_label
@@ -1463,10 +1508,10 @@ let emit_probe_notes0 () =
   end;
   D.align 2;
   String.Map.iter (fun _ label ->
-    D.global label;
-    _label label;
-    D.word (const 0);
-    add_def_symbol label)
+      D.global label;
+      _label label;
+      D.word (const 0);
+      add_def_symbol label)
     !probe_semaphores
 
 let emit_probe_notes () =
