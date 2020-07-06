@@ -1399,13 +1399,19 @@ let emit_probe_handler_wrapper p =
       | Stack (Outgoing k) ->
         (match r.typ with
         | Val -> k::acc
-        (* CR mshinwell: I'm unsure about this next line.  The possible cases
+        (* XCR mshinwell: I'm unsure about this next line.  The possible cases
            are: Val, Addr, Int, Float.
            Val and Int should both be in the previous case, I think.
            I don't think Addr or Float should ever arise here; the arguments
            to a call should always be valid OCaml values.  However it would
-           be best to have a proper error (Misc.fatal_errorf). *)
-        | _ -> acc)
+           be best to have a proper error (Misc.fatal_errorf).
+
+           gyorsh: Only Val needs to be recorded. Addr should never arise
+           here. Int and Float are possible as live set at the probe site
+           includes intermediate values of the caller.
+        *)
+        | Int | Float -> acc
+        | Addr -> Misc.fatal_error ("bad GC root " ^ Reg.name r))
       | _ -> assert false)
     saved_live
     []
