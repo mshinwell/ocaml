@@ -522,13 +522,14 @@ let stack_to_stack_move (src : Reg.t) (dst : Reg.t) =
   assert (src.typ = dst.typ);
   if (src.loc <> dst.loc) then begin
     match src.typ with
-    | Int | Addr | Val ->
+    | Int | Val ->
       (* Not calling move because r15 is not in int_reg_name. *)
       I.mov (reg src) r15;
       I.mov r15 (reg dst)
-    | Float ->
-      I.movsd (reg src) xmm15;
-      I.movsd xmm15 (reg dst)
+    | Float | Addr ->
+      Misc.fatal_errorf
+        "Unexpected register type for stack to stack move: from %s to %s\n"
+        (Reg.name src) (Reg.name dst)
   end
 
 let move_allowing_stack_to_stack src dst =
@@ -1245,8 +1246,11 @@ let make_stack_loc ~offset i (r : Reg.t) =
      as offset [n] from the stack pointer,
      rather than a calculation relative to the stack frame,
      which is incorrect for floats in the wrapper's frame. *)
-  (* CR mshinwell: I don't understand why we would ever have floats here.
-     See two CRs below. *)
+  (* XCR mshinwell: I don't understand why we would ever have floats here.
+     See two CRs below.
+
+     gyorsh: this is used for saving live vars which can be floats.
+  *)
   let loc = Stack (Outgoing (offset + (8*i))) in
   (* Manufacture stack entry with this register's type *)
   Reg.at_location r.typ loc
@@ -1281,8 +1285,7 @@ let make_stack_loc ~offset i (r : Reg.t) =
    |------------|
    | live       | saved live registers
    |------------|
-   | xmm15      | spilled regs used as temporaries for stack to stack copying
-   | r15        |
+   | r15        | spill to use as a temporary for stack to stack move [2]
    |------------|
    | tmp        | spilled reg and stack arguments of the wrapper
    |------------|<-- 16-byte aligned [1]
@@ -1292,6 +1295,12 @@ let make_stack_loc ~offset i (r : Reg.t) =
    [1] To ensure that the stack before the call from the wrapper to the handler
    is 16-byte aligned, we align this explicitly. It is a little wasteful,
    but reuses the calculation made by [Proc.loc_arguments].
+
+   [2] Stack to stack moves are only used for probe arguments,
+   which must be valid OCaml values and not naked floats,
+   because probes are treated like calls.
+   Therefore, for now, we do not need a temporary register of type float.
+   This assumption will be violated with unboxed types.
 *)
 
 (* Can't be called from any other place
@@ -1337,9 +1346,8 @@ let emit_probe_handler_wrapper p =
     |> Array.of_list
   in
   let live_offset = 8 * (Array.length live) in
-  (* Compute the size of stack slots for spilling all arguments of the probe.
-     r15 and xmm15 are also spilled (see below). *)
-  let aux_offset = 8 * 2 (* for saving r15 and xmm15 *) in
+  (* Compute the size of stack slots for spilling all arguments of the probe. *)
+  let aux_offset = 8 (* for saving r15 *) in
   let tmp_offset = 8 * (Array.length p.probe_insn.arg) in
   let loc_args, loc_offset = Proc.loc_arguments p.probe_insn.arg in
   (* Ensure the stack is aligned.
@@ -1368,16 +1376,11 @@ let emit_probe_handler_wrapper p =
      calculations look uniform. *)
   let saved_live = Array.mapi (make_stack_loc ~offset:(n - live_offset)) live in
   Array.iteri (fun i reg -> move reg saved_live.(i)) live;
-  (* Spill r15 and xmm15 to free them to be used as temporary registers
+  (* Spill r15 to free it to be used as temporary registers
      for stack to stack copying. *)
   let offset = tmp_offset + loc_offset in
   let saved_r15 = make_stack_loc 0 (Reg.dummy) ~offset in
-  (* CR mshinwell: I don't think we need saved_xmm15.  If the probe is being
-     treated like a call then all of its arguments must be valid OCaml
-     values, not naked floats.  See also CR below about register types. *)
-  let saved_xmm15 = make_stack_loc 1 (phys_reg 115) ~offset in
   I.mov r15 (reg saved_r15);
-  I.movsd xmm15 (reg saved_xmm15);
   (* Spill all arguments of the probe.  Some of these may already be on the
      stack, in which case a temporary is used for the move. *)
   let tmp = Array.mapi (make_stack_loc ~offset:loc_offset) p.probe_insn.arg in
@@ -1387,7 +1390,6 @@ let emit_probe_handler_wrapper p =
   Array.iteri (fun i reg -> move_allowing_stack_to_stack tmp.(i) reg) loc_args;
   (* Reload spilled registers used as temporaries *)
   I.mov (reg saved_r15) r15;
-  I.movsd (reg saved_xmm15) xmm15;
   (* Emit call to handler *)
   add_used_symbol handler_code_sym;
   emit_call handler_code_sym;
