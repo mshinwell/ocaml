@@ -331,19 +331,20 @@ type simplify_function_result = {
   new_code_id : Code_id.t;
   params_and_body : Function_params_and_body.t;
   function_type : T.Function_declaration_type.t;
-  code_age_relation : Code_age_relation.t;
-  r : R.t;
+  dacc_after_body : DA.t;
+  r_after_upwards_traversal : R.t;
 }
 
 let simplify_function context r closure_id function_decl
-      ~closure_bound_names_inside_function code_age_relation =
+      ~closure_bound_names_inside_function code_age_relation
+      ~lifted_consts_prev_functions =
   let name = Closure_id.to_string closure_id in
   Profile.record_call ~accumulate:true name (fun () ->
     let code_id = FD.code_id function_decl in
     let params_and_body =
       DE.find_code (DA.denv (C.dacc_prior_to_sets context)) code_id
     in
-    let params_and_body, dacc_after_body, r =
+    let params_and_body, dacc_after_body, r_after_upwards_traversal =
       Function_params_and_body.pattern_match params_and_body
         ~f:(fun ~return_continuation exn_continuation params ~body
                 ~my_closure ->
@@ -351,6 +352,10 @@ let simplify_function context r closure_id function_decl
             dacc_inside_function context r ~params ~my_closure closure_id
               ~closure_bound_names_inside_function
           in
+          if not (DA.no_lifted_constants dacc) then begin
+            Misc.fatal_errorf "Did not expect lifted constants in [dacc]:@ %a"
+              DA.print dacc
+          end;
           let dacc =
             DA.map_denv dacc ~f:(fun denv ->
               denv
@@ -361,7 +366,10 @@ let simplify_function context r closure_id function_decl
                     code_age_relation
                 in
                 TE.with_code_age_relation typing_env code_age_relation)
-              |> DE.add_lifted_constants ~lifted:(R.get_lifted_constants r))
+              |> fun denv ->
+                (* Lifted constants from previous functions in the set get
+                   put into the environment for subsequent functions. *)
+                DE.add_lifted_constants denv lifted_consts_prev_functions)
           in
           assert (not (DE.at_unit_toplevel (DA.denv dacc)));
           (* CR mshinwell: DE.no_longer_defining_symbol is redundant now? *)
@@ -373,14 +381,14 @@ let simplify_function context r closure_id function_decl
               ~return_cont_scope:Scope.initial
               ~exn_cont_scope:(Scope.next Scope.initial)
           with
-          | body, dacc_after_body, r ->
+          | body, dacc_after_body, r_after_upwards_traversal ->
             let dbg = Function_params_and_body.debuginfo params_and_body in
             (* CR mshinwell: Should probably look at [cont_uses]? *)
             let params_and_body =
               Function_params_and_body.create ~return_continuation
                 exn_continuation params ~dbg ~body ~my_closure
             in
-            params_and_body, dacc_after_body, r
+            params_and_body, dacc_after_body, r_after_upwards_traversal
           | exception Misc.Fatal_error ->
             if !Clflags.flambda_context_on_error then begin
               Format.eprintf "\n%sContext is:%s simplifying function \
@@ -410,15 +418,12 @@ let simplify_function context r closure_id function_decl
       function_decl_type (DA.denv dacc_after_body) function_decl
         ~params_and_body Rec_info.initial
     in
-    let code_age_relation =
-      TE.code_age_relation (DA.typing_env dacc_after_body)
-    in
     { function_decl;
       new_code_id;
       params_and_body;
       function_type;
-      code_age_relation;
-      r;
+      dacc_after_body;
+      r_after_upwards_traversal;
     })
 
 type simplify_set_of_closures0_result = {
@@ -431,24 +436,28 @@ type simplify_set_of_closures0_result = {
 let simplify_set_of_closures0 dacc context set_of_closures
       ~closure_bound_names ~closure_bound_names_inside ~closure_elements
       ~closure_element_types =
-  let r, prior_lifted_constants =
-    R.get_and_clear_lifted_constants (DA.r dacc)
-  in
-  let dacc = DA.with_r dacc r in
   let function_decls = Set_of_closures.function_decls set_of_closures in
   let all_function_decls_in_set =
     Function_declarations.funs_in_order function_decls
   in
-  let all_function_decls_in_set, code, fun_types, code_age_relation, r =
+  if not (DA.no_lifted_constants dacc) then begin
+    Misc.fatal_errorf "Did not expect lifted constants in [dacc]:@ %a"
+      DA.print dacc
+  end;
+  let all_function_decls_in_set, code, fun_types, code_age_relation,
+      r_after_upwards_traversal, lifted_consts =
     Closure_id.Lmap.fold
       (fun closure_id function_decl
            (result_function_decls_in_set, code, fun_types,
-            code_age_relation, r) ->
+            code_age_relation, r, lifted_consts_prev_functions) ->
         let { function_decl; new_code_id; params_and_body; function_type;
-              code_age_relation; r; } =
+              dacc_after_body; r_after_upwards_traversal; } =
           simplify_function context r closure_id function_decl
             ~closure_bound_names_inside_function:closure_bound_names_inside
-            code_age_relation
+            code_age_relation ~lifted_consts_prev_functions
+        in
+        let lifted_consts_this_function =
+          DA.get_lifted_constants dacc_after_body
         in
         let result_function_decls_in_set =
           Closure_id.Lmap.add closure_id function_decl
@@ -456,11 +465,19 @@ let simplify_set_of_closures0 dacc context set_of_closures
         in
         let code = Code_id.Lmap.add new_code_id params_and_body code in
         let fun_types = Closure_id.Map.add closure_id function_type fun_types in
-        result_function_decls_in_set, code, fun_types, code_age_relation, r)
+        let lifted_consts_prev_functions =
+          LCS.union lifted_consts_this_function lifted_consts_prev_functions
+        in
+        let code_age_relation =
+          TE.code_age_relation (DA.typing_env dacc_after_body)
+        in
+        result_function_decls_in_set, code, fun_types, code_age_relation,
+          r_after_upwards_traversal, lifted_consts_prev_functions)
       all_function_decls_in_set
       (Closure_id.Lmap.empty, Code_id.Lmap.empty, Closure_id.Map.empty,
-        TE.code_age_relation (DA.typing_env dacc), DA.r dacc)
+        TE.code_age_relation (DA.typing_env dacc), DA.r dacc, LCS.empty)
   in
+  let dacc = DA.add_lifted_constants dacc lifted_consts in
   let closure_types_by_bound_name =
     let closure_types_via_aliases =
       Closure_id.Map.map (fun name ->
@@ -489,22 +506,18 @@ let simplify_set_of_closures0 dacc context set_of_closures
      could further add equalities between those irrelevant variables and the
      bound closure variables themselves.) *)
   let dacc =
-    DA.map_denv (DA.with_r dacc r) ~f:(fun denv ->
+    DA.map_denv (DA.with_r dacc r_after_upwards_traversal) ~f:(fun denv ->
       denv
       |> DE.map_typing_env ~f:(fun typing_env ->
         TE.with_code_age_relation typing_env code_age_relation)
       |> Closure_id.Map.fold (fun _closure_id bound_name denv ->
              DE.define_name_if_undefined denv bound_name K.value)
            closure_bound_names
-      |> DE.add_lifted_constants ~lifted:(R.get_lifted_constants r)
+      |> fun denv -> DE.add_lifted_constants denv lifted_consts
       |> Name_in_binding_pos.Map.fold (fun bound_name closure_type denv ->
              let bound_name = Name_in_binding_pos.to_name bound_name in
              DE.add_equation_on_name denv bound_name closure_type)
            closure_types_by_bound_name)
-  in
-  let dacc =
-    DA.with_r dacc
-      (R.add_prior_lifted_constants (DA.r dacc) prior_lifted_constants)
   in
   let set_of_closures =
     Function_declarations.create all_function_decls_in_set
@@ -580,8 +593,9 @@ let simplify_and_lift_set_of_closures dacc ~closure_bound_vars_inverse
     = Closure_id.Map.cardinal closure_symbols_map);
   let types_of_symbols =
     Symbol.Set.fold (fun symbol types_of_symbols ->
-        let typ = DE.find_symbol (DA.denv dacc) symbol in
-        Symbol.Map.add symbol typ types_of_symbols)
+        let denv = DA.denv dacc in
+        let typ = DE.find_symbol denv symbol in
+        Symbol.Map.add symbol (denv, typ) types_of_symbols)
       closure_symbols_set
       Symbol.Map.empty
   in
@@ -608,21 +622,14 @@ let simplify_and_lift_set_of_closures dacc ~closure_bound_vars_inverse
     }]
   in
   let set_of_closures_lifted_constant =
-    Lifted_constant.create (DA.denv dacc) bound_symbols static_const
-      ~types_of_symbols
+    Lifted_constant.create bound_symbols static_const ~types_of_symbols
   in
-  let r =
-    R.new_lifted_constant (DA.r dacc) set_of_closures_lifted_constant
+  let dacc =
+    DA.add_lifted_constant dacc set_of_closures_lifted_constant
   in
   let denv =
-    DE.add_lifted_constants (DA.denv dacc)
-      ~lifted:[set_of_closures_lifted_constant]
+    DE.add_lifted_constant (DA.denv dacc) set_of_closures_lifted_constant
   in
-  (*
-  Format.eprintf "NON LIFTED:@ %a\n%!" Static_const.print static_const;
-  Format.eprintf "CAR:@ %a\n%!"
-    Code_age_relation.print (TE.code_age_relation (DE.typing_env denv));
-  *)
   let denv, bindings =
     Closure_id.Map.fold (fun closure_id bound_var (denv, bindings) ->
         match Closure_id.Map.find closure_id closure_symbols_map with
@@ -639,9 +646,9 @@ let simplify_and_lift_set_of_closures dacc ~closure_bound_vars_inverse
       closure_bound_vars
       (denv, [])
   in
-  bindings, DA.with_denv (DA.with_r dacc r) denv
+  bindings, DA.with_denv dacc denv
 
-let simplify_non_lifted_set_of_closures0 dacc ~bound_vars ~closure_bound_vars
+let simplify_non_lifted_set_of_closures0 dacc bound_vars ~closure_bound_vars
       set_of_closures ~closure_elements ~closure_element_types =
   let closure_bound_names =
     Closure_id.Map.map Name_in_binding_pos.var closure_bound_vars
@@ -673,15 +680,12 @@ let simplify_non_lifted_set_of_closures0 dacc ~bound_vars ~closure_bound_vars
      lifted and non-lifted cases; we always need the new code in the
      environment and [r]. *)
   let lifted_constant =
-    Lifted_constant.create_pieces_of_code (DA.denv dacc)
+    Lifted_constant.create_pieces_of_code
       code ~newer_versions_of:(C.new_to_old_code_ids_all_sets context)
   in
   let dacc =
-    DA.map_r dacc ~f:(fun r -> R.new_lifted_constant r lifted_constant)
-  in
-  let dacc =
-    DA.map_denv dacc ~f:(fun denv ->
-      DE.add_lifted_constants denv ~lifted:[lifted_constant])
+    DA.add_lifted_constant dacc lifted_constant
+    |> DA.map_denv ~f:(fun denv -> DE.add_lifted_constant denv lifted_constant)
   in
   [bound_vars, defining_expr], dacc
 
@@ -751,7 +755,7 @@ let type_closure_elements_for_previously_lifted_set dacc
     set_of_closures
 
 let simplify_non_lifted_set_of_closures dacc
-      ~(bound_vars : Bindable_let_bound.t) set_of_closures =
+      (bound_vars : Bindable_let_bound.t) set_of_closures =
   let closure_bound_vars =
     Bindable_let_bound.must_be_set_of_closures bound_vars
   in
@@ -776,7 +780,7 @@ let simplify_non_lifted_set_of_closures dacc
     simplify_and_lift_set_of_closures dacc ~closure_bound_vars_inverse
       ~closure_bound_vars set_of_closures ~closure_elements
   else
-    simplify_non_lifted_set_of_closures0 dacc ~bound_vars ~closure_bound_vars
+    simplify_non_lifted_set_of_closures0 dacc bound_vars ~closure_bound_vars
       set_of_closures ~closure_elements ~closure_element_types
 
 let simplify_lifted_set_of_closures0 context ~closure_symbols
