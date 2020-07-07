@@ -44,11 +44,15 @@ let lift_non_closure_discovered_via_reified_continuation_param_types dacc
       DA.map_r dacc ~f:(fun r ->
         R.consider_constant_for_sharing r symbol static_const)
     in
-    let reified_definitions =
-      (Let_symbol.Bound_symbols.Singleton symbol, static_const,
-        Name_occurrences.empty)
-      :: reified_definitions
+    let types_of_symbols =
+      (* The environment in this mapping may be used by
+         [Sort_lifted_constants], but the type will not be. *)
+      Symbol.Map.singleton symbol (DA.denv dacc, T.any_value ())
     in
+    let lifted_constant =
+      LC.create (Singleton symbol) static_const ~types_of_symbols
+    in
+    let reified_definitions = (lifted_constant, None) :: reified_definitions in
     let reified_continuation_params_to_symbols =
       Variable.Map.add var symbol reified_continuation_params_to_symbols
     in
@@ -128,7 +132,7 @@ let lift_set_of_closures_discovered_via_reified_continuation_param_types dacc
          via symbols.)  See long comment above concerning subtle point
          relating to dependencies that might be exposed during such
          simplification. *)
-      Let_symbol.pieces_of_code
+      Flambda.pieces_of_code
         ~newer_versions_of:Code_id.Map.empty
         ~set_of_closures:(closure_symbols, set_of_closures)
         Code_id.Lmap.empty
@@ -170,8 +174,21 @@ let lift_set_of_closures_discovered_via_reified_continuation_param_types dacc
         closure_vars
         Name_occurrences.empty
     in
+    let types_of_symbols =
+      (* The environments in this mapping may be used by
+         [Sort_lifted_constants], but the types will not be. *)
+      Closure_id.Lmap.fold (fun _closure_id closure_symbol types_of_symbols ->
+          Symbol.Map.add closure_symbol
+            (DA.denv dacc, T.any_value ())
+          types_of_symbols)
+        closure_symbols
+        Symbol.Map.empty
+    in
+    let lifted_constant =
+      LC.create (fst definition) (snd definition) ~types_of_symbols
+    in
     let reified_definitions =
-      (fst definition, snd definition, extra_deps) :: reified_definitions
+      (lifted_constant, Some (DA.denv dacc, extra_deps)) :: reified_definitions
     in
     let closure_symbol_map =
       Closure_id.Lmap.bindings closure_symbols
@@ -296,17 +313,12 @@ let lift_via_reification_of_continuation_param_types0 dacc ~params
      continuation's parameters, which are in turn substituted for symbols at the
      Cmm translation phase). (Any SCC class containing >1 set of closures is
      maybe a bug?) *)
-  let reified_definitions =
-    Sort_lifted_constants.sort dacc reified_definitions
-  in
+  let reified_definitions = Sort_lifted_constants.sort reified_definitions in
   let handler =
-    List.fold_left (fun handler (bound_symbols, defining_expr) ->
-        (*
-        Format.eprintf "Creating Let_symbol for:@ %a\n%!"
-          Bound_symbols.print bound_symbols;
-        *)
-        Let_symbol.create Dominator bound_symbols defining_expr handler
-        |> Expr.create_let_symbol)
+    List.fold_left (fun handler lifted_constant ->
+        let bound_symbols = LC.bound_symbols lifted_constant in
+        let defining_expr = LC.defining_expr lifted_constant in
+        Expr.create_let_symbol bound_symbols Dominator defining_expr handler)
       handler
       reified_definitions.bindings_outermost_last
   in

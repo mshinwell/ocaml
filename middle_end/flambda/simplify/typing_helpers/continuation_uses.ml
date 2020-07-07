@@ -18,6 +18,7 @@
 
 module DE = Simplify_env_and_result.Downwards_env
 module LC = Simplify_env_and_result.Lifted_constant
+module Lifted_constant_state = Simplify_env_and_result.Lifted_constant_state
 module T = Flambda_type
 module TE = Flambda_type.Typing_env
 module U = One_continuation_use
@@ -139,6 +140,9 @@ Format.eprintf "Unknown at or later than %a\n%!"
            discovered whilst simplifying the corresponding body. *)
         (* CR mshinwell: The following should be factored out as much as
            possible from here and [DE.add_lifted_constants]. *)
+        let consts_lifted_during_body =
+          Lifted_constant_state.all consts_lifted_during_body
+        in
         let use_env =
           List.fold_left (fun use_env const ->
               Symbol.Map.fold (fun symbol _ty use_env ->
@@ -154,9 +158,8 @@ Format.eprintf "Unknown at or later than %a\n%!"
         in
         let use_env =
           List.fold_left (fun use_env const ->
-              let denv_at_definition = LC.denv_at_definition const in
               let types_of_symbols = LC.types_of_symbols const in
-              Symbol.Map.fold (fun sym typ use_env ->
+              Symbol.Map.fold (fun sym (denv_at_definition, typ) use_env ->
                   let sym = Name.symbol sym in
                   let env_extension =
                     T.make_suitable_for_environment typ

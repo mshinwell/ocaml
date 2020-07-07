@@ -31,6 +31,7 @@ module rec Downwards_env : sig
   include I.Downwards_env
     with type result := Result.t
     with type lifted_constant := Lifted_constant.t
+    with type lifted_constant_state := Lifted_constant_state.t
 end = struct
   type t = {
     backend : (module Flambda_backend_intf.S);
@@ -410,21 +411,13 @@ end = struct
       code = from.code;
     }
 
-  let add_lifted_constants t ~lifted =
-    (*
-    let num_lifted_constants = List.length lifted in
-    if num_lifted_constants > 0 then begin
-      Format.eprintf "Adding %d lifted constants\n%!" (List.length lifted)
-    end;
-    Format.eprintf "Adding lifted:@ %a\n%!"
-      (Format.pp_print_list ~pp_sep:Format.pp_print_space
-        Lifted_constant.print) lifted;
-    *)
+  let add_lifted_constants t lifted =
     let module LC = Lifted_constant in
+    let lifted = Lifted_constant_state.all lifted in
     let t =
       List.fold_left (fun t lifted_constant ->
           let types_of_symbols = LC.types_of_symbols lifted_constant in
-          Symbol.Map.fold (fun sym typ t ->
+          Symbol.Map.fold (fun sym (_denv, typ) t ->
               define_symbol t sym (T.kind typ))
             types_of_symbols
             t)
@@ -433,9 +426,8 @@ end = struct
     in
     let typing_env =
       List.fold_left (fun typing_env lifted_constant ->
-          let denv_at_definition = LC.denv_at_definition lifted_constant in
           let types_of_symbols = LC.types_of_symbols lifted_constant in
-          Symbol.Map.fold (fun sym typ typing_env ->
+          Symbol.Map.fold (fun sym (denv_at_definition, typ) typing_env ->
               let sym = Name.symbol sym in
               let env_extension =
                 (* CR mshinwell: Sometimes we might already have the types
@@ -468,6 +460,10 @@ end = struct
           denv)
       (with_typing_env t typing_env)
       lifted
+
+  let add_lifted_constant t const =
+    add_lifted_constants t
+      (Lifted_constant_state.singleton_still_to_be_placed const)
 
   let set_inlined_debuginfo t dbg =
     { t with inlined_debuginfo = dbg; }
@@ -665,66 +661,82 @@ end = struct
 end and Result : sig
   include I.Result
     with type lifted_constant := Lifted_constant.t
+    with type lifted_constant_state := Lifted_constant_state.t
 end = struct
   type t =
     { resolver : I.resolver;
       get_imported_names : I.get_imported_names;
-      lifted_constants_innermost_last : Lifted_constant.t list;
+      lifted_constants : Lifted_constant_state.t;
       shareable_constants : Symbol.t Static_const.Map.t;
       used_closure_vars : Var_within_closure.Set.t;
       all_code : Exported_code.t;
     }
 
   let print ppf { resolver = _; get_imported_names = _;
-                  lifted_constants_innermost_last;
+                  lifted_constants;
                   shareable_constants; used_closure_vars;
                   all_code = _;
                 } =
     Format.fprintf ppf "@[<hov 1>(\
-        @[<hov 1>(lifted_constants_innermost_last@ %a)@]@ \
+        @[<hov 1>(lifted_constants@ %a)@]@ \
         @[<hov 1>(shareable_constants@ %a)@]@ \
         @[<hov 1>(used_closure_vars@ %a)@]\
         )@]"
-      (Format.pp_print_list ~pp_sep:Format.pp_print_space Lifted_constant.print)
-        lifted_constants_innermost_last
+      Lifted_constant_state.print lifted_constants
       (Static_const.Map.print Symbol.print) shareable_constants
       Var_within_closure.Set.print used_closure_vars
 
   let create ~resolver ~get_imported_names =
     { resolver;
       get_imported_names;
-      lifted_constants_innermost_last = [];
+      lifted_constants = Lifted_constant_state.empty;
       shareable_constants = Static_const.Map.empty;
       used_closure_vars = Var_within_closure.Set.empty;
       all_code = Exported_code.empty;
     }
 
-  let new_lifted_constant t lifted_constant =
+  let add_still_to_be_placed_lifted_constant t const =
     { t with
-      lifted_constants_innermost_last =
-        lifted_constant :: t.lifted_constants_innermost_last;
+      lifted_constants =
+        Lifted_constant_state.add_still_to_be_placed t.lifted_constants const;
     }
 
-  let get_lifted_constants t = t.lifted_constants_innermost_last
+  let add_placed_lifted_constant t const =
+    { t with
+      lifted_constants =
+        Lifted_constant_state.add_placed t.lifted_constants const;
+    }
+
+  let add_lifted_constants t constants =
+    { t with
+      lifted_constants =
+        Lifted_constant_state.union t.lifted_constants constants;
+    }
+
+  let get_lifted_constants t = t.lifted_constants
 
   let clear_lifted_constants t =
     { t with
-      lifted_constants_innermost_last = [];
+      lifted_constants = Lifted_constant_state.empty;
     }
 
-  let add_prior_lifted_constants t constants =
-    { t with
-      lifted_constants_innermost_last =
-        t.lifted_constants_innermost_last @ constants;
-    }
+  let no_lifted_constants t =
+    Lifted_constant_state.is_empty t.lifted_constants
 
   let get_and_clear_lifted_constants t =
-    let constants = t.lifted_constants_innermost_last in
+    let constants = t.lifted_constants in
     let t = clear_lifted_constants t in
     t, constants
 
   let set_lifted_constants t consts =
-    { t with lifted_constants_innermost_last = consts; }
+    { t with lifted_constants = consts; }
+
+  let transfer_placed_lifted_constants t ~from =
+    { t with
+      lifted_constants =
+        Lifted_constant_state.add_placed_from t.lifted_constants
+          ~from:from.lifted_constants;
+    }
 
   let find_shareable_constant t static_const =
     Static_const.Map.find_opt static_const t.shareable_constants
@@ -755,69 +767,145 @@ end and Lifted_constant : sig
     with type downwards_env := Downwards_env.t
 end = struct
   type t = {
-    denv : Downwards_env.t;
-    bound_symbols : Let_symbol.Bound_symbols.t;
+    bound_symbols : Bound_symbols.t;
     defining_expr : Static_const.t;
-    types_of_symbols : Flambda_type.t Symbol.Map.t;
+    types_of_symbols : (Downwards_env.t * Flambda_type.t) Symbol.Map.t;
   }
 
   let print ppf
-        { denv = _ ; bound_symbols; defining_expr; types_of_symbols = _; } =
+        { bound_symbols; defining_expr; types_of_symbols = _; } =
     Format.fprintf ppf "@[<hov 1>(\
         @[<hov 1>(bound_symbols@ %a)@]@ \
         @[<hov 1>(static_const@ %a)@]\
         )@]"
-      Let_symbol.Bound_symbols.print bound_symbols
+      Bound_symbols.print bound_symbols
       Static_const.print defining_expr
 
-  let create denv bound_symbols defining_expr ~types_of_symbols =
-    let being_defined = Let_symbol.Bound_symbols.being_defined bound_symbols in
+  let create bound_symbols defining_expr ~types_of_symbols =
+    let being_defined = Bound_symbols.being_defined bound_symbols in
     if not (Symbol.Set.equal (Symbol.Map.keys types_of_symbols) being_defined)
     then begin
       Misc.fatal_errorf "[types_of_symbols]:@ %a@ does not cover all symbols \
           in the definition:@ %a"
-        (Symbol.Map.print T.print) types_of_symbols
-        Let_symbol.Bound_symbols.print bound_symbols
+        (Symbol.Map.print T.print) (Symbol.Map.map snd types_of_symbols)
+        Bound_symbols.print bound_symbols
     end;
     (* CR mshinwell: This should check that [defining_expr] matches
        [bound_symbols] in the code/set-of-closures case *)
-    { denv;
-      bound_symbols;
+    { bound_symbols;
       defining_expr;
       types_of_symbols;
     }
 
-  let create_pieces_of_code denv ?newer_versions_of code =
+  let create_pieces_of_code ?newer_versions_of code =
     let bound_symbols, defining_expr =
-      Let_symbol.pieces_of_code ?newer_versions_of code
+      Flambda.pieces_of_code ?newer_versions_of code
     in
-    { denv;
-      bound_symbols;
+    { bound_symbols;
       defining_expr;
       types_of_symbols = Symbol.Map.empty;
     }
 
-  let create_piece_of_code denv ?newer_version_of code_id params_and_body =
+  let create_piece_of_code ?newer_version_of code_id params_and_body =
     let newer_versions_of =
       match newer_version_of with
       | None -> None
       | Some older -> Some (Code_id.Map.singleton code_id older)
     in
-    create_pieces_of_code denv ?newer_versions_of
+    create_pieces_of_code ?newer_versions_of
       (Code_id.Lmap.singleton code_id params_and_body)
 
-  let create_deleted_piece_of_code denv ?newer_versions_of code_id =
+  let create_deleted_piece_of_code ?newer_versions_of code_id =
     let bound_symbols, defining_expr =
-      Let_symbol.deleted_pieces_of_code ?newer_versions_of
+      Flambda.deleted_pieces_of_code ?newer_versions_of
         (Code_id.Set.singleton code_id)
     in
-    { denv;
-      bound_symbols;
+    { bound_symbols;
       defining_expr;
       types_of_symbols = Symbol.Map.empty;
     }
-  let denv_at_definition t = t.denv
   let bound_symbols t = t.bound_symbols
   let defining_expr t = t.defining_expr
   let types_of_symbols t = t.types_of_symbols
+end and Lifted_constant_state : sig
+  include I.Lifted_constant_state
+    with type lifted_constant := Lifted_constant.t
+
+  val empty : t
+  val is_empty : t -> bool
+
+  val singleton_still_to_be_placed : Lifted_constant.t -> t
+  val add_still_to_be_placed : t -> Lifted_constant.t -> t
+  val add_placed : t -> Lifted_constant.t -> t
+  val add_placed_from : t -> from:t -> t
+end = struct
+  type t = {
+    all : Lifted_constant.t list;
+    placed : Lifted_constant.t list;
+    still_to_be_placed : Lifted_constant.t list;
+  }
+
+  let print ppf { all; placed; still_to_be_placed; } =
+    let printer =
+      Format.pp_print_list ~pp_sep:Format.pp_print_space Lifted_constant.print
+    in
+    Format.fprintf ppf "@[<hov 1>(\
+        @[<hov 1>(all@ %a)@]@ \
+        @[<hov 1>(placed@ %a)@]@ \
+        @[<hov 1>(still_to_be_placed@ %a)@]@\
+        )@]"
+      printer all
+      printer placed
+      printer still_to_be_placed
+
+  let empty =
+    { all = [];
+      placed = [];
+      still_to_be_placed = [];
+    }
+
+  let is_empty t =
+    match t.all with
+    | [] -> true
+    | _::_ -> false
+
+  let still_to_be_placed t = t.still_to_be_placed
+  let placed t = t.placed
+  let all t = t.all
+
+  let union t1 t2 =
+    { all = t1.all @ t2.all;
+      placed = t1.placed @ t2.placed;
+      still_to_be_placed = t1.still_to_be_placed @ t2.still_to_be_placed;
+    }
+
+  let singleton_still_to_be_placed const =
+    { all = [const];
+      placed = [];
+      still_to_be_placed = [const];
+    }
+
+  let add_still_to_be_placed t const =
+    { all = const :: t.all;
+      placed = t.placed;
+      still_to_be_placed = const :: t.still_to_be_placed;
+    }
+
+  let add_placed t const =
+    { all = const :: t.all;
+      placed = const :: t.placed;
+      still_to_be_placed = t.still_to_be_placed;
+    }
+
+  let add_placed_from t ~from =
+    { all = t.all @ from.placed;
+      placed = t.placed @ from.placed;
+      still_to_be_placed = t.still_to_be_placed;
+    }
+
+  let only_still_to_be_placed t =
+    { all = t.still_to_be_placed;
+      placed = [];
+      still_to_be_placed = t.still_to_be_placed;
+    }
 end

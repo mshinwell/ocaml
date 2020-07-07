@@ -18,7 +18,6 @@
 
 module Apply = Flambda.Apply
 module Apply_cont = Flambda.Apply_cont
-module Bound_symbols = Flambda.Let_symbol_expr.Bound_symbols
 module Continuation_handler = Flambda.Continuation_handler
 module Continuation_handlers = Flambda.Continuation_handlers
 module Continuation_params_and_handler = Flambda.Continuation_params_and_handler
@@ -28,8 +27,8 @@ module Function_declarations = Flambda.Function_declarations
 module Function_params_and_body = Flambda.Function_params_and_body
 module Let_cont = Flambda.Let_cont
 module Let = Flambda.Let
-module Let_symbol = Flambda.Let_symbol_expr
 module Lifted_constant = Simplify_env_and_result.Lifted_constant
+module Lifted_constant_state = Simplify_env_and_result.Lifted_constant_state
 module Named = Flambda.Named
 module Non_recursive_let_cont_handler = Flambda.Non_recursive_let_cont_handler
 module Recursive_let_cont_handlers = Flambda.Recursive_let_cont_handlers

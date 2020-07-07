@@ -24,12 +24,12 @@
 open! Simplify_import
 
 type result = private {
-  bindings_outermost_last : (Bound_symbols.t * Static_const.t) list;
+  bindings_outermost_last : LC.t list;
 }
 
 (** The [Name_occurrences.t] values specify extra "hidden" dependencies of the
-    associated constant that must be taken into account. *)
-val sort
-   : DA.t
-  -> (Bound_symbols.t * Static_const.t * Name_occurrences.t) list
-  -> result
+    associated constant that must be taken into account.  The corresponding
+    environment must be provided for lookup of such names, since [LC.t]
+    values may contain multiple environments, so it wouldn't be clear which
+    one to choose. *)
+val sort : (LC.t * ((DE.t * Name_occurrences.t) option)) list -> result

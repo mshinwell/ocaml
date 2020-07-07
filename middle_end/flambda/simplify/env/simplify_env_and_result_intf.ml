@@ -28,6 +28,7 @@ module type Downwards_env = sig
 
   type result
   type lifted_constant
+  type lifted_constant_state
 
   val invariant : t -> unit
 
@@ -143,7 +144,9 @@ module type Downwards_env = sig
 
   val check_code_id_is_bound : t -> Code_id.t -> unit
 
-  val add_lifted_constants : t -> lifted:lifted_constant list -> t
+  val add_lifted_constant : t -> lifted_constant -> t
+
+  val add_lifted_constants : t -> lifted_constant_state -> t
 
   val define_code
      : t
@@ -264,6 +267,7 @@ end
 
 module type Result = sig
   type lifted_constant
+  type lifted_constant_state
 
   type t
 
@@ -274,25 +278,24 @@ module type Result = sig
     -> get_imported_names:get_imported_names
     -> t
 
-  val new_lifted_constant : t -> lifted_constant -> t
+  val no_lifted_constants : t -> bool
 
-(* can cause duplicates
-  val add_lifted_constants : t -> from:t -> t
-*)
+  val add_still_to_be_placed_lifted_constant : t -> lifted_constant -> t
 
-  (** Retrieve constants lifted to toplevel.  The constants must be defined
-      in the order returned (first element of the list defined first). *)
-  (* CR mshinwell: Update name to reflect this *)
-  val get_lifted_constants : t -> lifted_constant list
+  val add_placed_lifted_constant : t -> lifted_constant -> t
 
-  val get_and_clear_lifted_constants : t -> t * (lifted_constant list)
+  val add_lifted_constants : t -> lifted_constant_state -> t
 
-  val add_prior_lifted_constants : t -> lifted_constant list -> t
+  val get_lifted_constants : t -> lifted_constant_state
 
-  val set_lifted_constants : t -> lifted_constant list -> t
+  val get_and_clear_lifted_constants : t -> t * lifted_constant_state
 
-  (* CR mshinwell: This whole lifted/shareable constant interface probably
-     still needs some work *)
+  val clear_lifted_constants : t -> t
+
+  val set_lifted_constants : t -> lifted_constant_state -> t
+
+  val transfer_placed_lifted_constants : t -> from:t -> t
+
   val find_shareable_constant : t -> Static_const.t -> Symbol.t option
 
   val consider_constant_for_sharing : t -> Symbol.t -> Static_const.t -> t
@@ -303,8 +306,6 @@ module type Result = sig
     -> t
 
   val all_code : t -> Exported_code.t
-
-  val clear_lifted_constants : t -> t
 
   val add_use_of_closure_var : t -> Var_within_closure.t -> t
 
@@ -323,33 +324,45 @@ module type Lifted_constant = sig
 
   (** [create] takes the types of symbols to avoid re-inferring them. *)
   val create
-     : downwards_env
-    -> Flambda.Let_symbol_expr.Bound_symbols.t
+     : Bound_symbols.t
     -> Flambda.Static_const.t
-    -> types_of_symbols:Flambda_type.t Symbol.Map.t
+    -> types_of_symbols:(downwards_env * Flambda_type.t) Symbol.Map.t
     -> t
 
   val create_piece_of_code
-     : downwards_env
-    -> ?newer_version_of:Code_id.t
+     : ?newer_version_of:Code_id.t
     -> Code_id.t
     -> Flambda.Function_params_and_body.t
     -> t
 
   val create_pieces_of_code
-     : downwards_env
-    -> ?newer_versions_of:Code_id.t Code_id.Map.t
+     : ?newer_versions_of:Code_id.t Code_id.Map.t
     -> Flambda.Function_params_and_body.t Code_id.Lmap.t
     -> t
 
   val create_deleted_piece_of_code
-     : downwards_env
-    -> ?newer_versions_of:Code_id.t Code_id.Map.t
+     : ?newer_versions_of:Code_id.t Code_id.Map.t
     -> Code_id.t
     -> t
 
-  val denv_at_definition : t -> downwards_env
-  val bound_symbols : t -> Flambda.Let_symbol_expr.Bound_symbols.t
+  val bound_symbols : t -> Bound_symbols.t
   val defining_expr : t -> Flambda.Static_const.t
-  val types_of_symbols : t -> Flambda_type.t Symbol.Map.t
+  val types_of_symbols : t -> (downwards_env * Flambda_type.t) Symbol.Map.t
+end
+
+module type Lifted_constant_state = sig
+  type lifted_constant
+  type t
+
+  val print : Format.formatter -> t -> unit
+
+  val union : t -> t -> t
+
+  val only_still_to_be_placed : t -> t
+
+  val all : t -> lifted_constant list
+
+  val placed : t -> lifted_constant list
+
+  val still_to_be_placed : t -> lifted_constant list
 end
