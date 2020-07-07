@@ -111,7 +111,7 @@ let rec simplify_let
         expr, user_data, uacc
       else
         body, user_data, uacc
-    | Reified { definition; bound_symbol; static_const; dacc; } ->
+    | Reified { definition; bound_symbol; static_const; r; } ->
       if place_lifted_constants_immediately then begin
         Misc.fatal_errorf "Did not expect [Simplify_named] to return \
             [Reified] (bound symbol %a)"
@@ -124,9 +124,7 @@ let rec simplify_let
         Let_symbol.create Dominator bound_symbol static_const let_expr
         |> Expr.create_let_symbol
       in
-      (* We need to keep the shareable constants in dacc, but
-         revert to the typing env from original_dacc *)
-      let dacc = DA.with_r original_dacc (DA.r dacc) in
+      let dacc = DA.with_r original_dacc r in
       simplify_expr dacc let_symbol_expr k
     | Shared { symbol; kind; } ->
       if place_lifted_constants_immediately then begin

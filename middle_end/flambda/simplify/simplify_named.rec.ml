@@ -27,7 +27,7 @@ type simplify_named_result =
       definition : Named.t;
       bound_symbol : Let_symbol.Bound_symbols.t;
       static_const : Static_const.t;
-      dacc : Downwards_acc.t;
+      r : R.t;
     }
   | Shared of { symbol : Symbol.t; kind : Flambda_kind.t; }
 
@@ -93,7 +93,7 @@ let simplify_named0 dacc ~(bound_vars : Bindable_let_bound.t)
             { definition = named;
               bound_symbol = Let_symbol.Bound_symbols.Singleton symbol;
               static_const;
-              dacc;
+              r = DA.r dacc;
             }
       end
       else

@@ -27,7 +27,7 @@ type simplify_named_result = private
       definition : Named.t;
       bound_symbol : Let_symbol.Bound_symbols.t;
       static_const :  Static_const.t;
-      dacc : Downwards_acc.t;
+      r : R.t;
     }
   | Shared of { symbol : Symbol.t; kind : Flambda_kind.t; }
 
