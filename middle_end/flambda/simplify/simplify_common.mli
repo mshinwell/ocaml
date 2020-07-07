@@ -79,9 +79,8 @@ val bind_let_bound
        compilation unit. *)
 val create_let_symbol
    : Simplify_env_and_result.Result.t
-  -> Flambda.Let_symbol_expr.Scoping_rule.t
+  -> Symbol_scoping_rule.t
   -> Code_age_relation.t
-  -> Flambda.Let_symbol_expr.Bound_symbols.t
-  -> Flambda.Static_const.t
+  -> Simplify_env_and_result.Lifted_constant.t
   -> Flambda.Expr.t
   -> Flambda.Expr.t * Simplify_env_and_result.Result.t
