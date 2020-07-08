@@ -1245,12 +1245,8 @@ let make_stack_loc ~offset i (r : Reg.t) =
      because [slot_offset] emits (Outgoing n) directly
      as offset [n] from the stack pointer,
      rather than a calculation relative to the stack frame,
-     which is incorrect for floats in the wrapper's frame. *)
-  (* XCR mshinwell: I don't understand why we would ever have floats here.
-     See two CRs below.
-
-     gyorsh: this is used for saving live vars which can be floats.
-  *)
+     which is incorrect for naked floats (arising from live variables, not
+     probe arguments) in the wrapper's frame. *)
   let loc = Stack (Outgoing (offset + (8*i))) in
   (* Manufacture stack entry with this register's type *)
   Reg.at_location r.typ loc
@@ -1296,18 +1292,12 @@ let make_stack_loc ~offset i (r : Reg.t) =
    is 16-byte aligned, we align this explicitly. It is a little wasteful,
    but reuses the calculation made by [Proc.loc_arguments].
 
-   [2] Stack to stack moves are only used for probe arguments,
-   which must be valid OCaml values and not naked floats,
-   because probes are treated like calls.
+   [2] Stack to stack moves are only used for probe arguments, which must be
+   valid OCaml values and not naked floats, because probes are treated like
+   calls.
    Therefore, for now, we do not need a temporary register of type float.
-   This assumption will be violated with unboxed types.
+   This assumption might no longer hold in the presence of unboxed types.
 *)
-
-(* Can't be called from any other place
-   Has a normal frame
-   Global state is just to grab the caller's slots
-   Won't appear in OCaml backtrace as Debuginfo.none
-   Will probably appear in gdb backtrace *)
 
 let emit_probe_handler_wrapper p =
   let wrap_label = probe_handler_wrapper_name p.probe_label in
@@ -1363,22 +1353,11 @@ let emit_probe_handler_wrapper p =
   (* Allocate stack space *)
   emit_stack_offset n;
   (* Save all live hard registers *)
-  (* XCR mshinwell: It might be clearer if [offset] was set to
-     [tmp_offset + loc_offset + aux_offset].  I was expecting to then check:
-        n - live_offset = tmp_offset + loc_offset + aux_offset
-     but in fact this doesn't hold, because there might be another 8 bytes of
-     padding (which strangely gets put at the lowest address, leaving a gap
-     between the two temporary register spills and the live reg spills.
-     I think it's probably clearest to have the padding at the
-     highest address, which means [offset] here should be just
-     [tmp_offset + loc_offset + aux_offset].  Then all of the following offset
-     calculations look uniform.
-  *)
   let offset = aux_offset + tmp_offset + loc_offset in
   let saved_live = Array.mapi (make_stack_loc ~offset) live in
   Array.iteri (fun i reg -> move reg saved_live.(i)) live;
-  (* Spill r15 to free it to be used as temporary registers
-     for stack to stack copying. *)
+  (* Spill r15 to free it to be used as a temporary register for stack to
+     stack copying. *)
   let offset = tmp_offset + loc_offset in
   let saved_r15 = make_stack_loc 0 (Reg.dummy) ~offset in
   I.mov r15 (reg saved_r15);
@@ -1402,17 +1381,6 @@ let emit_probe_handler_wrapper p =
       | Stack (Outgoing k) ->
         (match r.typ with
         | Val -> k::acc
-        (* XCR mshinwell: I'm unsure about this next line.  The possible cases
-           are: Val, Addr, Int, Float.
-           Val and Int should both be in the previous case, I think.
-           I don't think Addr or Float should ever arise here; the arguments
-           to a call should always be valid OCaml values.  However it would
-           be best to have a proper error (Misc.fatal_errorf).
-
-           gyorsh: Only Val needs to be recorded. Addr should never arise
-           here. Int and Float are possible as live set at the probe site
-           includes intermediate values of the caller.
-        *)
         | Int | Float -> acc
         | Addr -> Misc.fatal_error ("bad GC root " ^ Reg.name r))
       | _ -> assert false)
