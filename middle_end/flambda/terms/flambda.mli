@@ -90,9 +90,13 @@ module rec Expr : sig
       (such as is required to bind a [Set_of_closures]). *)
   val create_pattern_let : Bindable_let_bound.t -> Named.t -> t -> t
 
-  (** Create a [Let_symbol] expression that binds a statically-allocated
-      value to a symbol. *)
-  val create_let_symbol : Let_symbol_expr.t -> t
+  (** Create a [Let] expression that binds a statically-allocated
+      value to one or more symbol(s). *)
+  val create_let_symbol
+     : Bound_symbols.t
+    -> Bindable_let_bound.Symbol_scoping_rule.t
+    -> Static_const.t
+    -> t
 
   (** Create an application expression. *)
   val create_apply : Apply.t -> t
@@ -162,7 +166,11 @@ end and Named : sig
     | Prim of Flambda_primitive.t * Debuginfo.t
       (** Primitive operations (arithmetic, memory access, allocation, etc). *)
     | Set_of_closures of Set_of_closures.t
-      (** Definition of a set of possibly mutually-recursive closures. *)
+      (** Definition of a set of (dynamically allocated) possibly
+          mutually-recursive closures. *)
+    | Static_const of Static_const.t
+      (** Definition of one or more symbols representing statically-allocated
+          constants (including sets of closures). *)
 
   (** Printing, invariant checks, name manipulation, etc. *)
   include Expr_std.S with type t := t
@@ -176,6 +184,10 @@ end and Named : sig
 
   (** Convert a set of closures into the defining expression of a [Let]. *)
   val create_set_of_closures : Set_of_closures.t -> t
+
+  (** Convert a statically-allocated constant into the defining expression of
+      a [Let]. *)
+  val create_static_const : Static_const.t -> t
 
   (** Build an expression boxing the name.  The returned kind is the
       one of the unboxed version. *)
@@ -199,8 +211,14 @@ end and Named : sig
 
   (** Returns [true] iff the given expression is a set of closures. *)
   val is_set_of_closures : t -> bool
+
+  (** Returns [true] iff the given expression is a statically-allocated
+      constant. *)
+  val is_static_const : t -> bool
 end and Let_expr : sig
-  (** The alpha-equivalence classes of expressions that bind variables. *)
+  (** The alpha-equivalence classes of expressions that bind variables; and
+      the expressions that bind symbols (which are not treated up to
+      alpha equivalence). *)
   type t
 
   (** Printing, invariant checks, name manipulation, etc. *)

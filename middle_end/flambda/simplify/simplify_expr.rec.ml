@@ -73,7 +73,7 @@ let rec simplify_let
     let defining_expr = L.defining_expr let_expr in
     let place_lifted_constants_immediately =
       let is_set_of_closures = Named.is_set_of_closures defining_expr in
-      let is_let_symbol = Named.is_let_symbol defining_expr in
+      let is_let_symbol = Named.is_static_const defining_expr in
       (* Simplification of toplevel sets of closures can yield constants
          that must be placed immediately around the body rather than
          propagated upwards to the previous enclosing "let symbol".  That this
@@ -164,7 +164,7 @@ let rec simplify_let
              are floating up from subsequent bindings.  The ones arising from
              the current binding are provided in [extra_lifted_constants].
              The function [get_and_place_lifted_constants] will make the
-             necessary [Let_symbol] bindings and then return a [uacc] whose
+             necessary "let symbol" bindings and then return a [uacc] whose
              [r] notes that the corresponding constants have now been placed.
              This avoids a subsequent duplicate placement and, crucially,
              allows outer scopes (for example the handler of a continuation
@@ -185,13 +185,12 @@ let rec simplify_let
           Bound_symbols.print bound_symbol
       end;
       (* In this case, the defining expression was found to be constant,
-         so we generate a [Let_symbol] binding.  The constant being bound
+         so we generate a "let symbol" binding.  The constant being bound
          has not yet been added to either the [denv] or [r] components of
          [dacc]; that will happen in [simplify_let_symbol]. *)
       let let_symbol_expr =
-        Expr.create_pattern_let bound_vars definition body
-        |> Let_symbol.create Dominator bound_symbol static_const
-        |> Expr.create_let_symbol
+        Expr.create_let bound_vars definition body
+        |> Expr.create_let_symbol Dominator bound_symbol static_const
       in
       simplify_expr dacc let_symbol_expr k
     | Shared { symbol; kind; } ->
@@ -215,121 +214,6 @@ let rec simplify_let
       in
       let bindings = [bound_vars, defining_expr] in
       Simplify_common.bind_let_bound ~bindings ~body, user_data, uacc)
-
-and simplify_let_symbol
-  : 'a. DA.t -> Let_symbol.t -> 'a k -> Expr.t * 'a * UA.t
-= fun dacc let_symbol_expr k ->
-  let module LS = Let_symbol in
-  if not (DE.at_unit_toplevel (DA.denv dacc)) then begin
-    Misc.fatal_errorf "[Let_symbol] is only allowed at the toplevel of \
-        compilation units (not even at the toplevel of function bodies):@ %a"
-      LS.print let_symbol_expr
-  end;
-  let module Bound_symbols = LS.Bound_symbols in
-  let scoping_rule = LS.scoping_rule let_symbol_expr in
-  let bound_symbols = LS.bound_symbols let_symbol_expr in
-  (* CR mshinwell: We can't do this in conjunction with the current
-     reification scheme for continuation parameters; that has to put the
-     symbols in the environment.
-  Symbol.Set.iter (fun sym ->
-      if DE.mem_symbol (DA.denv dacc) sym then begin
-        Misc.fatal_errorf "Symbol %a is already defined:@ %a"
-          Symbol.print sym
-          LS.print let_symbol_expr
-      end)
-    (LS.Bound_symbols.being_defined bound_symbols);
-  Code_id.Set.iter (fun code_id ->
-      if DE.mem_code (DA.denv dacc) code_id then begin
-        Misc.fatal_errorf "Code ID %a is already defined:@ %a"
-          Code_id.print code_id
-          LS.print let_symbol_expr
-      end)
-    (Bound_symbols.code_being_defined bound_symbols); *)
-  let defining_expr = LS.defining_expr let_symbol_expr in
-  let body = LS.body let_symbol_expr in
-  let prior_lifted_constants = R.get_lifted_constants (DA.r dacc) in
-  let dacc = DA.map_r dacc ~f:R.clear_lifted_constants in
-  let bound_symbols_free_names = Bound_symbols.free_names bound_symbols in
-  let dacc =
-    (* CR mshinwell: tidy this up? *)
-    DA.map_denv dacc ~f:(fun denv ->
-      Name_occurrences.fold_names bound_symbols_free_names
-        ~init:denv
-        ~f:(fun denv name ->
-          Name.pattern_match name
-            ~var:(fun _ -> denv)
-            ~symbol:(fun symbol ->
-              match bound_symbols with
-              | Singleton _ -> DE.now_defining_symbol denv symbol
-              | Sets_of_closures _ ->
-                (* [Simplify_set_of_closures] will do [now_defining_symbol]. *)
-                denv)))
-  in
-  let bound_symbols, defining_expr, dacc =
-    try
-      Simplify_static_const.simplify_static_const dacc bound_symbols
-        defining_expr
-    with Misc.Fatal_error -> begin
-      if !Clflags.flambda_context_on_error then begin
-        Format.eprintf "\n%sContext is:%s simplifying [Let_symbol] binding \
-                          of@ %a@ with downwards accumulator:@ %a\n"
-          (Flambda_colours.error ())
-          (Flambda_colours.normal ())
-          Bound_symbols.print bound_symbols
-          DA.print dacc
-        end;
-        raise Misc.Fatal_error
-    end
-  in
-  (* CR mshinwell: Change to be run only when invariants are on, and use
-     [Name_occurrences.iter] (to be written).
-  Symbol.Set.iter (fun sym ->
-      DE.check_symbol_is_bound (DA.denv dacc) sym)
-    (Name_occurrences.symbols bound_symbols_free_names);
-  Code_id.Set.iter (fun code_id ->
-      DE.check_code_id_is_bound (DA.denv dacc) code_id)
-    (Name_occurrences.code_ids bound_symbols_free_names);
-  *)
-  let dacc =
-    DA.map_denv dacc ~f:(fun denv ->
-      Name_occurrences.fold_names bound_symbols_free_names
-        ~init:denv
-        ~f:(fun denv name ->
-          Name.pattern_match name
-            ~var:(fun _ -> denv)
-            ~symbol:(fun symbol ->
-              match bound_symbols with
-              | Singleton _ -> DE.no_longer_defining_symbol denv symbol
-              | Sets_of_closures _ -> denv)))
-  in
-  let dacc =
-    match bound_symbols with
-    | Singleton symbol ->
-      DA.map_r dacc ~f:(fun r ->
-        R.consider_constant_for_sharing r symbol defining_expr)
-    | Sets_of_closures _ -> dacc
-  in
-  let types_of_symbols =
-    let all_symbols = Bound_symbols.being_defined bound_symbols in
-    Symbol.Set.fold (fun symbol types_of_symbols ->
-        let typ =
-          TE.find (DA.typing_env dacc) (Name.symbol symbol) (Some K.value)
-        in
-        Symbol.Map.add symbol (DA.denv dacc, typ) types_of_symbols)
-      all_symbols
-      Symbol.Map.empty
-  in
-  let body, user_data, uacc = simplify_expr dacc body k in
-  let lifted_constant =
-    LC.create bound_symbols defining_expr ~types_of_symbols
-  in
-  let expr, uacc =
-    get_and_place_lifted_constants uacc scoping_rule
-      ~prior_lifted_constants
-      ~extra_lifted_constants:[lifted_constant, None]
-      ~body
-  in
-  expr, user_data, uacc
 
 and simplify_one_continuation_handler :
  'a. DA.t
@@ -1871,7 +1755,6 @@ and simplify_expr
 = fun dacc expr k ->
   match Expr.descr expr with
   | Let let_expr -> simplify_let dacc let_expr k
-  | Let_symbol let_symbol -> simplify_let_symbol dacc let_symbol k
   | Let_cont let_cont -> simplify_let_cont dacc let_cont k
   | Apply apply -> simplify_apply dacc apply k
   | Apply_cont apply_cont -> simplify_apply_cont dacc apply_cont k

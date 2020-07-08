@@ -14,12 +14,18 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+type symbols = {
+  bound_symbols : Bound_symbols.t;
+  scoping_rule : Symbol_scoping_rule.t;
+}
+
 type t =
   | Singleton of Var_in_binding_pos.t
   | Set_of_closures of {
       name_mode : Name_mode.t;
       closure_vars : Var_in_binding_pos.t Closure_id.Map.t;
     }
+  | Symbols of symbols
 
 include Identifiable.Make (struct
   type nonrec t = t
@@ -39,6 +45,9 @@ include Identifiable.Make (struct
         (Format.pp_print_list ~pp_sep:Format.pp_print_space
           print_closure_binding)
         (Closure_id.Map.bindings closure_vars)
+    | Symbols _ ->
+      Misc.fatal_error "Printing of [Symbols] in [Bindable_let_bound] \
+        not implemented"
 
   let compare t1 t2 =
     match t1, t2 with
@@ -53,6 +62,12 @@ include Identifiable.Make (struct
          [closure_vars], so we don't need to compare them. *)
       Closure_id.Map.compare Var_in_binding_pos.compare
         closure_vars1 closure_vars2
+    | Symbols { bound_symbols = bound_symbols1; scoping_rule = scoping_rule1; },
+      Symbols { bound_symbols = bound_symbols2; scoping_rule = scoping_rule2; }
+        ->
+      let c = Bound_symbols.compare bound_symbols1 bound_symbols2 in
+      if c <> 0 then c
+      else Symbol_scoping_rule.compare scoping_rule1 scoping_rule2
 
   let equal t1 t2 =
     compare t1 t2 = 0
@@ -76,6 +91,8 @@ let free_names t =
           Name_mode.normal)
       closure_vars
       Name_occurrences.empty
+  | Symbols { bound_symbols; scoping_rule = _; } ->
+    Bound_symbols.free_names bound_symbols
 
 let apply_name_permutation t perm =
   match t with
@@ -91,6 +108,7 @@ let apply_name_permutation t perm =
     in
     if closure_vars == closure_vars' then t
     else Set_of_closures { name_mode; closure_vars = closure_vars'; }
+  | Symbols _ -> t
 
 let all_ids_for_export t =
   match t with
@@ -102,6 +120,8 @@ let all_ids_for_export t =
         Ids_for_export.add_variable ids (Var_in_binding_pos.var var))
       closure_vars
       Ids_for_export.empty
+  | Symbols { bound_symbols; scoping_rule = _; } ->
+    Bound_symbols.all_ids_for_export bound_symbols
 
 let import import_map t =
   match t with
@@ -138,7 +158,7 @@ let add_to_name_permutation t1 ~guaranteed_fresh:t2 perm =
       (Var_in_binding_pos.var var1)
       ~guaranteed_fresh:(Var_in_binding_pos.var var2)
   | Set_of_closures { name_mode = _; closure_vars = closure_vars1; },
-      Set_of_closures { name_mode = _; 
+      Set_of_closures { name_mode = _;
         closure_vars = closure_vars2; } ->
     let perm =
       Closure_id.Map.fold2_stop_on_key_mismatch
@@ -157,7 +177,8 @@ let add_to_name_permutation t1 ~guaranteed_fresh:t2 perm =
         print t1
         print t2
     end
-  | (Singleton _ | Set_of_closures _), _ ->
+  | Symbols _, Symbols _ -> perm
+  | (Singleton _ | Set_of_closures _ | Symbols _), _ ->
     Misc.fatal_errorf "Kind mismatch:@ %a@ and@ %a"
       print t1
       print t2
@@ -192,21 +213,31 @@ let set_of_closures ~closure_vars =
     Misc.fatal_errorf "Inconsistent name occurrence kinds:@ %a"
       (Closure_id.Map.print Var_in_binding_pos.print) closure_vars
 
+let symbols bound_symbols scoping_rule =
+  Symbols { bound_symbols; scoping_rule; }
+
 let name_mode t =
   match t with
   | Singleton var -> Var_in_binding_pos.name_mode var
   | Set_of_closures { name_mode; _ } -> name_mode
+  | Symbols _ -> Name_mode.normal
 
 let must_be_singleton t =
   match t with
   | Singleton var -> var
-  | Set_of_closures _ ->
+  | Set_of_closures _ | Symbols _ ->
     Misc.fatal_errorf "Bound name is not a [Singleton]:@ %a" print t
 
 let must_be_set_of_closures t =
   match t with
   | Set_of_closures { closure_vars; _ } -> closure_vars
-  | Singleton _ ->
+  | Singleton _ | Symbols _ ->
+    Misc.fatal_errorf "Bound name is not a [Set_of_closures]:@ %a" print t
+
+let must_be_symbols t ->
+  match t with
+  | Symbols symbols -> symbols
+  | Singleton _ | Set_of_closures _ ->
     Misc.fatal_errorf "Bound name is not a [Set_of_closures]:@ %a" print t
 
 let all_bound_vars t =
@@ -214,6 +245,7 @@ let all_bound_vars t =
   | Singleton var -> Var_in_binding_pos.Set.singleton var
   | Set_of_closures { closure_vars; _ } ->
     Var_in_binding_pos.Set.of_list (Closure_id.Map.data closure_vars)
+  | Symbols _ -> Var_in_binding_pos.Set.empty
 
 let all_bound_vars' t =
   match t with
@@ -221,3 +253,4 @@ let all_bound_vars' t =
   | Set_of_closures { closure_vars; _ } ->
     Variable.Set.of_list (
       List.map Var_in_binding_pos.var (Closure_id.Map.data closure_vars))
+  | Symbols _ -> Variable.Set.empty
