@@ -283,19 +283,6 @@ end and Let_symbol_expr : sig
   val body : t -> Expr.t
 
   include Expr_std.S with type t := t
-
-  (** If [newer_versions_of] maps [id1] to [id2] then [id1] is a newer
-      version of [id2]. *)
-  val pieces_of_code
-     : ?newer_versions_of:Code_id.t Code_id.Map.t
-    -> ?set_of_closures:(Symbol.t Closure_id.Map.t * Set_of_closures.t)
-    -> Function_params_and_body.t Code_id.Map.t
-    -> Bound_symbols.t * Static_const.t
-
-  val deleted_pieces_of_code
-     : ?newer_versions_of:Code_id.t Code_id.Map.t
-    -> Code_id.Set.t
-    -> Bound_symbols.t * Static_const.t
 end and Let_cont_expr : sig
   (** Values of type [t] represent alpha-equivalence classes of the definitions
       of continuations:
@@ -685,3 +672,16 @@ module Import : sig
   module Static_const = Static_const
   module Switch = Switch
 end
+
+(** If [newer_versions_of] maps [id1] to [id2] then [id1] is a newer
+    version of [id2]. *)
+val pieces_of_code
+    : ?newer_versions_of:Code_id.t Code_id.Map.t
+  -> ?set_of_closures:(Symbol.t Closure_id.Map.t * Set_of_closures.t)
+  -> Function_params_and_body.t Code_id.Map.t
+  -> Bound_symbols.t * Static_const.t
+
+val deleted_pieces_of_code
+    : ?newer_versions_of:Code_id.t Code_id.Map.t
+  -> Code_id.Set.t
+  -> Bound_symbols.t * Static_const.t

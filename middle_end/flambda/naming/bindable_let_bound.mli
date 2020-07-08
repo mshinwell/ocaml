@@ -4,7 +4,7 @@
 (*                                                                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2019 Jane Street Group LLC                                 *)
+(*   Copyright 2019--2020 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -12,16 +12,32 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-30-40-41-42"]
+[@@@ocaml.warning "+a-30-40-41-42"]
 
 (** Things that a [Let]-expression binds. *)
 
+module Symbol_scoping_rule : sig
+  type t =
+    | Syntactic
+    | Dominator
+end
+
 type t = private
   | Singleton of Var_in_binding_pos.t
+    (** The binding of a single variable, which is statically scoped. *)
   | Set_of_closures of {
       name_mode : Name_mode.t;
       closure_vars : Var_in_binding_pos.t Closure_id.Map.t;
     }
+    (** The binding of one or more variables to the individual closures in a
+        set of closures.  The variables are statically scoped. *)
+  | Symbols of {
+      scoping_rule : Symbol_scoping_rule.t;
+      bound_symbols : Bound_symbols.t;
+    }
+    (** The binding of one or more symbols to a statically-allocated constant.
+        The scoping of the symbols may either be syntactic, or follow the
+        dominator tree. *)
 
 include Bindable.S with type t := t
 
