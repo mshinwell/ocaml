@@ -29,7 +29,7 @@ type result = {
 let build_dep_graph lifted_constants =
   List.fold_left
     (fun (dep_graph, code_id_or_symbol_to_const)
-         (lifted_constant, extra_deps_denv, extra_deps) ->
+         (lifted_constant, extra_deps) ->
       (*
       Format.eprintf "Input for one set: %a =@ %a\n%!"
         Bound_symbols.print bound_symbols
@@ -92,8 +92,11 @@ let build_dep_graph lifted_constants =
                 free_names_with_envs)
       in
       let free_names_with_envs =
-        (extra_deps, Some (DE.typing_env extra_deps_denv))
-          :: free_names_with_envs
+        match extra_deps with
+        | None -> free_names_with_envs
+        | Some (extra_deps_denv, extra_deps) ->
+          (extra_deps, Some (DE.typing_env extra_deps_denv))
+            :: free_names_with_envs
       in
       (* Beware: when coming from [Reify_continuation_params] the
          sets of closures may have dependencies on variables that are

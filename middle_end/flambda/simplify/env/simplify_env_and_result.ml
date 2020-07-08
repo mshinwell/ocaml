@@ -31,6 +31,7 @@ module rec Downwards_env : sig
   include I.Downwards_env
     with type result := Result.t
     with type lifted_constant := Lifted_constant.t
+    with type lifted_constant_state := Lifted_constant_state.t
 end = struct
   type t = {
     backend : (module Flambda_backend_intf.S);
@@ -410,17 +411,9 @@ end = struct
       code = from.code;
     }
 
-  let add_lifted_constants t ~lifted =
-    (*
-    let num_lifted_constants = List.length lifted in
-    if num_lifted_constants > 0 then begin
-      Format.eprintf "Adding %d lifted constants\n%!" (List.length lifted)
-    end;
-    Format.eprintf "Adding lifted:@ %a\n%!"
-      (Format.pp_print_list ~pp_sep:Format.pp_print_space
-        Lifted_constant.print) lifted;
-    *)
+  let add_lifted_constants t lifted =
     let module LC = Lifted_constant in
+    let lifted = Lifted_constant_state.to_list lifted in
     let t =
       List.fold_left (fun t lifted_constant ->
           let types_of_symbols = LC.types_of_symbols lifted_constant in
@@ -467,6 +460,9 @@ end = struct
           denv)
       (with_typing_env t typing_env)
       lifted
+
+  let add_lifted_constant t const =
+    add_lifted_constants t (Lifted_constant_state.singleton const)
 
   let set_inlined_debuginfo t dbg =
     { t with inlined_debuginfo = dbg; }
@@ -664,6 +660,7 @@ end = struct
 end and Result : sig
   include I.Result
     with type lifted_constant := Lifted_constant.t
+    with type lifted_constant_state := Lifted_constant_state.t
 end = struct
   type t =
     { resolver : I.resolver;
@@ -697,12 +694,6 @@ end = struct
       used_closure_vars = Var_within_closure.Set.empty;
       all_code = Exported_code.empty;
     }
-
-  module Lifted_constant_state = struct
-    type t = Lifted_constant.t list
-
-    let to_list t = t
-  end
 
   let new_lifted_constant t lifted_constant =
     { t with
@@ -820,4 +811,14 @@ end = struct
   let bound_symbols t = t.bound_symbols
   let defining_expr t = t.defining_expr
   let types_of_symbols t = t.types_of_symbols
+end and Lifted_constant_state : sig
+  include I.Lifted_constant_state
+    with type lifted_constant := Lifted_constant.t
+
+  val singleton : Lifted_constant.t -> t
+end = struct
+  type t = Lifted_constant.t list
+
+  let to_list t = t
+  let singleton const = [const]
 end

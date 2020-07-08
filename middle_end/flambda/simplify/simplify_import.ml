@@ -30,6 +30,7 @@ module Let_cont = Flambda.Let_cont
 module Let = Flambda.Let
 module Let_symbol = Flambda.Let_symbol_expr
 module Lifted_constant = Simplify_env_and_result.Lifted_constant
+module Lifted_constant_state = Simplify_env_and_result.Lifted_constant_state
 module Named = Flambda.Named
 module Non_recursive_let_cont_handler = Flambda.Non_recursive_let_cont_handler
 module Recursive_let_cont_handlers = Flambda.Recursive_let_cont_handlers

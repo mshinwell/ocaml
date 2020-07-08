@@ -28,6 +28,7 @@ module type Downwards_env = sig
 
   type result
   type lifted_constant
+  type lifted_constant_state
 
   val invariant : t -> unit
 
@@ -143,7 +144,9 @@ module type Downwards_env = sig
 
   val check_code_id_is_bound : t -> Code_id.t -> unit
 
-  val add_lifted_constants : t -> lifted:lifted_constant list -> t
+  val add_lifted_constant : t -> lifted_constant -> t
+
+  val add_lifted_constants : t -> lifted_constant_state -> t
 
   val define_code
      : t
@@ -264,6 +267,7 @@ end
 
 module type Result = sig
   type lifted_constant
+  type lifted_constant_state
 
   type t
 
@@ -276,21 +280,15 @@ module type Result = sig
 
   val new_lifted_constant : t -> lifted_constant -> t
 
-  module Lifted_constant_state : sig
-    type t
+  val get_lifted_constants : t -> lifted_constant_state
 
-    val to_list : t -> lifted_constant list
-  end
-
-  val get_lifted_constants : t -> Lifted_constant_state.t
-
-  val get_and_clear_lifted_constants : t -> t * Lifted_constant_state.t
+  val get_and_clear_lifted_constants : t -> t * lifted_constant_state
 
   val clear_lifted_constants : t -> t
 
-  val add_prior_lifted_constants : t -> Lifted_constant_state.t -> t
+  val add_prior_lifted_constants : t -> lifted_constant_state -> t
 
-  val set_lifted_constants : t -> Lifted_constant_state.t -> t
+  val set_lifted_constants : t -> lifted_constant_state -> t
 
   val find_shareable_constant : t -> Static_const.t -> Symbol.t option
 
@@ -344,4 +342,11 @@ module type Lifted_constant = sig
   val bound_symbols : t -> Flambda.Let_symbol_expr.Bound_symbols.t
   val defining_expr : t -> Flambda.Static_const.t
   val types_of_symbols : t -> (downwards_env * Flambda_type.t) Symbol.Map.t
+end
+
+module type Lifted_constant_state = sig
+  type lifted_constant
+  type t
+
+  val to_list : t -> lifted_constant list
 end

@@ -18,6 +18,7 @@
 
 module DE = Simplify_env_and_result.Downwards_env
 module LC = Simplify_env_and_result.Lifted_constant
+module Lifted_constant_state = Simplify_env_and_result.Lifted_constant_state
 module T = Flambda_type
 module TE = Flambda_type.Typing_env
 module U = One_continuation_use
@@ -139,6 +140,9 @@ Format.eprintf "Unknown at or later than %a\n%!"
            discovered whilst simplifying the corresponding body. *)
         (* CR mshinwell: The following should be factored out as much as
            possible from here and [DE.add_lifted_constants]. *)
+        let consts_lifted_during_body =
+          Lifted_constant_state.to_list consts_lifted_during_body
+        in
         let use_env =
           List.fold_left (fun use_env const ->
               Symbol.Map.fold (fun symbol _ty use_env ->

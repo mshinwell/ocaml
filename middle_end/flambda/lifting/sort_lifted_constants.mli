@@ -32,4 +32,4 @@ type result = private {
     environment must be provided for lookup of such names, since [LC.t]
     values may contain multiple environments, so it wouldn't be clear which
     one to choose. *)
-val sort : (LC.t * DE.t * Name_occurrences.t) list -> result
+val sort : (LC.t * ((DE.t * Name_occurrences.t) option)) list -> result

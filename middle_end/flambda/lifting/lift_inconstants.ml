@@ -52,10 +52,7 @@ let lift_non_closure_discovered_via_reified_continuation_param_types dacc
     let lifted_constant =
       LC.create (Singleton symbol) static_const ~types_of_symbols
     in
-    let reified_definitions =
-      (lifted_constant, DA.denv dacc, Name_occurrences.empty)
-        :: reified_definitions
-    in
+    let reified_definitions = (lifted_constant, None) :: reified_definitions in
     let reified_continuation_params_to_symbols =
       Variable.Map.add var symbol reified_continuation_params_to_symbols
     in
@@ -191,7 +188,7 @@ let lift_set_of_closures_discovered_via_reified_continuation_param_types dacc
       LC.create (fst definition) (snd definition) ~types_of_symbols
     in
     let reified_definitions =
-      (lifted_constant, DA.denv dacc, extra_deps) :: reified_definitions
+      (lifted_constant, Some (DA.denv dacc, extra_deps)) :: reified_definitions
     in
     let closure_symbols_by_set =
       Set_of_closures.Map.add set_of_closures closure_symbols
@@ -307,9 +304,7 @@ let lift_via_reification_of_continuation_param_types0 dacc ~params
      continuation's parameters, which are in turn substituted for symbols at the
      Cmm translation phase). (Any SCC class containing >1 set of closures is
      maybe a bug?) *)
-  let reified_definitions =
-    Sort_lifted_constants.sort reified_definitions
-  in
+  let reified_definitions = Sort_lifted_constants.sort reified_definitions in
   let handler =
     List.fold_left (fun handler lifted_constant ->
         let bound_symbols = LC.bound_symbols lifted_constant in

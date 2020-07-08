@@ -27,7 +27,7 @@ open! Simplify_import
 
 type 'a k = DA.t -> ('a * UA.t)
 
-let get_and_place_lifted_constants dacc uacc scoping_rule
+let get_and_place_lifted_constants uacc scoping_rule
       ~prior_lifted_constants ~extra_lifted_constants ~body =
   let lifted_constants = R.get_lifted_constants (UA.r uacc) in
   let uacc =
@@ -35,9 +35,8 @@ let get_and_place_lifted_constants dacc uacc scoping_rule
   in
   let all_lifted_constants =
     extra_lifted_constants
-      @ List.map (fun lifted_constant ->
-          lifted_constant, Name_occurrences.empty)
-        (R.Lifted_constant_state.to_list lifted_constants)
+      @ List.map (fun lifted_constant -> lifted_constant, None)
+        (Lifted_constant_state.to_list lifted_constants)
   in
   let sorted_lifted_constants =
     Sort_lifted_constants.sort all_lifted_constants
@@ -96,14 +95,12 @@ let rec simplify_let
       let body = Simplify_common.bind_let_bound ~bindings ~body in
       if place_lifted_constants_immediately then
         let extra_lifted_constants =
-          List.map (fun lifted_const ->
-              LC.bound_symbols lifted_const,
-                LC.defining_expr lifted_const,
-                  Name_occurrences.empty)
-            lifted_constants_after_defining_expr
+          List.map (fun lifted_const -> lifted_const, None)
+            (Lifted_constant_state.to_list
+              lifted_constants_after_defining_expr)
         in
         let expr, uacc =
-          get_and_place_lifted_constants dacc uacc Dominator
+          get_and_place_lifted_constants uacc Dominator
             ~extra_lifted_constants
             ~prior_lifted_constants ~body
         in
@@ -238,16 +235,24 @@ and simplify_let_symbol
         R.consider_constant_for_sharing r symbol defining_expr)
     | Sets_of_closures _ -> dacc
   in
+  let types_of_symbols =
+    let all_symbols = Bound_symbols.being_defined bound_symbols in
+    Symbol.Set.fold (fun symbol types_of_symbols ->
+        let typ =
+          TE.find (DA.typing_env dacc) (Name.symbol symbol) (Some K.value)
+        in
+        Symbol.Map.add symbol (DA.denv dacc, typ) types_of_symbols)
+      all_symbols
+      Symbol.Map.empty
+  in
   let body, user_data, uacc = simplify_expr dacc body k in
+  let lifted_constant =
+    LC.create bound_symbols defining_expr ~types_of_symbols
+  in
   let expr, uacc =
-    (* It's valid to use [dacc] to examine each constant during sorting
-       because the constants don't involve variables.  They may involve
-       symbols, but those symbols are either already bound by [dacc], or
-       are in the list of constants being sorted. *)
-    get_and_place_lifted_constants dacc uacc scoping_rule
+    get_and_place_lifted_constants uacc scoping_rule
       ~prior_lifted_constants
-      ~extra_lifted_constants:
-        [bound_symbols, defining_expr, Name_occurrences.empty]
+      ~extra_lifted_constants:[lifted_constant, None]
       ~body
   in
   expr, user_data, uacc
@@ -415,8 +420,8 @@ and simplify_non_recursive_let_cont_handler
                    the single use's environment (which might not contain them
                    all already, somewhat counterintuitively) and return that
                    as the handler env. *)
-                DE.add_lifted_constants denv_before_body
-                  ~lifted:consts_lifted_during_body
+                consts_lifted_during_body
+                |> DE.add_lifted_constants denv_before_body
                 |> DE.with_code ~from:(DA.denv dacc_after_body)
                 |> DA.with_denv dacc_after_body
               in
@@ -644,8 +649,8 @@ and simplify_recursive_let_cont_handlers
               TE.code_age_relation (DA.typing_env dacc_after_body)
             in
             let denv =
-              let lifted = R.get_lifted_constants r in
-              DE.add_lifted_constants denv ~lifted
+              R.get_lifted_constants r
+              |> DE.add_lifted_constants denv
             in
             let typing_env =
               TE.with_code_age_relation (DE.typing_env denv)
@@ -923,17 +928,13 @@ and simplify_direct_partial_application
          constant identifying deleted code.  This will ensure, if for some
          reason the constant makes it to Cmm stage, that code size is not
          increased unnecessarily. *)
-      Lifted_constant.create_deleted_piece_of_code (DA.denv dacc) code_id
+      Lifted_constant.create_deleted_piece_of_code code_id
     in
-    let code =
-      Lifted_constant.create_piece_of_code (DA.denv dacc) code_id
-        params_and_body
-    in
+    let code = Lifted_constant.create_piece_of_code code_id params_and_body in
     let dacc =
       dacc
       |> DA.map_r ~f:(fun r -> R.new_lifted_constant r dummy_code)
-      |> DA.map_denv ~f:(fun denv ->
-        DE.add_lifted_constants denv ~lifted:[code])
+      |> DA.map_denv ~f:(fun denv -> DE.add_lifted_constant denv code)
     in
     Set_of_closures.create function_decls ~closure_elements, dacc
   in
