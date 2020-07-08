@@ -154,9 +154,8 @@ Format.eprintf "Unknown at or later than %a\n%!"
         in
         let use_env =
           List.fold_left (fun use_env const ->
-              let denv_at_definition = LC.denv_at_definition const in
               let types_of_symbols = LC.types_of_symbols const in
-              Symbol.Map.fold (fun sym typ use_env ->
+              Symbol.Map.fold (fun sym (denv_at_definition, typ) use_env ->
                   let sym = Name.symbol sym in
                   let env_extension =
                     T.make_suitable_for_environment typ

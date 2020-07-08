@@ -424,7 +424,7 @@ end = struct
     let t =
       List.fold_left (fun t lifted_constant ->
           let types_of_symbols = LC.types_of_symbols lifted_constant in
-          Symbol.Map.fold (fun sym typ t ->
+          Symbol.Map.fold (fun sym (_denv, typ) t ->
               define_symbol t sym (T.kind typ))
             types_of_symbols
             t)
@@ -433,9 +433,8 @@ end = struct
     in
     let typing_env =
       List.fold_left (fun typing_env lifted_constant ->
-          let denv_at_definition = LC.denv_at_definition lifted_constant in
           let types_of_symbols = LC.types_of_symbols lifted_constant in
-          Symbol.Map.fold (fun sym typ typing_env ->
+          Symbol.Map.fold (fun sym (denv_at_definition, typ) typing_env ->
               let sym = Name.symbol sym in
               let env_extension =
                 (* CR mshinwell: Sometimes we might already have the types
@@ -699,6 +698,12 @@ end = struct
       all_code = Exported_code.empty;
     }
 
+  module Lifted_constant_state = struct
+    type t = Lifted_constant.t list
+
+    let to_list t = t
+  end
+
   let new_lifted_constant t lifted_constant =
     { t with
       lifted_constants_innermost_last =
@@ -755,14 +760,13 @@ end and Lifted_constant : sig
     with type downwards_env := Downwards_env.t
 end = struct
   type t = {
-    denv : Downwards_env.t;
     bound_symbols : Let_symbol.Bound_symbols.t;
     defining_expr : Static_const.t;
-    types_of_symbols : Flambda_type.t Symbol.Map.t;
+    types_of_symbols : (Downwards_env.t * Flambda_type.t) Symbol.Map.t;
   }
 
   let print ppf
-        { denv = _ ; bound_symbols; defining_expr; types_of_symbols = _; } =
+        { bound_symbols; defining_expr; types_of_symbols = _; } =
     Format.fprintf ppf "@[<hov 1>(\
         @[<hov 1>(bound_symbols@ %a)@]@ \
         @[<hov 1>(static_const@ %a)@]\
@@ -770,53 +774,49 @@ end = struct
       Let_symbol.Bound_symbols.print bound_symbols
       Static_const.print defining_expr
 
-  let create denv bound_symbols defining_expr ~types_of_symbols =
+  let create bound_symbols defining_expr ~types_of_symbols =
     let being_defined = Let_symbol.Bound_symbols.being_defined bound_symbols in
     if not (Symbol.Set.equal (Symbol.Map.keys types_of_symbols) being_defined)
     then begin
       Misc.fatal_errorf "[types_of_symbols]:@ %a@ does not cover all symbols \
           in the definition:@ %a"
-        (Symbol.Map.print T.print) types_of_symbols
+        (Symbol.Map.print T.print) (Symbol.Map.map snd types_of_symbols)
         Let_symbol.Bound_symbols.print bound_symbols
     end;
     (* CR mshinwell: This should check that [defining_expr] matches
        [bound_symbols] in the code/set-of-closures case *)
-    { denv;
-      bound_symbols;
+    { bound_symbols;
       defining_expr;
       types_of_symbols;
     }
 
-  let create_pieces_of_code denv ?newer_versions_of code =
+  let create_pieces_of_code ?newer_versions_of code =
     let bound_symbols, defining_expr =
       Let_symbol.pieces_of_code ?newer_versions_of code
     in
-    { denv;
-      bound_symbols;
+    { bound_symbols;
       defining_expr;
       types_of_symbols = Symbol.Map.empty;
     }
 
-  let create_piece_of_code denv ?newer_version_of code_id params_and_body =
+  let create_piece_of_code ?newer_version_of code_id params_and_body =
     let newer_versions_of =
       match newer_version_of with
       | None -> None
       | Some older -> Some (Code_id.Map.singleton code_id older)
     in
-    create_pieces_of_code denv ?newer_versions_of
+    create_pieces_of_code ?newer_versions_of
       (Code_id.Map.singleton code_id params_and_body)
 
-  let create_deleted_piece_of_code denv ?newer_versions_of code_id =
+  let create_deleted_piece_of_code ?newer_versions_of code_id =
     let bound_symbols, defining_expr =
       Let_symbol.deleted_pieces_of_code ?newer_versions_of
         (Code_id.Set.singleton code_id)
     in
-    { denv;
-      bound_symbols;
+    { bound_symbols;
       defining_expr;
       types_of_symbols = Symbol.Map.empty;
     }
-  let denv_at_definition t = t.denv
   let bound_symbols t = t.bound_symbols
   let defining_expr t = t.defining_expr
   let types_of_symbols t = t.types_of_symbols
