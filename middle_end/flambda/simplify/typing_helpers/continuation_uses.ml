@@ -141,7 +141,7 @@ Format.eprintf "Unknown at or later than %a\n%!"
         (* CR mshinwell: The following should be factored out as much as
            possible from here and [DE.add_lifted_constants]. *)
         let consts_lifted_during_body =
-          Lifted_constant_state.to_list consts_lifted_during_body
+          Lifted_constant_state.all consts_lifted_during_body
         in
         let use_env =
           List.fold_left (fun use_env const ->

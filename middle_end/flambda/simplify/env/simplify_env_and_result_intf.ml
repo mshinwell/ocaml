@@ -278,7 +278,11 @@ module type Result = sig
     -> get_imported_names:get_imported_names
     -> t
 
-  val new_lifted_constant : t -> lifted_constant -> t
+  val add_still_to_be_placed_lifted_constant : t -> lifted_constant -> t
+
+  val add_placed_lifted_constant : t -> lifted_constant -> t
+
+  val add_lifted_constants : t -> lifted_constant_state -> t
 
   val get_lifted_constants : t -> lifted_constant_state
 
@@ -286,9 +290,9 @@ module type Result = sig
 
   val clear_lifted_constants : t -> t
 
-  val add_prior_lifted_constants : t -> lifted_constant_state -> t
-
   val set_lifted_constants : t -> lifted_constant_state -> t
+
+  val transfer_placed_lifted_constants : t -> from:t -> t
 
   val find_shareable_constant : t -> Static_const.t -> Symbol.t option
 
@@ -348,5 +352,9 @@ module type Lifted_constant_state = sig
   type lifted_constant
   type t
 
-  val to_list : t -> lifted_constant list
+  val print : Format.formatter -> t -> unit
+
+  val all : t -> lifted_constant list
+
+  val still_to_be_placed : t -> lifted_constant list
 end

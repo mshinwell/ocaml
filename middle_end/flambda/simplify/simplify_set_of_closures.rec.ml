@@ -432,10 +432,6 @@ type simplify_set_of_closures0_result = {
 let simplify_set_of_closures0 dacc context set_of_closures
       ~closure_bound_names ~closure_bound_names_inside ~closure_elements
       ~closure_element_types =
-  let r, prior_lifted_constants =
-    R.get_and_clear_lifted_constants (DA.r dacc)
-  in
-  let dacc = DA.with_r dacc r in
   let function_decls = Set_of_closures.function_decls set_of_closures in
   let all_function_decls_in_set = Function_declarations.funs function_decls in
   let all_function_decls_in_set, code, fun_types, code_age_relation, r =
@@ -495,15 +491,10 @@ let simplify_set_of_closures0 dacc context set_of_closures
       |> Closure_id.Map.fold (fun _closure_id bound_name denv ->
              DE.define_name_if_undefined denv bound_name K.value)
            closure_bound_names
-      |> fun denv -> DE.add_lifted_constants denv (R.get_lifted_constants r)
       |> Name_in_binding_pos.Map.fold (fun bound_name closure_type denv ->
              let bound_name = Name_in_binding_pos.to_name bound_name in
              DE.add_equation_on_name denv bound_name closure_type)
            closure_types_by_bound_name)
-  in
-  let dacc =
-    DA.with_r dacc
-      (R.add_prior_lifted_constants (DA.r dacc) prior_lifted_constants)
   in
   let set_of_closures =
     Function_declarations.create all_function_decls_in_set
@@ -608,7 +599,7 @@ let simplify_and_lift_set_of_closures dacc ~closure_bound_vars_inverse
     Lifted_constant.create bound_symbols static_const ~types_of_symbols
   in
   let r =
-    R.new_lifted_constant (DA.r dacc) set_of_closures_lifted_constant
+    R.new_not_placed_lifted_constant (DA.r dacc) set_of_closures_lifted_constant
   in
   let denv =
     DE.add_lifted_constant (DA.denv dacc) set_of_closures_lifted_constant

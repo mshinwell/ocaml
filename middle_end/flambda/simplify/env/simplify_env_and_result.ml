@@ -413,7 +413,7 @@ end = struct
 
   let add_lifted_constants t lifted =
     let module LC = Lifted_constant in
-    let lifted = Lifted_constant_state.to_list lifted in
+    let lifted = Lifted_constant_state.all lifted in
     let t =
       List.fold_left (fun t lifted_constant ->
           let types_of_symbols = LC.types_of_symbols lifted_constant in
@@ -462,7 +462,8 @@ end = struct
       lifted
 
   let add_lifted_constant t const =
-    add_lifted_constants t (Lifted_constant_state.singleton const)
+    add_lifted_constants t
+      (Lifted_constant_state.singleton_still_to_be_placed const)
 
   let set_inlined_debuginfo t dbg =
     { t with inlined_debuginfo = dbg; }
@@ -665,62 +666,74 @@ end = struct
   type t =
     { resolver : I.resolver;
       get_imported_names : I.get_imported_names;
-      lifted_constants_innermost_last : Lifted_constant.t list;
+      lifted_constants : Lifted_constant_state.t;
       shareable_constants : Symbol.t Static_const.Map.t;
       used_closure_vars : Var_within_closure.Set.t;
       all_code : Exported_code.t;
     }
 
   let print ppf { resolver = _; get_imported_names = _;
-                  lifted_constants_innermost_last;
+                  lifted_constants;
                   shareable_constants; used_closure_vars;
                   all_code = _;
                 } =
     Format.fprintf ppf "@[<hov 1>(\
-        @[<hov 1>(lifted_constants_innermost_last@ %a)@]@ \
+        @[<hov 1>(lifted_constants@ %a)@]@ \
         @[<hov 1>(shareable_constants@ %a)@]@ \
         @[<hov 1>(used_closure_vars@ %a)@]\
         )@]"
-      (Format.pp_print_list ~pp_sep:Format.pp_print_space Lifted_constant.print)
-        lifted_constants_innermost_last
+      Lifted_constant_state.print lifted_constants
       (Static_const.Map.print Symbol.print) shareable_constants
       Var_within_closure.Set.print used_closure_vars
 
   let create ~resolver ~get_imported_names =
     { resolver;
       get_imported_names;
-      lifted_constants_innermost_last = [];
+      lifted_constants = Lifted_constant_state.empty;
       shareable_constants = Static_const.Map.empty;
       used_closure_vars = Var_within_closure.Set.empty;
       all_code = Exported_code.empty;
     }
 
-  let new_lifted_constant t lifted_constant =
+  let add_still_to_be_placed_lifted_constant t const =
     { t with
-      lifted_constants_innermost_last =
-        lifted_constant :: t.lifted_constants_innermost_last;
+      lifted_constants =
+        Lifted_constant_state.add_still_to_be_placed t.lifted_constants const;
     }
 
-  let get_lifted_constants t = t.lifted_constants_innermost_last
+  let add_placed_lifted_constant t const =
+    { t with
+      lifted_constants =
+        Lifted_constant_state.add_placed t.lifted_constants const;
+    }
+
+  let add_lifted_constants t constants =
+    { t with
+      lifted_constants =
+        Lifted_constant_state.union t.lifted_constants constants;
+    }
+
+  let get_lifted_constants t = t.lifted_constants
 
   let clear_lifted_constants t =
     { t with
-      lifted_constants_innermost_last = [];
-    }
-
-  let add_prior_lifted_constants t constants =
-    { t with
-      lifted_constants_innermost_last =
-        t.lifted_constants_innermost_last @ constants;
+      lifted_constants = Lifted_constant_state.empty;
     }
 
   let get_and_clear_lifted_constants t =
-    let constants = t.lifted_constants_innermost_last in
+    let constants = t.lifted_constants in
     let t = clear_lifted_constants t in
     t, constants
 
   let set_lifted_constants t consts =
-    { t with lifted_constants_innermost_last = consts; }
+    { t with lifted_constants = consts; }
+
+  let transfer_placed_lifted_constants t ~from =
+    { t with
+      lifted_constants =
+        Lifted_constant_state.add_placed_from t.lifted_constants
+          ~from:from.lifted_constants;
+    }
 
   let find_shareable_constant t static_const =
     Static_const.Map.find_opt static_const t.shareable_constants
@@ -815,10 +828,70 @@ end and Lifted_constant_state : sig
   include I.Lifted_constant_state
     with type lifted_constant := Lifted_constant.t
 
-  val singleton : Lifted_constant.t -> t
-end = struct
-  type t = Lifted_constant.t list
+  val empty : t
 
-  let to_list t = t
-  let singleton const = [const]
+  val union : t -> t -> t
+
+  val singleton_still_to_be_placed : Lifted_constant.t -> t
+  val add_still_to_be_placed : t -> Lifted_constant.t -> t
+  val add_placed : t -> Lifted_constant.t -> t
+  val add_placed_from : t -> from:t -> t
+end = struct
+  type t = {
+    all : Lifted_constant.t list;
+    placed : Lifted_constant.t list;
+    still_to_be_placed : Lifted_constant.t list;
+  }
+
+  let print ppf { all; placed; still_to_be_placed; } =
+    let printer =
+      Format.pp_print_list ~pp_sep:Format.pp_print_space Lifted_constant.print
+    in
+    Format.fprintf ppf "@[<hov 1>(\
+        @[<hov 1>(all@ %a)@]@ \
+        @[<hov 1>(placed@ %a)@]@ \
+        @[<hov 1>(still_to_be_placed@ %a)@]@\
+        )@]"
+      printer all
+      printer placed
+      printer still_to_be_placed
+
+  let empty =
+    { all = [];
+      placed = [];
+      still_to_be_placed = [];
+    }
+
+  let still_to_be_placed t = t.still_to_be_placed
+  let all t = t.all
+
+  let union t1 t2 =
+    { all = t1.all @ t2.all;
+      placed = t1.placed @ t2.placed;
+      still_to_be_placed = t1.still_to_be_placed @ t2.still_to_be_placed;
+    }
+
+  let singleton_still_to_be_placed const =
+    { all = [const];
+      placed = [];
+      still_to_be_placed = [const];
+    }
+
+  let add_still_to_be_placed t const =
+    { all = const :: t.all;
+      placed = t.placed;
+      still_to_be_placed = const :: t.still_to_be_placed;
+    }
+
+  let add_placed t const =
+    { all = const :: t.all;
+      placed = const :: t.placed;
+      still_to_be_placed = t.still_to_be_placed;
+    }
+
+  let add_placed_from t ~from =
+    { all = t.all @ from.placed;
+      placed = t.placed @ from.placed;
+      still_to_be_placed = t.still_to_be_placed;
+    }
 end
