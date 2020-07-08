@@ -49,32 +49,20 @@ include Identifiable.Make (struct
       Misc.fatal_error "Printing of [Symbols] in [Bindable_let_bound] \
         not implemented"
 
-  let compare t1 t2 =
-    match t1, t2 with
-    | Singleton var1, Singleton var2 -> Var_in_binding_pos.compare var1 var2
-    | Singleton _, Set_of_closures _ -> -1
-    | Set_of_closures _, Singleton _ -> 1
-    | Set_of_closures { name_mode = _;
-                        closure_vars = closure_vars1; },
-        Set_of_closures { name_mode = _;
-                          closure_vars = closure_vars2; } ->
-      (* The [name_mode]s are uniquely determined by the
-         [closure_vars], so we don't need to compare them. *)
-      Closure_id.Map.compare Var_in_binding_pos.compare
-        closure_vars1 closure_vars2
-    | Symbols { bound_symbols = bound_symbols1; scoping_rule = scoping_rule1; },
-      Symbols { bound_symbols = bound_symbols2; scoping_rule = scoping_rule2; }
-        ->
-      let c = Bound_symbols.compare bound_symbols1 bound_symbols2 in
-      if c <> 0 then c
-      else Symbol_scoping_rule.compare scoping_rule1 scoping_rule2
+  (* The following would only be required if using
+     [Name_abstraction.Make_map], which we don't with this module. *)
 
-  let equal t1 t2 =
-    compare t1 t2 = 0
+  let compare _ _ =
+    Misc.fatal_error "Bindable_let_bound.compare not yet implemented"
 
-  let hash _ = Misc.fatal_error "Not yet implemented"
+  let equal _ _ =
+    Misc.fatal_error "Bindable_let_bound.equal not yet implemented"
 
-  let output _ _ = Misc.fatal_error "Not yet implemented"
+  let hash _ =
+    Misc.fatal_error "Bindable_let_bound.hash not yet implemented"
+
+  let output _ _ =
+    Misc.fatal_error "Bindable_let_bound.output not yet implemented"
 end)
 
 let print_with_cache ~cache:_ ppf t = print ppf t
@@ -141,6 +129,9 @@ let import import_map t =
         closure_vars
     in
     Set_of_closures { name_mode; closure_vars; }
+  | Symbols { bound_symbols; scoping_rule; } ->
+    let bound_symbols = Bound_symbols.import import_map bound_symbols in
+    Symbols { bound_symbols; scoping_rule; }
 
 let rename t =
   match t with
@@ -150,6 +141,7 @@ let rename t =
       Closure_id.Map.map (fun var -> Var_in_binding_pos.rename var) closure_vars
     in
     Set_of_closures { name_mode; closure_vars; }
+  | Symbols _ -> t
 
 let add_to_name_permutation t1 ~guaranteed_fresh:t2 perm =
   match t1, t2 with
@@ -234,7 +226,7 @@ let must_be_set_of_closures t =
   | Singleton _ | Symbols _ ->
     Misc.fatal_errorf "Bound name is not a [Set_of_closures]:@ %a" print t
 
-let must_be_symbols t ->
+let must_be_symbols t =
   match t with
   | Symbols symbols -> symbols
   | Singleton _ | Set_of_closures _ ->
@@ -254,3 +246,8 @@ let all_bound_vars' t =
     Variable.Set.of_list (
       List.map Var_in_binding_pos.var (Closure_id.Map.data closure_vars))
   | Symbols _ -> Variable.Set.empty
+
+let let_symbol_scoping_rule t =
+  match t with
+  | Singleton _ | Set_of_closures _ -> None
+  | Symbols { scoping_rule; _ } -> Some scoping_rule

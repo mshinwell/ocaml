@@ -44,9 +44,9 @@ module rec Expr : sig
 
   type descr = private
     | Let of Let_expr.t
-    (** Bind a variable.  There can be no effect on control flow (save for
-        asynchronous operations such as the invocation of finalisers or
-        signal handlers as a result of reaching a safe point). *)
+    (** Bind variable(s) or symbol(s).  There can be no effect on control flow
+        (save for asynchronous operations such as the invocation of finalisers
+        or signal handlers as a result of reaching a safe point). *)
     | Let_symbol of Let_symbol_expr.t
     (** Bind code and/or data symbol(s).  This form of expression is only
         allowed in certain "toplevel" contexts.  The bound symbols are not
@@ -94,7 +94,7 @@ module rec Expr : sig
       value to one or more symbol(s). *)
   val create_let_symbol
      : Bound_symbols.t
-    -> Bindable_let_bound.Symbol_scoping_rule.t
+    -> Symbol_scoping_rule.t
     -> Static_const.t
     -> t
 
@@ -231,7 +231,7 @@ end and Let_expr : sig
       class. *)
   val pattern_match
      : t
-    -> f:(bound_vars:Bindable_let_bound.t -> body:Expr.t -> 'a)
+    -> f:(Bindable_let_bound.t -> body:Expr.t -> 'a)
     -> 'a
 
   (** Look inside two [Let]s by choosing members of their alpha-equivalence
@@ -239,7 +239,7 @@ end and Let_expr : sig
   val pattern_match_pair
      : t
     -> t
-    -> f:(bound_vars:Bindable_let_bound.t -> body1:Expr.t -> body2:Expr.t -> 'a)
+    -> f:(Bindable_let_bound.t -> body1:Expr.t -> body2:Expr.t -> 'a)
     -> 'a
 end and Let_symbol_expr : sig
   module Bound_symbols : sig

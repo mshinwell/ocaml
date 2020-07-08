@@ -27,49 +27,11 @@ open! Simplify_import
 
 type 'a k = DA.t -> ('a * UA.t)
 
-let get_and_place_lifted_constants uacc
-      (scoping_rule : Let_symbol.Scoping_rule.t)
-      ~prior_lifted_constants ~extra_lifted_constants ~body =
-  let original_r = UA.r uacc in
-  let lifted_constants = R.get_lifted_constants original_r in
-  let uacc =
-    UA.map_r uacc ~f:(fun r ->
-      let r = R.set_lifted_constants r prior_lifted_constants in
-      R.transfer_placed_lifted_constants r ~from:original_r)
-  in
-  let all_lifted_constants =
-    extra_lifted_constants
-      @ List.map (fun lifted_constant -> lifted_constant, None)
-        (Lifted_constant_state.still_to_be_placed lifted_constants)
-  in
-  let sorted_lifted_constants =
-    Sort_lifted_constants.sort all_lifted_constants
-  in
-  let body, r =
-    List.fold_left (fun (body, r) lifted_constant ->
-        let body, r =
-          Simplify_common.create_let_symbol r scoping_rule
-            (UA.code_age_relation uacc)
-            (LC.bound_symbols lifted_constant)
-            (LC.defining_expr lifted_constant)
-            body
-        in
-        let r =
-          match scoping_rule with
-          | Syntactic -> r
-          | Dominator -> R.add_placed_lifted_constant r lifted_constant
-        in
-        body, r)
-      (body, UA.r uacc)
-      sorted_lifted_constants.bindings_outermost_last
-  in
-  body, UA.with_r uacc r
-
 let rec simplify_let
   : 'a. DA.t -> Let.t -> 'a k -> Expr.t * 'a * UA.t
 = fun dacc let_expr k ->
   let module L = Flambda.Let in
-  L.pattern_match let_expr ~f:(fun ~bound_vars ~body ->
+  L.pattern_match let_expr ~f:(fun bindable_let_bound ~body ->
     let defining_expr = L.defining_expr let_expr in
     let place_lifted_constants_immediately =
       let is_set_of_closures = Named.is_set_of_closures defining_expr in
@@ -154,30 +116,51 @@ let rec simplify_let
           |> List.map (fun lifted_const -> lifted_const, None)
         in
         let scoping_rule =
-          match L.let_symbol_scoping_rule let_expr with
-          | None -> Dominator
-          | Some scoping_rule -> scoping_rule
+          Option.value ~default:Let_symbol_scoping_rule.Dominator
+            (Bindable_let_bound.let_symbol_scoping_rule bindable_let_bound)
         in
-        let expr, uacc =
-          (* As a consequence of the clearing of lifted constants in [r]
-             above (see comment), [UA.r uacc] will only contain constants that
-             are floating up from subsequent bindings.  The ones arising from
-             the current binding are provided in [extra_lifted_constants].
-             The function [get_and_place_lifted_constants] will make the
-             necessary "let symbol" bindings and then return a [uacc] whose
-             [r] notes that the corresponding constants have now been placed.
-             This avoids a subsequent duplicate placement and, crucially,
-             allows outer scopes (for example the handler of a continuation
-             having the current let-expression in its body) to retrieve the
-             types of the constants.  The constants will still be accessible
-             in such outer scopes due to the [Dominator] scoping rule. *)
-          get_and_place_lifted_constants uacc
-            scoping_rule
-            ~extra_lifted_constants
-            ~prior_lifted_constants
-            ~body
+        (* As a consequence of the clearing of lifted constants in [r]
+           above (see comment), [UA.r uacc] will only contain constants that
+           are floating up from subsequent bindings.  The ones arising from
+           the current binding are provided in [extra_lifted_constants].
+           The function [get_and_place_lifted_constants] will make the
+           necessary "let symbol" bindings and then return a [uacc] whose
+           [r] notes that the corresponding constants have now been placed.
+           This avoids a subsequent duplicate placement and, crucially,
+           allows outer scopes (for example the handler of a continuation
+           having the current let-expression in its body) to retrieve the
+           types of the constants.  Constants can still be accessible
+           in such outer scopes due to the [Dominator] scoping rule. *)
+        let original_r = UA.r uacc in
+        let lifted_constants = R.get_lifted_constants original_r in
+        let uacc =
+          UA.map_r uacc ~f:(fun r ->
+            let r = R.set_lifted_constants r prior_lifted_constants in
+            R.transfer_placed_lifted_constants r ~from:original_r)
         in
-        expr, user_data, uacc
+        let sorted_lifted_constants =
+          (extra_lifted_constants
+            @ List.map (fun lifted_constant -> lifted_constant, None)
+              (Lifted_constant_state.still_to_be_placed lifted_constants))
+          |> Sort_lifted_constants.sort
+        in
+        let body, r =
+          ListLabels.fold_left sorted_lifted_constants.bindings_outermost_last
+            ~init:(body, UA.r uacc) ~f:(fun (body, r) lifted_constant ->
+              let body, r =
+                Simplify_common.create_let_symbol r scoping_rule
+                  (UA.code_age_relation uacc) bound_symbols defining_expr body
+              in
+              let r =
+                (* With [Dominator] scoping we must be prepared for the type
+                   of the constant to be required in an outer scope. *)
+                match scoping_rule with
+                | Syntactic -> r
+                | Dominator -> R.add_placed_lifted_constant r lifted_constant
+              in
+              body, r)
+        in
+        body, user_data, UA.with_r uacc r
     | Reified { definition; bound_symbol; static_const; r = _; } ->
       if place_lifted_constants_immediately then begin
         Misc.fatal_errorf "Did not expect [Simplify_named] to return \

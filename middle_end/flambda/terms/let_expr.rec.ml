@@ -28,13 +28,14 @@ type t = {
 
 let pattern_match t ~f =
   Bound_vars_and_body.pattern_match t.bound_vars_and_body
-    ~f:(fun bound_vars body -> f ~bound_vars ~body)
+    ~f:(fun bindable_let_bound body -> f bindable_let_bound ~body)
 
 let pattern_match_pair t1 t2 ~f =
   Bound_vars_and_body.pattern_match_pair
     t1.bound_vars_and_body
     t2.bound_vars_and_body
-    ~f:(fun bound_vars body1 body2 -> f ~bound_vars ~body1 ~body2)
+    ~f:(fun bindable_let_bound body1 body2 ->
+      f bindable_let_bound ~body1 ~body2)
 
 let print_with_cache ~cache ppf
       ({ bound_vars_and_body = _; defining_expr; } as t) =

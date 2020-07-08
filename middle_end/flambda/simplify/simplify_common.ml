@@ -336,7 +336,9 @@ let remove_unused_closure_vars r (static_const : Static_const.t)
   | Immutable_string _ -> static_const
 
 let create_let_symbol r (scoping_rule : Let_symbol.Scoping_rule.t)
-      code_age_relation bound_symbols static_const body =
+      code_age_relation lifted_constant body =
+  let bound_symbols = LC.bound_symbols lifted_constant in
+  let defining_expr = LC.defining_expr lifted_constant in
   let static_const = remove_unused_closure_vars r static_const in
   match scoping_rule with
   | Syntactic ->

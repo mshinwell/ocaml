@@ -19,7 +19,6 @@
 module Descr = struct
   type t =
     | Let of Let_expr.t
-    | Let_symbol of Let_symbol_expr.t
     | Let_cont of Let_cont_expr.t
     | Apply of Apply.t
     | Apply_cont of Apply_cont.t
@@ -29,7 +28,6 @@ module Descr = struct
   let free_names t =
     match t with
     | Let let_expr -> Let_expr.free_names let_expr
-    | Let_symbol let_symbol_expr -> Let_symbol_expr.free_names let_symbol_expr
     | Let_cont let_cont -> Let_cont_expr.free_names let_cont
     | Apply apply -> Apply.free_names apply
     | Apply_cont apply_cont -> Apply_cont.free_names apply_cont
@@ -42,12 +40,6 @@ module Descr = struct
       let let_expr' = Let_expr.apply_name_permutation let_expr perm in
       if let_expr == let_expr' then t
       else Let let_expr'
-    | Let_symbol let_symbol_expr ->
-      let let_symbol_expr' =
-        Let_symbol_expr.apply_name_permutation let_symbol_expr perm
-      in
-      if let_symbol_expr == let_symbol_expr' then t
-      else Let_symbol let_symbol_expr'
     | Let_cont let_cont ->
       let let_cont' = Let_cont_expr.apply_name_permutation let_cont perm in
       if let_cont == let_cont' then t
@@ -78,7 +70,6 @@ type t = {
 
 type descr = Descr.t =
   | Let of Let_expr.t
-  | Let_symbol of Let_symbol_expr.t
   | Let_cont of Let_cont_expr.t
   | Apply of Apply.t
   | Apply_cont of Apply_cont.t
@@ -131,8 +122,6 @@ let free_names t =
 let all_ids_for_export t =
   match descr t with
   | Let let_expr -> Let_expr.all_ids_for_export let_expr
-  | Let_symbol let_symbol_expr ->
-    Let_symbol_expr.all_ids_for_export let_symbol_expr
   | Let_cont let_cont -> Let_cont_expr.all_ids_for_export let_cont
   | Apply apply -> Apply.all_ids_for_export apply
   | Apply_cont apply_cont -> Apply_cont.all_ids_for_export apply_cont
@@ -143,8 +132,6 @@ let import import_map t =
   let descr =
     match descr t with
     | Let let_expr -> Let (Let_expr.import import_map let_expr)
-    | Let_symbol let_symbol_expr ->
-      Let_symbol (Let_symbol_expr.import import_map let_symbol_expr)
     | Let_cont let_cont -> Let_cont (Let_cont_expr.import import_map let_cont)
     | Apply apply -> Apply (Apply.import import_map apply)
     | Apply_cont apply_cont ->
@@ -157,7 +144,6 @@ let import import_map t =
 let invariant env t =
   match descr t with
   | Let let_expr -> Let_expr.invariant env let_expr
-  | Let_symbol let_symbol_expr -> Let_symbol_expr.invariant env let_symbol_expr
   | Let_cont let_cont -> Let_cont_expr.invariant env let_cont
   | Apply_cont apply_cont -> Apply_cont.invariant env apply_cont
   | Apply apply -> Apply.invariant env apply
@@ -170,8 +156,6 @@ let invariant env t =
 let print_with_cache ~cache ppf (t : t) =
   match descr t with
   | Let let_expr -> Let_expr.print_with_cache ~cache ppf let_expr
-  | Let_symbol let_symbol_expr ->
-    Let_symbol_expr.print_with_cache ~cache ppf let_symbol_expr
   | Let_cont let_cont -> Let_cont_expr.print_with_cache ~cache ppf let_cont
   | Apply apply ->
     Format.fprintf ppf "@[<hov 1>(@<0>%sapply@<0>%s@ %a)@]"
@@ -318,7 +302,7 @@ Format.eprintf "Deleting binding of %a; free names of body are:@ %a\n%!"
   if not keep_binding then body, let_creation_result
   else
     let bound_vars = Bindable_let_bound.singleton bound_var in
-    let let_expr = Let_expr.create ~bound_vars ~defining_expr ~body in
+    let let_expr = Let_expr.create bound_vars ~defining_expr ~body in
     let free_names =
       let from_defining_expr =
         let from_defining_expr = Named.free_names defining_expr in
@@ -366,7 +350,7 @@ let create_set_of_closures_let ~closure_vars defining_expr body
   then
     body, Have_deleted defining_expr
   else
-    let let_expr = Let_expr.create ~bound_vars ~defining_expr ~body in
+    let let_expr = Let_expr.create bound_vars ~defining_expr ~body in
     let free_names =
       let from_defining_expr = Named.free_names defining_expr in
       Name_occurrences.union from_defining_expr
@@ -380,12 +364,15 @@ let create_set_of_closures_let ~closure_vars defining_expr body
     in
     t, Nothing_deleted
 
-let create_pattern_let0 (bound_vars : Bindable_let_bound.t) defining_expr body
+let create_let_symbol ... =
+
+let create_pattern_let0 (bindable : Bindable_let_bound.t) defining_expr body
       : t * let_creation_result =
-  match bound_vars with
+  match bindable with
   | Singleton bound_var -> create_singleton_let bound_var defining_expr body
   | Set_of_closures { closure_vars; _ } ->
     create_set_of_closures_let ~closure_vars defining_expr body
+  | Symbols symbols -> create_let_symbol symbols
 
 let create_let bound_var defining_expr body : t =
   let expr, _ = create_singleton_let bound_var defining_expr body in
@@ -395,7 +382,13 @@ let create_pattern_let bound_vars defining_expr body : t =
   let expr, _ = create_pattern_let0 bound_vars defining_expr body in
   expr
 
-let create_let_symbol let_symbol = create (Let_symbol let_symbol)
+let create_let_symbol bound_symbols scoping_rule static_const =
+  let expr, _ =
+    create_pattern_let0 (Bindable_let_bound.symbols bound_symbols scoping_rule)
+      (Named.create_static_const static_const) body
+  in
+  expr
+
 let create_let_cont let_cont = create (Let_cont let_cont)
 let create_apply apply = create (Apply apply)
 let create_apply_cont apply_cont = create (Apply_cont apply_cont)

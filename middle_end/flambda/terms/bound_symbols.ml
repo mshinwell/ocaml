@@ -16,6 +16,8 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
+module K = Flambda_kind
+
 module Code_and_set_of_closures = struct
   type t = {
     code_ids : Code_id.Set.t;
