@@ -283,6 +283,7 @@ MIDDLE_END_FLAMBDA_NAMING=\
   middle_end/flambda/naming/with_delayed_permutation.cmo \
   middle_end/flambda/naming/var_in_binding_pos.cmo \
   middle_end/flambda/naming/bindable.cmo \
+  middle_end/flambda/terms/bound_symbols.cmo \
   middle_end/flambda/naming/bindable_let_bound.cmo \
   middle_end/flambda/naming/bindable_continuation.cmo \
   middle_end/flambda/naming/bindable_exn_continuation.cmo \
@@ -326,7 +327,6 @@ MIDDLE_END_FLAMBDA_TERMS=\
   middle_end/flambda/terms/function_declaration.cmo \
   middle_end/flambda/terms/function_declarations.cmo \
   middle_end/flambda/terms/set_of_closures.cmo \
-  middle_end/flambda/terms/bound_symbols.cmo \
   middle_end/flambda/terms/flambda.cmo \
   middle_end/flambda/types/flambda_type.cmo \
   middle_end/flambda/terms/flambda_unit.cmo
