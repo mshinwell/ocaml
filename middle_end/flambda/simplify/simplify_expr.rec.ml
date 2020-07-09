@@ -309,7 +309,7 @@ and simplify_non_recursive_let_cont_handler
            [body] raises any exceptions then it only does so to toplevel.
            If this can be shown and we are currently at the toplevel of a
            compilation unit, the handler for the environment can remain marked
-           as toplevel (and suitable for [Let_symbol] bindings); otherwise, it
+           as toplevel (and suitable for "let symbol" bindings); otherwise, it
            cannot. *)
         DE.at_unit_toplevel denv
           && (not (Continuation_handler.is_exn_handler cont_handler))
