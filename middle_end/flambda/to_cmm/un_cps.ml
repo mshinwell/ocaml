@@ -667,23 +667,6 @@ let rec expr env res e =
   | Switch e' -> switch env res e'
   | Invalid e' -> invalid env res e'
 
-and named env res n =
-  match (n : Named.t) with
-  | Simple s ->
-    let t, env, effs = simple env s in
-    t, None, env, effs, res
-  | Prim (p, dbg) ->
-    let prim_eff = Flambda_primitive.effects_and_coeffects p in
-    let t, extra, env, effs = prim env dbg p in
-    t, extra, env, Ece.join effs prim_eff, res
-  | Set_of_closures _ ->
-    Misc.fatal_errorf "sets of closures should not be bound to \
-                       a singleton variable"
-  | Static_const _static_const ->
-    (* In particular we can't call [Un_cps_static.static_const] as we haven't
-       got the bound symbols *)
-    Misc.fatal_error "mshinwell: don't know what to do here"
-
 and let_expr env res t =
   Let.pattern_match t ~f:(fun bindable_let_bound ~body ->
     let mode = Bindable_let_bound.name_mode bindable_let_bound in
@@ -696,17 +679,24 @@ and let_expr env res t =
     | Normal ->
       let e = Let.defining_expr t in
       begin match bindable_let_bound, e with
-      | Singleton v, _ ->
-        let v = Var_in_binding_pos.var v in
-        let_expr_aux env res v e body
+      (* Correct cases *)
+      | Singleton v, Simple s ->
+        let_expr_simple body env res v s
+      | Singleton v, Prim (p, dbg) ->
+        let_expr_prim body env res v p dbg
       | Set_of_closures { closure_vars; _ }, Set_of_closures soc ->
         let_set_of_closures env res body closure_vars soc
+      | Symbols { bound_symbols; scoping_rule; }, Static_const const ->
+        let_symbol env res bound_symbols scoping_rule const body
+      (* Error cases *)
+      | Singleton _, (Set_of_closures _ | Static_const _) ->
+        Misc.fatal_errorf
+          "Singleton binding to a set of closure or static const if forbidden:@ %a"
+          Let.print t
       | Set_of_closures _, (Simple _ | Prim _ | Static_const _) ->
         Misc.fatal_errorf
           "Set_of_closures binding a non-Set_of_closures:@ %a"
           Let.print t
-      | Symbols { bound_symbols; scoping_rule; }, Static_const const ->
-        let_symbol env res bound_symbols scoping_rule const body
       | Symbols _, (Simple _ | Prim _ | Set_of_closures _) ->
         Misc.fatal_errorf
           "Symbols binding a non-Static const:@ %a"
@@ -750,12 +740,20 @@ and let_expr_bind ?extra body env v cmm_expr effs =
   | Inline -> Env.bind_variable env v ?extra effs true cmm_expr
   | Regular -> Env.bind_variable env v ?extra effs false cmm_expr
 
-and let_expr_env body (env, res) v e =
-  let cmm_expr, extra, env, effs, res = named env res e in
-  let_expr_bind ?extra body env v cmm_expr effs, res
+and bind_simple body (env, res) v s =
+  let cmm_expr, env, effs = simple env s in
+  let_expr_bind body env v cmm_expr effs, res
 
-and let_expr_aux env res v e body =
-  let env, res = let_expr_env body (env, res) v e in
+and let_expr_simple body env res v s =
+  let v = Var_in_binding_pos.var v in
+  let env, res = bind_simple body (env, res) v s in
+  expr env res body
+
+and let_expr_prim body env res v p dbg =
+  let v = Var_in_binding_pos.var v in
+  let cmm_expr, extra, env, effs = prim env dbg p in
+  let effs = Ece.join effs (Flambda_primitive.effects_and_coeffects p) in
+  let env = let_expr_bind ?extra body env v cmm_expr effs in
   expr env res body
 
 and decide_inline_cont h k num_free_occurrences =
@@ -1080,9 +1078,8 @@ and apply_cont_regular env res e k args =
 and apply_cont_inline env res e k args handler_body handler_params =
   if List.compare_lengths args handler_params = 0 then begin
     let vars = List.map Kinded_parameter.var handler_params in
-    let args = List.map Named.create_simple args in
     let env, res =
-      List.fold_left2 (let_expr_env handler_body) (env, res) vars args
+      List.fold_left2 (bind_simple handler_body) (env, res) vars args
     in
     expr env res handler_body
   end else
