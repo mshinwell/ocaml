@@ -362,6 +362,8 @@ let simplify_function context r closure_id function_decl
                 in
                 TE.with_code_age_relation typing_env code_age_relation)
               |> fun denv ->
+                (* Lifted constants from previous functions in the set get
+                   put into the environment for subsequent functions. *)
                 DE.add_lifted_constants denv (R.get_lifted_constants r))
           in
           assert (not (DE.at_unit_toplevel (DA.denv dacc)));
