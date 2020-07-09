@@ -132,7 +132,7 @@ let lift_set_of_closures_discovered_via_reified_continuation_param_types dacc
          via symbols.)  See long comment above concerning subtle point
          relating to dependencies that might be exposed during such
          simplification. *)
-      Let_symbol.pieces_of_code
+      Flambda.pieces_of_code
         ~newer_versions_of:Code_id.Map.empty
         ~set_of_closures:(closure_symbols, set_of_closures)
         Code_id.Map.empty
@@ -309,8 +309,7 @@ let lift_via_reification_of_continuation_param_types0 dacc ~params
     List.fold_left (fun handler lifted_constant ->
         let bound_symbols = LC.bound_symbols lifted_constant in
         let defining_expr = LC.defining_expr lifted_constant in
-        Let_symbol.create Dominator bound_symbols defining_expr handler
-        |> Expr.create_let_symbol)
+        Expr.create_let_symbol bound_symbols Dominator defining_expr handler)
       handler
       reified_definitions.bindings_outermost_last
   in

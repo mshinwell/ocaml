@@ -599,16 +599,12 @@ let simplify_and_lift_set_of_closures dacc ~closure_bound_vars_inverse
     Lifted_constant.create bound_symbols static_const ~types_of_symbols
   in
   let r =
-    R.new_not_placed_lifted_constant (DA.r dacc) set_of_closures_lifted_constant
+    R.add_still_to_be_placed_lifted_constant (DA.r dacc)
+      set_of_closures_lifted_constant
   in
   let denv =
     DE.add_lifted_constant (DA.denv dacc) set_of_closures_lifted_constant
   in
-  (*
-  Format.eprintf "NON LIFTED:@ %a\n%!" Static_const.print static_const;
-  Format.eprintf "CAR:@ %a\n%!"
-    Code_age_relation.print (TE.code_age_relation (DE.typing_env denv));
-  *)
   let denv, bindings =
     Closure_id.Map.fold (fun closure_id bound_var (denv, bindings) ->
         match Closure_id.Map.find closure_id closure_symbols with
@@ -627,7 +623,7 @@ let simplify_and_lift_set_of_closures dacc ~closure_bound_vars_inverse
   in
   bindings, DA.with_denv (DA.with_r dacc r) denv
 
-let simplify_non_lifted_set_of_closures0 dacc ~bound_vars ~closure_bound_vars
+let simplify_non_lifted_set_of_closures0 dacc bound_vars ~closure_bound_vars
       set_of_closures ~closure_elements ~closure_element_types =
   let closure_bound_names =
     Closure_id.Map.map Name_in_binding_pos.var closure_bound_vars
@@ -664,7 +660,8 @@ let simplify_non_lifted_set_of_closures0 dacc ~bound_vars ~closure_bound_vars
   in
   let dacc =
     dacc
-    |> DA.map_r ~f:(fun r -> R.new_lifted_constant r lifted_constant)
+    |> DA.map_r ~f:(fun r ->
+      R.add_still_to_be_placed_lifted_constant r lifted_constant)
     |> DA.map_denv ~f:(fun denv -> DE.add_lifted_constant denv lifted_constant)
   in
   [bound_vars, defining_expr], dacc
@@ -735,7 +732,7 @@ let type_closure_elements_for_previously_lifted_set dacc
     set_of_closures
 
 let simplify_non_lifted_set_of_closures dacc
-      ~(bound_vars : Bindable_let_bound.t) set_of_closures =
+      (bound_vars : Bindable_let_bound.t) set_of_closures =
   let closure_bound_vars =
     Bindable_let_bound.must_be_set_of_closures bound_vars
   in
@@ -760,7 +757,7 @@ let simplify_non_lifted_set_of_closures dacc
     simplify_and_lift_set_of_closures dacc ~closure_bound_vars_inverse
       ~closure_bound_vars set_of_closures ~closure_elements
   else
-    simplify_non_lifted_set_of_closures0 dacc ~bound_vars ~closure_bound_vars
+    simplify_non_lifted_set_of_closures0 dacc bound_vars ~closure_bound_vars
       set_of_closures ~closure_elements ~closure_element_types
 
 let simplify_lifted_set_of_closures0 context ~closure_symbols

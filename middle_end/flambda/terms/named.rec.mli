@@ -77,6 +77,8 @@ val invariant_returning_kind
   -> t
   -> Flambda_primitive.result_kind
 
-val is_set_of_closures : t -> bool
+val is_dynamically_allocated_set_of_closures : t -> bool
 
 val is_static_const : t -> bool
+
+val must_be_static_const : t -> Static_const.t

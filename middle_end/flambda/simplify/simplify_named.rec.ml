@@ -25,7 +25,7 @@ type simplify_named_result =
     }
   | Reified of {
       definition : Named.t;
-      bound_symbol : Let_symbol.Bound_symbols.t;
+      bound_symbol : Bound_symbols.t;
       static_const : Static_const.t;
       r : R.t;
     }
@@ -34,7 +34,7 @@ type simplify_named_result =
 let bindings_result bindings_outermost_first dacc =
   Bindings { bindings_outermost_first; dacc; }
 
-let simplify_named0 dacc ~(bindable_let_bound : Bindable_let_bound.t)
+let simplify_named0 dacc (bindable_let_bound : Bindable_let_bound.t)
       (named : Named.t) =
   match named with
   | Simple simple ->
@@ -92,7 +92,7 @@ let simplify_named0 dacc ~(bindable_let_bound : Bindable_let_bound.t)
           let named = Named.create_simple (Simple.symbol symbol) in
           Reified
             { definition = named;
-              bound_symbol = Let_symbol.Bound_symbols.Singleton symbol;
+              bound_symbol = Singleton symbol;
               static_const;
               r = DA.r dacc;
             }
@@ -105,18 +105,18 @@ let simplify_named0 dacc ~(bindable_let_bound : Bindable_let_bound.t)
   | Set_of_closures set_of_closures ->
     let bindings, dacc =
       Simplify_set_of_closures.simplify_non_lifted_set_of_closures dacc
-        ~bindable_let_bound set_of_closures
+        bindable_let_bound set_of_closures
     in
     bindings_result bindings dacc
   | Static_const static_const ->
-    let { bound_symbols; scoping_rule; } =
-      Bindable_let_bound.must_be_symbols static_const
+    let { Bindable_let_bound. bound_symbols; scoping_rule = _; } =
+      Bindable_let_bound.must_be_symbols bindable_let_bound
     in
     if not (DE.at_unit_toplevel (DA.denv dacc)) then begin
       Misc.fatal_errorf "[Let] binding symbols is only allowed at the toplevel \
           of compilation units (not even at the toplevel of function \
           bodies):@ %a"
-        LS.print let_symbol_expr
+        Named.print named
     end;
     let bound_symbols_free_names = Bound_symbols.free_names bound_symbols in
     let dacc =
@@ -189,7 +189,7 @@ let simplify_named0 dacc ~(bindable_let_bound : Bindable_let_bound.t)
         Symbol.Map.empty
     in
     let lifted_constant =
-      LC.create bound_symbols defining_expr ~types_of_symbols
+      LC.create bound_symbols static_const ~types_of_symbols
     in
     let dacc =
       DA.map_r dacc ~f:(fun r ->
@@ -200,9 +200,9 @@ let simplify_named0 dacc ~(bindable_let_bound : Bindable_let_bound.t)
        constant returned in [r] (inside [dacc]). *)
     Bindings { bindings_outermost_first = []; dacc; }
 
-let simplify_named dacc ~bindable_let_bound named =
+let simplify_named dacc bindable_let_bound named =
   try
-    simplify_named0 dacc ~bindable_let_bound named
+    simplify_named0 dacc bindable_let_bound named
   with Misc.Fatal_error -> begin
     if !Clflags.flambda_context_on_error then begin
       Format.eprintf "\n%sContext is:%s simplifying [Let] binding@ %a =@ %a@ \

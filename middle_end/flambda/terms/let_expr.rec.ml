@@ -46,7 +46,7 @@ type flattened_for_printing = {
   second_or_later_binding_within_one_set : bool;
   second_or_later_set_of_closures : bool;
   descr : flattened_for_printing_descr;
-  scoping_rule : Scoping_rule.t;
+  scoping_rule : Symbol_scoping_rule.t;
 }
 
 let shape_colour descr =
@@ -54,8 +54,8 @@ let shape_colour descr =
   | Code _ -> Flambda_colours.code_id ()
   | Set_of_closures _ | Other _ -> Flambda_colours.symbol ()
 
-let flatten_for_printing0 scoping_rule bound_symbols defining_expr =
-  match bound_symbols with
+let flatten_for_printing0 bound_symbols scoping_rule defining_expr =
+  match (bound_symbols : Bound_symbols.t) with
   | Singleton symbol ->
     [{ second_or_later_binding_within_one_set = false;
        second_or_later_set_of_closures = false;
@@ -109,11 +109,12 @@ let flatten_for_printing0 scoping_rule bound_symbols defining_expr =
     flattened
 
 let flatten_for_printing t =
-  pattern_match t ~f:(fun ~(bindable_let_bound : Bindable_let_bound.t) ~body ->
+  pattern_match t ~f:(fun (bindable_let_bound : Bindable_let_bound.t) ~body ->
     match bindable_let_bound with
     | Symbols { bound_symbols; scoping_rule; } ->
       let flattened =
-        flatten_for_printing0 bound_symbols scoping_rule t.defining_expr
+        flatten_for_printing0 bound_symbols scoping_rule
+          (Named.must_be_static_const t.defining_expr)
       in
       Some (flattened, body)
     | Singleton _ | Set_of_closures _ -> None)
@@ -195,7 +196,7 @@ let flatten_let_symbol t : _ * Expr.t =
   in
   match flatten_for_printing t with
   | Some (flattened, body) ->
-    let flattened', body = flatten t.body in
+    let flattened', body = flatten body in
     flattened @ flattened', body
   | None -> assert false  (* see below *)
 
@@ -263,7 +264,7 @@ let print_with_cache ~cache ppf
 
 let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
-let create ~bindable_let_bound ~defining_expr ~body =
+let create bindable_let_bound ~defining_expr ~body =
   { name_abstraction = A.create bindable_let_bound body;
     defining_expr;
   }
@@ -271,7 +272,7 @@ let create ~bindable_let_bound ~defining_expr ~body =
 let invariant env t =
   let module E = Invariant_env in
   Named.invariant env t.defining_expr;
-  pattern_match t ~f:(fun ~(bindable_let_bound : Bindable_let_bound.t) ~body ->
+  pattern_match t ~f:(fun (bindable_let_bound : Bindable_let_bound.t) ~body ->
     let env =
       match t.defining_expr, bindable_let_bound with
       | Set_of_closures _, Set_of_closures { closure_vars; _ } ->
@@ -282,7 +283,7 @@ let invariant env t =
           env
       | Set_of_closures _, Singleton _ ->
         Misc.fatal_errorf "Cannot bind a [Set_of_closures] to a \
-            [Singleton] or to [Symbols]:@ %a"
+            [Singleton]:@ %a"
           print t
       | _, Set_of_closures _ ->
         Misc.fatal_errorf "Cannot bind a non-[Set_of_closures] to a \
@@ -296,7 +297,10 @@ let invariant env t =
         Simple.pattern_match simple
           ~const:(fun const -> E.add_variable env var (T.kind_for_const const))
           ~name:(fun name -> E.add_variable env var (E.kind_of_name env name))
-      | Static_const _, Symbols _ -> ()
+      | Static_const _, Symbols _ -> env
+      | Static_const _, Singleton _ ->
+        Misc.fatal_errorf "Cannot bind a [Static_const] to a [Singleton]:@ %a"
+          print t
       | (Simple _ | Prim _ | Set_of_closures _), Symbols _ ->
         Misc.fatal_errorf "Cannot bind a non-[Static_const] to [Symbols]:@ %a"
           print t
@@ -307,7 +311,7 @@ let defining_expr t = t.defining_expr
 
 let free_names ({ name_abstraction = _; defining_expr; } as t) =
   pattern_match t ~f:(fun bindable_let_bound ~body ->
-    let from_bindable = Bindable_let_bound.free_names bindable in
+    let from_bindable = Bindable_let_bound.free_names bindable_let_bound in
     let from_defining_expr =
       let name_mode = Bindable_let_bound.name_mode bindable_let_bound in
       Name_occurrences.downgrade_occurrences_at_strictly_greater_kind
@@ -317,7 +321,7 @@ let free_names ({ name_abstraction = _; defining_expr; } as t) =
     let from_body = Expr.free_names body in
     (* CR mshinwell: See comment in expr.rec.ml *)
     Name_occurrences.union from_defining_expr
-      (Name_occurrences.diff free_names_of_body free_names_of_bindable))
+      (Name_occurrences.diff from_body from_bindable))
 
 let apply_name_permutation ({ name_abstraction; defining_expr; } as t) perm =
   let name_abstraction' = A.apply_name_permutation name_abstraction perm in

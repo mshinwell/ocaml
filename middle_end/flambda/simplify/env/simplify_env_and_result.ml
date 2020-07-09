@@ -764,7 +764,7 @@ end and Lifted_constant : sig
     with type downwards_env := Downwards_env.t
 end = struct
   type t = {
-    bound_symbols : Let_symbol.Bound_symbols.t;
+    bound_symbols : Bound_symbols.t;
     defining_expr : Static_const.t;
     types_of_symbols : (Downwards_env.t * Flambda_type.t) Symbol.Map.t;
   }
@@ -775,17 +775,17 @@ end = struct
         @[<hov 1>(bound_symbols@ %a)@]@ \
         @[<hov 1>(static_const@ %a)@]\
         )@]"
-      Let_symbol.Bound_symbols.print bound_symbols
+      Bound_symbols.print bound_symbols
       Static_const.print defining_expr
 
   let create bound_symbols defining_expr ~types_of_symbols =
-    let being_defined = Let_symbol.Bound_symbols.being_defined bound_symbols in
+    let being_defined = Bound_symbols.being_defined bound_symbols in
     if not (Symbol.Set.equal (Symbol.Map.keys types_of_symbols) being_defined)
     then begin
       Misc.fatal_errorf "[types_of_symbols]:@ %a@ does not cover all symbols \
           in the definition:@ %a"
         (Symbol.Map.print T.print) (Symbol.Map.map snd types_of_symbols)
-        Let_symbol.Bound_symbols.print bound_symbols
+        Bound_symbols.print bound_symbols
     end;
     (* CR mshinwell: This should check that [defining_expr] matches
        [bound_symbols] in the code/set-of-closures case *)
@@ -796,7 +796,7 @@ end = struct
 
   let create_pieces_of_code ?newer_versions_of code =
     let bound_symbols, defining_expr =
-      Let_symbol.pieces_of_code ?newer_versions_of code
+      Flambda.pieces_of_code ?newer_versions_of code
     in
     { bound_symbols;
       defining_expr;
@@ -814,7 +814,7 @@ end = struct
 
   let create_deleted_piece_of_code ?newer_versions_of code_id =
     let bound_symbols, defining_expr =
-      Let_symbol.deleted_pieces_of_code ?newer_versions_of
+      Flambda.deleted_pieces_of_code ?newer_versions_of
         (Code_id.Set.singleton code_id)
     in
     { bound_symbols;

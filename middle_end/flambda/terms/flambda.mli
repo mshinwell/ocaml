@@ -47,11 +47,6 @@ module rec Expr : sig
     (** Bind variable(s) or symbol(s).  There can be no effect on control flow
         (save for asynchronous operations such as the invocation of finalisers
         or signal handlers as a result of reaching a safe point). *)
-    | Let_symbol of Let_symbol_expr.t
-    (** Bind code and/or data symbol(s).  This form of expression is only
-        allowed in certain "toplevel" contexts.  The bound symbols are not
-        treated up to alpha conversion; each such bound symbol must be
-        unique across the whole program being compiled. *)
     | Let_cont of Let_cont_expr.t
     (** Define one or more continuations. *)
     | Apply of Apply.t
@@ -96,6 +91,7 @@ module rec Expr : sig
      : Bound_symbols.t
     -> Symbol_scoping_rule.t
     -> Static_const.t
+    -> t
     -> t
 
   (** Create an application expression. *)
@@ -209,12 +205,16 @@ end and Named : sig
       necessarily type-correct, at the given kind. *)
   val dummy_value : Flambda_kind.t -> t
 
-  (** Returns [true] iff the given expression is a set of closures. *)
-  val is_set_of_closures : t -> bool
+  (** Returns [true] iff the given expression is a set of closures that will
+      be allocated on the OCaml heap during execution (i.e. not a
+      statically-allocated set of closures). *)
+  val is_dynamically_allocated_set_of_closures : t -> bool
 
   (** Returns [true] iff the given expression is a statically-allocated
       constant. *)
   val is_static_const : t -> bool
+
+  val must_be_static_const : t -> Static_const.t
 end and Let_expr : sig
   (** The alpha-equivalence classes of expressions that bind variables; and
       the expressions that bind symbols (which are not treated up to
@@ -241,66 +241,6 @@ end and Let_expr : sig
     -> t
     -> f:(Bindable_let_bound.t -> body1:Expr.t -> body2:Expr.t -> 'a)
     -> 'a
-end and Let_symbol_expr : sig
-  module Bound_symbols : sig
-    module Code_and_set_of_closures : sig
-      type t = {
-        code_ids : Code_id.Set.t;
-        closure_symbols : Symbol.t Closure_id.Map.t;
-      }
-
-      val print : Format.formatter -> t -> unit
-    end
-
-    type t =
-      | Singleton of Symbol.t
-        (** A binding of a single symbol of kind [Value]. *)
-      | Sets_of_closures of Code_and_set_of_closures.t list
-        (** A recursive binding of possibly multiple sets of closures with
-            associated code. All code IDs and symbols named in the
-            [Code_and_set_of_closures.t list] are in scope for _all_ associated
-            [Static_const.code_and_set_of_closures list] values on the
-            right-hand side of the corresponding [Let_symbol] expression.
-            Despite the recursive nature of the binding, the elements in the
-            [Code_and_set_of_closures.t list] must correspond elementwise to the
-            elements in the corresponding [Static_const.code_and_set_of_closures
-            list]. *)
-
-    val being_defined : t -> Symbol.Set.t
-
-    val code_being_defined : t -> Code_id.Set.t
-
-    val closure_symbols_being_defined : t -> Symbol.Set.t
-
-    val everything_being_defined : t -> Code_id_or_symbol.Set.t
-
-    include Expr_std.S with type t := t
-  end
-
-  module Scoping_rule : sig
-    type t =
-      | Syntactic
-      | Dominator
-  end
-
-  type t
-
-  val create
-     : Scoping_rule.t
-    -> Bound_symbols.t
-    -> Static_const.t
-    -> Expr.t
-    -> t
-
-  val scoping_rule : t -> Scoping_rule.t
-
-  val bound_symbols : t -> Bound_symbols.t
-
-  val defining_expr : t -> Static_const.t
-
-  val body : t -> Expr.t
-
-  include Expr_std.S with type t := t
 end and Let_cont_expr : sig
   (** Values of type [t] represent alpha-equivalence classes of the definitions
       of continuations:
@@ -682,7 +622,6 @@ module Import : sig
   module Function_params_and_body = Function_params_and_body
   module Let = Let
   module Let_cont = Let_cont
-  module Let_symbol = Let_symbol_expr
   module Named = Named
   module Non_recursive_let_cont_handler = Non_recursive_let_cont_handler
   module Recursive_let_cont_handlers = Recursive_let_cont_handlers

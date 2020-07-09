@@ -322,7 +322,7 @@ module type Lifted_constant = sig
 
   (** [create] takes the types of symbols to avoid re-inferring them. *)
   val create
-     : Flambda.Let_symbol_expr.Bound_symbols.t
+     : Bound_symbols.t
     -> Flambda.Static_const.t
     -> types_of_symbols:(downwards_env * Flambda_type.t) Symbol.Map.t
     -> t
@@ -343,7 +343,7 @@ module type Lifted_constant = sig
     -> Code_id.t
     -> t
 
-  val bound_symbols : t -> Flambda.Let_symbol_expr.Bound_symbols.t
+  val bound_symbols : t -> Bound_symbols.t
   val defining_expr : t -> Flambda.Static_const.t
   val types_of_symbols : t -> (downwards_env * Flambda_type.t) Symbol.Map.t
 end

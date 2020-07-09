@@ -213,8 +213,7 @@ let create_let_symbol0 r code_age_relation (bound_symbols : Bound_symbols.t)
     if not (Name_occurrences.mem_symbol free_names_after sym) then body, r
     else
       let expr =
-        Let_symbol.create Syntactic bound_symbols static_const body
-        |> Expr.create_let_symbol
+        Expr.create_let_symbol bound_symbols Syntactic static_const body
       in
       expr, r
   | Sets_of_closures _ ->
@@ -292,8 +291,7 @@ let create_let_symbol0 r code_age_relation (bound_symbols : Bound_symbols.t)
       in
       let static_const = Static_const.Sets_of_closures sets in
       let expr =
-        Let_symbol.create Syntactic bound_symbols static_const body
-        |> Expr.create_let_symbol
+        Expr.create_let_symbol bound_symbols Syntactic static_const body
       in
       let r =
         R.remember_code_for_cmx r
@@ -335,18 +333,17 @@ let remove_unused_closure_vars r (static_const : Static_const.t)
   | Mutable_string _
   | Immutable_string _ -> static_const
 
-let create_let_symbol r (scoping_rule : Let_symbol.Scoping_rule.t)
+let create_let_symbol r (scoping_rule : Symbol_scoping_rule.t)
       code_age_relation lifted_constant body =
   let bound_symbols = LC.bound_symbols lifted_constant in
   let defining_expr = LC.defining_expr lifted_constant in
-  let static_const = remove_unused_closure_vars r static_const in
+  let static_const = remove_unused_closure_vars r defining_expr in
   match scoping_rule with
   | Syntactic ->
     create_let_symbol0 r code_age_relation bound_symbols static_const body
   | Dominator ->
     let expr =
-      Let_symbol.create Dominator bound_symbols static_const body
-      |> Expr.create_let_symbol
+      Expr.create_let_symbol bound_symbols Dominator static_const body
     in
     let r =
       R.remember_code_for_cmx r

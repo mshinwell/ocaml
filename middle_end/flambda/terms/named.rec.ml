@@ -57,7 +57,7 @@ let invariant_returning_kind env t : Flambda_primitive.result_kind =
       Flambda_primitive.invariant env prim;
       ignore (dbg : Debuginfo.t);
       Flambda_primitive.result_kind prim
-    | Static_const _ -> ()
+    | Static_const _ -> Singleton K.value
   with Misc.Fatal_error ->
     Misc.fatal_errorf "(during invariant checks) Context is:@ %a" print t
 
@@ -152,6 +152,7 @@ let at_most_generative_effects (t : t) =
   | Simple _ -> true
   | Prim (prim, _) -> Flambda_primitive.at_most_generative_effects prim
   | Set_of_closures _ -> true
+  | Static_const _ -> true
 
 let dummy_value (kind : K.t) : t =
   let simple =
@@ -172,7 +173,18 @@ let dummy_value (kind : K.t) : t =
   in
   Simple simple
 
-let is_set_of_closures t =
+let is_dynamically_allocated_set_of_closures t =
   match t with
   | Set_of_closures _ -> true
-  | Simple _ | Prim _ -> false
+  | Simple _ | Prim _ | Static_const _ -> false
+
+let is_static_const t =
+  match t with
+  | Static_const _ -> true
+  | Simple _ | Prim _ | Set_of_closures _ -> false
+
+let must_be_static_const t =
+  match t with
+  | Static_const const -> const
+  | Simple _ | Prim _ | Set_of_closures _ ->
+    Misc.fatal_errorf "Must be a [Static_const], but is not: %a" print t

@@ -14,8 +14,6 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-[@@@ocaml.warning "-32"] (* FIXME Let_code -- just remove this *)
-
 open! Flambda.Import
 
 module Env = Un_cps_env
@@ -43,17 +41,9 @@ end
 (* Shortcuts for useful cmm machtypes *)
 let typ_int = Cmm.typ_int
 let typ_val = Cmm.typ_val
-let typ_addr = Cmm.typ_addr
 let typ_void = Cmm.typ_void
 let typ_float = Cmm.typ_float
 let typ_int64 = C.typ_int64
-
-(* CR gbury: this conversion is potentially unsafe when cross-compiling
-   for a 64-bit machine on a 32-bit host *)
-let nativeint_of_targetint t =
-  match Targetint.repr t with
-  | Int32 i -> Nativeint.of_int32 i
-  | Int64 i -> Int64.to_nativeint i
 
 (* CR gbury: {Targetint.to_int} should raise an error when converting
    an out-of-range integer. *)
@@ -671,7 +661,6 @@ let function_flags () =
 let rec expr env res e =
   match (Expr.descr e : Expr.descr) with
   | Let e' -> let_expr env res e'
-  | Let_symbol e' -> let_symbol env res e'
   | Let_cont e' -> let_cont env res e'
   | Apply e' -> apply_expr env res e'
   | Apply_cont e' -> apply_cont env res e'
@@ -690,10 +679,14 @@ and named env res n =
   | Set_of_closures _ ->
     Misc.fatal_errorf "sets of closures should not be bound to \
                        a singleton variable"
+  | Static_const _static_const ->
+    (* In particular we can't call [Un_cps_static.static_const] as we haven't
+       got the bound symbols *)
+    Misc.fatal_error "mshinwell: don't know what to do here"
 
 and let_expr env res t =
-  Let.pattern_match t ~f:(fun ~bound_vars ~body ->
-    let mode = Bindable_let_bound.name_mode bound_vars in
+  Let.pattern_match t ~f:(fun bindable_let_bound ~body ->
+    let mode = Bindable_let_bound.name_mode bindable_let_bound in
     begin match Name_mode.descr mode with
     | In_types ->
       Misc.fatal_errorf
@@ -702,33 +695,37 @@ and let_expr env res t =
       expr env res body
     | Normal ->
       let e = Let.defining_expr t in
-      begin match bound_vars, e with
+      begin match bindable_let_bound, e with
       | Singleton v, _ ->
         let v = Var_in_binding_pos.var v in
         let_expr_aux env res v e body
       | Set_of_closures { closure_vars; _ }, Set_of_closures soc ->
         let_set_of_closures env res body closure_vars soc
-      | Set_of_closures _, (Simple _ | Prim _) ->
+      | Set_of_closures _, (Simple _ | Prim _ | Static_const _) ->
         Misc.fatal_errorf
           "Set_of_closures binding a non-Set_of_closures:@ %a"
+          Let.print t
+      | Symbols { bound_symbols; scoping_rule; }, Static_const const ->
+        let_symbol env res bound_symbols scoping_rule const body
+      | Symbols _, (Simple _ | Prim _ | Set_of_closures _) ->
+        Misc.fatal_errorf
+          "Symbols binding a non-Static const:@ %a"
           Let.print t
       end
     end)
 
-and let_symbol env res let_sym =
-  let body = Let_symbol.body let_sym in
-  let bound_symbols = Let_symbol.bound_symbols let_sym in
+and let_symbol env res bound_symbols _scoping_rule const body =
   let env =
     (* All bound symbols are allowed to appear in each other's definition,
        so they're added to the environment first *)
     Env.add_to_scope env
-      (Let_symbol.Bound_symbols.everything_being_defined bound_symbols)
+      (Bound_symbols.everything_being_defined bound_symbols)
   in
   let env, res, update_opt =
     Un_cps_static.static_const
       env res ~params_and_body
-      (Let_symbol.bound_symbols let_sym)
-      (Let_symbol.defining_expr let_sym)
+      bound_symbols
+      const
   in
   match update_opt with
   | None -> expr env res body (* trying to preserve tail calls whenever we can *)

@@ -69,6 +69,7 @@ val create_let_symbol
   -> Symbol_scoping_rule.t
   -> Static_const.t
   -> t
+  -> t
 
 (** Create a [Let]-expression that may bind more than a single [Variable]
     (such as is required to bind a [Set_of_closures]). *)

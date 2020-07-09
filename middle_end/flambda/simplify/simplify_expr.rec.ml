@@ -34,19 +34,22 @@ let rec simplify_let
   L.pattern_match let_expr ~f:(fun bindable_let_bound ~body ->
     let defining_expr = L.defining_expr let_expr in
     let place_lifted_constants_immediately =
-      let is_set_of_closures = Named.is_set_of_closures defining_expr in
+      let is_dynamically_allocated_set_of_closures =
+        Named.is_dynamically_allocated_set_of_closures defining_expr
+      in
       let is_let_symbol = Named.is_static_const defining_expr in
-      (* Simplification of toplevel sets of closures can yield constants
-         that must be placed immediately around the body rather than
-         propagated upwards to the previous enclosing "let symbol".  That this
-         is so follows from the fact that such constants may involve
+      (* Simplification of toplevel dynamically-allocated sets of closures can
+         yield constants that must be placed immediately around the body rather
+         than propagated upwards to the previous enclosing "let symbol".  That
+         this is so follows from the fact that such constants may involve
          variables in their definition.  We cannot follow the pattern of the
          [Reified] case below as that would cause the bodies of the
          functions involved to be simplified a second time.
          When we actually have a [Let] that binds symbol(s), this is the
          behaviour in all cases. *)
-      (is_set_of_closures && DE.at_unit_toplevel (DA.denv dacc))
-        || is_let_symbol
+      is_let_symbol
+        || (is_dynamically_allocated_set_of_closures
+              && DE.at_unit_toplevel (DA.denv dacc))
     in
     let r, prior_lifted_constants =
       (* Snapshot the lifted constant state so we can easily find out which
@@ -57,7 +60,8 @@ let rec simplify_let
     let dacc = DA.with_r dacc r in
     let simplify_named_result =
       (* Simplify the defining expression. *)
-      Simplify_named.simplify_named dacc ~bound_vars (L.defining_expr let_expr)
+      Simplify_named.simplify_named dacc bindable_let_bound
+        (L.defining_expr let_expr)
     in
     let r =
       (* Find the [r] that is in effect after the simplification of the
@@ -83,7 +87,7 @@ let rec simplify_let
         match simplify_named_result with
         | Bindings { bindings_outermost_first = _; dacc; } -> dacc
         | Reified { definition = _; bound_symbol = _; static_const = _; r = _; }
-        | Shared { symbol = _; kind = _; } -> original_dacc
+        | Shared { symbol = _; kind = _; } -> dacc
       in
       DA.map_denv dacc ~f:(fun denv ->
         DE.add_lifted_constants denv new_lifted_constants)
@@ -110,19 +114,19 @@ let rec simplify_let
          [Let_symbol] binding. *)
       if not place_lifted_constants_immediately then body, user_data, uacc
       else
-        let extra_lifted_constants =
-          lifted_constants_after_defining_expr
+        let new_lifted_constants =
+          new_lifted_constants
           |> Lifted_constant_state.still_to_be_placed
           |> List.map (fun lifted_const -> lifted_const, None)
         in
         let scoping_rule =
-          Option.value ~default:Let_symbol_scoping_rule.Dominator
+          Option.value ~default:Symbol_scoping_rule.Dominator
             (Bindable_let_bound.let_symbol_scoping_rule bindable_let_bound)
         in
         (* As a consequence of the clearing of lifted constants in [r]
            above (see comment), [UA.r uacc] will only contain constants that
            are floating up from subsequent bindings.  The ones arising from
-           the current binding are provided in [extra_lifted_constants].
+           the current binding are provided in [new_lifted_constants].
            The function [get_and_place_lifted_constants] will make the
            necessary "let symbol" bindings and then return a [uacc] whose
            [r] notes that the corresponding constants have now been placed.
@@ -139,7 +143,7 @@ let rec simplify_let
             R.transfer_placed_lifted_constants r ~from:original_r)
         in
         let sorted_lifted_constants =
-          (extra_lifted_constants
+          (new_lifted_constants
             @ List.map (fun lifted_constant -> lifted_constant, None)
               (Lifted_constant_state.still_to_be_placed lifted_constants))
           |> Sort_lifted_constants.sort
@@ -149,7 +153,7 @@ let rec simplify_let
             ~init:(body, UA.r uacc) ~f:(fun (body, r) lifted_constant ->
               let body, r =
                 Simplify_common.create_let_symbol r scoping_rule
-                  (UA.code_age_relation uacc) bound_symbols defining_expr body
+                  (UA.code_age_relation uacc) lifted_constant body
               in
               let r =
                 (* With [Dominator] scoping we must be prepared for the type
@@ -172,8 +176,8 @@ let rec simplify_let
          has not yet been added to either the [denv] or [r] components of
          [dacc]; that will happen in [simplify_let_symbol]. *)
       let let_symbol_expr =
-        Expr.create_let bound_vars definition body
-        |> Expr.create_let_symbol Dominator bound_symbol static_const
+        Expr.create_let_symbol bound_symbol Dominator static_const
+          (Expr.create_pattern_let bindable_let_bound definition body)
       in
       simplify_expr dacc let_symbol_expr k
     | Shared { symbol; kind; } ->
@@ -187,7 +191,7 @@ let rec simplify_let
          generated previously, so we simply point the let-binding at the
          existing symbol. *)
       let dacc =
-        let var = Bindable_let_bound.must_be_singleton bound_vars in
+        let var = Bindable_let_bound.must_be_singleton bindable_let_bound in
         let ty = T.alias_type_of kind (Simple.symbol symbol) in
         DA.map_denv dacc ~f:(fun denv -> DE.add_variable denv var ty)
       in
@@ -195,7 +199,7 @@ let rec simplify_let
       let defining_expr =
         Reachable.reachable (Named.create_simple (Simple.symbol symbol))
       in
-      let bindings = [bound_vars, defining_expr] in
+      let bindings = [bindable_let_bound, defining_expr] in
       Simplify_common.bind_let_bound ~bindings ~body, user_data, uacc)
 
 and simplify_one_continuation_handler :
@@ -872,7 +876,8 @@ and simplify_direct_partial_application
     let code = Lifted_constant.create_piece_of_code code_id params_and_body in
     let dacc =
       dacc
-      |> DA.map_r ~f:(fun r -> R.new_lifted_constant r dummy_code)
+      |> DA.map_r
+           ~f:(fun r -> R.add_still_to_be_placed_lifted_constant r dummy_code)
       |> DA.map_denv ~f:(fun denv -> DE.add_lifted_constant denv code)
     in
     Set_of_closures.create function_decls ~closure_elements, dacc
@@ -1581,7 +1586,7 @@ and simplify_switch
                       assert (List.length params = 0);
                       match Expr.descr handler with
                       | Apply_cont action -> Some action
-                      | Let _ | Let_symbol _ | Let_cont _ | Apply _
+                      | Let _ | Let_cont _ | Apply _
                       | Switch _ | Invalid _ -> Some action)
                 | Unknown _ -> Some action
                 | Unreachable _ -> None
@@ -1677,10 +1682,8 @@ and simplify_switch
         (* Disable inconstant lifting *)
         DA.map_denv dacc ~f:DE.set_not_at_unit_toplevel
       in
-      match
-        Simplify_named.simplify_named dacc ~bound_vars named
-      with
-      | Simplify_named.Bindings
+      match Simplify_named.simplify_named dacc bound_vars named with
+      | Bindings
           { bindings_outermost_first = bindings; dacc = _; } ->
         let body = k ~tagged_scrutinee:(Simple.var bound_to) in
         Simplify_common.bind_let_bound ~bindings ~body, user_data, uacc
