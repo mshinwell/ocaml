@@ -57,14 +57,16 @@ let rec simplify_let
               *)
               && DE.at_unit_toplevel (DA.denv dacc))
     in
-    let r, prior_lifted_constants =
-      (* Snapshot the lifted constant state so we can easily find out which
-         constants are generated as a result of simplifying the defining
-         expression. *)
-      (* XXX Is it possible this is always empty? *)
-      R.get_and_clear_lifted_constants (DA.r dacc)
-    in
-    let dacc = DA.with_r dacc r in
+    begin match LCS.all (R.get_lifted_constants (DA.r dacc)) with
+    | [] -> ()
+    | wrong_consts ->
+      Misc.fatal_errorf "The lifted constants memory in [r] (inside [dacc]) \
+          should always be empty upon entry to [Simplify_expr.simplify_let]: \
+          %a@ %a"
+        L.print let_expr
+        (Format.pp_print_list ~pp_sep:Format.pp_print_space LC.print)
+        wrong_consts
+    end;
     let simplify_named_result =
       (* Simplify the defining expression. *)
       Simplify_named.simplify_named dacc bindable_let_bound
@@ -121,10 +123,10 @@ let rec simplify_let
       let uacc =
         UA.map_r uacc ~f:(fun r ->
           (* Reset the lifted constants memory in the [r] that we will
-             return to be the lifted constants prior to the let-expression,
-             plus those ones produced during simplification of the [body]
-             that have already been placed (i.e. been bound by a
-             "let symbol" expression).
+             return to be the lifted constants prior to the let-expression
+             (of which there are none!) plus those ones produced during
+             simplification of the [body] that have already been placed
+             (i.e. been bound by a "let symbol" expression).
              It might seem like we also need to transfer into the
              returned [r] any constants that were produced during the
              simplification of the defining expression and have already
@@ -133,9 +135,7 @@ let rec simplify_let
              [Static_const] within [Simplify_named]; and neither does it in
              the [Set_of_closures] case, since "let symbol" is disallowed
              under a lambda. *)
-          begin match
-            LCS.placed lifted_constants_from_defining_expr
-          with
+          begin match LCS.placed lifted_constants_from_defining_expr with
           | [] -> ()
           | wrong_consts ->
             Misc.fatal_errorf "There should be no lifted constants \
@@ -145,7 +145,7 @@ let rec simplify_let
               (Format.pp_print_list ~pp_sep:Format.pp_print_space LC.print)
               wrong_consts
           end;
-          let r = R.set_lifted_constants r prior_lifted_constants in
+          let r = R.clear_lifted_constants r in
           R.transfer_placed_lifted_constants r ~from:original_r)
       in
       (* At this point, all lifted constants that have already been placed
