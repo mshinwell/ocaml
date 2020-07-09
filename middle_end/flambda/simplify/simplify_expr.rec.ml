@@ -214,13 +214,15 @@ let rec simplify_let
       (* In this case, the defining expression was found to be constant,
          so we generate a "let symbol" binding.  The constant being bound
          has not yet been added to either the [denv] or [r] components of
-         [dacc]; that will happen in [simplify_let_symbol]. *)
+         [dacc]; that will happen during simplification of the following built
+         [let_symbol_expr]. *)
       let let_symbol_expr =
         Expr.create_let_symbol bound_symbol Dominator static_const
           (Expr.create_pattern_let bindable_let_bound definition body)
       in
       simplify_expr dacc let_symbol_expr k
     | Shared { symbol; kind; } ->
+      (* XXX This case needs checking *)
       if place_lifted_constants_immediately then begin
         Misc.fatal_errorf "Did not expect [Simplify_named] to return \
             [Shared] (symbol %a)"
