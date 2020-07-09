@@ -206,14 +206,6 @@ let create_singleton_let (bound_var : Var_in_binding_pos.t) defining_expr body
     let declared_name_mode =
       Var_in_binding_pos.name_mode bound_var
     in
-(*
-Format.eprintf "%a: greatest mode %a, declared mode %a, free names %a, body:@ %a\n%!"
-  Var_in_binding_pos.print bound_var
-  Name_mode.Or_absent.print greatest_name_mode
-  Name_mode.print declared_name_mode
-  Name_occurrences.print free_names_of_body
-  print body;
-*)
     begin match
       Name_mode.Or_absent.compare_partial_order
          greatest_name_mode
@@ -246,20 +238,6 @@ Format.eprintf "%a: greatest mode %a, declared mode %a, free names %a, body:@ %a
       let has_uses =
         Name_mode.Or_absent.is_present greatest_name_mode
       in
-      (* let uses_are_at_most_phantom = (\* CR mshinwell: rename? *\)
-       *   (\* CR mshinwell: This should detect whether there is any
-       *      provenance info associated with the variable.  If there isn't, the
-       *      [Let] can be deleted even if debugging information is being
-       *      generated. *\)
-       *   match
-       *     Name_mode.Or_absent.compare_partial_order
-       *       greatest_name_mode
-       *       (Name_mode.Or_absent.present
-       *         Name_mode.normal)
-       *   with
-       *   | None -> assert false
-       *   | Some c -> c < 0
-       * in *)
       let user_visible =
         Variable.user_visible (Var_in_binding_pos.var bound_var)
       in
@@ -268,15 +246,9 @@ Format.eprintf "%a: greatest mode %a, declared mode %a, free names %a, body:@ %a
            provenance info associated with the variable.  If there isn't, the
            [Let] can be deleted even if debugging information is being
            generated. *)
-        (* uses_are_at_most_phantom && *)
-        (not (has_uses || (!Clflags.debug && user_visible)))
+        not (has_uses || (!Clflags.debug && user_visible))
       in
       if will_delete_binding then begin
-(*
-Format.eprintf "Deleting binding of %a; free names of body are:@ %a\n%!"
-  Var_in_binding_pos.print bound_var
-  Name_occurrences.print free_names_of_body;
-*)
         bound_var, false, Have_deleted defining_expr
       end else
         let name_mode =
@@ -320,11 +292,6 @@ Format.eprintf "Deleting binding of %a; free names of body are:@ %a\n%!"
         (Name_occurrences.remove_var free_names_of_body
           (Var_in_binding_pos.var bound_var))
     in
-(*
-Format.eprintf "Free names %a for new let expr:@ %a\n%!"
-  Name_occurrences.print free_names
-  Let_expr.print let_expr;
-*)
     let t =
       { descr = Let let_expr;
         delayed_permutation = Name_permutation.empty;
@@ -364,7 +331,22 @@ let create_set_of_closures_let ~closure_vars defining_expr body
     in
     t, Nothing_deleted
 
-let create_let_symbol ... =
+let create_let_symbol bindable defining_expr body =
+  let free_names_of_body = free_names body in
+  let free_names_of_bindable = Bindable_let_bound.free_names bindable in
+  let let_expr = Let_expr.create bindable ~defining_expr ~body in
+  let free_names =
+    let from_defining_expr = Named.free_names defining_expr in
+    Name_occurrences.union from_defining_expr
+      (Name_occurrences.diff free_names_of_body free_names_of_bindable)
+  in
+  let t =
+    { descr = Let let_expr;
+      delayed_permutation = Name_permutation.empty;
+      free_names = Some free_names;
+    }
+  in
+  t, Nothing_deleted
 
 let create_pattern_let0 (bindable : Bindable_let_bound.t) defining_expr body
       : t * let_creation_result =
@@ -372,7 +354,7 @@ let create_pattern_let0 (bindable : Bindable_let_bound.t) defining_expr body
   | Singleton bound_var -> create_singleton_let bound_var defining_expr body
   | Set_of_closures { closure_vars; _ } ->
     create_set_of_closures_let ~closure_vars defining_expr body
-  | Symbols symbols -> create_let_symbol symbols
+  | Symbols _ -> create_let_symbol bindable defining_expr body
 
 let create_let bound_var defining_expr body : t =
   let expr, _ = create_singleton_let bound_var defining_expr body in
