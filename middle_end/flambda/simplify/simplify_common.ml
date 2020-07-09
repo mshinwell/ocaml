@@ -198,7 +198,16 @@ let bind_let_bound ~bindings ~body =
       | Reachable defining_expr ->
         match bound with
         | Singleton var -> Expr.bind ~bindings:[var, defining_expr] ~body:expr
-        | Set_of_closures _ -> Expr.create_pattern_let bound defining_expr expr)
+        | Set_of_closures _ -> Expr.create_pattern_let bound defining_expr expr
+        | Symbols { bound_symbols; scoping_rule; } ->
+          begin match defining_expr with
+          | Static_const s ->
+            Expr.create_let_symbol bound_symbols scoping_rule s expr
+          | Simple _ | Prim _ | Set_of_closures _ ->
+            Misc.fatal_errorf
+              "Cannot bind symbols to somethign else than a static const"
+          end
+    )
     body
     (List.rev bindings)
 
