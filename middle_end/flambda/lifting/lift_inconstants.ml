@@ -356,7 +356,7 @@ let allowed_for_toplevel_lifting static_const =
 
 type reify_primitive_at_toplevel_result =
   | Lift of {
-    dacc : Downwards_acc.t;
+    r : R.t;
     symbol : Symbol.t;
     static_const : Flambda.Static_const.t;
   }
@@ -394,11 +394,10 @@ let reify_primitive_at_toplevel dacc bound_var ty =
             (Linkage_name.create
                (Variable.unique_name (Var_in_binding_pos.var bound_var)))
         in
-        let dacc =
-          DA.map_r dacc ~f:(fun r ->
-            R.consider_constant_for_sharing r symbol static_const)
+        let r =
+          R.consider_constant_for_sharing (DA.r dacc) symbol static_const
         in
-        Lift { dacc; symbol; static_const; }
+        Lift { r; symbol; static_const; }
     end
   | Lift_set_of_closures _ | Simple _ | Cannot_reify | Invalid ->
     Cannot_reify

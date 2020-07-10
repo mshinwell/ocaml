@@ -88,13 +88,13 @@ let simplify_named0 dacc (bindable_let_bound : Bindable_let_bound.t)
           bindings_result [bindable_let_bound, defining_expr] dacc
         | Shared { symbol; } ->
           Shared { symbol; kind; }
-        | Lift { dacc; symbol; static_const; } ->
+        | Lift { r; symbol; static_const; } ->
           let named = Named.create_simple (Simple.symbol symbol) in
           Reified
             { definition = named;
               bound_symbol = Singleton symbol;
               static_const;
-              r = DA.r dacc;
+              r;
             }
       end
       else

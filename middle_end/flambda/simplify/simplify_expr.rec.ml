@@ -222,7 +222,6 @@ let rec simplify_let
       in
       simplify_expr dacc let_symbol_expr k
     | Shared { symbol; kind; } ->
-      (* XXX This case needs checking *)
       if place_lifted_constants_immediately then begin
         Misc.fatal_errorf "Did not expect [Simplify_named] to return \
             [Shared] (symbol %a)"
