@@ -831,7 +831,6 @@ end and Lifted_constant_state : sig
   include I.Lifted_constant_state
     with type lifted_constant := Lifted_constant.t
 
-  val empty : t
   val is_empty : t -> bool
 
   val singleton_still_to_be_placed : Lifted_constant.t -> t

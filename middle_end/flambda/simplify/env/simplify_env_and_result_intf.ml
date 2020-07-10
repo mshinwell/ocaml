@@ -354,6 +354,8 @@ module type Lifted_constant_state = sig
   type lifted_constant
   type t
 
+  val empty : t
+
   val print : Format.formatter -> t -> unit
 
   val union : t -> t -> t
