@@ -77,6 +77,17 @@ let rec simplify_let
   and body ones, place the ones that need placing, then carry on.  We don't
   want to touch the prior ones, just return them, since they are for an
   earlier [Let] binding to deal with.
+- Invariant: upon reaching the top, all constants in [uacc] must have been
+  placed.  Care: this isn't the case at the top of a lambda; they must
+  bubble up.  So it's a check for simplify.templ.ml not [Simplify_toplevel].
+
+  Structure for LCS:
+  - some kind of "time" (can't be binding time as it needs to follow the
+    dominator tree)
+  - a way for simplify_let to add a checkpoint and increment the time
+  - don't expose lists, only fold etc.
+  - some efficient way of then splitting the LCS structure in uacc so we
+    can extract the ones from the defining expr and the body in simplify_let.
 *)
 
 
