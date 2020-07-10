@@ -17,6 +17,7 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module DA = Downwards_acc
+module LCS = Simplify_env_and_result.Lifted_constant_state
 module R = Simplify_env_and_result.Result
 module TE = Flambda_type.Typing_env
 module UE = Simplify_env_and_result.Upwards_env
@@ -24,33 +25,39 @@ module UE = Simplify_env_and_result.Upwards_env
 type t = {
   uenv : UE.t;
   code_age_relation : Code_age_relation.t;
+  lifted_constants : LCS.t;
   r : R.t;
 }
 
-let print ppf { uenv; code_age_relation; r; } =
+let print ppf { uenv; code_age_relation; lifted_constants; r; } =
   Format.fprintf ppf "@[<hov 1>(\
       @[(uenv@ %a)@]@ \
       @[(code_age_relation@ %a)@]@ \
+      @[(lifted_constants@ %a)@]@ \
       @[(r@ %a)@]\
       )@]"
     UE.print uenv
     Code_age_relation.print code_age_relation
+    LCS.print lifted_constants
     R.print r
 
-let create uenv code_age_relation r =
+let create uenv code_age_relation r lifted_constants =
   { uenv;
     code_age_relation;
+    lifted_constants;
     r;
   }
 
 let of_dacc dacc =
   { uenv = UE.empty;
     code_age_relation = TE.code_age_relation (DA.typing_env dacc);
+    lifted_constants = DA.get_lifted_constants dacc;
     r = DA.r dacc;
   }
 
 let uenv t = t.uenv
 let code_age_relation t = t.code_age_relation
+let get_lifted_constants t = t.lifted_constants
 
 let map_uenv t ~f =
   { t with

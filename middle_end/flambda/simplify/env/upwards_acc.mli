@@ -24,6 +24,7 @@ val print : Format.formatter -> t -> unit
 val create
    : Simplify_env_and_result.Upwards_env.t
   -> Code_age_relation.t
+  -> Simplify_env_and_result.Lifted_constant_state.t
   -> Simplify_env_and_result.Result.t
   -> t
 
@@ -35,6 +36,8 @@ val of_dacc : Downwards_acc.t -> t
 val uenv : t -> Simplify_env_and_result.Upwards_env.t
 
 val code_age_relation : t -> Code_age_relation.t
+
+val get_lifted_constants : t -> Simplify_env_and_result.Lifted_constant_state.t
 
 (** Map the environment component of the given upwards accumulator. *)
 val map_uenv

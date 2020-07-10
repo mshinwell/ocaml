@@ -666,77 +666,30 @@ end = struct
   type t =
     { resolver : I.resolver;
       get_imported_names : I.get_imported_names;
-      lifted_constants : Lifted_constant_state.t;
       shareable_constants : Symbol.t Static_const.Map.t;
       used_closure_vars : Var_within_closure.Set.t;
       all_code : Exported_code.t;
     }
 
   let print ppf { resolver = _; get_imported_names = _;
-                  lifted_constants;
                   shareable_constants; used_closure_vars;
                   all_code = _;
                 } =
     Format.fprintf ppf "@[<hov 1>(\
-        @[<hov 1>(lifted_constants@ %a)@]@ \
         @[<hov 1>(shareable_constants@ %a)@]@ \
         @[<hov 1>(used_closure_vars@ %a)@]\
         )@]"
-      Lifted_constant_state.print lifted_constants
       (Static_const.Map.print Symbol.print) shareable_constants
       Var_within_closure.Set.print used_closure_vars
 
   let create ~resolver ~get_imported_names =
     { resolver;
       get_imported_names;
-      lifted_constants = Lifted_constant_state.empty;
       shareable_constants = Static_const.Map.empty;
       used_closure_vars = Var_within_closure.Set.empty;
       all_code = Exported_code.empty;
     }
 
-  let add_still_to_be_placed_lifted_constant t const =
-    { t with
-      lifted_constants =
-        Lifted_constant_state.add_still_to_be_placed t.lifted_constants const;
-    }
-
-  let add_placed_lifted_constant t const =
-    { t with
-      lifted_constants =
-        Lifted_constant_state.add_placed t.lifted_constants const;
-    }
-
-  let add_lifted_constants t constants =
-    { t with
-      lifted_constants =
-        Lifted_constant_state.union t.lifted_constants constants;
-    }
-
-  let get_lifted_constants t = t.lifted_constants
-
-  let clear_lifted_constants t =
-    { t with
-      lifted_constants = Lifted_constant_state.empty;
-    }
-
-  let no_lifted_constants t =
-    Lifted_constant_state.is_empty t.lifted_constants
-
-  let get_and_clear_lifted_constants t =
-    let constants = t.lifted_constants in
-    let t = clear_lifted_constants t in
-    t, constants
-
-  let set_lifted_constants t consts =
-    { t with lifted_constants = consts; }
-
-  let transfer_placed_lifted_constants t ~from =
-    { t with
-      lifted_constants =
-        Lifted_constant_state.add_placed_from t.lifted_constants
-          ~from:from.lifted_constants;
-    }
 
   let find_shareable_constant t static_const =
     Static_const.Map.find_opt static_const t.shareable_constants
@@ -830,13 +783,6 @@ end = struct
 end and Lifted_constant_state : sig
   include I.Lifted_constant_state
     with type lifted_constant := Lifted_constant.t
-
-  val is_empty : t -> bool
-
-  val singleton_still_to_be_placed : Lifted_constant.t -> t
-  val add_still_to_be_placed : t -> Lifted_constant.t -> t
-  val add_placed : t -> Lifted_constant.t -> t
-  val add_placed_from : t -> from:t -> t
 end = struct
   type t = {
     all : Lifted_constant.t list;

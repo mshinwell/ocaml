@@ -56,21 +56,60 @@ let rec simplify_let
               *)
               && DE.at_unit_toplevel (DA.denv dacc))
     in
-    begin match LCS.all (R.get_lifted_constants (DA.r dacc)) with
-    | [] -> ()
-    | wrong_consts ->
-      Misc.fatal_errorf "The lifted constants memory in [r] (inside [dacc]) \
-          should always be empty upon entry to [Simplify_expr.simplify_let]: \
-          %a@ %a"
-        L.print let_expr
-        (Format.pp_print_list ~pp_sep:Format.pp_print_space LC.print)
-        wrong_consts
-    end;
+(*
+
+- Constants in DA need to be accumulated all the way down so they can be
+  transferred to continuation handlers from continuation bodies, before the
+  upwards traversal starts.
+- Simplify_named does a down + up traversal.  It returns constants none of
+  which have been placed.  We can clear the lifted constants in [DA] around
+  a call to [simplify_named] without a problem.
+- At the turning point, no constants in DA should have been placed (check
+  this in UA.create).  Likewise when reaching any [Let].
+- On the upwards traversal, constants get placed.  Invariant: the uacc
+  returned by simplify_expr on the body in simplify_let should only ever
+  return:
+  - constants prior to the let (all not placed)
+  - constants from the defining expr (all not placed)
+  - constants from the body (either placed or not placed).
+  The main problem seems to be working out which of these constants were
+  the ones prior to the let.  We want to separate out the defining expr
+  and body ones, place the ones that need placing, then carry on.  We don't
+  want to touch the prior ones, just return them, since they are for an
+  earlier [Let] binding to deal with.
+*)
+
+
+    (* Remember then clear the lifted constants memory in [DA] so we can
+       easily find out which constants are generated during simplification
+       of the defining expression and the [body]. *)
+    let dacc, prior_lifted_constants = DA.get_and_clear_lifted_constants dacc in
     let simplify_named_result =
       (* Simplify the defining expression. *)
       Simplify_named.simplify_named dacc bindable_let_bound
         (L.defining_expr let_expr)
     in
+    let dacc =
+      (* [Simplify_named] will have entered the types of all constants in
+         [lifted_constants_from_defining_expr] into the [denv] component
+         of [dacc].  It will also have entered the definitions of such
+         constants into the lifted constants memory directly in [dacc].
+         It is necessary to propagate the definitions through [dacc] because
+         they are needed when we move from simplifying the body of a
+         continuation, on the downwards traversal, to simplifying its
+         corresponding handler.  (They are needed because otherwise we don't
+         know the types of the constants, which may appear in the
+         continuation's argument types, when calculating the environment at
+         the join point.)
+         The code here just works out which [dacc] to use; sometimes it
+         isn't returned from [Simplify_named] since nothing happened to it.
+      *)
+      match simplify_named_result with
+      | Bindings { bindings_outermost_first = _; dacc; } -> dacc
+      | Reified { definition = _; bound_symbol = _; static_const = _; r = _; }
+      | Shared { symbol = _; kind = _; } -> dacc
+    in
+
     let r =
       (* Find the [r] that is in effect after the simplification of the
          defining expression. *)
@@ -79,49 +118,26 @@ let rec simplify_let
       | Reified { definition = _; bound_symbol = _; static_const = _; r; } -> r
       | Shared { symbol = _; kind = _; } -> DA.r dacc
     in
-    let lifted_constants_from_defining_expr =
-      (* Retrieve the lifted constants that were generated as a result of
-         simplifying the defining expression. *)
-      R.get_lifted_constants r
-    in
-    let dacc =
-      (* We've now left the scope of the defining expression, so the types
-         of the [new_lifted_constants] must be entered into the typing
-         environment for the current scope, i.e. the one to be used for the
-         simplification of the [body].  Luckily [Simplify_named] has already
-         done this for us.  So all we need to do here is to find the correct
-         [dacc] to use. *)
-      match simplify_named_result with
-      | Bindings { bindings_outermost_first = _; dacc; } -> dacc
-      | Reified { definition = _; bound_symbol = _; static_const = _; r = _; }
-      | Shared { symbol = _; kind = _; } -> dacc
-    in
-    let dacc =
-      (* Since the [dacc] will be used for all of the [body], there is no need
-         for the [new_lifted_constants] to be in that [dacc]'s [r] during
-         the simplification of such [body].  In fact we want to make sure
-         they are not in [r], otherwise when we are placing lifted constants
-         immediately (see below), we would see constants from earlier
-         let-bindings in the [uacc] returned from [simplify_expr] on the
-         body of a _later_ let-binding.  That this is so follows from the fact
-         that [r] is copied from [dacc] to [uacc] at the "turning point" when
-         downwards simplification has finished and we start going back up. *)
-      DA.with_r dacc (R.clear_lifted_constants r)
-    in
+
     match simplify_named_result with
     | Bindings { bindings_outermost_first = bindings; dacc = _; } ->
-      (* The normal case.  Simplify the body of the let-expression. *)
+      (* The normal case. Simplify the body of the let-expression, make the
+         new [Let] bindings around the simplified body, and retrieve the
+         lifted constants from [uacc].  These constants will comprise both
+         those from the defining expression, which were left in [dacc] above,
+         and those arising from the simplification of [body]. *)
       let body, user_data, uacc = simplify_expr dacc body k in
       let body = Simplify_common.bind_let_bound ~bindings ~body in
+      let lifted_constants_from_body = UA.get_lifted_constants uacc in
+
+
       let original_r = UA.r uacc in
-      (* As a consequence of the clearing of lifted constants in [r] above
-         (see comment), [UA.r uacc] will only contain those constants that are
-         floating up from subsequent bindings, i.e. arising from the
-         simplification of the [body]. *)
-      let lifted_constants_from_body = R.get_lifted_constants original_r in
       let uacc =
         UA.map_r uacc ~f:(fun r ->
-          (* Reset the lifted constants memory in the [r] that we will
+          (* Reset the lifted constants memory in the [r] inside [uacc]
+             to contain:
+             - any lifted constants that were in the [dacc] prior to
+
              return to be the lifted constants prior to the let-expression
              (of which there are none!) plus those ones produced during
              simplification of the [body] that have already been placed
