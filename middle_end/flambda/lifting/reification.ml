@@ -42,7 +42,16 @@ let create_static_const (to_lift : T.to_lift) : Static_const.t =
 let lift dacc ty ~bound_to static_const =
   let dacc, symbol =
     match R.find_shareable_constant (DA.r dacc) static_const with
-    | Some symbol -> dacc, symbol
+    | Some symbol ->
+      if !Clflags.flambda_invariant_checks
+        && not (DE.mem_symbol (DA.denv dacc) symbol)
+      then begin
+        Misc.fatal_errorf "Constant with symbol %a is shareable but not in \
+            the environment:@ %a"
+          Symbol.print symbol
+          DA.print dacc
+      end;
+      dacc, symbol
     | None ->
       let symbol =
         Symbol.create (Compilation_unit.get_current_exn ())
