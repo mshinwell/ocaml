@@ -88,6 +88,15 @@ let rec simplify_let
   - don't expose lists, only fold etc.
   - some efficient way of then splitting the LCS structure in uacc so we
     can extract the ones from the defining expr and the body in simplify_let.
+
+  - map from time (point at which bindings might be dropped, i.e. [Let], not
+    where the constant was necessarily put into the LCS structure) to
+    a list of constants, along with whether they've been placed or not.
+  - on the way up, we could maybe take the entries from time > current time
+    and merge them into the entry at "time" itself.  So when deciding whether
+    to place constants there would only be one list to iter over.
+  - in fact... each time we reach a let on the way up, shouldn't we be at
+    the maximal element of the map?  Would be a useful check.
 *)
 
 
