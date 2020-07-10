@@ -849,9 +849,9 @@ end = struct
       Format.pp_print_list ~pp_sep:Format.pp_print_space Lifted_constant.print
     in
     Format.fprintf ppf "@[<hov 1>(\
-        @[<hov 1>(all@ %a)@]@ \
-        @[<hov 1>(placed@ %a)@]@ \
-        @[<hov 1>(still_to_be_placed@ %a)@]@\
+        @[<hov 1>(all@ (%a))@]@ \
+        @[<hov 1>(placed@ (%a))@]@ \
+        @[<hov 1>(still_to_be_placed@ (%a))@]\
         )@]"
       printer all
       printer placed
