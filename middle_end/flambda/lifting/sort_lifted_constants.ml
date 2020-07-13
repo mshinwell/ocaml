@@ -26,9 +26,13 @@ type result = {
   bindings_outermost_last : LC.t list;
 }
 
-let build_dep_graph lifted_constants =
-  List.fold_left
-    (fun (dep_graph, code_id_or_symbol_to_const)
+let empty_result = {
+  bindings_outermost_last = [];
+}
+
+let build_dep_graph ~fold_over_lifted_constants =
+  fold_over_lifted_constants ~init:(CIS.Map.empty, CIS.Map.empty)
+    ~f:(fun (dep_graph, code_id_or_symbol_to_const)
          (lifted_constant, extra_deps) ->
       (*
       Format.eprintf "Input for one set: %a =@ %a\n%!"
@@ -172,19 +176,14 @@ let build_dep_graph lifted_constants =
           dep_graph, code_id_or_symbol_to_const)
         (Bound_symbols.everything_being_defined bound_symbols)
         (dep_graph, code_id_or_symbol_to_const))
-    (CIS.Map.empty, CIS.Map.empty)
-    lifted_constants
 
-let sort lifted_constants =
-  (*
-  Format.eprintf "SORT LIFTED CONSTANTS\n%!";
-  *)
+let sort ~fold_over_lifted_constants =
   (* The various lifted constants may exhibit recursion between themselves
      (specifically between closures and/or code).  We use SCC to obtain a
      topological sort of groups that must be coalesced into single
      code-and-set-of-closures definitions. *)
   let lifted_constants_dep_graph, code_id_or_symbol_to_const =
-    build_dep_graph lifted_constants
+    build_dep_graph ~fold_over_lifted_constants
   in
   (*
   Format.eprintf "SCC graph is:@ %a\n%!"

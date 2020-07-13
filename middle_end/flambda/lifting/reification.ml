@@ -62,14 +62,10 @@ let lift dacc ty ~bound_to static_const =
           Variable.print bound_to
       end;
       let dacc =
-        DA.map_r dacc ~f:(fun r ->
-          let r =
-            let denv = DA.denv dacc in
-            Lifted_constant.create (Singleton symbol) static_const
-              ~types_of_symbols:(Symbol.Map.singleton symbol (denv, ty))
-            |> R.add_still_to_be_placed_lifted_constant r
-          in
-          R.consider_constant_for_sharing r symbol static_const)
+        let denv = DA.denv dacc in
+        Lifted_constant.create (Singleton symbol) static_const
+          ~types_of_symbols:(Symbol.Map.singleton symbol (denv, ty))
+        |> DA.add_lifted_constant dacc
       in
       let dacc =
         DA.map_denv dacc ~f:(fun denv -> DE.add_symbol denv symbol ty)

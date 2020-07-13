@@ -191,13 +191,10 @@ let simplify_named0 dacc (bindable_let_bound : Bindable_let_bound.t)
     let lifted_constant =
       LC.create bound_symbols static_const ~types_of_symbols
     in
-    let dacc =
-      DA.map_r dacc ~f:(fun r ->
-        R.add_still_to_be_placed_lifted_constant r lifted_constant)
-    in
+    let dacc = DA.add_lifted_constant dacc lifted_constant in
     (* We don't need to return any bindings; [Simplify_expr.simplify_let]
        will create the "let symbol" binding when it sees the lifted
-       constant returned in [r] (inside [dacc]). *)
+       constant. *)
     Bindings { bindings_outermost_first = []; dacc; }
 
 let simplify_named dacc bindable_let_bound named =
