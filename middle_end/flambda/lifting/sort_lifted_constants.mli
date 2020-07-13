@@ -35,8 +35,10 @@ val empty_result : result
     values may contain multiple environments, so it wouldn't be clear which
     one to choose. *)
 val sort
-   : fold_lifted_constants:(
-          init:'a
-       -> f:('a -> (LC.t * ((DE.t * Name_occurrences.t) option)) -> 'a)
-       -> 'a)
+   : fold_over_lifted_constants:(
+          init:(CIS.Set.t CIS.Map.t * LC.t CIS.Map.t)
+       -> f:(CIS.Set.t CIS.Map.t * LC.t CIS.Map.t
+         -> LC.t * (DE.t * Name_occurrences.t) option
+         -> CIS.Set.t CIS.Map.t * LC.t CIS.Map.t)
+       -> CIS.Set.t CIS.Map.t * LC.t CIS.Map.t)
   -> result

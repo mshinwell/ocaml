@@ -313,7 +313,11 @@ let lift_via_reification_of_continuation_param_types0 dacc ~params
      continuation's parameters, which are in turn substituted for symbols at the
      Cmm translation phase). (Any SCC class containing >1 set of closures is
      maybe a bug?) *)
-  let reified_definitions = Sort_lifted_constants.sort reified_definitions in
+  let reified_definitions =
+    Sort_lifted_constants.sort
+      ~fold_over_lifted_constants:(fun ~init ~f ->
+        ListLabels.fold_left reified_definitions ~init ~f)
+  in
   let handler =
     List.fold_left (fun handler lifted_constant ->
         let bound_symbols = LC.bound_symbols lifted_constant in

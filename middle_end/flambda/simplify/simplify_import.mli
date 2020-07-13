@@ -37,6 +37,7 @@ module Static_const = Flambda.Static_const
 module Switch = Flambda.Switch
 
 module CH = Continuation_handler
+module CIS = Code_id_or_symbol
 module CPH = Continuation_params_and_handler
 module CUE = Continuation_uses_env
 module DA = Downwards_acc

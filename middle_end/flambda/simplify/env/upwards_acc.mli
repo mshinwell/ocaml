@@ -44,7 +44,7 @@ val lifted_constants_still_to_be_placed
 
 (** Replace the accumulator of lifted constants returned by
     [lifted_constants_still_to_be_placed]. *)
-val set_lifted_constants_still_to_be_placed
+val with_lifted_constants_still_to_be_placed
    : t
   -> Simplify_env_and_result.Lifted_constant_state.t
   -> t

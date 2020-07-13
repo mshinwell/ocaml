@@ -41,7 +41,7 @@ let print ppf { uenv; code_age_relation; lifted_constants; r; } =
     LCS.print lifted_constants
     R.print r
 
-let create uenv code_age_relation r lifted_constants =
+let create uenv code_age_relation r =
   { uenv;
     code_age_relation;
     lifted_constants = LCS.empty;
@@ -58,7 +58,7 @@ let of_dacc dacc =
 let uenv t = t.uenv
 let code_age_relation t = t.code_age_relation
 let lifted_constants_still_to_be_placed t = t.lifted_constants
-let set_lifted_constants_still_to_be_placed t lifted_constants =
+let with_lifted_constants_still_to_be_placed t lifted_constants =
   { t with lifted_constants; }
 
 let map_uenv t ~f =

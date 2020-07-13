@@ -18,8 +18,6 @@
 
 open! Simplify_import
 
-module CIS = Code_id_or_symbol
-
 module SCC_lifted_constants = Strongly_connected_components.Make (CIS)
 
 type result = {

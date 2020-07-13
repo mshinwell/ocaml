@@ -413,40 +413,37 @@ end = struct
 
   let add_lifted_constants t lifted =
     let module LC = Lifted_constant in
-    let lifted = Lifted_constant_state.all lifted in
+    let module LCS = Lifted_constant_state in
     let t =
-      List.fold_left (fun t lifted_constant ->
-          let types_of_symbols = LC.types_of_symbols lifted_constant in
-          Symbol.Map.fold (fun sym (_denv, typ) t ->
-              define_symbol t sym (T.kind typ))
-            types_of_symbols
-            t)
-        t
-        lifted
+      LCS.fold lifted ~init:t ~f:(fun t lifted_constant ->
+        let types_of_symbols = LC.types_of_symbols lifted_constant in
+        Symbol.Map.fold (fun sym (_denv, typ) t ->
+            define_symbol t sym (T.kind typ))
+          types_of_symbols
+          t)
     in
     let typing_env =
-      List.fold_left (fun typing_env lifted_constant ->
-          let types_of_symbols = LC.types_of_symbols lifted_constant in
-          Symbol.Map.fold (fun sym (denv_at_definition, typ) typing_env ->
-              let sym = Name.symbol sym in
-              let env_extension =
-                (* CR mshinwell: Sometimes we might already have the types
-                   "made suitable" in the [closure_env] field of the typing
-                   environment, perhaps?  For example when lifted constants'
-                   types are coming out of a closure into the enclosing
-                   scope. *)
-                T.make_suitable_for_environment typ
-                  denv_at_definition.typing_env
-                  ~suitable_for:typing_env
-                  ~bind_to:sym
-              in
-              TE.add_env_extension typing_env env_extension)
-            types_of_symbols
-            typing_env)
-        t.typing_env
-        lifted
+      LCS.fold lifted ~init:t.typing_env ~f:(fun typing_env lifted_constant ->
+        let types_of_symbols = LC.types_of_symbols lifted_constant in
+        Symbol.Map.fold (fun sym (denv_at_definition, typ) typing_env ->
+            let sym = Name.symbol sym in
+            let env_extension =
+              (* CR mshinwell: Sometimes we might already have the types
+                 "made suitable" in the [closure_env] field of the typing
+                 environment, perhaps?  For example when lifted constants'
+                 types are coming out of a closure into the enclosing
+                 scope. *)
+              T.make_suitable_for_environment typ
+                denv_at_definition.typing_env
+                ~suitable_for:typing_env
+                ~bind_to:sym
+            in
+            TE.add_env_extension typing_env env_extension)
+          types_of_symbols
+          typing_env)
     in
-    List.fold_left (fun denv lifted_constant ->
+    LCS.fold lifted ~init:(with_typing_env t typing_env)
+      ~f:(fun denv lifted_constant ->
         let defining_expr = LC.defining_expr lifted_constant in
         Code_id.Lmap.fold
           (fun code_id
@@ -458,12 +455,9 @@ end = struct
             | Deleted -> denv)
           (Static_const.get_pieces_of_code defining_expr)
           denv)
-      (with_typing_env t typing_env)
-      lifted
 
   let add_lifted_constant t const =
-    add_lifted_constants t
-      (Lifted_constant_state.singleton_still_to_be_placed const)
+    add_lifted_constants t (Lifted_constant_state.singleton const)
 
   let set_inlined_debuginfo t dbg =
     { t with inlined_debuginfo = dbg; }
@@ -797,7 +791,7 @@ end = struct
 
   let print ppf t =
     Format.fprintf ppf "@[<hov 1>(%a)@]"
-      Format.pp_print_list ~pp_sep:Format.pp_print_space Lifted_constant.print
+      (Format.pp_print_list ~pp_sep:Format.pp_print_space Lifted_constant.print)
       (to_list t)
 
   let empty = Empty
@@ -809,7 +803,9 @@ end = struct
     | Empty -> true
     | Leaf _ | Union _ -> false
 
-  let add t const = Union (t, Leaf consts)
+  let singleton const = Leaf [const]
+
+  let add t const = Union (t, Leaf [const])
 
   let rec fold t ~init ~f =
     match t with

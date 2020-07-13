@@ -339,6 +339,8 @@ module type Lifted_constant_state = sig
 
   val print : Format.formatter -> t -> unit
 
+  val singleton : lifted_constant -> t
+
   val add : t -> lifted_constant -> t
 
   val union : t -> t -> t

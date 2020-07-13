@@ -74,10 +74,10 @@ let rec simplify_let
          We do however need to remember to update [r] in the [Reified] case.
       *)
       match simplify_named_result with
-      | Bindings { bindings_outermost_first = _; dacc; }
-      | Shared { symbol = _; kind = _; } -> dacc
+      | Bindings { bindings_outermost_first = _; dacc; } -> dacc
       | Reified { definition = _; bound_symbol = _; static_const = _; r; } ->
         DA.with_r dacc r
+      | Shared { symbol = _; kind = _; } -> dacc
     in
     (* Remember any lifted constants that were generated during the
        simplification of the defining expression.  Then add back in to
@@ -113,7 +113,7 @@ let rec simplify_let
         else
           let uacc =
             UA.with_lifted_constants_still_to_be_placed uacc
-              lifted_constants_to_return
+              lifted_constants_from_defining_expr_and_body
           in
           LCS.empty, uacc
       in
@@ -300,14 +300,13 @@ and simplify_non_recursive_let_cont_handler
                (Name_occurrences.continuations (Expr.free_names body))
                (Continuation.Set.of_list [cont; unit_toplevel_exn_cont])
       in
-      let r, prior_lifted_constants =
+      let dacc, prior_lifted_constants =
         (* We clear the lifted constants accumulator so that we can easily
            obtain, below, any constants that are generated during the
            simplification of the [body].  We will add these
-           [prior_lifted_constants] back into [r] later. *)
-        R.get_and_clear_lifted_constants (DA.r dacc)
+           [prior_lifted_constants] back into [dacc] later. *)
+        DA.get_and_clear_lifted_constants dacc
       in
-      let dacc = DA.with_r dacc r in
       let body, handler, user_data, uacc =
         let body, (result, uenv', user_data), uacc =
           let scope = DE.get_continuation_scope_level (DA.denv dacc) in
@@ -327,7 +326,7 @@ and simplify_non_recursive_let_cont_handler
                 TE.code_age_relation (DA.typing_env dacc_after_body)
               in
               let consts_lifted_during_body =
-                R.get_lifted_constants (DA.r dacc_after_body)
+                DA.get_lifted_constants dacc_after_body
               in
               let dacc =
                 (* We need any lifted constant symbols and associated code IDs
@@ -348,6 +347,8 @@ and simplify_non_recursive_let_cont_handler
                    the single use's environment (which might not contain them
                    all already, somewhat counterintuitively) and return that
                    as the handler env. *)
+                (* CR mshinwell: Exactly when does this weird situation
+                   occur? *)
                 consts_lifted_during_body
                 |> DE.add_lifted_constants denv_before_body
                 |> DE.with_code ~from:(DA.denv dacc_after_body)
@@ -359,8 +360,7 @@ and simplify_non_recursive_let_cont_handler
                   ~consts_lifted_during_body
               in
               let dacc =
-                DA.map_r dacc ~f:(fun r ->
-                  R.add_lifted_constants r prior_lifted_constants)
+                DA.add_lifted_constants dacc prior_lifted_constants
               in
               let handler, user_data, uacc, is_single_inlinable_use,
                   is_single_use =
@@ -537,14 +537,13 @@ and simplify_recursive_let_cont_handlers
         let dacc =
           DA.map_denv dacc ~f:DE.increment_continuation_scope_level
         in
-        let r, prior_lifted_constants =
+        let dacc, prior_lifted_constants =
           (* We clear the lifted constants accumulator so that we can easily
              obtain, below, any constants that are generated during the
              simplification of the [body].  We will add these
-             [prior_lifted_constants] back into [r] later. *)
-          R.get_and_clear_lifted_constants (DA.r dacc)
+             [prior_lifted_constants] back into [dacc] later. *)
+          DA.get_and_clear_lifted_constants dacc
         in
-        let dacc = DA.with_r dacc r in
         (* let set = Continuation_handlers.domain rec_handlers in *)
         let body, (handlers, user_data), uacc =
           simplify_expr dacc body (fun dacc_after_body ->
@@ -577,7 +576,7 @@ and simplify_recursive_let_cont_handlers
               TE.code_age_relation (DA.typing_env dacc_after_body)
             in
             let denv =
-              R.get_lifted_constants r
+              DA.get_lifted_constants dacc_after_body
               |> DE.add_lifted_constants denv
             in
             let typing_env =
@@ -585,8 +584,8 @@ and simplify_recursive_let_cont_handlers
                 code_age_relation_after_body
             in
             let denv = DE.with_typing_env denv typing_env in
-            let r = R.add_lifted_constants r prior_lifted_constants in
             let dacc = DA.create denv cont_uses_env r in
+            let dacc = DA.add_lifted_constants dacc prior_lifted_constants in
             let dacc = DA.map_denv dacc ~f:DE.set_not_at_unit_toplevel in
             let handler, user_data, uacc =
               simplify_one_continuation_handler dacc cont Recursive
