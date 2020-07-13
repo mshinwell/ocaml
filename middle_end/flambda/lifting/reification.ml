@@ -68,7 +68,10 @@ let lift dacc ty ~bound_to static_const =
         |> DA.add_lifted_constant dacc
       in
       let dacc =
-        DA.map_denv dacc ~f:(fun denv -> DE.add_symbol denv symbol ty)
+        dacc
+        |> DA.map_r ~f:(fun r ->
+          R.consider_constant_for_sharing r symbol static_const)
+        |> DA.map_denv ~f:(fun denv -> DE.add_symbol denv symbol ty)
       in
       dacc, symbol
   in
