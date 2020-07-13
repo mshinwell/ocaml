@@ -109,6 +109,9 @@ let rec simplify_let
       in
       let lifted_constants_to_place, uacc =
         if place_lifted_constants_immediately then
+          let uacc =
+            UA.with_lifted_constants_still_to_be_placed uacc LCS.empty
+          in
           lifted_constants_from_defining_expr_and_body, uacc
         else
           let uacc =
@@ -120,8 +123,9 @@ let rec simplify_let
       (* If there is nothing to place, avoid the closure allocations below. *)
       if LCS.is_empty lifted_constants_to_place
         || not place_lifted_constants_immediately
-      then body, user_data, uacc
-      else
+      then begin
+        body, user_data, uacc
+      end else begin
         let fold_over_lifted_constants ~init ~f =
           LCS.fold lifted_constants_to_place ~init
             ~f:(fun acc lifted_const -> f acc (lifted_const, None))
@@ -144,6 +148,7 @@ let rec simplify_let
         in
         assert (UA.no_lifted_constants_still_to_be_placed uacc);
         body, user_data, UA.with_r uacc r
+      end
     | Reified { definition; bound_symbol; static_const; r = _; } ->
       if place_lifted_constants_immediately then begin
         Misc.fatal_errorf "Did not expect [Simplify_named] to return \
