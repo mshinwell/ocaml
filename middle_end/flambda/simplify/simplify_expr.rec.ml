@@ -56,50 +56,6 @@ let rec simplify_let
               *)
               && DE.at_unit_toplevel (DA.denv dacc))
     in
-(*
-
-- Constants in DA need to be accumulated all the way down so they can be
-  transferred to continuation handlers from continuation bodies, before the
-  upwards traversal starts.
-- Simplify_named does a down + up traversal.  It returns constants none of
-  which have been placed.  We can clear the lifted constants in [DA] around
-  a call to [simplify_named] without a problem.
-- At the turning point, no constants in DA should have been placed (check
-  this in UA.create).  Likewise when reaching any [Let].
-- On the upwards traversal, constants get placed.  Invariant: the uacc
-  returned by simplify_expr on the body in simplify_let should only ever
-  return:
-  - constants prior to the let (all not placed)
-  - constants from the defining expr (all not placed)
-  - constants from the body (either placed or not placed).
-  The main problem seems to be working out which of these constants were
-  the ones prior to the let.  We want to separate out the defining expr
-  and body ones, place the ones that need placing, then carry on.  We don't
-  want to touch the prior ones, just return them, since they are for an
-  earlier [Let] binding to deal with.
-- Invariant: upon reaching the top, all constants in [uacc] must have been
-  placed.  Care: this isn't the case at the top of a lambda; they must
-  bubble up.  So it's a check for simplify.templ.ml not [Simplify_toplevel].
-
-  Structure for LCS:
-  - some kind of "time" (can't be binding time as it needs to follow the
-    dominator tree)
-  - a way for simplify_let to add a checkpoint and increment the time
-  - don't expose lists, only fold etc.
-  - some efficient way of then splitting the LCS structure in uacc so we
-    can extract the ones from the defining expr and the body in simplify_let.
-
-  - map from time (point at which bindings might be dropped, i.e. [Let], not
-    where the constant was necessarily put into the LCS structure) to
-    a list of constants, along with whether they've been placed or not.
-  - on the way up, we could maybe take the entries from time > current time
-    and merge them into the entry at "time" itself.  So when deciding whether
-    to place constants there would only be one list to iter over.
-  - in fact... each time we reach a let on the way up, shouldn't we be at
-    the maximal element of the map?  Would be a useful check.
-*)
-
-
     (* Remember then clear the lifted constants memory in [DA] so we can
        easily find out which constants are generated during simplification
        of the defining expression and the [body]. *)
