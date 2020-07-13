@@ -364,7 +364,7 @@ type reify_primitive_at_toplevel_result =
     symbol : Symbol.t;
     static_const : Flambda.Static_const.t;
   }
-  | Shared of { symbol : Symbol.t; }
+  | Shared of Symbol.t
   | Cannot_reify
 
 let reify_primitive_at_toplevel dacc bound_var ty =
@@ -390,8 +390,7 @@ let reify_primitive_at_toplevel dacc bound_var ty =
       (* CR mshinwell: This should attempt to share the constant (see
          first function in this file for the code). *)
       match R.find_shareable_constant (DA.r dacc) static_const with
-      | Some symbol ->
-        Shared { symbol; }
+      | Some symbol -> Shared symbol
       | None ->
         let symbol =
           Symbol.create (Compilation_unit.get_current_exn ())

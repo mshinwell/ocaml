@@ -29,7 +29,7 @@ type simplify_named_result =
       static_const : Static_const.t;
       r : R.t;
     }
-  | Shared of { symbol : Symbol.t; kind : Flambda_kind.t; }
+  | Shared of Symbol.t
 
 let bindings_result bindings_outermost_first dacc =
   Bindings { bindings_outermost_first; dacc; }
@@ -86,8 +86,7 @@ let simplify_named0 dacc (bindable_let_bound : Bindable_let_bound.t)
         with
         | Cannot_reify ->
           bindings_result [bindable_let_bound, defining_expr] dacc
-        | Shared { symbol; } ->
-          Shared { symbol; kind; }
+        | Shared symbol -> Shared symbol
         | Lift { r; symbol; static_const; } ->
           let named = Named.create_simple (Simple.symbol symbol) in
           Reified

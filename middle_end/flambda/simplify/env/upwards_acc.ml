@@ -60,6 +60,8 @@ let code_age_relation t = t.code_age_relation
 let lifted_constants_still_to_be_placed t = t.lifted_constants
 let with_lifted_constants_still_to_be_placed t lifted_constants =
   { t with lifted_constants; }
+let no_lifted_constants_still_to_be_placed t =
+  LCS.is_empty t.lifted_constants
 
 let map_uenv t ~f =
   { t with

@@ -352,6 +352,10 @@ let simplify_function context r closure_id function_decl
             dacc_inside_function context r ~params ~my_closure closure_id
               ~closure_bound_names_inside_function
           in
+          if not (DA.no_lifted_constants dacc) then begin
+            Misc.fatal_errorf "Did not expect lifted constants in [dacc]:@ %a"
+              DA.print dacc
+          end;
           let dacc =
             DA.map_denv dacc ~f:(fun denv ->
               denv
@@ -377,14 +381,14 @@ let simplify_function context r closure_id function_decl
               ~return_cont_scope:Scope.initial
               ~exn_cont_scope:(Scope.next Scope.initial)
           with
-          | body, dacc_after_body, r ->
+          | body, dacc_after_body, r_after_upwards_traversal ->
             let dbg = Function_params_and_body.debuginfo params_and_body in
             (* CR mshinwell: Should probably look at [cont_uses]? *)
             let params_and_body =
               Function_params_and_body.create ~return_continuation
                 exn_continuation params ~dbg ~body ~my_closure
             in
-            params_and_body, dacc_after_body, r
+            params_and_body, dacc_after_body, r_after_upwards_traversal
           | exception Misc.Fatal_error ->
             if !Clflags.flambda_context_on_error then begin
               Format.eprintf "\n%sContext is:%s simplifying function \
@@ -436,6 +440,10 @@ let simplify_set_of_closures0 dacc context set_of_closures
   let all_function_decls_in_set =
     Function_declarations.funs_in_order function_decls
   in
+  if not (DA.no_lifted_constants dacc) then begin
+    Misc.fatal_errorf "Did not expect lifted constants in [dacc]:@ %a"
+      DA.print dacc
+  end;
   let all_function_decls_in_set, code, fun_types, code_age_relation,
       r_after_upwards_traversal, lifted_consts =
     Closure_id.Lmap.fold

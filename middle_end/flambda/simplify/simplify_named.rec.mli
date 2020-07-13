@@ -29,7 +29,7 @@ type simplify_named_result = private
       static_const :  Static_const.t;
       r : R.t;
     }
-  | Shared of { symbol : Symbol.t; kind : Flambda_kind.t; }
+  | Shared of Symbol.t
 
 val simplify_named
    : Downwards_acc.t

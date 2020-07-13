@@ -33,7 +33,7 @@ type reify_primitive_at_toplevel_result =
     symbol : Symbol.t;
     static_const : Flambda.Static_const.t;
   }
-  | Shared of { symbol : Symbol.t; }
+  | Shared of Symbol.t
   | Cannot_reify
 
 val reify_primitive_at_toplevel

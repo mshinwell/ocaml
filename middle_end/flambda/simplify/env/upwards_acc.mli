@@ -49,6 +49,8 @@ val with_lifted_constants_still_to_be_placed
   -> Simplify_env_and_result.Lifted_constant_state.t
   -> t
 
+val no_lifted_constants_still_to_be_placed : t -> bool
+
 (** Map the environment component of the given upwards accumulator. *)
 val map_uenv
    : t
