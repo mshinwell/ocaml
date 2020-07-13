@@ -192,7 +192,7 @@ let sort ~fold_over_lifted_constants =
     SCC_lifted_constants.connected_components_sorted_from_roots_to_leaf
       lifted_constants_dep_graph
   in
-  let bindings_outermost_last =
+  let bindings_outermost_first =
     Array.fold_left (fun bindings (group : SCC_lifted_constants.component) ->
         let binding =
           match group with
@@ -264,15 +264,13 @@ let sort ~fold_over_lifted_constants =
       []
       (Array.of_list (List.rev (Array.to_list connected_components)))
   in
-  (* By effectively reversing the list during a subsequent fold on this
-     result, we rely on the following property:
+  (* By reversing the list we rely on the following property:
        Let the list L be a topological sort of a directed graph G.
        Then the reverse of L is a topological sort of the transpose of G.
   *)
   (*
   Format.eprintf "Result, outermost first:@ %a\n%!"
-    (Format.pp_print_list ~pp_sep:Format.pp_print_space
-      Bound_symbols.print)
-    (List.rev (List.map fst bindings_outermost_last));
+    (Format.pp_print_list ~pp_sep:Format.pp_print_space LC.print)
+    bindings_outermost_first;
   *)
-  { bindings_outermost_last; }
+  { bindings_outermost_last = List.rev bindings_outermost_first; }
