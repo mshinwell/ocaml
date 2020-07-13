@@ -104,7 +104,7 @@ let rec simplify_let
          the defining expression.  Then we either place them all, or return
          them in [uacc] for an outer [Let]-binding to deal with. *)
       let lifted_constants_from_defining_expr_and_body =
-        LCS.union (UA.get_lifted_constants_still_to_be_placed uacc)
+        LCS.union (UA.lifted_constants_still_to_be_placed uacc)
           lifted_constants_from_defining_expr
       in
       let lifted_constants_to_place, uacc =

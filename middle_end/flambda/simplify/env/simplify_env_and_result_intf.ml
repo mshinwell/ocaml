@@ -266,9 +266,6 @@ module type Upwards_env = sig
 end
 
 module type Result = sig
-  type lifted_constant
-  type lifted_constant_state
-
   type t
 
   val print : Format.formatter -> t -> unit
@@ -342,19 +339,9 @@ module type Lifted_constant_state = sig
 
   val print : Format.formatter -> t -> unit
 
+  val add : t -> lifted_constant -> t
+
   val union : t -> t -> t
 
-  val all : t -> lifted_constant list
-
-  val placed : t -> lifted_constant list
-
-  val still_to_be_placed : t -> lifted_constant list
-
-  val only_still_to_be_placed : t -> t
-
-  val singleton_still_to_be_placed : lifted_constant -> t
-
-  val add_still_to_be_placed : t -> lifted_constant -> t
-  val add_placed : t -> lifted_constant -> t
-  val add_placed_from : t -> from:t -> t
+  val fold : t -> init:'a -> f:('a -> lifted_constant -> 'a) -> 'a
 end

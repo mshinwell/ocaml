@@ -24,7 +24,6 @@ val print : Format.formatter -> t -> unit
 val create
    : Simplify_env_and_result.Upwards_env.t
   -> Code_age_relation.t
-  -> Simplify_env_and_result.Lifted_constant_state.t
   -> Simplify_env_and_result.Result.t
   -> t
 
@@ -37,7 +36,18 @@ val uenv : t -> Simplify_env_and_result.Upwards_env.t
 
 val code_age_relation : t -> Code_age_relation.t
 
-val get_lifted_constants : t -> Simplify_env_and_result.Lifted_constant_state.t
+(** Return the lifted constants that still need to be placed (i.e. have
+    [Let]-expressions made for them) on the upwards traversal. *)
+val lifted_constants_still_to_be_placed
+   : t
+  -> Simplify_env_and_result.Lifted_constant_state.t
+
+(** Replace the accumulator of lifted constants returned by
+    [lifted_constants_still_to_be_placed]. *)
+val set_lifted_constants_still_to_be_placed
+   : t
+  -> Simplify_env_and_result.Lifted_constant_state.t
+  -> t
 
 (** Map the environment component of the given upwards accumulator. *)
 val map_uenv

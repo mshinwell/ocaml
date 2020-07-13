@@ -125,14 +125,9 @@ let extend_typing_environment t env_extension =
 let get_typing_env_no_more_than_one_use t k =
   CUE.get_typing_env_no_more_than_one_use t.continuation_uses_env k
 
-let add_still_to_be_placed_lifted_constant t const =
+let add_lifted_constant t const =
   { t with
-    lifted_constants = LCS.add_still_to_be_placed t.lifted_constants const;
-  }
-
-let add_placed_lifted_constant t const =
-  { t with
-    lifted_constants = LCS.add_placed t.lifted_constants const;
+    lifted_constants = LCS.add t.lifted_constants const;
   }
 
 let add_lifted_constants t constants =
@@ -157,10 +152,3 @@ let get_and_clear_lifted_constants t =
 
 let set_lifted_constants t consts =
   { t with lifted_constants = consts; }
-
-let transfer_placed_lifted_constants t ~from =
-  { t with
-    lifted_constants =
-      LCS.add_placed_from t.lifted_constants
-        ~from:from.lifted_constants;
-  }

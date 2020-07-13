@@ -78,12 +78,7 @@ val extend_typing_environment : t -> Flambda_type.Typing_env_extension.t -> t
 
 val no_lifted_constants : t -> bool
 
-val add_still_to_be_placed_lifted_constant
-   : t
-  -> Simplify_env_and_result.Lifted_constant.t
-  -> t
-
-val add_placed_lifted_constant
+val add_lifted_constant
    : t
   -> Simplify_env_and_result.Lifted_constant.t
   -> t
@@ -106,5 +101,3 @@ val set_lifted_constants
    : t
   -> Simplify_env_and_result.Lifted_constant_state.t
   -> t
-
-val transfer_placed_lifted_constants : t -> from:t -> t

@@ -44,20 +44,22 @@ let print ppf { uenv; code_age_relation; lifted_constants; r; } =
 let create uenv code_age_relation r lifted_constants =
   { uenv;
     code_age_relation;
-    lifted_constants;
+    lifted_constants = LCS.empty;
     r;
   }
 
 let of_dacc dacc =
   { uenv = UE.empty;
     code_age_relation = TE.code_age_relation (DA.typing_env dacc);
-    lifted_constants = DA.get_lifted_constants dacc;
+    lifted_constants = LCS.empty;
     r = DA.r dacc;
   }
 
 let uenv t = t.uenv
 let code_age_relation t = t.code_age_relation
-let get_lifted_constants t = t.lifted_constants
+let lifted_constants_still_to_be_placed t = t.lifted_constants
+let set_lifted_constants_still_to_be_placed t lifted_constants =
+  { t with lifted_constants; }
 
 let map_uenv t ~f =
   { t with

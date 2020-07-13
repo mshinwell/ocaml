@@ -660,8 +660,6 @@ end = struct
     | rewrite -> Some rewrite
 end and Result : sig
   include I.Result
-    with type lifted_constant := Lifted_constant.t
-    with type lifted_constant_state := Lifted_constant_state.t
 end = struct
   type t =
     { resolver : I.resolver;
@@ -689,7 +687,6 @@ end = struct
       used_closure_vars = Var_within_closure.Set.empty;
       all_code = Exported_code.empty;
     }
-
 
   let find_shareable_constant t static_const =
     Static_const.Map.find_opt static_const t.shareable_constants
@@ -784,73 +781,39 @@ end and Lifted_constant_state : sig
   include I.Lifted_constant_state
     with type lifted_constant := Lifted_constant.t
 end = struct
-  type t = {
-    all : Lifted_constant.t list;
-    placed : Lifted_constant.t list;
-    still_to_be_placed : Lifted_constant.t list;
-  }
+  type t =
+    | Empty
+    | Leaf of Lifted_constant.t list
+    | Union of t * t
 
-  let print ppf { all; placed; still_to_be_placed; } =
-    let printer =
-      Format.pp_print_list ~pp_sep:Format.pp_print_space Lifted_constant.print
+  let to_list t =
+    let rec to_list t acc =
+      match t with
+      | Empty -> acc
+      | Leaf consts -> consts @ acc
+      | Union (t1, t2) -> to_list t1 (to_list t2 acc)
     in
-    Format.fprintf ppf "@[<hov 1>(\
-        @[<hov 1>(all@ (%a))@]@ \
-        @[<hov 1>(placed@ (%a))@]@ \
-        @[<hov 1>(still_to_be_placed@ (%a))@]\
-        )@]"
-      printer all
-      printer placed
-      printer still_to_be_placed
+    to_list t []
 
-  let empty =
-    { all = [];
-      placed = [];
-      still_to_be_placed = [];
-    }
+  let print ppf t =
+    Format.fprintf ppf "@[<hov 1>(%a)@]"
+      Format.pp_print_list ~pp_sep:Format.pp_print_space Lifted_constant.print
+      (to_list t)
+
+  let empty = Empty
+
+  let union t1 t2 = Union (t1, t2)
 
   let is_empty t =
-    match t.all with
-    | [] -> true
-    | _::_ -> false
+    match t with
+    | Empty -> true
+    | Leaf _ | Union _ -> false
 
-  let still_to_be_placed t = t.still_to_be_placed
-  let placed t = t.placed
-  let all t = t.all
+  let add t const = Union (t, Leaf consts)
 
-  let union t1 t2 =
-    { all = t1.all @ t2.all;
-      placed = t1.placed @ t2.placed;
-      still_to_be_placed = t1.still_to_be_placed @ t2.still_to_be_placed;
-    }
-
-  let singleton_still_to_be_placed const =
-    { all = [const];
-      placed = [];
-      still_to_be_placed = [const];
-    }
-
-  let add_still_to_be_placed t const =
-    { all = const :: t.all;
-      placed = t.placed;
-      still_to_be_placed = const :: t.still_to_be_placed;
-    }
-
-  let add_placed t const =
-    { all = const :: t.all;
-      placed = const :: t.placed;
-      still_to_be_placed = t.still_to_be_placed;
-    }
-
-  let add_placed_from t ~from =
-    { all = t.all @ from.placed;
-      placed = t.placed @ from.placed;
-      still_to_be_placed = t.still_to_be_placed;
-    }
-
-  let only_still_to_be_placed t =
-    { all = t.still_to_be_placed;
-      placed = [];
-      still_to_be_placed = t.still_to_be_placed;
-    }
+  let rec fold t ~init ~f =
+    match t with
+    | Empty -> init
+    | Leaf consts -> ListLabels.fold_left consts ~init ~f
+    | Union (t1, t2) -> fold t2 ~init:(fold t1 ~init ~f) ~f
 end
