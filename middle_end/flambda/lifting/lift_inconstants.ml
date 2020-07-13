@@ -383,7 +383,7 @@ let reify_primitive_at_toplevel dacc bound_var ty =
        already have been lifted. *)
     let static_const = Reification.create_static_const to_lift in
     if Static_const.is_fully_static static_const
-    || not (allowed_for_toplevel_lifting static_const)
+      || not (allowed_for_toplevel_lifting static_const)
     then
       Cannot_reify
     else begin

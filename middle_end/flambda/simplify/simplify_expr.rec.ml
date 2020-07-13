@@ -31,6 +31,7 @@ let rec simplify_let
   : 'a. DA.t -> Let.t -> 'a k -> Expr.t * 'a * UA.t
 = fun dacc let_expr k ->
   let module L = Flambda.Let in
+  let original_dacc = dacc in
   L.pattern_match let_expr ~f:(fun bindable_let_bound ~body ->
     let defining_expr = L.defining_expr let_expr in
     let place_lifted_constants_immediately =
@@ -60,42 +61,32 @@ let rec simplify_let
        easily find out which constants are generated during simplification
        of the defining expression and the [body]. *)
     let dacc, prior_lifted_constants = DA.get_and_clear_lifted_constants dacc in
-    let simplify_named_result =
-      (* Simplify the defining expression. *)
+    (* Simplify the defining expression. *)
+    match
       Simplify_named.simplify_named dacc bindable_let_bound
         (L.defining_expr let_expr)
-    in
-    let dacc =
-      (* [Simplify_named] will have entered the types of all constants in
-         [lifted_constants_from_defining_expr] into the [denv] component
-         of [dacc], so we don't need to do that here.
-         The following code just works out which [dacc] to use; sometimes it
-         isn't returned from [Simplify_named] since nothing happened to it.
-         We do however need to remember to update [r] in the [Reified] case.
+    with
+    | Bindings { bindings_outermost_first = bindings; dacc; } ->
+      (* This is the normal case.
+         First remember any lifted constants that were generated during the
+         simplification of the defining expression.  Then add back in to
+         [dacc] the [prior_lifted_constants] remembered above.  This results in
+         the definitions and types for all these constants being available at
+         a subsequent [Let_cont].  At such a point, [dacc] will be queried to
+         retrieve all of the constants, which are then manually transferred
+         into the computed [dacc] at the join point for subsequent
+         simplification of the continuation handler(s).
+         Note that no lifted constants are ever placed during the simplification
+         of the defining expression.  (Not even in the case of a
+         [Set_of_closures] binding, since "let symbol" is disallowed under a
+         lambda.)
       *)
-      match simplify_named_result with
-      | Bindings { bindings_outermost_first = _; dacc; } -> dacc
-      | Reified { definition = _; bound_symbol = _; static_const = _; r; } ->
-        DA.with_r dacc r
-      | Shared _ -> dacc
-    in
-    (* Remember any lifted constants that were generated during the
-       simplification of the defining expression.  Then add back in to
-       [dacc] the [prior_lifted_constants] remembered above.  This results in
-       the definitions and types for all these constants being available at
-       a subsequent [Let_cont].  At such a point, [dacc] will be queried to
-       retrieve all of the constants, which are then manually transferred
-       into the computed [dacc] at the join point for subsequent simplification
-       of the continuation handler(s).
-       Note that no lifted constants are ever placed during the simplification
-       of the defining expression.  (Not even in the case of a [Set_of_closures]
-       binding, since "let symbol" is disallowed under a lambda.) *)
-    let lifted_constants_from_defining_expr = DA.get_lifted_constants dacc in
-    let dacc = DA.add_lifted_constants dacc prior_lifted_constants in
-    match simplify_named_result with
-    | Bindings { bindings_outermost_first = bindings; dacc = _; } ->
-      (* The normal case. Simplify the body of the let-expression and make the
-         new [Let] bindings around the simplified body. *)
+      let lifted_constants_from_defining_expr = DA.get_lifted_constants dacc in
+      let dacc = DA.add_lifted_constants dacc prior_lifted_constants in
+      (* The normal case.  Simplify the body of the let-expression and make the
+         new [Let] bindings around the simplified body.  [Simplify_named] will
+         already have prepared [dacc] with the necessary bindings for the
+         simplification of the body. *)
       let body, user_data, uacc = simplify_expr dacc body k in
       let body = Simplify_common.bind_let_bound ~bindings ~body in
       (* The lifted constants present in [uacc] are the ones arising from
@@ -149,7 +140,7 @@ let rec simplify_let
         assert (UA.no_lifted_constants_still_to_be_placed uacc);
         body, user_data, UA.with_r uacc r
       end
-    | Reified { definition; bound_symbol; static_const; r = _; } ->
+    | Reified { definition; bound_symbol; static_const; r; } ->
       if place_lifted_constants_immediately then begin
         Misc.fatal_errorf "Did not expect [Simplify_named] to return \
             [Reified] (bound symbol %a)"
@@ -167,8 +158,10 @@ let rec simplify_let
       (* We're effectively replacing one expression (the original [Let])
          with another here; the new expression will be completely
          re-simplified.  So we don't have to do anything relating to lifted
-         constants. *)
-      simplify_expr dacc let_symbol_expr k
+         constants.  We use [original_dacc] to avoid having stale bindings
+         in the environment from the processing of the original [Let] binding.
+      *)
+      simplify_expr (DA.with_r original_dacc r) let_symbol_expr k
     | Shared symbol ->
       if place_lifted_constants_immediately then begin
         Misc.fatal_errorf "Did not expect [Simplify_named] to return \
@@ -186,7 +179,7 @@ let rec simplify_let
       in
       (* Same comment as for the [Reified] case with regard to lifted
          constants. *)
-      simplify_expr dacc let_expr k)
+      simplify_expr original_dacc let_expr k)
 
 and simplify_one_continuation_handler :
  'a. DA.t
