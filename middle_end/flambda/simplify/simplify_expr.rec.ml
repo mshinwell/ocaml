@@ -69,10 +69,10 @@ let rec simplify_let
     | Bindings { bindings_outermost_first = bindings; dacc; } ->
       (* This is the normal case.
          First remember any lifted constants that were generated during the
-         simplification of the defining expression.  Then add back in to
-         [dacc] the [prior_lifted_constants] remembered above.  This results in
-         the definitions and types for all these constants being available at
-         a subsequent [Let_cont].  At such a point, [dacc] will be queried to
+         simplification of the defining expression.  Then add back in to [dacc]
+         the [prior_lifted_constants] remembered above.  This results in the
+         definitions and types for all these constants being available at a
+         subsequent [Let_cont].  At such a point, [dacc] will be queried to
          retrieve all of the constants, which are then manually transferred
          into the computed [dacc] at the join point for subsequent
          simplification of the continuation handler(s).
@@ -83,10 +83,10 @@ let rec simplify_let
       *)
       let lifted_constants_from_defining_expr = DA.get_lifted_constants dacc in
       let dacc = DA.add_lifted_constants dacc prior_lifted_constants in
-      (* The normal case.  Simplify the body of the let-expression and make the
-         new [Let] bindings around the simplified body.  [Simplify_named] will
-         already have prepared [dacc] with the necessary bindings for the
-         simplification of the body. *)
+      (* Simplify the body of the let-expression and make the new [Let] bindings
+         around the simplified body.  [Simplify_named] will already have
+         prepared [dacc] with the necessary bindings for the simplification of
+         the body. *)
       let body, user_data, uacc = simplify_expr dacc body k in
       let body = Simplify_common.bind_let_bound ~bindings ~body in
       (* The lifted constants present in [uacc] are the ones arising from
@@ -126,8 +126,8 @@ let rec simplify_let
         in
         let scoping_rule =
           (* If this is a "normal" let rather than a "let symbol", then we
-            use [Dominator] scoping for any symbol bindings we place, as the
-            types of the symbols may have been used out of syntactic scope. *)
+             use [Dominator] scoping for any symbol bindings we place, as the
+             types of the symbols may have been used out of syntactic scope. *)
           Option.value ~default:Symbol_scoping_rule.Dominator
             (Bindable_let_bound.let_symbol_scoping_rule bindable_let_bound)
         in
