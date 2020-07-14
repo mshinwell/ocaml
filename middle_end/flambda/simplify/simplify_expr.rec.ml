@@ -182,6 +182,14 @@ let rec simplify_let
           calculate_constants_to_place lifted_constants_from_defining_expr
             ~critical_deps:Name_occurrences.empty ~to_float:LCS.empty
         in
+        let critical_deps =
+          (* Make sure we don't move constants past the [bindings] if there
+             is a dependency. *)
+          ListLabels.fold_left bindings ~init:critical_deps
+            ~f:(fun critical_deps (bound, _) ->
+              Name_occurrences.union (Bindable_let_bound.free_names bound)
+                critical_deps)
+        in
         let to_place_outermost_last_around_body, to_float, _critical_deps =
           calculate_constants_to_place lifted_constants_from_body
             ~critical_deps ~to_float
