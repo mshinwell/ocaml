@@ -32,11 +32,7 @@ let build_dep_graph ~fold_over_lifted_constants =
   fold_over_lifted_constants ~init:(CIS.Map.empty, CIS.Map.empty)
     ~f:(fun (dep_graph, code_id_or_symbol_to_const)
          (lifted_constant, extra_deps) ->
-      (*
-      Format.eprintf "Input for one set: %a =@ %a\n%!"
-        Bound_symbols.print bound_symbols
-        Static_const.print defining_expr;
-      *)
+      (* Format.eprintf "One constant: %a\n%!" LC.print lifted_constant; *)
       let defining_expr = LC.defining_expr lifted_constant in
       let bound_symbols = LC.bound_symbols lifted_constant in
       let types_of_symbols = LC.types_of_symbols lifted_constant in
@@ -72,11 +68,23 @@ let build_dep_graph ~fold_over_lifted_constants =
                     (code_and_set_of_closures
                       : Static_const.Code_and_set_of_closures.t) ->
               let closure_symbols = bound.closure_symbols in
-              (* We don't need to look at [code_and_set_of_closures.code]
-                 since all code IDs therein will also be in
-                 [from_bound_symbols], above. *)
+              let free_names_code =
+                Code_id.Lmap.fold (fun _code_id code free_names_code ->
+                    Name_occurrences.union free_names_code
+                      (Static_const.Code.free_names code))
+                  code_and_set_of_closures.code
+                  Name_occurrences.empty
+              in
               let set_of_closures = code_and_set_of_closures.set_of_closures in
-              let free_names = Set_of_closures.free_names set_of_closures in
+              let free_names_set_of_closures =
+                Set_of_closures.free_names set_of_closures
+              in
+              let free_names =
+                Name_occurrences.union free_names_code
+                  free_names_set_of_closures
+              in
+              (* Format.eprintf "All free_names:@ %a\n%!"
+                 Name_occurrences.print free_names; *)
               Closure_id.Lmap.fold
                 (fun _closure_id closure_sym free_names_with_envs ->
                   match Symbol.Map.find closure_sym types_of_symbols with
@@ -162,6 +170,7 @@ let build_dep_graph ~fold_over_lifted_constants =
         CIS.Set.union (CIS.set_of_symbol_set free_syms)
           (CIS.set_of_code_id_set free_code_ids)
       in
+      (* Format.eprintf "...deps are:@ %a\n%!" CIS.Set.print deps; *)
       CIS.Set.fold
         (fun (being_defined : CIS.t)
              (dep_graph, code_id_or_symbol_to_const) ->

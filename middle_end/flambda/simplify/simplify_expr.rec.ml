@@ -121,8 +121,9 @@ let rec simplify_let
           in
           let scoping_rule =
             (* If this is a "normal" let rather than a "let symbol", then we
-              use [Dominator] scoping for any symbol bindings we place, as the
-              types of the symbols may have been used out of syntactic scope. *)
+               use [Dominator] scoping for any symbol bindings we place, as the
+               types of the symbols may have been used out of syntactic scope.
+            *)
             Option.value ~default:Symbol_scoping_rule.Dominator
               (Bindable_let_bound.let_symbol_scoping_rule bindable_let_bound)
           in
