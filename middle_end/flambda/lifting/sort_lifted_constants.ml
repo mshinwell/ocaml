@@ -192,7 +192,7 @@ let sort ~fold_over_lifted_constants =
     SCC_lifted_constants.connected_components_sorted_from_roots_to_leaf
       lifted_constants_dep_graph
   in
-  let bindings_outermost_first =
+  let bindings_outermost_last =
     Array.fold_left (fun bindings (group : SCC_lifted_constants.component) ->
         let binding =
           match group with
@@ -271,6 +271,6 @@ let sort ~fold_over_lifted_constants =
   (*
   Format.eprintf "Result, outermost first:@ %a\n%!"
     (Format.pp_print_list ~pp_sep:Format.pp_print_space LC.print)
-    bindings_outermost_first;
+    (List.rev bindings_outermost_last);
   *)
-  { bindings_outermost_last = List.rev bindings_outermost_first; }
+  { bindings_outermost_last; }

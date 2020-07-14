@@ -88,56 +88,57 @@ let rec simplify_let
          prepared [dacc] with the necessary bindings for the simplification of
          the body. *)
       let body, user_data, uacc = simplify_expr dacc body k in
-      let body = Simplify_common.bind_let_bound ~bindings ~body in
       (* The lifted constants present in [uacc] are the ones arising from
          the simplification of [body] which still have to be placed.  We
          augment these with any constants arising from the simplification of
          the defining expression.  Then we either place them all, or return
          them in [uacc] for an outer [Let]-binding to deal with. *)
-      let lifted_constants_from_defining_expr_and_body =
-        LCS.union (UA.lifted_constants_still_to_be_placed uacc)
-          lifted_constants_from_defining_expr
+      let lifted_constants_from_body =
+        UA.lifted_constants_still_to_be_placed uacc
       in
-      let lifted_constants_to_place, uacc =
-        if place_lifted_constants_immediately then
-          let uacc =
-            UA.with_lifted_constants_still_to_be_placed uacc LCS.empty
-          in
-          lifted_constants_from_defining_expr_and_body, uacc
-        else
-          let uacc =
-            UA.with_lifted_constants_still_to_be_placed uacc
-              lifted_constants_from_defining_expr_and_body
-          in
-          LCS.empty, uacc
+      let no_constants_to_place =
+        LCS.is_empty lifted_constants_from_defining_expr
+          && LCS.is_empty lifted_constants_from_body
       in
       (* If there is nothing to place, avoid the closure allocations below. *)
-      if LCS.is_empty lifted_constants_to_place
-        || not place_lifted_constants_immediately
+      if no_constants_to_place || not place_lifted_constants_immediately
       then begin
+        let uacc =
+          UA.with_lifted_constants_still_to_be_placed uacc
+            (LCS.union lifted_constants_from_defining_expr
+              lifted_constants_from_body)
+        in
+        let body = Simplify_common.bind_let_bound ~bindings ~body in
         body, user_data, uacc
       end else begin
-        let fold_over_lifted_constants ~init ~f =
-          LCS.fold lifted_constants_to_place ~init
-            ~f:(fun acc lifted_const -> f acc (lifted_const, None))
-        in
-        let sorted_lifted_constants =
-          Sort_lifted_constants.sort ~fold_over_lifted_constants
-        in
-        let scoping_rule =
-          (* If this is a "normal" let rather than a "let symbol", then we
-             use [Dominator] scoping for any symbol bindings we place, as the
-             types of the symbols may have been used out of syntactic scope. *)
-          Option.value ~default:Symbol_scoping_rule.Dominator
-            (Bindable_let_bound.let_symbol_scoping_rule bindable_let_bound)
-        in
-        let body, r =
+        let place_constants r lifted_constants_to_place ~body =
+          let fold_over_lifted_constants ~init ~f =
+            LCS.fold lifted_constants_to_place ~init
+              ~f:(fun acc lifted_const -> f acc (lifted_const, None))
+          in
+          let sorted_lifted_constants =
+            Sort_lifted_constants.sort ~fold_over_lifted_constants
+          in
+          let scoping_rule =
+            (* If this is a "normal" let rather than a "let symbol", then we
+              use [Dominator] scoping for any symbol bindings we place, as the
+              types of the symbols may have been used out of syntactic scope. *)
+            Option.value ~default:Symbol_scoping_rule.Dominator
+              (Bindable_let_bound.let_symbol_scoping_rule bindable_let_bound)
+          in
           ListLabels.fold_left sorted_lifted_constants.bindings_outermost_last
-            ~init:(body, UA.r uacc) ~f:(fun (body, r) lifted_const ->
+            ~init:(body, r) ~f:(fun (body, r) lifted_const ->
               Simplify_common.create_let_symbol r scoping_rule
                 (UA.code_age_relation uacc) lifted_const body)
         in
-        assert (UA.no_lifted_constants_still_to_be_placed uacc);
+        let body, r =
+          place_constants (UA.r uacc) lifted_constants_from_body ~body
+        in
+        let body = Simplify_common.bind_let_bound ~bindings ~body in
+        let body, r =
+          place_constants r lifted_constants_from_defining_expr ~body
+        in
+        let uacc = UA.with_lifted_constants_still_to_be_placed uacc LCS.empty in
         body, user_data, UA.with_r uacc r
       end
     | Reified { definition; bound_symbol; static_const; r; } ->

@@ -346,6 +346,8 @@ let remove_unused_closure_vars r (static_const : Static_const.t)
   | Mutable_string _
   | Immutable_string _ -> static_const
 
+let _ = ignore create_let_symbol0
+
 let create_let_symbol r (scoping_rule : Symbol_scoping_rule.t)
       code_age_relation lifted_constant body =
   let bound_symbols = LC.bound_symbols lifted_constant in
@@ -356,7 +358,7 @@ let create_let_symbol r (scoping_rule : Symbol_scoping_rule.t)
     create_let_symbol0 r code_age_relation bound_symbols static_const body
   | Dominator ->
     let expr =
-      Expr.create_let_symbol bound_symbols Dominator static_const body
+      Expr.create_let_symbol bound_symbols scoping_rule static_const body
     in
     let r =
       R.remember_code_for_cmx r
