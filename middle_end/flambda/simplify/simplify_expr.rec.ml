@@ -111,7 +111,15 @@ let rec simplify_let
         let body = Simplify_common.bind_let_bound ~bindings ~body in
         body, user_data, uacc
       end else begin
-        let calculate_constants_to_place r lifted_constants_to_place ~body
+        let scoping_rule =
+          (* If this is a "normal" let rather than a "let symbol", then we
+             use [Dominator] scoping for any symbol bindings we place, as the
+             types of the symbols may have been used out of syntactic scope.
+          *)
+          Option.value ~default:Symbol_scoping_rule.Dominator
+            (Bindable_let_bound.let_symbol_scoping_rule bindable_let_bound)
+        in
+        let calculate_constants_to_place lifted_constants_to_place
               ~critical_deps ~to_float =
           let fold_over_lifted_constants ~init ~f =
             LCS.fold lifted_constants_to_place ~init
@@ -119,14 +127,6 @@ let rec simplify_let
           in
           let sorted_lifted_constants =
             Sort_lifted_constants.sort ~fold_over_lifted_constants
-          in
-          let scoping_rule =
-            (* If this is a "normal" let rather than a "let symbol", then we
-               use [Dominator] scoping for any symbol bindings we place, as the
-               types of the symbols may have been used out of syntactic scope.
-            *)
-            Option.value ~default:Symbol_scoping_rule.Dominator
-              (Bindable_let_bound.let_symbol_scoping_rule bindable_let_bound)
           in
           (* If we are at a [Dominator]-scoped binding then we float up
              as many constants as we can whose definitions are fully static
@@ -141,28 +141,38 @@ let rec simplify_let
           (* CR-soon mshinwell: This won't be needed once we can remove
              [Dominator]-scoped bindings; every "let symbol" can then have
              [Dominator] scoping. *)
-          let bindings_outermost_first =
-            List.rev sorted_lifted_constants.bindings_outermost_last
-          in
-          ListLabels.fold_left bindings_outermost_first
-            ~init:([], to_float, critical_deps)
-            ~f:(fun (to_place, to_float, critical_deps) lifted_const ->
-              let defining_expr = LC.defining_expr lifted_const in
-              if Static_const.is_fully_static defining_expr then
-                let must_place =
-                  Name_occurrences.inter_domain_is_non_empty critical_deps
-                    (Static_const.free_names defining_expr)
-                in
-                if must_place then
-                  lifted_const :: to_place, to_float, critical_deps
+          match scoping_rule with
+          | Syntactic ->
+            let to_place = sorted_lifted_constants.bindings_outermost_last in
+            to_place, to_float, critical_deps
+          | Dominator ->
+            let bindings_outermost_first =
+              List.rev sorted_lifted_constants.bindings_outermost_last
+            in
+            ListLabels.fold_left bindings_outermost_first
+              ~init:([], to_float, critical_deps)
+              ~f:(fun (to_place, to_float, critical_deps) lifted_const ->
+                let bound_symbols = LC.bound_symbols lifted_const in
+                let defining_expr = LC.defining_expr lifted_const in
+                if Static_const.is_fully_static defining_expr then
+                  let must_place =
+                    Name_occurrences.inter_domain_is_non_empty critical_deps
+                      (Static_const.free_names defining_expr)
+                  in
+                  if not must_place then
+                    to_place, LCS.add to_float lifted_const, critical_deps
+                  else
+                    let critical_deps =
+                      Name_occurrences.union critical_deps
+                        (Bound_symbols.free_names bound_symbols)
+                    in
+                    lifted_const :: to_place, to_float, critical_deps
                 else
-                  to_place, lifted_const :: to_float, critical_deps
-              else
-                let critical_deps =
-                  Name_occurrences.union critical_deps
-                    (Static_const.free_names defining_expr)
-                in
-                lifted_const :: to_place, to_float, critical_deps)
+                  let critical_deps =
+                    Name_occurrences.union critical_deps
+                      (Bound_symbols.free_names bound_symbols)
+                  in
+                  lifted_const :: to_place, to_float, critical_deps)
         in
         (* We handle constants arising from the defining expression, which
            may be used in [bindings], separately from those arising from the
@@ -170,28 +180,28 @@ let rec simplify_let
         let to_place_outermost_last_around_defining_expr, to_float,
             critical_deps =
           calculate_constants_to_place lifted_constants_from_defining_expr
-            ~body ~critical_deps:Name_occurrences.empty ~to_float:LCS.empty
+            ~critical_deps:Name_occurrences.empty ~to_float:LCS.empty
         in
         let to_place_outermost_last_around_body, to_float, _critical_deps =
           calculate_constants_to_place lifted_constants_from_body
-            ~body ~critical_deps ~to_float
+            ~critical_deps ~to_float
         in
         (* Propagate constants that are to float upwards. *)
         let uacc = UA.with_lifted_constants_still_to_be_placed uacc to_float in
         (* Place constants whose definitions must go at the current [Let]. *)
-        let place_constants r ~outermost_last =
+        let place_constants r ~around ~outermost_last =
           ListLabels.fold_left outermost_last
-            ~init:(body, r) ~f:(fun (body, r) lifted_const ->
+            ~init:(around, r) ~f:(fun (body, r) lifted_const ->
               Simplify_common.create_let_symbol r scoping_rule
                 (UA.code_age_relation uacc) lifted_const body)
         in
         let body, r =
-          place_constants (UA.uacc r)
+          place_constants (UA.r uacc) ~around:body
             ~outermost_last:to_place_outermost_last_around_body
         in
         let body = Simplify_common.bind_let_bound ~bindings ~body in
         let body, r =
-          place_constants r
+          place_constants r ~around:body
             ~outermost_last:to_place_outermost_last_around_defining_expr
         in
         body, user_data, UA.with_r uacc r
