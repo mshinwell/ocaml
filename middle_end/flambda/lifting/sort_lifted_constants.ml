@@ -62,14 +62,8 @@ let build_dep_graph ~fold_over_lifted_constants =
                 Static_const.Code_and_set_of_closures.free_names
                   code_and_set_of_closures
               in
-              match bound.denv with
-              | Some denv ->
-                let typing_env = Some (DE.typing_env denv) in
-                (free_names, typing_env) :: free_names_with_envs
-              | None ->
-                Misc.fatal_errorf "Missing [denv] in constant that defines \
-                    set(s) of closures:@ %a"
-                  LC.print lifted_constant)
+              let typing_env = Option.map DE.typing_env bound.denv in
+              (free_names, typing_env) :: free_names_with_envs)
       in
       let free_names_with_envs =
         match extra_deps with
