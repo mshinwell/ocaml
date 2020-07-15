@@ -564,6 +564,8 @@ end and Static_const : sig
       set_of_closures : Set_of_closures.t;
     }
 
+    val free_names : t -> Name_occurrences.t
+
     val map_code : t -> f:(Code_id.t -> Code.t -> Code.t) -> t
   end
 

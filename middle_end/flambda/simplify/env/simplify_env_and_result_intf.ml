@@ -297,15 +297,50 @@ module type Lifted_constant = sig
 
   type downwards_env
 
+  type for_one_set_of_closures = {
+    code_ids : Code_id.Set.t;
+    denv : downwards_env;
+    closure_symbols_with_types : (Symbol.t * Flambda_type.t) Closure_id.Lmap.t;
+  }
+
+  (* CR-soon mshinwell: Probably best to make this abstract. *)
+  type descr = private
+    | Singleton of {
+        denv : downwards_env;
+        symbol : Symbol.t;
+        ty : Flambda_type.t;
+        defining_expr : Flambda.Static_const.t;
+      }
+    | Sets_of_closures of {
+        sets : for_one_set_of_closures list;
+        defining_expr : Flambda.Static_const.t;
+      }
+
   type t
+
+  val descr : t -> descr
 
   val print : Format.formatter -> t -> unit
 
-  (** [create] takes the types of symbols to avoid re-inferring them. *)
-  val create
-     : Bound_symbols.t
+  (** The creation functions take the types of symbols to avoid re-inferring
+      them. *)
+  val create_singleton
+     : Symbol.t
     -> Flambda.Static_const.t
-    -> types_of_symbols:(downwards_env * Flambda_type.t) Symbol.Map.t
+    -> downwards_env
+    -> Flambda_type.t
+    -> t
+
+  val create_set_of_closures
+     : Code_id.Set.t
+    -> downwards_env
+    -> closure_symbols_with_types:(Symbol.t * Flambda_type.t) Closure_id.Lmap.t
+    -> Flambda.Static_const.t
+    -> t
+
+  val create_multiple_sets_of_closures
+     : for_one_set_of_closures list
+    -> Flambda.Static_const.t
     -> t
 
   val create_piece_of_code

@@ -34,15 +34,14 @@ let build_dep_graph ~fold_over_lifted_constants =
          (lifted_constant, extra_deps) ->
       (* Format.eprintf "One constant: %a\n%!" LC.print lifted_constant; *)
       let defining_expr = LC.defining_expr lifted_constant in
+      let descr = LC.descr lifted_constant in
       let bound_symbols = LC.bound_symbols lifted_constant in
-      let types_of_symbols = LC.types_of_symbols lifted_constant in
-      let bound_symbols_free_names = Bound_symbols.free_names bound_symbols in
       let free_names_with_envs =
         (* To avoid existing sets of closures (with or without associated
            code) being pulled apart, we add a dependency from each code ID
            or closure symbol being defined to all other code IDs and
            symbols bound by the same binding. *)
-        match bound_symbols with
+        match descr with
         | Singleton _ ->
           begin match Symbol.Map.get_singleton types_of_symbols with
           | Some (_sym, (denv, _typ)) ->
@@ -52,54 +51,26 @@ let build_dep_graph ~fold_over_lifted_constants =
                 [types_of_symbols] for lifted constant:@ %a"
               LC.print lifted_constant
           end
-        | Sets_of_closures bound ->
+        | Sets_of_closures { sets = bound; _ } ->
           let from_bound_symbols =
             (* We never need the environment of definition for symbols or
-               code IDs, only for variables (see below). *)
-            [bound_symbols_free_names, None]
+               code IDs, only for variables (see below), hence [None] here. *)
+            [Bound_symbols.free_names bound_symbols, None]
           in
-          let defining_expr =
-            Static_const.must_be_sets_of_closures defining_expr
-          in
-          ListLabels.fold_left2 bound defining_expr
+          ListLabels.fold_left2
+            bound
+            (Static_const.must_be_sets_of_closures defining_expr)
             ~init:from_bound_symbols
             ~f:(fun free_names_with_envs
-                    (bound : Bound_symbols.Code_and_set_of_closures.t)
+                    (bound : LC.for_one_set_of_closures)
                     (code_and_set_of_closures
                       : Static_const.Code_and_set_of_closures.t) ->
-              let closure_symbols = bound.closure_symbols in
-              let free_names_code =
-                Code_id.Lmap.fold (fun _code_id code free_names_code ->
-                    Name_occurrences.union free_names_code
-                      (Static_const.Code.free_names code))
-                  code_and_set_of_closures.code
-                  Name_occurrences.empty
-              in
-              let set_of_closures = code_and_set_of_closures.set_of_closures in
-              let free_names_set_of_closures =
-                Set_of_closures.free_names set_of_closures
-              in
               let free_names =
-                Name_occurrences.union free_names_code
-                  free_names_set_of_closures
+                Static_const.Code_and_set_of_closures.free_names
+                  code_and_set_of_closures
               in
-              (* Format.eprintf "All free_names:@ %a\n%!"
-                 Name_occurrences.print free_names; *)
-              Closure_id.Lmap.fold
-                (fun _closure_id closure_sym free_names_with_envs ->
-                  match Symbol.Map.find closure_sym types_of_symbols with
-                  | exception Not_found ->
-                    Misc.fatal_errorf "No environment and type given for \
-                        closure symbol %a"
-                      Symbol.print closure_sym
-                  | denv, _typ ->
-                    (* All of the closure symbols correspond to the same set
-                       of free names (the closure vars' free names in the
-                       set of closures). *)
-                    (free_names, Some (DE.typing_env denv))
-                      :: free_names_with_envs)
-                closure_symbols
-                free_names_with_envs)
+              let typing_env = Some (DE.typing_env bound.denv) in
+              (free_names, typing_env) :: free_names_with_envs)
       in
       let free_names_with_envs =
         match extra_deps with
@@ -208,66 +179,48 @@ let sort ~fold_over_lifted_constants =
           | No_loop code_id_or_symbol ->
             CIS.Map.find code_id_or_symbol code_id_or_symbol_to_const
           | Has_loop members ->
-            let _, types_of_symbols, sets_of_closures_bound_symbols,
-                code_and_sets_of_closures =
+            let _, for_all_sets_of_closures, code_and_sets_of_closures =
               List.fold_left
                 (fun ((defining_expr_already_seen,
-                       types_of_symbols_acc,
-                       sets_of_closures_bound_symbols_acc,
+                       for_one_set_of_closures_acc,
                        code_and_sets_of_closures_acc) as acc)
                      code_id_or_symbol ->
-                  if CIS.Set.mem code_id_or_symbol
-                       defining_expr_already_seen
+                  if CIS.Set.mem code_id_or_symbol defining_expr_already_seen
                   then acc
                   else
                     let lifted_constant =
                       CIS.Map.find code_id_or_symbol code_id_or_symbol_to_const
                     in
-                    let types_of_symbols =
-                      LC.types_of_symbols lifted_constant
-                    in
-                    let defining_expr = LC.defining_expr lifted_constant in
-                    let bound_symbols = LC.bound_symbols lifted_constant in
-                    (* We may encounter the same defining expression more
-                       than once (e.g. a set of closures via a code ID and
-                       a symbol), but we don't want duplicates in the result
-                       list. *)
                     let defining_expr_already_seen =
+                      (* We may encounter the same defining expression more
+                         than once (e.g. a set of closures via a code ID and
+                         a symbol), but we don't want duplicates in the result
+                         list. *)
+                      let bound_symbols = LC.bound_symbols lifted_constant in
                       CIS.Set.union
                         (Bound_symbols.everything_being_defined bound_symbols)
                         defining_expr_already_seen
                     in
-                    let sets_of_closures_bound_symbols =
-                      match (bound_symbols : Bound_symbols.t) with
+                    let for_one_set_of_closures =
+                      match LC.descr lifted_constant with
                       | Sets_of_closures sets -> sets
                       | Singleton _ ->
                         Misc.fatal_errorf "Code ID or symbol %a was involved@ \
                             in (non-closure) recursion that cannot be compiled"
                           CIS.print code_id_or_symbol
                     in
-                    let code_and_set_of_closures_list =
-                      Static_const.must_be_sets_of_closures defining_expr
-                    in
-                    let types_of_symbols =
-                      Symbol.Map.disjoint_union types_of_symbols
-                        types_of_symbols_acc
+                    let code_and_set_of_closures =
+                      Static_const.must_be_sets_of_closures
+                        (LC.defining_expr lifted_constant)
                     in
                     defining_expr_already_seen,
-                      types_of_symbols,
-                      sets_of_closures_bound_symbols
-                        @ sets_of_closures_bound_symbols_acc,
-                      code_and_set_of_closures_list
-                        @ code_and_sets_of_closures_acc)
-                (CIS.Set.empty, Symbol.Map.empty, [], [])
+                      for_one_set_of_closures @ for_one_set_of_closures_acc,
+                      code_and_set_of_closures @ code_and_sets_of_closures_acc)
+                (CIS.Set.empty, [], [])
                 members
             in
-            let bound_symbols : Bound_symbols.t =
-              Sets_of_closures sets_of_closures_bound_symbols
-            in
-            let defining_expr : Static_const.t =
-              Sets_of_closures code_and_sets_of_closures
-            in
-            LC.create bound_symbols defining_expr ~types_of_symbols
+            LC.create_multiple_sets_of_closures for_all_sets_of_closures
+              (Sets_of_closures code_and_sets_of_closures)
         in
         binding :: bindings)
       []

@@ -591,19 +591,13 @@ let simplify_and_lift_set_of_closures dacc ~closure_bound_vars_inverse
   in
   assert (Symbol.Set.cardinal closure_symbols_set
     = Closure_id.Map.cardinal closure_symbols_map);
-  let types_of_symbols =
+  let denv = DA.denv dacc in
+  let closure_symbols_with_types =
     Symbol.Set.fold (fun symbol types_of_symbols ->
-        let denv = DA.denv dacc in
         let typ = DE.find_symbol denv symbol in
-        Symbol.Map.add symbol (denv, typ) types_of_symbols)
+        Symbol.Map.add symbol typ types_of_symbols)
       closure_symbols_set
       Symbol.Map.empty
-  in
-  let bound_symbols : Bound_symbols.t =
-    Sets_of_closures [{
-      code_ids = Code_id.Lmap.keys code |> Code_id.Set.of_list;
-      closure_symbols;
-    }]
   in
   let static_const : SC.t =
     let code =
@@ -622,7 +616,11 @@ let simplify_and_lift_set_of_closures dacc ~closure_bound_vars_inverse
     }]
   in
   let set_of_closures_lifted_constant =
-    Lifted_constant.create bound_symbols static_const ~types_of_symbols
+    Lifted_constant.create_set_of_closures
+      (Code_id.Lmap.keys code |> Code_id.Set.of_list)
+      denv
+      ~closure_symbols_with_types
+      static_const
   in
   let dacc =
     DA.add_lifted_constant dacc set_of_closures_lifted_constant

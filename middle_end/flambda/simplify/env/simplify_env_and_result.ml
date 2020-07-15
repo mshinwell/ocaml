@@ -710,20 +710,69 @@ end and Lifted_constant : sig
   include I.Lifted_constant
     with type downwards_env := Downwards_env.t
 end = struct
-  type t = {
-    bound_symbols : Bound_symbols.t;
-    defining_expr : Static_const.t;
-    types_of_symbols : (Downwards_env.t * Flambda_type.t) Symbol.Map.t;
+  type for_one_set_of_closures = {
+    code_ids : Code_id.Set.t;
+    denv : downwards_env;
+    closure_symbols_with_types : (Symbol.t * Flambda_type.t) Closure_id.Lmap.t;
   }
 
+  type descr =
+    | Singleton of {
+        denv : downwards_env;
+        symbol : Symbol.t;
+        ty : Flambda_type.t;
+        defining_expr : Flambda.Static_const.t;
+      }
+    | Sets_of_closures of {
+        sets : for_one_set_of_closures list;
+        defining_expr : Flambda.Static_const.t;
+      }
+
+  type t = descr
+
+  let descr t = t
+
+  let bound_symbols t : Bound_symbols.t =
+    match t with
+    | Singleton { symbol; _ } = Singleton symbol
+    | Sets_of_closures sets ->
+      let sets =
+        ListLabels.map sets
+          ~f:(fun for_one_set : Bound_symbols.Code_and_set_of_closures.t ->
+            { code_ids = for_one_set.code_ids;
+              closure_symbols =
+                Closure_id.Lmap.map fst for_one_set.closure_symbols_with_types;
+            })
+      in
+      Sets_of_closures sets
+
+  let types_of_symbols t =
+    match t with
+    | Singleton { symbol; denv; ty; } ->
+      Symbol.Map.singleton symbol (denv, ty)
+    | Sets_of_closures { sets; _ } ->
+      ListLabels.fold_left sets ~init:Symbol.Map.empty
+        ~f:(fun types_of_symbols for_one_set ->
+          let denv = for_one_set.denv in
+          Closure_id.Lmap.fold (fun _closure_id (symbol, ty) types_of_symbols ->
+              Symbol.Map.add symbol (denv, ty) types_of_symbols)
+            for_one_set.closure_symbols_with_types
+            types_of_symbols)
+
+  let defining_expr t =
+    match t with
+    | Singleton { defining_expr; _ }
+    | Sets_of_closures { defining_expr; _ } -> defining_expr
+
+  (* CR-soon mshinwell: Update this to print everything *)
   let print ppf
         { bound_symbols; defining_expr; types_of_symbols = _; } =
     Format.fprintf ppf "@[<hov 1>(\
         @[<hov 1>(bound_symbols@ %a)@]@ \
         @[<hov 1>(static_const@ %a)@]\
         )@]"
-      Bound_symbols.print bound_symbols
-      Static_const.print defining_expr
+      Bound_symbols.print (bound_symbols t)
+      Static_const.print (defining_expr t)
 
   let create bound_symbols defining_expr ~types_of_symbols =
     let being_defined = Bound_symbols.being_defined bound_symbols in
@@ -740,6 +789,21 @@ end = struct
       defining_expr;
       types_of_symbols;
     }
+
+  let create_singleton symbol static_const denv ty =
+    let bound_symbols = Bound_symbols.Singleton symbol in
+    ...
+
+  let create_multiple_sets_of_closures sets defining_expr =
+    Sets_of_closures {
+      sets;
+      defining_expr;
+    }
+
+  let create_set_of_closures code_ids denv ~closure_symbols_with_types
+        static_const =
+    create_multiple_sets_of_closures
+      [{ code_ids; denv; closure_symbols_with_types; }]
 
   let create_pieces_of_code ?newer_versions_of code =
     let bound_symbols, defining_expr =
@@ -768,9 +832,6 @@ end = struct
       defining_expr;
       types_of_symbols = Symbol.Map.empty;
     }
-  let bound_symbols t = t.bound_symbols
-  let defining_expr t = t.defining_expr
-  let types_of_symbols t = t.types_of_symbols
 end and Lifted_constant_state : sig
   include I.Lifted_constant_state
     with type lifted_constant := Lifted_constant.t
