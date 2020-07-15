@@ -42,15 +42,8 @@ let build_dep_graph ~fold_over_lifted_constants =
            or closure symbol being defined to all other code IDs and
            symbols bound by the same binding. *)
         match descr with
-        | Singleton _ ->
-          begin match Symbol.Map.get_singleton types_of_symbols with
-          | Some (_sym, (denv, _typ)) ->
-            [Static_const.free_names defining_expr, Some (DE.typing_env denv)]
-          | None ->
-            Misc.fatal_errorf "Expected singleton entry in \
-                [types_of_symbols] for lifted constant:@ %a"
-              LC.print lifted_constant
-          end
+        | Singleton { denv; _ } ->
+          [Static_const.free_names defining_expr, Some (DE.typing_env denv)]
         | Sets_of_closures { sets = bound; _ } ->
           let from_bound_symbols =
             (* We never need the environment of definition for symbols or
@@ -69,8 +62,14 @@ let build_dep_graph ~fold_over_lifted_constants =
                 Static_const.Code_and_set_of_closures.free_names
                   code_and_set_of_closures
               in
-              let typing_env = Some (DE.typing_env bound.denv) in
-              (free_names, typing_env) :: free_names_with_envs)
+              match bound.denv with
+              | Some denv ->
+                let typing_env = Some (DE.typing_env denv) in
+                (free_names, typing_env) :: free_names_with_envs
+              | None ->
+                Misc.fatal_errorf "Missing [denv] in constant that defines \
+                    set(s) of closures:@ %a"
+                  LC.print lifted_constant)
       in
       let free_names_with_envs =
         match extra_deps with
@@ -203,7 +202,7 @@ let sort ~fold_over_lifted_constants =
                     in
                     let for_one_set_of_closures =
                       match LC.descr lifted_constant with
-                      | Sets_of_closures sets -> sets
+                      | Sets_of_closures { sets; _ } -> sets
                       | Singleton _ ->
                         Misc.fatal_errorf "Code ID or symbol %a was involved@ \
                             in (non-closure) recursion that cannot be compiled"

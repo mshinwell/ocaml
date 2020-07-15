@@ -593,11 +593,13 @@ let simplify_and_lift_set_of_closures dacc ~closure_bound_vars_inverse
     = Closure_id.Map.cardinal closure_symbols_map);
   let denv = DA.denv dacc in
   let closure_symbols_with_types =
-    Symbol.Set.fold (fun symbol types_of_symbols ->
+    Closure_id.Map.map (fun symbol ->
         let typ = DE.find_symbol denv symbol in
-        Symbol.Map.add symbol typ types_of_symbols)
-      closure_symbols_set
-      Symbol.Map.empty
+        symbol, typ)
+      closure_symbols_map
+    (* CR mshinwell: Add conversions between Map and Lmap *)
+    |> Closure_id.Map.to_seq
+    |> Closure_id.Lmap.of_seq
   in
   let static_const : SC.t =
     let code =

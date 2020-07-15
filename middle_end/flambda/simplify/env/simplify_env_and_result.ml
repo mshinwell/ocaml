@@ -712,13 +712,13 @@ end and Lifted_constant : sig
 end = struct
   type for_one_set_of_closures = {
     code_ids : Code_id.Set.t;
-    denv : downwards_env;
+    denv : Downwards_env.t option;
     closure_symbols_with_types : (Symbol.t * Flambda_type.t) Closure_id.Lmap.t;
   }
 
   type descr =
     | Singleton of {
-        denv : downwards_env;
+        denv : Downwards_env.t;
         symbol : Symbol.t;
         ty : Flambda_type.t;
         defining_expr : Flambda.Static_const.t;
@@ -734,8 +734,8 @@ end = struct
 
   let bound_symbols t : Bound_symbols.t =
     match t with
-    | Singleton { symbol; _ } = Singleton symbol
-    | Sets_of_closures sets ->
+    | Singleton { symbol; _ } -> Singleton symbol
+    | Sets_of_closures { sets; _ } ->
       let sets =
         ListLabels.map sets
           ~f:(fun for_one_set : Bound_symbols.Code_and_set_of_closures.t ->
@@ -746,27 +746,13 @@ end = struct
       in
       Sets_of_closures sets
 
-  let types_of_symbols t =
-    match t with
-    | Singleton { symbol; denv; ty; } ->
-      Symbol.Map.singleton symbol (denv, ty)
-    | Sets_of_closures { sets; _ } ->
-      ListLabels.fold_left sets ~init:Symbol.Map.empty
-        ~f:(fun types_of_symbols for_one_set ->
-          let denv = for_one_set.denv in
-          Closure_id.Lmap.fold (fun _closure_id (symbol, ty) types_of_symbols ->
-              Symbol.Map.add symbol (denv, ty) types_of_symbols)
-            for_one_set.closure_symbols_with_types
-            types_of_symbols)
-
   let defining_expr t =
     match t with
     | Singleton { defining_expr; _ }
     | Sets_of_closures { defining_expr; _ } -> defining_expr
 
   (* CR-soon mshinwell: Update this to print everything *)
-  let print ppf
-        { bound_symbols; defining_expr; types_of_symbols = _; } =
+  let print ppf t =
     Format.fprintf ppf "@[<hov 1>(\
         @[<hov 1>(bound_symbols@ %a)@]@ \
         @[<hov 1>(static_const@ %a)@]\
@@ -774,45 +760,61 @@ end = struct
       Bound_symbols.print (bound_symbols t)
       Static_const.print (defining_expr t)
 
-  let create bound_symbols defining_expr ~types_of_symbols =
-    let being_defined = Bound_symbols.being_defined bound_symbols in
-    if not (Symbol.Set.equal (Symbol.Map.keys types_of_symbols) being_defined)
-    then begin
-      Misc.fatal_errorf "[types_of_symbols]:@ %a@ does not cover all symbols \
-          in the definition:@ %a"
-        (Symbol.Map.print T.print) (Symbol.Map.map snd types_of_symbols)
-        Bound_symbols.print bound_symbols
-    end;
-    (* CR mshinwell: This should check that [defining_expr] matches
-       [bound_symbols] in the code/set-of-closures case *)
-    { bound_symbols;
+  let types_of_symbols t =
+    match t with
+    | Singleton { symbol; denv; ty; _ } ->
+      Symbol.Map.singleton symbol (denv, ty)
+    | Sets_of_closures { sets; _ } ->
+      ListLabels.fold_left sets ~init:Symbol.Map.empty
+        ~f:(fun types_of_symbols for_one_set ->
+          let denv = for_one_set.denv in
+          Closure_id.Lmap.fold (fun _closure_id (symbol, ty) types_of_symbols ->
+              match denv with
+              | Some denv -> Symbol.Map.add symbol (denv, ty) types_of_symbols
+              | None ->
+                Misc.fatal_errorf "Missing denv:@ %a" print t)
+            for_one_set.closure_symbols_with_types
+            types_of_symbols)
+
+  let create_singleton symbol defining_expr denv ty =
+    (* CR mshinwell: check that [defining_expr] is not a set of closures *)
+    Singleton {
+      symbol;
+      denv;
+      ty;
       defining_expr;
-      types_of_symbols;
     }
 
-  let create_singleton symbol static_const denv ty =
-    let bound_symbols = Bound_symbols.Singleton symbol in
-    ...
-
   let create_multiple_sets_of_closures sets defining_expr =
+    (* CR mshinwell: Check that [sets] matches [defining_expr] and
+       that [defining_expr] is a set of closures *)
     Sets_of_closures {
       sets;
       defining_expr;
     }
 
   let create_set_of_closures code_ids denv ~closure_symbols_with_types
-        static_const =
+        defining_expr =
     create_multiple_sets_of_closures
-      [{ code_ids; denv; closure_symbols_with_types; }]
+      [{ code_ids; denv = Some denv; closure_symbols_with_types; }]
+      defining_expr
 
   let create_pieces_of_code ?newer_versions_of code =
+    (* CR mshinwell: Avoid going via [pieces_of_code]? *)
     let bound_symbols, defining_expr =
       Flambda.pieces_of_code ?newer_versions_of code
     in
-    { bound_symbols;
-      defining_expr;
-      types_of_symbols = Symbol.Map.empty;
-    }
+    match bound_symbols with
+    | Sets_of_closures [{ code_ids; closure_symbols; }] ->
+      assert (Closure_id.Lmap.is_empty closure_symbols);
+      create_multiple_sets_of_closures
+        [{ code_ids;
+           denv = None;
+           closure_symbols_with_types = Closure_id.Lmap.empty;
+         }]
+        defining_expr
+    | Sets_of_closures _
+    | Singleton _ -> Misc.fatal_error "Expected singleton [Sets_of_closures]"
 
   let create_piece_of_code ?newer_version_of code_id params_and_body =
     let newer_versions_of =
@@ -824,14 +826,22 @@ end = struct
       (Code_id.Lmap.singleton code_id params_and_body)
 
   let create_deleted_piece_of_code ?newer_versions_of code_id =
+    (* CR mshinwell: Avoid going via [deleted_pieces_of_code]? *)
     let bound_symbols, defining_expr =
       Flambda.deleted_pieces_of_code ?newer_versions_of
         (Code_id.Set.singleton code_id)
     in
-    { bound_symbols;
-      defining_expr;
-      types_of_symbols = Symbol.Map.empty;
-    }
+    match bound_symbols with
+    | Sets_of_closures [{ code_ids; closure_symbols; }] ->
+      assert (Closure_id.Lmap.is_empty closure_symbols);
+      create_multiple_sets_of_closures
+        [{ code_ids;
+           denv = None;
+           closure_symbols_with_types = Closure_id.Lmap.empty;
+         }]
+        defining_expr
+    | Sets_of_closures _
+    | Singleton _ -> Misc.fatal_error "Expected singleton [Sets_of_closures]"
 end and Lifted_constant_state : sig
   include I.Lifted_constant_state
     with type lifted_constant := Lifted_constant.t

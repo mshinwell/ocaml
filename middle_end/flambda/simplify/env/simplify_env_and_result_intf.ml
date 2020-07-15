@@ -299,7 +299,7 @@ module type Lifted_constant = sig
 
   type for_one_set_of_closures = {
     code_ids : Code_id.Set.t;
-    denv : downwards_env;
+    denv : downwards_env option;
     closure_symbols_with_types : (Symbol.t * Flambda_type.t) Closure_id.Lmap.t;
   }
 

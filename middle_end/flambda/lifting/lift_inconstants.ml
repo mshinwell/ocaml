@@ -44,13 +44,10 @@ let lift_non_closure_discovered_via_reified_continuation_param_types dacc
       DA.map_r dacc ~f:(fun r ->
         R.consider_constant_for_sharing r symbol static_const)
     in
-    let types_of_symbols =
-      (* The environment in this mapping may be used by
-         [Sort_lifted_constants], but the type will not be. *)
-      Symbol.Map.singleton symbol (DA.denv dacc, T.any_value ())
-    in
     let lifted_constant =
-      LC.create (Singleton symbol) static_const ~types_of_symbols
+      (* The environment here may be used by [Sort_lifted_constants], but the
+         type will not be. *)
+      LC.create_singleton symbol static_const (DA.denv dacc) (T.any_value ())
     in
     let reified_definitions = (lifted_constant, None) :: reified_definitions in
     let reified_continuation_params_to_symbols =
@@ -123,20 +120,6 @@ let lift_set_of_closures_discovered_via_reified_continuation_param_types dacc
           closure_symbols
           denv)
     in
-    let definition =
-      (* We don't need to assign new code IDs, since we're not changing the
-         code. The code will actually be re-simplified (when we reach the new
-         [Let_symbol] bindings)---at that point, new code IDs may well be
-         assigned. (That is also the point at which references to the closures
-         being lifted, via the continuation's parameters, will be changed to go
-         via symbols.)  See long comment above concerning subtle point
-         relating to dependencies that might be exposed during such
-         simplification. *)
-      Flambda.pieces_of_code
-        ~newer_versions_of:Code_id.Map.empty
-        ~set_of_closures:(closure_symbols, set_of_closures)
-        Code_id.Lmap.empty
-    in
     (* This reification process will result in [Let_symbol] bindings containing
        closure symbol definitions but no code.  The code will be simplified
        when each such [Let_symbol] binding (occurring around the handler of the
@@ -174,18 +157,27 @@ let lift_set_of_closures_discovered_via_reified_continuation_param_types dacc
         closure_vars
         Name_occurrences.empty
     in
-    let types_of_symbols =
+    let closure_symbols_with_types =
       (* The environments in this mapping may be used by
          [Sort_lifted_constants], but the types will not be. *)
-      Closure_id.Lmap.fold (fun _closure_id closure_symbol types_of_symbols ->
-          Symbol.Map.add closure_symbol
-            (DA.denv dacc, T.any_value ())
-          types_of_symbols)
+      Closure_id.Lmap.map (fun closure_symbol -> closure_symbol, T.any_value ())
         closure_symbols
-        Symbol.Map.empty
     in
     let lifted_constant =
-      LC.create (fst definition) (snd definition) ~types_of_symbols
+      (* We don't need to assign new code IDs, since we're not changing the
+         code. The code will actually be re-simplified (when we reach the new
+         [Let_symbol] bindings)---at that point, new code IDs may well be
+         assigned. (That is also the point at which references to the closures
+         being lifted, via the continuation's parameters, will be changed to go
+         via symbols.)  See long comment above concerning subtle point
+         relating to dependencies that might be exposed during such
+         simplification. *)
+      LC.create_set_of_closures Code_id.Set.empty (DA.denv dacc)
+        ~closure_symbols_with_types
+        (Sets_of_closures [{
+          code = Code_id.Lmap.empty;
+          set_of_closures;
+        }])
     in
     let reified_definitions =
       (lifted_constant, Some (DA.denv dacc, extra_deps)) :: reified_definitions
