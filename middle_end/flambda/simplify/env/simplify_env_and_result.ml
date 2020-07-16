@@ -848,15 +848,17 @@ end and Lifted_constant_state : sig
 end = struct
   type t =
     | Empty
-    | Leaf of Lifted_constant.t list
+    | Leaf of Lifted_constant.t
     | Union of t * t
+    | Union_leaf of t * Lifted_constant.t
 
   let to_list t =
     let rec to_list t acc =
       match t with
       | Empty -> acc
-      | Leaf consts -> consts @ acc
+      | Leaf const -> const :: acc
       | Union (t1, t2) -> to_list t1 (to_list t2 acc)
+      | Union_leaf (t, const) -> to_list t (const :: acc)
     in
     to_list t []
 
@@ -867,20 +869,27 @@ end = struct
 
   let empty = Empty
 
-  let union t1 t2 = Union (t1, t2)
+  let union t1 t2 =
+    match t1, t2 with
+    | Empty, _ -> t2
+    | _, Empty -> t1
+    | Leaf const, (Union _ | Union_leaf _) -> Union_leaf (t2, const)
+    | (Union _ | Union_leaf _), Leaf const -> Union_leaf (t1, const)
+    | (Leaf _ | Union _ | Union_leaf _), _ -> Union (t1, t2)
 
   let is_empty t =
     match t with
     | Empty -> true
-    | Leaf _ | Union _ -> false
+    | Leaf _ | Union _ | Union_leaf _ -> false
 
-  let singleton const = Leaf [const]
+  let singleton const = Leaf const
 
-  let add t const = Union (t, Leaf [const])
+  let add t const = Union (t, Leaf const)
 
   let rec fold t ~init ~f =
     match t with
     | Empty -> init
-    | Leaf consts -> ListLabels.fold_left consts ~init ~f
+    | Leaf const -> f init const
     | Union (t1, t2) -> fold t2 ~init:(fold t1 ~init ~f) ~f
+    | Union_leaf (t, const) -> f (fold t ~init ~f) const
 end
