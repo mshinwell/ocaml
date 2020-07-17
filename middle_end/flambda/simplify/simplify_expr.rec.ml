@@ -917,14 +917,19 @@ and simplify_direct_partial_application
     let closure_elements =
       Var_within_closure.Map.of_list applied_args_with_closure_vars
     in
-    (* We should not add the piece of code as a lifted constant, or we
-       will break the invariant in [simplify_let], about the lifted
-       constants memory being empty.  A new piece of code, with
-       associated lifted constant, will always be generated when the [Let]
-       we generate below is simplified. *)
+    let dummy_code =
+      (* We should not add the real piece of code as a lifted constant.
+         A new piece of code will always be generated when the [Let] we
+         generate below is simplified.  As such we can simply add a lifted
+         constant identifying deleted code.  This will ensure, if for some
+         reason the constant makes it to Cmm stage, that code size is not
+         increased unnecessarily. *)
+      Lifted_constant.create_deleted_piece_of_code code_id
+    in
     let code = Lifted_constant.create_piece_of_code code_id params_and_body in
     let dacc =
-      DA.map_denv dacc ~f:(fun denv -> DE.add_lifted_constant denv code)
+      DA.add_lifted_constant dacc dummy_code
+      |> DA.map_denv ~f:(fun denv -> DE.add_lifted_constant denv code)
     in
     Set_of_closures.create function_decls ~closure_elements, dacc
   in
