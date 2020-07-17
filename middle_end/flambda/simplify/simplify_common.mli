@@ -78,9 +78,9 @@ val bind_let_bound
        given [r].  Such [r] must have seen all uses in the whole
        compilation unit. *)
 val create_let_symbol
-   : Simplify_env_and_result.Result.t
+   : Upwards_acc.t
   -> Symbol_scoping_rule.t
   -> Code_age_relation.t
   -> Simplify_env_and_result.Lifted_constant.t
   -> Flambda.Expr.t
-  -> Flambda.Expr.t * Simplify_env_and_result.Result.t
+  -> Flambda.Expr.t * Upwards_acc.t

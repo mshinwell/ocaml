@@ -660,12 +660,10 @@ end = struct
       get_imported_names : I.get_imported_names;
       shareable_constants : Symbol.t Static_const.Map.t;
       used_closure_vars : Var_within_closure.Set.t;
-      all_code : Exported_code.t;
     }
 
   let print ppf { resolver = _; get_imported_names = _;
                   shareable_constants; used_closure_vars;
-                  all_code = _;
                 } =
     Format.fprintf ppf "@[<hov 1>(\
         @[<hov 1>(shareable_constants@ %a)@]@ \
@@ -679,7 +677,6 @@ end = struct
       get_imported_names;
       shareable_constants = Static_const.Map.empty;
       used_closure_vars = Var_within_closure.Set.empty;
-      all_code = Exported_code.empty;
     }
 
   let find_shareable_constant t static_const =
@@ -700,12 +697,6 @@ end = struct
     }
 
   let used_closure_vars t = t.used_closure_vars
-
-  let remember_code_for_cmx t code =
-    let all_code = Exported_code.add_code code t.all_code in
-    { t with all_code; }
-
-  let all_code t = t.all_code
 end and Lifted_constant : sig
   include I.Lifted_constant
     with type downwards_env := Downwards_env.t

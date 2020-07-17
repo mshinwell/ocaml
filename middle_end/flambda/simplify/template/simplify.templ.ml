@@ -90,10 +90,9 @@ let run ~backend ~round unit =
       ~return_arity:[K.value] exn_continuation ~return_cont_scope
       ~exn_cont_scope
   in
-  let r = UA.r uacc in
   let return_cont_env = DA.continuation_uses_env dacc in
   let all_code =
-    Exported_code.merge (R.all_code r)
+    Exported_code.merge (UA.all_code uacc)
       (Exported_code.mark_as_imported !imported_code)
   in
   let used_closure_vars = R.used_closure_vars r in

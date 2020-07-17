@@ -197,22 +197,22 @@ let rec simplify_let
         (* Propagate constants that are to float upwards. *)
         let uacc = UA.with_lifted_constants_still_to_be_placed uacc to_float in
         (* Place constants whose definitions must go at the current [Let]. *)
-        let place_constants r ~around ~outermost_last =
+        let place_constants uacc ~around ~outermost_last =
           ListLabels.fold_left outermost_last
-            ~init:(around, r) ~f:(fun (body, r) lifted_const ->
-              Simplify_common.create_let_symbol r scoping_rule
+            ~init:(around, uacc) ~f:(fun (body, uacc) lifted_const ->
+              Simplify_common.create_let_symbol uacc scoping_rule
                 (UA.code_age_relation uacc) lifted_const body)
         in
-        let body, r =
-          place_constants (UA.r uacc) ~around:body
+        let body, uacc =
+          place_constants uacc ~around:body
             ~outermost_last:to_place_outermost_last_around_body
         in
         let body = Simplify_common.bind_let_bound ~bindings ~body in
-        let body, r =
-          place_constants r ~around:body
+        let body, uacc =
+          place_constants uacc ~around:body
             ~outermost_last:to_place_outermost_last_around_defining_expr
         in
-        body, user_data, UA.with_r uacc r
+        body, user_data, uacc
       end
     | Reified { definition; bound_symbol; static_const; r; } ->
       if place_lifted_constants_immediately then begin
@@ -836,7 +836,7 @@ and simplify_direct_partial_application
   let wrapper_closure_id =
     Closure_id.wrap compilation_unit (Variable.create "partial_app_closure")
   in
-  let wrapper_taking_remaining_args, dacc =
+  let wrapper_taking_remaining_args, dacc, dummy_code =
     let return_continuation = Continuation.create () in
     let remaining_params =
       List.map (fun kind ->
@@ -918,7 +918,7 @@ and simplify_direct_partial_application
       Var_within_closure.Map.of_list applied_args_with_closure_vars
     in
     let dummy_code =
-      (* We should not add the real piece of code as a lifted constant.
+      (* We should not add the real piece of code in the lifted constant.
          A new piece of code will always be generated when the [Let] we
          generate below is simplified.  As such we can simply add a lifted
          constant identifying deleted code.  This will ensure, if for some
@@ -931,7 +931,7 @@ and simplify_direct_partial_application
       DA.add_lifted_constant dacc dummy_code
       |> DA.map_denv ~f:(fun denv -> DE.add_lifted_constant denv code)
     in
-    Set_of_closures.create function_decls ~closure_elements, dacc
+    Set_of_closures.create function_decls ~closure_elements, dacc, dummy_code
   in
   let apply_cont =
     Apply_cont.create apply_continuation
@@ -947,7 +947,9 @@ and simplify_direct_partial_application
       (Named.create_set_of_closures wrapper_taking_remaining_args)
       (Expr.create_apply_cont apply_cont)
   in
-  simplify_expr dacc expr k
+  let expr, user_data, uacc = simplify_expr dacc expr k in
+  let uacc = UA.add_lifted_constant_still_to_be_placed uacc dummy_code in
+  expr, user_data, uacc
 
 (* CR mshinwell: Should it be an error to encounter a non-direct application
    of a symbol after [Simplify]? This shouldn't usually happen, but I'm not 100%

@@ -279,13 +279,6 @@ module type Result = sig
 
   val consider_constant_for_sharing : t -> Symbol.t -> Static_const.t -> t
 
-  val remember_code_for_cmx
-     : t
-    -> Flambda.Function_params_and_body.t Code_id.Map.t
-    -> t
-
-  val all_code : t -> Exported_code.t
-
   val add_use_of_closure_var : t -> Var_within_closure.t -> t
 
   val used_closure_vars : t -> Var_within_closure.Set.t

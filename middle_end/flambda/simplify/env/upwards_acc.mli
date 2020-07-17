@@ -42,6 +42,11 @@ val lifted_constants_still_to_be_placed
    : t
   -> Simplify_env_and_result.Lifted_constant_state.t
 
+val add_lifted_constant_still_to_be_placed
+   : t
+  -> Simplify_env_and_result.Lifted_constant.t
+  -> t
+
 (** Replace the accumulator of lifted constants returned by
     [lifted_constants_still_to_be_placed]. *)
 val with_lifted_constants_still_to_be_placed
@@ -73,3 +78,10 @@ val r : t -> Simplify_env_and_result.Result.t
 
 (** Replace the result structure of the given downwards accumulator. *)
 val with_r : t -> Simplify_env_and_result.Result.t -> t
+
+val remember_code_for_cmx
+    : t
+  -> Flambda.Function_params_and_body.t Code_id.Map.t
+  -> t
+
+val all_code : t -> Exported_code.t
