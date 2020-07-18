@@ -741,7 +741,7 @@ method emit_expr (env:environment) exp =
               self#insert_debug env (Iop new_op) dbg loc_arg loc_res;
               self#insert_move_results env loc_res rd stack_ofs;
               Some rd
-          | Iextcall { ty_res; ty_args; _} ->
+          | Iextcall { ty_args; _} ->
               let spacetime_reg =
                 self#about_to_emit_call env (Iop new_op) [| |] dbg in
               let (loc_arg, stack_ofs) =
@@ -750,7 +750,7 @@ method emit_expr (env:environment) exp =
               let rd = self#regs_for ty in
               let loc_res =
                 self#insert_op_debug env new_op dbg
-                  loc_arg (Proc.loc_external_results ty_res) in
+                  loc_arg (Proc.loc_external_results (Reg.typv rd)) in
               self#insert_move_results env loc_res rd stack_ofs;
               Some rd
           | Ialloc { bytes = _; spacetime_index; label_after_call_gc; } ->
