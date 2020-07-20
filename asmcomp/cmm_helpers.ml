@@ -805,7 +805,7 @@ let make_alloc_generic set_fn dbg tag wordsize args =
     | e1::el -> Csequence(set_fn (Cvar id) (Cconst_int (idx, dbg)) e1 dbg,
                           fill_fields (idx + 2) el) in
     Clet(VP.create id,
-         Cop(Cextcall("caml_alloc", typ_val, [XInt;XInt], true, None),
+         Cop(Cextcall("caml_alloc", typ_val, [], true, None),
                  [Cconst_int (wordsize, dbg); Cconst_int (tag, dbg)], dbg),
          fill_fields 1 args)
   end
@@ -2158,7 +2158,7 @@ let bbswap bi arg dbg =
       dbg)
 
 let bswap16 arg dbg =
-  (Cop(Cextcall("caml_bswap16_direct", typ_int, [XInt], false, None),
+  (Cop(Cextcall("caml_bswap16_direct", typ_int, [], false, None),
        [arg],
        dbg))
 

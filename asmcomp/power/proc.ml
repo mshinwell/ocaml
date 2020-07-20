@@ -132,6 +132,7 @@ let loc_int_pair last_int make_stack int ofs =
     int := !int + 2;
     [| reg_lower; reg_upper |]
   end else begin
+    (* CR mshinwell: maybe assert size_int = 4 *)
     let size_int64 = size_int * 2 in
     ofs := Misc.align !ofs size_int64;
     let stack_lower = stack_slot (make_stack !ofs) Int in
@@ -216,7 +217,7 @@ let external_calling_conventions
             assert (not reg_use_stack);
             loc.(i) <- loc_int_pair last_int make_stack int ofs
           end else
-            loc.(i) <- 
+            loc.(i) <-
               [| loc_int last_int make_stack reg_use_stack int ofs |]
       | XFloat ->
         loc.(i) <-

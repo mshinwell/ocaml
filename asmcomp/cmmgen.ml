@@ -746,7 +746,8 @@ and transl_ccall env prim args dbg =
           match bi with
           | Pnativeint -> XInt
           | Pint32 -> XInt32
-          | Pint64 -> XInt64 in
+          | Pint64 -> XInt64
+        in
         (xty, transl_unbox_int dbg env bi arg)
     | Untagged_int ->
         (XInt, untag_int (transl env arg) dbg)

@@ -255,6 +255,7 @@ method select_logical op = function
   | args ->
       (Iintop op, args)
 
+(* CR mshinwell: use a match for ty_arg *)
 method! insert_move_extcall_arg env ty_arg src dst =
   if macosx && ty_arg = XInt32 && is_stack_slot dst
   then self#insert env (Iop (Ispecific Imove32)) src dst

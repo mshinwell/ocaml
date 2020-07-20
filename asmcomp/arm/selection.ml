@@ -179,8 +179,9 @@ method select_shift_arith op dbg arithop arithrevop args =
       | op_args -> op_args
       end
 
+(* CR mshinwell: reverse args/res *)
 method private iextcall func ty_res ty_args =
-  Iextcall { func; ty_res; ty_args; 
+  Iextcall { func; ty_res; ty_args;
              alloc = false; label_after = Cmm.new_label (); }
 
 method! select_operation op args dbg =

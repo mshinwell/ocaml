@@ -71,9 +71,9 @@ val ge_component
 type exttype =
   | XInt                                (**r OCaml value, word-sized integer *)
   | XInt32                              (**r 32-bit integer *)
-  | XInt64                              (**r 64-bit integer  *)
-  | XFloat                             (**r double-precision FP number  *)
-(** A variant of [machtype] used to describe arguments 
+  | XInt64                              (**r 64-bit integer *)
+  | XFloat                              (**r double-precision FP number *)
+(** A variant of [machtype] used to describe arguments
     to external C functions *)
 
 val machtype_of_exttype: exttype -> machtype

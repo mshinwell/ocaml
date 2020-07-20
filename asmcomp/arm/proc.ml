@@ -195,7 +195,7 @@ let loc_results res =
      remaining args on stack.
    Return values in r0, r0-r1, or d0. *)
 
-let external_calling_conventions first_int last_int first_float last_float 
+let external_calling_conventions first_int last_int first_float last_float
                                  make_stack ty_args =
   let loc = Array.make (List.length ty_args) [| Reg.dummy |] in
   let int = ref first_int in
