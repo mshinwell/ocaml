@@ -95,6 +95,7 @@ let run ~backend ~round unit =
     Exported_code.merge (UA.all_code uacc)
       (Exported_code.mark_as_imported !imported_code)
   in
+  let r = UA.r uacc in
   let used_closure_vars = R.used_closure_vars r in
   let cmx =
     Flambda_cmx.prepare_cmx_file_contents ~return_cont_env
