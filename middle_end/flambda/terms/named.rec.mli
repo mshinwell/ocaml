@@ -27,7 +27,8 @@ type t = private
   | Set_of_closures of Set_of_closures.t
     (** Definition of a set of (dynamically allocated) possibly
         mutually-recursive closures. *)
-  | Static_const of Static_const.t
+  | Static_const of Static_const.t list
+    (* CR mshinwell: Add comment regarding ordering, recursion, etc. *)
     (** Definition of one or more symbols representing statically-allocated
         constants (including sets of closures). *)
 

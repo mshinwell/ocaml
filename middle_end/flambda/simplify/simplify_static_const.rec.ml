@@ -152,16 +152,104 @@ let simplify_static_const_of_kind_value dacc
         [Singleton] binding:@ %a"
       SC.print static_const
 
-let simplify_static_const dacc (bound_symbols : Bound_symbols.t)
-      (static_const : SC.t) : Bound_symbols.t * SC.t * DA.t =
-  match bound_symbols with
-  | Singleton result_sym ->
-    let static_const, dacc =
-      simplify_static_const_of_kind_value dacc static_const ~result_sym
-    in
-    bound_symbols, static_const, dacc
-  | Sets_of_closures bound_symbols' ->
-    let sets = SC.must_be_sets_of_closures static_const in
+let simplify_static_consts dacc (bound_symbols : Bound_symbols.t)
+      (static_consts : SC.t list) : Bound_symbols.t * SC.t list * DA.t =
+  let bound_symbols_list = Bound_symbols.to_list bound_symbols in
+  if List.compare_lengths bound_symbols_list static_consts <> 0 then begin
+    Misc.fatal_errorf "Bound symbols don't match static constants:@ %a@ =@ %a"
+      Bound_symbols.print bound_symbols
+      (Format.pp_print_list ~pp_sep:Format.pp_print_space SC.print)
+      static_consts
+  end;
+  (* The closure symbols are bound recursively across all of the
+     definitions.  We can start by giving these type [Unknown], since
+     simplification of the constants that are neither pieces of code nor
+     closures will not look at the structure of these closure symbols'
+     definitions. *)
+  let dacc =
+    ListLabels.fold_left2 bound_symbols_list static_consts
+      ~init:dacc
+      ~f:(fun dacc pattern static_const ->
+        Static_const.match_against_bound_symbols_pattern static_const pattern
+          ~set_of_closures:(fun ~closure_symbols _ ->
+            Closure_id.Lmap.fold (fun _ closure_symbol dacc ->
+                DA.with_denv dacc
+                  (DE.define_symbol (DA.denv dacc) closure_symbol K.value))
+              closure_symbols
+              dacc)
+          ~code:(fun _ -> dacc)
+          ~other:(fun _ -> dacc))
+  in
+  (* Next we simplify all the constants that are not closures.  The ordering
+     of the bindings is respected.  This step also adds code into the
+     environment.  We can do that here because we're not simplifying the code
+     (which may contain recursive references to symbols and/or code IDs
+     being defined). *)
+  let bound_symbols, static_consts, dacc =
+    ListLabels.fold_left2 bound_symbols_list static_consts
+      ~init:([], [], dacc)
+      ~f:(fun ((bound_symbols, static_consts, dacc) as acc)
+              (pattern : Bound_symbols.Pattern.t) static_const ->
+        Static_const.match_against_bound_symbols_pattern static_const pattern
+          ~code:(fun code ->
+            let dacc =
+              Code_id.Lmap.fold
+                (fun code_id
+                     ({ params_and_body; newer_version_of; } : SC.Code.t)
+                     dacc ->
+                  let define_code denv =
+                    match params_and_body with
+                    | Deleted -> denv
+                    | Present params_and_body ->
+                      DE.define_code denv ?newer_version_of ~code_id
+                        ~params_and_body
+                  in
+                  DA.map_denv dacc ~f:define_code)
+                code
+                dacc
+            in
+            pattern :: bound_symbols,
+              static_const :: static_consts,
+              dacc)
+          ~set_of_closures:(fun ~closure_symbols:_ _ -> acc)
+          ~other:(fun symbol static_const ->
+            let static_const, dacc =
+              simplify_static_const_of_kind_value dacc static_const ~result_sym
+            in
+            pattern :: bound_symbols,
+              static_const :: static_consts,
+              dacc))
+  in
+  (* We now collect together all of the closures, from all of the sets
+     being defined, and simplify them together. *)
+  let closure_bound_names_all_sets, sets_of_closures =
+    ListLabels.fold_left2 bound_symbols_list static_consts
+      ~init:(Closure_id.Map.empty, [])
+      ~f:(fun ((closure_bound_names_all_sets, sets_of_closures) as acc)
+              (pattern : Bound_symbols.Pattern.t) static_const ->
+        Static_const.match_against_bound_symbols_pattern static_const pattern
+          ~set_of_closures:(fun ~closure_symbols set_of_closures ->
+            let closure_bound_names_all_sets =
+              Closure_id.Lmap.fold
+                (fun closure_id symbol closure_bound_names_all_sets ->
+                  Closure_id.Map.add closure_id
+                    (Name_in_binding_pos.symbol symbol)
+                  closure_bound_names_all_sets)
+                closure_symbols
+                closure_bound_names
+            in
+            closure_bound_names_all_sets,
+              (closure_symbols, set_of_closures) :: sets_of_closures)
+          ~code:(fun _ -> acc)
+          ~other:(fun _ _ -> acc))
+  in
+  let bound_symbols', static_consts', dacc =
     Simplify_set_of_closures.simplify_lifted_sets_of_closures dacc
-      ~orig_bound_symbols:bound_symbols ~orig_static_const:static_const
-      bound_symbols' sets
+      ~all_sets_of_closures ~closure_symbols_all_sets
+      ~closure_bound_names_all_sets
+  in
+  (* The ordering of these lists doesn't matter as they will go through
+     [Sort_lifted_constants] before the terms are constructed. *)
+  Bound_symbols.create (bound_symbols @ bound_symbols'),
+    static_consts @ static_consts',
+    dacc

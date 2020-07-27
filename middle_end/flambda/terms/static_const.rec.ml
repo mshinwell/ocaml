@@ -689,10 +689,11 @@ let can_share0 t =
 let can_share t =
   can_share0 t && is_fully_static t
 
-let must_be_sets_of_closures t =
+let must_be_set_of_closures t =
   match t with
-  | Sets_of_closures sets -> sets
+  | Set_of_closures set -> set
   | Block _
+  | Code _
   | Boxed_float _
   | Boxed_int32 _
   | Boxed_int64 _
@@ -700,4 +701,42 @@ let must_be_sets_of_closures t =
   | Immutable_float_block _
   | Immutable_float_array _
   | Immutable_string _
-  | Mutable_string _ -> Misc.fatal_errorf "Not set(s) of closures:@ %a" print t
+  | Mutable_string _ -> Misc.fatal_errorf "Not a set of closures:@ %a" print t
+
+let match_against_bound_symbols_pattern t (pat : Bound_symbols.Pattern.t)
+      ~code:code_callback ~set_of_closures:set_of_closures_callback
+      ~other:other_callback =
+  match t, pat with
+  | Code code, Code code_ids ->
+    let code_ids' = Code_id.Lmap.keys code |> Code_id.Set.of_list in
+    if not (Code_id.Set.equal code_ids code_ids') then begin
+      Misc.fatal_errorf "Mismatch on declared code IDs:@ %a@ =@ %a"
+        Bound_symbols.Pattern.print pat
+        print t
+    end;
+    code_callback code
+  | Set_of_closures set_of_closures, Set_of_closures closure_symbols ->
+    let closure_ids =
+      Set_of_closures.function_decls set_of_closures
+      |> Function_declarations.funs_in_order
+      |> Closure_id.Lmap.keys
+    in
+    let closure_ids' = Closure_id.Lmap.keys closure_symbols in
+    if not (Closure_id.Set.equal closure_id closure_ids') then begin
+      Misc.fatal_errorf "Mismatch on declared closure IDs:@ %a@ =@ %a"
+        Bound_symbols.Pattern.print pat
+        print t
+    end;
+    set_of_closures_callback ~closure_symbols set_of_closures
+  | (Block _ | Boxed_float _ | Boxed_int32 _ | Boxed_int64 _
+      | Boxed_nativeint _ | Immutable_float_block _ | Immutable_float_array _
+      | Immutable_string _ | Mutable_string _), Other symbol ->
+    other_callback symbol t
+  | Code _, (Set_of_closures _ | Other _)
+  | Set_of_closures _, (Code _ | Other _)
+  | (Block _ | Boxed_float _ | Boxed_int32 _ | Boxed_int64 _
+      | Boxed_nativeint _ | Immutable_float_block _ | Immutable_float_array _
+      | Immutable_string _ | Mutable_string _), (Code _ | Set_of_closures _) ->
+    Misc.fatal_errorf "Mismatch on variety of [Static_const]:@ %a@ =@ %a"
+      Bound_symbols.Pattern.print pat
+      print t

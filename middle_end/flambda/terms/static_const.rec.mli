@@ -55,25 +55,12 @@ end
 (* CR mshinwell: Somewhere there should be an invariant check that
    code has no free names. *)
 
-(** The possibly-recursive declaration of pieces of code and any associated set
-    of closures. *)
-module Code_and_set_of_closures : sig
-  type t = {
-    code : Code.t Code_id.Lmap.t;
-    (* CR mshinwell: Check the free names of the set of closures *)
-    set_of_closures : Set_of_closures.t;
-  }
-
-  val map_code : t -> f:(Code_id.t -> Code.t -> Code.t) -> t
-
-  val free_names : t -> Name_occurrences.t
-end
-
 (** The static structure of a symbol, possibly with holes, ready to be filled
     with values computed at runtime. *)
 type t =
   | Block of Tag.Scannable.t * Mutability.t * (Field_of_block.t list)
-  | Sets_of_closures of Code_and_set_of_closures.t list
+  | Code of Code.t Code_id.Lmap.t
+  | Set_of_closures of Set_of_closures.t
     (** All code and sets of closures within the list are allowed to be
         recursive across those sets (but not recursive with any other code or
         set of closures). *)
@@ -99,3 +86,14 @@ val is_fully_static : t -> bool
 val can_share : t -> bool
 
 val must_be_sets_of_closures : t -> Code_and_set_of_closures.t list
+
+val match_against_bound_symbols_pattern
+   : t
+  -> Bound_symbols.Pattern.t
+  -> code:(Code_id.t Code_id.Lmap.t -> 'a)
+  -> set_of_closures:(
+       closure_symbols:Symbol.t Closure_id.Lmap.t
+    -> Set_of_closures.t
+    -> 'a)
+  -> other:(Symbol.t -> t -> 'a)
+  -> 'a

@@ -16,29 +16,26 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Code_and_set_of_closures : sig
-  type t = {
-    code_ids : Code_id.Set.t;
-    closure_symbols : Symbol.t Closure_id.Lmap.t;
-    (* CR mshinwell: keep a separate field for the symbols being defined? *)
-  }
+module Pattern : sig
+  type t = private
+    | Code of Code_id.t list
+    | Set_of_closures of Symbol.t Closure_id.Lmap.t
+    | Other of Symbol.t
+
+  val singleton : Symbol.t -> t
+
+  val code : Code_id.t list -> t
+
+  val set_of_closures : Symbol.t Closure_id.Lmap.t -> t
 
   val print : Format.formatter -> t -> unit
 end
 
-type t =
-  | Singleton of Symbol.t
-    (** A binding of a single symbol of kind [Value]. *)
-  | Sets_of_closures of Code_and_set_of_closures.t list
-    (** A recursive binding of possibly multiple sets of closures with
-        associated code. All code IDs and symbols named in the
-        [Code_and_set_of_closures.t list] are in scope for _all_ associated
-        [Static_const.code_and_set_of_closures list] values on the right-hand
-        side of the corresponding [Let_symbol] expression. Despite the
-        recursive nature of the binding, the elements in the
-        [Code_and_set_of_closures.t list] must correspond elementwise to the
-        elements in the corresponding
-        [Static_const.code_and_set_of_closures list]. *)
+type t
+
+val create : Pattern.t list -> t
+
+val to_list : t -> Pattern.t list
 
 val being_defined : t -> Symbol.Set.t
 
