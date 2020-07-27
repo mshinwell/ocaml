@@ -264,34 +264,53 @@ module type Upwards_env = sig
     -> Apply_cont_rewrite.t option
 end
 
+(* CR mshinwell: The name of this module is a bit misleading *)
 module type Lifted_constant = sig
-  (** Description of a statically-allocated constant discovered during
-      simplification. *)
+  (** Description of a group of statically-allocated constants discovered
+      during simplification. *)
 
   type downwards_env
 
-  type for_one_set_of_closures = {
-    code_ids : Code_id.Set.t;
-    denv : downwards_env option;
-    closure_symbols_with_types : (Symbol.t * Flambda_type.t) Closure_id.Lmap.t;
-  }
+  module Definition : sig
+    type t = private
+      | Code of {
+          code_ids : Code_id.t list;
+          defining_expr : Flambda.Static_const.t;
+        }
+      | Set_of_closures of {
+          denv : downwards_env;
+          closure_symbols_with_types : (Symbol.t * Flambda_type.t) Closure_id.Lmap.t;
+          defining_expr : Flambda.Static_const.t;
+        }
+      | Other of {
+          denv : downwards_env;
+          symbol : Symbol.t;
+          ty : Flambda_type.t;
+          defining_expr : Flambda.Static_const.t;
+        }
 
-  (* CR-soon mshinwell: Probably best to make this abstract. *)
-  type descr = private
-    | Singleton of {
-        denv : downwards_env;
-        symbol : Symbol.t;
-        ty : Flambda_type.t;
-        defining_expr : Flambda.Static_const.t;
-      }
-    | Sets_of_closures of {
-        sets : for_one_set_of_closures list;
-        defining_expr : Flambda.Static_const.t;
-      }
+    val code : Code_id.t list -> Flambda.Static_const.t -> t
+
+    val set_of_closures
+       : downwards_env
+      -> closure_symbols_with_types
+           : (Symbol.t * Flambda_type.t) Closure_id.Lmap.t
+      -> Flambda.Static_const.t
+      -> t
+
+    val other
+       : downwards_env
+      -> Symbol.t
+      -> Flambda_type.t
+      -> Flambda.Static_const.t
+      -> t
+  end
 
   type t
 
-  val descr : t -> descr
+  val definitions : t -> Definition.t list
+
+  val union : t list -> t
 
   val print : Format.formatter -> t -> unit
 

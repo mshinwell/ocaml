@@ -177,51 +177,32 @@ let sort ~fold_over_lifted_constants =
           | No_loop code_id_or_symbol ->
             CIS.Map.find code_id_or_symbol code_id_or_symbol_to_const
           | Has_loop members ->
-            let _, for_all_sets_of_closures, code_and_sets_of_closures =
+
+            (* XXX Just call [LC.union].  That function should dedup *)
+
+            let _, lifted_constants =
               List.fold_left
-                (fun ((defining_expr_already_seen,
-                       for_one_set_of_closures_acc,
-                       code_and_sets_of_closures_acc) as acc)
+                (fun ((already_seen, definitions) as acc)
                      code_id_or_symbol ->
-                  if CIS.Set.mem code_id_or_symbol defining_expr_already_seen
-                  then acc
+                  if CIS.Set.mem code_id_or_symbol already_seen then acc
                   else
                     let lifted_constant =
                       CIS.Map.find code_id_or_symbol code_id_or_symbol_to_const
                     in
-                    let defining_expr_already_seen =
+                    let already_seen =
                       (* We may encounter the same defining expression more
-                         than once (e.g. a set of closures via a code ID and
-                         a symbol), but we don't want duplicates in the result
-                         list. *)
+                         than once, in the case of sets of closures, which
+                         may bind more than one symbol.  We must avoid
+                         duplicates in the result list. *)
                       let bound_symbols = LC.bound_symbols lifted_constant in
                       CIS.Set.union
                         (Bound_symbols.everything_being_defined bound_symbols)
-                        defining_expr_already_seen
+                        already_seen
                     in
-                    let for_one_set_of_closures =
-                      match LC.descr lifted_constant with
-                      | Sets_of_closures { sets; _ } -> sets
-                      | Singleton _ ->
-                        Misc.fatal_errorf "Code ID or symbol %a was involved@ \
-                            in (non-closure) recursion that cannot be \
-                            compiled:@ %a"
-                          CIS.print code_id_or_symbol
-                          (CIS.Map.print CIS.Set.print)
-                          lifted_constants_dep_graph
-                    in
-                    let code_and_set_of_closures =
-                      Static_const.must_be_sets_of_closures
-                        (LC.defining_expr lifted_constant)
-                    in
-                    defining_expr_already_seen,
-                      for_one_set_of_closures @ for_one_set_of_closures_acc,
-                      code_and_set_of_closures @ code_and_sets_of_closures_acc)
-                (CIS.Set.empty, [], [])
-                members
+                    already_seen, lifted_constant :: definitions)
+                (CIS.Set.empty, [])
             in
-            LC.create_multiple_sets_of_closures for_all_sets_of_closures
-              (Sets_of_closures code_and_sets_of_closures)
+            LC.union lifted_constants
         in
         binding :: bindings)
       []
