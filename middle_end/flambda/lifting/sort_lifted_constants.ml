@@ -166,49 +166,26 @@ let sort ~fold_over_lifted_constants =
     (CIS.Map.print CIS.Set.print)
     lifted_constants_dep_graph;
   *)
-  let connected_components =
-    SCC_lifted_constants.connected_components_sorted_from_roots_to_leaf
-      lifted_constants_dep_graph
-  in
   let bindings_outermost_last =
-    Array.fold_left (fun bindings (group : SCC_lifted_constants.component) ->
-        let binding =
-          match group with
-          | No_loop code_id_or_symbol ->
-            CIS.Map.find code_id_or_symbol code_id_or_symbol_to_const
-          | Has_loop members ->
-
-            (* XXX Just call [LC.union].  That function should dedup *)
-
-            let _, lifted_constants =
-              List.fold_left
-                (fun ((already_seen, definitions) as acc)
-                     code_id_or_symbol ->
-                  if CIS.Set.mem code_id_or_symbol already_seen then acc
-                  else
-                    let lifted_constant =
-                      CIS.Map.find code_id_or_symbol code_id_or_symbol_to_const
-                    in
-                    let already_seen =
-                      (* We may encounter the same defining expression more
-                         than once, in the case of sets of closures, which
-                         may bind more than one symbol.  We must avoid
-                         duplicates in the result list. *)
-                      let bound_symbols = LC.bound_symbols lifted_constant in
-                      CIS.Set.union
-                        (Bound_symbols.everything_being_defined bound_symbols)
-                        already_seen
-                    in
-                    already_seen, lifted_constant :: definitions)
-                (CIS.Set.empty, [])
-            in
-            LC.union lifted_constants
-        in
-        binding :: bindings)
-      []
-      (Array.of_list (List.rev (Array.to_list connected_components)))
+    lifted_constants_dep_graph
+    |> SCC_lifted_constants.connected_components_sorted_from_roots_to_leaf
+    |> Array.to_list
+    |> List.rev
+    |> ListLabels.fold_left ~init:[]
+         ~f:(fun bindings (group : SCC_lifted_constants.component) ->
+           let code_id_or_symbols =
+             match group with
+             | No_loop code_id_or_symbol -> [code_id_or_symbol]
+             | Has_loop code_id_or_symbols -> code_id_or_symbols
+           in
+           let constants =
+             ListLabels.map code_id_or_symbols ~f:(fun code_id_or_symbol ->
+               CIS.Map.find code_id_or_symbol code_id_or_symbol_to_const)
+           in
+           (LC.union constants) :: bindings)
   in
-  (* By reversing the list we rely on the following property:
+  (* By reversing the list upon a subsequent fold we rely on the following
+     property:
        Let the list L be a topological sort of a directed graph G.
        Then the reverse of L is a topological sort of the transpose of G.
   *)

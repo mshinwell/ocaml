@@ -787,6 +787,34 @@ end = struct
         defining_expr
     | Sets_of_closures _
     | Singleton _ -> Misc.fatal_error "Expected singleton [Sets_of_closures]"
+
+  let union t1 t2 =
+    ...
+
+(*
+
+              List.fold_left
+                (fun ((already_seen, definitions) as acc)
+                     code_id_or_symbol ->
+                  if CIS.Set.mem code_id_or_symbol already_seen then acc
+                  else
+                    let lifted_constant =
+                      CIS.Map.find code_id_or_symbol code_id_or_symbol_to_const
+                    in
+                    let already_seen =
+                      (* We may encounter the same defining expression more
+                         than once, in the case of sets of closures, which
+                         may bind more than one symbol.  We must avoid
+                         duplicates in the result list. *)
+                      let bound_symbols = LC.bound_symbols lifted_constant in
+                      CIS.Set.union
+                        (Bound_symbols.everything_being_defined bound_symbols)
+                        already_seen
+                    in
+                    already_seen, lifted_constant :: definitions)
+                (CIS.Set.empty, [])
+
+*)
 end and Lifted_constant_state : sig
   include I.Lifted_constant_state
     with type lifted_constant := Lifted_constant.t
