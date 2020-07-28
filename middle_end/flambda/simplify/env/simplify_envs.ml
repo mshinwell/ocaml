@@ -761,10 +761,11 @@ end = struct
   let concat t1 t2 =
     t1 @ t2
 
+  let defining_exprs t = List.map Definition.defining_expr t
+
   let bound_symbols t =
     Bound_symbols.create (List.map Definition.bound_symbols t)
 
-  (* XXX Why is this useful if there isn't something to get the code too? *)
   let types_of_symbols t =
     ListLabels.fold_left (Definition.types_of_symbols t)
       ~init:Symbol.Map.empty

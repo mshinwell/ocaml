@@ -82,15 +82,11 @@ include Identifiable.S with type t := t
 include Contains_names.S with type t := t
 include Contains_ids.S with type t := t
 
-val get_pieces_of_code : t -> Code.t Code_id.Lmap.t
-
-val get_pieces_of_code' : t -> Function_params_and_body.t Code_id.Lmap.t
-
 val is_fully_static : t -> bool
 
 val can_share : t -> bool
 
-val must_be_sets_of_closures : t -> Code_and_set_of_closures.t list
+val must_be_set_of_closures : t -> Set_of_closures.t
 
 val match_against_bound_symbols_pattern
    : t

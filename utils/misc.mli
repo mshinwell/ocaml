@@ -143,7 +143,7 @@ module Stdlib : sig
         each with such longest common prefix removed, are also returned. *)
 
     val fold_left3
-       : ('a -> 'b -> 'c -> 'd -> a)
+       : ('a -> 'b -> 'c -> 'd -> 'a)
       -> 'a
       -> 'b list
       -> 'c list

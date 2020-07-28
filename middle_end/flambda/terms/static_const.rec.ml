@@ -225,103 +225,6 @@ module Code = struct
     }
 end
 
-module Code_and_set_of_closures = struct
-  type t = {
-    code : Code.t Code_id.Lmap.t;
-    set_of_closures : Set_of_closures.t;
-  }
-
-  let print_with_cache ~cache ppf { code; set_of_closures; } =
-    if Set_of_closures.is_empty set_of_closures then
-      match Code_id.Lmap.get_singleton code with
-      | None ->
-        fprintf ppf "@[<hov 1>(@<0>%sCode@<0>%s@ (\
-            @[<hov 1>%a@]\
-            ))@]"
-          (Flambda_colours.static_part ())
-          (Flambda_colours.normal ())
-          (Code_id.Lmap.print (Code.print_with_cache ~cache)) code
-      | Some (_code_id, code) ->
-        fprintf ppf "@[<hov 1>(@<0>%sCode@<0>%s@ (\
-            @[<hov 1>%a@]\
-            ))@]"
-          (Flambda_colours.static_part ())
-          (Flambda_colours.normal ())
-          (Code.print_with_cache ~cache) code
-    else
-      fprintf ppf "@[<hov 1>(@<0>%sSets_of_closures@<0>%s@ (\
-          @[<hov 1>(code@ (%a))@]@ \
-          @[<hov 1>(set_of_closures@ (%a))@]\
-          ))@]"
-        (Flambda_colours.static_part ())
-        (Flambda_colours.normal ())
-        (Code_id.Lmap.print (Code.print_with_cache ~cache)) code
-        (Set_of_closures.print_with_cache ~cache) set_of_closures
-
-  let compare { code = code1; set_of_closures = set1; }
-        { code = code2; set_of_closures = set2; } =
-    let c =
-      let id_set code =
-        Code_id.Set.of_list (Code_id.Lmap.keys code)
-      in
-      Code_id.Set.compare (id_set code1) (id_set code2)
-    in
-    if c <> 0 then c
-    else Set_of_closures.compare set1 set2
-
-  let free_names { code; set_of_closures; } =
-    Code_id.Lmap.fold (fun _code_id code free_names ->
-        Name_occurrences.union_list [
-          (* [code_id] does not count as a free name. *)
-          Code.free_names code;
-          free_names;
-        ])
-      code
-      (Set_of_closures.free_names set_of_closures)
-
-  let apply_name_permutation ({ code; set_of_closures; } as t) perm =
-    let code' =
-      Code_id.Lmap.map_sharing
-        (fun code -> Code.apply_name_permutation code perm)
-        code
-    in
-
-    if code == code' && set_of_closures == set_of_closures' then t
-    else
-      { code = code';
-        set_of_closures = set_of_closures';
-      }
-
-  let all_ids_for_export { code; set_of_closures; } =
-    let set_of_closures_ids =
-      Set_of_closures.all_ids_for_export set_of_closures
-    in
-    Code_id.Lmap.fold (fun code_id code ids ->
-        Ids_for_export.union ids
-          (Ids_for_export.add_code_id (Code.all_ids_for_export code) code_id))
-      code
-      set_of_closures_ids
-
-  let import import_map { code; set_of_closures; } =
-    let code =
-      Code_id.Lmap.bindings code
-      |> List.map (fun (code_id, code) ->
-          let code_id = Ids_for_export.Import_map.code_id import_map code_id in
-          let code = Code.import import_map code in
-          code_id, code)
-      |> Code_id.Lmap.of_list
-    in
-    let set_of_closures =
-      Set_of_closures.import import_map set_of_closures
-    in
-    { code; set_of_closures; }
-
-  let map_code t ~f =
-    { code = Code_id.Lmap.mapi f t.code;
-      set_of_closures = t.set_of_closures;
-    }
-end
-
 type t =
   | Code of Code.t
   | Set_of_closures of Set_of_closures.t
@@ -340,6 +243,16 @@ include Identifiable.Make (struct
 
   let print_with_cache ~cache ppf t =
     match t with
+    | Code code ->
+      fprintf ppf "@[<hov 1>(@<0>%sCode@<0>%s@ %a)@]"
+        (Flambda_colours.static_part ())
+        (Flambda_colours.normal ())
+        Code.print code
+    | Set_of_closures set ->
+      fprintf ppf "@[<hov 1>(@<0>%sSet_of_closures@<0>%s@ %a)@]"
+        (Flambda_colours.static_part ())
+        (Flambda_colours.normal ())
+        Set_of_closures.print set
     | Block (tag, mut, fields) ->
       fprintf ppf "@[<hov 1>(@<0>%s%sblock@<0>%s@ (tag %a)@ (%a))@]"
         (Flambda_colours.static_part ())
@@ -351,16 +264,6 @@ include Identifiable.Make (struct
         Tag.Scannable.print tag
         (Format.pp_print_list ~pp_sep:Format.pp_print_space
           Field_of_block.print) fields
-    | Code code ->
-      fprintf ppf "@[<hov 1>(@<0>%sCode@<0>%s@ %a)@]"
-        (Flambda_colours.static_part ())
-        (Flambda_colours.normal ())
-        Code.print code
-    | Set_of_closures set ->
-      fprintf ppf "@[<hov 1>(@<0>%sSet_of_closures@<0>%s@ %a)@]"
-        (Flambda_colours.static_part ())
-        (Flambda_colours.normal ())
-        Set_of_closures.print set
     | Boxed_float or_var ->
       fprintf ppf "@[<hov 1>(@<0>%sBoxed_float@<0>%s@ %a)@]"
         (Flambda_colours.static_part ())
@@ -413,6 +316,9 @@ include Identifiable.Make (struct
 
   let compare t1 t2 =
     match t1, t2 with
+    | Code code1, Code code2 -> Code.compare code1 code2
+    | Set_of_closures set1, Set_of_closures set2 ->
+      Set_of_closures.compare set1 set2
     | Block (tag1, mut1, fields1), Block (tag2, mut2, fields2) ->
       let c = Tag.Scannable.compare tag1 tag2 in
       if c <> 0 then c
@@ -420,8 +326,6 @@ include Identifiable.Make (struct
         let c = Mutability.compare mut1 mut2 in
         if c <> 0 then c
         else Misc.Stdlib.List.compare Field_of_block.compare fields1 fields2
-    | Sets_of_closures sets1, Sets_of_closures sets2 ->
-      Misc.Stdlib.List.compare Code_and_set_of_closures.compare sets1 sets2
     | Boxed_float or_var1, Boxed_float or_var2 ->
       Or_variable.compare Numbers.Float_by_bit_pattern.compare or_var1 or_var2
     | Boxed_int32 or_var1, Boxed_int32 or_var2 ->
@@ -443,8 +347,10 @@ include Identifiable.Make (struct
     | Immutable_string s1, Immutable_string s2 -> String.compare s1 s2
     | Block _, _ -> -1
     | _, Block _ -> 1
-    | Sets_of_closures _, _ -> -1
-    | _, Sets_of_closures _ -> 1
+    | Code _, _ -> -1
+    | _, Code _ -> 1
+    | Set_of_closures _, _ -> -1
+    | _, Set_of_closures _ -> 1
     | Boxed_float _, _ -> -1
     | _, Boxed_float _ -> 1
     | Boxed_int32 _, _ -> -1

@@ -20,13 +20,13 @@ module Pattern : sig
   type t = private
     | Code of Code_id.t
     | Set_of_closures of Symbol.t Closure_id.Lmap.t
-    | Other of Symbol.t
+    | Block_like of Symbol.t
 
   val code : Code_id.t -> t
 
   val set_of_closures : Symbol.t Closure_id.Lmap.t -> t
 
-  val other : Symbol.t -> t
+  val block_like : Symbol.t -> t
 
   val print : Format.formatter -> t -> unit
 end
