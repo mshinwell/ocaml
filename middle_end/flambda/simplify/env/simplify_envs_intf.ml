@@ -337,7 +337,7 @@ module type Lifted_constant = sig
 
   val definitions : t -> Definition.t list
   val bound_symbols : t -> Bound_symbols.t
-  val defining_expr : t -> Flambda.Static_const.t
+  val defining_exprs : t -> Flambda.Static_const.t list
   val types_of_symbols : t -> (downwards_env * Flambda_type.t) Symbol.Map.t
 
   val concat : t list -> t

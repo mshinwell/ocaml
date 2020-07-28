@@ -37,7 +37,7 @@ end
     version of one that existed previously (and may still exist), for
     example after a round of simplification. *)
 module Code : sig
-  type t = {
+  type t = private {
     params_and_body : Function_params_and_body.t or_deleted;
     newer_version_of : Code_id.t option;
   }
@@ -66,12 +66,9 @@ end
 (** The static structure of a symbol, possibly with holes, ready to be filled
     with values computed at runtime. *)
 type t =
-  | Block of Tag.Scannable.t * Mutability.t * (Field_of_block.t list)
   | Code of Code.t
   | Set_of_closures of Set_of_closures.t
-    (** All code and sets of closures within the list are allowed to be
-        recursive across those sets (but not recursive with any other code or
-        set of closures). *)
+  | Block of Tag.Scannable.t * Mutability.t * (Field_of_block.t list)
   | Boxed_float of Numbers.Float_by_bit_pattern.t Or_variable.t
   | Boxed_int32 of Int32.t Or_variable.t
   | Boxed_int64 of Int64.t Or_variable.t
@@ -98,10 +95,23 @@ val must_be_sets_of_closures : t -> Code_and_set_of_closures.t list
 val match_against_bound_symbols_pattern
    : t
   -> Bound_symbols.Pattern.t
-  -> code:(Code_id.t Code_id.Lmap.t -> 'a)
+  -> code:(Code_id.t -> Code.t -> 'a)
   -> set_of_closures:(
        closure_symbols:Symbol.t Closure_id.Lmap.t
     -> Set_of_closures.t
     -> 'a)
   -> other:(Symbol.t -> t -> 'a)
+  -> 'a
+
+val match_against_bound_symbols
+   : t list
+  -> Bound_symbols.t
+  -> init:'a
+  -> code:('a -> Code_id.t -> Code.t -> 'a)
+  -> set_of_closures:(
+       'a
+    -> closure_symbols:Symbol.t Closure_id.Lmap.t
+    -> Set_of_closures.t
+    -> 'a)
+  -> other:('a -> Symbol.t -> t -> 'a)
   -> 'a

@@ -351,7 +351,7 @@ let _ = ignore create_let_symbol0
 let create_let_symbol uacc (scoping_rule : Symbol_scoping_rule.t)
       code_age_relation lifted_constant body =
   let bound_symbols = LC.bound_symbols lifted_constant in
-  let defining_expr = LC.defining_expr lifted_constant in
+  let defining_exprs = LC.defining_exprs lifted_constant in
   let static_const = remove_unused_closure_vars uacc defining_expr in
   match scoping_rule with
   | Syntactic ->
@@ -361,10 +361,14 @@ let create_let_symbol uacc (scoping_rule : Symbol_scoping_rule.t)
       Expr.create_let_symbol bound_symbols scoping_rule static_const body
     in
     let uacc =
-      UA.remember_code_for_cmx uacc
-        (Static_const.get_pieces_of_code' static_const
-         |> Code_id.Lmap.bindings
-         |> Code_id.Map.of_list)
+      Static_const.match_against_bound_symbols defining_exprs bound_symbols
+        ~init:Code_id.Map.empty
+        ~code:(fun pieces_of_code code_id code ->
+          Code_id.Map.add code_id code pieces_of_code)
+        ~set_of_closures:(fun pieces_of_code ~closure_symbols:_ _ ->
+          pieces_of_code)
+        ~other:(fun pieces_of_code _ _ -> pieces_of_code)
+      |> UA.remember_code_for_cmx uacc
     in
     expr, uacc
 

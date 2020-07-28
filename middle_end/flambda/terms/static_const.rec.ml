@@ -138,6 +138,11 @@ module Code = struct
   let print ppf code =
     print_with_cache ~cache:(Printing_cache.create ()) ppf code
 
+  let create ~params_and_body ~newer_version_of =
+    { params_and_body;
+      newer_version_of;
+    }
+
   let free_names { params_and_body; newer_version_of; } =
     let from_newer_version_of =
       match newer_version_of with
@@ -209,6 +214,11 @@ module Code = struct
     in
     { params_and_body; newer_version_of; }
 
+  let deleted =
+    { params_and_body = Deleted;
+      newer_version_of = None;
+    }
+
   let make_deleted t =
     { params_and_body = Deleted;
       newer_version_of = t.newer_version_of;
@@ -275,13 +285,7 @@ module Code_and_set_of_closures = struct
         (fun code -> Code.apply_name_permutation code perm)
         code
     in
-    let set_of_closures' =
-      let set' =
-        Set_of_closures.apply_name_permutation set_of_closures perm
-      in
-      if set_of_closures == set' then set_of_closures
-      else set'
-    in
+
     if code == code' && set_of_closures == set_of_closures' then t
     else
       { code = code';
@@ -319,8 +323,9 @@ module Code_and_set_of_closures = struct
 end
 
 type t =
+  | Code of Code.t
+  | Set_of_closures of Set_of_closures.t
   | Block of Tag.Scannable.t * Mutability.t * (Field_of_block.t list)
-  | Sets_of_closures of Code_and_set_of_closures.t list
   | Boxed_float of Numbers.Float_by_bit_pattern.t Or_variable.t
   | Boxed_int32 of Int32.t Or_variable.t
   | Boxed_int64 of Int64.t Or_variable.t
@@ -346,9 +351,16 @@ include Identifiable.Make (struct
         Tag.Scannable.print tag
         (Format.pp_print_list ~pp_sep:Format.pp_print_space
           Field_of_block.print) fields
-    | Sets_of_closures sets ->
-      Format.pp_print_list ~pp_sep:Format.pp_print_space
-        (Code_and_set_of_closures.print_with_cache ~cache) ppf sets
+    | Code code ->
+      fprintf ppf "@[<hov 1>(@<0>%sCode@<0>%s@ %a)@]"
+        (Flambda_colours.static_part ())
+        (Flambda_colours.normal ())
+        Code.print code
+    | Set_of_closures set ->
+      fprintf ppf "@[<hov 1>(@<0>%sSet_of_closures@<0>%s@ %a)@]"
+        (Flambda_colours.static_part ())
+        (Flambda_colours.normal ())
+        Set_of_closures.print set
     | Boxed_float or_var ->
       fprintf ppf "@[<hov 1>(@<0>%sBoxed_float@<0>%s@ %a)@]"
         (Flambda_colours.static_part ())
@@ -455,41 +467,15 @@ include Identifiable.Make (struct
   let output _ _ = Misc.fatal_error "Not yet implemented"
 end)
 
-let get_pieces_of_code t =
-  match t with
-  | Sets_of_closures sets ->
-    Code_id.Lmap.disjoint_union_many
-      (List.map
-        (fun ({ code; set_of_closures = _; } : Code_and_set_of_closures.t) ->
-          code)
-        sets)
-  | Block _
-  | Boxed_float _
-  | Boxed_int32 _
-  | Boxed_int64 _
-  | Boxed_nativeint _
-  | Immutable_float_block _
-  | Immutable_float_array _
-  | Mutable_string _
-  | Immutable_string _ -> Code_id.Lmap.empty
-
-let get_pieces_of_code' t =
-  Code_id.Lmap.filter_map (get_pieces_of_code t)
-    ~f:(fun _ code ->
-      match code.Code.params_and_body with
-      | Deleted -> None
-      | Present params_and_body -> Some params_and_body)
-
 let free_names t =
   match t with
+  | Code code -> Code.free_names code
+  | Set_of_closures set -> Set_of_closures.free_names set
   | Block (_tag, _mut, fields) ->
     List.fold_left (fun fvs field ->
         Name_occurrences.union fvs (Field_of_block.free_names field))
       (Name_occurrences.empty)
       fields
-  | Sets_of_closures sets ->
-    let free_names_list = List.map Code_and_set_of_closures.free_names sets in
-    Name_occurrences.union_list free_names_list
   | Boxed_float or_var -> Or_variable.free_names or_var
   | Boxed_int32 or_var -> Or_variable.free_names or_var
   | Boxed_int64 or_var -> Or_variable.free_names or_var
@@ -509,6 +495,14 @@ let apply_name_permutation t perm =
   if Name_permutation.is_empty perm then t
   else
     match t with
+    | Code code ->
+      let code' = Code.apply_name_permutation code perm in
+      if code == code' then t
+      else Code code'
+    | Set_of_closures set ->
+      let set' = Set_of_closures.apply_name_permutation set perm in
+      if set == set' then t
+      else Set_of_closures set'
     | Block (tag, mut, fields) ->
       let changed = ref false in
       let fields =
@@ -522,14 +516,6 @@ let apply_name_permutation t perm =
       in
       if not !changed then t
       else Block (tag, mut, fields)
-    | Sets_of_closures sets ->
-      let sets' =
-        List.map (fun set ->
-            Code_and_set_of_closures.apply_name_permutation set perm)
-          sets
-      in
-      if List.for_all2 (fun set1 set2 -> set1 == set2) sets sets' then t
-      else Sets_of_closures sets'
     | Boxed_float or_var ->
       let or_var' = Or_variable.apply_name_permutation or_var perm in
       if or_var == or_var' then t
@@ -585,17 +571,13 @@ let apply_name_permutation t perm =
 
 let all_ids_for_export t =
   match t with
+  | Code code -> Code.all_ids_for_export code
+  | Set_of_closures set -> Set_of_closures.all_ids_for_export set
   | Block (_tag, _mut, fields) ->
     List.fold_left (fun ids field ->
         Ids_for_export.union ids (Field_of_block.all_ids_for_export field))
       Ids_for_export.empty
       fields
-  | Sets_of_closures sets ->
-    List.fold_left (fun ids set ->
-        Ids_for_export.union ids
-          (Code_and_set_of_closures.all_ids_for_export set))
-      Ids_for_export.empty
-      sets
   | Boxed_float (Var var)
   | Boxed_int32 (Var var)
   | Boxed_int64 (Var var)
@@ -625,12 +607,12 @@ let all_ids_for_export t =
       fields
 
 let import import_map t = match t with
+  | Code code -> Code (Code.import import_map set )
+  | Set_of_closures set ->
+    Set_of_closures (Set_of_closures.import import_map set)
   | Block (tag, mut, fields) ->
     let fields = List.map (Field_of_block.import import_map) fields in
     Block (tag, mut, fields)
-  | Sets_of_closures sets ->
-    let sets = List.map (Code_and_set_of_closures.import import_map) sets in
-    Sets_of_closures sets
   | Boxed_float (Var var) ->
     let var = Ids_for_export.Import_map.variable import_map var in
     Boxed_float (Var var)
@@ -705,7 +687,7 @@ let must_be_set_of_closures t =
 
 let match_against_bound_symbols_pattern t (pat : Bound_symbols.Pattern.t)
       ~code:code_callback ~set_of_closures:set_of_closures_callback
-      ~other:other_callback =
+      ~block_like:block_like_callback =
   match t, pat with
   | Code code, Code code_ids ->
     let code_ids' = Code_id.Lmap.keys code |> Code_id.Set.of_list in
@@ -731,7 +713,7 @@ let match_against_bound_symbols_pattern t (pat : Bound_symbols.Pattern.t)
   | (Block _ | Boxed_float _ | Boxed_int32 _ | Boxed_int64 _
       | Boxed_nativeint _ | Immutable_float_block _ | Immutable_float_array _
       | Immutable_string _ | Mutable_string _), Other symbol ->
-    other_callback symbol t
+    block_like_callback symbol t
   | Code _, (Set_of_closures _ | Other _)
   | Set_of_closures _, (Code _ | Other _)
   | (Block _ | Boxed_float _ | Boxed_int32 _ | Boxed_int64 _
@@ -740,3 +722,21 @@ let match_against_bound_symbols_pattern t (pat : Bound_symbols.Pattern.t)
     Misc.fatal_errorf "Mismatch on variety of [Static_const]:@ %a@ =@ %a"
       Bound_symbols.Pattern.print pat
       print t
+
+let match_against_bound_symbols t_list bound_symbols ~init ~code:code_callback
+      ~set_of_closures:set_of_closures_callback
+      ~block_like:block_like_callback =
+  let bound_symbol_pats = Bound_symbols.to_list bound_symbols in
+  if List.compare_lengths t_list bound_symbol_pats <> 0 then begin
+    Misc.fatal_errorf "Mismatch between length of [Bound_symbols.t] and \
+        [Static_const.t list]:@ %a@ =@ %a"
+      Bound_symbols.print bound_symbols
+      (Format.pp_print_list ~pp_sep:Format.pp_print_space print) t_list
+  end;
+  ListLabels.fold_left2 t_list bound_symbol_pats ~init
+    ~f:(fun acc t bound_symbols_pat ->
+      match_against_bound_symbols_pattern t bound_symbols_pat
+        ~code:(fun code_id code -> code_callback acc code_id code)
+        ~set_of_closures:(fun ~closure_symbols set_of_closures ->
+          set_of_closures_callback acc ~closure_symbols set_of_closures)
+        ~block_like:(fun symbol t -> block_like_callback acc symbol t))
