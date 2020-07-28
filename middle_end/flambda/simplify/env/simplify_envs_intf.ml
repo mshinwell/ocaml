@@ -145,6 +145,8 @@ module type Downwards_env = sig
 
   val add_lifted_constant : t -> lifted_constant -> t
 
+  val add_lifted_constants_from_list : t -> lifted_constant list -> t
+
   val add_lifted_constants : t -> lifted_constant_state -> t
 
   val define_code
@@ -272,24 +274,26 @@ module type Lifted_constant = sig
   type downwards_env
 
   module Definition : sig
-    type t = private
-      | Code of {
-          code_ids : Code_id.t list;
-          defining_expr : Flambda.Static_const.t;
-        }
+    type descr = private
+      | Code of Code_id.t
       | Set_of_closures of {
           denv : downwards_env;
-          closure_symbols_with_types : (Symbol.t * Flambda_type.t) Closure_id.Lmap.t;
-          defining_expr : Flambda.Static_const.t;
+          closure_symbols_with_types
+            : (Symbol.t * Flambda_type.t) Closure_id.Lmap.t;
         }
-      | Other of {
-          denv : downwards_env;
+      | Block_like of {
           symbol : Symbol.t;
+          denv : downwards_env;
           ty : Flambda_type.t;
-          defining_expr : Flambda.Static_const.t;
         }
 
-    val code : Code_id.t list -> Flambda.Static_const.t -> t
+    type t
+
+    val descr : t -> descr
+
+    val defining_expr : t -> Static_const.t
+
+    val code : Code_id.t -> Static_const.t -> t
 
     val set_of_closures
        : downwards_env
@@ -308,15 +312,11 @@ module type Lifted_constant = sig
 
   type t
 
-  val definitions : t -> Definition.t list
-
-  val union : t list -> t
-
   val print : Format.formatter -> t -> unit
 
   (** The creation functions take the types of symbols to avoid re-inferring
       them. *)
-  val create_singleton
+  val create_block_like
      : Symbol.t
     -> Flambda.Static_const.t
     -> downwards_env
@@ -330,30 +330,17 @@ module type Lifted_constant = sig
     -> Flambda.Static_const.t
     -> t
 
-  val create_multiple_sets_of_closures
-     : for_one_set_of_closures list
+  val create_code
+     : Code_id.t
     -> Flambda.Static_const.t
     -> t
 
-  val create_piece_of_code
-     : ?newer_version_of:Code_id.t
-    -> Code_id.t
-    -> Flambda.Function_params_and_body.t
-    -> t
-
-  val create_pieces_of_code
-     : ?newer_versions_of:Code_id.t Code_id.Map.t
-    -> Flambda.Function_params_and_body.t Code_id.Lmap.t
-    -> t
-
-  val create_deleted_piece_of_code
-     : ?newer_versions_of:Code_id.t Code_id.Map.t
-    -> Code_id.t
-    -> t
-
+  val definitions : t -> Definition.t list
   val bound_symbols : t -> Bound_symbols.t
   val defining_expr : t -> Flambda.Static_const.t
   val types_of_symbols : t -> (downwards_env * Flambda_type.t) Symbol.Map.t
+
+  val concat : t list -> t
 end
 
 module type Lifted_constant_state = sig

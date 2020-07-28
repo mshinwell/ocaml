@@ -458,6 +458,9 @@ end = struct
   let add_lifted_constant t const =
     add_lifted_constants t (Lifted_constant_state.singleton const)
 
+  let add_lifted_constants_from_list t consts =
+    ListLabels.fold_left consts ~init:t ~f:add_lifted_constant
+
   let set_inlined_debuginfo t dbg =
     { t with inlined_debuginfo = dbg; }
 
@@ -655,166 +658,117 @@ end and Lifted_constant : sig
   include I.Lifted_constant
     with type downwards_env := Downwards_env.t
 end = struct
-  type for_one_set_of_closures = {
-    code_ids : Code_id.Set.t;
-    denv : Downwards_env.t option;
-    closure_symbols_with_types : (Symbol.t * Flambda_type.t) Closure_id.Lmap.t;
-  }
+  module Definition = struct
+    type descr =
+      | Code of Code_id.t
+      | Set_of_closures of {
+          denv : downwards_env;
+          closure_symbols_with_types
+            : (Symbol.t * Flambda_type.t) Closure_id.Lmap.t;
+        }
+      | Block_like of {
+          symbol : Symbol.t;
+          denv : downwards_env;
+          ty : Flambda_type.t;
+        }
 
-  type descr =
-    | Singleton of {
-        denv : Downwards_env.t;
-        symbol : Symbol.t;
-        ty : Flambda_type.t;
-        defining_expr : Flambda.Static_const.t;
+    type t = {
+      descr : descr;
+      defining_expr : Static_const.t;
+    }
+
+    let print_descr ppf descr =
+      match descr with
+      | Code code_id -> Code_id.print ppf code_id
+      | Set_of_closures { closure_symbols_with_types; _ } ->
+        let symbols =
+          Closure_id.Lmap.data closure_symbols_with_types
+          |> List.map fst
+        in
+        Format.fprintf ppf "@[<hov 1>(%a)@]"
+          (Format.pp_print_list ~pp_sep:Format.pp_print_space Symbol.print)
+          symbols
+      | Block_like { symbol; _ } -> Symbol.print ppf symbol
+
+    let print ppf t =
+      Format.fprintf ppf "@[<hov 1>(\
+          @[<hov 1>
+          @]"
+
+    let descr t = t.descr
+    let defining_expr t = t.defining_expr
+
+    let code code_id defining_expr =
+      { descr = Code code_id;
+        defining_expr;
       }
-    | Sets_of_closures of {
-        sets : for_one_set_of_closures list;
-        defining_expr : Flambda.Static_const.t;
+
+    let set_of_closures denv ~closure_symbols_with_types defining_expr =
+      { descr = Set_of_closures {
+          denv;
+          closure_symbols_with_types;
+        };
+        defining_expr;
       }
 
-  type t = descr
+    let block_like denv symbol ty defining_expr =
+      { descr = Block_like {
+          symbol;
+          denv;
+          ty;
+        };
+        defining_expr;
+      }
 
-  let descr t = t
+    let bound_symbols_pattern t =
+      let module P = Bound_symbols.Pattern in
+      match t with
+      | Code code_id -> P.code code_id
+      | Set_of_closures { closure_symbols_with_types; } ->
+        P.set_of_closures (List.map fst closure_symbols_with_types)
+      | Block_like { symbol; _ } -> P.other symbol
 
-  let bound_symbols t : Bound_symbols.t =
-    match t with
-    | Singleton { symbol; _ } -> Singleton symbol
-    | Sets_of_closures { sets; _ } ->
-      let sets =
-        ListLabels.map sets
-          ~f:(fun for_one_set : Bound_symbols.Code_and_set_of_closures.t ->
-            { code_ids = for_one_set.code_ids;
-              closure_symbols =
-                Closure_id.Lmap.map fst for_one_set.closure_symbols_with_types;
-            })
-      in
-      Sets_of_closures sets
+    let types_of_symbols t =
+      match t with
+      | Code _ -> Symbol.Map.empty
+      | Set_of_closures { denv; closure_symbols_with_types; } ->
+        Closure_id.Lmap.fold (fun _closure_id (symbol, ty) types_of_symbols ->
+            Symbol.Map.add symbol (denv, ty) types_of_symbols)
+          for_one_set.closure_symbols_with_types
+          Symbol.Map.empty
+      | Block_like { symbol; denv; ty; _ } ->
+        Symbol.Map.singleton symbol (denv, ty)
+  end
 
-  let defining_expr t =
-    match t with
-    | Singleton { defining_expr; _ }
-    | Sets_of_closures { defining_expr; _ } -> defining_expr
+  type t = Definition.t list
 
-  (* CR-soon mshinwell: Update this to print everything *)
   let print ppf t =
-    Format.fprintf ppf "@[<hov 1>(\
-        @[<hov 1>(bound_symbols@ %a)@]@ \
-        @[<hov 1>(static_const@ %a)@]\
-        )@]"
-      Bound_symbols.print (bound_symbols t)
-      Static_const.print (defining_expr t)
+    Format.fprintf ppf "@[<hov 1>(%a)@]"
+      (Format.pp_print_list ~pp_sep:Format.pp_print_space Definition.print)
+      t
 
+  let create_other symbol defining_expr denv ty =
+    (* CR mshinwell: check that [defining_expr] is not a set of closures
+       or code *)
+    [Definition.block_like denv symbol ty defining_expr]
+
+  let create_set_of_closures denv ~closure_symbols_with_types defining_expr =
+    [Definition.set_of_closures denv ~closure_symbols_with_types defining_expr]
+
+  let code code_id defining_expr =
+    [Definition.code code_id defining_expr]
+
+  let concat t1 t2 =
+    t1 @ t2
+
+  let bound_symbols t =
+    Bound_symbols.create (List.map Definition.bound_symbols t)
+
+  (* XXX Why is this useful if there isn't something to get the code too? *)
   let types_of_symbols t =
-    match t with
-    | Singleton { symbol; denv; ty; _ } ->
-      Symbol.Map.singleton symbol (denv, ty)
-    | Sets_of_closures { sets; _ } ->
-      ListLabels.fold_left sets ~init:Symbol.Map.empty
-        ~f:(fun types_of_symbols for_one_set ->
-          let denv = for_one_set.denv in
-          Closure_id.Lmap.fold (fun _closure_id (symbol, ty) types_of_symbols ->
-              match denv with
-              | Some denv -> Symbol.Map.add symbol (denv, ty) types_of_symbols
-              | None ->
-                Misc.fatal_errorf "Missing denv:@ %a" print t)
-            for_one_set.closure_symbols_with_types
-            types_of_symbols)
-
-  let create_singleton symbol defining_expr denv ty =
-    (* CR mshinwell: check that [defining_expr] is not a set of closures *)
-    Singleton {
-      symbol;
-      denv;
-      ty;
-      defining_expr;
-    }
-
-  let create_multiple_sets_of_closures sets defining_expr =
-    (* CR mshinwell: Check that [sets] matches [defining_expr] and
-       that [defining_expr] is a set of closures *)
-    Sets_of_closures {
-      sets;
-      defining_expr;
-    }
-
-  let create_set_of_closures code_ids denv ~closure_symbols_with_types
-        defining_expr =
-    create_multiple_sets_of_closures
-      [{ code_ids; denv = Some denv; closure_symbols_with_types; }]
-      defining_expr
-
-  let create_pieces_of_code ?newer_versions_of code =
-    (* CR mshinwell: Avoid going via [pieces_of_code]? *)
-    let bound_symbols, defining_expr =
-      Flambda.pieces_of_code ?newer_versions_of code
-    in
-    match bound_symbols with
-    | Sets_of_closures [{ code_ids; closure_symbols; }] ->
-      assert (Closure_id.Lmap.is_empty closure_symbols);
-      create_multiple_sets_of_closures
-        [{ code_ids;
-           denv = None;
-           closure_symbols_with_types = Closure_id.Lmap.empty;
-         }]
-        defining_expr
-    | Sets_of_closures _
-    | Singleton _ -> Misc.fatal_error "Expected singleton [Sets_of_closures]"
-
-  let create_piece_of_code ?newer_version_of code_id params_and_body =
-    let newer_versions_of =
-      match newer_version_of with
-      | None -> None
-      | Some older -> Some (Code_id.Map.singleton code_id older)
-    in
-    create_pieces_of_code ?newer_versions_of
-      (Code_id.Lmap.singleton code_id params_and_body)
-
-  let create_deleted_piece_of_code ?newer_versions_of code_id =
-    (* CR mshinwell: Avoid going via [deleted_pieces_of_code]? *)
-    let bound_symbols, defining_expr =
-      Flambda.deleted_pieces_of_code ?newer_versions_of
-        (Code_id.Set.singleton code_id)
-    in
-    match bound_symbols with
-    | Sets_of_closures [{ code_ids; closure_symbols; }] ->
-      assert (Closure_id.Lmap.is_empty closure_symbols);
-      create_multiple_sets_of_closures
-        [{ code_ids;
-           denv = None;
-           closure_symbols_with_types = Closure_id.Lmap.empty;
-         }]
-        defining_expr
-    | Sets_of_closures _
-    | Singleton _ -> Misc.fatal_error "Expected singleton [Sets_of_closures]"
-
-  let union t1 t2 =
-    ...
-
-(*
-
-              List.fold_left
-                (fun ((already_seen, definitions) as acc)
-                     code_id_or_symbol ->
-                  if CIS.Set.mem code_id_or_symbol already_seen then acc
-                  else
-                    let lifted_constant =
-                      CIS.Map.find code_id_or_symbol code_id_or_symbol_to_const
-                    in
-                    let already_seen =
-                      (* We may encounter the same defining expression more
-                         than once, in the case of sets of closures, which
-                         may bind more than one symbol.  We must avoid
-                         duplicates in the result list. *)
-                      let bound_symbols = LC.bound_symbols lifted_constant in
-                      CIS.Set.union
-                        (Bound_symbols.everything_being_defined bound_symbols)
-                        already_seen
-                    in
-                    already_seen, lifted_constant :: definitions)
-                (CIS.Set.empty, [])
-
-*)
+    ListLabels.fold_left (Definition.types_of_symbols t)
+      ~init:Symbol.Map.empty
+      ~f:Symbol.Map.union
 end and Lifted_constant_state : sig
   include I.Lifted_constant_state
     with type lifted_constant := Lifted_constant.t

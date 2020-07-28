@@ -700,16 +700,24 @@ let simplify_non_lifted_set_of_closures0 dacc bound_vars ~closure_bound_vars
   let defining_expr =
     Reachable.reachable (Named.create_set_of_closures set_of_closures)
   in
-  (* CR mshinwell: This next part should probably be shared between the
-     lifted and non-lifted cases; we always need the new code in the
-     environment and [r]. *)
-  let lifted_constant =
-    Lifted_constant.create_pieces_of_code
-      code ~newer_versions_of:(C.new_to_old_code_ids_all_sets context)
+  let lifted_constants =
+    let newer_versions_of = C.new_to_old_code_ids_all_sets context in
+    Code_id.Lmap.fold (fun code_id params_and_body lifted_constants ->
+        let newer_version_of =
+          Some (Code_id.Map.find code_id newer_versions_of)
+        in
+        let lifted_constant =
+          Static_const.Code.create ~params_and_body ~newer_version_of
+          |> LC.create_code code_id
+        in
+        lifted_constant :: lifted_constants)
+      code
+      []
   in
   let dacc =
-    DA.add_lifted_constant dacc lifted_constant
-    |> DA.map_denv ~f:(fun denv -> DE.add_lifted_constant denv lifted_constant)
+    DA.add_lifted_constants_from_list dacc lifted_constants
+    |> DA.map_denv ~f:(fun denv ->
+      DE.add_lifted_constants_from_list denv lifted_constants)
   in
   [bound_vars, defining_expr], dacc
 

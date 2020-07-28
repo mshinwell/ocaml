@@ -49,6 +49,14 @@ module Code : sig
 
   val free_names : t -> Name_occurrences.t
 
+  val create
+     : params_and_body:Function_params_and_body.t or_deleted
+    -> newer_version_of:Code_id.t option
+    -> t
+
+  (** The piece of code that is [Deleted] with no [newer_version_of]. *)
+  val deleted : t
+
   val make_deleted : t -> t
 end
 
@@ -59,7 +67,7 @@ end
     with values computed at runtime. *)
 type t =
   | Block of Tag.Scannable.t * Mutability.t * (Field_of_block.t list)
-  | Code of Code.t Code_id.Lmap.t
+  | Code of Code.t
   | Set_of_closures of Set_of_closures.t
     (** All code and sets of closures within the list are allowed to be
         recursive across those sets (but not recursive with any other code or

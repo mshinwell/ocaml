@@ -178,11 +178,28 @@ let sort ~fold_over_lifted_constants =
              | No_loop code_id_or_symbol -> [code_id_or_symbol]
              | Has_loop code_id_or_symbols -> code_id_or_symbols
            in
-           let constants =
-             ListLabels.map code_id_or_symbols ~f:(fun code_id_or_symbol ->
-               CIS.Map.find code_id_or_symbol code_id_or_symbol_to_const)
+           let lifted_constants =
+             ListLabels.fold_left code_id_or_symbols
+               ~init:(CIS.Set.empty, [])
+               ~f:(fun ((already_seen, definitions) as acc) code_id_or_symbol ->
+                 if CIS.Set.mem code_id_or_symbol already_seen then acc
+                 else
+                   let lifted_constant =
+                     CIS.Map.find code_id_or_symbol code_id_or_symbol_to_const
+                   in
+                   let already_seen =
+                     (* We may encounter the same defining expression more
+                        than once, in the case of sets of closures, which
+                        may bind more than one symbol.  We must avoid
+                        duplicates in the result list. *)
+                     let bound_symbols = LC.bound_symbols lifted_constant in
+                     CIS.Set.union
+                       (Bound_symbols.everything_being_defined bound_symbols)
+                       already_seen
+                   in
+                   already_seen, lifted_constant :: definitions)
            in
-           (LC.union constants) :: bindings)
+           (LC.concat lifted_constants) :: bindings)
   in
   (* By reversing the list upon a subsequent fold we rely on the following
      property:

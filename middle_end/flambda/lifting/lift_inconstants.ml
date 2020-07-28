@@ -44,7 +44,7 @@ let lift_non_closure_discovered_via_reified_continuation_param_types dacc
     let lifted_constant =
       (* The environment here may be used by [Sort_lifted_constants], but the
          type will not be. *)
-      LC.create_singleton symbol static_const (DA.denv dacc) (T.any_value ())
+      LC.create_other symbol static_const (DA.denv dacc) (T.any_value ())
     in
     let reified_definitions = (lifted_constant, None) :: reified_definitions in
     let reified_continuation_params_to_symbols =
@@ -170,12 +170,9 @@ let lift_set_of_closures_discovered_via_reified_continuation_param_types dacc
          via symbols.)  See long comment above concerning subtle point
          relating to dependencies that might be exposed during such
          simplification. *)
-      LC.create_set_of_closures Code_id.Set.empty (DA.denv dacc)
+      LC.create_set_of_closures (DA.denv dacc)
         ~closure_symbols_with_types
-        (Sets_of_closures [{
-          code = Code_id.Lmap.empty;
-          set_of_closures;
-        }])
+        (Set_of_closures set_of_closures)
     in
     let reified_definitions =
       (lifted_constant, Some (DA.denv dacc, extra_deps)) :: reified_definitions

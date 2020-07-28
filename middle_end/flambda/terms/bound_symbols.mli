@@ -18,15 +18,15 @@
 
 module Pattern : sig
   type t = private
-    | Code of Code_id.t list
+    | Code of Code_id.t
     | Set_of_closures of Symbol.t Closure_id.Lmap.t
     | Other of Symbol.t
 
-  val singleton : Symbol.t -> t
-
-  val code : Code_id.t list -> t
+  val code : Code_id.t -> t
 
   val set_of_closures : Symbol.t Closure_id.Lmap.t -> t
+
+  val other : Symbol.t -> t
 
   val print : Format.formatter -> t -> unit
 end

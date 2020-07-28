@@ -969,9 +969,12 @@ and simplify_direct_partial_application
          constant identifying deleted code.  This will ensure, if for some
          reason the constant makes it to Cmm stage, that code size is not
          increased unnecessarily. *)
-      Lifted_constant.create_deleted_piece_of_code code_id
+      Lifted_constant.code code_id Static_const.Code.deleted
     in
-    let code = Lifted_constant.create_piece_of_code code_id params_and_body in
+    let code =
+      Static_const.Code.create ~params_and_body ~newer_version_of:None
+      |> Lifted_constant.code code_id
+    in
     let dacc =
       DA.add_lifted_constant dacc dummy_code
       |> DA.map_denv ~f:(fun denv -> DE.add_lifted_constant denv code)

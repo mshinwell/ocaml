@@ -176,31 +176,24 @@ let simplify_named0 dacc (bindable_let_bound : Bindable_let_bound.t)
     in
     let lifted_constant =
       match bound_symbols with
-      | Singleton symbol ->
+      | Block_like symbol ->
         let typ =
           TE.find (DA.typing_env dacc) (Name.symbol symbol) (Some K.value)
         in
-        LC.create_singleton symbol static_const (DA.denv dacc) typ
-      | Sets_of_closures sets ->
-        let sets =
-          ListLabels.map sets
-            ~f:(fun (set : Bound_symbols.Code_and_set_of_closures.t)
-                  : LC.for_one_set_of_closures ->
-              let closure_symbols_with_types =
-                Closure_id.Lmap.map (fun symbol ->
-                    let typ =
-                      TE.find (DA.typing_env dacc) (Name.symbol symbol)
-                        (Some K.value)
-                    in
-                    symbol, typ)
-                  set.closure_symbols
+        LC.create_block_like symbol static_const (DA.denv dacc) typ
+      | Code code_id -> LC.create_code code_id static_const
+      | Set_of_closures closure_symbols ->
+        let closure_symbols_with_types =
+          Closure_id.Lmap.map (fun symbol ->
+              let typ =
+                TE.find (DA.typing_env dacc) (Name.symbol symbol) (Some K.value)
               in
-              { code_ids = set.code_ids;
-                denv = Some (DA.denv dacc);
-                closure_symbols_with_types;
-              })
+              symbol, typ)
+            closure_symbols
         in
-        LC.create_multiple_sets_of_closures sets static_const
+        LC.create_set_of_closures (DA.denv dacc)
+          ~closure_symbols_with_types
+          static_const
     in
     let dacc = DA.add_lifted_constant dacc lifted_constant in
     (* We don't need to return any bindings; [Simplify_expr.simplify_let]
