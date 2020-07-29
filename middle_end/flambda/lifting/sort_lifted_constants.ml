@@ -66,7 +66,8 @@ let build_dep_graph ~fold_over_lifted_constants =
              the definitions.)  Some of these symbols may be the ones
              involved in the current SCC calculation.  For this latter set,
              we must explicitly add them as dependencies. *)
-          let free_syms =
+          let free_syms = Name_occurrences.symbols free_names in
+          (* RCP is disabled at present
             Name_occurrences.fold_names free_names
               ~init:Symbol.Set.empty
               ~f:(fun free_syms name ->
@@ -106,6 +107,7 @@ let build_dep_graph ~fold_over_lifted_constants =
                     end)
                   ~symbol:(fun sym -> Symbol.Set.add sym free_syms))
           in
+          *)
           let free_code_ids =
             free_names
             |> Name_occurrences.code_ids_and_newer_version_of_code_ids
