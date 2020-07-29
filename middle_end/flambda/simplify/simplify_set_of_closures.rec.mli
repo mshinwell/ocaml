@@ -33,6 +33,6 @@ val simplify_non_lifted_set_of_closures
 val simplify_lifted_sets_of_closures
    : Downwards_acc.t
   -> all_sets_of_closures_and_symbols:
-    (Symbol.t Closure_id.Map.t * Set_of_closures.t) list
-  -> closure_bound_names_all_sets:Name_in_binding_pos.t Closure_id.Map.t
-  -> Bound_symbols.t * (Static_const.t list) * Downwards_acc.t
+    (Symbol.t Closure_id.Lmap.t * Set_of_closures.t) list
+  -> closure_bound_names_all_sets:Name_in_binding_pos.t Closure_id.Map.t list
+  -> Bound_symbols.t * Static_const.Group.t * Downwards_acc.t
