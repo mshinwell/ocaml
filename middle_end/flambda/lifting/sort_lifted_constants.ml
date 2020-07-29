@@ -34,67 +34,44 @@ let build_dep_graph ~fold_over_lifted_constants =
     ~f:(fun (dep_graph, code_id_or_symbol_to_const)
          (lifted_constant, extra_deps) ->
       (* Format.eprintf "One constant: %a\n%!" LC.print lifted_constant; *)
-      let defining_exprs = LC.defining_exprs lifted_constant in
-      let descr = LC.descr lifted_constant in
-      let bound_symbols = LC.bound_symbols lifted_constant in
-
-
-      let free_names_with_envs =
-        (* To avoid existing sets of closures (with or without associated
-           code) being pulled apart, we add a dependency from each code ID
-           or closure symbol being defined to all other code IDs and
-           symbols bound by the same binding. *)
-        match descr with
-        | Singleton { denv; _ } ->
-          [Static_const.free_names defining_expr, Some (DE.typing_env denv)]
-        | Sets_of_closures { sets = bound; _ } ->
-          let from_bound_symbols =
-            (* We never need the environment of definition for symbols or
-               code IDs, only for variables (see below), hence [None] here. *)
-            [Bound_symbols.free_names bound_symbols, None]
+      ListLabels.fold_left (LC.definitions lifted_constant)
+        ~init:[]
+        ~f:(fun (dep_graph, code_id_or_symbol_to_const) definition ->
+          let module D = LC.Definition in
+          let free_names =
+            let free_names =
+              Static_const.free_names (D.defining_expr definition)
+            in
+            match D.descr with
+            | Code _ | Block_like _ -> free_names
+            | Set_of_closures { denv = _; closure_symbols_with_types; } ->
+              (* To avoid existing sets of closures (with or without associated
+                 code) being pulled apart, we add a dependency from each of the
+                 closure symbols (in the current set) to all of the others
+                 (in the current set). *)
+              ListLabels.fold_left
+                (Closure_id.Lmap.data closure_symbols_with_types)
+                ~init:free_names
+                ~f:(fun free_names (symbol, _) ->
+                  Name_occurrences.add_symbol free_names symbol NM.normal)
           in
-          ListLabels.fold_left2
-            bound
-            (Static_const.must_be_sets_of_closures defining_expr)
-            ~init:from_bound_symbols
-            ~f:(fun free_names_with_envs
-                    (bound : LC.for_one_set_of_closures)
-                    (code_and_set_of_closures
-                      : Static_const.Code_and_set_of_closures.t) ->
-              let free_names =
-                Static_const.Code_and_set_of_closures.free_names
-                  code_and_set_of_closures
-              in
-              let typing_env = Option.map DE.typing_env bound.denv in
-              (free_names, typing_env) :: free_names_with_envs)
-      in
-      let free_names_with_envs =
-        match extra_deps with
-        | None -> free_names_with_envs
-        | Some (extra_deps_denv, extra_deps) ->
-          (extra_deps, Some (DE.typing_env extra_deps_denv))
-            :: free_names_with_envs
-      in
-      (* Beware: when coming from [Reify_continuation_params] the
-         sets of closures may have dependencies on variables that are
-         now equal to symbols in the environment.  (They haven't been
-         changed to symbols yet as the simplifier hasn't been run on
-         the definitions.)  Some of these symbols may be the ones
-         involved in the current SCC calculation.  For this latter set,
-         we must explicitly add them as dependencies. *)
-      let free_syms =
-        ListLabels.fold_left free_names_with_envs
-          ~init:Symbol.Set.empty
-          ~f:(fun free_syms (free_names, typing_env) ->
+          (* Beware: when coming from [Reify_continuation_params] the
+             sets of closures may have dependencies on variables that are
+             now equal to symbols in the environment.  (They haven't been
+             changed to symbols yet as the simplifier hasn't been run on
+             the definitions.)  Some of these symbols may be the ones
+             involved in the current SCC calculation.  For this latter set,
+             we must explicitly add them as dependencies. *)
+          let free_syms =
             Name_occurrences.fold_names free_names
-              ~init:free_syms
+              ~init:Symbol.Set.empty
               ~f:(fun free_syms name ->
                 Name.pattern_match name
                   ~var:(fun var ->
                     try
                       let typing_env =
-                        match typing_env with
-                        | Some typing_env -> typing_env
+                        match D.denv definition with
+                        | Some denv -> DE.typing_env denv
                         | None -> assert false  (* see above *)
                       in
                       match
@@ -113,47 +90,35 @@ let build_dep_graph ~fold_over_lifted_constants =
                     with Misc.Fatal_error -> begin
                       if !Clflags.flambda_context_on_error then begin
                         Format.eprintf "\n%sContext is:%s finding canonical \
-                            for %a,@ current constant binding is@ %a =@ %a@ \
-                            with free names:@ %a"
+                            for %a,@ current constant is:@ %a@ \
+                            with [free_names]:@ %a"
                           (Flambda_colours.error ())
                           (Flambda_colours.normal ())
                           Variable.print var
-                          Bound_symbols.print bound_symbols
-                          Static_const.print defining_expr
+                          LC.print lifted_constant
                           Name_occurrences.print free_names
                       end;
                       raise Misc.Fatal_error
                     end)
-                  ~symbol:(fun sym -> Symbol.Set.add sym free_syms)))
-      in
-      let free_code_ids =
-        ListLabels.fold_left free_names_with_envs ~init:Code_id.Set.empty
-          ~f:(fun free_code_ids (free_names, _) ->
+                  ~symbol:(fun sym -> Symbol.Set.add sym free_syms))
+          in
+          let free_code_ids =
             free_names
             |> Name_occurrences.code_ids_and_newer_version_of_code_ids
-            |> Code_id.Set.union free_code_ids)
-      in
-      let deps =
-        CIS.Set.union (CIS.set_of_symbol_set free_syms)
-          (CIS.set_of_code_id_set free_code_ids)
-      in
-      (*
-      Format.eprintf "Deps for %a are:@ %a\n%!"
-        Bound_symbols.print bound_symbols
-        CIS.Set.print deps;
-      *)
-      CIS.Set.fold
-        (fun (being_defined : CIS.t)
-             (dep_graph, code_id_or_symbol_to_const) ->
+          in
+          let deps =
+            CIS.Set.union (CIS.set_of_symbol_set free_syms)
+              (CIS.set_of_code_id_set free_code_ids)
+          in
+          let being_defined =
+            D.bound_symbols definition
+            |> Bound_symbols.everything_being_defined
+          in
           let dep_graph = CIS.Map.add being_defined deps dep_graph in
           let code_id_or_symbol_to_const =
-            CIS.Map.add being_defined
-              lifted_constant
-              code_id_or_symbol_to_const
+            CIS.Map.add being_defined lifted_constant code_id_or_symbol_to_const
           in
-          dep_graph, code_id_or_symbol_to_const)
-        (Bound_symbols.everything_being_defined bound_symbols)
-        (dep_graph, code_id_or_symbol_to_const))
+          dep_graph, code_id_or_symbol_to_const))
 
 let sort ~fold_over_lifted_constants =
   (* The various lifted constants may exhibit recursion between themselves
