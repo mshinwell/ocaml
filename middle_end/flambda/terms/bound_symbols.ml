@@ -16,8 +16,6 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
-module K = Flambda_kind
-
 module Pattern = struct
   type t =
     | Code of Code_id.t

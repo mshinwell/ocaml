@@ -85,12 +85,12 @@ module rec Expr : sig
       (such as is required to bind a [Set_of_closures]). *)
   val create_pattern_let : Bindable_let_bound.t -> Named.t -> t -> t
 
-  (** Create a [Let] expression that binds a statically-allocated
-      value to one or more symbol(s). *)
+  (** Create a [Let] expression that binds one or more statically-allocated
+      values to one or more symbol(s). *)
   val create_let_symbol
      : Bound_symbols.t
     -> Symbol_scoping_rule.t
-    -> Static_const.t
+    -> Static_const.t list
     -> t
     -> t
 
@@ -164,7 +164,7 @@ end and Named : sig
     | Set_of_closures of Set_of_closures.t
       (** Definition of a set of (dynamically allocated) possibly
           mutually-recursive closures. *)
-    | Static_const of Static_const.t
+    | Static_consts of Static_const.t list
       (** Definition of one or more symbols representing statically-allocated
           constants (including sets of closures). *)
 
@@ -181,9 +181,9 @@ end and Named : sig
   (** Convert a set of closures into the defining expression of a [Let]. *)
   val create_set_of_closures : Set_of_closures.t -> t
 
-  (** Convert a statically-allocated constant into the defining expression of
-      a [Let]. *)
-  val create_static_const : Static_const.t -> t
+  (** Convert one or more statically-allocated constants into the defining
+      expression of a [Let]. *)
+  val create_static_consts : Static_const.t list -> t
 
   (** Build an expression boxing the name.  The returned kind is the
       one of the unboxed version. *)
@@ -210,11 +210,11 @@ end and Named : sig
       statically-allocated set of closures). *)
   val is_dynamically_allocated_set_of_closures : t -> bool
 
-  (** Returns [true] iff the given expression is a statically-allocated
-      constant. *)
-  val is_static_const : t -> bool
+  (** Returns [true] iff the given expression is one or more
+      statically-allocated constants. *)
+  val is_static_consts : t -> bool
 
-  val must_be_static_const : t -> Static_const.t
+  val must_be_static_consts : t -> Static_const.t list
 end and Let_expr : sig
   (** The alpha-equivalence classes of expressions that bind variables; and
       the expressions that bind symbols (which are not treated up to
@@ -545,6 +545,7 @@ end and Static_const : sig
       example after a round of simplification. *)
   module Code : sig
     type t = private {
+      code_id : Code_id.t;
       params_and_body : Function_params_and_body.t or_deleted;
       newer_version_of : Code_id.t option;
     }
@@ -557,12 +558,13 @@ end and Static_const : sig
     val free_names : t -> Name_occurrences.t
 
     val create
-      : params_and_body:Function_params_and_body.t or_deleted
+       : Code_id.t
+      -> params_and_body:Function_params_and_body.t or_deleted
       -> newer_version_of:Code_id.t option
       -> t
 
-    (** The piece of code that is [Deleted] with no [newer_version_of]. *)
-    val deleted : t
+    (** A piece of code that is [Deleted] with no [newer_version_of]. *)
+    val deleted : Code_id.t -> t
 
     val make_deleted : t -> t
   end
@@ -603,7 +605,7 @@ end and Static_const : sig
         closure_symbols:Symbol.t Closure_id.Lmap.t
       -> Set_of_closures.t
       -> 'a)
-    -> other:(Symbol.t -> t -> 'a)
+    -> block_like:(Symbol.t -> t -> 'a)
     -> 'a
 
   val match_against_bound_symbols
@@ -616,7 +618,7 @@ end and Static_const : sig
       -> closure_symbols:Symbol.t Closure_id.Lmap.t
       -> Set_of_closures.t
       -> 'a)
-    -> other:('a -> Symbol.t -> t -> 'a)
+    -> block_like:('a -> Symbol.t -> t -> 'a)
     -> 'a
 end
 

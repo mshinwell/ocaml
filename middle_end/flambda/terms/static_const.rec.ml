@@ -110,6 +110,7 @@ end
 
 module Code = struct
   type t = {
+    code_id : Code_id.t;
     params_and_body : Function_params_and_body.t or_deleted;
     newer_version_of : Code_id.t option;
   }
@@ -124,7 +125,8 @@ module Code = struct
       Function_params_and_body.print_with_cache ~cache ppf
         params_and_body
 
-  let print_with_cache ~cache ppf { params_and_body; newer_version_of; } =
+  let print_with_cache ~cache ppf
+        { code_id = _; params_and_body; newer_version_of; } =
     Format.fprintf ppf "@[<hov 1>(\
         @[<hov 1>@<0>%s(newer_version_of@ %a)@<0>%s@]@ \
         %a\
@@ -138,12 +140,18 @@ module Code = struct
   let print ppf code =
     print_with_cache ~cache:(Printing_cache.create ()) ppf code
 
-  let create ~params_and_body ~newer_version_of =
-    { params_and_body;
+  let create code_id ~params_and_body ~newer_version_of =
+    { code_id;
+      params_and_body;
       newer_version_of;
     }
 
-  let free_names { params_and_body; newer_version_of; } =
+  let compare { code_id = code_id1; _ } { code_id = code_id2; _ } =
+    Code_id.compare code_id1 code_id2
+
+  let free_names { code_id = _; params_and_body; newer_version_of; } =
+    (* [code_id] is only in [t] for the use of [compare]; it doesn't
+       count as a free name. *)
     let from_newer_version_of =
       match newer_version_of with
       | None -> Name_occurrences.empty
@@ -159,8 +167,8 @@ module Code = struct
     in
     Name_occurrences.union from_newer_version_of from_params_and_body
 
-  let apply_name_permutation ({ params_and_body; newer_version_of; } as t)
-        perm =
+  let apply_name_permutation
+        ({ code_id; params_and_body; newer_version_of; } as t) perm =
     let params_and_body' =
       match params_and_body with
       | Deleted -> Deleted
@@ -176,11 +184,12 @@ module Code = struct
     in
     if params_and_body == params_and_body' then t
     else
-      { params_and_body = params_and_body';
+      { code_id;
+        params_and_body = params_and_body';
         newer_version_of;
       }
 
-  let all_ids_for_export { params_and_body; newer_version_of; } =
+  let all_ids_for_export { code_id; params_and_body; newer_version_of; } =
     let newer_version_of_ids =
       match newer_version_of with
       | None -> Ids_for_export.empty
@@ -193,9 +202,12 @@ module Code = struct
       | Present params_and_body ->
         Function_params_and_body.all_ids_for_export params_and_body
     in
-    Ids_for_export.union newer_version_of_ids params_and_body_ids
+    Ids_for_export.add_code_id
+      (Ids_for_export.union newer_version_of_ids params_and_body_ids)
+      code_id
 
-  let import import_map { params_and_body; newer_version_of; } =
+  let import import_map { code_id; params_and_body; newer_version_of; } =
+    let code_id = Ids_for_export.Import_map.code_id import_map code_id in
     let params_and_body =
       match params_and_body with
       | Deleted -> Deleted
@@ -212,16 +224,18 @@ module Code = struct
         let older = Ids_for_export.Import_map.code_id import_map older in
         Some older
     in
-    { params_and_body; newer_version_of; }
+    { code_id; params_and_body; newer_version_of; }
 
-  let deleted =
-    { params_and_body = Deleted;
+  let deleted code_id =
+    { code_id;
+      params_and_body = Deleted;
       newer_version_of = None;
     }
 
-  let make_deleted t =
-    { params_and_body = Deleted;
-      newer_version_of = t.newer_version_of;
+  let make_deleted { code_id; params_and_body = _; newer_version_of; } =
+    { code_id;
+      params_and_body = Deleted;
+      newer_version_of;
     }
 end
 
@@ -512,8 +526,9 @@ let all_ids_for_export t =
       Ids_for_export.empty
       fields
 
-let import import_map t = match t with
-  | Code code -> Code (Code.import import_map set )
+let import import_map t =
+  match t with
+  | Code code -> Code (Code.import import_map code)
   | Set_of_closures set ->
     Set_of_closures (Set_of_closures.import import_map set)
   | Block (tag, mut, fields) ->
@@ -563,7 +578,10 @@ let is_fully_static t =
 let can_share0 t =
   match t with
   | Block (_, Immutable, _)
-  | Sets_of_closures _
+  | Code _
+    (* Code will never actually be shared since the [compare] function
+       looks at the code ID. *)
+  | Set_of_closures _
   | Boxed_float _
   | Boxed_int32 _
   | Boxed_int64 _
@@ -595,14 +613,13 @@ let match_against_bound_symbols_pattern t (pat : Bound_symbols.Pattern.t)
       ~code:code_callback ~set_of_closures:set_of_closures_callback
       ~block_like:block_like_callback =
   match t, pat with
-  | Code code, Code code_ids ->
-    let code_ids' = Code_id.Lmap.keys code |> Code_id.Set.of_list in
-    if not (Code_id.Set.equal code_ids code_ids') then begin
+  | Code code, Code code_id ->
+    if not (Code_id.equal code.code_id code_id) then begin
       Misc.fatal_errorf "Mismatch on declared code IDs:@ %a@ =@ %a"
         Bound_symbols.Pattern.print pat
         print t
     end;
-    code_callback code
+    code_callback code_id code
   | Set_of_closures set_of_closures, Set_of_closures closure_symbols ->
     let closure_ids =
       Set_of_closures.function_decls set_of_closures
@@ -610,7 +627,11 @@ let match_against_bound_symbols_pattern t (pat : Bound_symbols.Pattern.t)
       |> Closure_id.Lmap.keys
     in
     let closure_ids' = Closure_id.Lmap.keys closure_symbols in
-    if not (Closure_id.Set.equal closure_id closure_ids') then begin
+    let closure_ids_match =
+      (* Note that we check the order here. *)
+      Misc.Stdlib.List.compare Closure_id.compare closure_ids closure_ids' = 0
+    in
+    if not closure_ids_match then begin
       Misc.fatal_errorf "Mismatch on declared closure IDs:@ %a@ =@ %a"
         Bound_symbols.Pattern.print pat
         print t
@@ -618,10 +639,10 @@ let match_against_bound_symbols_pattern t (pat : Bound_symbols.Pattern.t)
     set_of_closures_callback ~closure_symbols set_of_closures
   | (Block _ | Boxed_float _ | Boxed_int32 _ | Boxed_int64 _
       | Boxed_nativeint _ | Immutable_float_block _ | Immutable_float_array _
-      | Immutable_string _ | Mutable_string _), Other symbol ->
+      | Immutable_string _ | Mutable_string _), Block_like symbol ->
     block_like_callback symbol t
-  | Code _, (Set_of_closures _ | Other _)
-  | Set_of_closures _, (Code _ | Other _)
+  | Code _, (Set_of_closures _ | Block_like _)
+  | Set_of_closures _, (Code _ | Block_like _)
   | (Block _ | Boxed_float _ | Boxed_int32 _ | Boxed_int64 _
       | Boxed_nativeint _ | Immutable_float_block _ | Immutable_float_array _
       | Immutable_string _ | Mutable_string _), (Code _ | Set_of_closures _) ->

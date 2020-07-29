@@ -38,6 +38,7 @@ end
     example after a round of simplification. *)
 module Code : sig
   type t = private {
+    code_id : Code_id.t;
     params_and_body : Function_params_and_body.t or_deleted;
     newer_version_of : Code_id.t option;
   }
@@ -50,12 +51,13 @@ module Code : sig
   val free_names : t -> Name_occurrences.t
 
   val create
-     : params_and_body:Function_params_and_body.t or_deleted
+     : Code_id.t
+    -> params_and_body:Function_params_and_body.t or_deleted
     -> newer_version_of:Code_id.t option
     -> t
 
-  (** The piece of code that is [Deleted] with no [newer_version_of]. *)
-  val deleted : t
+  (** A piece of code that is [Deleted] with no [newer_version_of]. *)
+  val deleted : Code_id.t -> t
 
   val make_deleted : t -> t
 end
@@ -96,7 +98,7 @@ val match_against_bound_symbols_pattern
        closure_symbols:Symbol.t Closure_id.Lmap.t
     -> Set_of_closures.t
     -> 'a)
-  -> other:(Symbol.t -> t -> 'a)
+  -> block_like:(Symbol.t -> t -> 'a)
   -> 'a
 
 val match_against_bound_symbols
@@ -109,5 +111,5 @@ val match_against_bound_symbols
     -> closure_symbols:Symbol.t Closure_id.Lmap.t
     -> Set_of_closures.t
     -> 'a)
-  -> other:('a -> Symbol.t -> t -> 'a)
+  -> block_like:('a -> Symbol.t -> t -> 'a)
   -> 'a
