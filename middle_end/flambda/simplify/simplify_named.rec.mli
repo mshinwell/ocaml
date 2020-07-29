@@ -25,8 +25,8 @@ type simplify_named_result = private
     }
   | Reified of {
       definition : Named.t;
-      bound_symbol : Bound_symbols.t;
-      static_const :  Static_const.t;
+      symbol : Symbol.t;
+      static_const : Static_const.t;
       dacc : Downwards_acc.t;
     }
   | Shared of Symbol.t

@@ -90,7 +90,7 @@ module rec Expr : sig
   val create_let_symbol
      : Bound_symbols.t
     -> Symbol_scoping_rule.t
-    -> Static_const.t list
+    -> Static_const.Group.t
     -> t
     -> t
 
@@ -164,7 +164,7 @@ end and Named : sig
     | Set_of_closures of Set_of_closures.t
       (** Definition of a set of (dynamically allocated) possibly
           mutually-recursive closures. *)
-    | Static_consts of Static_const.t list
+    | Static_consts of Static_const.Group.t
       (** Definition of one or more symbols representing statically-allocated
           constants (including sets of closures). *)
 
@@ -214,7 +214,7 @@ end and Named : sig
       statically-allocated constants. *)
   val is_static_consts : t -> bool
 
-  val must_be_static_consts : t -> Static_const.t list
+  val must_be_static_consts : t -> Static_const.Group.t
 end and Let_expr : sig
   (** The alpha-equivalence classes of expressions that bind variables; and
       the expressions that bind symbols (which are not treated up to
@@ -613,18 +613,45 @@ end and Static_const : sig
     -> block_like:(Symbol.t -> t -> 'a)
     -> 'a
 
-  val match_against_bound_symbols
-    : t list
-    -> Bound_symbols.t
-    -> init:'a
-    -> code:('a -> Code_id.t -> Code.t -> 'a)
-    -> set_of_closures:(
-        'a
-      -> closure_symbols:Symbol.t Closure_id.Lmap.t
-      -> Set_of_closures.t
-      -> 'a)
-    -> block_like:('a -> Symbol.t -> t -> 'a)
-    -> 'a
+  module Group : sig
+    type t
+
+    include Contains_names.S with type t := t
+    include Contains_ids.S with type t := t
+
+    val create : Static_const.t list -> t
+
+    val print_with_cache
+       : cache:Printing_cache.t
+      -> Format.formatter
+      -> t
+      -> unit
+
+    val print : Format.formatter -> t -> unit
+
+    val to_list : t -> Static_const.t list
+
+    val concat : t -> t -> t
+
+    val match_against_bound_symbols
+       : t
+      -> Bound_symbols.t
+      -> init:'a
+      -> code:('a -> Code_id.t -> Code.t -> 'a)
+      -> set_of_closures:(
+          'a
+        -> closure_symbols:Symbol.t Closure_id.Lmap.t
+        -> Set_of_closures.t
+        -> 'a)
+      -> block_like:('a -> Symbol.t -> Static_const.t -> 'a)
+      -> 'a
+
+    val pieces_of_code : t -> Function_params_and_body.t Code_id.Map.t
+
+    val pieces_of_code' : t -> Code.t list
+
+    val is_fully_static : t -> bool
+  end
 end
 
 module Function_declaration = Function_declaration

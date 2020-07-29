@@ -126,7 +126,7 @@ module Iter_sets_of_closures = struct
   and invalid _ _ = ()
 
   and static_consts f bound_symbols static_consts =
-    Static_const.match_against_bound_symbols static_consts bound_symbols
+    Static_const.Group.match_against_bound_symbols static_consts bound_symbols
       ~init:()
       ~code:(fun () _code_id (code : Static_const.Code.t) ->
         match code.params_and_body with

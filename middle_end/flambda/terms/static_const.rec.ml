@@ -259,78 +259,80 @@ type t =
   | Mutable_string of { initial_value : string; }
   | Immutable_string of string
 
+type static_const = t
+
+let print_with_cache ~cache ppf t =
+  match t with
+  | Code code ->
+    fprintf ppf "@[<hov 1>(@<0>%sCode@<0>%s@ %a)@]"
+      (Flambda_colours.static_part ())
+      (Flambda_colours.normal ())
+      (Code.print_with_cache ~cache) code
+  | Set_of_closures set ->
+    fprintf ppf "@[<hov 1>(@<0>%sSet_of_closures@<0>%s@ %a)@]"
+      (Flambda_colours.static_part ())
+      (Flambda_colours.normal ())
+      Set_of_closures.print set
+  | Block (tag, mut, fields) ->
+    fprintf ppf "@[<hov 1>(@<0>%s%sblock@<0>%s@ (tag %a)@ (%a))@]"
+      (Flambda_colours.static_part ())
+      (match mut with
+        | Immutable -> "Immutable_"
+        | Immutable_unique -> "Unique_"
+        | Mutable -> "Mutable_")
+      (Flambda_colours.normal ())
+      Tag.Scannable.print tag
+      (Format.pp_print_list ~pp_sep:Format.pp_print_space
+        Field_of_block.print) fields
+  | Boxed_float or_var ->
+    fprintf ppf "@[<hov 1>(@<0>%sBoxed_float@<0>%s@ %a)@]"
+      (Flambda_colours.static_part ())
+      (Flambda_colours.normal ())
+      (Or_variable.print Numbers.Float_by_bit_pattern.print) or_var
+  | Boxed_int32 or_var ->
+    fprintf ppf "@[<hov 1>(@<0>%sBoxed_int32@<0>%s@ %a)@]"
+      (Flambda_colours.static_part ())
+      (Flambda_colours.normal ())
+      (Or_variable.print Numbers.Int32.print) or_var
+  | Boxed_int64 or_var ->
+    fprintf ppf "@[<hov 1>(@<0>%sBoxed_int64@<0>%s@ %a)@]"
+      (Flambda_colours.static_part ())
+      (Flambda_colours.normal ())
+      (Or_variable.print Numbers.Int64.print) or_var
+  | Boxed_nativeint or_var ->
+    fprintf ppf "@[<hov 1>(@<0>%sBoxed_nativeint@<0>%s@ %a)@]"
+      (Flambda_colours.static_part ())
+      (Flambda_colours.normal ())
+      (Or_variable.print Targetint.print) or_var
+  | Immutable_float_block fields ->
+    fprintf ppf "@[<hov 1>(@<0>%sImmutable_float_block@<0>%s@ @[[| %a |]@])@]"
+      (Flambda_colours.static_part ())
+      (Flambda_colours.normal ())
+      (Format.pp_print_list
+        ~pp_sep:(fun ppf () -> Format.pp_print_string ppf "@; ")
+        (Or_variable.print Numbers.Float_by_bit_pattern.print))
+      fields
+  | Immutable_float_array fields ->
+    fprintf ppf "@[<hov 1>(@<0>%sImmutable_float_array@<0>%s@ @[[| %a |]@])@]"
+      (Flambda_colours.static_part ())
+      (Flambda_colours.normal ())
+      (Format.pp_print_list
+        ~pp_sep:(fun ppf () -> Format.pp_print_string ppf "@; ")
+        (Or_variable.print Numbers.Float_by_bit_pattern.print))
+      fields
+  | Mutable_string { initial_value = s; } ->
+    fprintf ppf "@[<hov 1>(@<0>%sMutable_string@<0>%s@ %S)@]"
+      (Flambda_colours.static_part ())
+      (Flambda_colours.normal ())
+      s
+  | Immutable_string s ->
+    fprintf ppf "@[<hov 1>(@<0>%sImmutable_string@<0>%s@ %S)@]"
+      (Flambda_colours.static_part ())
+      (Flambda_colours.normal ())
+      s
+
 include Identifiable.Make (struct
   type nonrec t = t
-
-  let print_with_cache ~cache ppf t =
-    match t with
-    | Code code ->
-      fprintf ppf "@[<hov 1>(@<0>%sCode@<0>%s@ %a)@]"
-        (Flambda_colours.static_part ())
-        (Flambda_colours.normal ())
-        (Code.print_with_cache ~cache) code
-    | Set_of_closures set ->
-      fprintf ppf "@[<hov 1>(@<0>%sSet_of_closures@<0>%s@ %a)@]"
-        (Flambda_colours.static_part ())
-        (Flambda_colours.normal ())
-        Set_of_closures.print set
-    | Block (tag, mut, fields) ->
-      fprintf ppf "@[<hov 1>(@<0>%s%sblock@<0>%s@ (tag %a)@ (%a))@]"
-        (Flambda_colours.static_part ())
-        (match mut with
-         | Immutable -> "Immutable_"
-         | Immutable_unique -> "Unique_"
-         | Mutable -> "Mutable_")
-        (Flambda_colours.normal ())
-        Tag.Scannable.print tag
-        (Format.pp_print_list ~pp_sep:Format.pp_print_space
-          Field_of_block.print) fields
-    | Boxed_float or_var ->
-      fprintf ppf "@[<hov 1>(@<0>%sBoxed_float@<0>%s@ %a)@]"
-        (Flambda_colours.static_part ())
-        (Flambda_colours.normal ())
-        (Or_variable.print Numbers.Float_by_bit_pattern.print) or_var
-    | Boxed_int32 or_var ->
-      fprintf ppf "@[<hov 1>(@<0>%sBoxed_int32@<0>%s@ %a)@]"
-        (Flambda_colours.static_part ())
-        (Flambda_colours.normal ())
-        (Or_variable.print Numbers.Int32.print) or_var
-    | Boxed_int64 or_var ->
-      fprintf ppf "@[<hov 1>(@<0>%sBoxed_int64@<0>%s@ %a)@]"
-        (Flambda_colours.static_part ())
-        (Flambda_colours.normal ())
-        (Or_variable.print Numbers.Int64.print) or_var
-    | Boxed_nativeint or_var ->
-      fprintf ppf "@[<hov 1>(@<0>%sBoxed_nativeint@<0>%s@ %a)@]"
-        (Flambda_colours.static_part ())
-        (Flambda_colours.normal ())
-        (Or_variable.print Targetint.print) or_var
-    | Immutable_float_block fields ->
-      fprintf ppf "@[<hov 1>(@<0>%sImmutable_float_block@<0>%s@ @[[| %a |]@])@]"
-        (Flambda_colours.static_part ())
-        (Flambda_colours.normal ())
-        (Format.pp_print_list
-          ~pp_sep:(fun ppf () -> Format.pp_print_string ppf "@; ")
-          (Or_variable.print Numbers.Float_by_bit_pattern.print))
-        fields
-    | Immutable_float_array fields ->
-      fprintf ppf "@[<hov 1>(@<0>%sImmutable_float_array@<0>%s@ @[[| %a |]@])@]"
-        (Flambda_colours.static_part ())
-        (Flambda_colours.normal ())
-        (Format.pp_print_list
-          ~pp_sep:(fun ppf () -> Format.pp_print_string ppf "@; ")
-          (Or_variable.print Numbers.Float_by_bit_pattern.print))
-        fields
-    | Mutable_string { initial_value = s; } ->
-      fprintf ppf "@[<hov 1>(@<0>%sMutable_string@<0>%s@ %S)@]"
-        (Flambda_colours.static_part ())
-        (Flambda_colours.normal ())
-        s
-    | Immutable_string s ->
-      fprintf ppf "@[<hov 1>(@<0>%sImmutable_string@<0>%s@ %S)@]"
-        (Flambda_colours.static_part ())
-        (Flambda_colours.normal ())
-        s
 
   let print ppf t =
     print_with_cache ~cache:(Printing_cache.create ()) ppf t
@@ -671,20 +673,65 @@ let match_against_bound_symbols_pattern t (pat : Bound_symbols.Pattern.t)
       Bound_symbols.Pattern.print pat
       print t
 
-let match_against_bound_symbols t_list bound_symbols ~init ~code:code_callback
-      ~set_of_closures:set_of_closures_callback
-      ~block_like:block_like_callback =
-  let bound_symbol_pats = Bound_symbols.to_list bound_symbols in
-  if List.compare_lengths t_list bound_symbol_pats <> 0 then begin
-    Misc.fatal_errorf "Mismatch between length of [Bound_symbols.t] and \
-        [Static_const.t list]:@ %a@ =@ %a"
-      Bound_symbols.print bound_symbols
-      (Format.pp_print_list ~pp_sep:Format.pp_print_space print) t_list
-  end;
-  ListLabels.fold_left2 t_list bound_symbol_pats ~init
-    ~f:(fun acc t bound_symbols_pat ->
-      match_against_bound_symbols_pattern t bound_symbols_pat
-        ~code:(fun code_id code -> code_callback acc code_id code)
-        ~set_of_closures:(fun ~closure_symbols set_of_closures ->
-          set_of_closures_callback acc ~closure_symbols set_of_closures)
-        ~block_like:(fun symbol t -> block_like_callback acc symbol t))
+module Group = struct
+  type nonrec t = t list
+
+  let create static_consts = static_consts
+  let to_list t = t
+
+  let print_with_cache ~cache ppf t =
+    Format.fprintf ppf "@[<hov 1>(%a)@]"
+      (Format.pp_print_list ~pp_sep:Format.pp_print_space
+        (print_with_cache ~cache))
+      t
+
+  let print ppf t =
+    Format.fprintf ppf "@[<hov 1>(%a)@]"
+      (Format.pp_print_list ~pp_sep:Format.pp_print_space print) t
+
+  let free_names t =
+    List.map free_names t
+    |> Name_occurrences.union_list
+
+  let apply_name_permutation t perm =
+    List.map (fun static_const -> apply_name_permutation static_const perm) t
+
+  let all_ids_for_export t =
+    List.map all_ids_for_export t
+    |> Ids_for_export.union_list
+
+  let import import_map t =
+    List.map (import import_map) t
+
+  let match_against_bound_symbols t bound_symbols ~init ~code:code_callback
+        ~set_of_closures:set_of_closures_callback
+        ~block_like:block_like_callback =
+    let bound_symbol_pats = Bound_symbols.to_list bound_symbols in
+    if List.compare_lengths t bound_symbol_pats <> 0 then begin
+      Misc.fatal_errorf "Mismatch between length of [Bound_symbols.t] and \
+          [Static_const.t list]:@ %a@ =@ %a"
+        Bound_symbols.print bound_symbols
+        print t
+    end;
+    ListLabels.fold_left2 t bound_symbol_pats ~init
+      ~f:(fun acc static_const bound_symbols_pat ->
+        match_against_bound_symbols_pattern static_const bound_symbols_pat
+          ~code:(fun code_id code -> code_callback acc code_id code)
+          ~set_of_closures:(fun ~closure_symbols set_of_closures ->
+            set_of_closures_callback acc ~closure_symbols set_of_closures)
+          ~block_like:(fun symbol static_const ->
+            block_like_callback acc symbol static_const))
+
+  let pieces_of_code t =
+    List.filter_map to_code t
+    |> List.filter_map (fun code ->
+      Option.map (fun params_and_body -> Code.code_id code, params_and_body)
+        (Code.params_and_body code))
+    |> Code_id.Map.of_list
+
+  let pieces_of_code' t = List.filter_map to_code t
+
+  let is_fully_static t = List.for_all is_fully_static t
+
+  let concat t1 t2 = t1 @ t2
+end

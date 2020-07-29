@@ -43,9 +43,13 @@ val being_defined : t -> Symbol.Set.t
 
 val code_being_defined : t -> Code_id.Set.t
 
+val non_closure_symbols_being_defined : t -> Symbol.Set.t
+
 val closure_symbols_being_defined : t -> Symbol.Set.t
 
 val everything_being_defined : t -> Code_id_or_symbol.Set.t
+
+val concat : t -> t -> t
 
 include Expr_std.S with type t := t
 include Contains_ids.S with type t := t

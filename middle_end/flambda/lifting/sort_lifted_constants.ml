@@ -31,18 +31,17 @@ let empty_result = {
 let build_dep_graph ~fold_over_lifted_constants =
   (* Format.eprintf "SORTING:\n%!"; *)
   fold_over_lifted_constants ~init:(CIS.Map.empty, CIS.Map.empty)
-    ~f:(fun (dep_graph, code_id_or_symbol_to_const)
-         (lifted_constant, extra_deps) ->
+    ~f:(fun (dep_graph, code_id_or_symbol_to_const) lifted_constant ->
       (* Format.eprintf "One constant: %a\n%!" LC.print lifted_constant; *)
       ListLabels.fold_left (LC.definitions lifted_constant)
-        ~init:[]
+        ~init:(dep_graph, code_id_or_symbol_to_const)
         ~f:(fun (dep_graph, code_id_or_symbol_to_const) definition ->
           let module D = LC.Definition in
           let free_names =
             let free_names =
               Static_const.free_names (D.defining_expr definition)
             in
-            match D.descr with
+            match D.descr definition with
             | Code _ | Block_like _ -> free_names
             | Set_of_closures { denv = _; closure_symbols_with_types; } ->
               (* To avoid existing sets of closures (with or without associated
@@ -119,11 +118,16 @@ let build_dep_graph ~fold_over_lifted_constants =
             D.bound_symbols definition
             |> Bound_symbols.everything_being_defined
           in
-          let dep_graph = CIS.Map.add being_defined deps dep_graph in
-          let code_id_or_symbol_to_const =
-            CIS.Map.add being_defined lifted_constant code_id_or_symbol_to_const
-          in
-          dep_graph, code_id_or_symbol_to_const))
+          CIS.Set.fold
+            (fun being_defined (dep_graph, code_id_or_symbol_to_const) ->
+              let dep_graph = CIS.Map.add being_defined deps dep_graph in
+              let code_id_or_symbol_to_const =
+                CIS.Map.add being_defined lifted_constant
+                  code_id_or_symbol_to_const
+              in
+              dep_graph, code_id_or_symbol_to_const)
+            being_defined
+            (dep_graph, code_id_or_symbol_to_const)))
 
 let sort ~fold_over_lifted_constants =
   (* The various lifted constants may exhibit recursion between themselves
@@ -150,7 +154,7 @@ let sort ~fold_over_lifted_constants =
              | No_loop code_id_or_symbol -> [code_id_or_symbol]
              | Has_loop code_id_or_symbols -> code_id_or_symbols
            in
-           let lifted_constants =
+           let _, lifted_constants =
              ListLabels.fold_left code_id_or_symbols
                ~init:(CIS.Set.empty, [])
                ~f:(fun ((already_seen, definitions) as acc) code_id_or_symbol ->

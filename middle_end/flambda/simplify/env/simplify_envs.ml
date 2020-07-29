@@ -445,7 +445,7 @@ end = struct
       ~f:(fun denv lifted_constant ->
         let pieces_of_code =
           LC.defining_exprs lifted_constant
-          |> List.filter_map Static_const.to_code
+          |> Static_const.Group.pieces_of_code'
         in
         List.fold_left (fun denv (code : Static_const.Code.t) ->
             match code.params_and_body with
@@ -724,6 +724,11 @@ end = struct
         defining_expr;
       }
 
+    let denv t =
+      match t.descr with
+      | Code _ -> None
+      | Set_of_closures { denv; _ } | Block_like { denv; _ } -> Some denv
+
     let bound_symbols_pattern t =
       let module P = Bound_symbols.Pattern in
       match t.descr with
@@ -731,6 +736,9 @@ end = struct
       | Set_of_closures { closure_symbols_with_types; denv = _; } ->
         P.set_of_closures (Closure_id.Lmap.map fst closure_symbols_with_types)
       | Block_like { symbol; _ } -> P.block_like symbol
+
+    let bound_symbols t =
+      Bound_symbols.create [bound_symbols_pattern t]
 
     let types_of_symbols t =
       match t.descr with
@@ -766,7 +774,8 @@ end = struct
 
   let concat = List.concat
 
-  let defining_exprs t = List.map Definition.defining_expr t
+  let defining_exprs t =
+    Static_const.Group.create (List.map Definition.defining_expr t)
 
   let bound_symbols t =
     Bound_symbols.create (List.map Definition.bound_symbols_pattern t)

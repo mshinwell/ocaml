@@ -20,7 +20,7 @@ type t =
   | Simple of Simple.t
   | Prim of Flambda_primitive.t * Debuginfo.t
   | Set_of_closures of Set_of_closures.t
-  | Static_consts of Static_const.t list
+  | Static_consts of Static_const.Group.t
 
 let create_simple simple = Simple simple
 let create_prim prim dbg = Prim (prim, dbg)
@@ -39,9 +39,7 @@ let print_with_cache ~cache ppf (t : t) =
   | Set_of_closures set_of_closures ->
     Set_of_closures.print_with_cache ~cache ppf set_of_closures
   | Static_consts consts ->
-    Format.fprintf ppf "@[<hov 1>(%a)@]"
-      (Format.pp_print_list ~pp_sep:Format.pp_print_space Static_const.print)
-      consts
+    Static_const.Group.print_with_cache ~cache ppf consts
 
 let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
@@ -75,9 +73,7 @@ let free_names t =
   | Simple simple -> Simple.free_names simple
   | Prim (prim, _dbg) -> Flambda_primitive.free_names prim
   | Set_of_closures set -> Set_of_closures.free_names set
-  | Static_consts consts ->
-    List.map Static_const.free_names consts
-    |> Name_occurrences.union_list
+  | Static_consts consts -> Static_const.Group.free_names consts
 
 let apply_name_permutation t perm =
   match t with
@@ -94,20 +90,16 @@ let apply_name_permutation t perm =
     if set == set' then t
     else Set_of_closures set'
   | Static_consts consts ->
-    let consts =
-      List.map (fun const -> Static_const.apply_name_permutation const perm)
-        consts
-    in
-    Static_consts consts
+    let consts' = Static_const.Group.apply_name_permutation consts perm in
+    if consts == consts' then t
+    else Static_consts consts'
 
 let all_ids_for_export t =
   match t with
   | Simple simple -> Ids_for_export.from_simple simple
   | Prim (prim, _dbg) -> Flambda_primitive.all_ids_for_export prim
   | Set_of_closures set -> Set_of_closures.all_ids_for_export set
-  | Static_consts consts ->
-    List.map Static_const.all_ids_for_export consts
-    |> Ids_for_export.union_list
+  | Static_consts consts -> Static_const.Group.all_ids_for_export consts
 
 let import import_map t =
   match t with
@@ -121,7 +113,8 @@ let import import_map t =
     let set = Set_of_closures.import import_map set in
     Set_of_closures set
   | Static_consts consts ->
-    Static_consts (List.map (Static_const.import import_map) consts)
+    let consts = Static_const.Group.import import_map consts in
+    Static_consts consts
 
 let box_value name (kind : Flambda_kind.t) dbg : t * Flambda_kind.t =
   let simple = Simple.name name in

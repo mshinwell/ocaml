@@ -63,7 +63,7 @@ let lift dacc ty ~bound_to static_const =
       end;
       let dacc =
         let denv = DA.denv dacc in
-        Lifted_constant.create_singleton symbol static_const denv ty
+        Lifted_constant.create_block_like symbol static_const denv ty
         |> DA.add_lifted_constant dacc
       in
       let dacc =

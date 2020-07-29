@@ -131,6 +131,9 @@ let closure_symbols_being_defined t =
   List.map Pattern.closure_symbols_being_defined t
   |> Symbol.Set.union_list
 
+let non_closure_symbols_being_defined t =
+  Symbol.Set.diff (being_defined t) (closure_symbols_being_defined t)
+
 let code_being_defined t =
   List.map Pattern.code_being_defined t
   |> Code_id.Set.union_list
@@ -151,3 +154,5 @@ let all_ids_for_export t =
 
 let import import_map t =
   List.map (Pattern.import import_map) t
+
+let concat t1 t2 = t1 @ t2

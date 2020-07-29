@@ -625,28 +625,26 @@ let simplify_and_lift_set_of_closures dacc ~closure_bound_vars_inverse
     |> Closure_id.Map.to_seq
     |> Closure_id.Lmap.of_seq
   in
-  let static_const : SC.t =
-    let code =
-      Code_id.Lmap.mapi (fun code_id params_and_body : SC.Code.t ->
-          let newer_version_of =
-            Code_id.Map.find code_id (C.new_to_old_code_ids_all_sets context)
-          in
-          { params_and_body = Present params_and_body;
-            newer_version_of = Some newer_version_of;
-          })
-        code
-    in
-    Sets_of_closures [{
-      code;
-      set_of_closures;
-    }]
+  let dacc =
+    ListLabels.fold_left (Code_id.Lmap.bindings code)
+      ~init:dacc
+      ~f:(fun dacc (code_id, params_and_body) ->
+        let newer_version_of =
+          Code_id.Map.find code_id (C.new_to_old_code_ids_all_sets context)
+        in
+        let code =
+          SC.Code.create code_id
+            ~params_and_body:(Present params_and_body)
+            ~newer_version_of:(Some newer_version_of)
+        in
+        LC.create_code code_id (Code code)
+        |> DA.add_lifted_constant dacc)
   in
   let set_of_closures_lifted_constant =
     Lifted_constant.create_set_of_closures
-      (Code_id.Lmap.keys code |> Code_id.Set.of_list)
       denv
       ~closure_symbols_with_types
-      static_const
+      (Set_of_closures set_of_closures)
   in
   let dacc =
     DA.add_lifted_constant dacc set_of_closures_lifted_constant
@@ -707,8 +705,10 @@ let simplify_non_lifted_set_of_closures0 dacc bound_vars ~closure_bound_vars
           Some (Code_id.Map.find code_id newer_versions_of)
         in
         let lifted_constant =
-          Static_const.Code.create ~params_and_body ~newer_version_of
-          |> LC.create_code code_id
+          LC.create_code code_id
+            (Code (Static_const.Code.create code_id
+              ~params_and_body:(Present params_and_body)
+              ~newer_version_of))
         in
         lifted_constant :: lifted_constants)
       code
@@ -855,26 +855,36 @@ let simplify_lifted_set_of_closures0 context ~closure_symbols
         denv)
   in
   let code =
-    Code_id.Lmap.mapi (fun code_id params_and_body : SC.Code.t ->
+    Code_id.Lmap.mapi (fun code_id params_and_body ->
         let newer_version_of =
           Code_id.Map.find_opt code_id (C.new_to_old_code_ids_all_sets context)
         in
-        { params_and_body = Present params_and_body;
-          newer_version_of;
-        })
+        SC.Code.create code_id
+          ~params_and_body:(Present params_and_body)
+          ~newer_version_of)
       code
   in
-  let code_pattern : Bound_symbols.Pattern.t =
-    Code (Code_id.Lmap.keys code |> Code_id.Set.of_list)
+  let code_patterns =
+    Code_id.Lmap.keys code
+    |> List.map Bound_symbols.Pattern.code
   in
-  let set_of_closures_pattern : Bound_symbols.Pattern.t =
-    Set_of_closures closure_symbols
+  let set_of_closures_pattern =
+    Bound_symbols.Pattern.set_of_closures closure_symbols
   in
-  let code_static_const : SC.t = Code code in
+  let bound_symbols =
+    set_of_closures_pattern :: code_patterns
+    |> Bound_symbols.create
+  in
+  let code_static_consts =
+    ListLabels.map (Code_id.Lmap.bindings code)
+      ~f:(fun (_code_id, code) : SC.t -> Code code)
+  in
   let set_of_closures_static_const : SC.t = Set_of_closures set_of_closures in
-  [code_pattern; set_of_closures_pattern],
-    [code_static_const; set_of_closures_static_const],
-    dacc
+  let static_consts =
+    set_of_closures_static_const :: code_static_consts
+    |> Static_const.Group.create
+  in
+  bound_symbols, static_consts, dacc
 
 let simplify_lifted_sets_of_closures dacc ~all_sets_of_closures_and_symbols
       ~closure_bound_names_all_sets =
@@ -915,8 +925,15 @@ let simplify_lifted_sets_of_closures dacc ~all_sets_of_closures_and_symbols
          (closure_elements, closure_element_types) ->
       let patterns, static_consts, dacc =
         if Set_of_closures.is_empty set_of_closures then begin
-          [Bound_symbols.Pattern.set_of_closures closure_symbols],
-            [set_of_closures], dacc
+          let bound_symbols =
+            Bound_symbols.create
+              [Bound_symbols.Pattern.set_of_closures closure_symbols]
+          in
+          let static_consts =
+            Static_const.Group.create
+              [Static_const.Set_of_closures set_of_closures]
+          in
+          bound_symbols, static_consts, dacc
         end else begin
           simplify_lifted_set_of_closures0 context ~closure_symbols
             ~closure_bound_names_inside ~closure_elements
@@ -925,7 +942,9 @@ let simplify_lifted_sets_of_closures dacc ~all_sets_of_closures_and_symbols
       in
       (* The order doesn't matter here -- see comment in
          [Simplify_static_const] where this function is called from. *)
-      patterns @ patterns_acc, static_consts @ static_consts_acc, dacc)
+      Bound_symbols.concat patterns patterns_acc,
+        Static_const.Group.concat static_consts static_consts_acc,
+        dacc)
     ([], [], dacc)
     all_sets_of_closures_and_symbols
     closure_bound_names_inside_all_sets

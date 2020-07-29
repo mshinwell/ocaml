@@ -67,7 +67,7 @@ val create_let : Var_in_binding_pos.t -> Named.t -> t -> t
 val create_let_symbol
    : Bound_symbols.t
   -> Symbol_scoping_rule.t
-  -> Static_const.t list
+  -> Static_const.Group.t
   -> t
   -> t
 

@@ -214,7 +214,7 @@ let bind_let_bound ~bindings ~body =
     (List.rev bindings)
 
 let create_let_symbol0 uacc code_age_relation (bound_symbols : Bound_symbols.t)
-      (static_consts : Static_const.t list) body =
+      static_consts body =
 (*
   Format.eprintf "create_let_symbol %a\n%!" Bound_symbols.print bound_symbols;
 *)
@@ -259,13 +259,18 @@ let create_let_symbol0 uacc code_age_relation (bound_symbols : Bound_symbols.t)
     let code_ids_to_make_deleted =
       (* CR-someday mshinwell: This could be made more precise, but would
          probably require a proper analysis. *)
-      let code_ids_static_const =
-        Name_occurrences.code_ids (Static_const.free_names static_const)
+      let code_ids_static_consts =
+        ListLabels.fold_left (Static_const.Group.to_list static_consts)
+          ~init:Code_id.Set.empty
+          ~f:(fun code_ids static_const ->
+            Static_const.free_names static_const
+            |> Name_occurrences.code_ids
+            |> Code_id.Set.union code_ids)
       in
       let code_ids_only_used_in_newer_version_of =
         Code_id.Set.inter all_code_ids_bound_names
           (Code_id.Set.diff code_ids_only_used_in_newer_version_of_after
-            code_ids_static_const)
+            code_ids_static_consts)
       in
       (* We cannot delete code unless it is certain that a non-trivial join
          operation between later versions of it cannot happen. *)
@@ -283,22 +288,20 @@ let create_let_symbol0 uacc code_age_relation (bound_symbols : Bound_symbols.t)
     in
     let module Code = Static_const.Code in
     let static_consts =
-      ListLabels.map static_consts ~f:(fun static_const : Static_const.t ->
-        match Static_const.to_code static_const with
-        | Some code
+      ListLabels.map (Static_const.Group.to_list static_consts)
+        ~f:(fun static_const : Static_const.t ->
+          match Static_const.to_code static_const with
+          | Some code
             when Code_id.Set.mem (Code.code_id code) code_ids_to_make_deleted ->
-          Code (Static_const.Code.make_deleted code)
-        | Some _ | None -> static_const)
+            Code (Static_const.Code.make_deleted code)
+          | Some _ | None -> static_const)
+      |> Static_const.Group.create
     in
     let expr =
       Expr.create_let_symbol bound_symbols Syntactic static_consts body
     in
     let uacc =
-      List.filter_map Static_const.to_code static_consts
-      |> List.filter_map (fun code ->
-        Option.map (fun params_and_body -> Code.code_id code, params_and_body)
-          (Code.params_and_body code))
-      |> Code_id.Map.of_list
+      Static_const.Group.pieces_of_code static_consts
       |> UA.remember_code_for_cmx uacc
     in
     expr, uacc
@@ -328,14 +331,19 @@ let remove_unused_closure_vars uacc (static_const : Static_const.t)
   | Mutable_string _
   | Immutable_string _ -> static_const
 
-let remove_unused_closure_vars uacc static_consts =
+let remove_unused_closure_vars_list uacc static_consts =
   List.map (remove_unused_closure_vars uacc) static_consts
 
 let create_let_symbol uacc (scoping_rule : Symbol_scoping_rule.t)
       code_age_relation lifted_constant body =
   let bound_symbols = LC.bound_symbols lifted_constant in
   let defining_exprs = LC.defining_exprs lifted_constant in
-  let static_consts = remove_unused_closure_vars_list uacc defining_expr in
+  let static_consts =
+    defining_exprs
+    |> Static_const.Group.to_list
+    |> remove_unused_closure_vars_list uacc
+    |> Static_const.Group.create
+  in
   match scoping_rule with
   | Syntactic ->
     create_let_symbol0 uacc code_age_relation bound_symbols static_consts body
@@ -344,13 +352,7 @@ let create_let_symbol uacc (scoping_rule : Symbol_scoping_rule.t)
       Expr.create_let_symbol bound_symbols scoping_rule static_consts body
     in
     let uacc =
-      Static_const.match_against_bound_symbols defining_exprs bound_symbols
-        ~init:Code_id.Map.empty
-        ~code:(fun pieces_of_code code_id code ->
-          Code_id.Map.add code_id code pieces_of_code)
-        ~set_of_closures:(fun pieces_of_code ~closure_symbols:_ _ ->
-          pieces_of_code)
-        ~other:(fun pieces_of_code _ _ -> pieces_of_code)
+      Static_const.Group.pieces_of_code defining_exprs
       |> UA.remember_code_for_cmx uacc
     in
     expr, uacc

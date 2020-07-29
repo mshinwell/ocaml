@@ -51,12 +51,13 @@ module Code : sig
   val free_names : t -> Name_occurrences.t
 
   val create
-     : Code_id.t
+     : Code_id.t  (** needed for [compare], although useful otherwise too *)
     -> params_and_body:Function_params_and_body.t or_deleted
     -> newer_version_of:Code_id.t option
     -> t
 
   (** A piece of code that is [Deleted] with no [newer_version_of]. *)
+  (* CR mshinwell: rename to [create_deleted] *)
   val deleted : Code_id.t -> t
 
   val code_id : t -> Code_id.t
@@ -83,6 +84,8 @@ type t =
   | Mutable_string of { initial_value : string; }
   | Immutable_string of string
 
+type static_const = t
+
 include Identifiable.S with type t := t
 include Contains_names.S with type t := t
 include Contains_ids.S with type t := t
@@ -106,15 +109,39 @@ val match_against_bound_symbols_pattern
   -> block_like:(Symbol.t -> t -> 'a)
   -> 'a
 
-val match_against_bound_symbols
-   : t list
-  -> Bound_symbols.t
-  -> init:'a
-  -> code:('a -> Code_id.t -> Code.t -> 'a)
-  -> set_of_closures:(
-       'a
-    -> closure_symbols:Symbol.t Closure_id.Lmap.t
-    -> Set_of_closures.t
-    -> 'a)
-  -> block_like:('a -> Symbol.t -> t -> 'a)
-  -> 'a
+(* CR mshinwell: This should probably move to its own file. *)
+module Group : sig
+  type t
+
+  include Contains_names.S with type t := t
+  include Contains_ids.S with type t := t
+
+  val create : static_const list -> t
+
+  val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
+
+  val print : Format.formatter -> t -> unit
+
+  val to_list : t -> static_const list
+
+  val concat : t -> t -> t
+
+  val match_against_bound_symbols
+     : t
+    -> Bound_symbols.t
+    -> init:'a
+    -> code:('a -> Code_id.t -> Code.t -> 'a)
+    -> set_of_closures:(
+        'a
+      -> closure_symbols:Symbol.t Closure_id.Lmap.t
+      -> Set_of_closures.t
+      -> 'a)
+    -> block_like:('a -> Symbol.t -> static_const -> 'a)
+    -> 'a
+
+  val pieces_of_code : t -> Function_params_and_body.t Code_id.Map.t
+
+  val pieces_of_code' : t -> Code.t list
+
+  val is_fully_static : t -> bool
+end

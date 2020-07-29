@@ -58,7 +58,7 @@ let shape_colour descr =
    doesn't become used soon. *)
 
 let flatten_for_printing0 bound_symbols scoping_rule defining_exprs =
-  Static_const.match_against_bound_symbols defining_exprs bound_symbols
+  Static_const.Group.match_against_bound_symbols defining_exprs bound_symbols
     ~init:([], false)
     ~code:(fun (flattened_acc, second_or_later_rec_binding)
           code_id code ->

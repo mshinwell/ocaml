@@ -293,7 +293,7 @@ module type Lifted_constant = sig
 
     val defining_expr : t -> Static_const.t
 
-    val denv : t -> Downwards_env.t option
+    val denv : t -> downwards_env option
 
     val code : Code_id.t -> Static_const.t -> t
 
@@ -340,7 +340,7 @@ module type Lifted_constant = sig
 
   val definitions : t -> Definition.t list
   val bound_symbols : t -> Bound_symbols.t
-  val defining_exprs : t -> Flambda.Static_const.t list
+  val defining_exprs : t -> Flambda.Static_const.Group.t
   val types_of_symbols : t -> (downwards_env * Flambda_type.t) Symbol.Map.t
 
   val concat : t list -> t

@@ -245,7 +245,7 @@ let simplify_static_consts dacc (bound_symbols : Bound_symbols.t)
   in
   let bound_symbols', static_consts', dacc =
     Simplify_set_of_closures.simplify_lifted_sets_of_closures dacc
-      ~all_sets_of_closures ~closure_symbols_all_sets
+      ~all_sets_of_closures_and_symbols
       ~closure_bound_names_all_sets
   in
   (* The ordering of these lists doesn't matter as they will go through

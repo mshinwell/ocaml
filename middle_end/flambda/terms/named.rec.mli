@@ -27,7 +27,7 @@ type t = private
   | Set_of_closures of Set_of_closures.t
     (** Definition of a set of (dynamically allocated) possibly
         mutually-recursive closures. *)
-  | Static_consts of Static_const.t list
+  | Static_consts of Static_const.Group.t
     (* CR mshinwell: Add comment regarding ordering, recursion, etc. *)
     (** Definition of one or more symbols representing statically-allocated
         constants (including sets of closures). *)
@@ -84,4 +84,4 @@ val is_dynamically_allocated_set_of_closures : t -> bool
     constants. *)
 val is_static_consts : t -> bool
 
-val must_be_static_consts : t -> Static_const.t list
+val must_be_static_consts : t -> Static_const.Group.t
