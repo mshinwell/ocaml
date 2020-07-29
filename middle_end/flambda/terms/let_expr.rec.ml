@@ -139,7 +139,7 @@ let print_flattened ppf
         descr;
         scoping_rule;
       } =
-  fprintf ppf "@[<hov 1>";
+  fprintf ppf "@[<hov 0>";
   (*
   if second_or_later_rec_binding
     && not second_or_later_binding_within_one_set
@@ -149,7 +149,7 @@ let print_flattened ppf
       (Flambda_colours.normal ())
   end else *) if second_or_later_rec_binding then begin
     fprintf ppf "@<0>%sand @<0>%s"
-      (Flambda_colours.elide ())
+      (Flambda_colours.expr_keyword ())
       (Flambda_colours.normal ())
   end else begin
     let shape =
