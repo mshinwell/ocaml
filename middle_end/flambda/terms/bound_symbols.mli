@@ -33,6 +33,8 @@ end
 
 type t
 
+val empty : t
+
 val create : Pattern.t list -> t
 
 val singleton : Pattern.t -> t

@@ -679,6 +679,8 @@ module Group = struct
   let create static_consts = static_consts
   let to_list t = t
 
+  let empty = []
+
   let print_with_cache ~cache ppf t =
     Format.fprintf ppf "@[<hov 1>(%a)@]"
       (Format.pp_print_list ~pp_sep:Format.pp_print_space

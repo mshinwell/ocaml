@@ -106,6 +106,8 @@ end
 
 type t = Pattern.t list
 
+let empty = []
+
 let create pattern_list = pattern_list
 
 let singleton pattern = [pattern]

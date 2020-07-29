@@ -945,7 +945,7 @@ let simplify_lifted_sets_of_closures dacc ~all_sets_of_closures_and_symbols
       Bound_symbols.concat patterns patterns_acc,
         Static_const.Group.concat static_consts static_consts_acc,
         dacc)
-    ([], [], dacc)
+    (Bound_symbols.empty, Static_const.Group.empty, dacc)
     all_sets_of_closures_and_symbols
     closure_bound_names_inside_all_sets
     closure_elements_and_types_all_sets

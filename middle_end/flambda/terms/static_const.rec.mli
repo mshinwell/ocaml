@@ -116,6 +116,8 @@ module Group : sig
   include Contains_names.S with type t := t
   include Contains_ids.S with type t := t
 
+  val empty : t
+
   val create : static_const list -> t
 
   val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
