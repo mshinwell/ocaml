@@ -443,17 +443,18 @@ end = struct
     in
     LCS.fold lifted ~init:(with_typing_env t typing_env)
       ~f:(fun denv lifted_constant ->
-        let defining_expr = LC.defining_expr lifted_constant in
-        Code_id.Lmap.fold
-          (fun code_id
-               ({ params_and_body; newer_version_of; } : Static_const.Code.t)
-               denv ->
-            match params_and_body with
+        let pieces_of_code =
+          LC.defining_exprs lifted_constant
+          |> List.filter_map Static_const.to_code
+        in
+        List.fold_left (fun denv (code : Static_const.Code.t) ->
+            match code.params_and_body with
             | Present params_and_body ->
-              define_code denv ?newer_version_of ~code_id ~params_and_body
+              define_code denv ?newer_version_of:code.newer_version_of
+                ~code_id:code.code_id ~params_and_body
             | Deleted -> denv)
-          (Static_const.get_pieces_of_code defining_expr)
-          denv)
+          denv
+          pieces_of_code)
 
   let add_lifted_constant t const =
     add_lifted_constants t (Lifted_constant_state.singleton const)
@@ -662,13 +663,13 @@ end = struct
     type descr =
       | Code of Code_id.t
       | Set_of_closures of {
-          denv : downwards_env;
+          denv : Downwards_env.t;
           closure_symbols_with_types
             : (Symbol.t * Flambda_type.t) Closure_id.Lmap.t;
         }
       | Block_like of {
           symbol : Symbol.t;
-          denv : downwards_env;
+          denv : Downwards_env.t;
           ty : Flambda_type.t;
         }
 
@@ -690,10 +691,13 @@ end = struct
           symbols
       | Block_like { symbol; _ } -> Symbol.print ppf symbol
 
-    let print ppf t =
+    let print ppf { descr; defining_expr; } =
       Format.fprintf ppf "@[<hov 1>(\
-          @[<hov 1>
+          @[<hov 1>(descr@ %a)@]@ \
+          @[<hov 1>(defining_expr@ %a)@]\
           @]"
+        print_descr descr
+        Static_const.print defining_expr
 
     let descr t = t.descr
     let defining_expr t = t.defining_expr
@@ -722,19 +726,19 @@ end = struct
 
     let bound_symbols_pattern t =
       let module P = Bound_symbols.Pattern in
-      match t with
+      match t.descr with
       | Code code_id -> P.code code_id
-      | Set_of_closures { closure_symbols_with_types; } ->
-        P.set_of_closures (List.map fst closure_symbols_with_types)
-      | Block_like { symbol; _ } -> P.other symbol
+      | Set_of_closures { closure_symbols_with_types; denv = _; } ->
+        P.set_of_closures (Closure_id.Lmap.map fst closure_symbols_with_types)
+      | Block_like { symbol; _ } -> P.block_like symbol
 
     let types_of_symbols t =
-      match t with
+      match t.descr with
       | Code _ -> Symbol.Map.empty
       | Set_of_closures { denv; closure_symbols_with_types; } ->
         Closure_id.Lmap.fold (fun _closure_id (symbol, ty) types_of_symbols ->
             Symbol.Map.add symbol (denv, ty) types_of_symbols)
-          for_one_set.closure_symbols_with_types
+          closure_symbols_with_types
           Symbol.Map.empty
       | Block_like { symbol; denv; ty; _ } ->
         Symbol.Map.singleton symbol (denv, ty)
@@ -742,12 +746,14 @@ end = struct
 
   type t = Definition.t list
 
+  let definitions t = t
+
   let print ppf t =
     Format.fprintf ppf "@[<hov 1>(%a)@]"
       (Format.pp_print_list ~pp_sep:Format.pp_print_space Definition.print)
       t
 
-  let create_other symbol defining_expr denv ty =
+  let create_block_like symbol defining_expr denv ty =
     (* CR mshinwell: check that [defining_expr] is not a set of closures
        or code *)
     [Definition.block_like denv symbol ty defining_expr]
@@ -755,21 +761,22 @@ end = struct
   let create_set_of_closures denv ~closure_symbols_with_types defining_expr =
     [Definition.set_of_closures denv ~closure_symbols_with_types defining_expr]
 
-  let code code_id defining_expr =
+  let create_code code_id defining_expr =
     [Definition.code code_id defining_expr]
 
-  let concat t1 t2 =
-    t1 @ t2
+  let concat = List.concat
 
   let defining_exprs t = List.map Definition.defining_expr t
 
   let bound_symbols t =
-    Bound_symbols.create (List.map Definition.bound_symbols t)
+    Bound_symbols.create (List.map Definition.bound_symbols_pattern t)
 
   let types_of_symbols t =
-    ListLabels.fold_left (Definition.types_of_symbols t)
+    ListLabels.fold_left t
       ~init:Symbol.Map.empty
-      ~f:Symbol.Map.union
+      ~f:(fun types_of_symbols definition ->
+        Symbol.Map.disjoint_union (Definition.types_of_symbols definition)
+          types_of_symbols)
 end and Lifted_constant_state : sig
   include I.Lifted_constant_state
     with type lifted_constant := Lifted_constant.t

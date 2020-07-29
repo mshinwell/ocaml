@@ -1014,8 +1014,12 @@ let ilambda_to_flambda ~backend ~module_ident ~module_block_size_in_words
           ~dbg:Debuginfo.none
         |> Expr.create_apply_cont
       in
-      Flambda.Expr.create_let_symbol (Singleton module_symbol)
-        Syntactic static_const return
+      Flambda.Expr.create_let_symbol
+        (Bound_symbols.singleton
+          (Bound_symbols.Pattern.block_like module_symbol))
+        Syntactic
+        [static_const]
+        return
     in
     let block_access : P.Block_access_kind.t =
       Values {
@@ -1068,24 +1072,18 @@ let ilambda_to_flambda ~backend ~module_ident ~module_block_size_in_words
   let exn_continuation = ilam.exn_continuation.exn_handler in
   let body =
     List.fold_left (fun body (code_id, params_and_body) ->
-        let bound_symbols : Bound_symbols.t =
-          Sets_of_closures [{
-            code_ids = Code_id.Set.singleton code_id;
-            closure_symbols = Closure_id.Lmap.empty;
-          }]
+        let bound_symbols =
+          Bound_symbols.singleton (Bound_symbols.Pattern.code code_id)
         in
         let static_const : Static_const.t =
-          let code : Static_const.Code.t =
-            { params_and_body = Present params_and_body;
-              newer_version_of = None;
-            }
+          let code =
+            Static_const.Code.create code_id
+              ~params_and_body:(Present params_and_body)
+              ~newer_version_of:None
           in
-          Sets_of_closures [{
-            code = Code_id.Lmap.singleton code_id code;
-            set_of_closures = Set_of_closures.empty;
-          }]
+          Code code
         in
-        Flambda.Expr.create_let_symbol bound_symbols Syntactic static_const
+        Flambda.Expr.create_let_symbol bound_symbols Syntactic [static_const]
           body)
       body
       t.code
@@ -1106,8 +1104,11 @@ let ilambda_to_flambda ~backend ~module_ident ~module_block_size_in_words
   end;
   let body =
     List.fold_left (fun body (symbol, static_const) ->
-        Flambda.Expr.create_let_symbol (Singleton symbol) Syntactic
-          static_const body)
+        let bound_symbols =
+          Bound_symbols.singleton (Bound_symbols.Pattern.block_like symbol)
+        in
+        Flambda.Expr.create_let_symbol bound_symbols Syntactic
+          [static_const] body)
       body
       t.declared_symbols
   in

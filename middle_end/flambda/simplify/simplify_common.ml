@@ -201,7 +201,7 @@ let bind_let_bound ~bindings ~body =
         | Set_of_closures _ -> Expr.create_pattern_let bound defining_expr expr
         | Symbols { bound_symbols; scoping_rule; } ->
           begin match defining_expr with
-          | Static_const s ->
+          | Static_consts s ->
             Expr.create_let_symbol bound_symbols scoping_rule s expr
           | Simple _ | Prim _ | Set_of_closures _ ->
             Misc.fatal_errorf "Cannot bind [Symbols] to anything other than \
@@ -214,13 +214,13 @@ let bind_let_bound ~bindings ~body =
     (List.rev bindings)
 
 let create_let_symbol0 uacc code_age_relation (bound_symbols : Bound_symbols.t)
-      (static_const : Static_const.t) body =
+      (static_consts : Static_const.t list) body =
 (*
   Format.eprintf "create_let_symbol %a\n%!" Bound_symbols.print bound_symbols;
 *)
   let free_names_after = Expr.free_names body in
   match bound_symbols with
-  | Singleton sym ->
+  | Block_like sym ->
     if not (Name_occurrences.mem_symbol free_names_after sym) then body, uacc
     else
       let expr =
@@ -312,30 +312,21 @@ let create_let_symbol0 uacc code_age_relation (bound_symbols : Bound_symbols.t)
       in
       expr, uacc
 
-let remove_unused_closure_vars0 uacc
-      ({ code; set_of_closures; } : Static_const.Code_and_set_of_closures.t)
-      : Static_const.Code_and_set_of_closures.t =
-  let closure_elements =
-    Set_of_closures.closure_elements set_of_closures
-    |> Var_within_closure.Map.filter (fun closure_var _ ->
-      Var_within_closure.Set.mem closure_var (UA.used_closure_vars uacc))
-  in
-  let set_of_closures =
-    Set_of_closures.create (Set_of_closures.function_decls set_of_closures)
-      ~closure_elements
-  in
-  { code;
-    set_of_closures;
-  }
-
-let remove_unused_closure_vars r (static_const : Static_const.t)
+let remove_unused_closure_vars uacc (static_const : Static_const.t)
       : Static_const.t =
   match static_const with
-  | Sets_of_closures code_and_sets ->
-    let code_and_sets =
-      List.map (remove_unused_closure_vars0 r) code_and_sets
+  | Set_of_closures set_of_closures ->
+    let closure_elements =
+      Set_of_closures.closure_elements set_of_closures
+      |> Var_within_closure.Map.filter (fun closure_var _ ->
+        Var_within_closure.Set.mem closure_var (UA.used_closure_vars uacc))
     in
-    Sets_of_closures code_and_sets
+    let set_of_closures =
+      Set_of_closures.create (Set_of_closures.function_decls set_of_closures)
+        ~closure_elements
+    in
+    Set_of_closures set_of_closures
+  | Code _
   | Block _
   | Boxed_float _
   | Boxed_int32 _
@@ -346,19 +337,20 @@ let remove_unused_closure_vars r (static_const : Static_const.t)
   | Mutable_string _
   | Immutable_string _ -> static_const
 
-let _ = ignore create_let_symbol0
+let remove_unused_closure_vars uacc static_consts =
+  List.map (remove_unused_closure_vars uacc) static_consts
 
 let create_let_symbol uacc (scoping_rule : Symbol_scoping_rule.t)
       code_age_relation lifted_constant body =
   let bound_symbols = LC.bound_symbols lifted_constant in
   let defining_exprs = LC.defining_exprs lifted_constant in
-  let static_const = remove_unused_closure_vars uacc defining_expr in
+  let static_consts = remove_unused_closure_vars_list uacc defining_expr in
   match scoping_rule with
   | Syntactic ->
-    create_let_symbol0 uacc code_age_relation bound_symbols static_const body
+    create_let_symbol0 uacc code_age_relation bound_symbols static_consts body
   | Dominator ->
     let expr =
-      Expr.create_let_symbol bound_symbols scoping_rule static_const body
+      Expr.create_let_symbol bound_symbols scoping_rule static_consts body
     in
     let uacc =
       Static_const.match_against_bound_symbols defining_exprs bound_symbols

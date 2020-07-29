@@ -595,6 +595,8 @@ end and Static_const : sig
 
   val can_share : t -> bool
 
+  val to_code : t -> Code.t option
+
   val must_be_set_of_closures : t -> Set_of_closures.t
 
   val match_against_bound_symbols_pattern

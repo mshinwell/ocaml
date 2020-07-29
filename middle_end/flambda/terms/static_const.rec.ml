@@ -261,7 +261,7 @@ include Identifiable.Make (struct
       fprintf ppf "@[<hov 1>(@<0>%sCode@<0>%s@ %a)@]"
         (Flambda_colours.static_part ())
         (Flambda_colours.normal ())
-        Code.print code
+        (Code.print_with_cache ~cache) code
     | Set_of_closures set ->
       fprintf ppf "@[<hov 1>(@<0>%sSet_of_closures@<0>%s@ %a)@]"
         (Flambda_colours.static_part ())
@@ -594,6 +594,20 @@ let can_share0 t =
 
 let can_share t =
   can_share0 t && is_fully_static t
+
+let to_code t =
+  match t with
+  | Code code -> Some code
+  | Set_of_closures _
+  | Block _
+  | Boxed_float _
+  | Boxed_int32 _
+  | Boxed_int64 _
+  | Boxed_nativeint _
+  | Immutable_float_block _
+  | Immutable_float_array _
+  | Immutable_string _
+  | Mutable_string _ -> None
 
 let must_be_set_of_closures t =
   match t with

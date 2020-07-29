@@ -34,9 +34,11 @@ let build_dep_graph ~fold_over_lifted_constants =
     ~f:(fun (dep_graph, code_id_or_symbol_to_const)
          (lifted_constant, extra_deps) ->
       (* Format.eprintf "One constant: %a\n%!" LC.print lifted_constant; *)
-      let defining_expr = LC.defining_expr lifted_constant in
+      let defining_exprs = LC.defining_exprs lifted_constant in
       let descr = LC.descr lifted_constant in
       let bound_symbols = LC.bound_symbols lifted_constant in
+
+
       let free_names_with_envs =
         (* To avoid existing sets of closures (with or without associated
            code) being pulled apart, we add a dependency from each code ID

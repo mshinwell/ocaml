@@ -35,6 +35,8 @@ type t
 
 val create : Pattern.t list -> t
 
+val singleton : Pattern.t -> t
+
 val to_list : t -> Pattern.t list
 
 val being_defined : t -> Symbol.Set.t

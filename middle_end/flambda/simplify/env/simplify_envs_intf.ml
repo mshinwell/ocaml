@@ -302,7 +302,7 @@ module type Lifted_constant = sig
       -> Flambda.Static_const.t
       -> t
 
-    val other
+    val block_like
        : downwards_env
       -> Symbol.t
       -> Flambda_type.t
@@ -324,8 +324,7 @@ module type Lifted_constant = sig
     -> t
 
   val create_set_of_closures
-     : Code_id.Set.t
-    -> downwards_env
+     : downwards_env
     -> closure_symbols_with_types:(Symbol.t * Flambda_type.t) Closure_id.Lmap.t
     -> Flambda.Static_const.t
     -> t

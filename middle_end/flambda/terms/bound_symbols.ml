@@ -108,6 +108,8 @@ type t = Pattern.t list
 
 let create pattern_list = pattern_list
 
+let singleton pattern = [pattern]
+
 let to_list t = t
 
 let print ppf t =
