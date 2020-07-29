@@ -637,8 +637,10 @@ let simplify_and_lift_set_of_closures dacc ~closure_bound_vars_inverse
             ~params_and_body:(Present params_and_body)
             ~newer_version_of:(Some newer_version_of)
         in
-        LC.create_code code_id (Code code)
-        |> DA.add_lifted_constant dacc)
+        let lifted_constant = LC.create_code code_id (Code code) in
+        DA.add_lifted_constant dacc lifted_constant
+        |> DA.map_denv ~f:(fun denv ->
+          DE.add_lifted_constant denv lifted_constant))
   in
   let set_of_closures_lifted_constant =
     Lifted_constant.create_set_of_closures

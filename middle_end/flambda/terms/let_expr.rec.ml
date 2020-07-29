@@ -134,19 +134,20 @@ let print_flattened_descr_rhs ppf descr =
   | Block_like (_, static_const) -> Static_const.print ppf static_const
 
 let print_flattened ppf
-      { second_or_later_binding_within_one_set;
+      { second_or_later_binding_within_one_set = _;
         second_or_later_rec_binding;
         descr;
         scoping_rule;
       } =
   fprintf ppf "@[<hov 1>";
+  (*
   if second_or_later_rec_binding
     && not second_or_later_binding_within_one_set
   then begin
     fprintf ppf "@<0>%sand_set @<0>%s"
       (Flambda_colours.elide ())
       (Flambda_colours.normal ())
-  end else if second_or_later_binding_within_one_set then begin
+  end else *) if second_or_later_rec_binding then begin
     fprintf ppf "@<0>%sand @<0>%s"
       (Flambda_colours.elide ())
       (Flambda_colours.normal ())
