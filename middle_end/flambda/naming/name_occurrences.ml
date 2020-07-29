@@ -617,6 +617,8 @@ let add_code_id t id kind =
     code_ids = For_code_ids.add t.code_ids id kind;
   }
 
+let singleton_code_id id kind = add_code_id empty id kind
+
 let add_newer_version_of_code_id t id kind =
   { t with
     newer_version_of_code_ids =
