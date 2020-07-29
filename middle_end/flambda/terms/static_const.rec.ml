@@ -232,6 +232,13 @@ module Code = struct
       newer_version_of = None;
     }
 
+  let code_id t = t.code_id
+
+  let params_and_body t =
+    match t.params_and_body with
+    | Present params_and_body -> Some params_and_body
+    | Deleted -> None
+
   let make_deleted { code_id; params_and_body = _; newer_version_of; } =
     { code_id;
       params_and_body = Deleted;

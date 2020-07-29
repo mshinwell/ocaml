@@ -219,98 +219,89 @@ let create_let_symbol0 uacc code_age_relation (bound_symbols : Bound_symbols.t)
   Format.eprintf "create_let_symbol %a\n%!" Bound_symbols.print bound_symbols;
 *)
   let free_names_after = Expr.free_names body in
-  match bound_symbols with
-  | Block_like sym ->
-    if not (Name_occurrences.mem_symbol free_names_after sym) then body, uacc
-    else
-      let expr =
-        Expr.create_let_symbol bound_symbols Syntactic static_const body
-      in
-      expr, uacc
-  | Sets_of_closures _ ->
-    let bound_names_unused =
-      let being_defined =
-        Bound_symbols.everything_being_defined bound_symbols
-      in
-      Code_id_or_symbol.Set.for_all
-        (fun (code_id_or_symbol : Code_id_or_symbol.t) ->
-          match code_id_or_symbol with
-          | Code_id code_id ->
-            not (Name_occurrences.mem_code_id free_names_after code_id)
-          | Symbol sym ->
-            not (Name_occurrences.mem_symbol free_names_after sym))
-        being_defined
+  let bound_names_unused =
+    let being_defined =
+      Bound_symbols.everything_being_defined bound_symbols
     in
-    let all_code_ids_bound_names =
-      let bound_names = Bound_symbols.free_names bound_symbols in
-      Name_occurrences.code_ids_and_newer_version_of_code_ids bound_names
-    in
-    let newer_version_of_code_ids_after =
-      Name_occurrences.newer_version_of_code_ids free_names_after
-    in
-    let code_ids_after =
-      Name_occurrences.code_ids free_names_after
-    in
-    let code_ids_only_used_in_newer_version_of_after =
-      Code_id.Set.diff newer_version_of_code_ids_after code_ids_after
-    in
-    let all_code_ids_free_names_after =
-      Code_id.Set.union newer_version_of_code_ids_after code_ids_after
-    in
-    (* CR mshinwell: Add [Set.are_disjoint]? *)
-    if bound_names_unused
-      && Code_id.Set.is_empty (Code_id.Set.inter
-        all_code_ids_bound_names all_code_ids_free_names_after)
-    then body, uacc
-    else
-      (* Turn pieces of code that are only referenced in [newer_version_of]
-         fields into [Deleted]. *)
-      let code_ids_to_make_deleted =
-        (* CR-someday mshinwell: This could be made more precise, but would
-           probably require a proper analysis. *)
-        let code_ids_static_const =
-          Name_occurrences.code_ids (Static_const.free_names static_const)
-        in
-        let code_ids_only_used_in_newer_version_of =
-          Code_id.Set.inter all_code_ids_bound_names
-            (Code_id.Set.diff code_ids_only_used_in_newer_version_of_after
-              code_ids_static_const)
-        in
-        (* We cannot delete code unless it is certain that a non-trivial join
-           operation between later versions of it cannot happen. *)
-        Code_id.Set.filter (fun code_id ->
-            (* CR mshinwell: Think again about whether we need to have these
-               two separate calls. *)
-            Code_age_relation.newer_versions_form_linear_chain
-              code_age_relation code_id
-              ~all_code_ids_still_existing:all_code_ids_bound_names
-            &&
-            Code_age_relation.newer_versions_form_linear_chain
-              code_age_relation code_id
-              ~all_code_ids_still_existing:all_code_ids_free_names_after)
-          code_ids_only_used_in_newer_version_of
+    Code_id_or_symbol.Set.for_all
+      (fun (code_id_or_symbol : Code_id_or_symbol.t) ->
+        match code_id_or_symbol with
+        | Code_id code_id ->
+          not (Name_occurrences.mem_code_id free_names_after code_id)
+        | Symbol sym ->
+          not (Name_occurrences.mem_symbol free_names_after sym))
+      being_defined
+  in
+  let all_code_ids_bound_names =
+    let bound_names = Bound_symbols.free_names bound_symbols in
+    Name_occurrences.code_ids_and_newer_version_of_code_ids bound_names
+  in
+  let newer_version_of_code_ids_after =
+    Name_occurrences.newer_version_of_code_ids free_names_after
+  in
+  let code_ids_after =
+    Name_occurrences.code_ids free_names_after
+  in
+  let code_ids_only_used_in_newer_version_of_after =
+    Code_id.Set.diff newer_version_of_code_ids_after code_ids_after
+  in
+  let all_code_ids_free_names_after =
+    Code_id.Set.union newer_version_of_code_ids_after code_ids_after
+  in
+  (* CR mshinwell: Add [Set.are_disjoint]? *)
+  if bound_names_unused
+    && Code_id.Set.is_empty (Code_id.Set.inter
+      all_code_ids_bound_names all_code_ids_free_names_after)
+  then body, uacc
+  else
+    (* Turn pieces of code that are only referenced in [newer_version_of]
+       fields into [Deleted]. *)
+    let code_ids_to_make_deleted =
+      (* CR-someday mshinwell: This could be made more precise, but would
+         probably require a proper analysis. *)
+      let code_ids_static_const =
+        Name_occurrences.code_ids (Static_const.free_names static_const)
       in
-      let sets =
-        List.map (fun code_and_set_of_closures ->
-            Static_const.Code_and_set_of_closures.map_code
-              code_and_set_of_closures
-              ~f:(fun code_id code ->
-                if Code_id.Set.mem code_id code_ids_to_make_deleted
-                then Static_const.Code.make_deleted code
-                else code))
-          (Static_const.must_be_sets_of_closures static_const)
+      let code_ids_only_used_in_newer_version_of =
+        Code_id.Set.inter all_code_ids_bound_names
+          (Code_id.Set.diff code_ids_only_used_in_newer_version_of_after
+            code_ids_static_const)
       in
-      let static_const = Static_const.Sets_of_closures sets in
-      let expr =
-        Expr.create_let_symbol bound_symbols Syntactic static_const body
-      in
-      let uacc =
-        UA.remember_code_for_cmx uacc
-          (Static_const.get_pieces_of_code' static_const
-           |> Code_id.Lmap.bindings
-           |> Code_id.Map.of_list)
-      in
-      expr, uacc
+      (* We cannot delete code unless it is certain that a non-trivial join
+         operation between later versions of it cannot happen. *)
+      Code_id.Set.filter (fun code_id ->
+          (* CR mshinwell: Think again about whether we need to have these
+             two separate calls. *)
+          Code_age_relation.newer_versions_form_linear_chain
+            code_age_relation code_id
+            ~all_code_ids_still_existing:all_code_ids_bound_names
+          &&
+          Code_age_relation.newer_versions_form_linear_chain
+            code_age_relation code_id
+            ~all_code_ids_still_existing:all_code_ids_free_names_after)
+        code_ids_only_used_in_newer_version_of
+    in
+    let module Code = Static_const.Code in
+    let static_consts =
+      ListLabels.map static_consts ~f:(fun static_const : Static_const.t ->
+        match Static_const.to_code static_const with
+        | Some code
+            when Code_id.Set.mem (Code.code_id code) code_ids_to_make_deleted ->
+          Code (Static_const.Code.make_deleted code)
+        | Some _ | None -> static_const)
+    in
+    let expr =
+      Expr.create_let_symbol bound_symbols Syntactic static_consts body
+    in
+    let uacc =
+      List.filter_map Static_const.to_code static_consts
+      |> List.filter_map (fun code ->
+        Option.map (fun params_and_body -> Code.code_id code, params_and_body)
+          (Code.params_and_body code))
+      |> Code_id.Map.of_list
+      |> UA.remember_code_for_cmx uacc
+    in
+    expr, uacc
 
 let remove_unused_closure_vars uacc (static_const : Static_const.t)
       : Static_const.t =

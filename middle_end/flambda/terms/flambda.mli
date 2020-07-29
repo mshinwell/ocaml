@@ -566,6 +566,9 @@ end and Static_const : sig
     (** A piece of code that is [Deleted] with no [newer_version_of]. *)
     val deleted : Code_id.t -> t
 
+    val code_id : t -> Code_id.t
+    val params_and_body : t -> Function_params_and_body.t option
+
     val make_deleted : t -> t
   end
 

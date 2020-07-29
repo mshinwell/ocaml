@@ -55,6 +55,11 @@ let build_dep_graph ~fold_over_lifted_constants =
                 ~f:(fun free_names (symbol, _) ->
                   Name_occurrences.add_symbol free_names symbol NM.normal)
           in
+          (* CR mshinwell: Maybe there's some other way of dealing with
+             the insertion of the constants for [Reify_continuation_params]
+             that wouldn't involve adding "let symbol" bindings before
+             simplification (of those bindings around the handler).  If we
+             could do that, the following code could be removed. *)
           (* Beware: when coming from [Reify_continuation_params] the
              sets of closures may have dependencies on variables that are
              now equal to symbols in the environment.  (They haven't been
