@@ -5,6 +5,9 @@
 #include <caml/mlvalues.h>
 #include <libunwind.h>
 
+class Dummy_exn {};
+
+extern "C"
 value ml_func_with_10_params_native(value x1, value x2, value x3, value x4,
                                     value x5, value x6, value x7, value x8,
                                     value x9, value x10) {
@@ -24,7 +27,7 @@ int perform_stack_walk(int dbg) {
         }
     }
 
-    int reached_main = 0;
+    int reached_caml_start_program = 0;
 
     for (;;) {
         {
@@ -37,8 +40,8 @@ int perform_stack_walk(int dbg) {
                 return -1;
             }
 
-            if (strcmp(procname, "main") == 0)
-                reached_main = 1;
+            if (strcmp(procname, "caml_start_program") == 0)
+                reached_caml_start_program = 1;
             if (dbg) printf("%s + %lld\n", procname, (long long int)ip_offset);
         }
 
@@ -53,19 +56,23 @@ int perform_stack_walk(int dbg) {
     }
 
     if (dbg) printf("Reached end of stack.\n");
-    if (!reached_main) {
-        if (dbg) printf("Failure: Did not reach main.\n");
+    if (!reached_caml_start_program) {
+        if (dbg) printf("Failure: Did not reach caml_start_program.\n");
         return -1;
     }
     return 0;
 }
 
+extern "C"
 value ml_perform_stack_walk() {
-    if (perform_stack_walk(0) != 0) {
-        printf("TEST FAILED\n");
-        /* Re-run the test to produce a trace */
-        perform_stack_walk(1);
-        exit(1);
-    }
+    /* Use C++ exception constructs to force clang to generate unwind tables. */
+    try {
+        if (perform_stack_walk(1) != 0) {
+            printf("TEST FAILED\n");
+            /* Re-run the test to produce a trace */
+            perform_stack_walk(1);
+            exit(1);
+        }
+    } catch (Dummy_exn exn) { throw exn; };
     return Val_unit;
 }
