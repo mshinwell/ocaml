@@ -292,9 +292,9 @@ let preallocate_set_of_closures (r, updates, env) ~closure_symbols
     static_set_of_closures env closure_symbols set_of_closures updates
   in
   let r = R.set_data r data in
-  R.archive_data r, updates, env
+  r, updates, env
 
-let static_const env r ~updates ~params_and_body
+let static_const0 env r ~updates ~params_and_body
       (bound_symbols : Bound_symbols.Pattern.t)
       (static_const : Static_const.t) =
   match bound_symbols, static_const with
@@ -397,6 +397,12 @@ let static_const env r ~updates ~params_and_body
         bindings:@ %a"
       SC.print static_const
 
+let static_const env r ~updates ~params_and_body bound_symbols static_const =
+  let env, r, updates =
+    static_const0 env r ~updates ~params_and_body bound_symbols static_const
+  in
+  env, R.archive_data r, updates
+
 let static_consts0 env r ~params_and_body bound_symbols static_consts =
   (* We cannot both build the environment and compile any functions in
      one traversal, as the bodies may contain direct calls to the code IDs
@@ -441,12 +447,7 @@ let static_consts env r ~params_and_body bound_symbols static_consts =
       else Symbol.Set.elements (Bound_symbols.being_defined bound_symbols)
     in
     let r = R.add_gc_roots r roots in
-    let env, r, update_opt =
-      static_consts0 env r ~params_and_body bound_symbols static_consts
-    in
-    (* [R.archive_data] helps keep definitions of separate symbols in different
-       [data_item] lists and this increases readability of the generated Cmm. *)
-    env, R.archive_data r, update_opt
+    static_consts0 env r ~params_and_body bound_symbols static_consts
   with Misc.Fatal_error as e ->
     if !Clflags.flambda_context_on_error then begin
       (* Create a new "let symbol" with a dummy body to better print the bound
