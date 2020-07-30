@@ -17,6 +17,7 @@
 
 module V = Backend_var
 module VP = Backend_var.With_provenance
+module UI = Cmx_format.Unit_info
 open Cmm
 open Arch
 
@@ -785,7 +786,7 @@ let lookup_label obj lab dbg =
 let call_cached_method obj tag cache pos args dbg =
   let arity = List.length args in
   let cache = array_indexing log2_size_addr cache pos dbg in
-  Compilenv.need_send_fun arity;
+  Linking_state.need_send_fun arity;
   Cop(Capply typ_val,
       Cconst_symbol("caml_send" ^ Int.to_string arity, dbg) ::
         obj :: tag :: cache :: args,
@@ -831,9 +832,9 @@ let make_checkbound dbg = function
 (* Record application and currying functions *)
 
 let apply_function_sym n =
-  Compilenv.need_apply_fun n; "caml_apply" ^ Int.to_string n
+  Linking_state.need_apply_fun n; "caml_apply" ^ Int.to_string n
 let curry_function_sym n =
-  Compilenv.need_curry_fun n;
+  Linking_state.need_curry_fun n;
   if n >= 0
   then "caml_curry" ^ Int.to_string n
   else "caml_tuplify" ^ Int.to_string (-n)
@@ -1467,7 +1468,7 @@ let make_switch arg cases actions dbg =
     else None
   in
   let make_table_lookup ~cases ~const_actions arg dbg =
-    let table = Compilenv.new_const_symbol () in
+    let table = Symbol.(name_for_backend (for_lifted_anonymous_constant ())) in
     Cmmgen_state.add_constant table (Const_table (Local,
         Array.to_list (Array.map (fun act ->
           const_actions.(act)) cases)));
@@ -2074,15 +2075,10 @@ let default_apply = Int.Set.add 2 (Int.Set.add 3 Int.Set.empty)
   (* These apply funs are always present in the main program because
      the run-time system needs them (cf. runtime/<arch>.S) . *)
 
-let generic_functions shared units =
-  let (apply,send,curry) =
-    List.fold_left
-      (fun (apply,send,curry) (ui : Cmx_format.unit_infos) ->
-         List.fold_right Int.Set.add ui.ui_apply_fun apply,
-         List.fold_right Int.Set.add ui.ui_send_fun send,
-         List.fold_right Int.Set.add ui.ui_curry_fun curry)
-      (Int.Set.empty,Int.Set.empty,Int.Set.empty)
-      units in
+let generic_functions shared joined_link_info =
+  let apply = Cmx_format.Unit_info_link_time.apply_fun joined_link_info in
+  let send = Cmx_format.Unit_info_link_time.send_fun joined_link_info in
+  let curry = Cmx_format.Unit_info_link_time.curry_fun joined_link_info in
   let apply = if shared then apply else Int.Set.union apply default_apply in
   let accu = Int.Set.fold (fun n accu -> apply_function n :: accu) apply [] in
   let accu = Int.Set.fold (fun n accu -> send_function n :: accu) send accu in
@@ -2565,7 +2561,7 @@ let emit_float_array_constant symb fields cont =
 
 (* Generate the entry point *)
 
-let entry_point namelist =
+let entry_point comp_units =
   let dbg = placeholder_dbg in
   let cconst_int i = Cconst_int (i, dbg ()) in
   let cconst_symbol sym = Cconst_symbol (sym, dbg ()) in
@@ -2577,12 +2573,12 @@ let entry_point namelist =
                      cconst_int 1], dbg ())], dbg ()) in
   let body =
     List.fold_right
-      (fun name next ->
-        let entry_sym = Compilenv.make_symbol ~unitname:name (Some "entry") in
+      (fun unit next ->
+        let entry_sym = Symbol.make_backend_symbol unit (Some "entry") in
         Csequence(Cop(Capply typ_void,
                          [cconst_symbol entry_sym], dbg ()),
                   Csequence(incr_global_inited (), next)))
-      namelist (cconst_int 1) in
+      comp_units (cconst_int 1) in
   let fun_name = "caml_program" in
   let fun_dbg = placeholder_fun_dbg ~human_name:fun_name in
   Cfunction {fun_name;
@@ -2596,13 +2592,13 @@ let entry_point namelist =
 
 let cint_zero = Cint 0n
 
-let global_table namelist =
-  let mksym name =
-    Csymbol_address (Compilenv.make_symbol ~unitname:name (Some "gc_roots"))
+let global_table comp_units =
+  let mksym unit =
+    Csymbol_address (Symbol.make_backend_symbol unit (Some "gc_roots"))
   in
   Cdata(Cglobal_symbol "caml_globals" ::
         Cdefine_symbol "caml_globals" ::
-        List.map mksym namelist @
+        List.map mksym comp_units @
         [cint_zero])
 
 let reference_symbols namelist =
@@ -2617,26 +2613,26 @@ let globals_map v = global_data "caml_globals_map" v
 
 (* Generate the master table of frame descriptors *)
 
-let frame_table namelist =
-  let mksym name =
-    Csymbol_address (Compilenv.make_symbol ~unitname:name (Some "frametable"))
+let frame_table comp_units =
+  let mksym cu =
+    Csymbol_address (Symbol.make_backend_symbol cu (Some "frametable"))
   in
   Cdata(Cglobal_symbol "caml_frametable" ::
         Cdefine_symbol "caml_frametable" ::
-        List.map mksym namelist
+        List.map mksym comp_units
         @ [cint_zero])
 
 (* Generate the table of module data and code segments *)
 
-let segment_table namelist symbol begname endname =
-  let addsyms name lst =
-    Csymbol_address (Compilenv.make_symbol ~unitname:name (Some begname)) ::
-    Csymbol_address (Compilenv.make_symbol ~unitname:name (Some endname)) ::
+let segment_table comp_units symbol begname endname =
+  let addsyms cu lst =
+    Csymbol_address (Symbol.make_backend_symbol cu (Some begname)) ::
+    Csymbol_address (Symbol.make_backend_symbol cu (Some endname)) ::
     lst
   in
   Cdata(Cglobal_symbol symbol ::
         Cdefine_symbol symbol ::
-        List.fold_right addsyms namelist [cint_zero])
+        List.fold_right addsyms comp_units [cint_zero])
 
 let data_segment_table namelist =
   segment_table namelist "caml_data_segments" "data_begin" "data_end"
@@ -2647,11 +2643,19 @@ let code_segment_table namelist =
 (* Initialize a predefined exception *)
 
 let predef_exception i name =
-  let name_sym = Compilenv.new_const_symbol () in
+let id =
+    try List.assoc name Predef.builtin_values
+    with Not_found -> Misc.fatal_errorf "Cannot find predef exception %s" name
+  in
+  let name_sym =
+    Symbol.for_lifted_anonymous_constant
+      ~compilation_unit:Symbol.Predef.startup ()
+    |> Symbol.name_for_backend in
   let data_items =
     emit_string_constant (name_sym, Local) name []
   in
-  let exn_sym = "caml_exn_" ^ name in
+  let exn_sym =
+    Symbol.name_for_backend (Symbol.for_predefined_exn id) in
   let tag = Obj.object_tag in
   let size = 2 in
   let fields =
@@ -2667,17 +2671,15 @@ let predef_exception i name =
 (* Header for a plugin *)
 
 let plugin_header units =
-  let mk ((ui : Cmx_format.unit_infos),crc) : Cmxs_format.dynunit =
-    { dynu_name = ui.ui_name;
-      dynu_crc = crc;
-      dynu_imports_cmi = ui.ui_imports_cmi;
-      dynu_imports_cmx = ui.ui_imports_cmx;
-      dynu_defines = ui.ui_defines
-    } in
-  global_data "caml_plugin_header"
-    ({ dynu_magic = Config.cmxs_magic_number;
-       dynu_units = List.map mk units }
-     : Cmxs_format.dynheader)
+  let mk (ui, crc) =
+    Cmxs_format.Dynunit_info.create ~unit:(UI.unit ui)
+      ~crc
+      ~imports_cmi:(UI.imports_cmi ui)
+      ~imports_cmx:(UI.imports_cmx ui)
+      ~defines:(UI.defines ui)
+  in
+  let header = Cmxs_format.Dynheader_info.create ~units:(List.map mk units) in
+  global_data "caml_plugin_header" header
 
 (* To compile "let rec" over values *)
 
@@ -2704,7 +2706,8 @@ let fundecls_size fundecls =
 let emit_constant_closure ((_, global_symb) as symb) fundecls clos_vars cont =
   let closure_symbol (f : Clambda.ufunction) =
     if Config.flambda then
-      cdefine_symbol (f.label ^ "_closure", global_symb)
+      let label = Symbol.name_for_backend f.label in
+      cdefine_symbol (label ^ "_closure", global_symb)
     else
       []
   in
@@ -2723,7 +2726,7 @@ let emit_constant_closure ((_, global_symb) as symb) fundecls clos_vars cont =
           if f2.arity = 1 || f2.arity = 0 then
             Cint(infix_header pos) ::
             (closure_symbol f2) @
-            Csymbol_address f2.label ::
+            Csymbol_address (Symbol.name_for_backend f2.label) ::
             Cint(closure_info ~arity:f2.arity ~startenv:(startenv - pos)) ::
             emit_others (pos + 3) rem
           else
@@ -2731,26 +2734,27 @@ let emit_constant_closure ((_, global_symb) as symb) fundecls clos_vars cont =
             (closure_symbol f2) @
             Csymbol_address(curry_function_sym f2.arity) ::
             Cint(closure_info ~arity:f2.arity ~startenv:(startenv - pos)) ::
-            Csymbol_address f2.label ::
+            Csymbol_address (Symbol.name_for_backend f2.label) ::
             emit_others (pos + 4) rem in
       Cint(black_closure_header (fundecls_size fundecls
                                  + List.length clos_vars)) ::
       cdefine_symbol symb @
       (closure_symbol f1) @
       if f1.arity = 1 || f1.arity = 0 then
-        Csymbol_address f1.label ::
+        Csymbol_address (Symbol.name_for_backend f1.label) ::
         Cint(closure_info ~arity:f1.arity ~startenv) ::
         emit_others 3 remainder
       else
         Csymbol_address(curry_function_sym f1.arity) ::
         Cint(closure_info ~arity:f1.arity ~startenv) ::
-        Csymbol_address f1.label ::
+        Csymbol_address (Symbol.name_for_backend f1.label) ::
         emit_others 4 remainder
 
 (* Build the NULL terminated array of gc roots *)
 
 let emit_gc_roots_table ~symbols cont =
-  let table_symbol = Compilenv.make_symbol (Some "gc_roots") in
+  let cu = Compilation_unit.get_current_exn () in
+  let table_symbol = Symbol.make_backend_symbol cu (Some "gc_roots") in
   Cdata(Cglobal_symbol table_symbol ::
         Cdefine_symbol table_symbol ::
         List.map (fun s -> Csymbol_address s) symbols @
@@ -2773,11 +2777,11 @@ let preallocate_block cont { Clambda.symbol; exported; tag; fields } =
         | Some (Clambda.Uconst_field_int n) ->
             cint_const n
         | Some (Clambda.Uconst_field_ref label) ->
-            Csymbol_address label)
+            Csymbol_address (Symbol.name_for_backend label))
       fields
   in
   let global = Cmmgen_state.(if exported then Global else Local) in
-  let symb = (symbol, global) in
+  let symb = (Symbol.name_for_backend symbol, global) in
   let data =
     emit_block symb (block_header tag (List.length fields)) space
   in
@@ -2785,7 +2789,8 @@ let preallocate_block cont { Clambda.symbol; exported; tag; fields } =
 
 let emit_preallocated_blocks preallocated_blocks cont =
   let symbols =
-    List.map (fun ({ Clambda.symbol }:Clambda.preallocated_block) -> symbol)
+    List.map (fun ({ Clambda.symbol }:Clambda.preallocated_block) ->
+        Symbol.name_for_backend symbol)
       preallocated_blocks
   in
   let c1 = emit_gc_roots_table ~symbols cont in

@@ -48,7 +48,7 @@ let should_save_before_emit () =
   should_save_ir_after Compiler_pass.Scheduling && (not !start_from_emit)
 
 let linear_unit_info =
-  { Linear_format.unit_name = "";
+  { Linear_format.unit_name = Compilation_unit.none;
     items = [];
     for_pack = None;
   }
@@ -56,7 +56,7 @@ let linear_unit_info =
 let reset () =
   start_from_emit := false;
   if should_save_before_emit () then begin
-    linear_unit_info.unit_name <- Compilenv.current_unit_name ();
+    linear_unit_info.unit_name <- Compilation_unit.get_current_exn ();
     linear_unit_info.items <- [];
     linear_unit_info.for_pack <- !Clflags.for_package;
   end
@@ -166,12 +166,19 @@ let compile_phrase ~ppf_dump p =
 (* For the native toplevel: generates generic functions unless
    they are already available in the process *)
 let compile_genfuns ~ppf_dump f =
+  let linking_state = Linking_state.Snapshot.create () in
+  let link_info =
+    Cmx_format.Unit_info_link_time.create ~curry_fun:linking_state.curry_fun
+      ~apply_fun:linking_state.apply_fun
+      ~send_fun:linking_state.send_fun
+      ~force_link:linking_state.force_link
+  in
   List.iter
     (function
        | (Cfunction {fun_name = name}) as ph when f name ->
            compile_phrase ~ppf_dump ph
        | _ -> ())
-    (Cmm_helpers.generic_functions true [Compilenv.current_unit_infos ()])
+    (Cmm_helpers.generic_functions true link_info)
 
 let compile_unit ~output_prefix ~asm_filename ~keep_asm ~obj_filename gen =
   reset ();
@@ -201,9 +208,9 @@ let compile_unit ~output_prefix ~asm_filename ~keep_asm ~obj_filename gen =
        if create_asm && not keep_asm then remove_file asm_filename
     )
 
-let end_gen_implementation ?toplevel ~ppf_dump
+let end_gen_implementation ?toplevel ~ppf_dump comp_unit
     (clambda : Clambda.with_constants) =
-  emit_begin_assembly ();
+  emit_begin_assembly comp_unit;
   clambda
   ++ Profile.record "cmm" Cmmgen.compunit
   ++ Profile.record "compile_phrases" (List.iter (compile_phrase ~ppf_dump))
@@ -220,7 +227,7 @@ let end_gen_implementation ?toplevel ~ppf_dump
            if not (Primitive.native_name_is_external prim) then None
            else Some (Primitive.native_name prim))
           !Translmod.primitive_declarations));
-  emit_end_assembly ()
+  emit_end_assembly comp_unit
 
 type middle_end =
      backend:(module Backend_intf.S)
@@ -241,13 +248,15 @@ let compile_implementation ?toplevel ~backend ~filename ~prefixname ~middle_end
     ~asm_filename:(asm_filename prefixname) ~keep_asm:!keep_asm_file
     ~obj_filename:(prefixname ^ ext_obj)
     (fun () ->
-      Ident.Set.iter Compilenv.require_global program.required_globals;
+      Ident.Set.iter Compilation_state.require_global program.required_globals;
       let clambda_with_constants =
         middle_end ~backend ~filename ~prefixname ~ppf_dump program
       in
-      end_gen_implementation ?toplevel ~ppf_dump clambda_with_constants)
+      end_gen_implementation
+        ?toplevel ~ppf_dump (Compilation_unit.get_current_exn ())
+        clambda_with_constants)
 
-let linear_gen_implementation filename =
+let linear_gen_implementation comp_unit filename =
   let open Linear_format in
   let linear_unit_info, _ = restore filename in
   (match !Clflags.for_package, linear_unit_info.for_pack with
@@ -259,16 +268,19 @@ let linear_gen_implementation filename =
     | Func f -> emit_fundecl f
   in
   start_from_emit := true;
-  emit_begin_assembly ();
+  emit_begin_assembly comp_unit;
   Profile.record "Emit" (List.iter emit_item) linear_unit_info.items;
-  emit_end_assembly ()
+  emit_end_assembly comp_unit
+
+(* CR mshinwell: check comp unit handling here. *)
 
 let compile_implementation_linear output_prefix ~progname =
   compile_unit ~output_prefix
     ~asm_filename:(asm_filename output_prefix) ~keep_asm:!keep_asm_file
     ~obj_filename:(output_prefix ^ ext_obj)
     (fun () ->
-      linear_gen_implementation progname)
+      linear_gen_implementation (Compilation_unit.get_current_exn ())
+      progname)
 
 (* Error report *)
 

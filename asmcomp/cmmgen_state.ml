@@ -72,7 +72,8 @@ let set_structured_constants l =
   Hashtbl.clear state.structured_constants;
   List.iter
     (fun (c : Clambda.preallocated_constant) ->
-       Hashtbl.add state.structured_constants c.symbol c.definition
+       let s = Symbol.name_for_backend c.symbol in
+       Hashtbl.add state.structured_constants s c.definition
     )
     l
 
@@ -83,6 +84,7 @@ let get_structured_constant s =
   Hashtbl.find_opt state.structured_constants s
 
 let structured_constant_of_sym s =
-  match Compilenv.structured_constant_of_symbol s with
+  (* TODO: Fix *)
+  match None (*Compilenv.structured_constant_of_symbol s*) with
   | None -> get_structured_constant s
   | Some _ as r -> r

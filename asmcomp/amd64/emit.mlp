@@ -442,8 +442,8 @@ let emit_float_constant f lbl =
   _label (emit_label lbl);
   D.qword (Const f)
 
-let emit_global_label s =
-  let lbl = Compilenv.make_symbol (Some s) in
+let emit_global_label cu s =
+  let lbl = Symbol.make_backend_symbol cu (Some s) in
   add_def_symbol lbl;
   let lbl = emit_symbol lbl in
   D.global lbl;
@@ -932,7 +932,7 @@ let data l =
 
 (* Beginning / end of an assembly file *)
 
-let begin_assembly() =
+let begin_assembly cu =
   X86_proc.reset_asm_code ();
   reset_debug_info();                   (* PR#5603 *)
   reset_imp_table();
@@ -969,14 +969,14 @@ let begin_assembly() =
   end;
 
   D.data ();
-  emit_global_label "data_begin";
+  emit_global_label cu "data_begin";
 
-  emit_named_text_section (Compilenv.make_symbol (Some "code_begin"));
-  emit_global_label "code_begin";
+  emit_named_text_section (Symbol.make_backend_symbol cu (Some "code_begin"));
+  emit_global_label cu "code_begin";
   if system = S_macosx then I.nop (); (* PR#4690 *)
   ()
 
-let end_assembly() =
+let end_assembly cu =
   if !float_constants <> [] then begin
     begin match system with
     | S_macosx -> D.section ["__TEXT";"__literal8"] None ["8byte_literals"]
@@ -988,21 +988,21 @@ let end_assembly() =
     List.iter (fun (cst,lbl) -> emit_float_constant cst lbl) !float_constants
   end;
 
-  emit_named_text_section (Compilenv.make_symbol (Some "code_end"));
+  emit_named_text_section (Symbol.make_backend_symbol cu (Some "code_end"));
   if system = S_macosx then I.nop ();
   (* suppress "ld warning: atom sorting error" *)
 
-  emit_global_label "code_end";
+  emit_global_label cu "code_end";
 
   emit_imp_table();
 
   D.data ();
   D.qword (const 0);  (* PR#6329 *)
-  emit_global_label "data_end";
+  emit_global_label cu "data_end";
   D.qword (const 0);
 
   D.align 8;                            (* PR#7591 *)
-  emit_global_label "frametable";
+  emit_global_label cu "frametable";
 
   let setcnt = ref 0 in
   emit_frames
@@ -1033,7 +1033,7 @@ let end_assembly() =
     };
 
   if system = S_linux then begin
-    let frametable = emit_symbol (Compilenv.make_symbol (Some "frametable")) in
+    let frametable = Symbol.make_backend_symbol cu (Some "frametable") in
     D.size frametable (ConstSub (ConstThis, ConstLabel frametable))
   end;
 

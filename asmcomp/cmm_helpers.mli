@@ -578,37 +578,38 @@ val send :
 (** Generic Cmm fragments *)
 
 (** Generate generic functions *)
-val generic_functions : bool -> Cmx_format.unit_infos list -> Cmm.phrase list
+val generic_functions : bool -> Cmx_format.Unit_info_link_time.t -> Cmm.phrase list
 
 val placeholder_dbg : unit -> Debuginfo.t
 val placeholder_fun_dbg : human_name:string -> Debuginfo.t
 
 (** Entry point *)
-val entry_point : string list -> phrase
+val entry_point : Compilation_unit.t list -> phrase
 
 (** Generate the caml_globals table *)
-val global_table: string list -> phrase
+val global_table: Compilation_unit.t list -> phrase
 
 (** Add references to the given symbols *)
 val reference_symbols: string list -> phrase
 
 (** Generate the caml_globals_map structure, as a marshalled string constant *)
 val globals_map:
-  (string * Digest.t option * Digest.t option * string list) list -> phrase
+  (Compilation_unit.Name.t * Digest.t option * Digest.t option *
+   Compilation_unit.t list) list -> phrase
 
 (** Generate the caml_frametable table, referencing the frametables
     from the given compilation units *)
-val frame_table: string list -> phrase
+val frame_table: Compilation_unit.t list -> phrase
 
 (** Generate the tables for data and code positions respectively of the given
     compilation units *)
-val data_segment_table: string list -> phrase
-val code_segment_table: string list -> phrase
+val data_segment_table: Compilation_unit.t list -> phrase
+val code_segment_table: Compilation_unit.t list -> phrase
 
 (** Generate data for a predefined exception *)
 val predef_exception: int -> string -> phrase
 
-val plugin_header: (Cmx_format.unit_infos * Digest.t) list -> phrase
+val plugin_header: (Cmx_format.Unit_info.t * Digest.t) list -> phrase
 
 (** Emit constant symbols *)
 

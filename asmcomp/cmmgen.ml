@@ -178,11 +178,11 @@ let rec expr_size env = function
 let transl_constant dbg = function
   | Uconst_int n ->
       int_const dbg n
-  | Uconst_ref (label, def_opt) ->
-      Option.iter
-        (fun def -> Cmmgen_state.add_structured_constant label def)
+  | Uconst_ref (sym, def_opt) ->
+      let sym = Symbol.name_for_backend sym in
+      Option.iter (fun def -> Cmmgen_state.add_structured_constant sym def)
         def_opt;
-      Cconst_symbol (label, dbg)
+      Cconst_symbol (sym, dbg)
 
 let emit_constant cst cont =
   match cst with
@@ -190,7 +190,7 @@ let emit_constant cst cont =
       cint_const n
       :: cont
   | Uconst_ref (sym, _) ->
-      Csymbol_address sym :: cont
+      Csymbol_address (Symbol.name_for_backend sym) :: cont
 
 let emit_structured_constant ((_sym, is_global) as symb) cst cont =
   match cst with
@@ -210,7 +210,8 @@ let emit_structured_constant ((_sym, is_global) as symb) cst cont =
   | Uconst_float_array fields ->
       emit_float_array_constant symb fields cont
   | Uconst_closure(fundecls, lbl, fv) ->
-      Cmmgen_state.add_constant lbl (Const_closure (is_global, fundecls, fv));
+      Cmmgen_state.add_constant
+        (Symbol.name_for_backend lbl) (Const_closure (is_global, fundecls, fv));
       List.iter (fun f -> Cmmgen_state.add_function f) fundecls;
       cont
 
@@ -230,12 +231,12 @@ let box_int_constant sym bi n =
 let box_int dbg bi arg =
   match arg with
   | Cconst_int (n, _) ->
-      let sym = Compilenv.new_const_symbol () in
+      let sym = Symbol.(name_for_backend (for_lifted_anonymous_constant ())) in
       let data_items = box_int_constant sym bi (Nativeint.of_int n) in
       Cmmgen_state.add_data_items data_items;
       Cconst_symbol (sym, dbg)
   | Cconst_natint (n, _) ->
-      let sym = Compilenv.new_const_symbol () in
+      let sym = Symbol.(name_for_backend (for_lifted_anonymous_constant ())) in
       let data_items = box_int_constant sym bi n in
       Cmmgen_state.add_data_items data_items;
       Cconst_symbol (sym, dbg)
@@ -366,7 +367,7 @@ let rec transl env e =
   | Uconst sc ->
       transl_constant Debuginfo.none sc
   | Uclosure(fundecls, []) ->
-      let sym = Compilenv.new_const_symbol() in
+      let sym = Symbol.(name_for_backend (for_lifted_anonymous_constant ())) in
       Cmmgen_state.add_constant sym (Const_closure (Local, fundecls, []));
       List.iter (fun f -> Cmmgen_state.add_function f) fundecls;
       let dbg =
@@ -383,9 +384,10 @@ let rec transl env e =
         | f :: rem ->
             Cmmgen_state.add_function f;
             let dbg = f.dbg in
+            let sym = Symbol.name_for_backend f.label in
             let without_header =
               if f.arity = 1 || f.arity = 0 then
-                Cconst_symbol (f.label, dbg) ::
+                Cconst_symbol (sym, dbg) ::
                 alloc_closure_info ~arity:f.arity
                                    ~startenv:(startenv - pos) dbg ::
                 transl_fundecls (pos + 3) rem
@@ -393,7 +395,7 @@ let rec transl env e =
                 Cconst_symbol (curry_function_sym f.arity, dbg) ::
                 alloc_closure_info ~arity:f.arity
                                    ~startenv:(startenv - pos) dbg ::
-                Cconst_symbol (f.label, dbg) ::
+                Cconst_symbol (sym, dbg) ::
                 transl_fundecls (pos + 4) rem
             in
             if pos = 0
@@ -413,7 +415,7 @@ let rec transl env e =
       ptr_offset ptr offset dbg
   | Udirect_apply(lbl, args, dbg) ->
       let args = List.map (transl env) args in
-      direct_apply lbl args dbg
+      direct_apply (Symbol.name_for_backend lbl) args dbg
   | Ugeneric_apply(clos, args, dbg) ->
       let clos = transl env clos in
       let args = List.map (transl env) args in
@@ -433,9 +435,10 @@ let rec transl env e =
           let defining_expr =
             match defining_expr with
             | Uphantom_const (Uconst_ref (sym, _defining_expr)) ->
-              Cphantom_const_symbol sym
+              Cphantom_const_symbol (Symbol.name_for_backend sym)
             | Uphantom_read_symbol_field { sym; field; } ->
-              Cphantom_read_symbol_field { sym; field; }
+              Cphantom_read_symbol_field
+                { sym = Symbol.name_for_backend sym; field; }
             | Uphantom_const (Uconst_int i) ->
               Cphantom_const_int (targetint_const i)
             | Uphantom_var var -> Cphantom_var var
@@ -456,7 +459,7 @@ let rec transl env e =
   | Uprim(prim, args, dbg) ->
       begin match (simplif_primitive prim, args) with
       | (Pread_symbol sym, []) ->
-          Cconst_symbol (sym, dbg)
+          Cconst_symbol (Symbol.name_for_backend sym, dbg)
       | (Pmakeblock _, []) ->
           assert false
       | (Pmakeblock(tag, _mut, _kind), args) ->
@@ -1371,7 +1374,7 @@ let transl_function f =
     else
       [ Reduce_code_size ]
   in
-  Cfunction {fun_name = f.label;
+  Cfunction {fun_name = Symbol.name_for_backend f.label;
              fun_args = List.map (fun (id, _) -> (id, typ_val)) f.params;
              fun_body = cmm_body;
              fun_codegen_options;
@@ -1383,7 +1386,7 @@ let rec transl_all_functions already_translated cont =
   match Cmmgen_state.next_function () with
   | None -> cont, already_translated
   | Some f ->
-    let sym = f.label in
+    let sym = Symbol.name_for_backend f.label in
     if String.Set.mem sym already_translated then
       transl_all_functions already_translated cont
     else begin
@@ -1412,7 +1415,7 @@ let transl_clambda_constants (constants : Clambda.preallocated_constant list)
        let global : Cmmgen_state.is_global =
          if exported then Global else Local
        in
-       emit_clambda_constant symbol global cst)
+       emit_clambda_constant (Symbol.name_for_backend symbol) global cst)
     constants;
   !c
 
@@ -1464,7 +1467,10 @@ let compunit (ulam, preallocated_blocks, constants) =
         (fun () -> dbg)
     else
       transl empty_env ulam in
-  let c1 = [Cfunction {fun_name = Compilenv.make_symbol (Some "entry");
+  let fun_name =
+    Symbol.make_backend_symbol
+      (Compilation_unit.get_current_exn ()) (Some "entry") in
+  let c1 = [Cfunction {fun_name;
                        fun_args = [];
                        fun_body = init_code;
                        (* This function is often large and run only once.

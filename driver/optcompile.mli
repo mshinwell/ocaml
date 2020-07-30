@@ -24,7 +24,7 @@ val implementation:
 
 (** {2 Internal functions} **)
 
-val clambda :
+val closure :
   Compile_common.info ->
   (module Backend_intf.S) ->
   Typedtree.implementation -> unit

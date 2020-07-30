@@ -94,6 +94,8 @@ let get_compilation_unit t = t.compilation_unit
 
 let name t = t.name
 
+let stamp t = t.name_stamp
+
 let unique_name t =
   t.name ^ "_" ^ (Int.to_string t.name_stamp)
 
