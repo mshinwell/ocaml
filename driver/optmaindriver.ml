@@ -36,6 +36,15 @@ module Options = Main_args.Make_optcomp_options (Main_args.Default.Optmain)
 let main argv ppf =
   native_code := true;
   match
+    begin match Sys.getenv_opt "FLAMBDA_COLUMNS" with
+    | None -> ()
+    | Some i ->
+      match int_of_string i with
+      | exception _ -> ()
+      | i ->
+        Format.pp_set_margin Format.std_formatter i;
+        Format.pp_set_margin Format.err_formatter i
+    end;
     readenv ppf Before_args;
     Clflags.add_arguments __LOC__ (Arch.command_line_options @ Options.list);
     Clflags.add_arguments __LOC__
