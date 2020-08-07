@@ -494,7 +494,18 @@ let join_types ~env_at_fork envs_with_levels ~extra_lifted_consts_in_use_envs =
       in
       let next_join_env = ref join_env in
       let join_types name joined_ty use_ty =
-        assert (Typing_env.mem env_at_fork name);  (* see [join], below *)
+        (* CR mshinwell for vlaviron: Looks like [Typing_env.mem] needs
+           fixing with respect to names from other units with their
+           .cmx missing (c.f. testsuite/tests/lib-dynlink-native/). *)
+        let same_unit =
+          Compilation_unit.equal (Name.compilation_unit name)
+            (Compilation_unit.get_current_exn ())
+        in
+        if same_unit && not (Typing_env.mem env_at_fork name) then begin
+          Misc.fatal_errorf "Name %a not defined in [env_at_fork]:@ %a"
+            Name.print name
+            Typing_env.print env_at_fork
+        end;
         let is_lifted_const_symbol =
           match Name.must_be_symbol_opt name with
           | None -> false
