@@ -20,10 +20,6 @@ open! Flambda.Import
 
 module DE = Simplify_envs.Downwards_env
 
-(* CR mshinwell: We should track the inlining depth on closures (or maybe
-   code) in addition to on [Apply] nodes, as per conversation with
-   lwhite 2020-08-10. *)
-
 (* CR mshinwell: We need to emit [Warnings.Inlining_impossible] as
    required.
    When in fallback-inlining mode: if we want to follow Closure we should
