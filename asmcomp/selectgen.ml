@@ -878,6 +878,11 @@ method emit_expr (env:environment) exp =
               self#emit_stores env new_args rd;
               set_traps_for_raise env;
               Some rd
+          | (Iprobe _) as op ->
+              let r1 = self#emit_tuple env new_args in
+              let rd = self#regs_for ty in
+              set_traps_for_raise env;
+              Some (self#insert_op_debug env op dbg r1 rd)
           | op ->
               let r1 = self#emit_tuple env new_args in
               let rd = self#regs_for ty in
@@ -1412,6 +1417,9 @@ method emit_tail (env:environment) exp =
                   (env_handler.trap_stack,
                    instr_cons (Iop Imove) [|Proc.loc_exn_bucket|] rv s2)))
         [||] [||]
+  | Cop (Cprobe _, _, _) ->
+      set_traps_for_raise env;
+      self#emit_return env exp (pop_all_traps env)
   | Cop _
   | Cconst_int _ | Cconst_natint _ | Cconst_float _ | Cconst_symbol _
   | Cconst_pointer _ | Cconst_natpointer _ | Cblockheader _
