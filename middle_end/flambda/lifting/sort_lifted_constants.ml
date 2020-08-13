@@ -20,17 +20,9 @@ open! Simplify_import
 
 module SCC_lifted_constants = Strongly_connected_components.Make (CIS)
 
-type result = {
-  bindings_outermost_last : LC.t list;
-}
-
-let empty_result = {
-  bindings_outermost_last = [];
-}
-
-let build_dep_graph ~fold_over_lifted_constants =
+let build_dep_graph lifted_constants =
   (* Format.eprintf "SORTING:\n%!"; *)
-  fold_over_lifted_constants ~init:(CIS.Map.empty, CIS.Map.empty)
+  LCS.fold lifted_constants ~init:(CIS.Map.empty, CIS.Map.empty)
     ~f:(fun (dep_graph, code_id_or_symbol_to_const) lifted_constant ->
       (* Format.eprintf "One constant: %a\n%!" LC.print lifted_constant; *)
       ListLabels.fold_left (LC.definitions lifted_constant)
@@ -131,65 +123,58 @@ let build_dep_graph ~fold_over_lifted_constants =
             being_defined
             (dep_graph, code_id_or_symbol_to_const)))
 
-let sort ~fold_over_lifted_constants =
+let sort0 lifted_constants =
   (* The various lifted constants may exhibit recursion between themselves
      (specifically between closures and/or code).  We use SCC to obtain a
      topological sort of groups that must be coalesced into single
      code-and-set-of-closures definitions. *)
   let lifted_constants_dep_graph, code_id_or_symbol_to_const =
-    build_dep_graph ~fold_over_lifted_constants
+    build_dep_graph lifted_constants
   in
   (*
   Format.eprintf "SCC graph is:@ %a\n%!"
     (CIS.Map.print CIS.Set.print)
     lifted_constants_dep_graph;
   *)
-  let bindings_outermost_last =
+  let innermost_first =
     lifted_constants_dep_graph
     |> SCC_lifted_constants.connected_components_sorted_from_roots_to_leaf
-    |> Array.to_list
-    |> List.rev
-    |> ListLabels.fold_left ~init:[]
-         ~f:(fun bindings (group : SCC_lifted_constants.component) ->
-           let code_id_or_symbols =
-             match group with
-             | No_loop code_id_or_symbol -> [code_id_or_symbol]
-             | Has_loop code_id_or_symbols -> code_id_or_symbols
-           in
-           let _, lifted_constants =
-             ListLabels.fold_left code_id_or_symbols
-               ~init:(CIS.Set.empty, [])
-               ~f:(fun ((already_seen, definitions) as acc) code_id_or_symbol ->
-                 if CIS.Set.mem code_id_or_symbol already_seen then acc
-                 else
-                   let lifted_constant =
-                     CIS.Map.find code_id_or_symbol code_id_or_symbol_to_const
-                   in
-                   let already_seen =
-                     (* We may encounter the same defining expression more
-                        than once, in the case of sets of closures, which
-                        may bind more than one symbol.  We must avoid
-                        duplicates in the result list. *)
-                     let bound_symbols = LC.bound_symbols lifted_constant in
-                     CIS.Set.union
-                       (Bound_symbols.everything_being_defined bound_symbols)
-                       already_seen
-                   in
-                   already_seen, lifted_constant :: definitions)
-           in
-           (LC.concat lifted_constants) :: bindings)
+    |> ArrayLabels.map ~f:(fun (group : SCC_lifted_constants.component) ->
+        let code_id_or_symbols =
+          match group with
+          | No_loop code_id_or_symbol -> [code_id_or_symbol]
+          | Has_loop code_id_or_symbols -> code_id_or_symbols
+        in
+        let _, lifted_constants =
+          ListLabels.fold_left code_id_or_symbols
+            ~init:(CIS.Set.empty, [])
+            ~f:(fun ((already_seen, definitions) as acc) code_id_or_symbol ->
+              if CIS.Set.mem code_id_or_symbol already_seen then acc
+              else
+                let lifted_constant =
+                  CIS.Map.find code_id_or_symbol code_id_or_symbol_to_const
+                in
+                let already_seen =
+                  (* We may encounter the same defining expression more
+                     than once, in the case of sets of closures, which
+                     may bind more than one symbol.  We must avoid
+                     duplicates in the resulting [LC.t]. *)
+                  let bound_symbols = LC.bound_symbols lifted_constant in
+                  CIS.Set.union
+                    (Bound_symbols.everything_being_defined bound_symbols)
+                    already_seen
+                in
+                already_seen, lifted_constant :: definitions)
+        in
+        LC.concat lifted_constants)
   in
-  (* By reversing the list upon a subsequent fold we rely on the following
-     property:
-       Let the list L be a topological sort of a directed graph G.
+  (* We may wish to traverse the array of constants in either direction.
+     This can be done by virtue of the following property:
+       Let the list/array L be a topological sort of a directed graph G.
        Then the reverse of L is a topological sort of the transpose of G.
   *)
-  (*
-  Format.eprintf "Result, outermost first:@ %a\n%!"
-    (Format.pp_print_list ~pp_sep:Format.pp_print_space LC.print)
-    (List.rev bindings_outermost_last);
-  Format.eprintf "Result, outermost first:@ %a\n%!"
-    (Format.pp_print_list ~pp_sep:Format.pp_print_space Bound_symbols.print)
-    (List.map LC.bound_symbols (List.rev bindings_outermost_last));
-  *)
-  { bindings_outermost_last; }
+  LCS.singleton_sorted_array_of_constants ~innermost_first
+
+let sort lifted_constants =
+  if LCS.is_empty lifted_constants then LCS.empty
+  else sort0 lifted_constants

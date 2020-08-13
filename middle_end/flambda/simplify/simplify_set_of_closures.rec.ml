@@ -469,7 +469,7 @@ let simplify_set_of_closures0 dacc context set_of_closures
              the downwards traversal turns into an upwards traversal is in
              such a context, not all of the constants may currently be
              present in [DA]. *)
-          UA.lifted_constants_still_to_be_placed uacc_after_upwards_traversal
+          UA.lifted_constants uacc_after_upwards_traversal
         in
         let result_function_decls_in_set =
           (closure_id, function_decl) :: result_function_decls_in_set

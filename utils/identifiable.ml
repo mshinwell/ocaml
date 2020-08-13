@@ -75,6 +75,7 @@ module type Map = sig
         -> 'b
         -> 'b option
   val inter : (key -> 'a -> 'a -> 'a) -> 'a t -> 'a t -> 'a t
+  val inter_domain_is_non_empty : 'a t -> 'a t -> bool
 end
 
 module type Tbl = sig
@@ -222,6 +223,8 @@ module Make_map (T : Thing) (Set : Set with module T := T) = struct
         | None, None | None, Some _ | Some _, None -> None
         | Some datum1, Some datum2 -> Some (f key datum1 datum2))
       t1 t2
+
+  let inter_domain_is_non_empty _ _ = Misc.fatal_error "Not yet implemented"
 end [@@@inline always]
 
 module Make_set (T : Thing) = struct

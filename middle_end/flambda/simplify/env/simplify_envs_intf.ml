@@ -357,7 +357,11 @@ module type Lifted_constant = sig
 
   val concat : t list -> t
 
+  val is_fully_static : t -> bool
+
   val all_defined_symbols : t -> Symbol.Set.t
+
+  val free_names_of_defining_exprs : t -> Name_occurrences.t
 end
 
 module type Lifted_constant_state = sig
@@ -372,11 +376,40 @@ module type Lifted_constant_state = sig
 
   val singleton : lifted_constant -> t
 
+  (* Use if the order of constants doesn't matter. *)
   val add : t -> lifted_constant -> t
 
+  val add_innermost : t -> lifted_constant -> t
+
+  val add_outermost : t -> lifted_constant -> t
+
+  val singleton_sorted_array_of_constants
+     : innermost_first:lifted_constant array
+     -> t
+
+  (* Use if the order of constants doesn't matter. *)
   val union : t -> t -> t
 
-  val fold : t -> init:'a -> f:('a -> lifted_constant -> 'a) -> 'a
+  val union_ordered : innermost:t -> outermost:t -> t
+
+  (* Use if the order of constants doesn't matter. *)
+  val fold
+     : t
+    -> init:'a
+    -> f:('a -> lifted_constant -> 'a)
+    -> 'a
+
+  val fold_outermost_first
+     : t
+    -> init:'a
+    -> f:('a -> lifted_constant -> 'a)
+    -> 'a
+
+  val fold_innermost_first
+     : t
+    -> init:'a
+    -> f:('a -> lifted_constant -> 'a)
+    -> 'a
 
   val all_defined_symbols : t -> Symbol.Set.t
 end

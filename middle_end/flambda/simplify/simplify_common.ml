@@ -338,7 +338,7 @@ let remove_unused_closure_vars uacc (static_const : Static_const.t)
 let remove_unused_closure_vars_list uacc static_consts =
   List.map (remove_unused_closure_vars uacc) static_consts
 
-let create_let_symbol uacc (scoping_rule : Symbol_scoping_rule.t)
+let create_let_symbols uacc (scoping_rule : Symbol_scoping_rule.t)
       code_age_relation lifted_constant body =
   let bound_symbols = LC.bound_symbols lifted_constant in
   let defining_exprs = LC.defining_exprs lifted_constant in

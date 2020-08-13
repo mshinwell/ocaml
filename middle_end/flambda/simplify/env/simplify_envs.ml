@@ -790,36 +790,115 @@ end = struct
         Symbol.Map.singleton symbol (denv, ty)
   end
 
-  type t = Definition.t list
+  type t = {
+    definitions : Definition.t list;
+    bound_symbols : Bound_symbols.t;
+    defining_exprs : Static_const.Group.t;
+    free_names : Name_occurrences.t;
+    is_fully_static : bool;
+  }
 
-  let definitions t = t
+  let definitions t = t.definitions
 
-  let print ppf t =
+  let free_names_of_defining_exprs t = t.free_names
+
+  let is_fully_static t = t.is_fully_static
+
+  let print ppf
+        { definitions; bound_symbols = _; defining_exprs = _;
+          free_names = _; is_fully_static = _; } =
     Format.fprintf ppf "@[<hov 1>(%a)@]"
       (Format.pp_print_list ~pp_sep:Format.pp_print_space Definition.print)
-      t
+      definitions
+
+  let compute_bound_symbols definitions =
+    ListLabels.map definitions ~f:Definition.bound_symbols_pattern
+    |> Bound_symbols.create
+
+  let compute_defining_exprs definitions =
+    ListLabels.map definitions ~f:Definition.defining_expr
+    |> Static_const.Group.create
 
   let create_block_like symbol defining_expr denv ty =
     (* CR mshinwell: check that [defining_expr] is not a set of closures
        or code *)
-    [Definition.block_like denv symbol ty defining_expr]
+    let definitions = [Definition.block_like denv symbol ty defining_expr] in
+    { definitions;
+      bound_symbols = compute_bound_symbols definitions;
+      defining_exprs = compute_defining_exprs definitions;
+      free_names = Static_const.free_names defining_expr;
+      is_fully_static = Static_const.is_fully_static defining_expr;
+    }
 
   let create_set_of_closures denv ~closure_symbols_with_types defining_expr =
-    [Definition.set_of_closures denv ~closure_symbols_with_types defining_expr]
+    let definitions =
+      [Definition.set_of_closures denv ~closure_symbols_with_types
+        defining_expr]
+    in
+    { definitions;
+      bound_symbols = compute_bound_symbols definitions;
+      defining_exprs = compute_defining_exprs definitions;
+      free_names = Static_const.free_names defining_expr;
+      is_fully_static = Static_const.is_fully_static defining_expr;
+    }
 
   let create_code code_id defining_expr =
-    [Definition.code code_id defining_expr]
+    let definitions = [Definition.code code_id defining_expr] in
+    { definitions;
+      bound_symbols = compute_bound_symbols definitions;
+      defining_exprs = compute_defining_exprs definitions;
+      free_names = Static_const.free_names defining_expr;
+      is_fully_static = Static_const.is_fully_static defining_expr;
+    }
 
-  let concat = List.concat
+  let concat ts =
+    let definitions =
+      List.fold_left (fun definitions t ->
+          t.definitions @ definitions)
+        []
+        ts
+    in
+    let bound_symbols =
+      List.fold_left (fun bound_symbols t ->
+          Bound_symbols.concat t.bound_symbols bound_symbols)
+        Bound_symbols.empty
+        ts
+    in
+    let defining_exprs =
+      List.fold_left (fun defining_exprs t ->
+          Static_const.Group.concat t.defining_exprs defining_exprs)
+        Static_const.Group.empty
+        ts
+    in
+    let free_names =
+      List.fold_left (fun free_names t ->
+          Name_occurrences.union t.free_names free_names)
+        Name_occurrences.empty
+        ts
+    in
+    let is_fully_static =
+      List.fold_left (fun is_fully_static t ->
+          t.is_fully_static && is_fully_static)
+        true
+        ts
+    in
+    { definitions;
+      bound_symbols;
+      defining_exprs;
+      free_names;
+      is_fully_static;
+    }
 
   let defining_exprs t =
-    Static_const.Group.create (List.map Definition.defining_expr t)
+    Static_const.Group.create
+      (List.map Definition.defining_expr t.definitions)
 
   let bound_symbols t =
-    Bound_symbols.create (List.map Definition.bound_symbols_pattern t)
+    Bound_symbols.create
+      (List.map Definition.bound_symbols_pattern t.definitions)
 
   let types_of_symbols t =
-    ListLabels.fold_left t
+    ListLabels.fold_left t.definitions
       ~init:Symbol.Map.empty
       ~f:(fun types_of_symbols definition ->
         Symbol.Map.disjoint_union (Definition.types_of_symbols definition)
@@ -834,50 +913,82 @@ end = struct
   type t =
     | Empty
     | Leaf of Lifted_constant.t
-    | Union of t * t
-    | Union_leaf of t * Lifted_constant.t
+    | Leaf_array of { innermost_first : Lifted_constant.t array; }
+    | Union of { outer : t; inner : t; }
 
-  let to_list t =
+  let to_list_outermost_first t =
     let rec to_list t acc =
       match t with
       | Empty -> acc
       | Leaf const -> const :: acc
-      | Union (t1, t2) -> to_list t1 (to_list t2 acc)
-      | Union_leaf (t, const) -> to_list t (const :: acc)
+      | Leaf_array { innermost_first; } ->
+        (List.rev (Array.to_list innermost_first)) @ acc
+      | Union { inner; outer; } -> to_list outer (to_list inner acc)
     in
     to_list t []
 
   let print ppf t =
-    Format.fprintf ppf "@[<hov 1>(%a)@]"
+    Format.fprintf ppf "@[<hov 1>(outermost_first@ %a)@]"
       (Format.pp_print_list ~pp_sep:Format.pp_print_space Lifted_constant.print)
-      (to_list t)
+      (to_list_outermost_first t)
 
   let empty = Empty
-
-  let union t1 t2 =
-    match t1, t2 with
-    | Empty, _ -> t2
-    | _, Empty -> t1
-    | Leaf const, (Union _ | Union_leaf _) -> Union_leaf (t2, const)
-    | (Union _ | Union_leaf _), Leaf const -> Union_leaf (t1, const)
-    | (Leaf _ | Union _ | Union_leaf _), _ -> Union (t1, t2)
 
   let is_empty t =
     match t with
     | Empty -> true
-    | Leaf _ | Union _ | Union_leaf _ -> false
+    | Leaf _ | Leaf_array _ | Union _ -> false
 
   let singleton const = Leaf const
 
-  let add t const =
-    Union (t, Leaf const)
+  let singleton_sorted_array_of_constants ~innermost_first =
+    if Array.length innermost_first < 1 then empty
+    else Leaf_array { innermost_first; }
 
-  let rec fold t ~init ~f =
+  let union_ordered ~innermost ~outermost =
+    match innermost, outermost with
+    | Empty, _ -> outermost
+    | _, Empty -> innermost
+    | inner, outer -> Union { inner; outer; }
+
+  let union t1 t2 = union_ordered ~innermost:t1 ~outermost:t2
+
+  let add_innermost t const =
+    if is_empty t then Leaf const
+    else Union { inner = Leaf const; outer = t; }
+
+  let add_outermost t const =
+    if is_empty t then Leaf const
+    else Union { outer = Leaf const; inner = t; }
+
+  let add = add_innermost
+
+  let rec fold_outermost_first t ~init ~f =
     match t with
     | Empty -> init
     | Leaf const -> f init const
-    | Union (t1, t2) -> fold t2 ~init:(fold t1 ~init ~f) ~f
-    | Union_leaf (t, const) -> f (fold t ~init ~f) const
+    | Leaf_array { innermost_first; } ->
+      (* Avoid [Array.fold_right] as it would require a closure allocation. *)
+      let acc = ref init in
+      for i = Array.length innermost_first - 1 downto 0 do
+        acc := f !acc innermost_first.(i)
+      done;
+      !acc
+    | Union { inner; outer; } ->
+      let init = fold_outermost_first outer ~init ~f in
+      fold_outermost_first inner ~init ~f
+
+  let rec fold_innermost_first t ~init ~f =
+    match t with
+    | Empty -> init
+    | Leaf const -> f init const
+    | Leaf_array { innermost_first; } ->
+      ArrayLabels.fold_left innermost_first ~init ~f
+    | Union { inner; outer; } ->
+      let init = fold_innermost_first inner ~init ~f in
+      fold_innermost_first outer ~init ~f
+
+  let fold = fold_innermost_first
 
   let all_defined_symbols t =
     fold t ~init:Symbol.Set.empty ~f:(fun symbols const ->

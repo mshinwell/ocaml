@@ -33,14 +33,14 @@ type t = {
 }
 
 let print ppf
-      { uenv; code_age_relation; lifted_constants; used_closure_vars;
-        all_code = _; shareable_constants; } =
+      { uenv; code_age_relation; lifted_constants;
+        used_closure_vars; all_code = _; shareable_constants; } =
   Format.fprintf ppf "@[<hov 1>(\
-      @[(uenv@ %a)@]@ \
-      @[(code_age_relation@ %a)@]@ \
-      @[(lifted_constants@ %a)@]@ \
-      @[(used_closure_vars@ %a)@]@ \
-      @[(shareable_constants@ %a)@]\
+      @[<hov 1>(uenv@ %a)@]@ \
+      @[<hov 1>(code_age_relation@ %a)@]@ \
+      @[<hov 1>(lifted_constants@ %a)@]@ \
+      @[<hov 1>(used_closure_vars@ %a)@]@ \
+      @[<hov 1>(shareable_constants@ %a)@]\
       )@]"
     UE.print uenv
     Code_age_relation.print code_age_relation
@@ -59,17 +59,21 @@ let create uenv dacc =
 
 let uenv t = t.uenv
 let code_age_relation t = t.code_age_relation
-let lifted_constants_still_to_be_placed t = t.lifted_constants
+let lifted_constants t = t.lifted_constants
 
-let add_lifted_constant_still_to_be_placed t const =
+(* Don't add empty LCS to the list *)
+
+let add_outermost_lifted_constant t const =
   { t with
-    lifted_constants = LCS.add t.lifted_constants const;
+    lifted_constants = LCS.add_outermost t.lifted_constants const;
   }
 
-let with_lifted_constants_still_to_be_placed t lifted_constants =
-  { t with lifted_constants; }
-let no_lifted_constants_still_to_be_placed t =
-  LCS.is_empty t.lifted_constants
+let with_lifted_constants t lifted_constants =
+  { t with
+    lifted_constants;
+  }
+
+let no_lifted_constants t = LCS.is_empty t.lifted_constants
 
 let map_uenv t ~f =
   { t with

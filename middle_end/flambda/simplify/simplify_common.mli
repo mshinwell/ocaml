@@ -70,14 +70,14 @@ val bind_let_bound
   -> body:Flambda.Expr.t
   -> Flambda.Expr.t
 
-(** Create a [Let_symbol] expression around a given body.  Two optimisations
+(** Create [Let_symbol] expression(s) around a given body.  Two optimisations
     are performed:
-    1. Best efforts are made not to create the [Let_symbol] if it would be
-       redundant.
+    1. Best efforts are made not to create the [Let_symbol](s) if it/they
+       would be redundant.
     2. Closure variables are removed if they are not used according to the
        given [r].  Such [r] must have seen all uses in the whole
        compilation unit. *)
-val create_let_symbol
+val create_let_symbols
    : Upwards_acc.t
   -> Symbol_scoping_rule.t
   -> Code_age_relation.t

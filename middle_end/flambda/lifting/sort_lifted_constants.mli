@@ -23,17 +23,6 @@
 
 open! Simplify_import
 
-type result = private {
-  bindings_outermost_last : LC.t list;
-}
-
-val empty_result : result
-
-val sort
-   : fold_over_lifted_constants:(
-          init:(CIS.Set.t CIS.Map.t * LC.t CIS.Map.t)
-       -> f:(CIS.Set.t CIS.Map.t * LC.t CIS.Map.t
-         -> LC.t
-         -> CIS.Set.t CIS.Map.t * LC.t CIS.Map.t)
-       -> CIS.Set.t CIS.Map.t * LC.t CIS.Map.t)
-  -> result
+(* CR mshinwell: Split [Simplify_envs] into separate files then move this
+   sorting algorithm into [LCS] *)
+val sort : LCS.t -> LCS.t

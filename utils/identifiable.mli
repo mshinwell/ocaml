@@ -95,6 +95,7 @@ module type Map = sig
         -> 'b option
 
   val inter : (key -> 'a -> 'a -> 'a) -> 'a t -> 'a t -> 'a t
+  val inter_domain_is_non_empty : 'a t -> 'a t -> bool
 end
 
 module type Tbl = sig

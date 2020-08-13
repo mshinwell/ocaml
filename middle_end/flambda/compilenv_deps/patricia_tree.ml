@@ -716,6 +716,29 @@ struct
         else
           Empty
 
+  let rec inter_domain_is_non_empty t0 t1 =
+    match t0, t1 with
+    | Empty, _
+    | _, Empty -> false
+    | Leaf (i, _), _ -> mem i t1
+    | _, Leaf (i, _) -> mem i t0
+    | Branch(prefix0, bit0, t00, t01), Branch(prefix1, bit1, t10, t11) ->
+        if equal_prefix prefix0 bit0 prefix1 bit1 then
+          (inter_domain_is_non_empty t00 t10)
+            || (inter_domain_is_non_empty t01 t11)
+        else if includes_prefix prefix0 bit0 prefix1 bit1 then
+          if zero_bit prefix1 bit0 then
+            inter_domain_is_non_empty t00 t1
+          else
+            inter_domain_is_non_empty t01 t1
+        else if includes_prefix prefix1 bit1 prefix0 bit0 then
+          if zero_bit prefix0 bit1 then
+            inter_domain_is_non_empty t0 t10
+          else
+            inter_domain_is_non_empty t0 t11
+        else
+          false
+
   let rec diff t0 t1 =
     match t0, t1 with
     | Empty, _ -> Empty

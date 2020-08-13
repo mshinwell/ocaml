@@ -380,10 +380,15 @@ end = struct
     | Potentially_many map1, Potentially_many map2 ->
       N.Set.subset (N.Map.keys map1) (N.Map.keys map2)
 
-  (* CR mshinwell: Provide better implementation.  Only used in closure
-     conversion at the moment. *)
   let inter_domain_is_non_empty t1 t2 =
-    not (N.Set.is_empty (N.Set.inter (keys t1) (keys t2)))
+    match t1, t2 with
+    | Empty, (Empty | One _ | Potentially_many _)
+    | (One _ | Potentially_many _), Empty -> false
+    | One (name1, _), One (name2, _) -> N.equal name1 name2
+    | One (name, _), Potentially_many map
+    | Potentially_many map, One (name, _) -> N.Map.mem name map
+    | Potentially_many map1, Potentially_many map2 ->
+      N.Map.inter_domain_is_non_empty map1 map2
 
   let mem t name =
     match t with
