@@ -20,7 +20,7 @@ val simplify_toplevel
    : Downwards_acc.t
   -> Flambda.Expr.t
   -> return_continuation:Continuation.t
-  -> return_arity:Flambda_arity.t
+  -> return_arity:Flambda_arity.With_subkinds.t
   -> Exn_continuation.t
   -> return_cont_scope:Scope.t
   -> exn_cont_scope:Scope.t

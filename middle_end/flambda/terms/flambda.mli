@@ -372,14 +372,17 @@ end and Continuation_handler : sig
      function declarations to hold one or more wrappers themselves. *)
   val stub : t -> bool
 
-  val arity : t -> Flambda_arity.t
+  val arity : t -> Flambda_arity.With_subkinds.t
 
   val with_params_and_handler : t -> Continuation_params_and_handler.t -> t
 
   type behaviour = private
-    | Unreachable of { arity : Flambda_arity.t; }
-    | Alias_for of { arity : Flambda_arity.t; alias_for : Continuation.t; }
-    | Unknown of { arity : Flambda_arity.t; }
+    | Unreachable of { arity : Flambda_arity.With_subkinds.t; }
+    | Alias_for of {
+        arity : Flambda_arity.With_subkinds.t;
+        alias_for : Continuation.t;
+      }
+    | Unknown of { arity : Flambda_arity.With_subkinds.t; }
 
   val behaviour : t -> behaviour
 end and Continuation_params_and_handler : sig
@@ -664,9 +667,9 @@ end and Code : sig
 
   val newer_version_of : t -> Code_id.t option
 
-  val params_arity : t -> Flambda_arity.t
+  val params_arity : t -> Flambda_arity.With_subkinds.t
 
-  val result_arity : t -> Flambda_arity.t
+  val result_arity : t -> Flambda_arity.With_subkinds.t
 
   val stub : t -> bool
 
@@ -680,8 +683,8 @@ end and Code : sig
      : Code_id.t
     -> params_and_body:Function_params_and_body.t Or_deleted.t
     -> newer_version_of:Code_id.t option
-    -> params_arity:Flambda_arity.t
-    -> result_arity:Flambda_arity.t
+    -> params_arity:Flambda_arity.With_subkinds.t
+    -> result_arity:Flambda_arity.With_subkinds.t
     -> stub:bool
     -> inline:Inline_attribute.t
     -> is_a_functor:bool

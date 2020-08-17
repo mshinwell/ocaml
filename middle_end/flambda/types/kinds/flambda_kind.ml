@@ -56,6 +56,9 @@ module Naked_number_kind = struct
 
   let compare t1 t2 =
     Int.compare (to_int t1) (to_int t2)
+
+  let equal t1 t2 =
+    compare t1 t2 = 0
 end
 
 type t =
@@ -347,4 +350,160 @@ module Naked_number = struct
     | Naked_int32 -> Format.pp_print_string ppf "Naked_int32"
     | Naked_int64 -> Format.pp_print_string ppf "Naked_int64"
     | Naked_nativeint -> Format.pp_print_string ppf "Naked_nativeint"
+end
+
+module With_subkind = struct
+  module Subkind = struct
+    type t =
+      | Anything
+      | Boxed_float
+      | Boxed_int32
+      | Boxed_int64
+      | Boxed_nativeint
+      | Tagged_immediate
+
+    include Identifiable.Make (struct
+      type nonrec t = t
+
+      let print ppf t =
+        let colour = Flambda_colours.subkind () in
+        match t with
+        | Anything -> ()
+        | Tagged_immediate ->
+          Format.fprintf ppf "@<0>%s=tagged_@<1>\u{2115}@<1>\u{1d55a}@<0>%s"
+            colour (Flambda_colours.normal ())
+        | Boxed_float ->
+          Format.fprintf ppf "@<0>%s=boxed_@<1>\u{2115}@<1>\u{1d557}@<0>%s"
+            colour (Flambda_colours.normal ())
+        | Boxed_int32 ->
+          Format.fprintf ppf
+            "@<0>%s=boxed_@<1>\u{2115}@<1>\u{1d7db}@<1>\u{1d7da}@<0>%s"
+            colour (Flambda_colours.normal ())
+        | Boxed_int64 ->
+          Format.fprintf ppf
+            "@<0>%s=boxed_@<1>\u{2115}@<1>\u{1d7de}@<1>\u{1d7dc}@<0>%s"
+            colour (Flambda_colours.normal ())
+        | Boxed_nativeint ->
+          Format.fprintf ppf "@<0>%s=boxed_@<1>\u{2115}@<1>\u{2115}@<0>%s"
+            colour (Flambda_colours.normal ())
+
+      let compare = Stdlib.compare
+
+      let equal t1 t2 = (compare t1 t2 = 0)
+
+      let hash = Hashtbl.hash
+
+      let output _ _ = Misc.fatal_error "Not yet implemented"
+    end)
+  end
+
+  type kind = t
+
+  type t = {
+    kind : kind;
+    subkind : Subkind.t;
+  }
+
+  let create (kind : kind) (subkind : Subkind.t) =
+    begin match kind with
+    | Value -> ()
+    | Naked_number _ | Fabricated ->
+      match subkind with
+      | Anything -> ()
+      | Boxed_float
+      | Boxed_int32
+      | Boxed_int64
+      | Boxed_nativeint
+      | Tagged_immediate ->
+        Misc.fatal_errorf "Only subkind %a is valid for kind %a"
+          Subkind.print subkind
+          print kind
+    end;
+    { kind; subkind; }
+
+  let kind t = t.kind
+  let subkind t = t.subkind
+
+  let any_value = create value Anything
+  let naked_immediate = create naked_immediate Anything
+  let naked_float = create naked_float Anything
+  let naked_int32 = create naked_int32 Anything
+  let naked_int64 = create naked_int64 Anything
+  let naked_nativeint = create naked_nativeint Anything
+  let boxed_float = create value Boxed_float
+  let boxed_int32 = create value Boxed_int32
+  let boxed_int64 = create value Boxed_int64
+  let boxed_nativeint = create value Boxed_nativeint
+  let tagged_immediate = create value Tagged_immediate
+
+  include Identifiable.Make (struct
+    type nonrec t = t
+
+    let print ppf { kind; subkind; } =
+      match kind, subkind with
+      | _, Anything -> print ppf kind
+      | Value, subkind ->
+        Format.fprintf ppf "@[%a%a@]"
+          print kind
+          Subkind.print subkind
+      | _, _ -> assert false  (* see [create] *)
+
+    let compare
+          { kind = kind1; subkind = subkind1; }
+          { kind = kind2; subkind = subkind2; } =
+      let c = compare kind1 kind2 in
+      if c <> 0 then c
+      else Subkind.compare subkind1 subkind2
+
+    let equal t1 t2 = (compare t1 t2 = 0)
+
+    let hash { kind; subkind; } =
+      Hashtbl.hash (hash kind, Subkind.hash subkind)
+
+    let output _ _ = Misc.fatal_error "Not yet implemented"
+  end)
+
+  type descr =
+    | Any_value
+    | Naked_number of Naked_number_kind.t
+    | Boxed_float
+    | Boxed_int32
+    | Boxed_int64
+    | Boxed_nativeint
+    | Tagged_immediate
+
+  let descr t : descr =
+    match t.kind with
+    | Value ->
+      begin match t.subkind with
+      | Anything -> Any_value
+      | Tagged_immediate -> Tagged_immediate
+      | Boxed_float -> Boxed_float
+      | Boxed_int32 -> Boxed_int32
+      | Boxed_int64 -> Boxed_int64
+      | Boxed_nativeint -> Boxed_nativeint
+      end
+    | Naked_number naked_number_kind -> Naked_number naked_number_kind
+    | Fabricated -> Misc.fatal_error "Not implemented"
+
+  let compatible t ~when_used_at =
+    match descr t, descr when_used_at with
+    (* Simple equality cases: *)
+    | Naked_number nn1, Naked_number nn2 -> Naked_number_kind.equal nn1 nn2
+    | Any_value, Any_value
+    | Boxed_float, Boxed_float
+    | Boxed_int32, Boxed_int32
+    | Boxed_int64, Boxed_int64
+    | Boxed_nativeint, Boxed_nativeint
+    | Tagged_immediate, Tagged_immediate -> true
+    (* Subkinds of [Value] may always be used at [Value], but not the
+       converse: *)
+    | Boxed_float, Any_value
+    | Boxed_int32, Any_value
+    | Boxed_int64, Any_value
+    | Boxed_nativeint, Any_value
+    | Tagged_immediate, Any_value -> true
+    (* All other combinations are incompatible. *)
+    | (Any_value | Naked_number _ | Boxed_float | Boxed_int32 | Boxed_int64
+      | Boxed_nativeint | Tagged_immediate), _ -> false
 end

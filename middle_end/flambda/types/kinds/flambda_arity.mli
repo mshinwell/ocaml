@@ -36,3 +36,20 @@ val is_all_naked_floats : t -> bool
 val is_singleton_value : t -> bool
 
 include Identifiable.S with type t := t
+
+module With_subkinds : sig
+  type arity = t
+  type t = Flambda_kind.With_subkind.t list
+
+  val create : Flambda_kind.With_subkind.t list -> t
+
+  val is_singleton_value : t -> bool
+
+  val to_arity : t -> arity
+
+  val of_arity : arity -> t
+
+  val compatible : t -> when_used_at:t -> bool
+
+  include Identifiable.S with type t := t
+end

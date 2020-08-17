@@ -281,10 +281,10 @@ let rec prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
         loc = loc;
       }))
   | Llet ((Strict | Alias | StrictOpt), Pgenval, fun_id,
-      Lfunction { kind; params; body = fbody; attr; loc; _ }, body) ->
+      Lfunction { kind; params; body = fbody; attr; loc; return; }, body) ->
     begin match
       Simplif.split_default_wrapper ~id:fun_id ~kind ~params
-        ~body:fbody ~return:Pgenval ~attr ~loc
+        ~body:fbody ~return ~attr ~loc
     with
     | [fun_id, def] ->
       (* CR mshinwell: Here and below, mark the wrappers as stubs *)
@@ -315,9 +315,9 @@ let rec prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
     prepare_list_with_flatten_map env bindings
       ~flatten_map:(fun fun_id (binding : L.lambda) ->
         match binding with
-        | Lfunction { kind; params; body = fbody; attr; loc; _ } ->
+        | Lfunction { kind; params; body = fbody; attr; loc; return; _ } ->
           Simplif.split_default_wrapper ~id:fun_id ~kind ~params
-            ~body:fbody ~return:Pgenval ~attr ~loc
+            ~body:fbody ~return ~attr ~loc
         | _ -> [fun_id, binding])
       (fun bindings ->
         prepare env body (fun body ->

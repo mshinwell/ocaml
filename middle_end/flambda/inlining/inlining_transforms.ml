@@ -92,7 +92,7 @@ let inline dacc ~callee ~args function_decl
                   let pop_wrapper_cont = Continuation.create () in
                   let pop_wrapper_handler =
                     let kinded_params =
-                      List.map (fun k -> (Variable.create "wrapper_return", k))
+                      List.map (fun k -> Variable.create "wrapper_return", k)
                         (Code.result_arity code)
                     in
                     let trap_action =
@@ -124,7 +124,9 @@ let inline dacc ~callee ~args function_decl
               in
               let wrapper_handler =
                 let param = Variable.create "exn" in
-                let kinded_params = [KP.create param K.value] in
+                let kinded_params =
+                  [KP.create param K.With_subkind.any_value]
+                in
                 let exn_handler =
                   Exn_continuation.exn_handler apply_exn_continuation
                 in

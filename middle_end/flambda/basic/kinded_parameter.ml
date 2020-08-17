@@ -18,30 +18,30 @@
 
 type t = {
   param : Variable.t;
-  kind : Flambda_kind.t;
+  kind : Flambda_kind.With_subkind.t;
 }
 
 include Identifiable.Make (struct
   type nonrec t = t
 
-  let compare 
+  let compare
         { param = param1; kind = kind1; }
         { param = param2; kind = kind2; } =
     let c = Variable.compare param1 param2 in
     if c <> 0 then c
-    else Flambda_kind.compare kind1 kind2
+    else Flambda_kind.With_subkind.compare kind1 kind2
 
   let equal t1 t2 = compare t1 t2 = 0
 
   let hash { param; kind; } =
-    Hashtbl.hash (Variable.hash param, Flambda_kind.hash kind)
+    Hashtbl.hash (Variable.hash param, Flambda_kind.With_subkind.hash kind)
 
   let print ppf { param; kind; } =
     Format.fprintf ppf "@[(@<0>%s%a@<0>%s @<1>\u{2237} %a)@]"
       (Flambda_colours.parameter ())
       Variable.print param
       (Flambda_colours.normal ())
-      Flambda_kind.print kind
+      Flambda_kind.With_subkind.print kind
 
   let output chan t =
     print (Format.formatter_of_out_channel chan) t
@@ -63,12 +63,8 @@ let with_kind t kind = { t with kind; }
 
 let rename t = { t with param = Variable.rename t.param; }
 
-let map_var t ~f = { t with param = f t.param; }
-
-let map_kind t ~f = { t with kind = f t.kind; }
-
 let equal_kinds t1 t2 =
-  Flambda_kind.equal t1.kind t2.kind
+  Flambda_kind.With_subkind.equal t1.kind t2.kind
 
 let free_names ({ param = _; kind = _; } as t) =
   Name_occurrences.singleton_variable (var t) Name_mode.normal
@@ -123,7 +119,9 @@ module List = struct
 
   let rename t = List.map (fun t -> rename t) t
 
-  let arity t = List.map (fun t -> kind t) t
+  let arity t = List.map (fun t -> Flambda_kind.With_subkind.kind (kind t)) t
+
+  let arity_with_subkinds t = List.map (fun t -> kind t) t
 
   let equal t1 t2 =
     List.compare_lengths t1 t2 = 0

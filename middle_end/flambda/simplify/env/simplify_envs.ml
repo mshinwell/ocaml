@@ -19,6 +19,7 @@
 open! Flambda.Import
 
 module I = Simplify_envs_intf
+module K = Flambda_kind
 module KP = Kinded_parameter
 module T = Flambda_type
 module TE = Flambda_type.Typing_env
@@ -289,7 +290,7 @@ end = struct
         let var =
           Var_in_binding_pos.create (KP.var param) Name_mode.normal
         in
-        define_variable t var (KP.kind param))
+        define_variable t var (K.With_subkind.kind (KP.kind param)))
       t
       params
 
@@ -298,7 +299,7 @@ end = struct
         let var =
           Var_in_binding_pos.create (KP.var param) Name_mode.normal
         in
-        let kind = KP.kind param in
+        let kind = K.With_subkind.kind (KP.kind param) in
         let t = define_variable t var kind in
         add_equation_on_variable t (KP.var param) (T.bottom kind))
       t
@@ -319,11 +320,15 @@ end = struct
       t
       params param_types
 
-  let add_parameters_with_unknown_types t params =
+  let add_parameters_with_unknown_types' t params =
     let param_types =
-      List.map (fun param -> T.unknown (KP.kind param)) params
+      ListLabels.map params ~f:(fun param ->
+        T.unknown_with_subkind (KP.kind param))
     in
-    add_parameters t params ~param_types
+    add_parameters t params ~param_types, param_types
+
+  let add_parameters_with_unknown_types t params =
+    fst (add_parameters_with_unknown_types' t params)
 
   let extend_typing_environment t env_extension =
     let typing_env = TE.add_env_extension t.typing_env env_extension in
@@ -589,8 +594,12 @@ end = struct
     add_continuation0 t cont scope (Unreachable { arity; })
 
   let add_continuation_alias t cont arity ~alias_for =
+    let arity = Flambda_arity.With_subkinds.to_arity arity in
     let alias_for = resolve_continuation_aliases t alias_for in
-    let alias_for_arity = continuation_arity t alias_for in
+    let alias_for_arity =
+      continuation_arity t alias_for
+      |> Flambda_arity.With_subkinds.to_arity
+    in
     if not (Flambda_arity.equal arity alias_for_arity) then begin
       Misc.fatal_errorf "%a (arity %a) cannot be an alias for %a (arity %a) \
           since the two continuations differ in arity"

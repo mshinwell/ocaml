@@ -752,7 +752,10 @@ let join_cse envs_with_levels cse ~allowed =
             Flambda_primitive.result_kind' (EP.to_primitive prim)
           in
           let var = Variable.create "cse_param" in
-          let extra_param = Kinded_parameter.create var prim_result_kind in
+          let extra_param =
+            Kinded_parameter.create var
+              (Flambda_kind.With_subkind.create prim_result_kind Anything)
+          in
           let bound_to =
             Apply_cont_rewrite_id.Map.map Rhs_kind.bound_to bound_to_map
           in

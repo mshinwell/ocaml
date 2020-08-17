@@ -296,13 +296,15 @@ let kind (k : Flambda_kind.t) : Fexpr.kind =
   | Fabricated -> Fabricated
   | Naked_number nnk -> Naked_number (naked_number_kind nnk)
 
-let arity (a : Flambda_arity.t) : Fexpr.flambda_arity =
-  List.map kind a
+let arity (a : Flambda_arity.With_subkinds.t) : Fexpr.flambda_arity =
+  List.map kind (Flambda_arity.With_subkinds.to_arity a)
+
+let arity_without_subkinds a = List.map kind a
 
 let kinded_parameter env (kp : Kinded_parameter.t)
       : Fexpr.kinded_parameter * Env.t =
   let k =
-    match kind (Kinded_parameter.kind kp) with
+    match kind (Flambda_kind.With_subkind.kind (Kinded_parameter.kind kp)) with
     | Value -> None
     | k -> Some k
   in
@@ -562,7 +564,7 @@ and static_let_expr env bound_symbols defining_expr body : Fexpr.expr =
       in
       let param_arity =
         match Flambda.Code.params_and_body code with
-        | Deleted -> 
+        | Deleted ->
           Some (arity (Flambda.Code.params_arity code))
         | Present _ ->
           None (* arity will be determined from params *)
@@ -741,10 +743,19 @@ and apply_expr env (app : Apply_expr.t) : Fexpr.expr =
   in
   let arities : Fexpr.function_arities option =
     match Apply_expr.call_kind app with
-    | Function (Indirect_known_arity { param_arity; return_arity })
+    | Function (Indirect_known_arity { param_arity; return_arity }) ->
+      let params_arity =
+        Flambda_arity.With_subkinds.to_arity param_arity
+        |> arity_without_subkinds
+      in
+      let ret_arity =
+        Flambda_arity.With_subkinds.to_arity return_arity
+        |> arity_without_subkinds
+      in
+      Some { params_arity; ret_arity; }
     | C_call { param_arity; return_arity; _ } ->
-      let params_arity = arity param_arity in
-      let ret_arity = arity return_arity in
+      let params_arity = arity_without_subkinds param_arity in
+      let ret_arity = arity_without_subkinds return_arity in
       Some { params_arity; ret_arity }
     | _ ->
       None

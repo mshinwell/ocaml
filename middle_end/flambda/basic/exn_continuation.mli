@@ -30,18 +30,18 @@ include Contains_ids.S with type t := t
 (** Create an exception continuation. *)
 val create
    : exn_handler:Continuation.t
-  -> extra_args:(Simple.t * Flambda_kind.t) list
+  -> extra_args:(Simple.t * Flambda_kind.With_subkind.t) list
   -> t
 
 (** The exception handler itself. *)
 val exn_handler : t -> Continuation.t
 
 (** Any extra arguments together with their kinds. *)
-val extra_args : t -> (Simple.t * Flambda_kind.t) list
+val extra_args : t -> (Simple.t * Flambda_kind.With_subkind.t) list
 
 (** The arity of the given exception continuation, taking into account both
     the exception bucket argument and any [extra_args]. *)
-val arity : t -> Flambda_arity.t
+val arity : t -> Flambda_arity.With_subkinds.t
 
 val with_exn_handler : t -> Continuation.t -> t
 

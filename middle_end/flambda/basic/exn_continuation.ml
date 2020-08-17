@@ -18,7 +18,7 @@
 
 type t = {
   exn_handler : Continuation.t;
-  extra_args : (Simple.t * Flambda_kind.t) list;
+  extra_args : (Simple.t * Flambda_kind.With_subkind.t) list;
 }
 
 include Identifiable.Make (struct
@@ -27,7 +27,7 @@ include Identifiable.Make (struct
   let print_simple_and_kind ppf (simple, kind) =
     Format.fprintf ppf "@[<h>(%a@ \u{2237}@ %a)@]"
       Simple.print simple
-      Flambda_kind.print kind
+      Flambda_kind.With_subkind.print kind
 
   let print ppf { exn_handler; extra_args; } =
     match extra_args with
@@ -53,7 +53,7 @@ include Identifiable.Make (struct
   let compare_simple_and_kind (simple1, kind1) (simple2, kind2) =
     let c = Simple.compare simple1 simple2 in
     if c <> 0 then c
-    else Flambda_kind.compare kind1 kind2
+    else Flambda_kind.With_subkind.compare kind1 kind2
 
   let compare
         { exn_handler = exn_handler1; extra_args = extra_args1; }
@@ -111,7 +111,10 @@ let apply_name_permutation ({ exn_handler; extra_args; } as t) perm =
 
 let arity t =
   let extra_args = List.map (fun (_simple, kind) -> kind) t.extra_args in
-  Flambda_kind.value :: extra_args
+  let exn_bucket_kind =
+    Flambda_kind.With_subkind.create Flambda_kind.value Anything
+  in
+  exn_bucket_kind :: extra_args
 
 let with_exn_handler t exn_handler =
   { t with exn_handler; }

@@ -58,6 +58,6 @@ val rewrite_exn_continuation
   -> Exn_continuation.t
   -> Exn_continuation.t
 
-val original_params_arity : t -> Flambda_arity.t
+val original_params_arity : t -> Flambda_arity.With_subkinds.t
 
 val does_nothing : t -> bool

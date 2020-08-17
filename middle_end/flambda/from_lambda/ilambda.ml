@@ -131,7 +131,7 @@ let print_simple_and_value_kind ppf (simple, kind) =
 
 let rec print_function ppf
       ({ return_continuation; kind; params; body; free_idents_of_body = _; attr;
-         exn_continuation; return = _; loc = _; stub = _;
+         exn_continuation; return; loc = _; stub = _;
        } : function_declaration) =
   let pr_params ppf params =
     match kind with
@@ -157,8 +157,9 @@ let rec print_function ppf
         print_simple_and_value_kind)
       extra_args
   end;
-  fprintf ppf "%a@ %a%a)@]"
+  fprintf ppf "%a@ : %a@ %a%a)@]"
     pr_params params
+    Printlambda.value_kind' return
     Printlambda.function_attribute attr
     print body
 

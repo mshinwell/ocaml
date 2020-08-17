@@ -89,7 +89,7 @@ module Make (U : Unboxing_spec) = struct
     (*
     Format.eprintf "UNBOX: %a\n%!" Index.print index;
     *)
-    let param_kind = KP.kind extra_param in
+    let param_kind = K.With_subkind.kind (KP.kind extra_param) in
     let field_var = Variable.create "field_at_use" in
     let field_name =
       Name_in_binding_pos.create (Name.var field_var) Name_mode.in_types
@@ -289,7 +289,8 @@ module Make (U : Unboxing_spec) = struct
             | Aborted -> Aborted
             | Continue (extra_args, field_types_by_id) ->
               let param_type =
-                T.alias_type_of (KP.kind extra_param) (KP.simple extra_param)
+                T.alias_type_of (K.With_subkind.kind (KP.kind extra_param))
+                  (KP.simple extra_param)
               in
               let all_field_types_by_id_rev =
                 field_types_by_id :: all_field_types_by_id_rev
@@ -338,7 +339,9 @@ module Make (U : Unboxing_spec) = struct
             in
             let var = Variable.create name in
             let param =
-              KP.create var (U.kind_of_unboxed_field_of_param index)
+              KP.create var
+                (K.With_subkind.create (U.kind_of_unboxed_field_of_param index)
+                  Anything)
             in
             Index.Map.add index param new_params)
           indexes
@@ -372,7 +375,7 @@ module Make (U : Unboxing_spec) = struct
             List.length all_field_types_by_id);
           let typing_env, extra_params_and_args =
             List.fold_left2
-              (fun (typing_env, extra_params_and_args) 
+              (fun (typing_env, extra_params_and_args)
                   field_type field_types_by_id ->
                 if not (U.unbox_recursively ~field_type) then
                   typing_env, extra_params_and_args
@@ -512,7 +515,7 @@ end = struct
     | Tag -> "tag"
     | Field { index; } ->
       Format.asprintf "field%a" Targetint.OCaml.print index
-end 
+end
 
 (* CR mshinwell: Presumably this can supercede [Block_of_values_spec]? *)
 module Variants_spec : Unboxing_spec

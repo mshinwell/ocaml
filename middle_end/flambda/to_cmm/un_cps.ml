@@ -543,7 +543,9 @@ let machtype_of_kind k =
   | Fabricated -> assert false
 
 let machtype_of_kinded_parameter p =
-  machtype_of_kind (Kinded_parameter.kind p)
+  Kinded_parameter.kind p
+  |> Flambda_kind.With_subkind.kind
+  |> machtype_of_kind
 
 let machtype_of_return_arity = function
   (* Functions that never return have arity 0. In that case, we
@@ -648,7 +650,9 @@ let is_var_used v e =
 
 let function_args vars my_closure body =
   if is_var_used my_closure body then begin
-    let last_arg = Kinded_parameter.create my_closure Flambda_kind.value in
+    let last_arg =
+      Kinded_parameter.create my_closure Flambda_kind.With_subkind.any_value
+    in
     vars @ [last_arg]
   end else
     vars
@@ -907,7 +911,11 @@ and apply_call env e =
     let params_arity = Exported_code.Calling_convention.params_arity info in
     if not (check_arity params_arity args) then
       Misc.fatal_errorf "Wrong arity for direct call";
-    let ty = machtype_of_return_arity return_arity in
+    let ty =
+      return_arity
+      |> Flambda_arity.With_subkinds.to_arity
+      |> machtype_of_return_arity
+    in
     let args, env, _ = arg_list env args in
     let args, env =
       if Exported_code.Calling_convention.needs_closure_arg info
@@ -933,7 +941,11 @@ and apply_call env e =
     else begin
       let f, env, _ = simple env f in
       let args, env, _ = arg_list env args in
-      let ty = machtype_of_return_arity return_arity in
+      let ty =
+        return_arity
+        |> Flambda_arity.With_subkinds.to_arity
+        |> machtype_of_return_arity
+      in
       C.indirect_full_call ~dbg ty f args, env, effs
     end
   | Call_kind.C_call { alloc; return_arity; _ } ->
@@ -1444,7 +1456,7 @@ let unit (middle_end_result : Flambda_middle_end.middle_end_result) =
          handler, but since it's constant we don't need it *)
       var_list env [
         Kinded_parameter.create (Variable.create "*ret*")
-          Flambda_kind.value;
+          Flambda_kind.With_subkind.any_value;
       ]
     in
     let return_cont, env =

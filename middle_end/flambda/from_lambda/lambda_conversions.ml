@@ -17,6 +17,7 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module K = Flambda_kind
+module KS = Flambda_kind.With_subkind
 module L = Lambda
 module P = Flambda_primitive
 
@@ -28,12 +29,12 @@ let check_float_array_optimisation_enabled () =
 
 let value_kind (value_kind : L.value_kind) =
   match value_kind with
-  | Pgenval
-  | Pfloatval
-  | Pboxedintval Pint32
-  | Pboxedintval Pint64
-  | Pboxedintval Pnativeint
-  | Pintval -> K.value
+  | Pgenval -> KS.any_value
+  | Pfloatval -> KS.boxed_float
+  | Pboxedintval Pint32 -> KS.boxed_int32
+  | Pboxedintval Pint64 -> KS.boxed_int64
+  | Pboxedintval Pnativeint -> KS.boxed_nativeint
+  | Pintval -> KS.tagged_immediate
 
 let inline_attribute (attr : L.inline_attribute) : Inline_attribute.t =
   match attr with

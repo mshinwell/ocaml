@@ -27,6 +27,7 @@ let tagged_immediate () = C.fg_256 70
 let constructor () = C.fg_256 69
 
 let kind () = C.fg_256 37
+let subkind () = C.fg_256 39
 
 let top_or_bottom_type () = C.fg_256 37
 

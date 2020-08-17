@@ -24,7 +24,7 @@ type t
 include Bindable.S with type t := t
 
 (** Create a kinded parameter. *)
-val create : Variable.t -> Flambda_kind.t -> t
+val create : Variable.t -> Flambda_kind.With_subkind.t -> t
 
 (** The underlying variable. *)
 val var : t -> Variable.t
@@ -35,20 +35,15 @@ val name : t -> Name.t
 val simple : t -> Simple.t
 
 (** The kind of the given parameter. *)
-val kind : t -> Flambda_kind.t
+val kind : t -> Flambda_kind.With_subkind.t
 
 (** Replace the kind of the given parameter. *)
-val with_kind : t -> Flambda_kind.t -> t
+val with_kind : t -> Flambda_kind.With_subkind.t -> t
 
 (* CR mshinwell: We should use [Name.t] underneath *)
 
-(** Map the underlying variable of the given parameter. *)
-val map_var : t -> f:(Variable.t -> Variable.t) -> t
-
-(** Map the kind of the given parameter. *)
-val map_kind : t -> f:(Flambda_kind.t -> Flambda_kind.t) -> t
-
-(** Returns [true] iff the provided kinded parameters have the same kind. *)
+(** Returns [true] iff the provided kinded parameters have the same kind
+    and subkind. *)
 val equal_kinds : t -> t -> bool
 
 val rename : t -> t
@@ -58,7 +53,7 @@ module List : sig
 
   include Contains_names.S with type t := t
 
-  val create : (Variable.t * Flambda_kind.t) list -> t
+  val create : (Variable.t * Flambda_kind.With_subkind.t) list -> t
 
   (** As for [Variable.List.vars]. *)
   val vars : t -> Variable.t list
@@ -80,6 +75,8 @@ module List : sig
   val rename : t -> t
 
   val arity : t -> Flambda_arity.t
+
+  val arity_with_subkinds : t -> Flambda_arity.With_subkinds.t
 
   val print : Format.formatter -> t -> unit
 

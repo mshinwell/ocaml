@@ -316,6 +316,9 @@ let close_c_call t ~let_bound_var (prim : Primitive.description)
     if not needs_wrapper then call
     else
       let after_call =
+        let return_kind =
+          Flambda_kind.With_subkind.create return_kind Anything
+        in
         let params = [Kinded_parameter.create handler_param return_kind] in
         let params_and_handler =
           Continuation_params_and_handler.create params
@@ -942,7 +945,7 @@ and close_one_function t ~external_env ~by_closure_id decl
       ~return_continuation:(Function_decl.return_continuation decl)
       exn_continuation params ~dbg ~body ~my_closure
   in
-  let params_arity = Kinded_parameter.List.arity params in
+  let params_arity = Kinded_parameter.List.arity_with_subkinds params in
   let is_tupled =
     match Function_decl.kind decl with
     | Curried -> false
@@ -1049,7 +1052,9 @@ let ilambda_to_flambda ~backend ~module_ident ~module_block_size_in_words
       body (List.rev field_vars)
   in
   let load_fields_cont_handler =
-    let param = Kinded_parameter.create module_block_var K.value in
+    let param =
+      Kinded_parameter.create module_block_var K.With_subkind.any_value
+    in
     let params_and_handler =
       Continuation_params_and_handler.create [param]
         ~handler:load_fields_body;

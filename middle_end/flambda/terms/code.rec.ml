@@ -20,8 +20,8 @@ type t = {
   code_id : Code_id.t;
   params_and_body : Function_params_and_body.t Or_deleted.t;
   newer_version_of : Code_id.t option;
-  params_arity : Flambda_arity.t;
-  result_arity : Flambda_arity.t;
+  params_arity : Flambda_arity.With_subkinds.t;
+  result_arity : Flambda_arity.With_subkinds.t;
   stub : bool;
   inline : Inline_attribute.t;
   is_a_functor : bool;
@@ -125,21 +125,21 @@ let print_with_cache ~cache ppf
     (if not is_a_functor then Flambda_colours.elide () else C.normal ())
     is_a_functor
     (Flambda_colours.normal ())
-    (if Flambda_arity.is_singleton_value params_arity
+    (if Flambda_arity.With_subkinds.is_singleton_value params_arity
      then Flambda_colours.elide ()
      else Flambda_colours.normal ())
     (Flambda_colours.normal ())
-    Flambda_arity.print params_arity
-    (if Flambda_arity.is_singleton_value params_arity
+    Flambda_arity.With_subkinds.print params_arity
+    (if Flambda_arity.With_subkinds.is_singleton_value params_arity
      then Flambda_colours.elide ()
      else Flambda_colours.normal ())
     (Flambda_colours.normal ())
-    (if Flambda_arity.is_singleton_value result_arity
+    (if Flambda_arity.With_subkinds.is_singleton_value result_arity
      then Flambda_colours.elide ()
      else Flambda_colours.normal ())
     (Flambda_colours.normal ())
-    Flambda_arity.print result_arity
-    (if Flambda_arity.is_singleton_value result_arity
+    Flambda_arity.With_subkinds.print result_arity
+    (if Flambda_arity.With_subkinds.is_singleton_value result_arity
      then Flambda_colours.elide ()
      else Flambda_colours.normal ())
     (Flambda_colours.normal ())

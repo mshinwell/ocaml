@@ -32,12 +32,12 @@ module Function_call = struct
     | Direct of {
         code_id : Code_id.t;
         closure_id : Closure_id.t;
-        return_arity : Flambda_arity.t;
+        return_arity : Flambda_arity.With_subkinds.t;
       }
     | Indirect_unknown_arity
     | Indirect_known_arity of {
-        param_arity : Flambda_arity.t;
-        return_arity : Flambda_arity.t;
+        param_arity : Flambda_arity.With_subkinds.t;
+        return_arity : Flambda_arity.With_subkinds.t;
       }
 
   let print ppf call =
@@ -50,13 +50,13 @@ module Function_call = struct
           )@]"
         Code_id.print code_id
         Closure_id.print closure_id
-        Flambda_arity.print return_arity
+        Flambda_arity.With_subkinds.print return_arity
     | Indirect_unknown_arity ->
       fprintf ppf "Indirect_unknown_arity"
     | Indirect_known_arity { param_arity; return_arity; } ->
       fprintf ppf "@[(Indirect_known_arity %a \u{2192} %a)@]"
-        Flambda_arity.print param_arity
-        Flambda_arity.print return_arity
+        Flambda_arity.With_subkinds.print param_arity
+        Flambda_arity.With_subkinds.print return_arity
 
   let invariant t =
     match t with
@@ -67,11 +67,11 @@ module Function_call = struct
       check_arity param_arity;
       check_arity return_arity
 
-  let return_arity call : Flambda_arity.t =
+  let return_arity call =
     match call with
     | Direct { return_arity; _ }
     | Indirect_known_arity { return_arity; _ } -> return_arity
-    | Indirect_unknown_arity -> [Flambda_kind.value]
+    | Indirect_unknown_arity -> [Flambda_kind.With_subkind.any_value]
 end
 
 type method_kind = Self | Public | Cached
@@ -142,11 +142,13 @@ let c_call ~alloc ~param_arity ~return_arity =
   invariant0 t;
   t
 
-let return_arity t : Flambda_arity.t =
+let return_arity t =
   match t with
   | Function call -> Function_call.return_arity call
-  | Method _ -> [Flambda_kind.value]
-  | C_call { return_arity; _ } -> return_arity
+  | Method _ -> [Flambda_kind.With_subkind.any_value]
+  | C_call { return_arity; _ } ->
+    List.map (fun kind -> Flambda_kind.With_subkind.create kind Anything)
+      return_arity
 
 let free_names t =
   match t with

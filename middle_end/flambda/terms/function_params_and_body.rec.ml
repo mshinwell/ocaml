@@ -32,7 +32,9 @@ type t = {
 let invariant _env _t = ()
 
 let create ~return_continuation exn_continuation params ~dbg ~body ~my_closure =
-  let my_closure = Kinded_parameter.create my_closure K.value in
+  let my_closure =
+    Kinded_parameter.create my_closure (K.With_subkind.create K.value Anything)
+  in
   let t0 = T0.create (params @ [my_closure]) body in
   let t1 = T1.create exn_continuation t0 in
   let abst = A.create return_continuation t1 in
@@ -63,7 +65,10 @@ let pattern_match_pair t1 t2 ~f =
 let print_with_cache ~cache ppf t =
   pattern_match t
     ~f:(fun ~return_continuation exn_continuation params ~body ~my_closure ->
-      let my_closure = Kinded_parameter.create my_closure Flambda_kind.value in
+      let my_closure =
+        Kinded_parameter.create my_closure
+          (K.With_subkind.create K.value Anything)
+      in
       fprintf ppf
         "@[<hov 1>(@<0>%s@<1>\u{03bb}@<0>%s@[<hov 1>\
          @<1>\u{3008}%a@<1>\u{3009}@<1>\u{300a}%a@<1>\u{300b}\

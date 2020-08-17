@@ -45,7 +45,7 @@ module Calling_convention = struct
     let f ~return_continuation:_ _exn_continuation params ~body ~my_closure =
       let free_vars = Flambda.Expr.free_names body in
       let needs_closure_arg = Name_occurrences.mem_var free_vars my_closure in
-      let params_arity = List.map Kinded_parameter.kind params in
+      let params_arity = Kinded_parameter.List.arity params in
       { needs_closure_arg; params_arity; }
     in
     P.pattern_match params_and_body ~f

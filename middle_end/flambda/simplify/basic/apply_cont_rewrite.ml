@@ -163,8 +163,10 @@ let rewrite_use t id apply_cont : rewrite_use_result =
    "extra args" as in [Exn_continuation]. *)
 let rewrite_exn_continuation t id exn_cont =
   let exn_cont_arity = Exn_continuation.arity exn_cont in
-  let original_params_arity = List.map KP.kind t.original_params in
-  if not (Flambda_arity.equal exn_cont_arity original_params_arity) then begin
+  let original_params_arity = KP.List.arity_with_subkinds t.original_params in
+  if not (Flambda_arity.With_subkinds.equal exn_cont_arity
+    original_params_arity)
+  then begin
     Misc.fatal_errorf "Arity of exception continuation %a does not \
         match@ [original_params] (%a)"
       Exn_continuation.print exn_cont
@@ -197,4 +199,4 @@ let rewrite_exn_continuation t id exn_cont =
     ~extra_args
 
 let original_params_arity t =
-  KP.List.arity t.original_params
+  KP.List.arity_with_subkinds t.original_params

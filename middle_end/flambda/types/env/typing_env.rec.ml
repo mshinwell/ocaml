@@ -582,6 +582,7 @@ let check_optional_kind_matches name ty kind_opt =
 
 exception Missing_cmx_and_kind
 
+(* CR mshinwell: [kind] could also take a [subkind] *)
 let find_with_binding_time_and_mode' t name kind =
   match Name.Map.find name (names_to_types t) with
   | exception Not_found ->
@@ -671,7 +672,7 @@ let find_or_missing t name =
 let find_params t params =
   List.map (fun param ->
       let name = Kinded_parameter.name param in
-      let kind = Kinded_parameter.kind param in
+      let kind = Flambda_kind.With_subkind.kind (Kinded_parameter.kind param) in
     find t name (Some kind))
   params
 
@@ -1090,7 +1091,8 @@ let add_definitions_of_params t ~params =
         Name_in_binding_pos.create (Kinded_parameter.name param)
           Name_mode.normal
       in
-      add_definition t name (Kinded_parameter.kind param))
+      add_definition t name
+        (Flambda_kind.With_subkind.kind (Kinded_parameter.kind param)))
     t
     params
 

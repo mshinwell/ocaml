@@ -151,3 +151,52 @@ module Naked_number : sig
 
   val print : Format.formatter -> _ t -> unit
 end
+
+module With_subkind : sig
+  module Subkind : sig
+    type t =
+      | Anything
+      | Boxed_float
+      | Boxed_int32
+      | Boxed_int64
+      | Boxed_nativeint
+      | Tagged_immediate
+
+    include Identifiable.S with type t := t
+  end
+
+  type kind = t
+  type t
+
+  val create : kind -> Subkind.t -> t
+
+  val kind : t -> kind
+  val subkind : t -> Subkind.t
+
+  val any_value : t
+  val naked_immediate : t
+  val naked_float : t
+  val naked_int32 : t
+  val naked_int64 : t
+  val naked_nativeint : t
+  val boxed_float : t
+  val boxed_int32 : t
+  val boxed_int64 : t
+  val boxed_nativeint : t
+  val tagged_immediate : t
+
+  type descr = private
+    | Any_value
+    | Naked_number of Naked_number_kind.t
+    | Boxed_float
+    | Boxed_int32
+    | Boxed_int64
+    | Boxed_nativeint
+    | Tagged_immediate
+
+  val descr : t -> descr
+
+  val compatible : t -> when_used_at:t -> bool
+
+  include Identifiable.S with type t := t
+end

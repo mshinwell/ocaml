@@ -59,6 +59,23 @@ type 'a type_accessor = Typing_env.t -> 'a
 let unknown_types_from_arity arity =
   List.map (fun kind -> unknown kind) arity
 
+let unknown_with_subkind kind =
+  match Flambda_kind.With_subkind.descr kind with
+  | Any_value -> any_value ()
+  | Naked_number Naked_immediate -> any_naked_immediate ()
+  | Naked_number Naked_float -> any_naked_float ()
+  | Naked_number Naked_int32 -> any_naked_int32 ()
+  | Naked_number Naked_int64 -> any_naked_int64 ()
+  | Naked_number Naked_nativeint -> any_naked_nativeint ()
+  | Boxed_float -> any_boxed_float ()
+  | Boxed_int32 -> any_boxed_int32 ()
+  | Boxed_int64 -> any_boxed_int64 ()
+  | Boxed_nativeint -> any_boxed_nativeint ()
+  | Tagged_immediate -> any_tagged_immediate ()
+
+let unknown_types_from_arity_with_subkinds arity =
+  List.map (fun kind -> unknown_with_subkind kind) arity
+
 let bottom_types_from_arity arity =
   List.map (fun kind -> bottom kind) arity
 

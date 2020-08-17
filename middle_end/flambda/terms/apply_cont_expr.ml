@@ -16,8 +16,6 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module K = Flambda_kind
-
 type t = {
   k : Continuation.t;
   args : Simple.t list;
@@ -105,6 +103,8 @@ end)
 
 let print_with_cache ~cache:_ ppf t = print ppf t
 
+let invariant _env _ = ()
+(*
 let invariant env ({ k; args; trap_action; dbg=_; } as t) =
   let module E = Invariant_env in
   let unbound_continuation cont reason =
@@ -123,7 +123,8 @@ let invariant env ({ k; args; trap_action; dbg=_; } as t) =
   let stack = E.current_continuation_stack env in
   E.Continuation_stack.unify cont stack cont_stack;
 *)
-  if not (Flambda_arity.equal args_arity arity) then begin
+  (* XXX This check can't be equality any more *)
+  if not (Flambda_arity.With_subkinds.equal args_arity arity) then begin
     Misc.fatal_errorf "Continuation %a called with wrong arity in \
         this [Apply_cont] term: expected %a but found %a:@ %a"
       Continuation.print k
@@ -200,6 +201,7 @@ let invariant env ({ k; args; trap_action; dbg=_; } as t) =
   E.Continuation_stack.unify cont stack cont_stack
   current_stack
   *)
+*)
 
 (* CR mshinwell: Check the sort of [k]. *)
 let create ?trap_action k ~args ~dbg = { k; args; trap_action; dbg; }
@@ -248,7 +250,7 @@ let apply_name_permutation ({ k; args; trap_action; dbg; } as t) perm =
 
 let all_ids_for_export { k; args; trap_action; dbg = _; } =
   List.fold_left (fun ids arg -> Ids_for_export.add_simple ids arg)
-    (Ids_for_export.add_continuation 
+    (Ids_for_export.add_continuation
       (Trap_action.Option.all_ids_for_export trap_action)
       k)
     args
@@ -297,5 +299,5 @@ let to_one_arg_without_trap_action t =
   | Some _ -> None
   | None ->
     match t.args with
-    | [arg] -> Some arg 
+    | [arg] -> Some arg
     | [] | _::_::_ -> None

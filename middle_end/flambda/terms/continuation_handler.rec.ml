@@ -149,9 +149,12 @@ let import import_map
   { params_and_handler; stub; is_exn_handler; }
 
 type behaviour =
-  | Unreachable of { arity : Flambda_arity.t; }
-  | Alias_for of { arity : Flambda_arity.t; alias_for : Continuation.t; }
-  | Unknown of { arity : Flambda_arity.t; }
+  | Unreachable of { arity : Flambda_arity.With_subkinds.t; }
+  | Alias_for of {
+      arity : Flambda_arity.With_subkinds.t;
+      alias_for : Continuation.t;
+    }
+  | Unknown of { arity : Flambda_arity.With_subkinds.t; }
 
 let behaviour t : behaviour =
   (* CR mshinwell: Maybe [behaviour] should be cached, to avoid re-opening
@@ -160,7 +163,7 @@ let behaviour t : behaviour =
      moment we just use a simple syntactic check. *)
   Continuation_params_and_handler.pattern_match t.params_and_handler
     ~f:(fun params ~handler ->
-      let arity = Kinded_parameter.List.arity params in
+      let arity = Kinded_parameter.List.arity_with_subkinds params in
       if t.is_exn_handler then
         Unknown { arity; }
       else
@@ -184,7 +187,8 @@ let behaviour t : behaviour =
 
 let arity t =
   Continuation_params_and_handler.pattern_match t.params_and_handler
-    ~f:(fun params ~handler:_ -> Kinded_parameter.List.arity params)
+    ~f:(fun params ~handler:_ ->
+      Kinded_parameter.List.arity_with_subkinds params)
 
 let with_params_and_handler t params_and_handler =
   { t with params_and_handler; }

@@ -260,6 +260,8 @@ val bottom : Flambda_kind.t -> t
 (** Construct a top ("unknown") type of the given kind. *)
 val unknown : Flambda_kind.t -> t
 
+val unknown_with_subkind : Flambda_kind.With_subkind.t -> t
+
 (** Create an bottom type with the same kind as the given type. *)
 val bottom_like : t -> t
 
@@ -408,6 +410,10 @@ val get_alias_exn : t -> Simple.t
 
 (** For each of the kinds in an arity, create an "unknown" type. *)
 val unknown_types_from_arity : Flambda_arity.t -> t list
+
+val unknown_types_from_arity_with_subkinds
+   : Flambda_arity.With_subkinds.t
+  -> t list
 
 (** For each of the kinds in an arity, create an "bottom" type. *)
 val bottom_types_from_arity : Flambda_arity.t -> t list

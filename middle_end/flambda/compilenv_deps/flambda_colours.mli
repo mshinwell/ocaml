@@ -25,6 +25,7 @@ val tagged_immediate : unit -> string
 val constructor : unit -> string
 
 val kind : unit -> string
+val subkind : unit -> string
 
 val top_or_bottom_type : unit -> string
 

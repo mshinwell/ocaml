@@ -18,12 +18,12 @@
 
 type t =
   | Unknown of {
-      arity : Flambda_arity.t;
+      arity : Flambda_arity.With_subkinds.t;
       handler : Flambda.Continuation_handler.t option;
     }
-  | Unreachable of { arity : Flambda_arity.t; }
+  | Unreachable of { arity : Flambda_arity.With_subkinds.t; }
   | Inline of {
-      arity : Flambda_arity.t;
+      arity : Flambda_arity.With_subkinds.t;
       handler : Flambda.Continuation_handler.t;
     }
 

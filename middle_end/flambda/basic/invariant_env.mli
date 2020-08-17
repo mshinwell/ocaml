@@ -43,7 +43,7 @@ val prepare_for_function_body
   -> parameters_with_kinds:(Variable.t * Flambda_kind.t) list
   -> my_closure:Variable.t
   -> return_cont:Continuation.t
-  -> return_cont_arity:Flambda_arity.t
+  -> return_cont_arity:Flambda_arity.With_subkinds.t
   -> exception_cont:Continuation.t
   -> t
 
@@ -58,7 +58,7 @@ val add_symbol : t -> Symbol.t -> Flambda_kind.t -> t
 val add_continuation
    : t
   -> Continuation.t
-  -> Flambda_arity.t
+  -> Flambda_arity.With_subkinds.t
   -> continuation_kind
 (*
   -> Continuation_stack.t
@@ -123,9 +123,10 @@ val check_symbol_is_bound : t -> Symbol.t -> unit
 val find_continuation_opt
    : t
   -> Continuation.t
-  -> (Flambda_arity.t * continuation_kind (* * Continuation_stack.t *)) option
+  -> (Flambda_arity.With_subkinds.t
+       * continuation_kind (* * Continuation_stack.t *)) option
 
-val continuation_arity : t -> Continuation.t -> Flambda_arity.t
+val continuation_arity : t -> Continuation.t -> Flambda_arity.With_subkinds.t
 
 val kind_of_simple : t -> Simple.t -> Flambda_kind.t
 

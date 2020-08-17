@@ -396,7 +396,7 @@ and simplify_non_recursive_let_cont_handler
           let is_exn_handler = CH.is_exn_handler cont_handler in
           CPH.pattern_match params_and_handler ~f:(fun params ~handler ->
             let denv_before_body =
-              DE.define_parameters (DA.denv dacc) ~params
+              DE.add_parameters_with_unknown_types (DA.denv dacc) params
             in
             let dacc_for_body =
               DE.increment_continuation_scope_level denv_before_body
@@ -635,7 +635,7 @@ and simplify_recursive_let_cont_handlers
       in
       let params_and_handler = CH.params_and_handler cont_handler in
       CPH.pattern_match params_and_handler ~f:(fun params ~handler ->
-        let arity = KP.List.arity params in
+      let arity = KP.List.arity_with_subkinds params in
         let dacc =
           DA.map_denv dacc ~f:DE.increment_continuation_scope_level
         in
@@ -650,9 +650,10 @@ and simplify_recursive_let_cont_handlers
         let body, (handlers, user_data), uacc =
           simplify_expr dacc body (fun dacc_after_body ->
             let cont_uses_env = DA.continuation_uses_env dacc_after_body in
-            let arg_types =
-              (* We can't know a good type from the call types *)
-              List.map T.unknown arity
+            let denv, arg_types =
+              (* XXX These don't have the same scope level as the
+                 non-recursive case *)
+              DE.add_parameters_with_unknown_types' definition_denv params
             in
             (* CR mshinwell: This next part is dubious, use the rewritten
                version in the recursive-continuation-unboxing branch. *)
@@ -667,11 +668,6 @@ and simplify_recursive_let_cont_handlers
                   definition_denv
                 )
                 ~arg_types
-            in
-            let denv =
-              (* XXX These don't have the same scope level as the
-                 non-recursive case *)
-              DE.add_parameters definition_denv params ~param_types:arg_types
             in
             let code_age_relation_after_body =
               TE.code_age_relation (DA.typing_env dacc_after_body)
@@ -776,7 +772,7 @@ and simplify_direct_tuple_application
 and simplify_direct_full_application
   : 'a. DA.t -> Apply.t
     -> (T.Function_declaration_type.Inlinable.t * Rec_info.t) option
-    -> result_arity:Flambda_arity.t
+    -> result_arity:Flambda_arity.With_subkinds.t
     -> 'a k -> Expr.t * 'a * UA.t
 = fun dacc apply function_decl_opt ~result_arity k ->
   let callee = Apply.callee apply in
@@ -834,7 +830,7 @@ Format.eprintf "Simplifying inlined body with DE depth delta = %d\n%!"
         let dacc, use_id =
           DA.record_continuation_use dacc apply_return_continuation Non_inlinable
             ~env_at_use:(DA.denv dacc)
-            ~arg_types:(T.unknown_types_from_arity result_arity)
+            ~arg_types:(T.unknown_types_from_arity_with_subkinds result_arity)
         in
         dacc, Some use_id
     in
@@ -843,7 +839,7 @@ Format.eprintf "Simplifying inlined body with DE depth delta = %d\n%!"
         (Exn_continuation.exn_handler (Apply.exn_continuation apply))
         Non_inlinable
         ~env_at_use:(DA.denv dacc)
-        ~arg_types:(T.unknown_types_from_arity (
+        ~arg_types:(T.unknown_types_from_arity_with_subkinds (
           Exn_continuation.arity (Apply.exn_continuation apply)))
     in
     let user_data, uacc = k dacc in
@@ -863,7 +859,8 @@ Format.eprintf "Simplifying inlined body with DE depth delta = %d\n%!"
 and simplify_direct_partial_application
   : 'a. DA.t -> Apply.t -> callee's_code_id:Code_id.t
     -> callee's_closure_id:Closure_id.t
-    -> param_arity:Flambda_arity.t -> result_arity:Flambda_arity.t
+    -> param_arity:Flambda_arity.With_subkinds.t
+    -> result_arity:Flambda_arity.With_subkinds.t
     -> recursive:Recursive.t -> 'a k -> Expr.t * 'a * UA.t
 = fun dacc apply ~callee's_code_id ~callee's_closure_id
       ~param_arity ~result_arity ~recursive k ->
@@ -896,16 +893,15 @@ and simplify_direct_partial_application
   assert (arity > List.length args);
   let applied_args, remaining_param_arity =
     Misc.Stdlib.List.map2_prefix (fun arg kind ->
-        if not (K.equal kind K.value) then begin
+        if not (K.equal (K.With_subkind.kind kind) K.value) then begin
           Misc.fatal_errorf "Non-[value] kind in partial application: %a"
             Apply.print apply
         end;
         arg)
       args param_arity
   in
-  begin match result_arity with
-  | [kind] when K.equal kind K.value -> ()
-  | _ ->
+  if not (Flambda_arity.With_subkinds.is_singleton_value result_arity)
+  then begin
     Misc.fatal_errorf "Partially-applied function with non-[value] \
         return kind: %a"
       Apply.print apply
@@ -984,7 +980,7 @@ and simplify_direct_partial_application
         code_id
         ~params_and_body:(Present params_and_body)
         ~newer_version_of:None
-        ~params_arity:(KP.List.arity remaining_params)
+        ~params_arity:(KP.List.arity_with_subkinds remaining_params)
         ~result_arity
         ~stub:true
         ~inline:Default_inline
@@ -992,7 +988,7 @@ and simplify_direct_partial_application
         ~recursive
     in
     let function_decl =
-      Function_declaration.create ~code_id ~is_tupled:false ~dbg 
+      Function_declaration.create ~code_id ~is_tupled:false ~dbg
     in
     let function_decls =
       Function_declarations.create
@@ -1042,8 +1038,8 @@ and simplify_direct_partial_application
    sure it cannot in every case. *)
 
 and simplify_direct_over_application
-  : 'a. DA.t -> Apply.t -> param_arity:Flambda_arity.t
-    -> result_arity:Flambda_arity.t -> 'a k
+  : 'a. DA.t -> Apply.t -> param_arity:Flambda_arity.With_subkinds.t
+    -> result_arity:Flambda_arity.With_subkinds.t -> 'a k
     -> Expr.t * 'a * UA.t
 = fun dacc apply ~param_arity ~result_arity:_ k ->
   let expr = Simplify_common.split_direct_over_application apply ~param_arity in
@@ -1053,7 +1049,7 @@ and simplify_direct_function_call
   : 'a. DA.t -> Apply.t -> callee's_code_id_from_type:Code_id.t
     -> callee's_code_id_from_call_kind:Code_id.t option
     -> callee's_closure_id:Closure_id.t
-    -> result_arity:Flambda_arity.t
+    -> result_arity:Flambda_arity.With_subkinds.t
     -> recursive:Recursive.t -> arg_types:T.t list
     -> must_be_detupled:bool
     -> (T.Function_declaration_type.Inlinable.t * Rec_info.t) option
@@ -1064,12 +1060,13 @@ and simplify_direct_function_call
   let result_arity_of_application =
     Call_kind.return_arity (Apply.call_kind apply)
   in
-  if not (Flambda_arity.equal result_arity_of_application result_arity)
+  if not (Flambda_arity.With_subkinds.compatible result_arity
+    ~when_used_at:result_arity_of_application)
   then begin
     Misc.fatal_errorf "Wrong return arity for direct OCaml function call \
         (expected %a, found %a):@ %a"
-      Flambda_arity.print result_arity
-      Flambda_arity.print result_arity_of_application
+      Flambda_arity.With_subkinds.print result_arity
+      Flambda_arity.With_subkinds.print result_arity_of_application
       Apply.print apply
   end;
   let callee's_code_id : _ Or_bottom.t =
@@ -1139,7 +1136,7 @@ and simplify_function_call_where_callee's_type_unavailable
       (Exn_continuation.exn_handler (Apply.exn_continuation apply))
       Non_inlinable
       ~env_at_use:(DA.denv dacc)
-      ~arg_types:(T.unknown_types_from_arity (
+      ~arg_types:(T.unknown_types_from_arity_with_subkinds (
         Exn_continuation.arity (Apply.exn_continuation apply)))
   in
   let check_return_arity_and_record_return_cont_use ~return_arity =
@@ -1154,7 +1151,7 @@ and simplify_function_call_where_callee's_type_unavailable
     end;
 *)
     DA.record_continuation_use dacc cont Non_inlinable ~env_at_use
-      ~arg_types:(T.unknown_types_from_arity return_arity)
+      ~arg_types:(T.unknown_types_from_arity_with_subkinds return_arity)
   in
   let call_kind, use_id, dacc =
     match call with
@@ -1165,13 +1162,18 @@ and simplify_function_call_where_callee's_type_unavailable
       in
       Call_kind.indirect_function_call_unknown_arity (), use_id, dacc
     | Indirect_known_arity { param_arity; return_arity; } ->
-      let args_arity = T.arity_of_list arg_types in
-      if not (Flambda_arity.equal param_arity args_arity) then begin
+      let args_arity =
+        T.arity_of_list arg_types
+        |> List.map (fun kind -> K.With_subkind.create kind Anything)
+      in
+      if not (Flambda_arity.With_subkinds.compatible args_arity
+        ~when_used_at:param_arity)
+      then begin
         Misc.fatal_errorf "Argument arity on indirect-known-arity \
             application doesn't match [Call_kind] (expected %a, \
             found %a):@ %a"
-          Flambda_arity.print param_arity
-          Flambda_arity.print args_arity
+          Flambda_arity.With_subkinds.print param_arity
+          Flambda_arity.With_subkinds.print args_arity
           Apply.print apply
       end;
       let dacc, use_id =
@@ -1183,7 +1185,10 @@ and simplify_function_call_where_callee's_type_unavailable
       in
       call_kind, use_id, dacc
     | Direct { return_arity; _ } ->
-      let param_arity = T.arity_of_list arg_types in
+      let param_arity =
+        T.arity_of_list arg_types
+        |> List.map (fun kind -> K.With_subkind.create kind Anything)
+      in
       (* Some types have regressed in precision.  Since this used to be a
          direct call, however, we know the function's arity even though we
          don't know which function it is. *)
@@ -1386,7 +1391,7 @@ and simplify_method_call
       (Exn_continuation.exn_handler (Apply.exn_continuation apply))
       Non_inlinable
       ~env_at_use:(DA.denv dacc)
-      ~arg_types:(T.unknown_types_from_arity (
+      ~arg_types:(T.unknown_types_from_arity_with_subkinds (
         Exn_continuation.arity (Apply.exn_continuation apply)))
   in
   (* CR mshinwell: Need to record exception continuation use (check all other
@@ -1398,7 +1403,7 @@ and simplify_method_call
   in
   let expr =
     Simplify_common.add_wrapper_for_fixed_arity_apply uacc ~use_id
-      (Flambda_arity.create [K.value]) apply
+      (Flambda_arity.With_subkinds.create [K.With_subkind.any_value]) apply
   in
   expr, user_data, uacc
 
@@ -1451,7 +1456,7 @@ and simplify_c_call
       (Exn_continuation.exn_handler (Apply.exn_continuation apply))
       Non_inlinable
       ~env_at_use:(DA.denv dacc)
-      ~arg_types:(T.unknown_types_from_arity (
+      ~arg_types:(T.unknown_types_from_arity_with_subkinds (
         Exn_continuation.arity (Apply.exn_continuation apply)))
   in
   let user_data, uacc = k dacc in
@@ -1465,7 +1470,7 @@ and simplify_c_call
     match use_id with
     | Some use_id ->
       Simplify_common.add_wrapper_for_fixed_arity_apply uacc ~use_id
-        return_arity apply
+        (Flambda_arity.With_subkinds.of_arity return_arity) apply
     | None ->
       Expr.create_apply apply
   in
@@ -1712,7 +1717,7 @@ and simplify_switch
              (new_let_conts, arms, identity_arms, not_arms) ->
           match
             Simplify_common.add_wrapper_for_switch_arm uacc action
-              ~use_id arity
+              ~use_id (Flambda_arity.With_subkinds.of_arity arity)
           with
           | Apply_cont action ->
             let action =

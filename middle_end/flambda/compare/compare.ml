@@ -18,7 +18,7 @@ open Flambda
  * inputs are different, return an *approximant*: a term that is
  * alpha-equivalent (in our expanded sense) to the first input but as close as
  * possible to the second.
- * 
+ *
  * Suppose we have two terms, F(a1, b1, ...) and G(a2, b2, ...) where F and G
  * are constructors (possibly the same constructor, of course).  Things
  * proceed like so (subst is a function described below):
@@ -111,7 +111,7 @@ end
 let debugging = false
 
 let log f e1 e2 thunk =
-  if debugging 
+  if debugging
     then begin
       Format.eprintf
         "@[<v>@[<hv>COMPARING@;<1 2>%a@;<1 0>TO@;<1 2>%a@]@,---@;<0 2>"
@@ -227,7 +227,7 @@ let subst_closure_var (env : Env.t) var =
 
 let subst_name env n =
   Name.pattern_match n
-    ~var:(fun _ -> n) 
+    ~var:(fun _ -> n)
     ~symbol:(fun s -> Name.symbol (subst_symbol env s))
 ;;
 
@@ -296,7 +296,7 @@ let subst_field env (field : Static_const.Field_of_block.t) =
     Static_const.Field_of_block.Symbol (subst_symbol env symbol)
   | Tagged_immediate _ | Dynamically_computed _ ->
     field
-;;      
+;;
 
 let subst_call_kind env (call_kind : Call_kind.t) : Call_kind.t =
   match call_kind with
@@ -387,7 +387,7 @@ and subst_code env (code : Code.t)
   let newer_version_of =
     Option.map (subst_code_id env) (Code.newer_version_of code)
   in
-  code 
+  code
   |> Code.with_params_and_body params_and_body
   |> Code.with_newer_version_of newer_version_of
 and subst_params_and_body env params_and_body =
@@ -418,7 +418,7 @@ and subst_let_cont env (let_cont_expr : Let_cont_expr.t) =
     Recursive_let_cont_handlers.pattern_match handlers
       ~f:(fun ~body handlers ->
         let body = subst_expr env body in
-        let handlers = 
+        let handlers =
           Continuation.Map.map
             (subst_cont_handler env)
             (handlers |> Continuation_handlers.to_map)
@@ -753,7 +753,7 @@ let primitives env prim1 prim2 : Flambda_primitive.t Comparison.t =
 (* Returns unit because the approximant isn't used by sets_of_closures *)
 let function_decls env decl1 decl2 : unit Comparison.t =
   let module F = Function_declaration in
-  if 
+  if
     (code_ids env (F.code_id decl1) (F.code_id decl2)
       |> Comparison.is_equivalent)
     && Bool.equal (F.is_tupled decl1) (F.is_tupled decl2)
@@ -880,7 +880,7 @@ let patterns env
       (closure_symbols1 |> Closure_id.Lmap.bindings)
       (closure_symbols2 |> Closure_id.Lmap.bindings)
     |> Comparison.map ~f:(fun bindings ->
-         Bound_symbols.Pattern.set_of_closures 
+         Bound_symbols.Pattern.set_of_closures
            (bindings |> Closure_id.Lmap.of_list))
   | _, _ ->
     Different { approximant = subst_pattern env pattern1 }
@@ -941,7 +941,7 @@ let call_kinds env (call_kind1 : Call_kind.t) (call_kind2 : Call_kind.t)
       return_arity = return_arity2
     }) ->
     triples ~f1:code_ids ~f2:closure_ids
-      ~f3:(Comparator.of_predicate ~f:Flambda_arity.equal)
+      ~f3:(Comparator.of_predicate ~f:Flambda_arity.With_subkinds.equal)
       ~subst3:(fun _ arity -> arity)
       env
       (code_id1, closure_id1, return_arity1)
@@ -952,8 +952,8 @@ let call_kinds env (call_kind1 : Call_kind.t) (call_kind2 : Call_kind.t)
                                      return_arity = return_arity1 }),
     Function (Indirect_known_arity { param_arity = param_arity2;
                                      return_arity = return_arity2 }) ->
-    if Flambda_arity.equal param_arity1 param_arity2
-      && Flambda_arity.equal return_arity1 return_arity2
+    if Flambda_arity.With_subkinds.equal param_arity1 param_arity2
+      && Flambda_arity.With_subkinds.equal return_arity1 return_arity2
       then Equivalent
       else Different { approximant = call_kind1 }
   | Function Indirect_unknown_arity, Function Indirect_unknown_arity ->
@@ -1020,7 +1020,7 @@ let apply_cont_exprs env apply_cont1 apply_cont2 : Apply_cont.t Comparison.t =
   let cont2 = Apply_cont.continuation apply_cont2 in
   log_eq Continuation.equal Continuation.print cont1 cont2;
   log_comp (Option.compare Trap_action.compare) (Format.pp_print_option Trap_action.print)
-    (Apply_cont.trap_action apply_cont1) 
+    (Apply_cont.trap_action apply_cont1)
     (Apply_cont.trap_action apply_cont2);
   if Option.compare Trap_action.compare
        (Apply_cont.trap_action apply_cont1)
@@ -1157,7 +1157,7 @@ and static_consts env (const1 : Static_const.t) (const2 : Static_const.t)
       : Static_const.t Comparison.t =
   match const1, const2 with
   | Code code1, Code code2 ->
-    codes env code1 code2 
+    codes env code1 code2
     |> Comparison.map ~f:(fun code1' -> Static_const.Code code1')
   | Block (tag1, mut1, fields1), Block (tag2, mut2, fields2) ->
     blocks env (tag1, mut1, fields1) (tag2, mut2, fields2)
@@ -1209,8 +1209,9 @@ and codes env (code1 : Code.t) (code2 : Code.t) =
   |> Comparison.add_condition
       ~approximant:(fun () -> subst_code env code1)
       ~cond:(
-        Flambda_arity.equal (Code.params_arity code1) (Code.params_arity code2)
-        && Flambda_arity.equal (Code.result_arity code1)
+        Flambda_arity.With_subkinds.equal
+          (Code.params_arity code1) (Code.params_arity code2)
+        && Flambda_arity.With_subkinds.equal (Code.result_arity code1)
              (Code.result_arity code2)
         && Bool.equal (Code.stub code1) (Code.stub code2)
         && Inline_attribute.equal (Code.inline code1) (Code.inline code2)
@@ -1239,7 +1240,7 @@ and let_cont_exprs env (let_cont1 : Let_cont.t) (let_cont2 : Let_cont.t)
       lists ~f:(fun env (cont, handler1) (_cont, handler2) ->
         cont_handlers env handler1 handler2
         (* Note that cont and _cont should be equal thanks to
-         * [pattern_match_pair] *)                 
+         * [pattern_match_pair] *)
         |> Comparison.map ~f:(fun handler1' -> (cont, handler1'))
       )
         ~subst:(fun env (cont, handler) ->
@@ -1267,7 +1268,7 @@ and let_cont_exprs env (let_cont1 : Let_cont.t) (let_cont2 : Let_cont.t)
   | _, _ ->
     Different { approximant = subst_let_cont env let_cont1 }
 and cont_handlers env handler1 handler2 =
-  Continuation_params_and_handler.pattern_match_pair 
+  Continuation_params_and_handler.pattern_match_pair
     (Continuation_handler.params_and_handler handler1)
     (Continuation_handler.params_and_handler handler2)
     ~f:(fun params ~handler1:expr1 ~handler2:expr2 ->

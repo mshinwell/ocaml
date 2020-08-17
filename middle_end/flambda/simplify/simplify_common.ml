@@ -88,7 +88,12 @@ let add_wrapper_for_fixed_arity_continuation0 uacc cont_or_apply_cont
   match UE.find_apply_cont_rewrite uenv original_cont with
   | None -> This_continuation cont
   | Some rewrite when Apply_cont_rewrite.does_nothing rewrite ->
-    let arity_in_rewrite = Apply_cont_rewrite.original_params_arity rewrite in
+    (* CR mshinwell: think more about this check w.r.t. subkinds *)
+    let arity = Flambda_arity.With_subkinds.to_arity arity in
+    let arity_in_rewrite =
+      Apply_cont_rewrite.original_params_arity rewrite
+      |> Flambda_arity.With_subkinds.to_arity
+    in
     if not (Flambda_arity.equal arity arity_in_rewrite) then begin
       Misc.fatal_errorf "Arity %a provided to fixed-arity-wrapper \
           addition function does not match arity %a in rewrite:@ %a"
@@ -388,7 +393,7 @@ let split_direct_over_application apply ~param_arity =
   let after_full_application = Continuation.create () in
   let after_full_application_handler =
     let params_and_handler =
-      let func_param = KP.create func_var K.value in
+      let func_param = KP.create func_var K.With_subkind.any_value in
       Continuation_params_and_handler.create [func_param]
         ~handler:(Expr.create_apply perform_over_application)
     in

@@ -107,7 +107,8 @@ type t = {
   uses_of_var_within_closures_seen : Var_within_closure.Set.t ref;
   names : Flambda_kind.t Name.Map.t;
   continuations :
-    (Flambda_arity.t * continuation_kind (* * Continuation_stack.t *))
+    (Flambda_arity.With_subkinds.t
+      * continuation_kind (* * Continuation_stack.t *))
       Continuation.Map.t;
 (*
   continuation_stack : Continuation_stack.t;
@@ -165,7 +166,7 @@ let add_variables t vars_and_kinds =
 let add_kinded_parameters t kinded_params =
   List.fold_left (fun t kinded_param ->
       add_name t (Kinded_parameter.name kinded_param)
-        (Kinded_parameter.kind kinded_param))
+        (Flambda_kind.With_subkind.kind (Kinded_parameter.kind kinded_param)))
     t
     kinded_params
 
@@ -362,7 +363,8 @@ let prepare_for_function_body t ~parameters_with_kinds ~my_closure
   in
   let continuations =
     Continuation.Map.add exception_cont
-      ([Flambda_kind.value], Exn_handler (*, continuation_stack *))
+      ([Flambda_kind.With_subkind.any_value],
+       Exn_handler (*, continuation_stack *))
       continuations
   in
   let names = Name.symbols_only_map t.names in

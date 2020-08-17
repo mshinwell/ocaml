@@ -49,13 +49,13 @@ val add_wrapper_for_switch_arm
    : Upwards_acc.t
   -> Flambda.Apply_cont.t
   -> use_id:Apply_cont_rewrite_id.t
-  -> Flambda_arity.t
+  -> Flambda_arity.With_subkinds.t
   -> add_wrapper_for_switch_arm_result
 
 val add_wrapper_for_fixed_arity_apply
    : Upwards_acc.t
   -> use_id:Apply_cont_rewrite_id.t
-  -> Flambda_arity.t
+  -> Flambda_arity.With_subkinds.t
   -> Apply_expr.t
   -> Flambda.Expr.t
 
@@ -98,6 +98,5 @@ val project_tuple
     the application of the leftover arguments. *)
 val split_direct_over_application
   : Apply_expr.t
- -> param_arity:Flambda_arity.t
+ -> param_arity:Flambda_arity.With_subkinds.t
  -> Flambda.Expr.t
-

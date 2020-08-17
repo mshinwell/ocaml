@@ -126,6 +126,11 @@ module type Downwards_env = sig
 
   val add_parameters_with_unknown_types : t -> Kinded_parameter.t list -> t
 
+  val add_parameters_with_unknown_types'
+     : t
+    -> Kinded_parameter.t list
+    -> t * (Flambda_type.t list)
+
   val extend_typing_environment : t -> Flambda_type.Typing_env_extension.t -> t
 
   val with_typing_env : t -> Flambda_type.Typing_env.t -> t
@@ -205,14 +210,14 @@ module type Upwards_env = sig
      : t
     -> Continuation.t
     -> Scope.t
-    -> Flambda_arity.t
+    -> Flambda_arity.With_subkinds.t
     -> t
 
   val add_continuation_with_handler
      : t
     -> Continuation.t
     -> Scope.t
-    -> Flambda_arity.t
+    -> Flambda_arity.With_subkinds.t
     -> Continuation_handler.t
     -> t
 
@@ -220,13 +225,13 @@ module type Upwards_env = sig
      : t
     -> Continuation.t
     -> Scope.t
-    -> Flambda_arity.t
+    -> Flambda_arity.With_subkinds.t
     -> t
 
   val add_continuation_alias
      : t
     -> Continuation.t
-    -> Flambda_arity.t
+    -> Flambda_arity.With_subkinds.t
     -> alias_for:Continuation.t
     -> t
 
@@ -234,7 +239,7 @@ module type Upwards_env = sig
      : t
     -> Continuation.t
     -> Scope.t
-    -> Flambda_arity.t
+    -> Flambda_arity.With_subkinds.t
     -> Continuation_handler.t
     -> t
 
@@ -255,7 +260,7 @@ module type Upwards_env = sig
     -> Exn_continuation.t
     -> Exn_continuation.t
 
-  val continuation_arity : t -> Continuation.t -> Flambda_arity.t
+  val continuation_arity : t -> Continuation.t -> Flambda_arity.With_subkinds.t
 
   val check_continuation_is_bound : t -> Continuation.t -> unit
 
