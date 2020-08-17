@@ -166,8 +166,15 @@ Format.eprintf "Unknown at or later than %a\n%!"
             use_envs_with_ids
         in
         let typing_env = DE.typing_env denv in
+        let compute_join =
+          if Flambda_features.join_points () then true
+          else
+            match use_envs_with_ids with
+            | [_] -> true
+            | [] | _::_ -> false
+        in
         let env_extension, extra_params_and_args =
-          if Flambda_features.join_points () then
+          if compute_join then
             TE.cut_and_n_way_join typing_env
               use_envs_with_ids
               ~params
