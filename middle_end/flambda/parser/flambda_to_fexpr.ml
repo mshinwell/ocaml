@@ -21,7 +21,7 @@ module Name_map (I : Convertible_id) : sig
   val empty : t
   val bind : t -> I.t -> I.fexpr_id * t
   val bind_to : t -> I.t -> I.fexpr_id -> t
-  val find : t -> I.t -> I.fexpr_id option
+(*  val find : t -> I.t -> I.fexpr_id option *)
   val find_exn : t -> I.t -> I.fexpr_id
 end = struct
   module String_map = Map.Make(String)
@@ -408,6 +408,7 @@ let varop (op : Flambda_primitive.variadic_primitive) : Fexpr.varop =
 
 let prim env (p : Flambda_primitive.t) : Fexpr.prim =
   match p with
+  | Nullary _ -> Misc.fatal_error "Not yet implemented"
   | Unary (op, arg) ->
     Unary (unop env op, simple env arg)
   | Binary (op, arg1, arg2) ->
