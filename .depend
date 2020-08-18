@@ -4103,14 +4103,6 @@ middle_end/flambda/basic/continuation.cmi : \
     utils/printing_cache.cmi \
     utils/identifiable.cmi \
     middle_end/flambda/compilenv_deps/compilation_unit.cmi
-middle_end/flambda/basic/continuation_counts.cmo : \
-    middle_end/flambda/basic/continuation.cmi \
-    middle_end/flambda/basic/continuation_counts.cmi
-middle_end/flambda/basic/continuation_counts.cmx : \
-    middle_end/flambda/basic/continuation.cmx \
-    middle_end/flambda/basic/continuation_counts.cmi
-middle_end/flambda/basic/continuation_counts.cmi : \
-    middle_end/flambda/basic/continuation.cmi
 middle_end/flambda/basic/continuation_extra_params_and_args.cmo : \
     middle_end/flambda/compilenv_deps/variable.cmi \
     middle_end/flambda/basic/simple.cmi \

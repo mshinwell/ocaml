@@ -274,7 +274,6 @@ MIDDLE_END_FLAMBDA_BASIC=\
   middle_end/flambda/basic/num_continuation_uses.cmo \
   middle_end/flambda/basic/function_decl_intf.cmo \
   middle_end/flambda/basic/effects_and_coeffects.cmo \
-  middle_end/flambda/basic/continuation_counts.cmo \
   middle_end/flambda/basic/closure_origin.cmo \
   middle_end/flambda/basic/apply_cont_rewrite_id.cmo \
   middle_end/flambda/basic/continuation_extra_params_and_args.cmo \
