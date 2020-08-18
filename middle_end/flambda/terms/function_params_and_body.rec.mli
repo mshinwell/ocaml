@@ -44,8 +44,7 @@ val create
   -> t
 
 (** Choose a member of the alpha-equivalence class to enable examination
-    of the parameters, relations thereon and the body over which they are
-    scoped. *)
+    of the parameters and the body over which they are scoped. *)
 val pattern_match
    : t
   -> f:(return_continuation:Continuation.t

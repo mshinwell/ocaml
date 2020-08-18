@@ -52,6 +52,9 @@ let create
 let singleton_code_id code_id =
   create ~code_ids:(Code_id.Set.singleton code_id) ()
 
+let singleton_continuation cont =
+  create ~continuations:(Continuation.Set.singleton cont) ()
+
 let singleton_symbol symbol =
   create ~symbols:(Symbol.Set.singleton symbol) ()
 

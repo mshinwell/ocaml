@@ -19,7 +19,6 @@
 module K = Flambda_kind
 
 module Result_continuation = struct
-
   type t =
     | Return of Continuation.t
     | Never_returns
@@ -57,6 +56,16 @@ module Result_continuation = struct
     | Return k -> Return (Name_permutation.apply_continuation perm k)
     | Never_returns -> Never_returns
 
+  let all_ids_for_export t =
+    match t with
+    | Return k -> Ids_for_export.singleton_continuation k
+    | Never_returns -> Ids_for_export.empty
+
+  let import import_map t =
+    match t with
+    | Return k ->
+      Return (Ids_for_export.Import_map.continuation import_map k)
+    | Never_returns -> Never_returns
 end
 
 type t = {
@@ -288,7 +297,7 @@ let apply_name_permutation
 
 let all_ids_for_export
       { callee;
-        continuation = _;
+        continuation;
         exn_continuation;
         args;
         call_kind;
@@ -304,12 +313,15 @@ let all_ids_for_export
       args
   in
   let call_kind_ids = Call_kind.all_ids_for_export call_kind in
+  let result_continuation_ids =
+    Result_continuation.all_ids_for_export continuation
+  in
   let exn_continuation_ids =
     Exn_continuation.all_ids_for_export exn_continuation
   in
   Ids_for_export.union
     (Ids_for_export.union callee_and_args_ids call_kind_ids)
-    exn_continuation_ids
+    (Ids_for_export.union result_continuation_ids exn_continuation_ids)
 
 let import import_map
       { callee;
@@ -324,6 +336,7 @@ let import import_map
   let callee = Ids_for_export.Import_map.simple import_map callee in
   let args = List.map (Ids_for_export.Import_map.simple import_map) args in
   let call_kind = Call_kind.import import_map call_kind in
+  let continuation = Result_continuation.import import_map continuation in
   let exn_continuation = Exn_continuation.import import_map exn_continuation in
   { callee;
     continuation;

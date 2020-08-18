@@ -36,6 +36,8 @@ val create
 
 val singleton_code_id : Code_id.t -> t
 
+val singleton_continuation : Continuation.t -> t
+
 val singleton_symbol : Symbol.t -> t
 
 val from_simple : Simple.t -> t
