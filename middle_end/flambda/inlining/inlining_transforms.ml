@@ -26,6 +26,7 @@ module VB = Var_in_binding_pos
 let inline dacc ~callee ~args function_decl
       ~apply_return_continuation ~apply_exn_continuation
       ~apply_inlining_depth ~unroll_to dbg =
+  (* CR mshinwell: Add meet constraint to the return continuation *)
   let denv = DA.denv dacc in
   let code = DE.find_code denv (I.code_id function_decl) in
   let params_and_body =
