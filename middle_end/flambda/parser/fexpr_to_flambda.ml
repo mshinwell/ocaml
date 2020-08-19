@@ -281,7 +281,7 @@ let unop env (unop:Fexpr.unop) : Flambda_primitive.unary_primitive =
     Select_closure { move_from; move_to }
 
 let infix_binop (binop:Fexpr.infix_binop) : Flambda_primitive.binary_primitive =
-  let int_comp c = Flambda_primitive.Int_comp (Tagged_immediate, Signed, c) in
+  let int_comp c = Flambda_primitive.Int_comp (Tagged_immediate, Signed, Yielding_bool c) in
   match binop with
   | Plus -> Int_arith (Tagged_immediate, Add)
   | Minus -> Int_arith (Tagged_immediate, Sub)
@@ -291,12 +291,12 @@ let infix_binop (binop:Fexpr.infix_binop) : Flambda_primitive.binary_primitive =
   | Ge -> int_comp Ge
   | Plusdot
   | Minusdot -> failwith "TODO binop"
-  | Eqdot -> Float_comp Eq
-  | Neqdot -> Float_comp Neq
-  | Ltdot -> Float_comp Lt
-  | Gtdot -> Float_comp Gt
-  | Ledot -> Float_comp Le
-  | Gedot -> Float_comp Ge
+  | Eqdot -> Float_comp (Yielding_bool Eq)
+  | Neqdot -> Float_comp (Yielding_bool Neq)
+  | Ltdot -> Float_comp (Yielding_bool Lt)
+  | Gtdot -> Float_comp (Yielding_bool Gt)
+  | Ledot -> Float_comp (Yielding_bool Le)
+  | Gedot -> Float_comp (Yielding_bool Ge)
 
 let binop (binop:Fexpr.binop) : Flambda_primitive.binary_primitive =
   match binop with
@@ -318,7 +318,7 @@ let binop (binop:Fexpr.binop) : Flambda_primitive.binary_primitive =
   | Infix op ->
     infix_binop op
   | Int_comp (i, s, c) ->
-    Int_comp (i, s, c)
+    Int_comp (i, s, Yielding_bool c)
 
 let convert_block_shape ~num_fields =
   List.init num_fields (

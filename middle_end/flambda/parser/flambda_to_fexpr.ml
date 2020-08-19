@@ -370,27 +370,27 @@ let binop (op : Flambda_primitive.binary_primitive) : Fexpr.binop =
     Infix Plus
   | Int_arith (Tagged_immediate, Sub) ->
     Infix Minus
-  | Int_comp (Tagged_immediate, Signed, Lt) ->
+  | Int_comp (Tagged_immediate, Signed, Yielding_bool Lt) ->
     Infix Lt
-  | Int_comp (Tagged_immediate, Signed, Gt) ->
+  | Int_comp (Tagged_immediate, Signed, Yielding_bool Gt) ->
     Infix Gt
-  | Int_comp (Tagged_immediate, Signed, Le) ->
+  | Int_comp (Tagged_immediate, Signed, Yielding_bool Le) ->
     Infix Le
-  | Int_comp (Tagged_immediate, Signed, Ge) ->
+  | Int_comp (Tagged_immediate, Signed, Yielding_bool Ge) ->
     Infix Ge
-  | Int_comp (i, s, c) ->
+  | Int_comp (i, s, Yielding_bool c) ->
     Int_comp (i, s, c)
-  | Float_comp Eq ->
+  | Float_comp (Yielding_bool Eq) ->
     Infix Eqdot
-  | Float_comp Neq ->
+  | Float_comp (Yielding_bool Neq) ->
     Infix Neqdot
-  | Float_comp Lt ->
+  | Float_comp (Yielding_bool Lt) ->
     Infix Ltdot
-  | Float_comp Gt ->
+  | Float_comp (Yielding_bool Gt) ->
     Infix Gtdot
-  | Float_comp Le ->
+  | Float_comp (Yielding_bool Le) ->
     Infix Ledot
-  | Float_comp Ge ->
+  | Float_comp (Yielding_bool Ge) ->
     Infix Gedot
   | _ ->
     Misc.fatal_errorf "TODO: Binary primitive: %a"
