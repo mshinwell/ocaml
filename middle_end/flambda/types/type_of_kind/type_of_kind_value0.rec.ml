@@ -195,6 +195,17 @@ let apply_rec_info t rec_info : _ Or_bottom.t =
     if Rec_info.is_initial rec_info then Ok t
     else Bottom
 
+let eviscerate t : _ Or_unknown.t =
+  match t with
+  | Boxed_float _ -> Known (Boxed_float (T.any_naked_float ()))
+  | Boxed_int32 _ -> Known (Boxed_int32 (T.any_naked_int32 ()))
+  | Boxed_int64 _ -> Known (Boxed_int64 (T.any_naked_int64 ()))
+  | Boxed_nativeint _ -> Known (Boxed_nativeint (T.any_naked_nativeint ()))
+  | Closures _
+  | Variant _
+  | String _
+  | Array _ -> Unknown
+
 let meet_unknown meet_contents ~contents_is_bottom env
     (or_unknown1 : _ Or_unknown.t) (or_unknown2 : _ Or_unknown.t)
     : ((_ Or_unknown.t) * TEE.t) Or_bottom.t =

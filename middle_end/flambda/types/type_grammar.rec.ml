@@ -200,6 +200,44 @@ let apply_rec_info t rec_info : _ Or_bottom.t =
     | Bottom -> Bottom
     end
 
+let eviscerate t env =
+  match t with
+  | Value ty ->
+    let ty =
+      T_V.eviscerate ~force_to_kind:force_to_kind_value ty env K.value
+    in
+    Value ty
+  | Naked_immediate ty ->
+    let ty =
+      T_NI.eviscerate ~force_to_kind:force_to_kind_naked_immediate ty env
+        K.naked_immediate
+    in
+    Naked_immediate ty
+  | Naked_float ty ->
+    let ty =
+      T_Nf.eviscerate ~force_to_kind:force_to_kind_naked_float ty env
+        K.naked_float
+    in
+    Naked_float ty
+  | Naked_int32 ty ->
+    let ty =
+      T_N32.eviscerate ~force_to_kind:force_to_kind_naked_int32 ty env
+        K.naked_int32
+    in
+    Naked_int32 ty
+  | Naked_int64 ty ->
+    let ty =
+      T_N64.eviscerate ~force_to_kind:force_to_kind_naked_int64 ty env
+        K.naked_int64
+    in
+    Naked_int64 ty
+  | Naked_nativeint ty ->
+    let ty =
+      T_NN.eviscerate ~force_to_kind:force_to_kind_naked_nativeint ty env
+        K.naked_nativeint
+    in
+    Naked_nativeint ty
+
 let kind t =
   match t with
   | Value _ -> K.value

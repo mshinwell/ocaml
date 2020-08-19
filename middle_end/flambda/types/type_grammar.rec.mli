@@ -41,6 +41,8 @@ val alias_type_of : Flambda_kind.t -> Simple.t -> t
 
 val apply_rec_info : t -> Rec_info.t -> t Or_bottom.t
 
+val eviscerate : t -> Typing_env.t -> t
+
 val get_alias_exn : t -> Simple.t
 
 val is_obviously_bottom : t -> bool

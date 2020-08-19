@@ -173,6 +173,8 @@ module With_subkind : sig
   val kind : t -> kind
   val subkind : t -> Subkind.t
 
+  val has_useful_subkind_info : t -> bool
+
   val any_value : t
   val naked_immediate : t
   val naked_float : t

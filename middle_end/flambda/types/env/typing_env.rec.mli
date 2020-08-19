@@ -58,6 +58,12 @@ val add_equations_on_params
   -> param_types:Type_grammar.t list
   -> t
 
+val meet_equations_on_params
+   : t
+  -> params:Kinded_parameter.t list
+  -> param_types:Type_grammar.t list
+  -> t
+
 (** If the kind of the name is known, it should be specified, otherwise it
     can be omitted.  Such omission will cause an error if the name satisfies
     [variable_is_from_missing_cmx_file]. *)

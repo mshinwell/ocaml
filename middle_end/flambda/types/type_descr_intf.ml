@@ -64,6 +64,13 @@ module type S = sig
 
   val apply_rec_info : t -> Rec_info.t -> t Or_bottom.t
 
+  val eviscerate
+     : force_to_kind:(flambda_type -> t)  (* CR mshinwell: "of_type"? *)
+    -> t
+    -> typing_env
+    -> Flambda_kind.t
+    -> t
+
   val expand_head
      : force_to_kind:(flambda_type -> t)  (* CR mshinwell: "of_type"? *)
     -> t

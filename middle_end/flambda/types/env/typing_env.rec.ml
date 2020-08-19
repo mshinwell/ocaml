@@ -1096,7 +1096,7 @@ let add_definitions_of_params t ~params =
     t
     params
 
-let add_equations_on_params t ~params ~param_types =
+let check_params_and_types ~params ~param_types =
   if !Clflags.flambda_invariant_checks
     && List.compare_lengths params param_types <> 0
   then begin
@@ -1105,9 +1105,30 @@ let add_equations_on_params t ~params ~param_types =
       Kinded_parameter.List.print params
       (Format.pp_print_list ~pp_sep:Format.pp_print_space Type_grammar.print)
       param_types
-  end;
+  end
+
+let add_equations_on_params t ~params ~param_types =
+  check_params_and_types ~params ~param_types;
   List.fold_left2 (fun t param param_type ->
       add_equation t (Kinded_parameter.name param) param_type)
+    t
+    params param_types
+
+let meet_equations_on_params t ~params ~param_types =
+  check_params_and_types ~params ~param_types;
+  List.fold_left2 (fun t param param_type ->
+      let kind =
+        Kinded_parameter.kind param
+        |> Flambda_kind.With_subkind.kind
+      in
+      let name = Kinded_parameter.name param in
+      let existing_type = find t name (Some kind) in
+      let env = Meet_env.create t in
+      match Type_grammar.meet env existing_type param_type with
+      | Bottom -> add_equation t name (Type_grammar.bottom kind)
+      | Ok (meet_ty, env_extension) ->
+        let t = add_equation t name meet_ty in
+        add_env_extension t env_extension)
     t
     params param_types
 

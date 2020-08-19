@@ -506,4 +506,13 @@ module With_subkind = struct
     (* All other combinations are incompatible. *)
     | (Any_value | Naked_number _ | Boxed_float | Boxed_int32 | Boxed_int64
       | Boxed_nativeint | Tagged_immediate), _ -> false
+
+  let has_useful_subkind_info t =
+    match t.subkind with
+    | Anything -> false
+    | Boxed_float
+    | Boxed_int32
+    | Boxed_int64
+    | Boxed_nativeint
+    | Tagged_immediate -> true
 end

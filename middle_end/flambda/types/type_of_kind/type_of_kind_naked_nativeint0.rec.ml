@@ -37,6 +37,8 @@ let apply_rec_info t rec_info : _ Or_bottom.t =
   if Rec_info.is_initial rec_info then Ok t
   else Bottom
 
+let eviscerate _ : _ Or_unknown.t = Unknown
+
 module Make_meet_or_join
   (E : Lattice_ops_intf.S
     with type meet_env := Meet_env.t

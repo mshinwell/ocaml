@@ -45,4 +45,6 @@ module type S = sig
   end
 
   val apply_rec_info : t -> Rec_info.t -> t Or_bottom.t
+
+  val eviscerate : t -> t Or_unknown.t
 end
