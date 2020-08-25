@@ -287,12 +287,14 @@ type gc_call =
     gc_frame: label;                    (* Label of frame descriptor *)
     gc_spacetime : (X86_ast.arg * int) option;
     (* Spacetime node hole pointer and index *)
+    gc_dbg : Debuginfo.t;
   }
 
 let call_gc_sites = ref ([] : gc_call list)
 
 let emit_call_gc gc =
   def_label gc.gc_lbl;
+  emit_debug_info gc.gc_dbg;
   begin match gc.gc_spacetime with
   | None -> assert (not Config.spacetime)
   | Some (node_ptr, index) ->
@@ -692,7 +694,8 @@ let emit_instr fallthrough i =
             gc_lbl = lbl_call_gc;
             gc_return_lbl = lbl_redo;
             gc_frame = lbl_frame;
-            gc_spacetime; } :: !call_gc_sites
+            gc_spacetime;
+            gc_dbg = i.dbg; } :: !call_gc_sites
       end else begin
         if Config.spacetime then begin
           spacetime_before_uninstrumented_call ~node_ptr:(arg i 0)
