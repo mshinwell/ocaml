@@ -21,6 +21,7 @@ type t = {
   binding_times : Variable.Set.t Binding_time.Map.t;
   equations : Type_grammar.t Name.Map.t;
   cse : Simple.t Flambda_primitive.Eligible_for_cse.Map.t;
+  symbol_projections : Symbol_projection.t Variable.Map.t;
 }
 
 let defined_vars t = t.defined_vars
@@ -38,7 +39,10 @@ let defines_name_but_no_equations t name =
 *)
 
 let print_with_cache ~cache ppf
-      { defined_vars; binding_times = _; equations; cse; } =
+      { defined_vars; binding_times = _; equations; cse;
+        symbol_projections = _; } =
+  (* CR mshinwell: print symbol projections along with tidying up this
+     function *)
   let print_equations ppf equations =
     let equations = Name.Map.bindings equations in
     match equations with
@@ -106,7 +110,9 @@ let fold_on_defined_vars f t init =
     t.binding_times
     init
 
-let apply_name_permutation ({ defined_vars; binding_times; equations; cse; } as t)
+let apply_name_permutation
+      ({ defined_vars; binding_times; equations; cse; symbol_projections; }
+        as t)
       perm =
   let defined_vars_changed = ref false in
   let defined_vars' =
@@ -159,6 +165,9 @@ let apply_name_permutation ({ defined_vars; binding_times; equations; cse; } as 
       cse
       Flambda_primitive.Eligible_for_cse.Map.empty
   in
+  (* CR mshinwell: Maybe we should call
+     [Symbol_projection.apply_name_permutation] even though it currently
+     does nothing? *)
   if (not !defined_vars_changed)
     && (not !equations_changed)
     && (not !cse_changed)
@@ -168,9 +177,11 @@ let apply_name_permutation ({ defined_vars; binding_times; equations; cse; } as 
       binding_times = binding_times';
       equations = equations';
       cse = cse';
+      symbol_projections;
     }
 
-let free_names { defined_vars; binding_times = _; equations; cse; } =
+let free_names
+      { defined_vars; binding_times = _; equations; cse; symbol_projections; } =
   let free_names_defined_vars =
     Name_occurrences.create_variables (Variable.Map.keys defined_vars)
       Name_mode.in_types
@@ -185,37 +196,56 @@ let free_names { defined_vars; binding_times = _; equations; cse; } =
       equations
       free_names_defined_vars
   in
-  Flambda_primitive.Eligible_for_cse.Map.fold
-    (fun prim (bound_to : Simple.t) acc ->
-      Simple.pattern_match bound_to
-        ~const:(fun _ -> acc)
-        ~name:(fun name ->
-          let free_in_prim =
-            Name_occurrences.downgrade_occurrences_at_strictly_greater_kind
-              (Flambda_primitive.Eligible_for_cse.free_names prim)
-              Name_mode.in_types
-          in
-          Name_occurrences.add_name free_in_prim
-            name Name_mode.in_types))
-    cse
-    free_names_equations
+  let free_names =
+    Flambda_primitive.Eligible_for_cse.Map.fold
+      (fun prim (bound_to : Simple.t) acc ->
+        Simple.pattern_match bound_to
+          ~const:(fun _ -> acc)
+          ~name:(fun name ->
+            let free_in_prim =
+              Name_occurrences.downgrade_occurrences_at_strictly_greater_kind
+                (Flambda_primitive.Eligible_for_cse.free_names prim)
+                Name_mode.in_types
+            in
+            Name_occurrences.add_name free_in_prim
+              name Name_mode.in_types))
+      cse
+      free_names_equations
+  in
+  Variable.Map.fold (fun _var proj free_names ->
+      Name_occurrences.union free_names
+        (Symbol_projection.free_names proj))
+    symbol_projections
+    free_names
 
 let empty () =
   { defined_vars = Variable.Map.empty;
     binding_times = Binding_time.Map.empty;
     equations = Name.Map.empty;
     cse = Flambda_primitive.Eligible_for_cse.Map.empty;
+    symbol_projections = Variable.Map.empty;
   }
 
-let is_empty { defined_vars; binding_times; equations; cse; } =
+let is_empty
+      { defined_vars; binding_times; equations; cse;
+        symbol_projections; } =
   Variable.Map.is_empty defined_vars
     && Binding_time.Map.is_empty binding_times
     && Name.Map.is_empty equations
     && Flambda_primitive.Eligible_for_cse.Map.is_empty cse
+    && Variable.Map.is_empty symbol_projections
 
 let equations t = t.equations
 
 let cse t = t.cse
+
+let symbol_projections t = t.symbol_projections
+
+let add_symbol_projection t var proj =
+  let symbol_projections =
+    Variable.Map.add var proj t.symbol_projections
+  in
+  { t with symbol_projections; }
 
 let add_definition t var kind binding_time =
   if !Clflags.flambda_invariant_checks
@@ -265,6 +295,7 @@ let one_equation name ty =
     binding_times = Binding_time.Map.empty;
     equations = Name.Map.singleton name ty;
     cse = Flambda_primitive.Eligible_for_cse.Map.empty;
+    symbol_projections = Variable.Map.empty;
   }
 
 let add_or_replace_equation t name ty =
@@ -321,10 +352,16 @@ let concat (t1 : t) (t2 : t) =
       t1.cse
       t2.cse
   in
+  let symbol_projections =
+    Variable.Map.union (fun _var _proj1 proj2 -> Some proj2)
+      t1.symbol_projections
+      t2.symbol_projections
+  in
   { defined_vars;
     binding_times;
     equations;
     cse;
+    symbol_projections;
   }
 
 let meet_equation0 env t name typ =
@@ -438,7 +475,6 @@ let meet0 env (t1 : t) (t2 : t) =
       (t, env)
   in
   let cse =
-    (* CR mshinwell: Add [Map.inter] (also used elsewhere) *)
     Flambda_primitive.Eligible_for_cse.Map.merge (fun _ simple1 simple2 ->
         match simple1, simple2 with
         | None, None | None, Some _ | Some _, None -> None
@@ -447,7 +483,19 @@ let meet0 env (t1 : t) (t2 : t) =
           else None)
       t1.cse t2.cse
   in
-  { t with cse; }
+  let symbol_projections =
+    Variable.Map.merge (fun _ proj1 proj2 ->
+        match proj1, proj2 with
+        | None, None | None, Some _ | Some _, None -> None
+        | Some proj1, Some proj2 ->
+          if Symbol_projection.equal proj1 proj2 then Some proj1
+          else None)
+      t1.symbol_projections t2.symbol_projections
+  in
+  { t with
+    cse;
+    symbol_projections;
+  }
 
 let meet env t1 t2 =
   (* Care: the domains of [t1] and [t2] are treated as contravariant.
@@ -797,7 +845,8 @@ let join_cse envs_with_levels cse ~allowed =
      Name.Map.empty,
      allowed)
 
-let construct_joined_level envs_with_levels ~allowed ~joined_types ~cse =
+let construct_joined_level envs_with_levels ~env_at_fork ~allowed
+      ~joined_types ~cse =
   let module EP = Flambda_primitive.Eligible_for_cse in
   let defined_vars, binding_times =
     List.fold_left (fun (defined_vars, binding_times)
@@ -854,10 +903,28 @@ let construct_joined_level envs_with_levels ~allowed ~joined_types ~cse =
           ~name:(fun name -> Name_occurrences.mem_name allowed name))
       cse
   in
+  let symbol_projections =
+    List.fold_left (fun symbol_projections (_env_at_use, _id, _use_kind, t) ->
+        let projs_this_level =
+          Variable.Map.filter (fun var _ ->
+              let name = Name.var var in
+              Typing_env.mem ~min_name_mode:Name_mode.normal env_at_fork name
+                || Name_occurrences.mem_name allowed name)
+            t.symbol_projections
+        in
+        Variable.Map.union (fun _var proj1 proj2 ->
+            if Symbol_projection.equal proj1 proj2 then Some proj1
+            else None)
+          symbol_projections
+          projs_this_level)
+      Variable.Map.empty
+      envs_with_levels
+  in
   { defined_vars;
     binding_times;
     equations;
     cse;
+    symbol_projections;
   }
 
 let check_join_inputs ~env_at_fork _envs_with_levels ~params
@@ -1043,7 +1110,10 @@ let join ~env_at_fork envs_with_levels ~params
   *)
   (* Having calculated which equations to propagate, the resulting level can
      now be constructed. *)
-  let t = construct_joined_level envs_with_levels ~allowed ~joined_types ~cse in
+  let t =
+    construct_joined_level envs_with_levels ~env_at_fork ~allowed
+      ~joined_types ~cse
+  in
   (*
   Format.eprintf "Join result:@ %a\n%!" print t;
   *)
@@ -1077,7 +1147,13 @@ let all_ids_for_export t =
     Ids_for_export.add_simple ids simple
   in
   let ids = Flambda_primitive.Eligible_for_cse.Map.fold cse t.cse ids in
-  ids
+  let symbol_projection var proj ids =
+    let ids =
+      Ids_for_export.union ids (Symbol_projection.all_ids_for_export proj)
+    in
+    Ids_for_export.add_variable ids var
+  in
+  Variable.Map.fold symbol_projection t.symbol_projections ids
 
 let import _import_map _t =
   Misc.fatal_error "Import not implemented on Typing_env_level"

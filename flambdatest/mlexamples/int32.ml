@@ -111,7 +111,7 @@ external ( asr ) : int -> int -> int = "%asrint"
 
 let max_int = (-1) lsr 1
 let min_int = max_int + 1
-
+(*
 (* Floating-point operations *)
 
 external ( ~-. ) : float -> float = "%negfloat"
@@ -260,8 +260,9 @@ let bool_of_string_opt = function
 
 let string_of_int n =
   format_int "%d" n
-
+*)
 external int_of_string : string -> int = "caml_int_of_string"
+(*
 
 let int_of_string_opt s =
   (* TODO: provide this directly as a non-raising primitive. *)
@@ -561,7 +562,7 @@ let exit retcode =
   sys_exit retcode
 
 let _ = register_named_value "Pervasives.do_at_exit" do_at_exit
-
+*)
 end
 
 open Stdlib
@@ -619,7 +620,7 @@ let unsigned_to_int =
       fun n -> let i = to_int n in Some (if i < 0 then i + move else i)
   | _ ->
       assert false
-
+(*
 external format : string -> int32 -> string = "caml_int32_format"
 let to_string n = format "%d" n
 
@@ -651,3 +652,4 @@ let unsigned_div n d =
 
 let unsigned_rem n d =
   sub n (mul (unsigned_div n d) d)
+*)

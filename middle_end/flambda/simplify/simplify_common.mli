@@ -29,8 +29,11 @@ val simplify_projection
 
 type cse =
   | Invalid of Flambda_type.t
+  (* CR mshinwell: Use a record type for the following and all of the
+     simplify_*primitive.mli files *)
   | Applied of
-      (Reachable.t * Flambda_type.Typing_env_extension.t * Downwards_acc.t)
+      (Reachable.t * Flambda_type.Typing_env_extension.t
+        * Simple.t list * Downwards_acc.t)
   | Not_applied of Downwards_acc.t
 
 val try_cse
@@ -38,6 +41,7 @@ val try_cse
   -> original_prim:Flambda_primitive.t
   -> result_kind:Flambda_kind.t
   -> min_name_mode:Name_mode.t
+  -> args:Simple.t list
   -> result_var:Variable.t
   -> cse
 
@@ -83,6 +87,16 @@ val create_let_symbols
   -> Code_age_relation.t
   -> Simplify_envs.Lifted_constant.t
   -> Flambda.Expr.t
+  -> Flambda.Expr.t * Upwards_acc.t
+
+val place_lifted_constants
+   : Upwards_acc.t
+  -> Symbol_scoping_rule.t
+  -> lifted_constants_from_defining_expr:Simplify_envs.Lifted_constant_state.t
+  -> lifted_constants_from_body:Simplify_envs.Lifted_constant_state.t
+  -> put_bindings_around_body:(body:Flambda.Expr.t -> Flambda.Expr.t)
+  -> body:Flambda.Expr.t
+  -> critical_deps_of_bindings:Name_occurrences.t
   -> Flambda.Expr.t * Upwards_acc.t
 
 (** Create the projection of a tuple (assumed to be a size-tuple of

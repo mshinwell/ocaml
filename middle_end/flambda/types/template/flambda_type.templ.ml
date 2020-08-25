@@ -722,14 +722,19 @@ type reification_result =
 
 (* CR mshinwell: Think more to identify all the cases that should be
    in this function. *)
-let reify ?allowed_if_free_vars_defined_in ?disallowed_free_vars
-      ?(allow_unique = false)
+let reify ?allowed_if_free_vars_defined_in ?additional_free_var_criterion
+      ?disallowed_free_vars ?(allow_unique = false)
       env ~min_name_mode t : reification_result =
   let var_allowed var =
     match allowed_if_free_vars_defined_in with
     | None -> false
     | Some allowed_if_free_vars_defined_in ->
-      Typing_env.mem ~min_name_mode allowed_if_free_vars_defined_in (Name.var var)
+      Typing_env.mem ~min_name_mode allowed_if_free_vars_defined_in
+          (Name.var var)
+        && begin match additional_free_var_criterion with
+           | None -> true
+           | Some criterion -> criterion var
+           end
         && match disallowed_free_vars with
            | None -> true
            | Some disallowed_free_vars ->

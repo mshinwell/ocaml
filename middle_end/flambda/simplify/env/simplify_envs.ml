@@ -46,6 +46,7 @@ end = struct
     at_unit_toplevel : bool;
     unit_toplevel_exn_continuation : Continuation.t;
     symbols_currently_being_defined : Symbol.Set.t;
+    variables_defined_at_toplevel : Variable.Set.t;
   }
 
   let print ppf { backend = _; round; typing_env; get_imported_code = _;
@@ -53,6 +54,7 @@ end = struct
                   inlining_depth_increment; float_const_prop;
                   code; at_unit_toplevel; unit_toplevel_exn_continuation;
                   symbols_currently_being_defined;
+                  variables_defined_at_toplevel;
                 } =
     Format.fprintf ppf "@[<hov 1>(\
         @[<hov 1>(round@ %d)@]@ \
@@ -64,6 +66,7 @@ end = struct
         @[<hov 1>(at_unit_toplevel@ %b)@]@ \
         @[<hov 1>(unit_toplevel_exn_continuation@ %a)@]@ \
         @[<hov 1>(symbols_currently_being_defined@ %a)@]@ \
+        @[<hov 1>(variables_defined_at_toplevel@ %a)@]@ \
         @[<hov 1>(code@ %a)@]\
         )@]"
       round
@@ -75,6 +78,7 @@ end = struct
       at_unit_toplevel
       Continuation.print unit_toplevel_exn_continuation
       Symbol.Set.print symbols_currently_being_defined
+      Variable.Set.print variables_defined_at_toplevel
       (Code_id.Map.print Code.print) code
 
   let invariant _t = ()
@@ -95,6 +99,7 @@ end = struct
       at_unit_toplevel = true;
       unit_toplevel_exn_continuation;
       symbols_currently_being_defined = Symbol.Set.empty;
+      variables_defined_at_toplevel = Variable.Set.empty;
     }
 
   let resolver t = TE.resolver t.typing_env
@@ -114,6 +119,9 @@ end = struct
 
   let set_at_unit_toplevel_state t at_unit_toplevel =
     { t with at_unit_toplevel; }
+
+  let is_defined_at_toplevel t var =
+    Variable.Set.mem var t.variables_defined_at_toplevel
 
   let get_inlining_depth_increment t = t.inlining_depth_increment
 
@@ -168,6 +176,7 @@ end = struct
                       float_const_prop; code; at_unit_toplevel = _;
                       unit_toplevel_exn_continuation;
                       symbols_currently_being_defined;
+                      variables_defined_at_toplevel;
                     } =
     { backend;
       round;
@@ -181,6 +190,7 @@ end = struct
       at_unit_toplevel = false;
       unit_toplevel_exn_continuation;
       symbols_currently_being_defined;
+      variables_defined_at_toplevel;
     }
 
   let define_variable t var kind =
@@ -188,7 +198,17 @@ end = struct
       let var = Name_in_binding_pos.var var in
       TE.add_definition t.typing_env var kind
     in
-    { t with typing_env; }
+    let variables_defined_at_toplevel =
+      if t.at_unit_toplevel then
+        Variable.Set.add (Var_in_binding_pos.var var)
+          t.variables_defined_at_toplevel
+      else
+        t.variables_defined_at_toplevel
+    in
+    { t with
+      typing_env;
+      variables_defined_at_toplevel;
+    }
 
   let add_name t name ty =
     let typing_env =
@@ -196,16 +216,41 @@ end = struct
         (TE.add_definition t.typing_env name (T.kind ty))
         (Name_in_binding_pos.name name) ty
     in
-    { t with typing_env; }
+    let variables_defined_at_toplevel =
+      Name.pattern_match (Name_in_binding_pos.name name)
+        ~var:(fun var ->
+          if t.at_unit_toplevel then
+            Variable.Set.add var t.variables_defined_at_toplevel
+          else
+            t.variables_defined_at_toplevel)
+        ~symbol:(fun _ -> t.variables_defined_at_toplevel)
+    in
+    { t with
+      typing_env;
+      variables_defined_at_toplevel;
+    }
 
-  let add_variable t var ty =
+  let add_variable0 t var ty ~at_unit_toplevel =
     let typing_env =
       let var' = Name_in_binding_pos.var var in
       TE.add_equation
         (TE.add_definition t.typing_env var' (T.kind ty))
         (Name.var (Var_in_binding_pos.var var)) ty
     in
-    { t with typing_env; }
+    let variables_defined_at_toplevel =
+      if at_unit_toplevel then
+        Variable.Set.add (Var_in_binding_pos.var var)
+          t.variables_defined_at_toplevel
+      else
+        t.variables_defined_at_toplevel
+    in
+    { t with
+      typing_env;
+      variables_defined_at_toplevel;
+    }
+
+  let add_variable t var ty =
+    add_variable0 t var ty ~at_unit_toplevel:t.at_unit_toplevel
 
   let add_equation_on_variable t var ty =
     let typing_env = TE.add_equation t.typing_env (Name.var var) ty in
@@ -260,19 +305,35 @@ end = struct
 
   let find_symbol t sym = find_name t (Name.symbol sym)
 
+  let add_symbol_projection t var proj =
+    { t with
+      typing_env = TE.add_symbol_projection t.typing_env var proj;
+    }
+
+  let find_symbol_projection t var =
+    TE.find_symbol_projection t.typing_env var
+
   let define_name t name kind =
     let typing_env =
       TE.add_definition t.typing_env name kind
     in
-    { t with typing_env; }
+    let variables_defined_at_toplevel =
+      Name.pattern_match (Name_in_binding_pos.name name)
+        ~var:(fun var ->
+          if t.at_unit_toplevel then
+            Variable.Set.add var t.variables_defined_at_toplevel
+          else
+            t.variables_defined_at_toplevel)
+        ~symbol:(fun _ -> t.variables_defined_at_toplevel)
+    in
+    { t with
+      typing_env;
+      variables_defined_at_toplevel;
+    }
 
   let define_name_if_undefined t name kind =
     if TE.mem t.typing_env (Name_in_binding_pos.to_name name) then t
-    else
-      let typing_env =
-        TE.add_definition t.typing_env name kind
-      in
-      { t with typing_env; }
+    else define_name t name kind
 
   let add_equation_on_name t name ty =
     let typing_env = TE.add_equation t.typing_env name ty in
@@ -305,30 +366,33 @@ end = struct
       t
       params
 
-  let add_parameters t params ~param_types =
+  let add_parameters ?at_unit_toplevel t params ~param_types =
     if List.compare_lengths params param_types <> 0 then begin
       Misc.fatal_errorf "Mismatch between number of [params] and \
           [param_types]:@ (%a)@ and@ %a"
         Kinded_parameter.List.print params
         (Format.pp_print_list ~pp_sep:Format.pp_print_space T.print) param_types
     end;
+    let at_unit_toplevel =
+      Option.value at_unit_toplevel ~default:t.at_unit_toplevel
+    in
     List.fold_left2 (fun t param param_type ->
         let var =
           Var_in_binding_pos.create (KP.var param) Name_mode.normal
         in
-        add_variable t var param_type)
+        add_variable0 t var param_type ~at_unit_toplevel)
       t
       params param_types
 
-  let add_parameters_with_unknown_types' t params =
+  let add_parameters_with_unknown_types' ?at_unit_toplevel t params =
     let param_types =
       ListLabels.map params ~f:(fun param ->
         T.unknown_with_subkind (KP.kind param))
     in
-    add_parameters t params ~param_types, param_types
+    add_parameters ?at_unit_toplevel t params ~param_types, param_types
 
-  let add_parameters_with_unknown_types t params =
-    fst (add_parameters_with_unknown_types' t params)
+  let add_parameters_with_unknown_types ?at_unit_toplevel t params =
+    fst (add_parameters_with_unknown_types' ?at_unit_toplevel t params)
 
   let extend_typing_environment t env_extension =
     let typing_env = TE.add_env_extension t.typing_env env_extension in
@@ -694,17 +758,41 @@ end = struct
           denv : Downwards_env.t;
           closure_symbols_with_types
             : (Symbol.t * Flambda_type.t) Closure_id.Lmap.t;
+          symbol_projections : Symbol_projection.t Variable.Map.t;
         }
       | Block_like of {
           symbol : Symbol.t;
           denv : Downwards_env.t;
           ty : Flambda_type.t;
+          symbol_projections : Symbol_projection.t Variable.Map.t;
         }
 
     type t = {
       descr : descr;
       defining_expr : Static_const.t;
     }
+
+    let binds_symbol t sym =
+      match t.descr with
+      | Code _ -> false
+      | Set_of_closures { closure_symbols_with_types; _ } ->
+        Closure_id.Lmap.exists (fun _ (sym', _) -> Symbol.equal sym sym')
+          closure_symbols_with_types
+      | Block_like { symbol; _ } -> Symbol.equal sym symbol
+
+    let free_names t =
+      match t.descr with
+      | Code _ -> Static_const.free_names t.defining_expr
+      | Set_of_closures { symbol_projections; _ }
+      | Block_like { symbol_projections; _ } ->
+        (* The symbols mentioned in any symbol projections must be counted
+           as free names, so that the definition doesn't get placed too high
+           in the code. *)
+        Variable.Map.fold (fun _var proj free_names ->
+            Name_occurrences.add_symbol free_names
+              (Symbol_projection.symbol proj) Name_mode.normal)
+          symbol_projections
+          (Static_const.free_names t.defining_expr)
 
     let print_descr ppf descr =
       match descr with
@@ -730,6 +818,12 @@ end = struct
     let descr t = t.descr
     let defining_expr t = t.defining_expr
 
+    let symbol_projections t =
+      match t.descr with
+      | Code _ -> Variable.Map.empty
+      | Set_of_closures { symbol_projections; _ }
+      | Block_like { symbol_projections; _ } -> symbol_projections
+
     let code code_id defining_expr =
       match defining_expr with
       | Static_const.Code code ->
@@ -745,19 +839,22 @@ end = struct
         Misc.fatal_errorf "Not a code definition: %a"
           Static_const.print defining_expr
 
-    let set_of_closures denv ~closure_symbols_with_types defining_expr =
+    let set_of_closures denv ~closure_symbols_with_types
+          ~symbol_projections defining_expr =
       { descr = Set_of_closures {
           denv;
           closure_symbols_with_types;
+          symbol_projections;
         };
         defining_expr;
       }
 
-    let block_like denv symbol ty defining_expr =
+    let block_like denv symbol ty ~symbol_projections defining_expr =
       { descr = Block_like {
           symbol;
           denv;
           ty;
+          symbol_projections;
         };
         defining_expr;
       }
@@ -771,7 +868,7 @@ end = struct
       let module P = Bound_symbols.Pattern in
       match t.descr with
       | Code code_id -> P.code code_id
-      | Set_of_closures { closure_symbols_with_types; denv = _; } ->
+      | Set_of_closures { closure_symbols_with_types; _; } ->
         P.set_of_closures (Closure_id.Lmap.map fst closure_symbols_with_types)
       | Block_like { symbol; _ } -> P.block_like symbol
 
@@ -781,7 +878,7 @@ end = struct
     let types_of_symbols t =
       match t.descr with
       | Code _ -> Symbol.Map.empty
-      | Set_of_closures { denv; closure_symbols_with_types; } ->
+      | Set_of_closures { denv; closure_symbols_with_types; _ } ->
         Closure_id.Lmap.fold (fun _closure_id (symbol, ty) types_of_symbols ->
             Symbol.Map.add symbol (denv, ty) types_of_symbols)
           closure_symbols_with_types
@@ -795,10 +892,12 @@ end = struct
     bound_symbols : Bound_symbols.t;
     defining_exprs : Static_const.Group.t;
     free_names : Name_occurrences.t;
+    symbol_projections : Symbol_projection.t Variable.Map.t;
     is_fully_static : bool;
   }
 
   let definitions t = t.definitions
+  let symbol_projections t = t.symbol_projections
 
   let free_names_of_defining_exprs t = t.free_names
 
@@ -806,7 +905,7 @@ end = struct
 
   let print ppf
         { definitions; bound_symbols = _; defining_exprs = _;
-          free_names = _; is_fully_static = _; } =
+          free_names = _; is_fully_static = _; symbol_projections = _; } =
     Format.fprintf ppf "@[<hov 1>(%a)@]"
       (Format.pp_print_list ~pp_sep:Format.pp_print_space Definition.print)
       definitions
@@ -819,36 +918,45 @@ end = struct
     ListLabels.map definitions ~f:Definition.defining_expr
     |> Static_const.Group.create
 
-  let create_block_like symbol defining_expr denv ty =
+  let create_block_like symbol ~symbol_projections defining_expr denv ty =
     (* CR mshinwell: check that [defining_expr] is not a set of closures
        or code *)
-    let definitions = [Definition.block_like denv symbol ty defining_expr] in
+    let definition =
+      Definition.block_like denv symbol ty ~symbol_projections defining_expr
+    in
+    let definitions = [definition] in
     { definitions;
       bound_symbols = compute_bound_symbols definitions;
       defining_exprs = compute_defining_exprs definitions;
-      free_names = Static_const.free_names defining_expr;
+      free_names = Definition.free_names definition;
       is_fully_static = Static_const.is_fully_static defining_expr;
+      symbol_projections = Definition.symbol_projections definition;
     }
 
-  let create_set_of_closures denv ~closure_symbols_with_types defining_expr =
-    let definitions =
-      [Definition.set_of_closures denv ~closure_symbols_with_types
-        defining_expr]
+  let create_set_of_closures denv ~closure_symbols_with_types
+        ~symbol_projections defining_expr =
+    let definition =
+      Definition.set_of_closures denv ~closure_symbols_with_types
+        ~symbol_projections defining_expr
     in
+    let definitions = [definition] in
     { definitions;
       bound_symbols = compute_bound_symbols definitions;
       defining_exprs = compute_defining_exprs definitions;
-      free_names = Static_const.free_names defining_expr;
+      free_names = Definition.free_names definition;
       is_fully_static = Static_const.is_fully_static defining_expr;
+      symbol_projections = Definition.symbol_projections definition;
     }
 
   let create_code code_id defining_expr =
-    let definitions = [Definition.code code_id defining_expr] in
+    let definition = Definition.code code_id defining_expr in
+    let definitions = [definition] in
     { definitions;
       bound_symbols = compute_bound_symbols definitions;
       defining_exprs = compute_defining_exprs definitions;
-      free_names = Static_const.free_names defining_expr;
+      free_names = Definition.free_names definition;
       is_fully_static = Static_const.is_fully_static defining_expr;
+      symbol_projections = Definition.symbol_projections definition;
     }
 
   let concat ts =
@@ -882,11 +990,19 @@ end = struct
         true
         ts
     in
+    let symbol_projections =
+      List.fold_left (fun symbol_projections t ->
+          Variable.Map.disjoint_union ~eq:Symbol_projection.equal
+            t.symbol_projections symbol_projections)
+        Variable.Map.empty
+        ts
+    in
     { definitions;
       bound_symbols;
       defining_exprs;
       free_names;
       is_fully_static;
+      symbol_projections;
     }
 
   let defining_exprs t =
@@ -906,6 +1022,85 @@ end = struct
 
   let all_defined_symbols t =
     Symbol.Map.keys (types_of_symbols t)
+
+  let apply_projection t proj =
+    let symbol = Symbol_projection.symbol proj in
+    let matching_defining_exprs =
+      ListLabels.filter_map t.definitions ~f:(fun definition ->
+        if Definition.binds_symbol definition symbol then
+          Some (Definition.defining_expr definition)
+        else
+          None)
+    in
+    match matching_defining_exprs with
+    | [defining_expr] ->
+      let simple =
+        match Symbol_projection.projection proj, defining_expr with
+        | Block_load { index; }, Block (tag, mut, fields) ->
+          if not (Tag.Scannable.equal tag Tag.Scannable.zero) then begin
+            Misc.fatal_errorf "Symbol projection@ %a@ on block which doesn't \
+                have tag zero:@ %a"
+              Symbol_projection.print proj
+              Static_const.print defining_expr
+          end;
+          if Mutability.is_mutable mut then begin
+            Misc.fatal_errorf "Symbol projection@ %a@ on mutable block:@ %a"
+              Symbol_projection.print proj
+              Static_const.print defining_expr
+          end;
+          let index = Targetint.OCaml.to_int_exn index in
+          begin match List.nth_opt fields index with
+          | Some field ->
+            begin match field with
+            | Symbol symbol -> Simple.symbol symbol
+            | Tagged_immediate imm ->
+              Simple.const_int (Target_imm.to_targetint imm)
+            | Dynamically_computed var -> Simple.var var
+            end
+          | None ->
+            Misc.fatal_errorf "Symbol projection@ %a@ has out-of-range \
+                index:@ %a"
+              Symbol_projection.print proj
+              Static_const.print defining_expr
+          end;
+        | Project_var { project_from; var; }, Set_of_closures set ->
+          let decls = Set_of_closures.function_decls set in
+          if not (Function_declarations.binds_closure_id decls project_from)
+          then begin
+            Misc.fatal_errorf "Symbol projection@ %a@ has closure ID not \
+                bound by this set of closures:@ %a"
+              Symbol_projection.print proj
+              Static_const.print defining_expr
+          end;
+          let closure_env = Set_of_closures.closure_elements set in
+          begin match Var_within_closure.Map.find var closure_env with
+          | exception Not_found ->
+            Misc.fatal_errorf "Symbol projection@ %a@ has closure var not \
+                defined in the environment of this set of closures:@ %a"
+              Symbol_projection.print proj
+              Static_const.print defining_expr
+          | closure_entry -> closure_entry
+          end
+        | Block_load _,
+          (Code _ | Set_of_closures _ | Boxed_float _ | Boxed_int32 _
+          | Boxed_int64 _ | Boxed_nativeint _ | Immutable_float_block _
+          | Immutable_float_array _ | Mutable_string _ | Immutable_string _)
+        | Project_var _,
+          (Code _ | Block _ | Boxed_float _ | Boxed_int32 _
+          | Boxed_int64 _ | Boxed_nativeint _ | Immutable_float_block _
+          | Immutable_float_array _ | Mutable_string _ | Immutable_string _) ->
+          Misc.fatal_errorf "Symbol projection@ %a@ cannot be applied to:@ %a"
+            Symbol_projection.print proj
+            Static_const.print defining_expr
+      in
+      Some simple
+    | [] -> None
+    | _::_::_ ->
+      Misc.fatal_errorf "Symbol projection@ %a@ matches more than one \
+          constant in:@ %a"
+        Symbol_projection.print proj
+        print t
+
 end and Lifted_constant_state : sig
   include I.Lifted_constant_state
     with type lifted_constant := Lifted_constant.t

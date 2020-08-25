@@ -56,6 +56,12 @@ module Cached : sig
 
   val with_cse : t -> cse:Simple.t Flambda_primitive.Eligible_for_cse.Map.t -> t
 
+  val add_symbol_projection : t -> Variable.t -> Symbol_projection.t -> t
+
+  val find_symbol_projection : t -> Variable.t -> Symbol_projection.t option
+
+  val symbol_projections : t -> Symbol_projection.t Variable.Map.t
+
   val clean_for_export : t -> reachable_names:Name_occurrences.t -> t
 
   val import : Ids_for_export.Import_map.t -> t -> t
@@ -67,6 +73,7 @@ end = struct
       (Type_grammar.t * Binding_time.t * Name_mode.t) Name.Map.t;
     aliases : Aliases.t;
     cse : Simple.t Flambda_primitive.Eligible_for_cse.Map.t;
+    symbol_projections : Symbol_projection.t Variable.Map.t;
   }
 
   let print_kind_and_mode ppf (ty, _, mode) =
@@ -113,11 +120,13 @@ end = struct
     { names_to_types = Name.Map.empty;
       aliases = Aliases.empty;
       cse = Flambda_primitive.Eligible_for_cse.Map.empty;
+      symbol_projections = Variable.Map.empty;
     }
 
   let names_to_types t = t.names_to_types
   let aliases t = t.aliases
   let cse t = t.cse
+  let symbol_projections t = t.symbol_projections
 
   (* CR mshinwell: At least before the following two functions were split
      (used to be add-or-replace), the [names_to_types] map addition was a
@@ -130,6 +139,7 @@ end = struct
     { names_to_types;
       aliases = new_aliases;
       cse = t.cse;
+      symbol_projections = t.symbol_projections;
     }
 
   let replace_variable_binding t var ty ~new_aliases =
@@ -142,9 +152,19 @@ end = struct
     { names_to_types;
       aliases = new_aliases;
       cse = t.cse;
+      symbol_projections = t.symbol_projections;
     }
 
   let with_cse t ~cse = { t with cse; }
+
+  let add_symbol_projection t var proj =
+    let symbol_projections = Variable.Map.add var proj t.symbol_projections in
+    { t with symbol_projections; }
+
+  let find_symbol_projection t var =
+    match Variable.Map.find var t.symbol_projections with
+    | exception Not_found -> None
+    | proj -> Some proj
 
   let clean_for_export t ~reachable_names =
     (* Two things happen:
@@ -166,11 +186,12 @@ end = struct
                current_compilation_unit)
         names_to_types
     in
+    (* [t.cse] is not exported, so doesn't need cleaning. *)
     { t with
       names_to_types;
     }
 
-  let import import_map { names_to_types; aliases; cse; } =
+  let import import_map { names_to_types; aliases; cse; symbol_projections; } =
     let module Import = Ids_for_export.Import_map in
     let names_to_types =
       Name.Map.fold (fun name (ty, binding_time, mode) acc ->
@@ -194,7 +215,15 @@ end = struct
         cse
         Flambda_primitive.Eligible_for_cse.Map.empty
     in
-    { names_to_types; aliases; cse }
+    let symbol_projections =
+      Variable.Map.fold (fun var proj acc ->
+          Variable.Map.add (Import.variable import_map var)
+            (Symbol_projection.import import_map proj)
+            acc)
+        symbol_projections
+        Variable.Map.empty
+    in
+    { names_to_types; aliases; cse; symbol_projections; }
 
   let merge t1 t2 =
     let names_to_types =
@@ -232,7 +261,19 @@ end = struct
              ~name:cannot_merge)
         t1.cse t2.cse
     in
-    { names_to_types; aliases; cse; }
+    let symbol_projections =
+      Variable.Map.union (fun var proj1 proj2 ->
+          if Symbol_projection.equal proj1 proj2 then Some proj1
+          else
+            Misc.fatal_errorf "Cannot merge symbol projections for %a:@ \
+                %a@ and@ %a"
+              Variable.print var
+              Symbol_projection.print proj1
+              Symbol_projection.print proj2)
+        t1.symbol_projections
+        t2.symbol_projections
+    in
+    { names_to_types; aliases; cse; symbol_projections; }
 end
 
 module One_level = struct
@@ -364,6 +405,8 @@ module Serializable = struct
       };
     }
 
+  (* CR mshinwell for vlaviron: Shouldn't some of this be in
+     [Cached.all_ids_for_export]? *)
   let all_ids_for_export { defined_symbols;
                            code_age_relation;
                            just_after_level; } =
@@ -391,6 +434,16 @@ module Serializable = struct
           in
           Ids_for_export.add_simple ids simple)
         (Cached.cse just_after_level)
+        ids
+    in
+    let ids =
+      Variable.Map.fold (fun var proj ids ->
+          let ids =
+            Ids_for_export.union ids
+              (Symbol_projection.all_ids_for_export proj)
+          in
+          Ids_for_export.add_variable ids var)
+        (Cached.symbol_projections just_after_level)
         ids
     in
     ids
@@ -818,6 +871,20 @@ let rec add_symbol_definitions t syms =
     closure_env;
   }
 
+let add_symbol_projection t var proj =
+  let level =
+    Typing_env_level.add_symbol_projection (One_level.level t.current_level)
+      var proj
+  in
+  let current_level =
+    One_level.create (current_scope t) level
+      ~just_after_level:(Cached.add_symbol_projection (cached t) var proj)
+  in
+  with_current_level t ~current_level
+
+let find_symbol_projection t var =
+  Cached.find_symbol_projection (cached t) var
+
 let kind_of_simple t simple =
   let [@inline always] const const =
     Type_grammar.kind (Type_grammar.type_for_const const)
@@ -1068,9 +1135,14 @@ and add_env_extension_from_level t level : t =
       (Typing_env_level.equations level)
       t
   in
-  Flambda_primitive.Eligible_for_cse.Map.fold (fun prim bound_to t ->
-      add_cse t prim ~bound_to)
-    (Typing_env_level.cse level)
+  let t =
+    Flambda_primitive.Eligible_for_cse.Map.fold (fun prim bound_to t ->
+        add_cse t prim ~bound_to)
+      (Typing_env_level.cse level)
+      t
+  in
+  Variable.Map.fold (fun var proj t -> add_symbol_projection t var proj)
+    (Typing_env_level.symbol_projections level)
     t
 
 and add_env_extension t env_extension =

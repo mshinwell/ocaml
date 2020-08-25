@@ -101,80 +101,21 @@ let rec simplify_let
         Option.value ~default:Symbol_scoping_rule.Dominator
           (Bindable_let_bound.let_symbol_scoping_rule bindable_let_bound)
       in
-      let calculate_constants_to_place lifted_constants ~critical_deps
-            ~to_float =
-        (* If we are at a [Dominator]-scoped binding, then we float up
-           as many constants as we can whose definitions are fully static
-           (i.e. do not involve variables) to the nearest enclosing
-           [Syntactic]ally-scoped [Let]-binding.  This is done by peeling
-           off the definitions starting at the outermost one.  We keep
-           track of the "critical dependencies", which are those symbols
-           that are definitely going to have their definitions placed at
-           the current [Let]-binding, and any reference to which in another
-           binding (even if fully static) will cause that binding to be
-           placed too. *)
-        (* CR-soon mshinwell: This won't be needed once we can remove
-           [Dominator]-scoped bindings; every "let symbol" can then have
-           [Dominator] scoping.  This should both simplify the code and
-           increase speed a fair bit. *)
-        match scoping_rule with
-        | Syntactic ->
-          lifted_constants, to_float, critical_deps
-        | Dominator ->
-          LCS.fold_outermost_first lifted_constants
-            ~init:(LCS.empty, to_float, critical_deps)
-            ~f:(fun (to_place, to_float, critical_deps) lifted_const ->
-              let must_place =
-                (not (LC.is_fully_static lifted_const))
-                  || Name_occurrences.inter_domain_is_non_empty critical_deps
-                       (LC.free_names_of_defining_exprs lifted_const)
-              in
-              if must_place then
-                let critical_deps =
-                  LC.bound_symbols lifted_const
-                  |> Bound_symbols.free_names
-                  |> Name_occurrences.union critical_deps
-                in
-                let to_place = LCS.add_innermost to_place lifted_const in
-                to_place, to_float, critical_deps
-              else
-                let to_float = LCS.add_innermost to_float lifted_const in
-                to_place, to_float, critical_deps)
-      in
-      (* We handle constants arising from the defining expression, which
-         may be used in [bindings], separately from those arising from the
-         [body], which may reference the [bindings]. *)
-      let to_place_around_defining_expr, to_float, critical_deps =
-        calculate_constants_to_place lifted_constants_from_defining_expr
-          ~critical_deps:Name_occurrences.empty ~to_float:LCS.empty
-      in
-      let critical_deps =
-        (* Make sure we don't move constants past the [bindings] if there
-           is a dependency. *)
-        ListLabels.fold_left bindings ~init:critical_deps
+      let critical_deps_of_bindings =
+        ListLabels.fold_left bindings ~init:Name_occurrences.empty
           ~f:(fun critical_deps (bound, _) ->
             Name_occurrences.union (Bindable_let_bound.free_names bound)
               critical_deps)
       in
-      let to_place_around_body, to_float, _critical_deps =
-        calculate_constants_to_place lifted_constants_from_body
-          ~critical_deps ~to_float
-      in
-      (* Propagate constants that are to float upwards. *)
-      let uacc = UA.with_lifted_constants uacc to_float in
-      (* Place constants whose definitions must go at the current [Let]. *)
-      let place_constants uacc ~around constants =
-        LCS.fold_innermost_first constants ~init:(around, uacc)
-          ~f:(fun (body, uacc) lifted_const ->
-            Simplify_common.create_let_symbols uacc scoping_rule
-              (UA.code_age_relation uacc) lifted_const body)
-      in
       let body, uacc =
-        place_constants uacc ~around:body to_place_around_body
-      in
-      let body = Simplify_common.bind_let_bound ~bindings ~body in
-      let body, uacc =
-        place_constants uacc ~around:body to_place_around_defining_expr
+        Simplify_common.place_lifted_constants uacc
+          scoping_rule
+          ~lifted_constants_from_defining_expr
+          ~lifted_constants_from_body
+          ~put_bindings_around_body:(fun ~body ->
+            Simplify_common.bind_let_bound ~bindings ~body)
+          ~body
+          ~critical_deps_of_bindings
       in
       body, user_data, uacc
     end)
@@ -182,6 +123,7 @@ let rec simplify_let
 and simplify_one_continuation_handler :
  'a. DA.t
   -> Continuation.t
+  -> at_unit_toplevel:bool
   -> Recursive.t
   -> CH.t
   -> params:KP.t list
@@ -189,7 +131,8 @@ and simplify_one_continuation_handler :
   -> extra_params_and_args:Continuation_extra_params_and_args.t
   -> 'a k
   -> Continuation_handler.t * 'a * UA.t
-= fun dacc cont (recursive : Recursive.t) (cont_handler : CH.t) ~params
+= fun dacc cont ~at_unit_toplevel
+      (recursive : Recursive.t) (cont_handler : CH.t) ~params
       ~(handler : Expr.t) ~(extra_params_and_args : EPA.t) k ->
   (*
 Format.eprintf "handler:@.%a@."
@@ -246,9 +189,24 @@ Format.eprintf "About to simplify handler %a, params %a, EPA %a\n%!"
         KP.List.print used_extra_params
     in
     *)
+    let params' = used_params @ used_extra_params in
+    let handler, uacc =
+      (* We might need to place lifted constants now, as they could
+         depend on continuation parameters. *)
+      if (not at_unit_toplevel)
+        || List.compare_length_with params' 0 = 0
+      then handler, uacc
+      else
+        Simplify_common.place_lifted_constants uacc
+          Dominator
+          ~lifted_constants_from_defining_expr:LCS.empty
+          ~lifted_constants_from_body:(UA.lifted_constants uacc)
+          ~put_bindings_around_body:(fun ~body -> body)
+          ~body:handler
+          ~critical_deps_of_bindings:(KP.List.free_names params')
+    in
     let handler =
-      let params = used_params @ used_extra_params in
-      CH.with_params_and_handler cont_handler (CPH.create params ~handler)
+      CH.with_params_and_handler cont_handler (CPH.create params' ~handler)
     in
     let rewrite =
       Apply_cont_rewrite.create ~original_params:params
@@ -314,7 +272,8 @@ and simplify_non_recursive_let_cont_handler
           let is_exn_handler = CH.is_exn_handler cont_handler in
           CPH.pattern_match params_and_handler ~f:(fun params ~handler ->
             let denv_before_body =
-              DE.add_parameters_with_unknown_types (DA.denv dacc) params
+              DE.add_parameters_with_unknown_types ~at_unit_toplevel
+                (DA.denv dacc) params
             in
             let dacc_for_body =
               DE.increment_continuation_scope_level denv_before_body
@@ -441,7 +400,8 @@ and simplify_non_recursive_let_cont_handler
                   in
                   try
                     let handler, user_data, uacc =
-                      simplify_one_continuation_handler dacc cont Non_recursive
+                      simplify_one_continuation_handler dacc cont
+                        ~at_unit_toplevel Non_recursive
                         cont_handler ~params ~handler ~extra_params_and_args k
                     in
                     handler, user_data, uacc, is_single_inlinable_use,
@@ -553,7 +513,8 @@ and simplify_recursive_let_cont_handlers
             let denv, arg_types =
               (* XXX These don't have the same scope level as the
                  non-recursive case *)
-              DE.add_parameters_with_unknown_types' definition_denv params
+              DE.add_parameters_with_unknown_types'
+                ~at_unit_toplevel:false definition_denv params
             in
             (* CR mshinwell: This next part is dubious, use the rewritten
                version in the recursive-continuation-unboxing branch. *)
@@ -588,7 +549,8 @@ and simplify_recursive_let_cont_handlers
             let dacc = DA.add_lifted_constants dacc prior_lifted_constants in
             let dacc = DA.map_denv dacc ~f:DE.set_not_at_unit_toplevel in
             let handler, user_data, uacc =
-              simplify_one_continuation_handler dacc cont Recursive
+              simplify_one_continuation_handler dacc cont
+                ~at_unit_toplevel:false Recursive
                 cont_handler ~params ~handler
                 ~extra_params_and_args:
                   Continuation_extra_params_and_args.empty

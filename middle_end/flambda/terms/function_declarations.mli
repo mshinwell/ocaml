@@ -58,6 +58,8 @@ val funs_in_order : t -> Function_declaration.t Closure_id.Lmap.t
 (** [find f t] raises [Not_found] if [f] is not in [t]. *)
 val find : t -> Closure_id.t -> Function_declaration.t
 
+val binds_closure_id : t -> Closure_id.t -> bool
+
 val compare : t -> t -> int
 
 val filter : t -> f:(Closure_id.t -> Function_declaration.t -> bool) -> t

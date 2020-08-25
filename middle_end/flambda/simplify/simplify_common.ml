@@ -28,7 +28,7 @@ let simplify_projection dacc ~original_term ~deconstructing ~shape ~result_var
 
 type cse =
   | Invalid of T.t
-  | Applied of (Reachable.t * TEE.t * DA.t)
+  | Applied of (Reachable.t * TEE.t * Simple.t list * DA.t)
   | Not_applied of DA.t
 
 let apply_cse dacc ~original_prim =
@@ -43,7 +43,7 @@ let apply_cse dacc ~original_prim =
       | exception Not_found -> None
       | simple -> Some simple
 
-let try_cse dacc ~original_prim ~result_kind ~min_name_mode
+let try_cse dacc ~original_prim ~result_kind ~min_name_mode ~args
       ~result_var : cse =
   (* CR mshinwell: Use [meet] and [reify] for CSE?  (discuss with lwhite) *)
   if not (Name_mode.equal min_name_mode Name_mode.normal) then Not_applied dacc
@@ -53,7 +53,7 @@ let try_cse dacc ~original_prim ~result_kind ~min_name_mode
       let named = Named.create_simple replace_with in
       let ty = T.alias_type_of result_kind replace_with in
       let env_extension = TEE.one_equation (Name.var result_var) ty in
-      Applied (Reachable.reachable named, env_extension, dacc)
+      Applied (Reachable.reachable named, env_extension, args, dacc)
     | None ->
       let dacc =
         match P.Eligible_for_cse.create original_prim with
@@ -342,24 +342,163 @@ let create_let_symbols uacc (scoping_rule : Symbol_scoping_rule.t)
       code_age_relation lifted_constant body =
   let bound_symbols = LC.bound_symbols lifted_constant in
   let defining_exprs = LC.defining_exprs lifted_constant in
+  let symbol_projections = LC.symbol_projections lifted_constant in
   let static_consts =
     defining_exprs
     |> Static_const.Group.to_list
     |> remove_unused_closure_vars_list uacc
     |> Static_const.Group.create
   in
-  match scoping_rule with
-  | Syntactic ->
-    create_let_symbol0 uacc code_age_relation bound_symbols static_consts body
-  | Dominator ->
-    let expr =
-      Expr.create_let_symbol bound_symbols scoping_rule static_consts body
-    in
-    let uacc =
-      Static_const.Group.pieces_of_code_by_code_id defining_exprs
-      |> UA.remember_code_for_cmx uacc
-    in
-    expr, uacc
+  let expr, uacc =
+    match scoping_rule with
+    | Syntactic ->
+      create_let_symbol0 uacc code_age_relation bound_symbols static_consts body
+    | Dominator ->
+      let expr =
+        Expr.create_let_symbol bound_symbols scoping_rule static_consts body
+      in
+      let uacc =
+        Static_const.Group.pieces_of_code_by_code_id defining_exprs
+        |> UA.remember_code_for_cmx uacc
+      in
+      expr, uacc
+  in
+  (*
+  if not (Variable.Map.is_empty symbol_projections) then begin
+    Format.eprintf "PLACING Constant:@ %a@ \nProjections:@ %a\n%!"
+      LC.print lifted_constant
+      (Variable.Map.print Symbol_projection.print) symbol_projections
+  end;
+  *)
+  let expr =
+    Variable.Map.fold (fun var proj expr ->
+        let rec apply_projection proj =
+          match LC.apply_projection lifted_constant proj with
+          | Some simple ->
+            (* If the projection is from one of the symbols bound by the
+               "let symbol" that we've just created, we'll always end up here,
+               avoiding any problem about where to do the projection versus
+               the initialisation of a possibly-recursive group of symbols.
+               We may end up with a "variable = variable" [Let] here, but
+               [Un_cps] (or a subsequent pass of [Simplify]) will remove it.
+               This is the same situation as when continuations are inlined;
+               we can't use a name permutation to resolve the problem as both
+               [var] and [var'] may occur in [expr], and permuting could cause
+               an unbound name.
+               It is possible for one projection to yield a variable that is
+               in turn defined by another symbol projection, so we need to
+               expand transitively. *)
+            Simple.pattern_match' simple
+              ~const:(fun _ -> Named.create_simple simple)
+              ~symbol:(fun _ -> Named.create_simple simple)
+              ~var:(fun var ->
+                match Variable.Map.find var symbol_projections with
+                | exception Not_found -> Named.create_simple simple
+                | proj -> apply_projection proj)
+          | None ->
+            let prim : P.t =
+              let symbol = Simple.symbol (Symbol_projection.symbol proj) in
+              match Symbol_projection.projection proj with
+              | Block_load { index; } ->
+                let index = Simple.const_int index in
+                let block_access_kind : P.Block_access_kind.t =
+                  Values {
+                    tag = Tag.Scannable.zero;
+                    size = Unknown;
+                    field_kind = Any_value;
+                  }
+                in
+                Binary (Block_load (block_access_kind, Immutable), symbol,
+                  index)
+              | Project_var { project_from; var; } ->
+                Unary (Project_var { project_from; var; }, symbol)
+            in
+            Named.create_prim prim Debuginfo.none
+        in
+        (* It's possible that this might create duplicates of the same
+           projection operation, but it's unlikely there will be a
+           significant number, and since we're at toplevel we tolerate
+           them. *)
+        let named = apply_projection proj in
+        Expr.create_let (Var_in_binding_pos.create var NM.normal) named expr)
+      symbol_projections
+      expr
+  in
+  expr, uacc
+
+let place_lifted_constants uacc (scoping_rule : Symbol_scoping_rule.t)
+      ~lifted_constants_from_defining_expr ~lifted_constants_from_body
+      ~put_bindings_around_body ~body ~critical_deps_of_bindings =
+  let calculate_constants_to_place lifted_constants ~critical_deps
+        ~to_float =
+    (* If we are at a [Dominator]-scoped binding, then we float up
+       as many constants as we can whose definitions are fully static
+       (i.e. do not involve variables) to the nearest enclosing
+       [Syntactic]ally-scoped [Let]-binding.  This is done by peeling
+       off the definitions starting at the outermost one.  We keep
+       track of the "critical dependencies", which are those symbols
+       that are definitely going to have their definitions placed at
+       the current [Let]-binding, and any reference to which in another
+       binding (even if fully static) will cause that binding to be
+       placed too. *)
+    (* CR-soon mshinwell: This won't be needed once we can remove
+       [Dominator]-scoped bindings; every "let symbol" can then have
+       [Dominator] scoping.  This should both simplify the code and
+       increase speed a fair bit. *)
+    match scoping_rule with
+    | Syntactic ->
+      lifted_constants, to_float, critical_deps
+    | Dominator ->
+      LCS.fold_outermost_first lifted_constants
+        ~init:(LCS.empty, to_float, critical_deps)
+        ~f:(fun (to_place, to_float, critical_deps) lifted_const ->
+          let must_place =
+            (not (LC.is_fully_static lifted_const))
+              || Name_occurrences.inter_domain_is_non_empty critical_deps
+                    (LC.free_names_of_defining_exprs lifted_const)
+          in
+          if must_place then
+            let critical_deps =
+              LC.bound_symbols lifted_const
+              |> Bound_symbols.free_names
+              |> Name_occurrences.union critical_deps
+            in
+            let to_place = LCS.add_innermost to_place lifted_const in
+            to_place, to_float, critical_deps
+          else
+            let to_float = LCS.add_innermost to_float lifted_const in
+            to_place, to_float, critical_deps)
+  in
+  (* We handle constants arising from the defining expression, which
+     may be used in [bindings], separately from those arising from the
+     [body], which may reference the [bindings]. *)
+  let to_place_around_defining_expr, to_float, critical_deps =
+    calculate_constants_to_place lifted_constants_from_defining_expr
+      ~critical_deps:Name_occurrences.empty ~to_float:LCS.empty
+  in
+  let critical_deps =
+    (* Make sure we don't move constants past the binding(s) if there
+       is a dependency. *)
+    Name_occurrences.union critical_deps critical_deps_of_bindings
+  in
+  let to_place_around_body, to_float, _critical_deps =
+    calculate_constants_to_place lifted_constants_from_body
+      ~critical_deps ~to_float
+  in
+  (* Propagate constants that are to float upwards. *)
+  let uacc = UA.with_lifted_constants uacc to_float in
+  (* Place constants whose definitions must go at the current binding. *)
+  let place_constants uacc ~around constants =
+    LCS.fold_innermost_first constants ~init:(around, uacc)
+      ~f:(fun (body, uacc) lifted_const ->
+        create_let_symbols uacc scoping_rule
+          (UA.code_age_relation uacc) lifted_const body)
+  in
+  let body, uacc =
+    place_constants uacc ~around:body to_place_around_body
+  in
+  let body = put_bindings_around_body ~body in
+  place_constants uacc ~around:body to_place_around_defining_expr
 
 (* generate the projection of the i-th field of a n-tuple *)
 let project_tuple ~dbg ~size ~field tuple =

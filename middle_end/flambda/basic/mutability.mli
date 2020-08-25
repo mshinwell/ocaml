@@ -31,3 +31,5 @@ val compare : t -> t -> int
 val join : t -> t -> t
 
 val to_lambda : t -> Asttypes.mutable_flag
+
+val is_mutable : t -> bool

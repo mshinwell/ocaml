@@ -61,9 +61,26 @@ let lift dacc ty ~bound_to static_const =
         Misc.fatal_errorf "Cannot lift non-[Value] variable: %a"
           Variable.print bound_to
       end;
+      let symbol_projections =
+        Name_occurrences.fold_variables (Static_const.free_names static_const)
+          ~init:Variable.Map.empty
+          ~f:(fun symbol_projections var ->
+            match DE.find_symbol_projection (DA.denv dacc) var with
+            | None -> symbol_projections
+            | Some proj -> Variable.Map.add var proj symbol_projections)
+      in
+      (*
+      if not (Variable.Map.is_empty symbol_projections) then begin
+        Format.eprintf "\nConstant:@ %a@ Symbol projections when created:@ %a\n%!"
+          Static_const.print static_const
+          (Variable.Map.print Symbol_projection.print) symbol_projections
+      end;
+      *)
       let dacc =
         let denv = DA.denv dacc in
-        Lifted_constant.create_block_like symbol static_const denv ty
+        Lifted_constant.create_block_like symbol static_const denv
+          ~symbol_projections
+          ty
         |> DA.add_lifted_constant dacc
       in
       let dacc =
@@ -92,7 +109,16 @@ let try_to_reify dacc (term : Reachable.t) ~bound_to ~allow_lifting =
     let denv = DE.add_equation_on_variable denv bound_to ty in
     Reachable.invalid (), DA.with_denv dacc denv, ty
   | Reachable _ ->
-    match T.reify (DE.typing_env denv) ~min_name_mode:occ_kind ty with
+    let typing_env = DE.typing_env denv in
+    let reify_result =
+      T.reify ~allowed_if_free_vars_defined_in:typing_env
+        ~additional_free_var_criterion:(fun var ->
+          DE.is_defined_at_toplevel denv var
+            || Option.is_some (DE.find_symbol_projection denv var))
+        ~allow_unique:true
+        typing_env ~min_name_mode:NM.normal ty
+    in
+    match reify_result with
     | Lift to_lift ->
       if Name_mode.is_normal occ_kind && allow_lifting then
         let static_const = create_static_const to_lift in

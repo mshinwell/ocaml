@@ -34,6 +34,7 @@ let reify_primitive_at_toplevel dacc bound_var ty =
      the [is_fully_static] check below. *)
   match
     T.reify ~allowed_if_free_vars_defined_in:typing_env
+      ~additional_free_var_criterion:(DE.is_defined_at_toplevel (DA.denv dacc))
       ~allow_unique:true
       typing_env ~min_name_mode:NM.normal ty
   with

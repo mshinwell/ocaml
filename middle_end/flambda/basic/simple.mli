@@ -78,6 +78,13 @@ val is_var : t -> bool
 
 val free_names_in_types : t -> Name_occurrences.t
 
+val pattern_match'
+   : t
+  -> var:(Variable.t -> 'a)
+  -> symbol:(Symbol.t -> 'a)
+  -> const:(Reg_width_const.t -> 'a)
+  -> 'a
+
 module List : sig
   type nonrec t = t list
 
