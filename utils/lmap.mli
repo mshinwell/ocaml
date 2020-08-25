@@ -57,10 +57,10 @@ module type S = sig
   (** The key should not already exist in the map; this is not checked. *)
   val add : key -> 'a -> 'a t -> 'a t
   val singleton : key -> 'a -> 'a t
-  
+
   (** Unlike [disjoint_union] on maps, the disjointness is not checked. *)
   val disjoint_union : 'a t -> 'a t -> 'a t
-  
+
   (** The given maps must be pairwise disjoint, which is not checked. *)
   val disjoint_union_many: 'a t list -> 'a t
   val iter : (key -> 'a -> unit) -> 'a t -> unit
@@ -69,7 +69,7 @@ module type S = sig
   val keys : _ t -> key list
   val data : 'a t -> 'a list
   val bindings : 'a t -> (key * 'a) list
-  
+
   (** Keys in the list must be distinct, which is not checked. *)
   val of_list : (key * 'a) list -> 'a t
   val find : key -> 'a t -> 'a
@@ -81,11 +81,13 @@ module type S = sig
   val map_sharing: ('a -> 'a) -> 'a t -> 'a t
   val filter_map: 'a t -> f:(key -> 'a -> 'b option) -> 'b t
   val to_seq : 'a t -> (key * 'a) Seq.t
-  
+
+  val exists : (key -> 'a -> bool) -> 'a t -> bool
+
   (** Keys in the sequence must be distinct from each other and from keys
       already in the map; neither of these conditions is checked. *)
   val add_seq : (key * 'a) Seq.t -> 'a t -> 'a t
-  
+
   (** Keys in the sequence must be distinct, which is not checked. *)
   val of_seq : (key * 'a) Seq.t -> 'a t
 

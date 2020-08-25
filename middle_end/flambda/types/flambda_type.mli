@@ -94,6 +94,10 @@ module Typing_env : sig
 
   val add_symbol_definitions : t -> Symbol.Set.t -> t
 
+  val add_symbol_projection : t -> Variable.t -> Symbol_projection.t -> t
+
+  val find_symbol_projection : t -> Variable.t -> Symbol_projection.t option
+
   val add_equation : t -> Name.t -> flambda_type -> t
 
   val add_equations_on_params
@@ -573,6 +577,7 @@ type reification_result = private
 
 val reify
    : ?allowed_if_free_vars_defined_in:Typing_env.t
+  -> ?additional_free_var_criterion:(Variable.t -> bool)
   -> ?disallowed_free_vars:Variable.Set.t
   -> ?allow_unique:bool
   -> Typing_env.t

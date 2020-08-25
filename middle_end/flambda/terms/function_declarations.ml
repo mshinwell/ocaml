@@ -87,3 +87,6 @@ let filter t ~f =
   let funs = Closure_id.Map.filter f t.funs in
   let in_order = Closure_id.Lmap.filter f t.in_order in
   { funs; in_order; }
+
+let binds_closure_id t closure_id =
+  Closure_id.Map.mem closure_id t.funs

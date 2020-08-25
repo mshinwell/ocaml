@@ -28,7 +28,7 @@ let simplify_projection dacc ~original_term ~deconstructing ~shape ~result_var
 
 type cse =
   | Invalid of T.t
-  | Applied of (Reachable.t * TEE.t * DA.t)
+  | Applied of (Reachable.t * TEE.t * Simple.t list * DA.t)
   | Not_applied of DA.t
 
 let apply_cse dacc ~original_prim =
@@ -43,7 +43,7 @@ let apply_cse dacc ~original_prim =
       | exception Not_found -> None
       | simple -> Some simple
 
-let try_cse dacc ~original_prim ~result_kind ~min_name_mode
+let try_cse dacc ~original_prim ~result_kind ~min_name_mode ~args
       ~result_var : cse =
   (* CR mshinwell: Use [meet] and [reify] for CSE?  (discuss with lwhite) *)
   if not (Name_mode.equal min_name_mode Name_mode.normal) then Not_applied dacc
@@ -53,7 +53,7 @@ let try_cse dacc ~original_prim ~result_kind ~min_name_mode
       let named = Named.create_simple replace_with in
       let ty = T.alias_type_of result_kind replace_with in
       let env_extension = TEE.one_equation (Name.var result_var) ty in
-      Applied (Reachable.reachable named, env_extension, dacc)
+      Applied (Reachable.reachable named, env_extension, args, dacc)
     | None ->
       let dacc =
         match P.Eligible_for_cse.create original_prim with
@@ -342,24 +342,68 @@ let create_let_symbols uacc (scoping_rule : Symbol_scoping_rule.t)
       code_age_relation lifted_constant body =
   let bound_symbols = LC.bound_symbols lifted_constant in
   let defining_exprs = LC.defining_exprs lifted_constant in
+  let symbol_projections = LC.symbol_projections lifted_constant in
   let static_consts =
     defining_exprs
     |> Static_const.Group.to_list
     |> remove_unused_closure_vars_list uacc
     |> Static_const.Group.create
   in
-  match scoping_rule with
-  | Syntactic ->
-    create_let_symbol0 uacc code_age_relation bound_symbols static_consts body
-  | Dominator ->
-    let expr =
-      Expr.create_let_symbol bound_symbols scoping_rule static_consts body
-    in
-    let uacc =
-      Static_const.Group.pieces_of_code_by_code_id defining_exprs
-      |> UA.remember_code_for_cmx uacc
-    in
-    expr, uacc
+  let expr, uacc =
+    match scoping_rule with
+    | Syntactic ->
+      create_let_symbol0 uacc code_age_relation bound_symbols static_consts body
+    | Dominator ->
+      let expr =
+        Expr.create_let_symbol bound_symbols scoping_rule static_consts body
+      in
+      let uacc =
+        Static_const.Group.pieces_of_code_by_code_id defining_exprs
+        |> UA.remember_code_for_cmx uacc
+      in
+      expr, uacc
+  in
+  let expr =
+    Variable.Map.fold (fun var proj expr ->
+        let named =
+          match LC.apply_projection lifted_constant proj with
+          | Some simple ->
+            (* If the projection is from one of the symbols bound by the
+               "let symbol" that we've just created, we'll always end up here,
+               avoiding any problem about where to do the projection versus
+               the initialisation of a possibly-recursive group of symbols.
+               We may end up with a "variable = variable" [Let] here, but
+               [Un_cps] (or a subsequent pass of [Simplify]) will remove it.
+               This is the same situation as when continuations are inlined; we
+               can't use a name permutation to resolve the problem as both
+               [var] and [var'] may occur in [expr], and permuting could cause
+               an unbound name. *)
+            Named.create_simple simple
+          | None ->
+            let prim : P.t =
+              let symbol = Simple.symbol (Symbol_projection.symbol proj) in
+              match Symbol_projection.projection proj with
+              | Block_load { index; } ->
+                let index = Simple.const_int index in
+                let block_access_kind : P.Block_access_kind.t =
+                  Values {
+                    tag = Tag.Scannable.zero;
+                    size = Unknown;
+                    field_kind = Any_value;
+                  }
+                in
+                Binary (Block_load (block_access_kind, Immutable), symbol,
+                  index)
+              | Project_var { project_from; var; } ->
+                Unary (Project_var { project_from; var; }, symbol)
+            in
+            Named.create_prim prim Debuginfo.none
+        in
+        Expr.create_let (Var_in_binding_pos.create var NM.normal) named expr)
+      symbol_projections
+      expr
+  in
+  expr, uacc
 
 (* generate the projection of the i-th field of a n-tuple *)
 let project_tuple ~dbg ~size ~field tuple =

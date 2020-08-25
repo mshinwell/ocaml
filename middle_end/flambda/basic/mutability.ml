@@ -50,3 +50,8 @@ let to_lambda t : Asttypes.mutable_flag =
   | Mutable -> Mutable
   | Immutable -> Immutable
   | Immutable_unique -> Immutable
+
+let is_mutable t =
+  match t with
+  | Mutable -> true
+  | Immutable | Immutable_unique -> false

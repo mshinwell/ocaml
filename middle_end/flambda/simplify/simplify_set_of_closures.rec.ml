@@ -551,7 +551,8 @@ let simplify_set_of_closures0 dacc context set_of_closures
   }
 
 let simplify_and_lift_set_of_closures dacc ~closure_bound_vars_inverse
-      ~closure_bound_vars set_of_closures ~closure_elements =
+      ~closure_bound_vars set_of_closures ~closure_elements
+      ~symbol_projections =
   let function_decls = Set_of_closures.function_decls set_of_closures in
   let closure_symbols =
     Closure_id.Lmap.mapi (fun closure_id _func_decl ->
@@ -586,7 +587,7 @@ let simplify_and_lift_set_of_closures dacc ~closure_bound_vars_inverse
                     Closure_id.Map.find closure_id closure_symbols_map
                   in
                   T.alias_type_of K.value (Simple.symbol closure_symbol))
-              ~symbol:(fun _sym -> T.alias_type_of K.value closure_element)))
+                ~symbol:(fun _sym -> T.alias_type_of K.value closure_element)))
       closure_elements
   in
   let context =
@@ -636,6 +637,7 @@ let simplify_and_lift_set_of_closures dacc ~closure_bound_vars_inverse
     Lifted_constant.create_set_of_closures
       denv
       ~closure_symbols_with_types
+      ~symbol_projections
       (Set_of_closures set_of_closures)
   in
   let dacc =
@@ -711,6 +713,7 @@ type lifting_decision_result = {
   can_lift : bool;
   closure_elements : Simple.t Var_within_closure.Map.t;
   closure_element_types : T.t Var_within_closure.Map.t;
+  symbol_projections : Symbol_projection.t Variable.Map.t;
 }
 
 let type_closure_elements_and_make_lifting_decision_for_one_set dacc
@@ -722,48 +725,69 @@ let type_closure_elements_and_make_lifting_decision_for_one_set dacc
      from the fact that closure elements cannot be deleted without a global
      analysis, as an inlined function's body may reference them out of
      scope of the closure declaration. *)
-  let closure_elements, closure_element_types =
+  let closure_elements, closure_element_types, symbol_projections =
     Var_within_closure.Map.fold
-      (fun closure_var simple (closure_elements, closure_element_types) ->
-        let simple, ty =
-          match S.simplify_simple dacc simple ~min_name_mode with
+      (fun closure_var env_entry
+           (closure_elements, closure_element_types, symbol_projections) ->
+        let env_entry, ty, symbol_projections =
+          match S.simplify_simple dacc env_entry ~min_name_mode with
           | Bottom, ty ->
             assert (K.equal (T.kind ty) K.value);
-            simple, ty
-          | Ok simple, ty -> simple, ty
+            env_entry, ty, symbol_projections
+          | Ok simple, ty ->
+            (* Note down separately if [simple] remains a variable and is known
+               to be equal to a projection from a symbol. *)
+            let symbol_projections =
+              Simple.pattern_match' simple
+                ~const:(fun _ -> symbol_projections)
+                ~symbol:(fun _ -> symbol_projections)
+                ~var:(fun var ->
+                  (* [var] will already be canonical, as we require for the
+                     symbol projections map. *)
+                  match DE.find_symbol_projection (DA.denv dacc) var with
+                  | None -> symbol_projections
+                  | Some proj ->
+                    Variable.Map.add var proj symbol_projections)
+            in
+            simple, ty, symbol_projections
         in
         let closure_elements =
-          Var_within_closure.Map.add closure_var simple closure_elements
+          Var_within_closure.Map.add closure_var env_entry closure_elements
         in
         let closure_element_types =
           Var_within_closure.Map.add closure_var ty closure_element_types
         in
-        closure_elements, closure_element_types)
+        closure_elements, closure_element_types, symbol_projections)
       (Set_of_closures.closure_elements set_of_closures)
-      (Var_within_closure.Map.empty, Var_within_closure.Map.empty)
+      (Var_within_closure.Map.empty, Var_within_closure.Map.empty,
+       Variable.Map.empty)
   in
   (* Note that [closure_bound_vars_inverse] doesn't need to include
      variables binding closures in other mutually-recursive sets, since if
      we get here in the case where we are considering lifting a set that has
      not been lifted before, there are never any other mutually-recursive
      sets ([Named.t] does not allow them). *)
-  let can_lift_even_if_not_at_toplevel =
-    Var_within_closure.Map.for_all (fun _ simple ->
-        Simple.pattern_match simple
-          ~const:(fun _ -> true)
-          ~name:(fun name ->
-            Name.pattern_match name
-              ~var:(fun var -> Variable.Map.mem var closure_bound_vars_inverse)
-              ~symbol:(fun _sym -> true)))
-      closure_elements
-  in
   let can_lift =
-    DE.at_unit_toplevel (DA.denv dacc)
-      || can_lift_even_if_not_at_toplevel
+    Var_within_closure.Map.for_all
+      (fun _ simple ->
+        Simple.pattern_match' simple
+          ~const:(fun _ -> true)
+          ~symbol:(fun _ -> true)
+          ~var:(fun var ->
+            DE.is_defined_at_toplevel (DA.denv dacc) var
+              || Variable.Map.mem var closure_bound_vars_inverse
+              (* If [var] is known to be a symbol projection, it doesn't
+                 matter if it isn't in scope at the place where we will
+                 eventually insert the "let symbol", as the binding to the
+                 projection from the relevant symbol can always be
+                 rematerialised. *)
+              || Variable.Map.mem var symbol_projections))
+      closure_elements
   in
   { can_lift;
     closure_elements;
     closure_element_types;
+    symbol_projections;
   }
 
 let type_closure_elements_for_previously_lifted_set dacc
@@ -795,13 +819,15 @@ let simplify_non_lifted_set_of_closures dacc
       closure_bound_vars
   in
   (* CR mshinwell: [closure_element_types] is barely worth keeping *)
-  let { can_lift; closure_elements; closure_element_types; } =
+  let { can_lift; closure_elements; closure_element_types;
+        symbol_projections; } =
     type_closure_elements_and_make_lifting_decision_for_one_set dacc
       ~min_name_mode ~closure_bound_vars_inverse set_of_closures
   in
   if can_lift then
     simplify_and_lift_set_of_closures dacc ~closure_bound_vars_inverse
       ~closure_bound_vars set_of_closures ~closure_elements
+      ~symbol_projections
   else
     simplify_non_lifted_set_of_closures0 dacc bound_vars ~closure_bound_vars
       set_of_closures ~closure_elements ~closure_element_types
@@ -870,6 +896,7 @@ let simplify_lifted_sets_of_closures dacc ~all_sets_of_closures_and_symbols
         let { can_lift = _;
               closure_elements;
               closure_element_types;
+              symbol_projections = _;
             } =
           type_closure_elements_for_previously_lifted_set
             dacc ~min_name_mode:Name_mode.normal set_of_closures

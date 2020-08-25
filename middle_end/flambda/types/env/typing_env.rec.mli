@@ -52,6 +52,10 @@ val add_symbol_definition : t -> Symbol.t -> t
 
 val add_symbol_definitions : t -> Symbol.Set.t -> t
 
+val add_symbol_projection : t -> Variable.t -> Symbol_projection.t -> t
+
+val find_symbol_projection : t -> Variable.t -> Symbol_projection.t option
+
 val add_equations_on_params
    : t
   -> params:Kinded_parameter.t list

@@ -449,7 +449,7 @@ let try_cse dacc prim arg ~min_name_mode ~result_var : Simplify_common.cse =
     | Ok arg, _arg_ty ->
       let original_prim : P.t = Unary (prim, arg) in
       Simplify_common.try_cse dacc ~original_prim ~result_kind
-        ~min_name_mode ~result_var
+        ~args:[arg] ~min_name_mode ~result_var
 
 let simplify_unary_primitive dacc (prim : P.unary_primitive)
       arg dbg ~result_var =
@@ -457,7 +457,7 @@ let simplify_unary_primitive dacc (prim : P.unary_primitive)
   let result_var' = Var_in_binding_pos.var result_var in
   let invalid ty =
     let env_extension = TEE.one_equation (Name.var result_var') ty in
-    Reachable.invalid (), env_extension, dacc
+    Reachable.invalid (), env_extension, [arg], dacc
   in
   match try_cse dacc prim arg ~min_name_mode ~result_var:result_var' with
   | Invalid ty -> invalid ty
@@ -515,4 +515,7 @@ let simplify_unary_primitive dacc (prim : P.unary_primitive)
             let env_extension = TEE.one_equation (Name.var result_var') ty in
             Reachable.reachable named, env_extension, dacc
       in
-      simplifier dacc ~original_term ~arg ~arg_ty ~result_var
+      let reachable, env_extension, dacc =
+        simplifier dacc ~original_term ~arg ~arg_ty ~result_var
+      in
+      reachable, env_extension, [arg], dacc

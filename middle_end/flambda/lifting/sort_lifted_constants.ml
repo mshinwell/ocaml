@@ -30,12 +30,10 @@ let build_dep_graph lifted_constants =
         ~f:(fun (dep_graph, code_id_or_symbol_to_const) definition ->
           let module D = LC.Definition in
           let free_names =
-            let free_names =
-              Static_const.free_names (D.defining_expr definition)
-            in
+            let free_names = D.free_names definition in
             match D.descr definition with
             | Code _ | Block_like _ -> free_names
-            | Set_of_closures { denv = _; closure_symbols_with_types; } ->
+            | Set_of_closures { closure_symbols_with_types; _; } ->
               (* To avoid existing sets of closures (with or without associated
                  code) being pulled apart, we add a dependency from each of the
                  closure symbols (in the current set) to all of the others
