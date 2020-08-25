@@ -278,13 +278,19 @@ let subst_func_decls env decls =
   |> Function_declarations.create
 ;;
 
+let subst_env_entry env (entry : Set_of_closures.Env_entry.t) =
+  match entry with
+  | Simple simple ->
+    Set_of_closures.Env_entry.simple (subst_simple env simple)
+  | Symbol_projection _ -> Misc.fatal_error "Not yet implemented"
+
 let subst_set_of_closures env set =
   let decls = subst_func_decls env (Set_of_closures.function_decls set) in
   let closure_elements =
     Set_of_closures.closure_elements set
     |> Var_within_closure.Map.bindings
-    |> List.map (fun (var, simple) ->
-        (subst_closure_var env var, subst_simple env simple))
+    |> List.map (fun (var, entry) ->
+        (subst_closure_var env var, subst_env_entry env entry))
     |> Var_within_closure.Map.of_list
   in
   Set_of_closures.create decls ~closure_elements
@@ -294,6 +300,7 @@ let subst_field env (field : Static_const.Field_of_block.t) =
   match field with
   | Symbol symbol ->
     Static_const.Field_of_block.Symbol (subst_symbol env symbol)
+  | Symbol_projection _ -> Misc.fatal_error "Not yet implemented"
   | Tagged_immediate _ | Dynamically_computed _ ->
     field
 ;;
@@ -751,7 +758,7 @@ let primitives env prim1 prim2 : Flambda_primitive.t Comparison.t =
 ;;
 
 (* Returns unit because the approximant isn't used by sets_of_closures *)
-let function_decls env decl1 decl2 : unit Comparison.t =
+let _function_decls env decl1 decl2 : unit Comparison.t =
   let module F = Function_declaration in
   if
     (code_ids env (F.code_id decl1) (F.code_id decl2)
@@ -761,7 +768,9 @@ let function_decls env decl1 decl2 : unit Comparison.t =
   else Different { approximant = () }
 ;;
 
-let sets_of_closures env set1 set2 : Set_of_closures.t Comparison.t =
+let sets_of_closures _env _set1 _set2 : Set_of_closures.t Comparison.t =
+  Misc.fatal_error "Needs fixing"
+  (*
   (* Need to do unification on closure vars and closure ids, we we're going to
    * invert both maps, figuring the closure vars with the same value should be
    * the same.  There is a risk that two closure vars will be mapped to the
@@ -830,6 +839,7 @@ let sets_of_closures env set1 set2 : Set_of_closures.t Comparison.t =
       then Equivalent
       else Different { approximant = subst_set_of_closures env set1 }
 ;;
+*)
 
 let named_exprs env named1 named2 : Named.t Comparison.t =
   match (named1 : Named.t), (named2 : Named.t) with

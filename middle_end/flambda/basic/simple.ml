@@ -47,6 +47,10 @@ let [@inline always] is_symbol t =
 let [@inline always] is_const t =
   pattern_match t ~name:(fun _ -> false) ~const:(fun _ -> true)
 
+let pattern_match' t ~var ~symbol ~const =
+  pattern_match t ~const
+    ~name:(fun name -> Name.pattern_match name ~var ~symbol)
+
 let const_from_descr descr = const (RWC.of_descr descr)
 
 let without_rec_info t = pattern_match t ~name ~const

@@ -571,22 +571,28 @@ let simplify_and_lift_set_of_closures dacc ~closure_bound_vars_inverse
     Closure_id.Map.map Name_in_binding_pos.symbol closure_symbols_map
   in
   let closure_element_types =
-    Var_within_closure.Map.map (fun closure_element ->
-        Simple.pattern_match closure_element
-          ~const:(fun _ -> T.alias_type_of K.value closure_element)
-          ~name:(fun name ->
-            Name.pattern_match name
-              ~var:(fun var ->
-                match Variable.Map.find var closure_bound_vars_inverse with
-                | exception Not_found ->
-                  assert (DE.mem_variable (DA.denv dacc) var);
-                  T.alias_type_of K.value closure_element
-                | closure_id ->
-                  let closure_symbol =
-                    Closure_id.Map.find closure_id closure_symbols_map
-                  in
-                  T.alias_type_of K.value (Simple.symbol closure_symbol))
-              ~symbol:(fun _sym -> T.alias_type_of K.value closure_element)))
+    Var_within_closure.Map.map (fun (closure_element : EE.t) ->
+        (* We assume symbol projections are inconstant and unknown; see comment
+           below in type_closure_elements_and_make_lifting_decision_for_one_set.
+        *)
+        match closure_element with
+        | Symbol_projection _ -> T.any_value ()
+        | Simple closure_element ->
+          Simple.pattern_match closure_element
+            ~const:(fun _ -> T.alias_type_of K.value closure_element)
+            ~name:(fun name ->
+              Name.pattern_match name
+                ~var:(fun var ->
+                  match Variable.Map.find var closure_bound_vars_inverse with
+                  | exception Not_found ->
+                    assert (DE.mem_variable (DA.denv dacc) var);
+                    T.alias_type_of K.value closure_element
+                  | closure_id ->
+                    let closure_symbol =
+                      Closure_id.Map.find closure_id closure_symbols_map
+                    in
+                    T.alias_type_of K.value (Simple.symbol closure_symbol))
+                ~symbol:(fun _sym -> T.alias_type_of K.value closure_element)))
       closure_elements
   in
   let context =
@@ -709,7 +715,7 @@ let simplify_non_lifted_set_of_closures0 dacc bound_vars ~closure_bound_vars
 
 type lifting_decision_result = {
   can_lift : bool;
-  closure_elements : Simple.t Var_within_closure.Map.t;
+  closure_elements : EE.t Var_within_closure.Map.t;
   closure_element_types : T.t Var_within_closure.Map.t;
 }
 
@@ -724,16 +730,44 @@ let type_closure_elements_and_make_lifting_decision_for_one_set dacc
      scope of the closure declaration. *)
   let closure_elements, closure_element_types =
     Var_within_closure.Map.fold
-      (fun closure_var simple (closure_elements, closure_element_types) ->
-        let simple, ty =
-          match S.simplify_simple dacc simple ~min_name_mode with
-          | Bottom, ty ->
-            assert (K.equal (T.kind ty) K.value);
-            simple, ty
-          | Ok simple, ty -> simple, ty
+      (fun closure_var (env_entry : EE.t)
+           (closure_elements, closure_element_types) ->
+        let env_entry, ty =
+          match env_entry with
+          | Simple simple ->
+            begin match S.simplify_simple dacc simple ~min_name_mode with
+            | Bottom, ty ->
+              assert (K.equal (T.kind ty) K.value);
+              env_entry, ty
+            | Ok simple, ty ->
+              (* If we've still got a variable but it turns out to be equal to
+                 a symbol projection, we replace the variable by the
+                 projection, to make it more likely we can lift (see below). *)
+              let env_entry =
+                Simple.pattern_match' simple
+                  ~const:(fun _ -> EE.simple simple)
+                  ~symbol:(fun _ -> EE.simple simple)
+                  ~var:(fun var ->
+                    (* [var] is now canonical, since we've called
+                       [simplify_simple]; this means we can directly query
+                       the symbol projection map (which holds mappings based
+                       on canonical name). *)
+                    match DE.find_symbol_projection (DA.denv dacc) var with
+                    | None -> EE.simple simple
+                    | Some proj -> EE.symbol_projection proj)
+              in
+              env_entry, ty
+            end
+          | Symbol_projection _ ->
+            (* For the moment just assume that all of these are going to
+               be inconstant and unknown.  If a variable corresponding to a
+               projection is constant then it should have been turned into
+               either the [Const] or [Symbol] case of [Simple] by
+               [simplify_simple], above. *)
+            env_entry, T.any_value ()
         in
         let closure_elements =
-          Var_within_closure.Map.add closure_var simple closure_elements
+          Var_within_closure.Map.add closure_var env_entry closure_elements
         in
         let closure_element_types =
           Var_within_closure.Map.add closure_var ty closure_element_types
@@ -747,19 +781,23 @@ let type_closure_elements_and_make_lifting_decision_for_one_set dacc
      we get here in the case where we are considering lifting a set that has
      not been lifted before, there are never any other mutually-recursive
      sets ([Named.t] does not allow them). *)
-  let can_lift_even_if_not_at_toplevel =
-    Var_within_closure.Map.for_all (fun _ simple ->
-        Simple.pattern_match simple
-          ~const:(fun _ -> true)
-          ~name:(fun name ->
-            Name.pattern_match name
-              ~var:(fun var -> Variable.Map.mem var closure_bound_vars_inverse)
-              ~symbol:(fun _sym -> true)))
-      closure_elements
-  in
   let can_lift =
-    DE.at_unit_toplevel (DA.denv dacc)
-      || can_lift_even_if_not_at_toplevel
+    Var_within_closure.Map.for_all
+      (fun _ (env_entry : Set_of_closures.Env_entry.t) ->
+        match env_entry with
+        | Symbol_projection _ -> true
+        | Simple simple ->
+          Simple.pattern_match' simple
+            ~const:(fun _ -> true)
+            ~symbol:(fun _ -> true)
+            ~var:(fun var ->
+              (* Note that we've already converted variables that are known
+                 to be equal to symbol projections into [Symbol_projection]s,
+                 just above.  So there's no need to check symbol projections
+                 here. *)
+              DE.is_defined_at_toplevel (DA.denv dacc) var
+                || Variable.Map.mem var closure_bound_vars_inverse))
+      closure_elements
   in
   { can_lift;
     closure_elements;

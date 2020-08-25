@@ -23,6 +23,7 @@ module K = Flambda_kind
 module Field_of_block = struct
   type t =
     | Symbol of Symbol.t
+    | Symbol_projection of Symbol_projection.t
     | Tagged_immediate of Target_imm.t
     | Dynamically_computed of Variable.t
 
@@ -32,15 +33,17 @@ module Field_of_block = struct
     let compare t1 t2 =
       match t1, t2 with
       | Symbol s1, Symbol s2 -> Symbol.compare s1 s2
+      | Symbol_projection proj1, Symbol_projection proj2 ->
+        Symbol_projection.compare proj1 proj2
       | Tagged_immediate t1, Tagged_immediate t2 ->
         Target_imm.compare t1 t2
       | Dynamically_computed v1, Dynamically_computed v2 ->
         Variable.compare v1 v2
-      | Symbol _, Tagged_immediate _ -> -1
-      | Tagged_immediate _, Symbol _ -> 1
-      | Symbol _, Dynamically_computed _ -> -1
-      | Dynamically_computed _, Symbol _ -> 1
-      | Tagged_immediate _, Dynamically_computed _ -> -1
+      | Symbol _, _ -> -1
+      | _, Symbol _ -> 1
+      | Symbol_projection _, _ -> -1
+      | _, Symbol_projection _ -> 1
+      | Tagged_immediate _, _ -> -1
       | Dynamically_computed _, Tagged_immediate _ -> 1
 
     let equal t1 t2 =
@@ -49,13 +52,16 @@ module Field_of_block = struct
     let hash t =
       match t with
       | Symbol symbol -> Hashtbl.hash (0, Symbol.hash symbol)
+      | Symbol_projection proj ->
+        Hashtbl.hash (1, Symbol_projection.hash proj)
       | Tagged_immediate immediate ->
-        Hashtbl.hash (1, Target_imm.hash immediate)
-      | Dynamically_computed var -> Hashtbl.hash (2, Variable.hash var)
+        Hashtbl.hash (2, Target_imm.hash immediate)
+      | Dynamically_computed var -> Hashtbl.hash (3, Variable.hash var)
 
     let print ppf t =
       match t with
       | Symbol symbol -> Symbol.print ppf symbol
+      | Symbol_projection proj -> Symbol_projection.print ppf proj
       | Tagged_immediate immediate -> Target_imm.print ppf immediate
       | Dynamically_computed var -> Variable.print ppf var
 
@@ -66,6 +72,10 @@ module Field_of_block = struct
   let apply_name_permutation t perm =
     match t with
     | Symbol _ | Tagged_immediate _ -> t
+    | Symbol_projection proj ->
+      let proj' = Symbol_projection.apply_name_permutation proj perm in
+      if proj == proj' then t
+      else Symbol_projection proj'
     | Dynamically_computed var ->
       let var' = Name_permutation.apply_variable perm var in
       if var == var' then t
@@ -77,6 +87,7 @@ module Field_of_block = struct
       Name_occurrences.singleton_variable var Name_mode.normal
     | Symbol sym ->
       Name_occurrences.singleton_symbol sym Name_mode.normal
+    | Symbol_projection proj -> Symbol_projection.free_names proj
     | Tagged_immediate _ -> Name_occurrences.empty
 
   let all_ids_for_export t =
@@ -85,6 +96,7 @@ module Field_of_block = struct
       Ids_for_export.add_variable Ids_for_export.empty var
     | Symbol sym ->
       Ids_for_export.add_symbol Ids_for_export.empty sym
+    | Symbol_projection proj -> Symbol_projection.all_ids_for_export proj
     | Tagged_immediate _ -> Ids_for_export.empty
 
   let import import_map t =
@@ -95,6 +107,9 @@ module Field_of_block = struct
     | Symbol sym ->
       let sym = Ids_for_export.Import_map.symbol import_map sym in
       Symbol sym
+    | Symbol_projection proj ->
+      let proj = Symbol_projection.import import_map proj in
+      Symbol_projection proj
     | Tagged_immediate _ -> t
 
 (*

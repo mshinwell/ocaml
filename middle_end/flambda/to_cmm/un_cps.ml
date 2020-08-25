@@ -1348,8 +1348,41 @@ and fill_slot decls elts env acc offset slot =
     let field = C.alloc_infix_header (offset + 1) Debuginfo.none in
     field :: acc, offset + 1, env, Ece.pure
   | Env_var v ->
-    let field, env, eff = simple env (Var_within_closure.Map.find v elts) in
-    field :: acc, offset + 1, env, eff
+    begin match Var_within_closure.Map.find v elts with
+    | Set_of_closures.Env_entry.Simple s ->
+      let field, env, eff = simple env s in
+      field :: acc, offset + 1, env, eff
+    | Set_of_closures.Env_entry.Symbol_projection proj ->
+      (* CR mshinwell: Share with [Un_cps_static] *)
+      let dbg = Debuginfo.none in
+      let symbol_to_read = C.symbol (symbol (Symbol_projection.symbol proj)) in
+      let projection = Symbol_projection.projection proj in
+      let field =
+        match projection with
+        | Block_load { index; } ->
+          let kind : Flambda_primitive.Block_access_kind.t =
+            Values {
+              tag = Tag.Scannable.zero;
+              size = Unknown;
+              field_kind = Any_value;
+            }
+          in
+          C.block_load ~dbg kind Immutable symbol_to_read
+            (C.int (Targetint.to_int (tag_targetint (
+              Targetint.OCaml.to_targetint index))))
+        | Project_var { project_from; var; } ->
+          match Env.env_var_offset env var,
+            Env.closure_offset env project_from
+          with
+          | Some { offset; }, Some { offset = base; _ } ->
+            C.get_field_gen Asttypes.Immutable symbol_to_read (offset - base)
+              dbg
+          | Some _, None | None, Some _ | None, None ->
+            Misc.fatal_errorf "Symbol projection %a cannot be compiled"
+              Symbol_projection.print proj
+      in
+      field :: acc, offset + 1, env, Ece.read
+    end
   | Closure (c : Closure_id.t) ->
     let c : Closure_id.t = c in
     let decl = Closure_id.Map.find c decls in

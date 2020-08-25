@@ -776,7 +776,8 @@ and close_functions t external_env function_declarations =
   let closure_elements =
     Ident.Map.fold (fun id var_within_closure map ->
         let external_var = Simple.var (Env.find_var external_env id) in
-        Var_within_closure.Map.add var_within_closure external_var map)
+        Var_within_closure.Map.add var_within_closure
+          (Set_of_closures.Env_entry.simple external_var) map)
       var_within_closures_from_idents
       Var_within_closure.Map.empty
   in

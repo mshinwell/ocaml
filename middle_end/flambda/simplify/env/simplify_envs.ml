@@ -46,6 +46,7 @@ end = struct
     at_unit_toplevel : bool;
     unit_toplevel_exn_continuation : Continuation.t;
     symbols_currently_being_defined : Symbol.Set.t;
+    variables_defined_at_toplevel : Variable.Set.t;
   }
 
   let print ppf { backend = _; round; typing_env; get_imported_code = _;
@@ -53,6 +54,7 @@ end = struct
                   inlining_depth_increment; float_const_prop;
                   code; at_unit_toplevel; unit_toplevel_exn_continuation;
                   symbols_currently_being_defined;
+                  variables_defined_at_toplevel;
                 } =
     Format.fprintf ppf "@[<hov 1>(\
         @[<hov 1>(round@ %d)@]@ \
@@ -64,6 +66,7 @@ end = struct
         @[<hov 1>(at_unit_toplevel@ %b)@]@ \
         @[<hov 1>(unit_toplevel_exn_continuation@ %a)@]@ \
         @[<hov 1>(symbols_currently_being_defined@ %a)@]@ \
+        @[<hov 1>(variables_defined_at_toplevel@ %a)@]@ \
         @[<hov 1>(code@ %a)@]\
         )@]"
       round
@@ -75,6 +78,7 @@ end = struct
       at_unit_toplevel
       Continuation.print unit_toplevel_exn_continuation
       Symbol.Set.print symbols_currently_being_defined
+      Variable.Set.print variables_defined_at_toplevel
       (Code_id.Map.print Code.print) code
 
   let invariant _t = ()
@@ -95,6 +99,7 @@ end = struct
       at_unit_toplevel = true;
       unit_toplevel_exn_continuation;
       symbols_currently_being_defined = Symbol.Set.empty;
+      variables_defined_at_toplevel = Variable.Set.empty;
     }
 
   let resolver t = TE.resolver t.typing_env
@@ -114,6 +119,9 @@ end = struct
 
   let set_at_unit_toplevel_state t at_unit_toplevel =
     { t with at_unit_toplevel; }
+
+  let is_defined_at_toplevel t var =
+    Variable.Set.mem var t.variables_defined_at_toplevel
 
   let get_inlining_depth_increment t = t.inlining_depth_increment
 
@@ -168,6 +176,7 @@ end = struct
                       float_const_prop; code; at_unit_toplevel = _;
                       unit_toplevel_exn_continuation;
                       symbols_currently_being_defined;
+                      variables_defined_at_toplevel;
                     } =
     { backend;
       round;
@@ -181,6 +190,7 @@ end = struct
       at_unit_toplevel = false;
       unit_toplevel_exn_continuation;
       symbols_currently_being_defined;
+      variables_defined_at_toplevel;
     }
 
   let define_variable t var kind =
@@ -188,7 +198,17 @@ end = struct
       let var = Name_in_binding_pos.var var in
       TE.add_definition t.typing_env var kind
     in
-    { t with typing_env; }
+    let variables_defined_at_toplevel =
+      if t.at_unit_toplevel then
+        Variable.Set.add (Var_in_binding_pos.var var)
+          t.variables_defined_at_toplevel
+      else
+        t.variables_defined_at_toplevel
+    in
+    { t with
+      typing_env;
+      variables_defined_at_toplevel;
+    }
 
   let add_name t name ty =
     let typing_env =
@@ -196,7 +216,19 @@ end = struct
         (TE.add_definition t.typing_env name (T.kind ty))
         (Name_in_binding_pos.name name) ty
     in
-    { t with typing_env; }
+    let variables_defined_at_toplevel =
+      Name.pattern_match (Name_in_binding_pos.name name)
+        ~var:(fun var ->
+          if t.at_unit_toplevel then
+            Variable.Set.add var t.variables_defined_at_toplevel
+          else
+            t.variables_defined_at_toplevel)
+        ~symbol:(fun _ -> t.variables_defined_at_toplevel)
+    in
+    { t with
+      typing_env;
+      variables_defined_at_toplevel;
+    }
 
   let add_variable t var ty =
     let typing_env =
@@ -205,7 +237,17 @@ end = struct
         (TE.add_definition t.typing_env var' (T.kind ty))
         (Name.var (Var_in_binding_pos.var var)) ty
     in
-    { t with typing_env; }
+    let variables_defined_at_toplevel =
+      if t.at_unit_toplevel then
+        Variable.Set.add (Var_in_binding_pos.var var)
+          t.variables_defined_at_toplevel
+      else
+        t.variables_defined_at_toplevel
+    in
+    { t with
+      typing_env;
+      variables_defined_at_toplevel;
+    }
 
   let add_equation_on_variable t var ty =
     let typing_env = TE.add_equation t.typing_env (Name.var var) ty in
@@ -260,19 +302,35 @@ end = struct
 
   let find_symbol t sym = find_name t (Name.symbol sym)
 
+  let add_symbol_projection t var proj =
+    { t with
+      typing_env = TE.add_symbol_projection t.typing_env var proj;
+    }
+
+  let find_symbol_projection t var =
+    TE.find_symbol_projection t.typing_env var
+
   let define_name t name kind =
     let typing_env =
       TE.add_definition t.typing_env name kind
     in
-    { t with typing_env; }
+    let variables_defined_at_toplevel =
+      Name.pattern_match (Name_in_binding_pos.name name)
+        ~var:(fun var ->
+          if t.at_unit_toplevel then
+            Variable.Set.add var t.variables_defined_at_toplevel
+          else
+            t.variables_defined_at_toplevel)
+        ~symbol:(fun _ -> t.variables_defined_at_toplevel)
+    in
+    { t with
+      typing_env;
+      variables_defined_at_toplevel;
+    }
 
   let define_name_if_undefined t name kind =
     if TE.mem t.typing_env (Name_in_binding_pos.to_name name) then t
-    else
-      let typing_env =
-        TE.add_definition t.typing_env name kind
-      in
-      { t with typing_env; }
+    else define_name t name kind
 
   let add_equation_on_name t name ty =
     let typing_env = TE.add_equation t.typing_env name ty in

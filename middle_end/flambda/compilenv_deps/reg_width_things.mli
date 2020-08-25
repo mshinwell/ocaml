@@ -164,9 +164,9 @@ module Simple : sig
     -> const:(Const.t -> 'a)
     -> 'a
 
-   (* [same s1 s2] returns true iff they represent the same name or const
-      i.e. [same s (with_rec_info s rec_info)] returns true *)
-   val same : t -> t -> bool
+  (* [same s1 s2] returns true iff they represent the same name or const
+     i.e. [same s (with_rec_info s rec_info)] returns true *)
+  val same : t -> t -> bool
 
   val export : t -> exported
 

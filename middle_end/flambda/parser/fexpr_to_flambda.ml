@@ -380,9 +380,10 @@ let set_of_closures env fun_decls closure_elements =
     |> Function_declarations.create
   in
   let closure_elements = Option.value closure_elements ~default:[] in
-  let closure_elements : Simple.t Var_within_closure.Map.t =
+  let closure_elements : _ Var_within_closure.Map.t =
     let convert ({ var; value } : Fexpr.closure_element) =
-      (fresh_or_existing_var_within_closure env var, simple env value)
+      (fresh_or_existing_var_within_closure env var,
+        Set_of_closures.Env_entry.simple (simple env value))
     in
     List.map convert closure_elements
     |> Var_within_closure.Map.of_list

@@ -94,6 +94,10 @@ module Typing_env : sig
 
   val add_symbol_definitions : t -> Symbol.Set.t -> t
 
+  val add_symbol_projection : t -> Variable.t -> Symbol_projection.t -> t
+
+  val find_symbol_projection : t -> Variable.t -> Symbol_projection.t option
+
   val add_equation : t -> Name.t -> flambda_type -> t
 
   val add_equations_on_params

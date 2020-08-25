@@ -28,7 +28,7 @@ let simplify_projection dacc ~original_term ~deconstructing ~shape ~result_var
 
 type cse =
   | Invalid of T.t
-  | Applied of (Reachable.t * TEE.t * DA.t)
+  | Applied of (Reachable.t * TEE.t * Simple.t list * DA.t)
   | Not_applied of DA.t
 
 let apply_cse dacc ~original_prim =
@@ -43,7 +43,7 @@ let apply_cse dacc ~original_prim =
       | exception Not_found -> None
       | simple -> Some simple
 
-let try_cse dacc ~original_prim ~result_kind ~min_name_mode
+let try_cse dacc ~original_prim ~result_kind ~min_name_mode ~args
       ~result_var : cse =
   (* CR mshinwell: Use [meet] and [reify] for CSE?  (discuss with lwhite) *)
   if not (Name_mode.equal min_name_mode Name_mode.normal) then Not_applied dacc
@@ -53,7 +53,7 @@ let try_cse dacc ~original_prim ~result_kind ~min_name_mode
       let named = Named.create_simple replace_with in
       let ty = T.alias_type_of result_kind replace_with in
       let env_extension = TEE.one_equation (Name.var result_var) ty in
-      Applied (Reachable.reachable named, env_extension, dacc)
+      Applied (Reachable.reachable named, env_extension, args, dacc)
     | None ->
       let dacc =
         match P.Eligible_for_cse.create original_prim with

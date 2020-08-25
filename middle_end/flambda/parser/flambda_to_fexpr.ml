@@ -419,7 +419,7 @@ let prim env (p : Flambda_primitive.t) : Fexpr.prim =
   | Variadic (op, args) ->
     Variadic (varop op, List.map (simple env) args)
 
-let closure_elements env map =
+let _closure_elements env map =
   List.map (fun (var, value) ->
     let var = Env.translate_var_within_closure env var in
     let value = simple env value in
@@ -438,12 +438,14 @@ let function_declaration env fd closure_id : Fexpr.fun_decl =
   { code_id; closure_id; is_tupled }
 
 let set_of_closures env sc =
-  let fun_decls = List.map (fun (closure_id, fun_decl) ->
+  let _fun_decls = List.map (fun (closure_id, fun_decl) ->
     function_declaration env fun_decl closure_id
   ) (Set_of_closures.function_decls sc
       |> Function_declarations.funs_in_order
       |> Closure_id.Lmap.bindings)
   in
+  Misc.fatal_error "To be fixed"
+  (*
   let elts = closure_elements env (Set_of_closures.closure_elements sc) in
   let elts =
     match elts with
@@ -451,12 +453,14 @@ let set_of_closures env sc =
     | _ -> Some elts
   in
   fun_decls, elts
+  *)
 
 let field_of_block env (field : Flambda.Static_const.Field_of_block.t)
       : Fexpr.of_kind_value =
   match field with
   | Symbol symbol ->
     Symbol (Env.find_symbol_exn env symbol)
+  | Symbol_projection _ -> Misc.fatal_error "Not yet implemented"
   | Tagged_immediate imm ->
     Tagged_immediate (imm |> Target_imm.to_targetint' |> Targetint.to_string)
   | Dynamically_computed var ->

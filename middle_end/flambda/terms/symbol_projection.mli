@@ -2,11 +2,9 @@
 (*                                                                        *)
 (*                                 OCaml                                  *)
 (*                                                                        *)
-(*                       Pierre Chambart, OCamlPro                        *)
-(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*                   Mark Shinwell, Jane Street Europe                    *)
 (*                                                                        *)
-(*   Copyright 2013--2019 OCamlPro SAS                                    *)
-(*   Copyright 2014--2019 Jane Street Group LLC                           *)
+(*   Copyright 2020 Jane Street Group LLC                                 *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -14,17 +12,36 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-30-40-41-42"]
+[@@@ocaml.warning "+a-30-40-41-42"]
 
-(** Simplification of primitives taking three arguments. *)
+module Projection : sig
+  type t = private
+    | Block_load of { index : Targetint.OCaml.t; }
+    | Project_var of {
+        project_from : Closure_id.t;
+        var : Var_within_closure.t;
+      }
 
-val simplify_ternary_primitive
-   : Downwards_acc.t
-  -> Flambda_primitive.ternary_primitive
-  -> Simple.t
-  -> Simple.t
-  -> Simple.t
-  -> Debuginfo.t
-  -> result_var:Var_in_binding_pos.t
-  -> Reachable.t * Flambda_type.Typing_env_extension.t
-       * Simple.t list * Downwards_acc.t
+  val block_load : index:Targetint.OCaml.t -> t
+
+  val project_var : Closure_id.t -> Var_within_closure.t -> t
+end
+
+type t
+
+val print : Format.formatter -> t -> unit
+
+val create : Symbol.t -> Projection.t -> t
+
+val symbol : t -> Symbol.t
+
+val projection : t -> Projection.t
+
+val compare : t -> t -> int
+
+val equal : t -> t -> bool
+
+val hash : t -> int
+
+include Contains_names.S with type t := t
+include Contains_ids.S with type t := t

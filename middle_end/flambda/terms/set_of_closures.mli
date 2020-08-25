@@ -27,30 +27,26 @@ val empty : t
 
 val is_empty : t -> bool
 
+module Env_entry : sig
+  type t = private
+    | Simple of Simple.t
+    | Symbol_projection of Symbol_projection.t
+
+  val simple : Simple.t -> t
+  val symbol_projection : Symbol_projection.t -> t
+end
+
 (** Create a set of closures given the code for its functions and the
     closure variables. *)
 val create
    : Function_declarations.t
-  -> closure_elements:Simple.t Var_within_closure.Map.t
+  -> closure_elements:Env_entry.t Var_within_closure.Map.t
   -> t
 
 (** The function declarations associated with the set of closures. *)
 val function_decls : t -> Function_declarations.t
 
 (** The map from the closure's environment entries to their values. *)
-val closure_elements : t -> Simple.t Var_within_closure.Map.t
-
-(** Returns true iff the given set of closures has an empty environment. *)
-val has_empty_environment : t -> bool
-
-(** Returns true iff the given set of closures does not contain any variables
-    in its environment.  (If this condition is satisfied, a set of closures
-    may be lifted.) *)
-val environment_doesn't_mention_variables : t -> bool
-
-val filter_function_declarations
-   : t
-  -> f:(Closure_id.t -> Function_declaration.t -> bool)
-  -> t
+val closure_elements : t -> Env_entry.t Var_within_closure.Map.t
 
 include Identifiable.S with type t := t

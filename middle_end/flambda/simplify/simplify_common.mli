@@ -29,8 +29,11 @@ val simplify_projection
 
 type cse =
   | Invalid of Flambda_type.t
+  (* CR mshinwell: Use a record type for the following and all of the
+     simplify_*primitive.mli files *)
   | Applied of
-      (Reachable.t * Flambda_type.Typing_env_extension.t * Downwards_acc.t)
+      (Reachable.t * Flambda_type.Typing_env_extension.t
+        * Simple.t list * Downwards_acc.t)
   | Not_applied of Downwards_acc.t
 
 val try_cse
@@ -38,6 +41,7 @@ val try_cse
   -> original_prim:Flambda_primitive.t
   -> result_kind:Flambda_kind.t
   -> min_name_mode:Name_mode.t
+  -> args:Simple.t list
   -> result_var:Variable.t
   -> cse
 

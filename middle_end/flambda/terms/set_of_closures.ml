@@ -16,13 +16,63 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+module Env_entry = struct
+  type t =
+    | Simple of Simple.t
+    | Symbol_projection of Symbol_projection.t
+
+  let simple simple = Simple simple
+  let symbol_projection proj = Symbol_projection proj
+
+  let print ppf t =
+    match t with
+    | Simple simple -> Simple.print ppf simple
+    | Symbol_projection proj -> Symbol_projection.print ppf proj
+
+  let apply_name_permutation t perm =
+    match t with
+    | Simple simple ->
+      let simple' = Simple.apply_name_permutation simple perm in
+      if simple == simple' then t
+      else Simple simple'
+    | Symbol_projection proj ->
+      let proj' = Symbol_projection.apply_name_permutation proj perm in
+      if proj == proj' then t
+      else Symbol_projection proj'
+
+  let free_names t =
+    match t with
+    | Simple simple -> Simple.free_names simple
+    | Symbol_projection proj -> Symbol_projection.free_names proj
+
+  let all_ids_for_export t =
+    match t with
+    | Simple simple -> Ids_for_export.from_simple simple
+    | Symbol_projection proj -> Symbol_projection.all_ids_for_export proj
+
+  let import import_map t =
+    match t with
+    | Simple simple ->
+      Simple (Ids_for_export.Import_map.simple import_map simple)
+    | Symbol_projection proj ->
+      Symbol_projection (Symbol_projection.import import_map proj)
+
+  let compare t1 t2 =
+    match t1, t2 with
+    | Simple simple1, Simple simple2 -> Simple.compare simple1 simple2
+    | Symbol_projection proj1, Symbol_projection proj2 ->
+      Symbol_projection.compare proj1 proj2
+    | Simple _, Symbol_projection _ -> -1
+    | Symbol_projection _, Simple _ -> 1
+end
+
 type t = {
   function_decls : Function_declarations.t;
-  closure_elements : Simple.t Var_within_closure.Map.t;
+  closure_elements : Env_entry.t Var_within_closure.Map.t;
 }
 
 let print_with_cache ~cache ppf
-      { function_decls; 
+      { function_decls;
         closure_elements;
       } =
   Format.fprintf ppf "@[<hov 1>(%sset_of_closures%s@ \
@@ -32,7 +82,7 @@ let print_with_cache ~cache ppf
     (Flambda_colours.prim_constructive ())
     (Flambda_colours.normal ())
     (Function_declarations.print_with_cache ~cache) function_decls
-    (Var_within_closure.Map.print Simple.print) closure_elements
+    (Var_within_closure.Map.print Env_entry.print) closure_elements
 
 include Identifiable.Make (struct
   type nonrec t = t
@@ -53,7 +103,7 @@ include Identifiable.Make (struct
     let c = Function_declarations.compare function_decls1 function_decls2 in
     if c <> 0 then c
     else
-      Var_within_closure.Map.compare Simple.compare
+      Var_within_closure.Map.compare Env_entry.compare
         closure_elements1 closure_elements2
 
   let equal t1 t2 = (compare t1 t2 = 0)
@@ -81,15 +131,8 @@ let create function_decls ~closure_elements =
 let function_decls t = t.function_decls
 let closure_elements t = t.closure_elements
 
-let has_empty_environment t =
-  Var_within_closure.Map.is_empty t.closure_elements
-
-let environment_doesn't_mention_variables t =
-  Var_within_closure.Map.for_all (fun _vwc simple -> Simple.is_symbol simple)
-    t.closure_elements
-
 let print_with_cache ~cache ppf
-      { function_decls; 
+      { function_decls;
         closure_elements;
       } =
   if Var_within_closure.Map.is_empty closure_elements then
@@ -107,7 +150,7 @@ let print_with_cache ~cache ppf
       (Flambda_colours.prim_constructive ())
       (Flambda_colours.normal ())
       (Function_declarations.print_with_cache ~cache) function_decls
-      (Var_within_closure.Map.print Simple.print) closure_elements
+      (Var_within_closure.Map.print Env_entry.print) closure_elements
 
 let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
@@ -115,21 +158,21 @@ let free_names
       { function_decls;
         closure_elements;
       } =
-  Name_occurrences.union_list [
-    Function_declarations.free_names function_decls;
-    Simple.List.free_names (Var_within_closure.Map.data closure_elements);
-  ]
+  Var_within_closure.Map.fold (fun _ env_entry free_names ->
+      Name_occurrences.union free_names (Env_entry.free_names env_entry))
+    closure_elements
+    (Function_declarations.free_names function_decls)
 
 let apply_name_permutation
-      ({ function_decls; 
+      ({ function_decls;
          closure_elements;
        } as t) perm =
   let function_decls' =
     Function_declarations.apply_name_permutation function_decls perm
   in
   let closure_elements' =
-    Var_within_closure.Map.map_sharing (fun simple ->
-        Simple.apply_name_permutation simple perm)
+    Var_within_closure.Map.map_sharing (fun env_entry ->
+        Env_entry.apply_name_permutation env_entry perm)
       closure_elements
   in
   if function_decls == function_decls'
@@ -140,35 +183,21 @@ let apply_name_permutation
       closure_elements = closure_elements';
     }
 
-let all_ids_for_export
-      { function_decls;
-        closure_elements;
-      } =
-  let function_decls_ids =
-    Function_declarations.all_ids_for_export function_decls
-  in
-  Var_within_closure.Map.fold (fun _closure_var simple ids ->
-      Ids_for_export.add_simple ids simple)
+let all_ids_for_export { function_decls; closure_elements; } =
+  Var_within_closure.Map.fold (fun _closure_var env_entry ids ->
+      Ids_for_export.union ids (Env_entry.all_ids_for_export env_entry))
     closure_elements
-    function_decls_ids
+    (Function_declarations.all_ids_for_export function_decls)
 
 let import import_map { function_decls; closure_elements; } =
   let function_decls =
     Function_declarations.import import_map function_decls
   in
   let closure_elements =
-    Var_within_closure.Map.filter_map ~f:(fun var simple ->
+    Var_within_closure.Map.filter_map ~f:(fun var env_entry ->
         if Ids_for_export.Import_map.closure_var_is_used import_map var
-        then Some (Ids_for_export.Import_map.simple import_map simple)
+        then Some (Env_entry.import import_map env_entry)
         else None)
       closure_elements
   in
   { function_decls; closure_elements; }
-
-let filter_function_declarations t ~f =
-  let function_decls =
-    Function_declarations.filter t.function_decls ~f
-  in
-  { t with
-    function_decls;
-  }

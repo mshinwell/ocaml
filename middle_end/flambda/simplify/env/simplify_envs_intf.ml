@@ -60,6 +60,12 @@ module type Downwards_env = sig
 
   val set_at_unit_toplevel_state : t -> bool -> t
 
+  val is_defined_at_toplevel : t -> Variable.t -> bool
+
+  val add_symbol_projection : t -> Variable.t -> Symbol_projection.t -> t
+
+  val find_symbol_projection : t -> Variable.t -> Symbol_projection.t option
+
   val unit_toplevel_exn_continuation : t -> Continuation.t
 
   val enter_closure : t -> t

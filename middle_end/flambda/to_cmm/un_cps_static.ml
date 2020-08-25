@@ -86,7 +86,11 @@ let static_value env v =
   | Symbol s ->
       Env.check_scope ~allow_deleted:false env (Code_id_or_symbol.Symbol s),
       C.symbol_address (symbol s)
-  | Dynamically_computed _ -> env, C.cint 1n
+  | Symbol_projection _ | Dynamically_computed _ ->
+      (* This field will be patched later, before it is read (but not
+         necessarily before the next GC), so we just put the unit value
+         in it for now. *)
+      env, C.cint 1n
   | Tagged_immediate i ->
       env, C.cint (nativeint_of_targetint (tag_targetint (targetint_of_imm i)))
 
@@ -95,7 +99,39 @@ let or_variable f default v cont =
   | Const c -> f c cont
   | Var _ -> f default cont
 
-let make_update env kind symb var i prev_update =
+let make_update_from_symbol_projection env kind symb proj i prev_update =
+  let dbg = Debuginfo.none in
+  let e =
+    let symbol_to_read = C.symbol (symbol (Symbol_projection.symbol proj)) in
+    let projection = Symbol_projection.projection proj in
+    match projection with
+    | Block_load { index; } ->
+      let kind : Flambda_primitive.Block_access_kind.t =
+        Values {
+          tag = Tag.Scannable.zero;
+          size = Unknown;
+          field_kind = Any_value;
+        }
+      in
+      (* CR mshinwell: Going via [int] is bad, this should be fixed in Cmm *)
+      C.block_load ~dbg kind Immutable symbol_to_read
+        (C.int (Targetint.to_int (tag_targetint (
+          Targetint.OCaml.to_targetint index))))
+    | Project_var { project_from; var; } ->
+      match Env.env_var_offset env var, Env.closure_offset env project_from with
+      | Some { offset; }, Some { offset = base; _ } ->
+        C.get_field_gen Asttypes.Immutable symbol_to_read (offset - base) dbg
+      | Some _, None | None, Some _ | None, None ->
+        Misc.fatal_errorf "Symbol projection %a cannot be compiled"
+          Symbol_projection.print proj
+  in
+  let address = C.field_address symb i dbg in
+  let update = C.store kind Lambda.Root_initialization address e in
+  match prev_update with
+  | None -> Some update
+  | Some prev_update -> Some (C.sequence prev_update update)
+
+let make_update_from_var env kind symb var i prev_update =
   let e = Env.get_variable env var in
   let address = C.field_address symb i Debuginfo.none in
   let update = C.store kind Lambda.Root_initialization address e in
@@ -110,8 +146,13 @@ let rec static_block_updates symb env acc i = function
       | Symbol _
       | Tagged_immediate _ ->
           static_block_updates symb env acc (i + 1) r
+      | Symbol_projection proj ->
+          let acc =
+            make_update_from_symbol_projection env Cmm.Word_val symb proj i acc
+          in
+          static_block_updates symb env acc (i + 1) r
       | Dynamically_computed var ->
-          let acc = make_update env Cmm.Word_val symb var i acc in
+          let acc = make_update_from_var env Cmm.Word_val symb var i acc in
           static_block_updates symb env acc (i + 1) r
       end
 
@@ -122,7 +163,7 @@ let rec static_float_array_updates symb env acc i = function
       | Const _ ->
           static_float_array_updates symb env acc (i + 1) r
       | Var var ->
-          let acc = make_update env Cmm.Double_u symb var i acc in
+          let acc = make_update_from_var env Cmm.Double_u symb var i acc in
           static_float_array_updates symb env acc (i + 1) r
       end
 
@@ -132,8 +173,7 @@ let static_boxed_number kind env s default emit transl v r updates =
   let updates =
     match (v : _ Or_variable.t) with
     | Const _ -> None
-    | Var v ->
-        make_update env kind (C.symbol name) v 0 updates
+    | Var v -> make_update_from_var env kind (C.symbol name) v 0 updates
   in
   R.update_data r (or_variable aux default v), updates
 
@@ -197,20 +237,30 @@ and fill_static_slot s symbs decls elts env acc offset updates slot =
       let field = C.cint (C.infix_header (offset + 1)) in
       env, field :: acc, offset + 1, updates
   | Env_var v ->
-      let env, contents =
-        simple_static env (Var_within_closure.Map.find v elts)
-      in
-      let fields, updates =
-        match contents with
-        | `Data fields -> fields, updates
-        | `Var v ->
-            let s = get_whole_closure_symbol s in
-            let updates =
-              make_update env Cmm.Word_val (C.symbol (symbol s)) v offset updates
-            in
-            [C.cint 1n], updates
-      in
-      env, List.rev fields @ acc, offset + 1, updates
+      (* CR mshinwell for gbury: maybe this could be improved? *)
+      begin match Var_within_closure.Map.find v elts with
+      | Set_of_closures.Env_entry.Simple simple ->
+        let env, contents = simple_static env simple in
+        let fields, updates =
+          match contents with
+          | `Data fields -> fields, updates
+          | `Var v ->
+              let s = get_whole_closure_symbol s in
+              let updates =
+                make_update_from_var env Cmm.Word_val (C.symbol (symbol s))
+                  v offset updates
+              in
+              [C.cint 1n], updates
+        in
+        env, List.rev fields @ acc, offset + 1, updates
+      | Set_of_closures.Env_entry.Symbol_projection proj ->
+        let s = get_whole_closure_symbol s in
+        let updates =
+          make_update_from_symbol_projection env Cmm.Word_val
+            (C.symbol (symbol s)) proj offset updates
+        in
+        env, (C.cint 1n) :: acc, offset + 1, updates
+      end
   | Closure c ->
       let decl = Closure_id.Map.find c decls in
       let symb = Closure_id.Map.find c symbs in

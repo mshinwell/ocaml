@@ -60,6 +60,10 @@ val add_cse
   -> bound_to:Simple.t
   -> t
 
+val add_symbol_projection : t -> Variable.t -> Symbol_projection.t -> t
+
+val symbol_projections : t -> Symbol_projection.t Variable.Map.t
+
 val concat : t -> t -> t
 
 val meet : Meet_env.t -> t -> t -> t

@@ -990,7 +990,7 @@ let try_cse dacc prim arg1 arg2 ~min_name_mode ~result_var
       | Ok arg2, _arg2_ty ->
         let original_prim : P.t = Binary (prim, arg1, arg2) in
         Simplify_common.try_cse dacc ~original_prim ~result_kind
-          ~min_name_mode ~result_var
+          ~args:[arg1; arg2] ~min_name_mode ~result_var
 
 let simplify_binary_primitive dacc (prim : P.binary_primitive)
       arg1 arg2 dbg ~result_var =
@@ -998,7 +998,7 @@ let simplify_binary_primitive dacc (prim : P.binary_primitive)
   let result_var' = Var_in_binding_pos.var result_var in
   let invalid ty =
     let env_extension = TEE.one_equation (Name.var result_var') ty in
-    Reachable.invalid (), env_extension, dacc
+    Reachable.invalid (), env_extension, [arg1; arg2], dacc
   in
   match
     try_cse dacc prim arg1 arg2 ~min_name_mode ~result_var:result_var'
@@ -1067,5 +1067,8 @@ let simplify_binary_primitive dacc (prim : P.binary_primitive)
               let env_extension = TEE.one_equation (Name.var result_var') ty in
               Reachable.reachable named, env_extension, dacc
         in
-        simplifier dacc ~original_term dbg ~arg1 ~arg1_ty ~arg2 ~arg2_ty
-          ~result_var
+        let reachable, env_extension, dacc =
+          simplifier dacc ~original_term dbg ~arg1 ~arg1_ty ~arg2 ~arg2_ty
+            ~result_var
+        in
+        reachable, env_extension, [arg1; arg2], dacc

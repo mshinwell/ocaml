@@ -555,6 +555,8 @@ end and Static_const : sig
     type t =
       | Symbol of Symbol.t
         (** The address of the given symbol. *)
+      | Symbol_projection of Symbol_projection.t
+        (** The contents of the given field of the given symbol. *)
       | Tagged_immediate of Target_imm.t
         (** The given tagged immediate. *)
       | Dynamically_computed of Variable.t

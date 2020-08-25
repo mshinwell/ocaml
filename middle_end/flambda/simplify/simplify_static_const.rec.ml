@@ -25,6 +25,11 @@ module Field_of_block = Static_const.Field_of_block
 let simplify_field_of_block dacc (field : Field_of_block.t) =
   match field with
   | Symbol sym -> field, T.alias_type_of K.value (Simple.symbol sym)
+  | Symbol_projection _ ->
+    (* We assume these are inconstant, since otherwise they should have
+       simplified to something else (see comment to the same effect in
+       [Simplify_set_of_closures]). *)
+    field, T.any_value ()
   | Tagged_immediate i -> field, T.this_tagged_immediate i
   | Dynamically_computed var ->
     let min_name_mode = Name_mode.normal in

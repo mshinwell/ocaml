@@ -896,6 +896,7 @@ and simplify_direct_partial_application
     in
     let closure_elements =
       Var_within_closure.Map.of_list applied_args_with_closure_vars
+      |> Var_within_closure.Map.map EE.simple
     in
     let defining_expr =
       Lifted_constant.create_code code_id (Code code)

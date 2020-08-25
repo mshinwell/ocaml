@@ -38,7 +38,7 @@ let print_with_cache ~cache:_ ppf
   Format.fprintf ppf "@[<hov 1>(\
       @[<hov 1>(code_id@ %a)@]@ \
       @[<hov 1>@<0>%s(dbg@ %a)@<0>%s@]@ \
-      @[<hov 1>@<0>%s(is_tupled @ %b)@<0>%s@])@]"
+      @[<hov 1>@<0>%s(is_tupled@ %b)@<0>%s@])@]"
     Code_id.print code_id
     (Flambda_colours.debuginfo ())
     Debuginfo.print_compact dbg
