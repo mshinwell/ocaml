@@ -18,20 +18,13 @@
 
 open! Simplify_import
 
-type simplify_named_result =
-  | Bindings of {
-      bindings_outermost_first : (Bindable_let_bound.t * Reachable.t) list;
-      dacc : Downwards_acc.t;
-    }
-  | Reified of {
-      definition : Named.t;
-      symbol : Symbol.t;
-      static_const : Static_const.t;
-    }
-  | Shared of Symbol.t
+type simplify_named_result = {
+  bindings_outermost_first : (Bindable_let_bound.t * Reachable.t) list;
+  dacc : Downwards_acc.t;
+}
 
 let bindings_result bindings_outermost_first dacc =
-  Bindings { bindings_outermost_first; dacc; }
+  { bindings_outermost_first; dacc; }
 
 let simplify_named0 dacc (bindable_let_bound : Bindable_let_bound.t)
       (named : Named.t) =
@@ -86,14 +79,20 @@ let simplify_named0 dacc (bindable_let_bound : Bindable_let_bound.t)
       with
       | Cannot_reify ->
         bindings_result [bindable_let_bound, defining_expr] dacc
-      | Shared symbol -> Shared symbol
+      | Shared symbol ->
+        let defining_expr =
+          Reachable.reachable (Named.create_simple (Simple.symbol symbol))
+        in
+        bindings_result [bindable_let_bound, defining_expr] dacc
       | Lift { symbol; static_const; } ->
-        let named = Named.create_simple (Simple.symbol symbol) in
-        Reified
-          { definition = named;
-            symbol;
-            static_const;
-          }
+        let dacc =
+          LC.create_block_like symbol static_const (DA.denv dacc) ty
+          |> DA.add_lifted_constant_also_to_env dacc
+        in
+        let defining_expr =
+          Reachable.reachable (Named.create_simple (Simple.symbol symbol))
+        in
+        bindings_result [bindable_let_bound, defining_expr] dacc
     end
     else
       bindings_result [bindable_let_bound, defining_expr] dacc
@@ -193,7 +192,7 @@ let simplify_named0 dacc (bindable_let_bound : Bindable_let_bound.t)
     (* We don't need to return any bindings; [Simplify_expr.simplify_let]
        will create the "let symbol" binding when it sees the lifted
        constant. *)
-    Bindings { bindings_outermost_first = []; dacc; }
+    { bindings_outermost_first = []; dacc; }
 
 let simplify_named dacc bindable_let_bound named =
   try

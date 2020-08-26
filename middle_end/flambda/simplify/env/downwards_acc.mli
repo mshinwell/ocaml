@@ -71,6 +71,11 @@ val add_lifted_constant
   -> Simplify_envs.Lifted_constant.t
   -> t
 
+val add_lifted_constant_also_to_env
+   : t
+  -> Simplify_envs.Lifted_constant.t
+  -> t
+
 val add_lifted_constants_from_list
    : t
   -> Simplify_envs.Lifted_constant.t list

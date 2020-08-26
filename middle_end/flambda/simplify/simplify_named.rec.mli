@@ -18,17 +18,10 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-type simplify_named_result = private
-  | Bindings of {
-      bindings_outermost_first : (Bindable_let_bound.t * Reachable.t) list;
-      dacc : Downwards_acc.t;
-    }
-  | Reified of {
-      definition : Named.t;
-      symbol : Symbol.t;
-      static_const :  Static_const.t;
-    }
-  | Shared of Symbol.t
+type simplify_named_result = private {
+  bindings_outermost_first : (Bindable_let_bound.t * Reachable.t) list;
+  dacc : Downwards_acc.t;
+}
 
 val simplify_named
    : Downwards_acc.t

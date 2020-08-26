@@ -125,6 +125,12 @@ let add_lifted_constant t const =
     lifted_constants = LCS.add t.lifted_constants const;
   }
 
+let add_lifted_constant_also_to_env t const =
+  { t with
+    lifted_constants = LCS.add t.lifted_constants const;
+    denv = DE.add_lifted_constant t.denv const;
+  }
+
 let add_lifted_constants_from_list t consts =
   ListLabels.fold_left consts ~init:t ~f:add_lifted_constant
 

@@ -31,228 +31,170 @@ let rec simplify_let
   : 'a. DA.t -> Let.t -> 'a k -> Expr.t * 'a * UA.t
 = fun dacc let_expr k ->
   let module L = Flambda.Let in
-  let original_dacc = dacc in
   L.pattern_match let_expr ~f:(fun bindable_let_bound ~body ->
     let defining_expr = L.defining_expr let_expr in
-    let place_lifted_constants_immediately =
+    let may_need_to_place_lifted_constants_immediately =
       let is_dynamically_allocated_set_of_closures =
         Named.is_dynamically_allocated_set_of_closures defining_expr
       in
       let is_let_symbol = Named.is_static_consts defining_expr in
-      (* Simplification of toplevel dynamically-allocated sets of closures can
+      (* Simplification of toplevel dynamically-allocated sets of closures
+         (or other defining expressions when [lift_toplevel_inconstants]) can
          yield constants that must be placed immediately around the body rather
          than propagated upwards to the previous enclosing "let symbol".  That
          this is so follows from the fact that such constants may involve
-         variables in their definition.  We cannot follow the pattern of the
-         [Reified] case below as that would cause the bodies of the
-         functions involved to be simplified a second time.
-         When we actually have a [Let] that binds symbol(s), this is the
-         behaviour in all cases. *)
+         variables in their definition. *)
       is_let_symbol
-        || (is_dynamically_allocated_set_of_closures
-              (* CR mshinwell: We need to fix the performance problem that
-                 Vincent investigated relating to construction of closure
-                 environments, then uncomment this.
-              && !Clflags.Flambda.lift_toplevel_inconstants
-              *)
-              && DE.at_unit_toplevel (DA.denv dacc))
+        || ((is_dynamically_allocated_set_of_closures
+              || !Clflags.Flambda.lift_toplevel_inconstants)
+            && DE.at_unit_toplevel (DA.denv dacc))
     in
     (* Remember then clear the lifted constants memory in [DA] so we can
        easily find out which constants are generated during simplification
        of the defining expression and the [body]. *)
     let dacc, prior_lifted_constants = DA.get_and_clear_lifted_constants dacc in
     (* Simplify the defining expression. *)
-    match
+    let { Simplify_named. bindings_outermost_first = bindings; dacc; } =
       Simplify_named.simplify_named dacc bindable_let_bound
         (L.defining_expr let_expr)
-    with
-    | Bindings { bindings_outermost_first = bindings; dacc; } ->
-      (* This is the normal case.
-         First remember any lifted constants that were generated during the
-         simplification of the defining expression and sort them, since they
-         may be mutually recursive.  Then add back in to [dacc]
-         the [prior_lifted_constants] remembered above.  This results in the
-         definitions and types for all these constants being available at a
-         subsequent [Let_cont].  At such a point, [dacc] will be queried to
-         retrieve all of the constants, which are then manually transferred
-         into the computed [dacc] at the join point for subsequent
-         simplification of the continuation handler(s).
-         Note that no lifted constants are ever placed during the simplification
-         of the defining expression.  (Not even in the case of a
-         [Set_of_closures] binding, since "let symbol" is disallowed under a
-         lambda.)
-      *)
-      let lifted_constants_from_defining_expr =
-        Sort_lifted_constants.sort (DA.get_lifted_constants dacc)
+    in
+    (* First remember any lifted constants that were generated during the
+       simplification of the defining expression and sort them, since they
+       may be mutually recursive.  Then add back in to [dacc]
+       the [prior_lifted_constants] remembered above.  This results in the
+       definitions and types for all these constants being available at a
+       subsequent [Let_cont].  At such a point, [dacc] will be queried to
+       retrieve all of the constants, which are then manually transferred
+       into the computed [dacc] at the join point for subsequent
+       simplification of the continuation handler(s).
+       Note that no lifted constants are ever placed during the simplification
+       of the defining expression.  (Not even in the case of a
+       [Set_of_closures] binding, since "let symbol" is disallowed under a
+       lambda.)
+    *)
+    let lifted_constants_from_defining_expr =
+      Sort_lifted_constants.sort (DA.get_lifted_constants dacc)
+    in
+    let no_constants_from_defining_expr =
+      LCS.is_empty lifted_constants_from_defining_expr
+    in
+    let dacc = DA.add_lifted_constants dacc prior_lifted_constants in
+    (* Simplify the body of the let-expression and make the new [Let] bindings
+       around the simplified body.  [Simplify_named] will already have
+       prepared [dacc] with the necessary bindings for the simplification of
+       the body. *)
+    let body, user_data, uacc = simplify_expr dacc body k in
+    (* The lifted constants present in [uacc] are the ones arising from
+       the simplification of [body] which still have to be placed.  We
+       augment these with any constants arising from the simplification of
+       the defining expression.  Then we place (some of) them and/or return
+       them in [uacc] for an outer [Let]-binding to deal with. *)
+    let lifted_constants_from_body = UA.lifted_constants uacc in
+    let no_constants_to_place =
+      no_constants_from_defining_expr
+        && LCS.is_empty lifted_constants_from_body
+    in
+    (* Return as quickly as possible if there is nothing to do.  In this
+       case, all constants get floated up to an outer binding. *)
+    if no_constants_to_place
+      || not may_need_to_place_lifted_constants_immediately
+    then begin
+      let uacc =
+        (* Avoid re-allocating [uacc] unless necessary. *)
+        if no_constants_from_defining_expr then uacc
+        else
+          LCS.union_ordered ~innermost:lifted_constants_from_body
+            ~outermost:lifted_constants_from_defining_expr
+          |> UA.with_lifted_constants uacc
       in
-      let no_constants_from_defining_expr =
-        LCS.is_empty lifted_constants_from_defining_expr
+      let body = Simplify_common.bind_let_bound ~bindings ~body in
+      body, user_data, uacc
+    end else begin
+      let scoping_rule =
+        (* If this is a "normal" let rather than a "let symbol", then we
+           use [Dominator] scoping for any symbol bindings we place, as the
+           types of the symbols may have been used out of syntactic scope.
+        *)
+        Option.value ~default:Symbol_scoping_rule.Dominator
+          (Bindable_let_bound.let_symbol_scoping_rule bindable_let_bound)
       in
-      let dacc = DA.add_lifted_constants dacc prior_lifted_constants in
-      (* Simplify the body of the let-expression and make the new [Let] bindings
-         around the simplified body.  [Simplify_named] will already have
-         prepared [dacc] with the necessary bindings for the simplification of
-         the body. *)
-      let body, user_data, uacc = simplify_expr dacc body k in
-      (* The lifted constants present in [uacc] are the ones arising from
-         the simplification of [body] which still have to be placed.  We
-         augment these with any constants arising from the simplification of
-         the defining expression.  Then we place (some of) them and/or return
-         them in [uacc] for an outer [Let]-binding to deal with. *)
-      let lifted_constants_from_body = UA.lifted_constants uacc in
-      let no_constants_to_place =
-        no_constants_from_defining_expr
-          && LCS.is_empty lifted_constants_from_body
-      in
-      (* Return as quickly as possible if there is nothing to do.  In this
-         case, all constants get floated up to an outer binding. *)
-      if no_constants_to_place || not place_lifted_constants_immediately
-      then begin
-        let uacc =
-          (* Avoid re-allocating [uacc] unless necessary. *)
-          if no_constants_from_defining_expr then uacc
-          else
-            LCS.union_ordered ~innermost:lifted_constants_from_body
-              ~outermost:lifted_constants_from_defining_expr
-            |> UA.with_lifted_constants uacc
-        in
-        let body = Simplify_common.bind_let_bound ~bindings ~body in
-        body, user_data, uacc
-      end else begin
-        let scoping_rule =
-          (* If this is a "normal" let rather than a "let symbol", then we
-             use [Dominator] scoping for any symbol bindings we place, as the
-             types of the symbols may have been used out of syntactic scope.
-          *)
-          Option.value ~default:Symbol_scoping_rule.Dominator
-            (Bindable_let_bound.let_symbol_scoping_rule bindable_let_bound)
-        in
-        let calculate_constants_to_place lifted_constants ~critical_deps
-              ~to_float =
-          (* If we are at a [Dominator]-scoped binding, then we float up
-             as many constants as we can whose definitions are fully static
-             (i.e. do not involve variables) to the nearest enclosing
-             [Syntactic]ally-scoped [Let]-binding.  This is done by peeling
-             off the definitions starting at the outermost one.  We keep
-             track of the "critical dependencies", which are those symbols
-             that are definitely going to have their definitions placed at
-             the current [Let]-binding, and any reference to which in another
-             binding (even if fully static) will cause that binding to be
-             placed too. *)
-          (* CR-soon mshinwell: This won't be needed once we can remove
-             [Dominator]-scoped bindings; every "let symbol" can then have
-             [Dominator] scoping.  This should both simplify the code and
-             increase speed a fair bit. *)
-          match scoping_rule with
-          | Syntactic ->
-            lifted_constants, to_float, critical_deps
-          | Dominator ->
-            LCS.fold_outermost_first lifted_constants
-              ~init:(LCS.empty, to_float, critical_deps)
-              ~f:(fun (to_place, to_float, critical_deps) lifted_const ->
-                let must_place =
-                  (not (LC.is_fully_static lifted_const))
-                    || Name_occurrences.inter_domain_is_non_empty critical_deps
-                         (LC.free_names_of_defining_exprs lifted_const)
+      let calculate_constants_to_place lifted_constants ~critical_deps
+            ~to_float =
+        (* If we are at a [Dominator]-scoped binding, then we float up
+           as many constants as we can whose definitions are fully static
+           (i.e. do not involve variables) to the nearest enclosing
+           [Syntactic]ally-scoped [Let]-binding.  This is done by peeling
+           off the definitions starting at the outermost one.  We keep
+           track of the "critical dependencies", which are those symbols
+           that are definitely going to have their definitions placed at
+           the current [Let]-binding, and any reference to which in another
+           binding (even if fully static) will cause that binding to be
+           placed too. *)
+        (* CR-soon mshinwell: This won't be needed once we can remove
+           [Dominator]-scoped bindings; every "let symbol" can then have
+           [Dominator] scoping.  This should both simplify the code and
+           increase speed a fair bit. *)
+        match scoping_rule with
+        | Syntactic ->
+          lifted_constants, to_float, critical_deps
+        | Dominator ->
+          LCS.fold_outermost_first lifted_constants
+            ~init:(LCS.empty, to_float, critical_deps)
+            ~f:(fun (to_place, to_float, critical_deps) lifted_const ->
+              let must_place =
+                (not (LC.is_fully_static lifted_const))
+                  || Name_occurrences.inter_domain_is_non_empty critical_deps
+                       (LC.free_names_of_defining_exprs lifted_const)
+              in
+              if must_place then
+                let critical_deps =
+                  LC.bound_symbols lifted_const
+                  |> Bound_symbols.free_names
+                  |> Name_occurrences.union critical_deps
                 in
-                if must_place then
-                  let critical_deps =
-                    LC.bound_symbols lifted_const
-                    |> Bound_symbols.free_names
-                    |> Name_occurrences.union critical_deps
-                  in
-                  let to_place = LCS.add_innermost to_place lifted_const in
-                  to_place, to_float, critical_deps
-                else
-                  let to_float = LCS.add_innermost to_float lifted_const in
-                  to_place, to_float, critical_deps)
-        in
-        (* We handle constants arising from the defining expression, which
-           may be used in [bindings], separately from those arising from the
-           [body], which may reference the [bindings]. *)
-        let to_place_around_defining_expr, to_float, critical_deps =
-          calculate_constants_to_place lifted_constants_from_defining_expr
-            ~critical_deps:Name_occurrences.empty ~to_float:LCS.empty
-        in
-        let critical_deps =
-          (* Make sure we don't move constants past the [bindings] if there
-             is a dependency. *)
-          ListLabels.fold_left bindings ~init:critical_deps
-            ~f:(fun critical_deps (bound, _) ->
-              Name_occurrences.union (Bindable_let_bound.free_names bound)
-                critical_deps)
-        in
-        let to_place_around_body, to_float, _critical_deps =
-          calculate_constants_to_place lifted_constants_from_body
-            ~critical_deps ~to_float
-        in
-        (* Propagate constants that are to float upwards. *)
-        let uacc = UA.with_lifted_constants uacc to_float in
-        (* Place constants whose definitions must go at the current [Let]. *)
-        let place_constants uacc ~around constants =
-          LCS.fold_innermost_first constants ~init:(around, uacc)
-            ~f:(fun (body, uacc) lifted_const ->
-              Simplify_common.create_let_symbols uacc scoping_rule
-                (UA.code_age_relation uacc) lifted_const body)
-        in
-        let body, uacc =
-          place_constants uacc ~around:body to_place_around_body
-        in
-        let body = Simplify_common.bind_let_bound ~bindings ~body in
-        let body, uacc =
-          place_constants uacc ~around:body to_place_around_defining_expr
-        in
-        body, user_data, uacc
-      end
-    | Reified { definition; symbol; static_const; } ->
-      if place_lifted_constants_immediately then begin
-        Misc.fatal_errorf "Did not expect [Simplify_named] to return \
-            [Reified] (bound symbol %a)"
-          Symbol.print symbol
-      end;
-      (* In this case, the defining expression was found to be constant,
-         so we generate a "let symbol" binding.  The constant being bound
-         has not yet been added to [dacc]; that will happen during
-         simplification of the following built [let_symbol_expr]. *)
-      let bound_symbols =
-        Bound_symbols.singleton (Bound_symbols.Pattern.block_like symbol)
+                let to_place = LCS.add_innermost to_place lifted_const in
+                to_place, to_float, critical_deps
+              else
+                let to_float = LCS.add_innermost to_float lifted_const in
+                to_place, to_float, critical_deps)
       in
-      let let_symbol_expr =
-        Expr.create_let_symbol bound_symbols Dominator
-          (Static_const.Group.create [static_const])
-          (Expr.create_pattern_let bindable_let_bound definition body)
+      (* We handle constants arising from the defining expression, which
+         may be used in [bindings], separately from those arising from the
+         [body], which may reference the [bindings]. *)
+      let to_place_around_defining_expr, to_float, critical_deps =
+        calculate_constants_to_place lifted_constants_from_defining_expr
+          ~critical_deps:Name_occurrences.empty ~to_float:LCS.empty
       in
-      (* We're effectively replacing one expression (the original [Let])
-         with another here; the new expression will be completely
-         re-simplified.  So we don't have to do anything relating to lifted
-         constants.
-         We have to revert to [original_dacc] as types in [dacc] may have
-         been affected (due to aliases) in ways that would be wrong to
-         propagate.  We do however augment [original_dacc] so that it knows
-         [symbol], which we have freshly generated, is eligible for
-         sharing. *)
-      let dacc =
-        DA.consider_constant_for_sharing original_dacc symbol static_const
+      let critical_deps =
+        (* Make sure we don't move constants past the [bindings] if there
+           is a dependency. *)
+        ListLabels.fold_left bindings ~init:critical_deps
+          ~f:(fun critical_deps (bound, _) ->
+            Name_occurrences.union (Bindable_let_bound.free_names bound)
+              critical_deps)
       in
-      simplify_expr dacc let_symbol_expr k
-    | Shared symbol ->
-      if place_lifted_constants_immediately then begin
-        Misc.fatal_errorf "Did not expect [Simplify_named] to return \
-            [Shared] (symbol %a)"
-          Symbol.print symbol
-      end;
-      (* This is similar to the [Reified] case above, except that the
-         constant in question is structurally identical to one that has been
-         generated previously, so we simply point the let-binding at the
-         existing symbol. *)
-      let let_expr =
-        Expr.create_pattern_let bindable_let_bound
-          (Named.create_simple (Simple.symbol symbol))
-          body
+      let to_place_around_body, to_float, _critical_deps =
+        calculate_constants_to_place lifted_constants_from_body
+          ~critical_deps ~to_float
       in
-      (* Same comment as for the [Reified] case with regard to lifted
-         constants and [original_dacc]. *)
-      simplify_expr original_dacc let_expr k)
+      (* Propagate constants that are to float upwards. *)
+      let uacc = UA.with_lifted_constants uacc to_float in
+      (* Place constants whose definitions must go at the current [Let]. *)
+      let place_constants uacc ~around constants =
+        LCS.fold_innermost_first constants ~init:(around, uacc)
+          ~f:(fun (body, uacc) lifted_const ->
+            Simplify_common.create_let_symbols uacc scoping_rule
+              (UA.code_age_relation uacc) lifted_const body)
+      in
+      let body, uacc =
+        place_constants uacc ~around:body to_place_around_body
+      in
+      let body = Simplify_common.bind_let_bound ~bindings ~body in
+      let body, uacc =
+        place_constants uacc ~around:body to_place_around_defining_expr
+      in
+      body, user_data, uacc
+    end)
 
 and simplify_one_continuation_handler :
  'a. DA.t
@@ -1826,17 +1768,11 @@ and simplify_switch
         (* Disable inconstant lifting *)
         DA.map_denv dacc ~f:DE.set_not_at_unit_toplevel
       in
-      match Simplify_named.simplify_named dacc bound_vars named with
-      | Bindings
-          { bindings_outermost_first = bindings; dacc = _; } ->
-        let body = k ~tagged_scrutinee:(Simple.var bound_to) in
-        Simplify_common.bind_let_bound ~bindings ~body, user_data, uacc
-      | Reified _ ->
-        Misc.fatal_errorf "Simplify_switch: Inconstant lifting is disabled, \
-          so Simplify_named.simplify_named should not return Reify"
-      | Shared symbol ->
-        let body = k ~tagged_scrutinee:(Simple.symbol symbol) in
-        body, user_data, uacc
+      let { Simplify_named. bindings_outermost_first = bindings; dacc = _; } =
+        Simplify_named.simplify_named dacc bound_vars named
+      in
+      let body = k ~tagged_scrutinee:(Simple.var bound_to) in
+      Simplify_common.bind_let_bound ~bindings ~body, user_data, uacc
     in
     let body, user_data, uacc =
       match switch_is_identity with
