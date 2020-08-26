@@ -428,7 +428,7 @@ module Flambda = struct
   let join_points = ref true
   let unbox_along_intra_function_control_flow = ref true
   let lift_inconstants = ref false
-  let lift_toplevel_inconstants = ref false
+  let lift_toplevel_inconstants = ref true
   let backend_cse_at_toplevel = ref false
   let cse_depth = ref 2
 
@@ -449,7 +449,7 @@ module Flambda = struct
     cse_depth := 2;
     join_points := false;
     unbox_along_intra_function_control_flow := true;
-    lift_toplevel_inconstants := false;
+    lift_toplevel_inconstants := true;
     Expert.fallback_inlining_heuristic := true;
     backend_cse_at_toplevel := false;
     ()
@@ -458,7 +458,7 @@ module Flambda = struct
     cse_depth := 2;
     join_points := true;
     unbox_along_intra_function_control_flow := true;
-    lift_toplevel_inconstants := false;
+    lift_toplevel_inconstants := true;
     Expert.fallback_inlining_heuristic := false;
     backend_cse_at_toplevel := false;
     ()
