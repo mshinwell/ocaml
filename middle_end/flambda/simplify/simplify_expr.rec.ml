@@ -456,24 +456,6 @@ and simplify_non_recursive_let_cont_handler
                     in
                     DA.with_denv dacc denv
                   in
-                  (* CR mshinwell: This is currently disabled
-                  let dacc, handler =
-                    (* When still at toplevel, attempt to reify the types
-                       of the continuation's parameters, to allow more lifting
-                       (e.g. of closures with computed free variables). *)
-                    match Continuation.sort cont with
-                    | Normal
-                       when is_single_inlinable_use
-                         || not at_unit_toplevel -> dacc, handler
-                    | Return | Toplevel_return | Exn -> dacc, handler
-                    | Normal | Define_root_symbol ->
-                      (* CR mshinwell: This shouldn't be [assert] in the
-                         [Define_root_symbol] case *)
-                      assert at_unit_toplevel;
-                      Lift_inconstants.
-                        lift_via_reification_of_continuation_param_types dacc
-                          ~params ~extra_params_and_args ~handler
-                  in *)
                   try
                     let handler, user_data, uacc =
                       simplify_one_continuation_handler dacc cont Non_recursive

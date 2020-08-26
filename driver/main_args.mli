@@ -228,8 +228,6 @@ module type Optcommon_options = sig
   val _no_flambda_join_points : unit -> unit
   val _flambda_unbox_along_intra_function_control_flow : unit -> unit
   val _no_flambda_unbox_along_intra_function_control_flow : unit -> unit
-  val _flambda_lift_inconstants : unit -> unit
-  val _no_flambda_lift_inconstants : unit -> unit
   val _flambda_lift_toplevel_inconstants : unit -> unit
   val _no_flambda_lift_toplevel_inconstants : unit -> unit
   val _flambda_backend_cse_at_toplevel : unit -> unit

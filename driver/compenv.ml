@@ -476,8 +476,6 @@ let read_one_param ppf position name v =
   | "flambda-unbox-along-intra-function-control-flow" ->
     set "flambda-unbox-along-intra-function-control-flow"
       [ Flambda.unbox_along_intra_function_control_flow ] v
-  | "flambda-lift-inconstants" ->
-    set "flambda-lift-inconstants" [ Flambda.lift_inconstants ] v
   | "flambda-lift-toplevel-inconstants" ->
     set "flambda-lift-toplevel-inconstants"
       [ Flambda.lift_toplevel_inconstants ] v

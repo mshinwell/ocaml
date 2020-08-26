@@ -46,60 +46,7 @@ let build_dep_graph lifted_constants =
                 ~f:(fun free_names (symbol, _) ->
                   Name_occurrences.add_symbol free_names symbol NM.normal)
           in
-          (* CR mshinwell: Maybe there's some other way of dealing with
-             the insertion of the constants for [Reify_continuation_params]
-             that wouldn't involve adding "let symbol" bindings before
-             simplification (of those bindings around the handler).  If we
-             could do that, the following code could be removed. *)
-          (* Beware: when coming from [Reify_continuation_params] the
-             sets of closures may have dependencies on variables that are
-             now equal to symbols in the environment.  (They haven't been
-             changed to symbols yet as the simplifier hasn't been run on
-             the definitions.)  Some of these symbols may be the ones
-             involved in the current SCC calculation.  For this latter set,
-             we must explicitly add them as dependencies. *)
           let free_syms = Name_occurrences.symbols free_names in
-          (* RCP is disabled at present
-            Name_occurrences.fold_names free_names
-              ~init:Symbol.Set.empty
-              ~f:(fun free_syms name ->
-                Name.pattern_match name
-                  ~var:(fun var ->
-                    try
-                      let typing_env =
-                        match D.denv definition with
-                        | Some denv -> DE.typing_env denv
-                        | None -> assert false  (* see above *)
-                      in
-                      match
-                        TE.get_canonical_simple_exn typing_env
-                          ~min_name_mode:NM.normal
-                          (Simple.var var)
-                      with
-                      | exception Not_found -> free_syms
-                      | canonical ->
-                        Simple.pattern_match canonical
-                          ~const:(fun _ -> free_syms)
-                          ~name:(fun name ->
-                            Name.pattern_match name
-                              ~var:(fun _var -> free_syms)
-                              ~symbol:(fun sym -> Symbol.Set.add sym free_syms))
-                    with Misc.Fatal_error -> begin
-                      if !Clflags.flambda_context_on_error then begin
-                        Format.eprintf "\n%sContext is:%s finding canonical \
-                            for %a,@ current constant is:@ %a@ \
-                            with [free_names]:@ %a"
-                          (Flambda_colours.error ())
-                          (Flambda_colours.normal ())
-                          Variable.print var
-                          LC.print lifted_constant
-                          Name_occurrences.print free_names
-                      end;
-                      raise Misc.Fatal_error
-                    end)
-                  ~symbol:(fun sym -> Symbol.Set.add sym free_syms))
-          in
-          *)
           let free_code_ids =
             free_names
             |> Name_occurrences.code_ids_and_newer_version_of_code_ids

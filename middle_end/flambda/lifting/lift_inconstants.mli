@@ -14,18 +14,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Attempt to statically-allocate values whose structure can be deduced
-    by examining the types of the parameters of continuations occurring
-    at toplevel. *)
-
 [@@@ocaml.warning "+a-30-40-41-42"]
-
-val lift_via_reification_of_continuation_param_types
-   : Downwards_acc.t
-  -> params:Kinded_parameter.List.t
-  -> extra_params_and_args:Continuation_extra_params_and_args.t
-  -> handler:Flambda.Expr.t
-  -> Downwards_acc.t * Flambda.Expr.t
 
 type reify_primitive_at_toplevel_result =
   | Lift of {
