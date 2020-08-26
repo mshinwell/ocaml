@@ -32,23 +32,6 @@ let rec simplify_let
 = fun dacc let_expr k ->
   let module L = Flambda.Let in
   L.pattern_match let_expr ~f:(fun bindable_let_bound ~body ->
-    let defining_expr = L.defining_expr let_expr in
-    let may_need_to_place_lifted_constants_immediately =
-      let is_dynamically_allocated_set_of_closures =
-        Named.is_dynamically_allocated_set_of_closures defining_expr
-      in
-      let is_let_symbol = Named.is_static_consts defining_expr in
-      (* Simplification of toplevel dynamically-allocated sets of closures
-         (or other defining expressions when [lift_toplevel_inconstants]) can
-         yield constants that must be placed immediately around the body rather
-         than propagated upwards to the previous enclosing "let symbol".  That
-         this is so follows from the fact that such constants may involve
-         variables in their definition. *)
-      is_let_symbol
-        || ((is_dynamically_allocated_set_of_closures
-              || !Clflags.Flambda.lift_toplevel_inconstants)
-            && DE.at_unit_toplevel (DA.denv dacc))
-    in
     (* Remember then clear the lifted constants memory in [DA] so we can
        easily find out which constants are generated during simplification
        of the defining expression and the [body]. *)
@@ -97,7 +80,7 @@ let rec simplify_let
     (* Return as quickly as possible if there is nothing to do.  In this
        case, all constants get floated up to an outer binding. *)
     if no_constants_to_place
-      || not may_need_to_place_lifted_constants_immediately
+      || not (DE.at_unit_toplevel (DA.denv dacc))
     then begin
       let uacc =
         (* Avoid re-allocating [uacc] unless necessary. *)
