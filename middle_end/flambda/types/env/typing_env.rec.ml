@@ -186,8 +186,7 @@ end = struct
                current_compilation_unit)
         names_to_types
     in
-    (* CR mshinwell for vlaviron: Should this clean [cse] too?  If not there
-       should probably be a comment explaining why. *)
+    (* [t.cse] is not exported, so doesn't need cleaning. *)
     { t with
       names_to_types;
     }
