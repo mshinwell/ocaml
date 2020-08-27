@@ -484,12 +484,17 @@ let meet0 env (t1 : t) (t2 : t) =
       t1.cse t2.cse
   in
   let symbol_projections =
-    Variable.Map.merge (fun _ proj1 proj2 ->
-        match proj1, proj2 with
-        | None, None | None, Some _ | Some _, None -> None
-        | Some proj1, Some proj2 ->
-          if Symbol_projection.equal proj1 proj2 then Some proj1
-          else None)
+    Variable.Map.union (fun _ proj1 proj2 ->
+        (* CR vlaviron:
+           I'm not sure whether this can come up at all, but
+           if proj1 and proj2 are different then it means the corresponding
+           variable can be accessed through two different projections.
+           I think it would be safe to use any of them, but forgetting
+           the projection is guaranteed to be sound and I think it is
+           better for debugging problems if the meet function is kept
+           symmetrical. *)
+        if Symbol_projection.equal proj1 proj2 then Some proj1
+        else None)
       t1.symbol_projections t2.symbol_projections
   in
   { t with
