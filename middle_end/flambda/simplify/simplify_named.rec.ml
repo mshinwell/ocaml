@@ -159,7 +159,12 @@ let simplify_named0 dacc (bindable_let_bound : Bindable_let_bound.t)
     end
   | Prim (prim, dbg) ->
     let bound_var = Bindable_let_bound.must_be_singleton bindable_let_bound in
-    let term, env_extension, args, dacc =
+    let term, env_extension, simplified_args, dacc =
+      (* [simplified_args] has to be returned from [simplify_primitive] because
+         in at least one case (for [Project_var]), the simplifier may return
+         something other than a [Prim] as the [term].  However we need the
+         simplified arguments of the actual primitive for the symbol
+         projection check below. *)
       Simplify_primitive.simplify_primitive dacc ~original_named:named
         prim dbg ~result_var:bound_var
     in
@@ -186,7 +191,7 @@ let simplify_named0 dacc (bindable_let_bound : Bindable_let_bound.t)
       else defining_expr
     in
     let dacc =
-      record_any_symbol_projection dacc defining_expr prim args
+      record_any_symbol_projection dacc defining_expr prim simplified_args
         bindable_let_bound ~bound_var named
     in
     bindings_result [bindable_let_bound, defining_expr] dacc
