@@ -27,4 +27,4 @@ let simplify_nullary_primitive dacc (prim : P.nullary_primitive)
   | Probe_is_enabled _ ->
     let ty = T.any_tagged_bool () in
     let env_extension = TEE.one_equation (Name.var result_var') ty in
-    Reachable.reachable original_term, env_extension, dacc
+    Reachable.reachable original_term, env_extension, [], dacc

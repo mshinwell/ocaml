@@ -73,7 +73,7 @@ let main argv ppf =
     if
       List.length (List.filter (fun x -> !x)
                      [make_package; make_archive; shared;
-                      compile_only; output_c_object]) > 1
+                      stop_early; output_c_object]) > 1
     then
     begin
       let module P = Clflags.Compiler_pass in
@@ -81,11 +81,13 @@ let main argv ppf =
       | None ->
         fatal "Please specify at most one of -pack, -a, -shared, -c, \
              -output-obj";
-      | Some (P.Parsing | P.Typing) ->
+      | Some ((P.Parsing | P.Typing | P.Scheduling | P.Emit) as p) ->
+        assert (P.is_compilation_pass p);
         Printf.ksprintf fatal
           "Options -i and -stop-after (%s) \
            are  incompatible with -pack, -a, -shared, -output-obj"
-          (String.concat "|" P.pass_names)
+          (String.concat "|"
+             (P.available_pass_names ~filter:(fun _ -> true) ~native:true))
     end;
     if !make_archive then begin
       Compmisc.init_path ();
@@ -110,7 +112,7 @@ let main argv ppf =
           (get_objfiles ~with_ocamlparam:false) target);
       Warnings.check_fatal ();
     end
-    else if not !compile_only && !objfiles <> [] then begin
+    else if not !stop_early && !objfiles <> [] then begin
       let target =
         if !output_c_object then
           let s = extract_output !output_name in
