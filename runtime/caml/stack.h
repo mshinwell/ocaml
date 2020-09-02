@@ -97,7 +97,8 @@ typedef struct {
   uint32_t debug_info_offset[num_debug];
 
     Debug info is stored as relative offsets to debuginfo structures.
-    num_debug is num_alloc if frame_size & 2, otherwise 1. */
+    num_debug is num_alloc if Frame_descr_alloc_info_follows(...),
+    otherwise 1. */
 } frame_descr;
 
 #define Frame_descr_frame_size(descr) (descr->first_word)
