@@ -152,6 +152,23 @@ Format.eprintf "About to simplify handler %a, params %a, EPA %a\n%!"
         Continuation.print cont Expr.print handler
     in
     *)
+    let handler, uacc =
+      let params = params @ extra_params_and_args.extra_params in
+      (* We might need to place lifted constants now, as they could
+         depend on continuation parameters.  As such we must also compute
+         the unused parameters after placing any constants! *)
+      if (not at_unit_toplevel)
+        || List.compare_length_with params 0 = 0
+      then handler, uacc
+      else
+        Simplify_common.place_lifted_constants uacc
+          Dominator
+          ~lifted_constants_from_defining_expr:LCS.empty
+          ~lifted_constants_from_body:(UA.lifted_constants uacc)
+          ~put_bindings_around_body:(fun ~body -> body)
+          ~body:handler
+          ~critical_deps_of_bindings:(KP.List.free_names params)
+    in
     let free_names = Expr.free_names handler in
     let used_params =
       (* Removal of unused parameters of recursive continuations is not
@@ -190,21 +207,6 @@ Format.eprintf "About to simplify handler %a, params %a, EPA %a\n%!"
     in
     *)
     let params' = used_params @ used_extra_params in
-    let handler, uacc =
-      (* We might need to place lifted constants now, as they could
-         depend on continuation parameters. *)
-      if (not at_unit_toplevel)
-        || List.compare_length_with params' 0 = 0
-      then handler, uacc
-      else
-        Simplify_common.place_lifted_constants uacc
-          Dominator
-          ~lifted_constants_from_defining_expr:LCS.empty
-          ~lifted_constants_from_body:(UA.lifted_constants uacc)
-          ~put_bindings_around_body:(fun ~body -> body)
-          ~body:handler
-          ~critical_deps_of_bindings:(KP.List.free_names params')
-    in
     let handler =
       CH.with_params_and_handler cont_handler (CPH.create params' ~handler)
     in
