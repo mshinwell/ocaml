@@ -45,9 +45,9 @@ frame_descr * caml_next_frame_descriptor(uintnat * pc, char ** sp)
       h = (h+1) & caml_frame_descriptors_mask;
     }
     /* Skip to next frame */
-    if (d->frame_size != 0xFFFF) {
+    if (Frame_descr_frame_size(d) != 0xFFFF) {
       /* Regular frame, update sp/pc and return the frame descriptor */
-      *sp += (d->frame_size & 0xFFFC);
+      *sp += (Frame_descr_frame_size(d) & 0xFFFC);
       *pc = Saved_return_address(*sp);
 #ifdef Mask_already_scanned
       *pc = Mask_already_scanned(*pc);
@@ -165,12 +165,12 @@ static debuginfo debuginfo_extract(frame_descr* d, int alloc_idx)
   unsigned char* infoptr;
   uint32_t debuginfo_offset;
 
-  if ((d->frame_size & 1) == 0) {
+  if (!Frame_descr_debug_info_follows(d)) {
     return NULL;
   }
   /* Recover debugging info */
-  infoptr = (unsigned char*)&d->live_ofs[d->num_live];
-  if (d->frame_size & 2) {
+  infoptr = (unsigned char*)&d->live_ofs[Frame_descr_num_live(d)];
+  if (Frame_descr_frame_size(d) & 2) {
     CAMLassert(alloc_idx == -1 || (0 <= alloc_idx && alloc_idx < *infoptr));
     /* skip alloc_lengths */
     infoptr += *infoptr + 1;

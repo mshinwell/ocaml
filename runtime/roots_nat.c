@@ -81,17 +81,17 @@ static frame_descr * next_frame_descr(frame_descr * d) {
   unsigned char num_allocs = 0, *p;
   CAMLassert(d->retaddr >= 4096);
   /* Skip to end of live_ofs */
-  p = (unsigned char*)&d->live_ofs[d->num_live];
+  p = (unsigned char*)&d->live_ofs[Frame_descr_num_live(d)];
   /* Skip alloc_lengths if present */
-  if (d->frame_size & 2) {
+  if (Frame_descr_alloc_info_follows(d)) {
     num_allocs = *p;
     p += num_allocs + 1;
   }
   /* Skip debug info if present */
-  if (d->frame_size & 1) {
+  if (Frame_descr_debug_info_follows(d)) {
     /* Align to 32 bits */
     p = Align_to(p, uint32_t);
-    p += sizeof(uint32_t) * (d->frame_size & 2 ? num_allocs : 1);
+    p += sizeof(uint32_t) * Frame_descr_num_debug(d);
   }
   /* Align to word size */
   p = Align_to(p, void*);
@@ -288,9 +288,9 @@ void caml_oldify_local_roots (void)
         if (d->retaddr == retaddr) break;
         h = (h+1) & caml_frame_descriptors_mask;
       }
-      if (d->frame_size != 0xFFFF) {
+      if (Frame_descr_frame_size(d) != 0xFFFF) {
         /* Scan the roots in this frame */
-        for (p = d->live_ofs, n = d->num_live; n > 0; n--, p++) {
+        for (p = d->live_ofs, n = Frame_descr_num_live(d); n > 0; n--, p++) {
           ofs = *p;
           if (ofs & 1) {
             root = regs + (ofs >> 1);
@@ -300,7 +300,7 @@ void caml_oldify_local_roots (void)
           Oldify (root);
         }
         /* Move to next frame */
-        sp += (d->frame_size & 0xFFFC);
+        sp += (Frame_descr_frame_size(d) & 0xFFFC);
         retaddr = Saved_return_address(sp);
 #ifdef Already_scanned
         /* Stop here if the frame has been scanned during earlier GCs  */
@@ -465,9 +465,9 @@ void caml_do_local_roots(scanning_action f, char * bottom_of_stack,
         if (d->retaddr == retaddr) break;
         h = (h+1) & caml_frame_descriptors_mask;
       }
-      if (d->frame_size != 0xFFFF) {
+      if (Frame_descr_frame_size(d) != 0xFFFF) {
         /* Scan the roots in this frame */
-        for (p = d->live_ofs, n = d->num_live; n > 0; n--, p++) {
+        for (p = d->live_ofs, n = Frame_descr_num_live(d); n > 0; n--, p++) {
           ofs = *p;
           if (ofs & 1) {
             root = regs + (ofs >> 1);
@@ -477,7 +477,7 @@ void caml_do_local_roots(scanning_action f, char * bottom_of_stack,
           f (*root, root);
         }
         /* Move to next frame */
-        sp += (d->frame_size & 0xFFFC);
+        sp += (Frame_descr_frame_size(d) & 0xFFFC);
         retaddr = Saved_return_address(sp);
 #ifdef Mask_already_scanned
         retaddr = Mask_already_scanned(retaddr);

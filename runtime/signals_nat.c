@@ -86,7 +86,7 @@ void caml_garbage_collection(void)
 
   /* Compute the total allocation size at this point,
      including allocations combined by Comballoc */
-  alloc_len = (unsigned char*)(&d->live_ofs[d->num_live]);
+  alloc_len = (unsigned char*)(&d->live_ofs[Frame_descr_num_live(d)]);
   nallocs = *alloc_len++;
   for (i = 0; i < nallocs; i++) {
     allocsz += Whsize_wosize(Wosize_encoded_alloc_len(alloc_len[i]));

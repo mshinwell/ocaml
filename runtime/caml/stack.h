@@ -85,20 +85,32 @@ struct caml_context {
 
 typedef struct {
   uintnat retaddr;
-  unsigned short frame_size;
-  unsigned short num_live;
+  unsigned short first_word;
+  unsigned short second_word;
   unsigned short live_ofs[1 /* num_live */];
   /*
-    If frame_size & 2, then allocation info follows:
+    If Frame_descr_alloc_info_follows(...), then allocation info follows:
   unsigned char num_allocs;
   unsigned char alloc_lengths[num_alloc];
 
-    If frame_size & 1, then debug info follows:
+    If Frame_descr_debug_info_follows(...), then debug info follows:
   uint32_t debug_info_offset[num_debug];
 
     Debug info is stored as relative offsets to debuginfo structures.
     num_debug is num_alloc if frame_size & 2, otherwise 1. */
 } frame_descr;
+
+#define Frame_descr_frame_size(descr) (descr->first_word)
+#define Frame_descr_num_live(descr) (descr->second_word)
+#define Frame_descr_alloc_info_follows(descr) \
+  (Frame_descr_frame_size(descr) & 0x2)
+#define Frame_descr_debug_info_follows(descr) \
+  (Frame_descr_frame_size(descr) & 0x1)
+#define Frame_descr_num_allocs(descr) \
+  (*(unsigned char*) &descr->live_ofs[Frame_descr_num_live(descr)])
+#define Frame_descr_num_debug(descr) \
+  (Frame_descr_alloc_info_follows(descr) ? \
+    Frame_descr_num_allocs(descr) : 1)
 
 /* Allocation lengths are encoded as 0-255, giving sizes 1-256 */
 #define Wosize_encoded_alloc_len(n) ((uintnat)(n) + 1)
