@@ -237,21 +237,8 @@ and simplify_non_recursive_let_cont_handler
   Non_recursive_let_cont_handler.pattern_match non_rec_handler
     ~f:(fun cont ~body ->
       let denv = DA.denv dacc in
+      let denv_for_toplevel_check = denv in
       let unit_toplevel_exn_cont = DE.unit_toplevel_exn_continuation denv in
-      let at_unit_toplevel =
-        (* We try to show that [handler] postdominates [body] (which is done by
-           showing that [body] can only return through [cont]) and that if
-           [body] raises any exceptions then it only does so to toplevel.
-           If this can be shown and we are currently at the toplevel of a
-           compilation unit, the handler for the environment can remain marked
-           as toplevel (and suitable for "let symbol" bindings); otherwise, it
-           cannot. *)
-        DE.at_unit_toplevel denv
-          && (not (Continuation_handler.is_exn_handler cont_handler))
-          && Continuation.Set.subset
-               (Name_occurrences.continuations (Expr.free_names body))
-               (Continuation.Set.of_list [cont; unit_toplevel_exn_cont])
-      in
       let dacc, prior_lifted_constants =
         (* We clear the lifted constants accumulator so that we can easily
            obtain, below, any constants that are generated during the
@@ -272,8 +259,7 @@ and simplify_non_recursive_let_cont_handler
           let is_exn_handler = CH.is_exn_handler cont_handler in
           CPH.pattern_match params_and_handler ~f:(fun params ~handler ->
             let denv_before_body =
-              DE.add_parameters_with_unknown_types ~at_unit_toplevel
-                (DA.denv dacc) params
+              DE.add_parameters_with_unknown_types (DA.denv dacc) params
             in
             let dacc_for_body =
               DE.increment_continuation_scope_level denv_before_body
@@ -285,6 +271,11 @@ and simplify_non_recursive_let_cont_handler
                 (DA.denv dacc_for_body))
               DE.print denv_before_body;
             *)
+            let prior_cont_uses_env = DA.continuation_uses_env dacc_for_body in
+            let dacc_for_body =
+              DA.with_continuation_uses_env dacc_for_body
+                ~cont_uses_env:CUE.empty
+            in
             assert (DA.no_lifted_constants dacc_for_body);
             simplify_expr dacc_for_body body (fun dacc_after_body ->
               let cont_uses_env = DA.continuation_uses_env dacc_after_body in
@@ -316,6 +307,13 @@ and simplify_non_recursive_let_cont_handler
                      otherwise, its code will be deleted but any continuation
                      usage information collected during its simplification will
                      remain. *)
+                  let cont_uses_env =
+                    CUE.union prior_cont_uses_env
+                      (CUE.remove cont_uses_env cont)
+                  in
+                  let dacc =
+                    DA.with_continuation_uses_env dacc ~cont_uses_env
+                  in
                   let user_data, uacc = k dacc in
                   cont_handler, user_data, uacc, false, false
                 (* CR mshinwell: Refactor so we don't have the
@@ -368,7 +366,30 @@ and simplify_non_recursive_let_cont_handler
                   let handler_env =
                     DE.with_typing_env handler_env handler_typing_env
                   in
+                  let at_unit_toplevel =
+                    (* We try to show that [handler] postdominates [body] (which
+                       is done by showing that [body] can only return through
+                       [cont]) and that if [body] raises any exceptions then it
+                       only does so to toplevel.  If this can be shown and we
+                       are currently at the toplevel of a compilation unit, the
+                       handler for the environment can remain marked as toplevel
+                       (and suitable for "let symbol" bindings); otherwise, it
+                       cannot. *)
+                    DE.at_unit_toplevel denv_for_toplevel_check
+                      && (not (CH.is_exn_handler cont_handler))
+                      && Continuation.Set.subset
+                          (CUE.all_continuations_used cont_uses_env)
+                          (Continuation.Set.of_list
+                            [cont; unit_toplevel_exn_cont])
+                  in
                   let dacc =
+                    let cont_uses_env =
+                      CUE.union prior_cont_uses_env
+                        (CUE.remove cont_uses_env cont)
+                    in
+                    let dacc =
+                      DA.with_continuation_uses_env dacc ~cont_uses_env
+                    in
                     let denv =
                       (* Install the environment arising from the join into
                          [dacc].  Note that this environment doesn't just
@@ -379,6 +400,10 @@ and simplify_non_recursive_let_cont_handler
                          moving into a different scope.) *)
                       DE.set_at_unit_toplevel_state handler_env
                         at_unit_toplevel
+                    in
+                    let denv =
+                      if not at_unit_toplevel then denv
+                      else DE.mark_parameters_as_toplevel denv params
                     in
                     let denv =
                       (* In the case where the continuation is going to be
@@ -509,26 +534,11 @@ and simplify_recursive_let_cont_handlers
         (* let set = Continuation_handlers.domain rec_handlers in *)
         let body, (handlers, user_data), uacc =
           simplify_expr dacc body (fun dacc_after_body ->
-            let cont_uses_env = DA.continuation_uses_env dacc_after_body in
-            let denv, arg_types =
+            let denv, _arg_types =
               (* XXX These don't have the same scope level as the
                  non-recursive case *)
               DE.add_parameters_with_unknown_types'
                 ~at_unit_toplevel:false definition_denv params
-            in
-            (* CR mshinwell: This next part is dubious, use the rewritten
-               version in the recursive-continuation-unboxing branch. *)
-            let (cont_uses_env, _apply_cont_rewrite_id) :
-              Continuation_uses_env.t * Apply_cont_rewrite_id.t =
-              (* We don't know anything, it's like it was called
-                 with an arbitrary argument! *)
-              CUE.record_continuation_use cont_uses_env cont
-                Non_inlinable (* Maybe simpler ? *)
-                ~env_at_use:(
-                  (* not useful as we will have only top *)
-                  definition_denv
-                )
-                ~arg_types
             in
             let code_age_relation_after_body =
               TE.code_age_relation (DA.typing_env dacc_after_body)
@@ -544,7 +554,9 @@ and simplify_recursive_let_cont_handlers
             let denv = DE.with_typing_env denv typing_env in
             let dacc =
               DA.with_denv dacc_after_body denv
-              |> DA.with_continuation_uses_env ~cont_uses_env
+                (*
+                   |> DA.with_continuation_uses_env ~cont_uses_env
+                   *)
             in
             let dacc = DA.add_lifted_constants dacc prior_lifted_constants in
             let dacc = DA.map_denv dacc ~f:DE.set_not_at_unit_toplevel in
@@ -555,6 +567,10 @@ and simplify_recursive_let_cont_handlers
                 ~extra_params_and_args:
                   Continuation_extra_params_and_args.empty
                 (fun dacc ->
+                  let cont_uses_env =
+                    CUE.remove (DA.continuation_uses_env dacc) cont
+                  in
+                  let dacc = DA.with_continuation_uses_env dacc ~cont_uses_env in
                   let user_data, uacc = k dacc in
                   let uacc =
                     UA.map_uenv uacc ~f:(fun uenv ->

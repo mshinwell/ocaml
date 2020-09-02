@@ -55,3 +55,5 @@ val arity : t -> Flambda_arity.t
 val get_typing_env_no_more_than_one_use
    : t
   -> Flambda_type.Typing_env.t option
+
+val union : t -> t -> t

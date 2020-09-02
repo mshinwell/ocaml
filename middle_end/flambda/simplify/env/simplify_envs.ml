@@ -394,6 +394,13 @@ end = struct
   let add_parameters_with_unknown_types ?at_unit_toplevel t params =
     fst (add_parameters_with_unknown_types' ?at_unit_toplevel t params)
 
+  let mark_parameters_as_toplevel t params =
+    let variables_defined_at_toplevel =
+      Variable.Set.union t.variables_defined_at_toplevel
+        (KP.List.var_set params)
+    in
+    { t with variables_defined_at_toplevel; }
+
   let extend_typing_environment t env_extension =
     let typing_env = TE.add_env_extension t.typing_env env_extension in
     { t with
