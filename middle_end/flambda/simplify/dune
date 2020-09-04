@@ -3,13 +3,23 @@
   (deps
     rec_modules
     template/simplify.templ.ml
+    simplify_apply_expr.rec.ml
+    simplify_apply_cont_expr.rec.ml
     simplify_expr.rec.ml
+    simplify_let_expr.rec.ml
+    simplify_let_cont_expr.rec.ml
     simplify_named.rec.ml
     simplify_set_of_closures.rec.ml
     simplify_static_const.rec.ml
+    simplify_switch_expr.rec.ml
     simplify_toplevel.rec.ml
+    simplify_apply_expr.rec.mli
+    simplify_apply_cont_expr.rec.mli
     simplify_expr.rec.mli
+    simplify_let_expr.rec.mli
+    simplify_let_cont_expr.rec.mli
     simplify_named.rec.mli
+    simplify_switch_expr.rec.mli
     simplify_toplevel.rec.mli
     simplify_set_of_closures.rec.mli
     simplify_static_const.rec.mli

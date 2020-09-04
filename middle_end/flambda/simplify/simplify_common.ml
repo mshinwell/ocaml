@@ -18,6 +18,8 @@
 
 open! Simplify_import
 
+type 'a k = Downwards_acc.t -> ('a * Upwards_acc.t)
+
 let simplify_projection dacc ~original_term ~deconstructing ~shape ~result_var
       ~result_kind =
   let env = DA.typing_env dacc in

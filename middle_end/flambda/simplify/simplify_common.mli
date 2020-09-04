@@ -14,9 +14,11 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Miscellaneous utility functions used by the simplifier. *)
+(** Miscellaneous utility functions and types used by the simplifier. *)
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
+
+type 'a k = Downwards_acc.t -> ('a * Upwards_acc.t)
 
 val simplify_projection
    : Downwards_acc.t

@@ -37,6 +37,7 @@ module Set_of_closures = Flambda.Set_of_closures
 module Static_const = Flambda.Static_const
 module Switch = Flambda.Switch
 
+module AC = Apply_cont
 module CH = Continuation_handler
 module CIS = Code_id_or_symbol
 module CPH = Continuation_params_and_handler
