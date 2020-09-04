@@ -18,7 +18,7 @@
 
 open! Simplify_import
 
-let simplify_direct_tuple_application dacc apply code_id k =
+let simplify_direct_tuple_application dacc apply code_id ~down_to_up =
   let dbg = Apply.dbg apply in
   let callee's_code = DE.find_code (DA.denv dacc) code_id in
   let param_arity =
@@ -60,10 +60,10 @@ let simplify_direct_tuple_application dacc apply code_id k =
         Expr.create_let var_bind defining_expr body)
       vars_and_fields apply_expr
   in
-  Simplify_expr.simplify_expr dacc expr k
+  Simplify_expr.simplify_expr dacc expr ~down_to_up
 
 let rebuild_non_inlined_direct_full_application apply ~use_id ~exn_cont_use_id
-      ~result_arity ~user_data uacc =
+      ~result_arity uacc ~after_rebuild =
   let apply =
     Simplify_common.update_exn_continuation_extra_args uacc ~exn_cont_use_id
       apply
@@ -75,10 +75,10 @@ let rebuild_non_inlined_direct_full_application apply ~use_id ~exn_cont_use_id
       Simplify_common.add_wrapper_for_fixed_arity_apply uacc ~use_id
         result_arity apply
   in
-  expr, user_data, uacc
+  after_rebuild expr uacc
 
 let simplify_direct_full_application dacc apply function_decl_opt
-      ~result_arity k =
+      ~result_arity ~down_to_up =
   let callee = Apply.callee apply in
   let args = Apply.args apply in
   let inlined =
@@ -107,7 +107,8 @@ let simplify_direct_full_application dacc apply function_decl_opt
         Some (dacc, inlined)
   in
   match inlined with
-  | Some (dacc, inlined) -> Simplify_expr.simplify_expr dacc inlined k
+  | Some (dacc, inlined) ->
+    Simplify_expr.simplify_expr dacc inlined ~down_to_up
   | None ->
     let dacc, use_id =
       match Apply.continuation apply with
@@ -128,12 +129,13 @@ let simplify_direct_full_application dacc apply function_decl_opt
         ~arg_types:(T.unknown_types_from_arity_with_subkinds (
           Exn_continuation.arity (Apply.exn_continuation apply)))
     in
-    let user_data, uacc = k dacc in
-    rebuild_non_inlined_direct_full_application apply ~use_id
-      ~exn_cont_use_id ~result_arity ~user_data uacc
+    down_to_up dacc
+      ~rebuild:(rebuild_non_inlined_direct_full_application apply ~use_id
+        ~exn_cont_use_id ~result_arity)
 
 let simplify_direct_partial_application dacc apply ~callee's_code_id
-      ~callee's_closure_id ~param_arity ~result_arity ~recursive k =
+      ~callee's_closure_id ~param_arity ~result_arity ~recursive
+      ~down_to_up =
   (* For simplicity, we disallow [@inline] attributes on partial
      applications.  The user may always write an explicit wrapper instead
      with such an attribute. *)
@@ -299,21 +301,25 @@ let simplify_direct_partial_application dacc apply ~callee's_code_id
       (Named.create_set_of_closures wrapper_taking_remaining_args)
       (Expr.create_apply_cont apply_cont)
   in
-  let expr, user_data, uacc = Simplify_expr.simplify_expr dacc expr k in
-  let uacc = UA.add_outermost_lifted_constant uacc dummy_code in
-  expr, user_data, uacc
+  Simplify_expr.simplify_expr dacc expr
+    ~down_to_up:(fun dacc ~rebuild ->
+      down_to_up dacc ~rebuild:(fun uacc ~after_rebuild ->
+        let uacc = UA.add_outermost_lifted_constant uacc dummy_code in
+        rebuild uacc ~after_rebuild))
 
 (* CR mshinwell: Should it be an error to encounter a non-direct application
    of a symbol after [Simplify]? This shouldn't usually happen, but I'm not 100%
    sure it cannot in every case. *)
 
-let simplify_direct_over_application dacc apply ~param_arity ~result_arity:_ k =
+let simplify_direct_over_application dacc apply ~param_arity ~result_arity:_
+      ~down_to_up =
   let expr = Simplify_common.split_direct_over_application apply ~param_arity in
-  Simplify_expr.simplify_expr dacc expr k
+  Simplify_expr.simplify_expr dacc expr ~down_to_up
 
 let simplify_direct_function_call dacc apply ~callee's_code_id_from_type
       ~callee's_code_id_from_call_kind ~callee's_closure_id ~result_arity
-      ~recursive ~arg_types:_ ~must_be_detupled function_decl_opt k =
+      ~recursive ~arg_types:_ ~must_be_detupled function_decl_opt
+      ~down_to_up =
   let result_arity_of_application =
     Call_kind.return_arity (Apply.call_kind apply)
   in
@@ -337,8 +343,7 @@ let simplify_direct_function_call dacc apply ~callee's_code_id_from_type
   in
   match callee's_code_id with
   | Bottom ->
-    let user_data, uacc = k dacc in
-    Expr.create_invalid (), user_data, uacc
+    down_to_up dacc ~rebuild:Simplify_common.rebuild_invalid
   | Ok callee's_code_id ->
     let call_kind =
       Call_kind.direct_function_call callee's_code_id callee's_closure_id
@@ -346,7 +351,8 @@ let simplify_direct_function_call dacc apply ~callee's_code_id_from_type
     in
     let apply = Apply.with_call_kind apply call_kind in
     if must_be_detupled then
-      simplify_direct_tuple_application dacc apply callee's_code_id k
+      simplify_direct_tuple_application dacc apply callee's_code_id
+        ~down_to_up
     else begin
       let args = Apply.args apply in
       let provided_num_args = List.length args in
@@ -361,12 +367,14 @@ let simplify_direct_function_call dacc apply ~callee's_code_id_from_type
       let num_params = List.length param_arity in
       if provided_num_args = num_params then
         simplify_direct_full_application dacc apply function_decl_opt
-          ~result_arity k
+          ~result_arity ~down_to_up
       else if provided_num_args > num_params then
-        simplify_direct_over_application dacc apply ~param_arity ~result_arity k
+        simplify_direct_over_application dacc apply ~param_arity ~result_arity
+          ~down_to_up
       else if provided_num_args > 0 && provided_num_args < num_params then
         simplify_direct_partial_application dacc apply ~callee's_code_id
-          ~callee's_closure_id ~param_arity ~result_arity ~recursive k
+          ~callee's_closure_id ~param_arity ~result_arity ~recursive
+          ~down_to_up
       else
         Misc.fatal_errorf "Function with %d params when simplifying \
                            direct OCaml function call with %d arguments: %a"
@@ -376,7 +384,7 @@ let simplify_direct_function_call dacc apply ~callee's_code_id_from_type
     end
 
 let rebuild_function_call_where_callee's_type_unavailable apply call_kind
-      ~use_id ~exn_cont_use_id ~user_data uacc =
+      ~use_id ~exn_cont_use_id uacc ~after_rebuild =
   let apply =
     Apply.with_call_kind apply call_kind
     |> Simplify_common.update_exn_continuation_extra_args uacc ~exn_cont_use_id
@@ -385,10 +393,10 @@ let rebuild_function_call_where_callee's_type_unavailable apply call_kind
     Simplify_common.add_wrapper_for_fixed_arity_apply uacc ~use_id
       (Call_kind.return_arity call_kind) apply
   in
-  expr, user_data, uacc
+  after_rebuild expr uacc
 
 let simplify_function_call_where_callee's_type_unavailable dacc apply
-      (call : Call_kind.Function_call.t) ~args:_ ~arg_types k =
+      (call : Call_kind.Function_call.t) ~args:_ ~arg_types ~down_to_up =
   let cont =
     match Apply.continuation apply with
     | Never_returns ->
@@ -467,16 +475,16 @@ let simplify_function_call_where_callee's_type_unavailable dacc apply
       in
       call_kind, use_id, dacc
   in
-  let user_data, uacc = k dacc in
-  rebuild_function_call_where_callee's_type_unavailable apply call_kind
-    ~use_id ~exn_cont_use_id ~user_data uacc
+  down_to_up dacc
+    ~rebuild:(rebuild_function_call_where_callee's_type_unavailable apply
+      call_kind ~use_id ~exn_cont_use_id)
 
 (* CR mshinwell: I've seen at least one case where a call of kind
    [Indirect_unknown_arity] has been generated with no warning, despite having
    [@inlined always]. *)
 
 let simplify_function_call dacc apply ~callee_ty
-      (call : Call_kind.Function_call.t) ~arg_types k =
+      (call : Call_kind.Function_call.t) ~arg_types ~down_to_up =
   let args = Apply.args apply in
   (* Function declarations and params and body might not have the same
      calling convention. Currently the only case when it happens is for tupled
@@ -507,7 +515,7 @@ let simplify_function_call dacc apply ~callee_ty
   in
   let type_unavailable () =
     simplify_function_call_where_callee's_type_unavailable dacc apply call
-      ~args ~arg_types k
+      ~args ~arg_types ~down_to_up
   in
   (* CR mshinwell: Should this be using [meet_shape], like for primitives? *)
   let denv = DA.denv dacc in
@@ -549,7 +557,8 @@ let simplify_function_call dacc apply ~callee_ty
         ~result_arity:(Code.result_arity callee's_code)
         ~recursive:(Code.recursive callee's_code)
         ~must_be_detupled
-        (Some (inlinable, function_decl_rec_info)) k
+        (Some (inlinable, function_decl_rec_info))
+        ~down_to_up
     | Ok (Non_inlinable non_inlinable) ->
       let module N = T.Function_declaration_type.Non_inlinable in
       let callee's_code_id_from_type = N.code_id non_inlinable in
@@ -569,16 +578,15 @@ let simplify_function_call dacc apply ~callee_ty
         ~result_arity:(Code.result_arity callee's_code_from_type)
         ~recursive:(Code.recursive callee's_code_from_type)
         ~must_be_detupled
-        None k
+        None
+        ~down_to_up
     | Bottom ->
-      let user_data, uacc = k dacc in
-      Expr.create_invalid (), user_data, uacc
+      down_to_up dacc ~rebuild:Simplify_common.rebuild_invalid
     | Unknown -> type_unavailable ()
     end
   | Unknown -> type_unavailable ()
   | Invalid ->
-    let user_data, uacc = k dacc in
-    Expr.create_invalid (), user_data, uacc
+    down_to_up dacc ~rebuild:Simplify_common.rebuild_invalid
 
 let simplify_apply_shared dacc apply : _ Or_bottom.t =
   let min_name_mode = Name_mode.normal in
@@ -605,7 +613,7 @@ let simplify_apply_shared dacc apply : _ Or_bottom.t =
       in
       Ok (callee_ty, apply, arg_types)
 
-let rebuild_method_call apply ~use_id ~exn_cont_use_id ~user_data uacc =
+let rebuild_method_call apply ~use_id ~exn_cont_use_id uacc ~after_rebuild =
   let apply =
     Simplify_common.update_exn_continuation_extra_args uacc ~exn_cont_use_id
       apply
@@ -614,9 +622,10 @@ let rebuild_method_call apply ~use_id ~exn_cont_use_id ~user_data uacc =
     Simplify_common.add_wrapper_for_fixed_arity_apply uacc ~use_id
       (Flambda_arity.With_subkinds.create [K.With_subkind.any_value]) apply
   in
-  expr, user_data, uacc
+  after_rebuild expr uacc
 
-let simplify_method_call dacc apply ~callee_ty ~kind:_ ~obj ~arg_types k =
+let simplify_method_call dacc apply ~callee_ty ~kind:_ ~obj ~arg_types
+      ~down_to_up =
   let callee_kind = T.kind callee_ty in
   if not (K.is_value callee_kind) then begin
     Misc.fatal_errorf "Method call with callee of wrong kind %a: %a"
@@ -653,11 +662,11 @@ let simplify_method_call dacc apply ~callee_ty ~kind:_ ~obj ~arg_types k =
   in
   (* CR mshinwell: Need to record exception continuation use (check all other
      cases like this too) *)
-  let user_data, uacc = k dacc in
-  rebuild_method_call apply ~use_id ~exn_cont_use_id ~user_data uacc
+  down_to_up dacc
+    ~rebuild:(rebuild_method_call apply ~use_id ~exn_cont_use_id)
 
-let rebuild_c_call apply ~use_id ~exn_cont_use_id ~return_arity ~user_data
-      uacc =
+let rebuild_c_call apply ~use_id ~exn_cont_use_id ~return_arity uacc
+      ~after_rebuild =
   (* CR mshinwell: Make sure that [resolve_continuation_aliases] has been
      called before building of any term that contains a continuation *)
   let apply =
@@ -672,10 +681,10 @@ let rebuild_c_call apply ~use_id ~exn_cont_use_id ~return_arity ~user_data
     | None ->
       Expr.create_apply apply
   in
-  expr, user_data, uacc
+  after_rebuild expr uacc
 
 let simplify_c_call dacc apply ~callee_ty ~param_arity ~return_arity
-      ~arg_types k =
+      ~arg_types ~down_to_up =
   let callee_kind = T.kind callee_ty in
   if not (K.is_value callee_kind) then begin
     Misc.fatal_errorf "C callees must be of kind [value], not %a: %a"
@@ -723,20 +732,19 @@ let simplify_c_call dacc apply ~callee_ty ~param_arity ~return_arity
       ~arg_types:(T.unknown_types_from_arity_with_subkinds (
         Exn_continuation.arity (Apply.exn_continuation apply)))
   in
-  let user_data, uacc = k dacc in
-  rebuild_c_call apply ~use_id ~exn_cont_use_id ~return_arity ~user_data uacc
+  down_to_up dacc
+    ~rebuild:(rebuild_c_call apply ~use_id ~exn_cont_use_id ~return_arity)
 
-let simplify_apply dacc apply k =
+let simplify_apply dacc apply ~down_to_up =
   match simplify_apply_shared dacc apply with
-  | Bottom ->
-    let user_data, uacc = k dacc in
-    Expr.create_invalid (), user_data, uacc
+  | Bottom -> down_to_up dacc ~rebuild:Simplify_common.rebuild_invalid
   | Ok (callee_ty, apply, arg_types) ->
     match Apply.call_kind apply with
     | Function call ->
-      simplify_function_call dacc apply ~callee_ty call ~arg_types k
+      simplify_function_call dacc apply ~callee_ty call ~arg_types ~down_to_up
     | Method { kind; obj; } ->
-      simplify_method_call dacc apply ~callee_ty ~kind ~obj ~arg_types k
+      simplify_method_call dacc apply ~callee_ty ~kind ~obj ~arg_types
+        ~down_to_up
     | C_call { alloc = _; param_arity; return_arity; } ->
       simplify_c_call dacc apply ~callee_ty ~param_arity ~return_arity
-        ~arg_types k
+        ~arg_types ~down_to_up

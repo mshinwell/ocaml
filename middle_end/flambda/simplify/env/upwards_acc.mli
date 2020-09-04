@@ -23,6 +23,8 @@ val print : Format.formatter -> t -> unit
 
 val create : Simplify_envs.Upwards_env.t -> Downwards_acc.t -> t
 
+val creation_dacc : t -> Downwards_acc.t
+
 (** Extract the environment component of the given upwards accumulator. *)
 val uenv : t -> Simplify_envs.Upwards_env.t
 

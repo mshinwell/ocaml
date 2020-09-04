@@ -25,21 +25,20 @@ open! Simplify_import
    more transparent (e.g. through [find_continuation]).  Tricky potentially in
    conjunction with the rewrites. *)
 
-let simplify_expr dacc expr k =
+let simplify_expr dacc expr ~down_to_up =
   match Expr.descr expr with
   | Let let_expr ->
-    Simplify_let_expr.simplify_let dacc let_expr k
+    Simplify_let_expr.simplify_let dacc let_expr ~down_to_up
   | Let_cont let_cont ->
-    Simplify_let_cont_expr.simplify_let_cont dacc let_cont k
+    Simplify_let_cont_expr.simplify_let_cont dacc let_cont ~down_to_up
   | Apply apply ->
-    Simplify_apply_expr.simplify_apply dacc apply k
+    Simplify_apply_expr.simplify_apply dacc apply ~down_to_up
   | Apply_cont apply_cont ->
-    Simplify_apply_cont_expr.simplify_apply_cont dacc apply_cont k
+    Simplify_apply_cont_expr.simplify_apply_cont dacc apply_cont ~down_to_up
   | Switch switch ->
-    Simplify_switch_expr.simplify_switch dacc switch k
+    Simplify_switch_expr.simplify_switch dacc switch ~down_to_up
   | Invalid _ ->
     (* CR mshinwell: Make sure that a program can be simplified to just
        [Invalid].  [Un_cps] should translate any [Invalid] that it sees as if
        it were [Halt_and_catch_fire]. *)
-    let user_data, uacc = k dacc in
-    expr, user_data, uacc
+    down_to_up dacc ~rebuild:Simplify_common.rebuild_invalid

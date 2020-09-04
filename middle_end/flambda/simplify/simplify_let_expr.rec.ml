@@ -19,8 +19,8 @@
 open! Simplify_import
 
 let rebuild_let bindable_let_bound ~bindings
-      ~lifted_constants_from_defining_expr ~at_unit_toplevel body ~user_data
-      uacc =
+      ~lifted_constants_from_defining_expr ~at_unit_toplevel ~body uacc
+      ~after_rebuild =
   let no_constants_from_defining_expr =
     LCS.is_empty lifted_constants_from_defining_expr
   in
@@ -46,7 +46,7 @@ let rebuild_let bindable_let_bound ~bindings
         |> UA.with_lifted_constants uacc
     in
     let body = Simplify_common.bind_let_bound ~bindings ~body in
-    body, user_data, uacc
+    after_rebuild body uacc
   else
     let scoping_rule =
       (* If this is a "normal" let rather than a "let symbol", then we
@@ -72,9 +72,9 @@ let rebuild_let bindable_let_bound ~bindings
         ~body
         ~critical_deps_of_bindings
     in
-    body, user_data, uacc
+    after_rebuild body uacc
 
-let simplify_let dacc let_expr k =
+let simplify_let dacc let_expr ~down_to_up =
   let module L = Flambda.Let in
   L.pattern_match let_expr ~f:(fun bindable_let_bound ~body ->
     (* Remember then clear the lifted constants memory in [DA] so we can
@@ -109,7 +109,10 @@ let simplify_let dacc let_expr k =
        around the simplified body.  [Simplify_named] will already have
        prepared [dacc] with the necessary bindings for the simplification of
        the body. *)
-    let body, user_data, uacc = Simplify_expr.simplify_expr dacc body k in
-    rebuild_let bindable_let_bound ~bindings
-      ~lifted_constants_from_defining_expr ~at_unit_toplevel body ~user_data
-      uacc)
+    Simplify_expr.simplify_expr dacc body
+      ~down_to_up:(fun dacc ~rebuild:rebuild_body ->
+        down_to_up dacc ~rebuild:(fun uacc ~after_rebuild ->
+          rebuild_body uacc ~after_rebuild:(fun body uacc ->
+            rebuild_let bindable_let_bound ~bindings
+              ~lifted_constants_from_defining_expr ~at_unit_toplevel ~body uacc
+              ~after_rebuild))))

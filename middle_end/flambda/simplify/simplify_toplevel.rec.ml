@@ -20,24 +20,12 @@ open! Simplify_import
 
 let simplify_toplevel dacc expr ~return_continuation ~return_arity
       exn_continuation ~return_cont_scope ~exn_cont_scope =
-  try
-    Simplify_expr.simplify_expr dacc expr (fun dacc ->
-      let uenv =
-        UE.add_continuation UE.empty return_continuation
-          return_cont_scope return_arity
-      in
-      let uenv =
-        UE.add_exn_continuation uenv exn_continuation exn_cont_scope
-      in
-      dacc, UA.create uenv dacc)
-  with Misc.Fatal_error -> begin
-    if !Clflags.flambda_context_on_error then begin
-      Format.eprintf "\n%sContext is:%s simplifying toplevel \
-          expression:@ %a@ in downwards accumulator:@ %a"
-        (Flambda_colours.error ())
-        (Flambda_colours.normal ())
-        Expr.print expr
-        DA.print dacc
-    end;
-    raise Misc.Fatal_error
-  end
+  Simplify_expr.simplify_expr dacc expr ~down_to_up:(fun dacc ~rebuild ->
+    let uenv =
+      UE.add_continuation UE.empty return_continuation
+        return_cont_scope return_arity
+    in
+    let uenv =
+      UE.add_exn_continuation uenv exn_continuation exn_cont_scope
+    in
+    rebuild (UA.create uenv dacc) ~after_rebuild:(fun expr uacc -> expr, uacc))

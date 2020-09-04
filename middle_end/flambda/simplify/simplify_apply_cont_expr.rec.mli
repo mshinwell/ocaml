@@ -16,8 +16,4 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
-val simplify_apply_cont
-   : Downwards_acc.t
-  -> Flambda.Apply_cont.t
-  -> 'a Simplify_common.k
-  -> Flambda.Expr.t * 'a * Upwards_acc.t
+val simplify_apply_cont : Flambda.Apply_cont.t Simplify_common.expr_simplifier

@@ -22,6 +22,10 @@ open! Simplify_import
    simplification of sets of closures, taking the used-var-in-closures
    set from the previous round. *)
 
+(* CR-someday mshinwell: We could consider making the functions in this
+   file tail recursive, although it probably isn't necessary, as
+   excessive levels of nesting of functions seems unlikely. *)
+
 let function_decl_type denv function_decl ?code_id ?params_and_body rec_info =
   let decision =
     Inlining_decision.make_decision_for_function_declaration
@@ -376,7 +380,8 @@ let simplify_function context ~used_closure_vars ~shareable_constants
               ~return_cont_scope:Scope.initial
               ~exn_cont_scope:(Scope.next Scope.initial)
           with
-          | body, dacc_after_body, uacc ->
+          | body, uacc ->
+            let dacc_after_body = UA.creation_dacc uacc in
             let dbg = Function_params_and_body.debuginfo params_and_body in
             (* CR mshinwell: Should probably look at [cont_uses]? *)
             let params_and_body =

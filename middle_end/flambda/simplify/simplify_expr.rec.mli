@@ -19,5 +19,6 @@
 val simplify_expr
    : Downwards_acc.t
   -> Flambda.Expr.t
-  -> 'a Simplify_common.k
-  -> Flambda.Expr.t * 'a * Upwards_acc.t
+  -> down_to_up:(Flambda.Expr.t * Upwards_acc.t,
+       Flambda.Expr.t * Upwards_acc.t) Simplify_common.down_to_up
+  -> Flambda.Expr.t * Upwards_acc.t

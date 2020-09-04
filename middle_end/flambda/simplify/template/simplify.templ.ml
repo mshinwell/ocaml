@@ -81,7 +81,7 @@ let run ~backend ~round unit =
   let exn_cont_scope = DE.get_continuation_scope_level denv in
   let denv = DE.increment_continuation_scope_level denv in
   let dacc = DA.create denv Continuation_uses_env.empty in
-  let body, dacc, uacc =
+  let body, uacc =
     let exn_continuation =
       Exn_continuation.create ~exn_handler:exn_continuation ~extra_args:[]
     in
@@ -89,7 +89,7 @@ let run ~backend ~round unit =
       ~return_arity:[K.With_subkind.any_value] exn_continuation
       ~return_cont_scope ~exn_cont_scope
   in
-  let return_cont_env = DA.continuation_uses_env dacc in
+  let return_cont_env = DA.continuation_uses_env (UA.creation_dacc uacc) in
   let all_code =
     Exported_code.merge (UA.all_code uacc)
       (Exported_code.mark_as_imported !imported_code)

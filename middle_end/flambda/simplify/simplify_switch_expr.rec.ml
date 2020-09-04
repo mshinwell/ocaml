@@ -18,7 +18,8 @@
 
 open! Simplify_import
 
-let rebuild_switch dacc ~arms ~scrutinee ~scrutinee_ty ~user_data uacc =
+let rebuild_switch dacc ~arms ~scrutinee ~scrutinee_ty uacc
+      ~after_rebuild =
   let new_let_conts, arms, identity_arms, not_arms =
     Target_imm.Map.fold
       (fun arm (action, use_id, arity)
@@ -145,9 +146,9 @@ let rebuild_switch dacc ~arms ~scrutinee ~scrutinee_ty ~user_data uacc =
       Simplify_named.simplify_named dacc bound_vars named
     in
     let body = k ~tagged_scrutinee:(Simple.var bound_to) in
-    Simplify_common.bind_let_bound ~bindings ~body, user_data, uacc
+    Simplify_common.bind_let_bound ~bindings ~body, uacc
   in
-  let body, user_data, uacc =
+  let body, uacc =
     match switch_is_identity with
     | Some dest ->
       create_tagged_scrutinee (fun ~tagged_scrutinee ->
@@ -179,7 +180,7 @@ let rebuild_switch dacc ~arms ~scrutinee ~scrutinee_ty ~user_data uacc =
             T.print scrutinee_ty
             Expr.print expr
         end;
-        expr, user_data, uacc
+        expr, uacc
   in
   let expr =
     List.fold_left (fun body (new_cont, new_handler) ->
@@ -187,16 +188,15 @@ let rebuild_switch dacc ~arms ~scrutinee ~scrutinee_ty ~user_data uacc =
       body
       new_let_conts
   in
-  expr, user_data, uacc
+  after_rebuild expr uacc
 
-let simplify_switch dacc switch k =
+let simplify_switch dacc switch ~down_to_up =
   let module AC = Apply_cont in
   let min_name_mode = Name_mode.normal in
   let scrutinee = Switch.scrutinee switch in
   match S.simplify_simple dacc scrutinee ~min_name_mode with
   | Bottom, _ty ->
-    let user_data, uacc = k dacc in
-    Expr.create_invalid (), user_data, uacc
+    down_to_up dacc ~rebuild:Simplify_common.rebuild_invalid
   | Ok scrutinee, scrutinee_ty ->
     let arms, dacc =
       let typing_env_at_use = DA.typing_env dacc in
@@ -240,5 +240,5 @@ let simplify_switch dacc switch k =
         (Switch.arms switch)
         (Target_imm.Map.empty, dacc)
     in
-    let user_data, uacc = k dacc in
-    rebuild_switch dacc ~arms ~scrutinee ~scrutinee_ty ~user_data uacc
+    down_to_up dacc
+      ~rebuild:(rebuild_switch dacc ~arms ~scrutinee ~scrutinee_ty)

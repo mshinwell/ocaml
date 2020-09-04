@@ -25,6 +25,7 @@ module Static_const = Flambda.Static_const
 
 type t = {
   uenv : UE.t;
+  creation_dacc : DA.t;
   code_age_relation : Code_age_relation.t;
   lifted_constants : LCS.t;
   all_code : Exported_code.t;
@@ -33,7 +34,7 @@ type t = {
 }
 
 let print ppf
-      { uenv; code_age_relation; lifted_constants;
+      { uenv; creation_dacc = _; code_age_relation; lifted_constants;
         used_closure_vars; all_code = _; shareable_constants; } =
   Format.fprintf ppf "@[<hov 1>(\
       @[<hov 1>(uenv@ %a)@]@ \
@@ -50,6 +51,7 @@ let print ppf
 
 let create uenv dacc =
   { uenv;
+    creation_dacc = dacc;
     code_age_relation = TE.code_age_relation (DA.typing_env dacc);
     lifted_constants = LCS.empty;
     all_code = Exported_code.empty;
@@ -57,6 +59,7 @@ let create uenv dacc =
     shareable_constants = DA.shareable_constants dacc;
   }
 
+let creation_dacc t = t.creation_dacc
 let uenv t = t.uenv
 let code_age_relation t = t.code_age_relation
 let lifted_constants t = t.lifted_constants

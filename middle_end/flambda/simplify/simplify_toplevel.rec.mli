@@ -24,4 +24,4 @@ val simplify_toplevel
   -> Exn_continuation.t
   -> return_cont_scope:Scope.t
   -> exn_cont_scope:Scope.t
-  -> Flambda.Expr.t * Downwards_acc.t * Upwards_acc.t
+  -> Flambda.Expr.t * Upwards_acc.t
