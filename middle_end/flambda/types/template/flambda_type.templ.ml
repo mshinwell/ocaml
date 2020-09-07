@@ -504,10 +504,15 @@ let prove_variant env t : variant_proof proof_allowing_kind_mismatch =
     begin match blocks_imms.immediates with
     | Unknown -> Unknown
     | Known imms ->
-      match prove_naked_immediates env imms with
+      let const_ctors : _ Or_unknown.t =
+        match prove_naked_immediates env imms with
+        | Unknown -> Unknown
+        | Invalid -> Known Target_imm.Set.empty
+        | Proved const_ctors -> Known const_ctors
+      in
+      match const_ctors with
       | Unknown -> Unknown
-      | Invalid -> Invalid
-      | Proved const_ctors ->
+      | Known const_ctors ->
         let valid =
           Target_imm.Set.for_all Target_imm.is_non_negative const_ctors
         in
