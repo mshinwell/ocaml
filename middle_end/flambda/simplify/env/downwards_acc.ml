@@ -174,3 +174,6 @@ let used_closure_vars t = t.used_closure_vars
 
 let with_used_closure_vars t ~used_closure_vars =
   { t with used_closure_vars; }
+
+let all_continuations_used t =
+  CUE.all_continuations_used t.continuation_uses_env

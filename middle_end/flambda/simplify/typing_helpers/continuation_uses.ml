@@ -71,6 +71,14 @@ let add_use t kind ~env_at_use id ~arg_types =
     raise Misc.Fatal_error
   end
 
+let union t1 t2 =
+  assert (Continuation.equal t1.continuation t2.continuation);
+  assert (Flambda_arity.equal t1.arity t2.arity);
+  { continuation = t1.continuation;
+    arity = t1.arity;
+    uses = t1.uses @ t2.uses;
+  }
+
 let number_of_uses t = List.length t.uses
 
 let arity t = t.arity

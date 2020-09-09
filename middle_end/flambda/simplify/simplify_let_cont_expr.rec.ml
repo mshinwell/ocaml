@@ -132,7 +132,8 @@ let rebuild_non_recursive_let_cont_handler cont
 let simplify_non_recursive_let_cont_handler ~denv_before_body ~dacc_after_body
       cont params ~(handler : Expr.t) cont_handler ~prior_lifted_constants
       ~inlining_depth_increment_at_let_cont ~inlined_debuginfo_at_let_cont
-      ~scope ~at_unit_toplevel ~is_exn_handler ~down_to_up =
+      ~scope ~is_exn_handler ~denv_for_toplevel_check ~unit_toplevel_exn_cont
+      ~prior_cont_uses_env ~down_to_up =
   let cont_uses_env = DA.continuation_uses_env dacc_after_body in
   let code_age_relation_after_body =
     TE.code_age_relation (DA.typing_env dacc_after_body)
@@ -158,6 +159,10 @@ let simplify_non_recursive_let_cont_handler ~denv_before_body ~dacc_after_body
        otherwise, its code will be deleted but any continuation
        usage information collected during its simplification will
        remain. *)
+    let cont_uses_env =
+      CUE.union prior_cont_uses_env (CUE.remove cont_uses_env cont)
+    in
+    let dacc = DA.with_continuation_uses_env dacc ~cont_uses_env in
     down_to_up dacc
       ~rebuild:(rebuild_non_recursive_let_cont_handler cont uses
         ~is_single_inlinable_use:false ~is_single_use:false scope
@@ -193,7 +198,24 @@ let simplify_non_recursive_let_cont_handler ~denv_before_body ~dacc_after_body
         handler_typing_env, extra_params_and_args
     in
     let handler_env = DE.with_typing_env handler_env handler_typing_env in
+    let at_unit_toplevel =
+      (* We try to show that [handler] postdominates [body] (which is done by
+         showing that [body] can only return through [cont]) and that if [body]
+         raises any exceptions then it only does so to toplevel. If this can be
+         shown and we are currently at the toplevel of a compilation unit, the
+         handler for the environment can remain marked as toplevel (and suitable
+         for "let symbol" bindings); otherwise, it cannot. *)
+      DE.at_unit_toplevel denv_for_toplevel_check
+        && (not (CH.is_exn_handler cont_handler))
+        && Continuation.Set.subset
+          (CUE.all_continuations_used cont_uses_env)
+          (Continuation.Set.of_list [cont; unit_toplevel_exn_cont])
+    in
     let dacc =
+      let cont_uses_env =
+        CUE.union prior_cont_uses_env (CUE.remove cont_uses_env cont)
+      in
+      let dacc = DA.with_continuation_uses_env dacc ~cont_uses_env in
       let denv =
         (* Install the environment arising from the join into [dacc].  Note
            that this environment doesn't just contain the joined types; it may
@@ -201,6 +223,10 @@ let simplify_non_recursive_let_cont_handler ~denv_before_body ~dacc_after_body
            simplification of the body.  (The [DE] component of [dacc_after_body]
            is discarded since we are now moving into a different scope.) *)
         DE.set_at_unit_toplevel_state handler_env at_unit_toplevel
+      in
+      let denv =
+        if not at_unit_toplevel then denv
+        else DE.mark_parameters_as_toplevel denv params
       in
       let denv =
         (* In the case where the continuation is going to be inlined, [denv] is
@@ -236,21 +262,8 @@ let simplify_non_recursive_let_cont dacc non_rec ~down_to_up =
   let cont_handler = Non_recursive_let_cont_handler.handler non_rec in
   Non_recursive_let_cont_handler.pattern_match non_rec ~f:(fun cont ~body ->
     let denv = DA.denv dacc in
+    let denv_for_toplevel_check = denv in
     let unit_toplevel_exn_cont = DE.unit_toplevel_exn_continuation denv in
-    let at_unit_toplevel =
-      (* We try to show that [handler] postdominates [body] (which is done by
-         showing that [body] can only return through [cont]) and that if
-         [body] raises any exceptions then it only does so to toplevel.
-         If this can be shown and we are currently at the toplevel of a
-         compilation unit, the handler for the environment can remain marked
-         as toplevel (and suitable for "let symbol" bindings); otherwise, it
-         cannot. *)
-      DE.at_unit_toplevel denv
-        && (not (Continuation_handler.is_exn_handler cont_handler))
-        && Continuation.Set.subset
-              (Name_occurrences.continuations (Expr.free_names body))
-              (Continuation.Set.of_list [cont; unit_toplevel_exn_cont])
-    in
     let dacc, prior_lifted_constants =
       (* We clear the lifted constants accumulator so that we can easily
          obtain, below, any constants that are generated during the
@@ -269,12 +282,20 @@ let simplify_non_recursive_let_cont dacc non_rec ~down_to_up =
     let is_exn_handler = CH.is_exn_handler cont_handler in
     CPH.pattern_match params_and_handler ~f:(fun params ~handler ->
       let denv_before_body =
-        DE.add_parameters_with_unknown_types ~at_unit_toplevel
-          (DA.denv dacc) params
+        (* We add the parameters assuming that none of them are at toplevel.
+           When we do the toplevel calculation before simplifying the
+           handler, we will mark any of the parameters that are in fact at
+           toplevel as such. *)
+        DE.add_parameters_with_unknown_types (DA.denv dacc) params
+          ~at_unit_toplevel:false
       in
       let dacc_for_body =
         DE.increment_continuation_scope_level denv_before_body
         |> DA.with_denv dacc
+      in
+      let prior_cont_uses_env = DA.continuation_uses_env dacc_for_body in
+      let dacc_for_body =
+        DA.with_continuation_uses_env dacc_for_body ~cont_uses_env:CUE.empty
       in
       assert (DA.no_lifted_constants dacc_for_body);
       (* First the downwards traversal is done on the body. *)
@@ -285,8 +306,9 @@ let simplify_non_recursive_let_cont dacc non_rec ~down_to_up =
           simplify_non_recursive_let_cont_handler ~denv_before_body
             ~dacc_after_body cont params ~handler cont_handler
             ~prior_lifted_constants ~inlining_depth_increment_at_let_cont
-            ~inlined_debuginfo_at_let_cont ~scope ~at_unit_toplevel
-            ~is_exn_handler
+            ~inlined_debuginfo_at_let_cont ~scope ~is_exn_handler
+            ~denv_for_toplevel_check ~unit_toplevel_exn_cont
+            ~prior_cont_uses_env
             (* After doing the downwards traversal of the handler, we continue
                the downwards traversal of any surrounding expression (which
                would have to be a [Let_cont]; as such, there's no problem
@@ -320,26 +342,11 @@ let rebuild_recursive_let_cont_handlers cont arity ~original_cont_scope_level
 let simplify_recursive_let_cont_handlers ~denv_before_body ~dacc_after_body
       cont params ~handler cont_handler ~prior_lifted_constants arity
       ~original_cont_scope_level ~down_to_up =
-  let cont_uses_env = DA.continuation_uses_env dacc_after_body in
-  let denv, arg_types =
+  let denv, _arg_types =
     (* XXX These don't have the same scope level as the
         non-recursive case *)
     DE.add_parameters_with_unknown_types'
       ~at_unit_toplevel:false denv_before_body params
-  in
-  (* CR mshinwell: This next part is dubious, use the rewritten
-      version in the recursive-continuation-unboxing branch. *)
-  let (cont_uses_env, _apply_cont_rewrite_id) :
-    Continuation_uses_env.t * Apply_cont_rewrite_id.t =
-    (* We don't know anything, it's like it was called
-        with an arbitrary argument! *)
-    CUE.record_continuation_use cont_uses_env cont
-      Non_inlinable (* Maybe simpler ? *)
-      ~env_at_use:(
-        (* not useful as we will have only top *)
-        denv_before_body
-      )
-      ~arg_types
   in
   let code_age_relation_after_body =
     TE.code_age_relation (DA.typing_env dacc_after_body)
@@ -353,10 +360,7 @@ let simplify_recursive_let_cont_handlers ~denv_before_body ~dacc_after_body
       code_age_relation_after_body
   in
   let denv = DE.with_typing_env denv typing_env in
-  let dacc =
-    DA.with_denv dacc_after_body denv
-    |> DA.with_continuation_uses_env ~cont_uses_env
-  in
+  let dacc = DA.with_denv dacc_after_body denv in
   let dacc = DA.add_lifted_constants dacc prior_lifted_constants in
   let dacc = DA.map_denv dacc ~f:DE.set_not_at_unit_toplevel in
   simplify_one_continuation_handler dacc cont
@@ -365,6 +369,8 @@ let simplify_recursive_let_cont_handlers ~denv_before_body ~dacc_after_body
     ~extra_params_and_args:
       Continuation_extra_params_and_args.empty
     ~down_to_up:(fun dacc ~rebuild:rebuild_handler ->
+      let cont_uses_env = CUE.remove (DA.continuation_uses_env dacc) cont in
+      let dacc = DA.with_continuation_uses_env dacc ~cont_uses_env in
       down_to_up dacc ~rebuild:(fun uacc ~after_rebuild ->
         let uacc =
           UA.map_uenv uacc ~f:(fun uenv ->

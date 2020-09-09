@@ -49,4 +49,6 @@ module type S = sig
     -> Continuation_env_and_param_types.t
 
   val num_continuation_uses : t -> Continuation.t -> int
+
+  val all_continuations_used : t -> Continuation.Set.t
 end

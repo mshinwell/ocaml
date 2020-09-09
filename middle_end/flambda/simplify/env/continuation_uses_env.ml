@@ -75,3 +75,19 @@ let num_continuation_uses t cont =
   match Continuation.Map.find cont t.continuation_uses with
   | exception Not_found -> 0
   | uses -> Continuation_uses.number_of_uses uses
+
+let all_continuations_used t =
+  Continuation.Map.keys t.continuation_uses
+
+let union t1 t2 =
+  let continuation_uses =
+    Continuation.Map.union
+      (fun _ uses1 uses2 -> Some (Continuation_uses.union uses1 uses2))
+      t1.continuation_uses
+      t2.continuation_uses
+  in
+  { continuation_uses; }
+
+let remove t cont =
+  { continuation_uses = Continuation.Map.remove cont t.continuation_uses;
+  }
