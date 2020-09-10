@@ -17,27 +17,8 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 [@@@ocaml.warning "-55"]
 
+(* CR mshinwell: Remove this alias *)
 module Kind = Name_mode
-
-module Num_occurrences : sig
-  type t =
-    | Zero
-    | One
-    | More_than_one
-
-  val print : Format.formatter -> t -> unit
-end = struct
-  type t =
-    | Zero
-    | One
-    | More_than_one
-
-  let print ppf t =
-    match t with
-    | Zero -> Format.fprintf ppf "Zero"
-    | One -> Format.fprintf ppf "One"
-    | More_than_one -> Format.fprintf ppf "More_than_one"
-end
 
 module For_one_variety_of_names (N : sig
   include Identifiable.S
@@ -75,6 +56,8 @@ end) : sig
 
   val count : t -> N.t -> Num_occurrences.t
 
+  val count_normal : t -> N.t -> Num_occurrences.t
+
   val greatest_name_mode : t -> N.t -> Kind.Or_absent.t
 
   val downgrade_occurrences_at_strictly_greater_kind : t -> Kind.t -> t
@@ -99,6 +82,8 @@ end = struct
     val add : t -> Kind.t -> t
 
     val num_occurrences : t -> int
+
+    val num_occurrences_normal : t -> int
 
     val downgrade_occurrences_at_strictly_greater_kind : t -> Kind.t -> t
 
@@ -215,6 +200,7 @@ end = struct
         (num_occurrences_phantom t1 + num_occurrences_phantom t2))
   end
 
+  (* CR mshinwell: This type is a pain, see if it's really worth it *)
   type t =
     | Empty
     | One of N.t * Kind.t
@@ -420,6 +406,23 @@ end = struct
         else if num_occurrences = 1 then One
         else More_than_one
 
+  let count_normal t name : Num_occurrences.t =
+    match t with
+    | Empty -> Zero
+    | One (name', mode) ->
+      if N.equal name name' && Name_mode.is_normal mode then One else Zero
+    | Potentially_many map ->
+      match N.Map.find name map with
+      | exception Not_found -> Zero
+      | for_one_name ->
+        let num_occurrences =
+          For_one_name.num_occurrences_normal for_one_name
+        in
+        assert (num_occurrences >= 0);
+        if num_occurrences = 0 then Zero
+        else if num_occurrences = 1 then One
+        else More_than_one
+
   let greatest_name_mode t name : Kind.Or_absent.t =
     match t with
     | Empty -> Kind.Or_absent.absent
@@ -591,6 +594,9 @@ let count_continuation t cont =
 
 let count_variable t var =
   For_names.count t.names (Name.var var)
+
+let count_variable_normal_mode t var =
+  For_names.count_normal t.names (Name.var var)
 
 let singleton_variable var kind =
   { empty with

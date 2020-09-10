@@ -230,6 +230,7 @@ let rec bind_rec ~backend exn_cont
       in
       let params_and_handler =
         Continuation_params_and_handler.create [] ~handler
+          ~free_names_of_handler:Unknown
       in
       Continuation_handler.create ~params_and_handler
         ~stub:false
@@ -243,6 +244,7 @@ let rec bind_rec ~backend exn_cont
       in
       let params_and_handler =
         Continuation_params_and_handler.create [] ~handler
+          ~free_names_of_handler:Unknown
       in
       Continuation_handler.create ~params_and_handler
         ~stub:false
@@ -254,6 +256,7 @@ let rec bind_rec ~backend exn_cont
           let condition_passed_cont_handler =
             let params_and_handler =
               Continuation_params_and_handler.create [] ~handler:rest
+                ~free_names_of_handler:Unknown
             in
             Continuation_handler.create ~params_and_handler
               ~stub:false
@@ -273,7 +276,8 @@ let rec bind_rec ~backend exn_cont
                   ])))
           in
           Let_cont.create_non_recursive condition_passed_cont
-            condition_passed_cont_handler ~body)
+            condition_passed_cont_handler ~body
+            ~free_names_of_body:Unknown)
         (Expr.create_apply_cont
            (Apply_cont.create primitive_cont ~args:[] ~dbg:Debuginfo.none))
         validity_conditions
@@ -283,7 +287,9 @@ let rec bind_rec ~backend exn_cont
       ~body:(
         Let_cont.create_non_recursive failure_cont
           failure_cont_handler
-          ~body:check_validity_conditions)
+          ~body:check_validity_conditions
+          ~free_names_of_body:Unknown)
+      ~free_names_of_body:Unknown
 
 and bind_rec_primitive ~backend exn_cont ~register_const_string
       (prim : simple_or_prim)

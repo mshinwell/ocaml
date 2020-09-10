@@ -40,7 +40,7 @@
 type t = private
   | Non_recursive of {
       handler : Non_recursive_let_cont_handler.t;
-      num_free_occurrences : Name_occurrences.Num_occurrences.t;
+      num_free_occurrences : Num_occurrences.t Or_unknown.t;
       (** [num_free_occurrences] can be used, for example, to decide whether
           to inline out a linearly-used continuation. *)
     }
@@ -58,6 +58,7 @@ val create_non_recursive
    : Continuation.t
   -> Continuation_handler.t
   -> body:Expr.t
+  -> free_names_of_body:Name_occurrences.t Or_unknown.t
   -> Expr.t
 
 (** Create a definition of a set of possibly-recursive continuations. *)

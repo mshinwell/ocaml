@@ -207,6 +207,7 @@ MIDDLE_END_FLAMBDA_BASIC=\
   middle_end/flambda/naming/name_mode.cmo \
   middle_end/flambda/naming/permutation.cmo \
   middle_end/flambda/naming/name_permutation.cmo \
+  middle_end/flambda/naming/num_occurrences.cmo \
   middle_end/flambda/naming/name_occurrences.cmo \
   middle_end/flambda/basic/or_variable.cmo \
   middle_end/flambda/basic/simple.cmo \

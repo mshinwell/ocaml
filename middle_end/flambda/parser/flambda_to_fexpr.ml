@@ -610,7 +610,7 @@ and static_let_expr env bound_symbols defining_expr body : Fexpr.expr =
           let params_and_body =
             Flambda.Function_params_and_body.pattern_match params_and_body
               ~f:(fun ~return_continuation exn_continuation params ~body
-                  ~my_closure : Fexpr.params_and_body ->
+                  ~my_closure ~is_my_closure_used:_ : Fexpr.params_and_body ->
                 let ret_cont, env =
                   Env.bind_named_continuation env return_continuation
                 in

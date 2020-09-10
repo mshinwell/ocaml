@@ -25,15 +25,6 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Num_occurrences : sig
-  type t = private
-    | Zero
-    | One
-    | More_than_one
-
-  val print : Format.formatter -> t -> unit
-end
-
 type t
 
 val empty : t
@@ -57,6 +48,8 @@ val add_continuation_in_trap_action : t -> Continuation.t -> t
 val count_continuation : t -> Continuation.t -> Num_occurrences.t
 
 val count_variable : t -> Variable.t -> Num_occurrences.t
+
+val count_variable_normal_mode : t -> Variable.t -> Num_occurrences.t
 
 val singleton_variable : Variable.t -> Name_mode.t -> t
 

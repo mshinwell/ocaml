@@ -484,6 +484,7 @@ let rec expr env (e : Fexpr.expr) : Flambda.Expr.t =
       in
       let params_and_handler =
         Flambda.Continuation_params_and_handler.create params ~handler
+          ~free_names_of_handler:Unknown
       in
       let handler =
         Flambda.Continuation_handler.create ~params_and_handler
@@ -493,6 +494,7 @@ let rec expr env (e : Fexpr.expr) : Flambda.Expr.t =
       match recursive with
       | Nonrecursive ->
         Flambda.Let_cont.create_non_recursive name handler ~body
+          ~free_names_of_body:Unknown
       | Recursive ->
         let handlers = Continuation.Map.singleton name handler in
         Flambda.Let_cont.create_recursive handlers ~body
@@ -650,6 +652,7 @@ let rec expr env (e : Fexpr.expr) : Flambda.Expr.t =
               Flambda.Function_params_and_body.create
                 ~return_continuation
                 exn_continuation params ~body ~my_closure ~dbg
+                ~free_names_of_body:Unknown
             in
             Present params_and_body
         in
@@ -765,3 +768,4 @@ let conv ~backend ~module_ident (fexpr : Fexpr.flambda_unit) : Flambda_unit.t =
     ~exn_continuation
     ~body
     ~module_symbol
+    ~used_closure_vars:Unknown

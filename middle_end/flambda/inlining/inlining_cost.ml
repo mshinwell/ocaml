@@ -442,7 +442,7 @@ let smaller' denv expr ~than:threshold =
           | Present params_and_body ->
             Function_params_and_body.pattern_match params_and_body
               ~f:(fun ~return_continuation:_ _exn_continuation _params
-                      ~body ~my_closure:_ ->
+                      ~body ~my_closure:_ ~is_my_closure_used:_ ->
                 expr_size denv body)
           | Deleted -> ())
         funs

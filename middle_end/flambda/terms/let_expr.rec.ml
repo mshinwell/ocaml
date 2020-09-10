@@ -14,12 +14,53 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-30-40-41-42"]
+[@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module T = Flambda_type
 module VB = Var_in_binding_pos
 
-module A = Name_abstraction.Make (Bindable_let_bound) (Expr)
+module T0 = struct
+  type t = {
+    num_normal_occurrences_of_bound_vars : Num_occurrences.t Variable.Map.t;
+    body : Expr.t;
+  }
+
+  let print_with_cache ~cache ppf
+        { body; num_normal_occurrences_of_bound_vars = _; } =
+    fprintf ppf "@[<hov 1>(\
+        @[<hov 1>(body@ %a)@]\
+        )@]"
+      (Expr.print_with_cache ~cache) body
+
+  let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
+
+  let free_names { body; num_normal_occurrences_of_bound_vars = _; } =
+    Expr.free_names body
+
+  let apply_name_permutation
+        ({ body; num_normal_occurrences_of_bound_vars; } as t) perm =
+    let body' = Expr.apply_name_permutation body perm in
+    let changed = ref (body != body') in
+    let num_normal_occurrences_of_bound_vars =
+      Variable.Map.fold (fun var num result ->
+          let var' = Name_permutation.apply_variable perm var in
+          changed := !changed || (var != var');
+          Variable.Map.add var' num result)
+        num_normal_occurrences_of_bound_vars
+        Variable.Map.empty
+    in
+    if not !changed then t
+    else { body = body'; num_normal_occurrences_of_bound_vars; }
+
+  let all_ids_for_export { body; num_normal_occurrences_of_bound_vars = _; } =
+    Expr.all_ids_for_export body
+
+  let import import_map { body; num_normal_occurrences_of_bound_vars; } =
+    let body = Expr.import import_map body in
+    { body; num_normal_occurrences_of_bound_vars; }
+end
+
+module A = Name_abstraction.Make (Bindable_let_bound) (T0)
 
 type t = {
   name_abstraction : A.t;
@@ -28,7 +69,15 @@ type t = {
 
 let pattern_match t ~f =
   A.pattern_match t.name_abstraction
-    ~f:(fun bindable_let_bound body -> f bindable_let_bound ~body)
+    ~f:(fun bindable_let_bound t0 -> f bindable_let_bound ~body:t0.body)
+
+let pattern_match' t ~f =
+  A.pattern_match t.name_abstraction
+    ~f:(fun bindable_let_bound t0 ->
+      let num_normal_occurrences_of_bound_vars =
+        t0.num_normal_occurrences_of_bound_vars
+      in
+      f bindable_let_bound ~num_normal_occurrences_of_bound_vars ~body:t0.body)
 
 module Pattern_match_pair_error = struct
   type t = Mismatched_let_bindings
@@ -39,16 +88,18 @@ end
 
 let pattern_match_pair t1 t2 ~dynamic ~static =
   A.pattern_match t1.name_abstraction
-    ~f:(fun bindable_let_bound1 body1 ->
+    ~f:(fun bindable_let_bound1 t0_1 ->
+      let body1 = t0_1.body in
       A.pattern_match t2.name_abstraction
-        ~f:(fun bindable_let_bound2 body2 ->
+        ~f:(fun bindable_let_bound2 t0_2 ->
+          let body2 = t0_2.body in
           let dynamic_case () =
             let ans =
               A.pattern_match_pair
                 t1.name_abstraction
                 t2.name_abstraction
-                ~f:(fun bindable_let_bound body1 body2 ->
-                  dynamic bindable_let_bound ~body1 ~body2)
+                ~f:(fun bindable_let_bound t0_1 t0_2 ->
+                  dynamic bindable_let_bound ~body1:t0_1.body ~body2:t0_2.body)
             in
             Ok ans
           in
@@ -297,8 +348,30 @@ let print_with_cache ~cache ppf
 
 let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
-let create bindable_let_bound ~defining_expr ~body =
-  { name_abstraction = A.create bindable_let_bound body;
+let create bindable_let_bound ~defining_expr ~body
+      ~(free_names_of_body : _ Or_unknown.t) =
+  let num_normal_occurrences_of_bound_vars =
+    match free_names_of_body with
+    | Unknown -> Variable.Map.empty
+    | Known free_names_of_body ->
+      let free_names_of_bindable =
+        Bindable_let_bound.free_names bindable_let_bound
+      in
+      Name_occurrences.fold_variables free_names_of_bindable
+        ~init:Variable.Map.empty
+        ~f:(fun num_occurrences var ->
+          let num =
+            Name_occurrences.count_variable_normal_mode
+              free_names_of_body var
+          in
+          Variable.Map.add var num num_occurrences)
+  in
+  let t0 : T0.t =
+    { num_normal_occurrences_of_bound_vars;
+      body;
+    }
+  in
+  { name_abstraction = A.create bindable_let_bound t0;
     defining_expr;
   }
 
@@ -342,7 +415,8 @@ let invariant env t =
 
 let defining_expr t = t.defining_expr
 
-let free_names ({ name_abstraction = _; defining_expr; } as t) =
+let free_names
+      ({ name_abstraction = _; defining_expr; } as t) =
   pattern_match t ~f:(fun bindable_let_bound ~body ->
     let from_bindable = Bindable_let_bound.free_names bindable_let_bound in
     let from_defining_expr =
