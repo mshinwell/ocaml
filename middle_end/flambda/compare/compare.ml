@@ -392,7 +392,8 @@ and subst_code env (code : Code.t)
   |> Code.with_newer_version_of newer_version_of
 and subst_params_and_body env params_and_body =
   Function_params_and_body.pattern_match params_and_body
-    ~f:(fun ~return_continuation exn_continuation params ~body ~my_closure ->
+    ~f:(fun ~return_continuation exn_continuation params ~body ~my_closure
+            ~is_my_closure_used:_ ->
       let body = subst_expr env body in
       let dbg = Function_params_and_body.debuginfo params_and_body in
       Function_params_and_body.create

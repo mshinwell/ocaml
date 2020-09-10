@@ -130,7 +130,10 @@ type cont =
       The list of machtypes represent the types of arguments expected by the
       catch handler. *)
   | Inline of { handler_params: Kinded_parameter.t list;
-                handler_body: Flambda.Expr.t; }
+                handler_body: Flambda.Expr.t;
+                handler_params_occurrences:
+                  Name_occurrences.Num_occurrences.t Or_unknown.t
+                    Kinded_parameter.Map.t; }
   (** Inline the continuation.
       When inlining is not possible, generate a jump *)
 (** Translation information for continuations. A continuation may either
@@ -140,7 +143,11 @@ val add_jump_cont : t -> Cmm.machtype list -> Continuation.t -> int * t
 (** Bind the given continuation to a jump, creating a fresh jump id for it. *)
 
 val add_inline_cont :
-  t -> Continuation.t -> Kinded_parameter.t list -> Flambda.Expr.t -> t
+  t -> Continuation.t -> Kinded_parameter.t list
+    -> handler_params_occurrences:
+         Name_occurrences.Num_occurrences.t Or_unknown.t
+           Kinded_parameter.Map.t
+    -> Flambda.Expr.t -> t
 (** Bind the given continuation as an inline continuation, bound over
     the given variables.
     Returns the Cmm continuation id, a reference that will be set to true if

@@ -612,44 +612,50 @@ let split_exn_cont_args k = function
 
 (* effects and co-effects *)
 
-let cont_has_one_occurrence k num =
-  match (num : Name_occurrences.Num_occurrences.t) with
-  | One -> true
-  | More_than_one -> false
-  | Zero ->
-    Misc.fatal_errorf
-      "Found unused let-bound continuation %a, this should not happen"
-      Continuation.print k
+let cont_is_known_to_have_exactly_one_occurrence k (num : _ Or_unknown.t) =
+  match num with
+  | Unknown -> false
+  | Known num ->
+    match (num : Name_occurrences.Num_occurrences.t) with
+    | One -> true
+    | More_than_one -> false
+    | Zero ->
+      Misc.fatal_errorf
+        "Found unused let-bound continuation %a, this should not happen"
+        Continuation.print k
 
 type inlining_decision =
   | Skip (* no use, the bound variable can be skipped/ignored *)
   | Inline (* the variable is used once, we can try and inline its use *)
   | Regular (* the variable is used multiple times, do not try and inline it. *)
 
-let decide_inline_let effs v body =
-  let free_names = Expr.free_names body in
-  match Name_occurrences.count_variable free_names v with
-  | Zero ->
+let decide_inline_let effs
+      ~(num_occurrences_of_bound_var
+          : Name_occurrences.Num_occurrences.t Or_unknown.t) =
+  match num_occurrences_of_bound_var with
+  | Known Zero ->
     begin match Env.classify effs with
     | Coeffect | Pure -> Skip
     | Effect -> Regular (* Could be Inline technically, but it doesn't matter
                            since it can only be flushed by the env. *)
     end
-  | One ->
+  | Known One ->
     begin match Env.classify effs with
-    | Effect when not (Flambda_features.Expert.inline_effects_in_cmm ()) -> Regular
+    | Effect when not (Flambda_features.Expert.inline_effects_in_cmm ()) ->
+      Regular
     | _ -> Inline
     end
-  | More_than_one -> Regular
+  | Known More_than_one | Unknown -> Regular
 
 (* Helpers for translating functions *)
 
-let is_var_used v e =
-  let free_names = Expr.free_names e in
-  Name_occurrences.mem_var free_names v
-
-let function_args vars my_closure body =
-  if is_var_used my_closure body then begin
+let function_args vars my_closure ~(is_my_closure_used : _ Or_unknown.t) =
+  let is_my_closure_used =
+    match is_my_closure_used with
+    | Unknown -> true
+    | Known is_my_closure_used -> is_my_closure_used
+  in
+  if is_my_closure_used then begin
     let last_arg =
       Kinded_parameter.create my_closure Flambda_kind.With_subkind.any_value
     in
@@ -685,12 +691,13 @@ and let_expr env res t =
       expr env res body
     | Normal ->
       let e = Let.defining_expr t in
+      let num_occurrences_of_bound_var = Let.num_occurrences_of_bound_var t in
       begin match bindable_let_bound, e with
       (* Correct cases *)
       | Singleton v, Simple s ->
-        let_expr_simple body env res v s
+        let_expr_simple body env res v ~num_occurrences_of_bound_var s
       | Singleton v, Prim (p, dbg) ->
-        let_expr_prim body env res v p dbg
+        let_expr_prim body env res v ~num_occurrences_of_bound_var p dbg
       | Set_of_closures { closure_vars; _ }, Set_of_closures soc ->
         let_set_of_closures env res body closure_vars soc
       | Symbols { bound_symbols; scoping_rule; }, Static_consts consts ->
@@ -742,38 +749,42 @@ and let_set_of_closures env res body closure_vars s =
     let_dynamic_set_of_closures env res body closure_vars decls elts
 
 
-and let_expr_bind ?extra body env v cmm_expr effs =
-  match decide_inline_let effs v body with
+and let_expr_bind ?extra env v ~num_occurrences_of_bound_var cmm_expr effs =
+  match decide_inline_let effs ~num_occurrences_of_bound_var with
   | Skip -> env
   | Inline -> Env.bind_variable env v ?extra effs true cmm_expr
   | Regular -> Env.bind_variable env v ?extra effs false cmm_expr
 
-and bind_simple body (env, res) v s =
+and bind_simple (env, res) v ~num_occurrences_of_bound_var s =
   let cmm_expr, env, effs = simple env s in
-  let_expr_bind body env v cmm_expr effs, res
+  let_expr_bind env v ~num_occurrences_of_bound_var cmm_expr effs, res
 
-and let_expr_simple body env res v s =
+and let_expr_simple body env res v ~num_occurrences_of_bound_var s =
   let v = Var_in_binding_pos.var v in
-  let env, res = bind_simple body (env, res) v s in
+  let env, res =
+    bind_simple (env, res) v ~num_occurrences_of_bound_var s
+  in
   expr env res body
 
-and let_expr_prim body env res v p dbg =
+and let_expr_prim body env res v ~num_occurrences_of_bound_var p dbg =
   let v = Var_in_binding_pos.var v in
   let cmm_expr, extra, env, effs = prim env dbg p in
   let effs = Ece.join effs (Flambda_primitive.effects_and_coeffects p) in
-  let env = let_expr_bind ?extra body env v cmm_expr effs in
+  let env =
+    let_expr_bind ?extra env v ~num_occurrences_of_bound_var cmm_expr effs
+  in
   expr env res body
 
-and decide_inline_cont h k num_free_occurrences =
+and decide_inline_cont h k ~num_free_occurrences =
   not (Continuation_handler.is_exn_handler h)
   && (Continuation_handler.stub h
-      || cont_has_one_occurrence k num_free_occurrences)
+      || cont_is_known_to_have_exactly_one_occurrence k num_free_occurrences)
 
 and let_cont env res = function
   | Let_cont.Non_recursive { handler; num_free_occurrences; } ->
     Non_recursive_let_cont_handler.pattern_match handler ~f:(fun k ~body ->
       let h = Non_recursive_let_cont_handler.handler handler in
-      if decide_inline_cont h k num_free_occurrences then begin
+      if decide_inline_cont h k ~num_free_occurrences then begin
         let_cont_inline env res k h body
       end else
         let_cont_jump env res k h body
@@ -786,8 +797,12 @@ and let_cont env res = function
 
 (* The bound continuation [k] will be inlined. *)
 and let_cont_inline env res k h body =
-  let args, handler = continuation_handler_split h in
-  let env = Env.add_inline_cont env k args handler in
+  let params, handler_params_occurrences, handler =
+    continuation_handler_split h
+  in
+  let env =
+    Env.add_inline_cont env k params ~handler_params_occurrences handler
+  in
   expr env res body
 
 (* Continuations that are not inlined are translated using a jump:
@@ -866,16 +881,20 @@ and let_cont_rec env res conts body =
 
 and continuation_handler_split h =
   let h = Continuation_handler.params_and_handler h in
-  Continuation_params_and_handler.pattern_match h ~f:(fun args ~handler ->
-    args, handler
-  )
+  Continuation_params_and_handler.pattern_match' h
+    ~f:(fun params ~params_num_occurrences ~handler ->
+      let num_occurrences_by_param =
+        Kinded_parameter.Map.of_list
+          (List.combine params params_num_occurrences)
+      in
+      params, num_occurrences_by_param, handler)
 
 and continuation_arg_tys h =
-  let args, _ = continuation_handler_split h in
+  let args, _, _ = continuation_handler_split h in
   List.map machtype_of_kinded_parameter args
 
 and continuation_handler env res h =
-  let args, handler = continuation_handler_split h in
+  let args, _, handler = continuation_handler_split h in
   let env, vars = var_list env args in
   let e, res = expr env res handler in
   vars, e, res
@@ -1004,13 +1023,27 @@ and wrap_cont env res effs call e =
     | Jump { types = [_]; cont; } ->
       let wrap, _ = Env.flush_delayed_lets env in
       wrap (C.cexit cont [call] []), res
-    | Inline { handler_params = []; handler_body = body; _ } ->
+    | Inline { handler_params = []; handler_body = body;
+               handler_params_occurrences = _; } ->
       let var = Variable.create "*apply_res*" in
-      let env = let_expr_bind body env var call effs in
+      let env =
+        let_expr_bind env var
+          ~num_occurrences_of_bound_var:(Or_unknown.Known
+            Name_occurrences.Num_occurrences.Zero)
+          call effs
+      in
       expr env res body
-    | Inline { handler_params = [v]; handler_body = body; _ } ->
-      let var = Kinded_parameter.var v in
-      let env = let_expr_bind body env var call effs in
+    | Inline { handler_params = [param]; handler_body = body;
+               handler_params_occurrences; } ->
+      let num_occurrences_of_bound_var : _ Or_unknown.t =
+        match Kinded_parameter.Map.find param handler_params_occurrences with
+        | exception Not_found -> Unknown
+        | num_occurrences_or_unknown -> num_occurrences_or_unknown
+      in
+      let var = Kinded_parameter.var param in
+      let env =
+        let_expr_bind env var ~num_occurrences_of_bound_var call effs
+      in
       expr env res body
     | Jump _
     | Inline _ ->
@@ -1088,24 +1121,34 @@ and apply_cont_ret env res e k = function
 
 and apply_cont_regular env res e k args =
   match Env.get_k env k with
-  | Inline { handler_params; handler_body; } ->
+  | Inline { handler_params; handler_body; handler_params_occurrences; } ->
     if not (Apply_cont_expr.trap_action e = None) then begin
       Misc.fatal_errorf "This [Apply_cont] should not have a trap \
                          action:@ %a"
         Apply_cont_expr.print e
     end;
     apply_cont_inline env res e k args handler_body handler_params
+      ~handler_params_occurrences
   | Jump { types; cont; } ->
     apply_cont_jump env res e types cont args
 
 (* Inlining a continuation call simply needs to bind the arguments to the
    variables that the continuation's body expects. The delayed lets in the
    environment enables that translation to be tail-rec. *)
-and apply_cont_inline env res e k args handler_body handler_params =
+and apply_cont_inline env res e k args handler_body handler_params
+      ~handler_params_occurrences =
   if List.compare_lengths args handler_params = 0 then begin
-    let vars = List.map Kinded_parameter.var handler_params in
     let env, res =
-      List.fold_left2 (bind_simple handler_body) (env, res) vars args
+      List.fold_left2 (fun env_and_res param ->
+          let num_occurrences_of_bound_var : _ Or_unknown.t =
+            match Kinded_parameter.Map.find param handler_params_occurrences with
+            | exception Not_found -> Unknown
+            | num_occurrences_or_unknown -> num_occurrences_or_unknown
+          in
+          bind_simple env_and_res (Kinded_parameter.var param)
+            ~num_occurrences_of_bound_var)
+        (env, res)
+        handler_params args
     in
     expr env res handler_body
   end else
@@ -1321,7 +1364,9 @@ and let_dynamic_set_of_closures env res body closure_vars decls elts =
     List.fold_left2 (fun acc cid v ->
       let v = Var_in_binding_pos.var v in
       let e, effs = get_closure_by_offset env soc_cmm_var cid in
-      let_expr_bind body acc v e effs
+      (* It doesn't seem important to know the number of occurrences here. *)
+      let_expr_bind acc v ~num_occurrences_of_bound_var:Or_unknown.Unknown
+        e effs
     ) env (Closure_id.Lmap.keys decls) closure_vars in
   (* The set of closures, as well as the individual closures variables
      are correctly set in the env, go on translating the body. *)
@@ -1386,9 +1431,10 @@ and fill_up_to j acc i =
 
 and params_and_body env res fun_name p =
   Function_params_and_body.pattern_match p
-    ~f:(fun ~return_continuation:k k_exn vars ~body ~my_closure ->
+    ~f:(fun ~return_continuation:k k_exn vars ~body ~my_closure
+          ~is_my_closure_used ->
       try
-        let args = function_args vars my_closure body in
+        let args = function_args vars my_closure ~is_my_closure_used in
         let k_exn = Exn_continuation.exn_handler k_exn in
         (* Init the env and create a jump id for the ret closure
            in case a trap action is attached to one of tis call *)

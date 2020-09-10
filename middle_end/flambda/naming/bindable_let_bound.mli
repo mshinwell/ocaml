@@ -47,6 +47,8 @@ val symbols : Bound_symbols.t -> Symbol_scoping_rule.t -> t
 
 val must_be_singleton : t -> Var_in_binding_pos.t
 
+val must_be_singleton_opt : t -> Var_in_binding_pos.t option
+
 val must_be_set_of_closures : t -> Var_in_binding_pos.t list
 
 val must_be_symbols : t -> symbols

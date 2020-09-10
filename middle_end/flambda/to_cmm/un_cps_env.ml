@@ -21,7 +21,10 @@
 type cont =
   | Jump of { types: Cmm.machtype list; cont: int; }
   | Inline of { handler_params: Kinded_parameter.t list;
-                handler_body: Flambda.Expr.t; }
+                handler_body: Flambda.Expr.t;
+                handler_params_occurrences:
+                  Name_occurrences.Num_occurrences.t Or_unknown.t
+                    Kinded_parameter.Map.t; }
 
 (* Extra information about bound variables. These extra information
    help keep track of some extra semantics that are useful to
@@ -254,10 +257,11 @@ let add_jump_cont env types k =
   let conts = Continuation.Map.add k (Jump { types; cont; }) env.conts in
   cont, { env with conts }
 
-let add_inline_cont env k vars e =
+let add_inline_cont env k vars ~handler_params_occurrences e =
   let info = Inline {
       handler_params = vars;
       handler_body = e;
+      handler_params_occurrences;
     } in
   let conts = Continuation.Map.add k info env.conts in
   { env with conts }

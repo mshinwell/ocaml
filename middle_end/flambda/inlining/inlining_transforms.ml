@@ -33,7 +33,8 @@ let inline dacc ~callee ~args function_decl
     Code.params_and_body_must_be_present code ~error_context:"Inlining"
   in
   Function_params_and_body.pattern_match params_and_body
-    ~f:(fun ~return_continuation exn_continuation params ~body ~my_closure ->
+    ~f:(fun ~return_continuation exn_continuation params ~body ~my_closure
+            ~is_my_closure_used:_ ->
           let denv =
             DE.set_inlining_depth_increment
               (DE.set_inlined_debuginfo denv dbg)

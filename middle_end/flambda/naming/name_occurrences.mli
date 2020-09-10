@@ -26,7 +26,7 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module Num_occurrences : sig
-  type t = private
+  type t =
     | Zero
     | One
     | More_than_one

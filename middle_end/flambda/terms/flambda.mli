@@ -227,6 +227,10 @@ end and Let_expr : sig
   (** The defining expression of the [Let]. *)
   val defining_expr : t -> Named.t
 
+  val num_occurrences_of_bound_var
+     : t
+    -> Name_occurrences.Num_occurrences.t Or_unknown.t
+
   (** Look inside the [Let] by choosing a member of the alpha-equivalence
       class. *)
   val pattern_match
@@ -282,7 +286,8 @@ end and Let_cont_expr : sig
   type t = private
     | Non_recursive of {
         handler : Non_recursive_let_cont_handler.t;
-        num_free_occurrences : Name_occurrences.Num_occurrences.t;
+        num_free_occurrences
+          : Name_occurrences.Num_occurrences.t Or_unknown.t;
         (** [num_free_occurrences] can be used, for example, to decide whether
             to inline out a linearly-used continuation.  It will always be
             strictly greater than zero. *)
@@ -296,7 +301,8 @@ end and Let_cont_expr : sig
       does not occur free in the [body], then just the [body] is returned,
       without any enclosing [Let_cont]. *)
   val create_non_recursive
-     : Continuation.t
+     : ?free_names_of_body:Name_occurrences.t
+    -> Continuation.t
     -> Continuation_handler.t
     -> body:Expr.t
     -> Expr.t
@@ -397,13 +403,23 @@ end and Continuation_params_and_handler : sig
   (** Create a value of type [t] given information about a continuation
       handler. *)
   val create
-     : Kinded_parameter.t list
+     : ?free_names_of_handler:Name_occurrences.t
+    -> Kinded_parameter.t list
     -> handler:Expr.t
     -> t
 
   (** Choose a member of the alpha-equivalence class to enable examination
       of the parameters, relations thereon and the code over which they
       are scoped. *)
+  val pattern_match'
+     : t
+    -> f:(Kinded_parameter.t list
+      -> params_num_occurrences:
+          Name_occurrences.Num_occurrences.t Or_unknown.t list
+      -> handler:Expr.t
+      -> 'a)
+    -> 'a
+
   val pattern_match
      : t
     -> f:(Kinded_parameter.t list
@@ -491,7 +507,8 @@ end and Function_params_and_body : sig
   (** Create an abstraction that binds the given parameters, with associated
       relations thereon, over the given body. *)
   val create
-     : return_continuation:Continuation.t
+     : ?free_names_of_body:Name_occurrences.t
+    -> return_continuation:Continuation.t
     -> Exn_continuation.t
     -> Kinded_parameter.t list
     -> dbg:Debuginfo.t
@@ -515,6 +532,7 @@ end and Function_params_and_body : sig
       -> Kinded_parameter.t list
       -> body:Expr.t
       -> my_closure:Variable.t
+      -> is_my_closure_used:bool Or_unknown.t
       -> 'a)
     -> 'a
 

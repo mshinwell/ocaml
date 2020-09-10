@@ -40,7 +40,8 @@
 type t = private
   | Non_recursive of {
       handler : Non_recursive_let_cont_handler.t;
-      num_free_occurrences : Name_occurrences.Num_occurrences.t;
+      num_free_occurrences :
+        Name_occurrences.Num_occurrences.t Or_unknown.t;
       (** [num_free_occurrences] can be used, for example, to decide whether
           to inline out a linearly-used continuation. *)
     }
@@ -55,7 +56,8 @@ include Contains_ids.S with type t := t
     does not occur free in the [body], then just the [body] is returned,
     without any enclosing [Let_cont]. *)
 val create_non_recursive
-   : Continuation.t
+   : ?free_names_of_body:Name_occurrences.t
+  -> Continuation.t
   -> Continuation_handler.t
   -> body:Expr.t
   -> Expr.t

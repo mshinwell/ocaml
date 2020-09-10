@@ -29,13 +29,23 @@ include Contains_ids.S with type t := t
 (** Create a value of type [t] given information about a continuation
     handler. *)
 val create
-   : Kinded_parameter.t list
+   : ?free_names_of_handler:Name_occurrences.t
+  -> Kinded_parameter.t list
   -> handler:Expr.t
   -> t
 
 (** Choose a member of the alpha-equivalence class to enable examination
     of the parameters, relations thereon and the code over which they
     are scoped. *)
+val pattern_match'
+   : t
+  -> f:(Kinded_parameter.t list
+    -> params_num_occurrences:
+         Name_occurrences.Num_occurrences.t Or_unknown.t list
+    -> handler:Expr.t
+    -> 'a)
+  -> 'a
+
 val pattern_match
    : t
   -> f:(Kinded_parameter.t list

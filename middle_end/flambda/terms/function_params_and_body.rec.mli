@@ -35,7 +35,8 @@ include Contains_ids.S with type t := t
 (** Create an abstraction that binds the given parameters, with associated
     relations thereon, over the given body. *)
 val create
-   : return_continuation:Continuation.t
+   : ?free_names_of_body:Name_occurrences.t
+  -> return_continuation:Continuation.t
   -> Exn_continuation.t
   -> Kinded_parameter.t list
   -> dbg:Debuginfo.t
@@ -58,6 +59,7 @@ val pattern_match
     -> Kinded_parameter.t list
     -> body:Expr.t
     -> my_closure:Variable.t
+    -> is_my_closure_used:bool Or_unknown.t
     -> 'a)
   -> 'a
 
