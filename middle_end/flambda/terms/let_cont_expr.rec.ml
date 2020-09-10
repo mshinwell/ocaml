@@ -19,7 +19,7 @@
 type t =
   | Non_recursive of {
       handler : Non_recursive_let_cont_handler.t;
-      num_free_occurrences : Name_occurrences.Num_occurrences.t;
+      num_free_occurrences : Num_occurrences.t Or_unknown.t;
     }
   | Recursive of Recursive_let_cont_handlers.t
 
@@ -89,17 +89,17 @@ let print_with_cache ~cache ppf t =
 let print ppf t =
   print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
-let create_non_recursive cont handler ~body =
-  let free_names = Expr.free_names body in
+let create_non_recursive cont handler ~body ~free_names_of_body =
   let num_free_occurrences =
-    Name_occurrences.count_continuation free_names cont
+    Or_unknown.map free_names_of_body ~f:(fun free_names_of_body ->
+      Name_occurrences.count_continuation free_names_of_body cont)
   in
   (* We don't inline out linear uses of continuations here, as it could
      result in quadratic behaviour.  However we can safely avoid creating
      a completely unused continuation binding. *)
   match num_free_occurrences with
-  | Zero -> body
-  | One | More_than_one ->
+  | Known Zero -> body
+  | Known One | Known More_than_one | Unknown ->
     match Expr.descr body with
     | Apply_cont apply_cont when Apply_cont.is_goto_to apply_cont cont ->
       (* CR mshinwell: This could work for the >0 arity-case too, to handle

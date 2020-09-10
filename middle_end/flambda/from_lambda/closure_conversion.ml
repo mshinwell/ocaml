@@ -272,6 +272,11 @@ let close_c_call t ~let_bound_var (prim : Primitive.description)
       let params_and_handler =
         Continuation_params_and_handler.create params
           ~handler:code_after_call
+          (* Here and elsewhere in this pass, we specify [Unknown] for
+             free name sets like this, since the information isn't needed
+             until the translation to Cmm -- by which point Simplify will
+             have rebuilt the term and provided the free names. *)
+          ~free_names_of_handler:Unknown
       in
       Continuation_handler.create ~params_and_handler
         ~stub:false
@@ -279,6 +284,7 @@ let close_c_call t ~let_bound_var (prim : Primitive.description)
     in
     Let_cont.create_non_recursive return_continuation after_call
       ~body:call
+      ~free_names_of_body:Unknown
 
 let close_exn_continuation t env (exn_continuation : Ilambda.exn_continuation) =
   let extra_args =
@@ -406,6 +412,7 @@ let rec close t env (ilam : Ilambda.t) : Expr.t =
     let handler = close t handler_env handler in
     let params_and_handler =
       Continuation_params_and_handler.create params ~handler
+        ~free_names_of_handler:Unknown
     in
     let handler =
       Continuation_handler.create ~params_and_handler
@@ -416,6 +423,7 @@ let rec close t env (ilam : Ilambda.t) : Expr.t =
     begin match recursive with
     | Nonrecursive ->
       Flambda.Let_cont.create_non_recursive name handler ~body
+        ~free_names_of_body:Unknown
     | Recursive ->
       let handlers = Continuation.Map.singleton name handler in
       Flambda.Let_cont.create_recursive handlers ~body
@@ -826,6 +834,7 @@ and close_one_function t ~external_env ~by_closure_id decl
     Function_params_and_body.create
       ~return_continuation:(Function_decl.return_continuation decl)
       exn_continuation params ~dbg ~body ~my_closure
+      ~free_names_of_body:Unknown
   in
   let params_arity = Kinded_parameter.List.arity_with_subkinds params in
   let is_tupled =
@@ -940,6 +949,7 @@ let ilambda_to_flambda ~backend ~module_ident ~module_block_size_in_words
     let params_and_handler =
       Continuation_params_and_handler.create [param]
         ~handler:load_fields_body
+        ~free_names_of_handler:Unknown
     in
     Continuation_handler.create ~params_and_handler
       ~stub:false  (* CR mshinwell: remove "stub" notion *)
@@ -955,6 +965,7 @@ let ilambda_to_flambda ~backend ~module_ident ~module_block_size_in_words
     Let_cont.create_non_recursive ilam.return_continuation
       load_fields_cont_handler
       ~body
+      ~free_names_of_body:Unknown
   in
   begin match ilam.exn_continuation.extra_args with
   | [] -> ()
@@ -1002,4 +1013,4 @@ let ilambda_to_flambda ~backend ~module_ident ~module_block_size_in_words
   in
   (* CR mshinwell: Delete [t.imported_symbols] if unused *)
   Flambda_unit.create ~return_continuation:return_cont ~exn_continuation ~body
-    ~module_symbol
+    ~module_symbol ~used_closure_vars:Unknown

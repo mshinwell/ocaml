@@ -24,6 +24,13 @@ include Expr_std.S with type t := t
 
 include Contains_ids.S with type t := t
 
+val create
+   : Bindable_let_bound.t
+  -> defining_expr:Named.t
+  -> body:Expr.t
+  -> free_names_of_body:Name_occurrences.t Or_unknown.t
+  -> t
+
 (** The defining expression of the [Let]. *)
 val defining_expr : t -> Named.t
 
@@ -32,6 +39,14 @@ val defining_expr : t -> Named.t
 val pattern_match
    : t
   -> f:(Bindable_let_bound.t -> body:Expr.t -> 'a)
+  -> 'a
+
+val pattern_match'
+   : t
+  -> f:(Bindable_let_bound.t
+    -> num_normal_occurrences_of_bound_vars:Num_occurrences.t Variable.Map.t
+    -> body:Expr.t
+    -> 'a)
   -> 'a
 
 module Pattern_match_pair_error : sig
@@ -57,5 +72,3 @@ val pattern_match_pair
        -> body2:Expr.t
        -> 'a)
   -> ('a, Pattern_match_pair_error.t) Result.t
-
-val create : Bindable_let_bound.t -> defining_expr:Named.t -> body:Expr.t -> t

@@ -184,7 +184,8 @@ let rebuild_switch dacc ~arms ~scrutinee ~scrutinee_ty uacc
   in
   let expr =
     List.fold_left (fun body (new_cont, new_handler) ->
-        Let_cont.create_non_recursive new_cont new_handler ~body)
+        Let_cont.create_non_recursive new_cont new_handler ~body
+          ~free_names_of_body:(Known (Expr.free_names body)))
       body
       new_let_conts
   in

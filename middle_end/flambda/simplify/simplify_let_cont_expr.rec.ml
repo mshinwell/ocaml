@@ -66,7 +66,8 @@ let rebuild_one_continuation_handler cont ~at_unit_toplevel
   in
   let params' = used_params @ used_extra_params in
   let handler =
-    CH.with_params_and_handler cont_handler (CPH.create params' ~handler)
+    CH.with_params_and_handler cont_handler
+      (CPH.create params' ~handler ~free_names_of_handler:(Known free_names))
   in
   let rewrite =
     Apply_cont_rewrite.create ~original_params:params
@@ -255,7 +256,11 @@ let rebuild_non_recursive_let_cont cont ~body handler ~uenv_without_cont uacc
   (* The upwards environment of [uacc] is replaced so that out-of-scope
      continuation bindings do not end up in the accumulator. *)
   let uacc = UA.with_uenv uacc uenv_without_cont in
-  let expr = Let_cont.create_non_recursive cont handler ~body in
+  let free_names_of_body = Expr.free_names body in
+  let expr =
+    Let_cont.create_non_recursive cont handler ~body
+      ~free_names_of_body:(Known free_names_of_body)
+  in
   after_rebuild expr uacc
 
 let simplify_non_recursive_let_cont dacc non_rec ~down_to_up =

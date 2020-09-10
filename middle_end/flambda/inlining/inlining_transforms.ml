@@ -33,7 +33,8 @@ let inline dacc ~callee ~args function_decl
     Code.params_and_body_must_be_present code ~error_context:"Inlining"
   in
   Function_params_and_body.pattern_match params_and_body
-    ~f:(fun ~return_continuation exn_continuation params ~body ~my_closure ->
+    ~f:(fun ~return_continuation exn_continuation params ~body ~my_closure
+            ~is_my_closure_used:_ ->
           let denv =
             DE.set_inlining_depth_increment
               (DE.set_inlined_debuginfo denv dbg)
@@ -100,17 +101,21 @@ let inline dacc ~callee ~args function_decl
                       Trap_action.Pop { exn_handler = wrapper; raise_kind = None; }
                     in
                     let args = List.map (fun (v, _) -> Simple.var v) kinded_params in
-                    let handler =
-                      Expr.create_apply_cont (Apply_cont.create
-                                                ~trap_action
-                                                apply_return_continuation
-                                                ~args
-                                                ~dbg: Debuginfo.none)
+                    let apply_cont =
+                      Apply_cont.create ~trap_action
+                        apply_return_continuation
+                        ~args
+                        ~dbg:Debuginfo.none
                     in
+                    let handler = Expr.create_apply_cont apply_cont in
                     let params_and_handler =
                       Continuation_params_and_handler.create
                         (Kinded_parameter.List.create kinded_params)
                         ~handler
+                        (* We don't need to give any name occurrence
+                           information since the entirety of the expression
+                           we're building will be re-simplified. *)
+                        ~free_names_of_handler:Unknown
                     in
                     Continuation_handler.create ~params_and_handler
                       ~stub:false
@@ -122,6 +127,7 @@ let inline dacc ~callee ~args function_decl
                   in
                   Let_cont.create_non_recursive pop_wrapper_cont
                     pop_wrapper_handler ~body
+                    ~free_names_of_body:Unknown
               in
               let wrapper_handler =
                 let param = Variable.create "exn" in
@@ -145,6 +151,7 @@ let inline dacc ~callee ~args function_decl
                 in
                 let params_and_handler =
                   Continuation_params_and_handler.create kinded_params ~handler
+                    ~free_names_of_handler:Unknown
                 in
                 Continuation_handler.create ~params_and_handler
                   ~stub:false
@@ -156,6 +163,7 @@ let inline dacc ~callee ~args function_decl
                 let handler = body_with_pop in
                 let params_and_handler =
                   Continuation_params_and_handler.create [] ~handler
+                    ~free_names_of_handler:Unknown
                 in
                 let push_wrapper_handler =
                   Continuation_handler.create ~params_and_handler
@@ -174,9 +182,11 @@ let inline dacc ~callee ~args function_decl
                 in
                 Let_cont.create_non_recursive push_wrapper_cont
                   push_wrapper_handler ~body
+                  ~free_names_of_body:Unknown
               in
               Let_cont.create_non_recursive wrapper wrapper_handler
                 ~body:body_with_push
+                ~free_names_of_body:Unknown
           in
 (*
   Format.eprintf "Inlined body to be simplified:@ %a\n%!"

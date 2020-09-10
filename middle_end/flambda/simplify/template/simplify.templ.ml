@@ -101,6 +101,7 @@ let run ~backend ~round unit =
   in
   let unit =
     FU.create ~return_continuation ~exn_continuation ~module_symbol ~body
+      ~used_closure_vars:(Known used_closure_vars)
   in
   { cmx;
     unit;

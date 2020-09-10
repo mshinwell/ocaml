@@ -234,6 +234,14 @@ end and Let_expr : sig
     -> f:(Bindable_let_bound.t -> body:Expr.t -> 'a)
     -> 'a
 
+  val pattern_match'
+     : t
+    -> f:(Bindable_let_bound.t
+      -> num_normal_occurrences_of_bound_vars:Num_occurrences.t Variable.Map.t
+      -> body:Expr.t
+      -> 'a)
+    -> 'a
+
   module Pattern_match_pair_error : sig
     type t = Mismatched_let_bindings
 
@@ -282,7 +290,7 @@ end and Let_cont_expr : sig
   type t = private
     | Non_recursive of {
         handler : Non_recursive_let_cont_handler.t;
-        num_free_occurrences : Name_occurrences.Num_occurrences.t;
+        num_free_occurrences : Num_occurrences.t Or_unknown.t;
         (** [num_free_occurrences] can be used, for example, to decide whether
             to inline out a linearly-used continuation.  It will always be
             strictly greater than zero. *)
@@ -299,6 +307,7 @@ end and Let_cont_expr : sig
      : Continuation.t
     -> Continuation_handler.t
     -> body:Expr.t
+    -> free_names_of_body:Name_occurrences.t Or_unknown.t
     -> Expr.t
 
   (** Create a definition of a set of possibly-recursive continuations. *)
@@ -399,11 +408,20 @@ end and Continuation_params_and_handler : sig
   val create
      : Kinded_parameter.t list
     -> handler:Expr.t
+    -> free_names_of_handler:Name_occurrences.t Or_unknown.t
     -> t
 
   (** Choose a member of the alpha-equivalence class to enable examination
       of the parameters, relations thereon and the code over which they
       are scoped. *)
+  val pattern_match'
+     : t
+    -> f:(Kinded_parameter.t list
+      -> num_normal_occurrences_of_params:Num_occurrences.t Variable.Map.t
+      -> handler:Expr.t
+      -> 'a)
+    -> 'a
+
   val pattern_match
      : t
     -> f:(Kinded_parameter.t list
@@ -496,6 +514,7 @@ end and Function_params_and_body : sig
     -> Kinded_parameter.t list
     -> dbg:Debuginfo.t
     -> body:Expr.t
+    -> free_names_of_body:Name_occurrences.t Or_unknown.t
     -> my_closure:Variable.t
     -> t
 
@@ -515,6 +534,7 @@ end and Function_params_and_body : sig
       -> Kinded_parameter.t list
       -> body:Expr.t
       -> my_closure:Variable.t
+      -> is_my_closure_used:bool Or_unknown.t
       -> 'a)
     -> 'a
 

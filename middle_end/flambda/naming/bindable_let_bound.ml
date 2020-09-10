@@ -216,6 +216,11 @@ let must_be_singleton t =
   | Set_of_closures _ | Symbols _ ->
     Misc.fatal_errorf "Bound name is not a [Singleton]:@ %a" print t
 
+let must_be_singleton_opt t =
+  match t with
+  | Singleton var -> Some var
+  | Set_of_closures _ | Symbols _ -> None
+
 let must_be_set_of_closures t =
   match t with
   | Set_of_closures { closure_vars; _ } -> closure_vars

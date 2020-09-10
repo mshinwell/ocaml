@@ -16,6 +16,14 @@
 
 open! Flambda.Import
 
+let filter_closure_vars set ~used_closure_vars =
+  Var_within_closure.Map.filter (fun clos_var _bound_to ->
+      match (used_closure_vars : _ Or_unknown.t) with
+      | Unknown -> true
+      | Known used_closure_vars ->
+        Var_within_closure.Set.mem clos_var used_closure_vars)
+    (Set_of_closures.closure_elements set)
+
 (* Compute offsets for elements within a closure block
 
    Closure_ids and environment values within a closure block can occur
@@ -380,11 +388,7 @@ module Greedy = struct
     let closures = Closure_id.Map.bindings closure_map in
     let state = create_closure_slots set state code closures in
     (* Fill env var slots *)
-    let env_map =
-      Var_within_closure.Map.filter (fun clos_var _bound_to ->
-          Var_within_closure.Set.mem clos_var used_closure_vars)
-        (Set_of_closures.closure_elements set_id)
-    in
+    let env_map = filter_closure_vars set_id ~used_closure_vars in
     let env_vars = List.map fst (Var_within_closure.Map.bindings env_map) in
     let state = create_env_var_slots set state env_vars in
     state

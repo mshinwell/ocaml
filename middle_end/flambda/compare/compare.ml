@@ -392,7 +392,8 @@ and subst_code env (code : Code.t)
   |> Code.with_newer_version_of newer_version_of
 and subst_params_and_body env params_and_body =
   Function_params_and_body.pattern_match params_and_body
-    ~f:(fun ~return_continuation exn_continuation params ~body ~my_closure ->
+    ~f:(fun ~return_continuation exn_continuation params ~body ~my_closure
+            ~is_my_closure_used:_ ->
       let body = subst_expr env body in
       let dbg = Function_params_and_body.debuginfo params_and_body in
       Function_params_and_body.create
@@ -402,6 +403,7 @@ and subst_params_and_body env params_and_body =
         ~dbg
         ~body
         ~my_closure
+        ~free_names_of_body:Unknown
     )
 and subst_let_cont env (let_cont_expr : Let_cont_expr.t) =
   match let_cont_expr with
@@ -413,6 +415,7 @@ and subst_let_cont env (let_cont_expr : Let_cont_expr.t) =
           (Non_recursive_let_cont_handler.handler handler)
       in
       Let_cont_expr.create_non_recursive cont handler ~body
+        ~free_names_of_body:Unknown
     )
   | Recursive handlers ->
     Recursive_let_cont_handlers.pattern_match handlers
@@ -432,6 +435,7 @@ and subst_cont_handler env cont_handler =
       let handler = subst_expr env handler in
       let params_and_handler =
         Continuation_params_and_handler.create params ~handler
+          ~free_names_of_handler:Unknown
       in
       Continuation_handler.create ~params_and_handler
         ~stub:(Continuation_handler.stub cont_handler)
@@ -1181,7 +1185,7 @@ and codes env (code1 : Code.t) (code2 : Code.t) =
              let dbg = Function_params_and_body.debuginfo params_and_body1 in
              Function_params_and_body.create
                ~return_continuation exn_continuation params ~dbg ~body:body1'
-               ~my_closure
+               ~my_closure ~free_names_of_body:Unknown
            )
       )
   in
@@ -1231,6 +1235,7 @@ and let_cont_exprs env (let_cont1 : Let_cont.t) (let_cont2 : Let_cont.t)
           (Non_rec.handler handler2, body2)
         |> Comparison.map ~f:(fun (handler, body) ->
              Let_cont.create_non_recursive cont handler ~body
+               ~free_names_of_body:Unknown
            ))
     |> Comparison.add_condition ~cond:(num1 = num2)
          ~approximant:(fun () -> subst_let_cont env let_cont1)
@@ -1276,6 +1281,7 @@ and cont_handlers env handler1 handler2 =
       |> Comparison.map ~f:(fun handler ->
           let params_and_handler =
             Continuation_params_and_handler.create params ~handler
+              ~free_names_of_handler:Unknown
           in
           Continuation_handler.create
             ~params_and_handler
@@ -1322,5 +1328,6 @@ let flambda_units u1 u2 =
          ~exn_continuation:exn_cont
          ~body
          ~module_symbol
+         ~used_closure_vars:Unknown
      )
 ;;

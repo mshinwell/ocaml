@@ -345,7 +345,7 @@ let simplify_function context ~used_closure_vars ~shareable_constants
     let params_and_body, dacc_after_body, uacc_after_upwards_traversal =
       Function_params_and_body.pattern_match params_and_body
         ~f:(fun ~return_continuation exn_continuation params ~body
-                ~my_closure ->
+                ~my_closure ~is_my_closure_used:_ ->
           let dacc =
             dacc_inside_function context ~used_closure_vars ~shareable_constants
               ~params ~my_closure closure_id
@@ -384,9 +384,12 @@ let simplify_function context ~used_closure_vars ~shareable_constants
             let dacc_after_body = UA.creation_dacc uacc in
             let dbg = Function_params_and_body.debuginfo params_and_body in
             (* CR mshinwell: Should probably look at [cont_uses]? *)
+            let free_names_of_body = Expr.free_names body in
             let params_and_body =
-              Function_params_and_body.create ~return_continuation
-                exn_continuation params ~dbg ~body ~my_closure
+              Function_params_and_body.create
+                ~free_names_of_body:(Known free_names_of_body)
+                ~return_continuation exn_continuation params ~dbg ~body
+                ~my_closure
             in
             params_and_body, dacc_after_body, uacc
           | exception Misc.Fatal_error ->

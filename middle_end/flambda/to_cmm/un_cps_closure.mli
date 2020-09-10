@@ -26,6 +26,16 @@ val closure_code : string -> string
 (** Returns the address for a function code from the global name of
     a closure. *)
 
+val filter_closure_vars
+   : Flambda.Set_of_closures.t
+  -> used_closure_vars:Var_within_closure.Set.t Or_unknown.t
+  -> Simple.t Var_within_closure.Map.t
+(** Returns the assignments of closure variables to [Simple]s from the
+    given set of closures, but ignoring any closure variable that does not
+    occur in [used_closure_vars], so long as [used_closure_vars] is [Known].
+    If [used_closure_vars] is [Unknown] then assignments for all closure
+    variables are returned. *)
+
 (* val map_on_function_decl :
  *   (string -> Closure_id.t -> Flambda.Function_declaration.t -> 'a) ->
  *   Flambda_unit.t -> 'a Closure_id.Map.t

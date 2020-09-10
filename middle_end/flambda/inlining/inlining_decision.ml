@@ -66,7 +66,8 @@ let make_decision_for_function_declaration denv ?params_and_body function_decl
       in
       Function_params_and_body.pattern_match params_and_body
         ~f:(fun ~return_continuation:_ _exn_continuation _params ~body
-                ~my_closure:_ : Function_declaration_decision.t ->
+                ~my_closure:_ ~is_my_closure_used:_
+                : Function_declaration_decision.t ->
           let inlining_threshold : Inlining_cost.Threshold.t =
             let round = DE.round denv in
             let unscaled =

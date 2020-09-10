@@ -241,6 +241,7 @@ let simplify_direct_partial_application dacc apply ~callee's_code_id
         ~body
         ~dbg
         ~my_closure
+        ~free_names_of_body:Unknown
     in
     let code_id =
       Code_id.create

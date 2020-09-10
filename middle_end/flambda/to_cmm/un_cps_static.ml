@@ -43,13 +43,6 @@ let nativeint_of_targetint t =
   | Int32 i -> Nativeint.of_int32 i
   | Int64 i -> Int64.to_nativeint i
 
-let filter_closure_vars env s =
-  let used_closure_vars = Env.used_closure_vars env in
-  let aux clos_var _bound_to =
-    Var_within_closure.Set.mem clos_var used_closure_vars
-  in
-  Var_within_closure.Map.filter aux s
-
 let todo () = failwith "Not yet implemented"
 (* ----- End of functions to share ----- *)
 
@@ -158,7 +151,10 @@ let rec static_set_of_closures env symbs set prev_update =
   let clos_symb = ref None in
   let fun_decls = Set_of_closures.function_decls set in
   let decls = Function_declarations.funs fun_decls in
-  let elts = filter_closure_vars env (Set_of_closures.closure_elements set) in
+  let elts =
+    Un_cps_closure.filter_closure_vars set
+      ~used_closure_vars:(Env.used_closure_vars env)
+  in
   let layout = Env.layout env
       (List.map fst (Closure_id.Map.bindings decls))
       (List.map fst (Var_within_closure.Map.bindings elts))

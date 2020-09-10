@@ -31,11 +31,20 @@ include Contains_ids.S with type t := t
 val create
    : Kinded_parameter.t list
   -> handler:Expr.t
+  -> free_names_of_handler:Name_occurrences.t Or_unknown.t
   -> t
 
 (** Choose a member of the alpha-equivalence class to enable examination
     of the parameters, relations thereon and the code over which they
     are scoped. *)
+val pattern_match'
+   : t
+  -> f:(Kinded_parameter.t list
+    -> num_normal_occurrences_of_params:Num_occurrences.t Variable.Map.t
+    -> handler:Expr.t
+    -> 'a)
+  -> 'a
+
 val pattern_match
    : t
   -> f:(Kinded_parameter.t list

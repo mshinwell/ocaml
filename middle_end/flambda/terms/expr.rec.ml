@@ -277,7 +277,10 @@ let create_singleton_let (bound_var : Var_in_binding_pos.t) defining_expr body
   if not keep_binding then body, let_creation_result
   else
     let bound_vars = Bindable_let_bound.singleton bound_var in
-    let let_expr = Let_expr.create bound_vars ~defining_expr ~body in
+    let let_expr =
+      Let_expr.create bound_vars ~defining_expr ~body
+        ~free_names_of_body:(Known free_names_of_body)
+    in
     let free_names =
       let from_defining_expr =
         let from_defining_expr = Named.free_names defining_expr in
@@ -320,7 +323,10 @@ let create_set_of_closures_let ~closure_vars defining_expr body
   then
     body, Have_deleted defining_expr
   else
-    let let_expr = Let_expr.create bound_vars ~defining_expr ~body in
+    let let_expr =
+      Let_expr.create bound_vars ~defining_expr ~body
+        ~free_names_of_body:(Known free_names_of_body)
+    in
     let free_names =
       let from_defining_expr = Named.free_names defining_expr in
       Name_occurrences.union from_defining_expr
@@ -337,7 +343,10 @@ let create_set_of_closures_let ~closure_vars defining_expr body
 let create_let_symbol bindable defining_expr body =
   let free_names_of_body = free_names body in
   let free_names_of_bindable = Bindable_let_bound.free_names bindable in
-  let let_expr = Let_expr.create bindable ~defining_expr ~body in
+  let let_expr =
+    Let_expr.create bindable ~defining_expr ~body
+      ~free_names_of_body:(Known free_names_of_body)
+  in
   let free_names =
     let from_defining_expr = Named.free_names defining_expr in
     Name_occurrences.union from_defining_expr
@@ -383,7 +392,7 @@ let create_invalid ?semantics () =
     match semantics with
     | Some semantics ->
       semantics
-    | None -> 
+    | None ->
       if !Clflags.treat_invalid_code_as_unreachable then
         Treat_as_unreachable
       else

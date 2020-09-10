@@ -40,6 +40,7 @@ val create
   -> Kinded_parameter.t list
   -> dbg:Debuginfo.t
   -> body:Expr.t
+  -> free_names_of_body:Name_occurrences.t Or_unknown.t
   -> my_closure:Variable.t
   -> t
 
@@ -58,6 +59,7 @@ val pattern_match
     -> Kinded_parameter.t list
     -> body:Expr.t
     -> my_closure:Variable.t
+    -> is_my_closure_used:bool Or_unknown.t
     -> 'a)
   -> 'a
 

@@ -18,10 +18,12 @@
 
 module T0 = struct
   type t = {
+    num_normal_occurrences_of_params : Num_occurrences.t Variable.Map.t;
     handler : Expr.t;
   }
 
-  let print_with_cache ~cache ppf { handler; } =
+  let print_with_cache ~cache ppf
+        { handler; num_normal_occurrences_of_params = _; } =
     fprintf ppf "@[<hov 1>(\
         @[<hov 1>(handler@ %a)@]\
         )@]"
@@ -29,22 +31,23 @@ module T0 = struct
 
   let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
-  let free_names { handler; } =
+  let free_names { handler; num_normal_occurrences_of_params = _; } =
     Expr.free_names handler
 
-  let apply_name_permutation ({ handler; } as t) perm =
+  let apply_name_permutation
+        ({ handler; num_normal_occurrences_of_params; } as t) perm =
     let handler' =
       Expr.apply_name_permutation handler perm
     in
     if handler == handler' then t
-    else { handler = handler'; }
+    else { handler = handler'; num_normal_occurrences_of_params; }
 
-  let all_ids_for_export { handler; } =
+  let all_ids_for_export { handler; num_normal_occurrences_of_params = _; } =
     Expr.all_ids_for_export handler
 
-  let import import_map { handler; } =
+  let import import_map { handler; num_normal_occurrences_of_params; } =
     let handler = Expr.import import_map handler in
-    { handler; }
+    { handler; num_normal_occurrences_of_params; }
 end
 
 include Name_abstraction.Make_list (Kinded_parameter) (T0)
@@ -55,16 +58,37 @@ let print ppf t : unit = print ppf t
 
 let print_with_cache ~cache ppf t : unit = print_with_cache ~cache ppf t
 
-let create params ~handler =
+let create params ~handler ~(free_names_of_handler : _ Or_unknown.t) =
+  let num_normal_occurrences_of_params =
+    match free_names_of_handler with
+    | Unknown -> Variable.Map.empty
+    | Known free_names_of_handler ->
+      ListLabels.fold_left params
+        ~init:Variable.Map.empty
+        ~f:(fun num_occurrences param ->
+          let var = Kinded_parameter.var param in
+          let num =
+            Name_occurrences.count_variable_normal_mode
+              free_names_of_handler var
+          in
+          Variable.Map.add var num num_occurrences)
+  in
   let t0 : T0.t =
-    { handler;
+    { num_normal_occurrences_of_params;
+      handler;
     }
   in
   create params t0
 
+let pattern_match' t ~f =
+  pattern_match t
+    ~f:(fun params { handler; num_normal_occurrences_of_params; } ->
+      f params ~num_normal_occurrences_of_params ~handler)
+
 let pattern_match t ~f =
-  pattern_match t ~f:(fun params { handler; } ->
-    f params ~handler)
+  pattern_match t
+    ~f:(fun params { handler; num_normal_occurrences_of_params = _; } ->
+      f params ~handler)
 
 module Pattern_match_pair_error = struct
   type t = Parameter_lists_have_different_lengths
@@ -81,7 +105,7 @@ let pattern_match_pair t1 t2 ~f =
          [Name_abstraction.Make_list]? *)
       if List.compare_lengths params1 params2 = 0 then
         pattern_match_pair t1 t2 ~f:(
-          fun params { handler = handler1; } { handler = handler2; } ->
+          fun params { handler = handler1; _ } { handler = handler2; _ } ->
             Ok (f params ~handler1 ~handler2))
       else
         Error Pattern_match_pair_error.Parameter_lists_have_different_lengths))

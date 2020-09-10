@@ -49,8 +49,8 @@ val mk :
   Exported_offsets.t ->
   Exported_code.t ->
   Continuation.t -> Continuation.t ->
-  Var_within_closure.Set.t -> t
-(** [mk offsets k k_exn used_closure_vars] creates a local environment for
+  used_closure_vars:Var_within_closure.Set.t Or_unknown.t -> t
+(** [mk offsets k k_exn ~used_closure_vars] creates a local environment for
     translating a flambda expression, with return continuation [k], exception
     continuation [k_exn], and which uses the given closures variables. *)
 
@@ -130,7 +130,9 @@ type cont =
       The list of machtypes represent the types of arguments expected by the
       catch handler. *)
   | Inline of { handler_params: Kinded_parameter.t list;
-                handler_body: Flambda.Expr.t; }
+                handler_body: Flambda.Expr.t;
+                handler_params_occurrences: Num_occurrences.t Variable.Map.t;
+              }
   (** Inline the continuation.
       When inlining is not possible, generate a jump *)
 (** Translation information for continuations. A continuation may either
@@ -140,7 +142,9 @@ val add_jump_cont : t -> Cmm.machtype list -> Continuation.t -> int * t
 (** Bind the given continuation to a jump, creating a fresh jump id for it. *)
 
 val add_inline_cont :
-  t -> Continuation.t -> Kinded_parameter.t list -> Flambda.Expr.t -> t
+  t -> Continuation.t -> Kinded_parameter.t list
+    -> handler_params_occurrences:Num_occurrences.t Variable.Map.t
+    -> Flambda.Expr.t -> t
 (** Bind the given continuation as an inline continuation, bound over
     the given variables.
     Returns the Cmm continuation id, a reference that will be set to true if
@@ -176,7 +180,7 @@ val layout :
   t -> Closure_id.t list -> Var_within_closure.t list -> Un_cps_closure.layout
 (** Wrapper around {!Un_cps_closure.layout}. *)
 
-val used_closure_vars : t -> Var_within_closure.Set.t
+val used_closure_vars : t -> Var_within_closure.Set.t Or_unknown.t
 (** All closure variables used in the whole program. *)
 
 val add_to_scope : t -> Code_id_or_symbol.Set.t -> t

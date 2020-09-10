@@ -23,13 +23,16 @@ type t = {
   exn_continuation : Continuation.t;
   body : Flambda.Expr.t;
   module_symbol : Symbol.t;
+  used_closure_vars : Var_within_closure.Set.t Or_unknown.t;
 }
 
-let create ~return_continuation ~exn_continuation ~body ~module_symbol =
+let create ~return_continuation ~exn_continuation ~body ~module_symbol
+      ~used_closure_vars =
   { return_continuation;
     exn_continuation;
     body;
     module_symbol;
+    used_closure_vars;
   }
 
 let return_continuation t = t.return_continuation
@@ -39,22 +42,24 @@ let module_symbol t = t.module_symbol
 
 let print ppf
       { return_continuation; exn_continuation; body; module_symbol;
+        used_closure_vars;
       } =
   Format.fprintf ppf "@[<hov 1>(\
         @[<hov 1>(module_symbol@ %a)@]@ \
         @[<hov 1>(return_continuation@ %a)@]@ \
         @[<hov 1>(exn_continuation@ %a)@]@ \
+        @[<hov 1>(used_closure_vars@ %a)@]@ \
         @[<hov 1>%a@]\
       )@]"
     Symbol.print module_symbol
     Continuation.print return_continuation
     Continuation.print exn_continuation
+    (Or_unknown.print Var_within_closure.Set.print) used_closure_vars
     Flambda.Expr.print body
 
 let invariant _t = ()
 
-let used_closure_vars t =
-  Name_occurrences.closure_vars (Flambda.Expr.free_names t.body)
+let used_closure_vars t = t.used_closure_vars
 
 (* Iter on all sets of closures of a given program. *)
 (* CR mshinwell: These functions should be pushed directly into [Flambda] *)
@@ -135,7 +140,8 @@ module Iter = struct
         | Deleted -> ()
         | Present params_and_body ->
           Function_params_and_body.pattern_match params_and_body
-            ~f:(fun ~return_continuation:_ _ _ ~body ~my_closure:_ ->
+            ~f:(fun ~return_continuation:_ _ _ ~body ~my_closure:_
+                    ~is_my_closure_used:_ ->
                 expr f_c f_s body))
       ~set_of_closures:(fun () ~closure_symbols set_of_closures ->
         f_s ~closure_symbols:(Some closure_symbols) set_of_closures)

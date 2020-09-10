@@ -139,6 +139,7 @@ let add_wrapper_for_fixed_arity_continuation0 uacc cont_or_apply_cont
       let new_handler =
         let params_and_handler =
           Continuation_params_and_handler.create kinded_params ~handler:expr
+            ~free_names_of_handler:(Known (Expr.free_names expr))
         in
         Continuation_handler.create ~params_and_handler
           ~stub:false
@@ -185,7 +186,9 @@ let add_wrapper_for_fixed_arity_continuation uacc cont ~use_id arity ~around =
   | This_continuation cont -> around cont
   | Apply_cont _ -> assert false
   | New_wrapper (new_cont, new_handler) ->
-    Let_cont.create_non_recursive new_cont new_handler ~body:(around new_cont)
+    let body = around new_cont in
+    Let_cont.create_non_recursive new_cont new_handler ~body
+      ~free_names_of_body:(Known (Expr.free_names body))
 
 let add_wrapper_for_fixed_arity_apply uacc ~use_id arity apply =
   match Apply.continuation apply with
@@ -558,8 +561,10 @@ let split_direct_over_application apply ~param_arity =
   let after_full_application_handler =
     let params_and_handler =
       let func_param = KP.create func_var K.With_subkind.any_value in
+      let free_names_of_expr = Apply.free_names perform_over_application in
       Continuation_params_and_handler.create [func_param]
         ~handler:(Expr.create_apply perform_over_application)
+        ~free_names_of_handler:(Known free_names_of_expr)
     in
     Continuation_handler.create ~params_and_handler
       ~stub:false
@@ -575,6 +580,7 @@ let split_direct_over_application apply ~param_arity =
     Let_cont.create_non_recursive after_full_application
       after_full_application_handler
       ~body:(Expr.create_apply full_apply)
+      ~free_names_of_body:(Known (Apply.free_names full_apply))
   in
   expr
 
