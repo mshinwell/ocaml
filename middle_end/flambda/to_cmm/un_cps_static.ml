@@ -442,7 +442,11 @@ let static_consts env r ~params_and_body bound_symbols static_consts =
          symbols and static consts. *)
       let dummy_body = Expr.create_invalid () in
       let tmp_let_symbol =
-        Expr.create_let_symbol bound_symbols Syntactic static_consts dummy_body
+        Let.create (Bindable_let_bound.symbols bound_symbols Syntactic)
+          (Named.create_static_consts static_consts)
+          ~body:dummy_body
+          ~free_names_of_body:(Known Name_occurrences.empty)
+        |> Expr.create_let
       in
       Format.eprintf
         "\n@[<v 0>%sContext is:%s translating `let symbol' to Cmm:@ %a@."
@@ -451,4 +455,3 @@ let static_consts env r ~params_and_body bound_symbols static_consts =
         Expr.print tmp_let_symbol
     end;
     raise e
-

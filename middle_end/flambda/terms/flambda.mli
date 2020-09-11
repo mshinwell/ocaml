@@ -63,36 +63,7 @@ module rec Expr : sig
   (** Extract the description of an expression. *)
   val descr : t -> descr
 
-  (** What happened when a [Let]-expression was created. *)
-  type let_creation_result = private
-    | Have_deleted of Named.t
-    | Nothing_deleted
-
-  (** Create a [Let]-expression.  Unnecessary variable bindings will not be
-      created and their associated defining expressions will be reported as
-      [Have_deleted]. *)
-  val create_pattern_let0
-     : Bindable_let_bound.t
-    -> Named.t
-    -> t
-    -> t * let_creation_result
-
-  (** Like [create_let0], but for use when the caller isn't interested in
-      whether something got deleted. *)
-  val create_let : Var_in_binding_pos.t -> Named.t -> t -> t
-
-  (** Create a [Let]-expression that may bind more than a single [Variable]
-      (such as is required to bind a [Set_of_closures]). *)
-  val create_pattern_let : Bindable_let_bound.t -> Named.t -> t -> t
-
-  (** Create a [Let] expression that binds one or more statically-allocated
-      values to one or more symbol(s). *)
-  val create_let_symbol
-     : Bound_symbols.t
-    -> Symbol_scoping_rule.t
-    -> Static_const.Group.t
-    -> t
-    -> t
+  val create_let : Let_expr.t -> t
 
   (** Create an application expression. *)
   val create_apply : Apply.t -> t
@@ -130,28 +101,17 @@ module rec Expr : sig
   (** Create an expression indicating type-incorrect or unreachable code. *)
   val create_invalid : ?semantics:Invalid_term_semantics.t -> unit -> t
 
-  (** [bind [var1, expr1; ...; varN, exprN] body] binds using
-      [Immutable] [Let] expressions the given [(var, expr)] pairs around the
-      body. *)
-  val bind
+  val bind_no_simplification
      : bindings:(Var_in_binding_pos.t * Named.t) list
-    -> body:t
-    -> t
+    -> body:Expr.t
+    -> free_names_of_body:Name_occurrences.t
+    -> Expr.t * Name_occurrences.t
 
-  val bind_parameters
-     : bindings:(Kinded_parameter.t * Named.t) list
-    -> body:t
-    -> t
-
-  (** Given lists of kinded parameters [p_1; ...; p_n] and simples
-      [s_1; ...; s_n], create an expression that surrounds the given
-      expression with bindings of each [p_i] to the corresponding [s_i],
-      such as is typically used when performing an inlining transformation. *)
-  val bind_parameters_to_simples
-     : bind:Kinded_parameter.t list
-    -> target:Simple.t list
-    -> t
-    -> t
+  val bind_parameters_to_args_no_simplification
+     : params:Kinded_parameter.t list
+    -> args:Simple.t list
+    -> body:Expr.t
+    -> Expr.t
 end and Named : sig
   (** The defining expressions of [Let] bindings. *)
   type t = private
@@ -183,7 +143,7 @@ end and Named : sig
 
   (** Convert one or more statically-allocated constants into the defining
       expression of a [Let]. *)
-  val create_static_consts : Static_const.t list -> t
+  val create_static_consts : Static_const.Group.t -> t
 
   (** Build an expression boxing the name.  The returned kind is the
       one of the unboxed version. *)
@@ -215,6 +175,8 @@ end and Named : sig
   val is_static_consts : t -> bool
 
   val must_be_static_consts : t -> Static_const.Group.t
+
+  val at_most_generative_effects : t -> bool
 end and Let_expr : sig
   (** The alpha-equivalence classes of expressions that bind variables; and
       the expressions that bind symbols (which are not treated up to
@@ -223,6 +185,13 @@ end and Let_expr : sig
 
   (** Printing, invariant checks, name manipulation, etc. *)
   include Expr_std.S with type t := t
+
+  val create
+     : Bindable_let_bound.t
+    -> Named.t
+    -> body:Expr.t
+    -> free_names_of_body:Name_occurrences.t Or_unknown.t
+    -> t
 
   (** The defining expression of the [Let]. *)
   val defining_expr : t -> Named.t
@@ -310,6 +279,13 @@ end and Let_cont_expr : sig
     -> free_names_of_body:Name_occurrences.t Or_unknown.t
     -> Expr.t
 
+  val create_non_recursive'
+     : cont:Continuation.t
+    -> Continuation_handler.t
+    -> body:Expr.t
+    -> num_free_occurrences_of_cont_in_body:Num_occurrences.t Or_unknown.t
+    -> Expr.t
+
   (** Create a definition of a set of possibly-recursive continuations. *)
   val create_recursive
      : Continuation_handler.t Continuation.Map.t
@@ -351,69 +327,14 @@ end and Continuation_handler : sig
 
   (** Create the representation of a single continuation handler. *)
   val create
-     : params_and_handler:Continuation_params_and_handler.t
-    -> stub:bool
-    -> is_exn_handler:bool
-    -> t
-
-  (** The alpha-equivalence class of the continuation's parameters bound over
-      its code. *)
-  val params_and_handler : t -> Continuation_params_and_handler.t
-
-  (** Whether the continuation is an exception handler.
-
-      Continuations used as exception handlers are always [Non_recursive]. To
-      enable identification of them in passes not invoked from [Simplify] (where
-      they could be identified by looking at the [Apply_cont]s that reference
-      them) they are marked explicitly.
-
-      Continuations used as exception handlers may have more than one
-      parameter (see [Exn_continuation]).
-
-      (Relevant piece of background info: the backend cannot compile
-      simultaneously-defined continuations when one or more of them is an
-      exception handler.) *)
-  val is_exn_handler : t -> bool
-
-  (** Whether the continuation is a compiler-generated wrapper that should
-      always be inlined. *)
-  (* CR mshinwell: Remove the notion of "stub" and enhance continuation and
-     function declarations to hold one or more wrappers themselves. *)
-  val stub : t -> bool
-
-  val arity : t -> Flambda_arity.With_subkinds.t
-
-  val with_params_and_handler : t -> Continuation_params_and_handler.t -> t
-
-  type behaviour = private
-    | Unreachable of { arity : Flambda_arity.With_subkinds.t; }
-    | Alias_for of {
-        arity : Flambda_arity.With_subkinds.t;
-        alias_for : Continuation.t;
-      }
-    | Unknown of { arity : Flambda_arity.With_subkinds.t; }
-
-  val behaviour : t -> behaviour
-end and Continuation_params_and_handler : sig
-  (** The representation of the alpha-equivalence class of bindings of a list
-      of parameters, with associated relations thereon, over the code of a
-      continuation handler. *)
-  type t
-
-  (** Printing, invariant checks, name manipulation, etc. *)
-  include Expr_std.S with type t := t
-
-  (** Create a value of type [t] given information about a continuation
-      handler. *)
-  val create
      : Kinded_parameter.t list
     -> handler:Expr.t
     -> free_names_of_handler:Name_occurrences.t Or_unknown.t
+    -> is_exn_handler:bool
     -> t
 
   (** Choose a member of the alpha-equivalence class to enable examination
-      of the parameters, relations thereon and the code over which they
-      are scoped. *)
+      of the parameters and the code over which they are scoped. *)
   val pattern_match'
      : t
     -> f:(Kinded_parameter.t list
@@ -446,6 +367,34 @@ end and Continuation_params_and_handler : sig
       -> 'a)
     -> ('a, Pattern_match_pair_error.t) Result.t
 
+  (** Whether the continuation is an exception handler.
+
+      Continuations used as exception handlers are always [Non_recursive]. To
+      enable identification of them in passes not invoked from [Simplify] (where
+      they could be identified by looking at the [Apply_cont]s that reference
+      them) they are marked explicitly.
+
+      Continuations used as exception handlers may have more than one
+      parameter (see [Exn_continuation]).
+
+      (Relevant piece of background info: the backend cannot compile
+      simultaneously-defined continuations when one or more of them is an
+      exception handler.) *)
+  val is_exn_handler : t -> bool
+
+  module Behaviour : sig
+    type t = private
+      | Unreachable of { arity : Flambda_arity.With_subkinds.t; }
+      | Alias_for of {
+          arity : Flambda_arity.With_subkinds.t;
+          alias_for : Continuation.t;
+        }
+      | Unknown of { arity : Flambda_arity.With_subkinds.t; }
+  end
+
+  val arity : t -> Flambda_arity.With_subkinds.t
+
+  val behaviour : t -> Behaviour.t
 end and Recursive_let_cont_handlers : sig
   (** The representation of the alpha-equivalence class of a group of possibly
       (mutually-) recursive continuation handlers that are bound both over a
@@ -647,6 +596,8 @@ end and Static_const : sig
 
     val concat : t -> t -> t
 
+    val map : t -> f:(Static_const.t -> Static_const.t) -> t
+
     val match_against_bound_symbols
        : t
       -> Bound_symbols.t
@@ -660,16 +611,15 @@ end and Static_const : sig
       -> block_like:('a -> Symbol.t -> Static_const.t -> 'a)
       -> 'a
 
-    val pieces_of_code : t -> Function_params_and_body.t Code_id.Map.t
+    (** This function ignores [Deleted] code. *)
+    val pieces_of_code : t -> Code.t Code_id.Map.t
 
+    (** This function ignores [Deleted] code. *)
     val pieces_of_code' : t -> Code.t list
-
-    val pieces_of_code_by_code_id : t -> Code.t Code_id.Map.t
 
     val is_fully_static : t -> bool
   end
 end and Code : sig
-
   (** A piece of code, comprising of the parameters and body of a function,
       together with a field indicating whether the piece of code is a newer
       version of one that existed previously (and may still exist), for
@@ -701,7 +651,8 @@ end and Code : sig
 
   val create
      : Code_id.t
-    -> params_and_body:Function_params_and_body.t Or_deleted.t
+    -> params_and_body:
+         (Function_params_and_body.t * Name_occurrences.t) Or_deleted.t
     -> newer_version_of:Code_id.t option
     -> params_arity:Flambda_arity.With_subkinds.t
     -> result_arity:Flambda_arity.With_subkinds.t
@@ -713,7 +664,10 @@ end and Code : sig
 
   val with_code_id : Code_id.t -> t -> t
 
-  val with_params_and_body : Function_params_and_body.t Or_deleted.t -> t -> t
+  val with_params_and_body
+     : (Function_params_and_body.t * Name_occurrences.t) Or_deleted.t
+    -> t
+    -> t
 
   val with_newer_version_of : Code_id.t option -> t -> t
 
@@ -727,6 +681,7 @@ end and Code : sig
 
   val make_deleted : t -> t
 
+  val is_deleted : t -> bool
 end
 
 module Function_declaration = Function_declaration
@@ -743,7 +698,6 @@ module Import : sig
   module Code = Code
   module Continuation_handler = Continuation_handler
   module Continuation_handlers = Continuation_handlers
-  module Continuation_params_and_handler = Continuation_params_and_handler
   module Expr = Expr
   module Function_declaration = Function_declaration
   module Function_declarations = Function_declarations

@@ -485,8 +485,7 @@ end = struct
 
   let find_code t id =
     match Code_id.Map.find id t.code with
-    | exception Not_found ->
-      Exported_code.find_code (t.get_imported_code ()) id
+    | exception Not_found -> Exported_code.find_code (t.get_imported_code ()) id
     | code -> code
 
   let with_code ~from t =
@@ -537,17 +536,16 @@ end = struct
       ~f:(fun t lifted_constant ->
         let pieces_of_code =
           LC.defining_exprs lifted_constant
-          |> Static_const.Group.pieces_of_code'
+          |> Static_const_with_free_names.Group.pieces_of_code
         in
-        List.fold_left (fun t (code : Code.t) ->
+        Code_id.Map.fold (fun code_id code t ->
             match Code.params_and_body code with
             | Present _ ->
-              if maybe_already_defined && mem_code t (Code.code_id code) then t
-              else
-                define_code t ~code_id:(Code.code_id code) ~code
+              if maybe_already_defined && mem_code t code_id then t
+              else define_code t ~code_id ~code
             | Deleted -> t)
-          t
-          pieces_of_code)
+          pieces_of_code
+          t)
 
   let add_lifted_constant t const =
     add_lifted_constants t (Lifted_constant_state.singleton const)
@@ -643,9 +641,9 @@ end = struct
 
   let continuation_arity t cont =
     match find_continuation t cont with
-    | Unknown { arity; handler = _; }
+    | Other { arity; handler = _; }
     | Unreachable { arity; }
-    | Inline { arity; _ } -> arity
+    | Linearly_used_and_inlinable { arity; _ } -> arity
 
   let add_continuation0 t cont scope cont_in_env =
     let continuations =
@@ -656,10 +654,10 @@ end = struct
     }
 
   let add_continuation t cont scope arity =
-    add_continuation0 t cont scope (Unknown { arity; handler = None; })
+    add_continuation0 t cont scope (Other { arity; handler = None; })
 
   let add_continuation_with_handler t cont scope arity handler =
-    add_continuation0 t cont scope (Unknown { arity; handler = Some handler; })
+    add_continuation0 t cont scope (Other { arity; handler = Some handler; })
 
   let add_unreachable_continuation t cont scope arity =
     add_continuation0 t cont scope (Unreachable { arity; })
@@ -704,15 +702,18 @@ end = struct
       continuation_aliases;
     }
 
-  let add_continuation_to_inline t cont scope arity handler =
-    add_continuation0 t cont scope (Inline { arity; handler; })
+  let add_linearly_used_inlinable_continuation t cont scope arity ~params
+        ~handler ~free_names_of_handler =
+    add_continuation0 t cont scope
+      (Linearly_used_and_inlinable { arity; handler; free_names_of_handler;
+        params; })
 
   let add_exn_continuation t exn_cont scope =
     (* CR mshinwell: Think more about keeping these in both maps *)
     let continuations =
       let cont = Exn_continuation.exn_handler exn_cont in
       let cont_in_env : Continuation_in_env.t =
-        Unknown { arity = Exn_continuation.arity exn_cont; handler = None; }
+        Other { arity = Exn_continuation.arity exn_cont; handler = None; }
       in
       Continuation.Map.add cont (scope, cont_in_env) t.continuations
     in
@@ -754,6 +755,16 @@ end = struct
     match Continuation.Map.find cont t.apply_cont_rewrites with
     | exception Not_found -> None
     | rewrite -> Some rewrite
+
+  let delete_apply_cont_rewrite t cont =
+    { t with
+      apply_cont_rewrites = Continuation.Map.remove cont t.apply_cont_rewrites;
+    }
+
+  let will_inline_continuation t cont =
+    match find_continuation t cont with
+    | Other _ | Unreachable _ -> false
+    | Linearly_used_and_inlinable _ -> true
 end and Lifted_constant : sig
   include I.Lifted_constant
     with type downwards_env := Downwards_env.t
@@ -776,7 +787,7 @@ end = struct
 
     type t = {
       descr : descr;
-      defining_expr : Static_const.t;
+      defining_expr : Static_const_with_free_names.t;
     }
 
     let binds_symbol t sym =
@@ -789,7 +800,7 @@ end = struct
 
     let free_names t =
       match t.descr with
-      | Code _ -> Static_const.free_names t.defining_expr
+      | Code _ -> Static_const_with_free_names.free_names t.defining_expr
       | Set_of_closures { symbol_projections; _ }
       | Block_like { symbol_projections; _ } ->
         (* The symbols mentioned in any symbol projections must be counted
@@ -799,7 +810,7 @@ end = struct
             Name_occurrences.add_symbol free_names
               (Symbol_projection.symbol proj) Name_mode.normal)
           symbol_projections
-          (Static_const.free_names t.defining_expr)
+          (Static_const_with_free_names.free_names t.defining_expr)
 
     let print_descr ppf descr =
       match descr with
@@ -820,7 +831,7 @@ end = struct
           @[<hov 1>(defining_expr@ %a)@]\
           @]"
         print_descr descr
-        Static_const.print defining_expr
+        Static_const_with_free_names.print defining_expr
 
     let descr t = t.descr
     let defining_expr t = t.defining_expr
@@ -832,8 +843,8 @@ end = struct
       | Block_like { symbol_projections; _ } -> symbol_projections
 
     let code code_id defining_expr =
-      match defining_expr with
-      | Static_const.Code code ->
+      match Static_const_with_free_names.const defining_expr with
+      | Code code ->
         if Code_id.equal code_id (Code.code_id code) then
           { descr = Code code_id;
             defining_expr;
@@ -844,7 +855,7 @@ end = struct
             Code_id.print (Code.code_id code)
       | _ ->
         Misc.fatal_errorf "Not a code definition: %a"
-          Static_const.print defining_expr
+          Static_const_with_free_names.print defining_expr
 
     let set_of_closures denv ~closure_symbols_with_types
           ~symbol_projections defining_expr =
@@ -897,8 +908,7 @@ end = struct
   type t = {
     definitions : Definition.t list;
     bound_symbols : Bound_symbols.t;
-    defining_exprs : Static_const.Group.t;
-    free_names : Name_occurrences.t;
+    defining_exprs : Static_const_with_free_names.Group.t;
     symbol_projections : Symbol_projection.t Variable.Map.t;
     is_fully_static : bool;
   }
@@ -906,13 +916,14 @@ end = struct
   let definitions t = t.definitions
   let symbol_projections t = t.symbol_projections
 
-  let free_names_of_defining_exprs t = t.free_names
+  let free_names_of_defining_exprs t =
+    Static_const_with_free_names.Group.free_names t.defining_exprs
 
   let is_fully_static t = t.is_fully_static
 
   let print ppf
         { definitions; bound_symbols = _; defining_exprs = _;
-          free_names = _; is_fully_static = _; symbol_projections = _; } =
+          is_fully_static = _; symbol_projections = _; } =
     Format.fprintf ppf "@[<hov 1>(%a)@]"
       (Format.pp_print_list ~pp_sep:Format.pp_print_space Definition.print)
       definitions
@@ -923,7 +934,7 @@ end = struct
 
   let compute_defining_exprs definitions =
     ListLabels.map definitions ~f:Definition.defining_expr
-    |> Static_const.Group.create
+    |> Static_const_with_free_names.Group.create
 
   let create_block_like symbol ~symbol_projections defining_expr denv ty =
     (* CR mshinwell: check that [defining_expr] is not a set of closures
@@ -935,8 +946,8 @@ end = struct
     { definitions;
       bound_symbols = compute_bound_symbols definitions;
       defining_exprs = compute_defining_exprs definitions;
-      free_names = Definition.free_names definition;
-      is_fully_static = Static_const.is_fully_static defining_expr;
+      is_fully_static =
+        Static_const_with_free_names.is_fully_static defining_expr;
       symbol_projections = Definition.symbol_projections definition;
     }
 
@@ -950,8 +961,8 @@ end = struct
     { definitions;
       bound_symbols = compute_bound_symbols definitions;
       defining_exprs = compute_defining_exprs definitions;
-      free_names = Definition.free_names definition;
-      is_fully_static = Static_const.is_fully_static defining_expr;
+      is_fully_static =
+        Static_const_with_free_names.is_fully_static defining_expr;
       symbol_projections = Definition.symbol_projections definition;
     }
 
@@ -961,8 +972,8 @@ end = struct
     { definitions;
       bound_symbols = compute_bound_symbols definitions;
       defining_exprs = compute_defining_exprs definitions;
-      free_names = Definition.free_names definition;
-      is_fully_static = Static_const.is_fully_static defining_expr;
+      is_fully_static =
+        Static_const_with_free_names.is_fully_static defining_expr;
       symbol_projections = Definition.symbol_projections definition;
     }
 
@@ -981,14 +992,9 @@ end = struct
     in
     let defining_exprs =
       List.fold_left (fun defining_exprs t ->
-          Static_const.Group.concat t.defining_exprs defining_exprs)
-        Static_const.Group.empty
-        ts
-    in
-    let free_names =
-      List.fold_left (fun free_names t ->
-          Name_occurrences.union t.free_names free_names)
-        Name_occurrences.empty
+          Static_const_with_free_names.Group.concat t.defining_exprs
+            defining_exprs)
+        Static_const_with_free_names.Group.empty
         ts
     in
     let is_fully_static =
@@ -1007,13 +1013,12 @@ end = struct
     { definitions;
       bound_symbols;
       defining_exprs;
-      free_names;
       is_fully_static;
       symbol_projections;
     }
 
   let defining_exprs t =
-    Static_const.Group.create
+    Static_const_with_free_names.Group.create
       (List.map Definition.defining_expr t.definitions)
 
   let bound_symbols t =
@@ -1042,18 +1047,21 @@ end = struct
     match matching_defining_exprs with
     | [defining_expr] ->
       let simple =
-        match Symbol_projection.projection proj, defining_expr with
+        match
+          Symbol_projection.projection proj,
+          Static_const_with_free_names.const defining_expr
+        with
         | Block_load { index; }, Block (tag, mut, fields) ->
           if not (Tag.Scannable.equal tag Tag.Scannable.zero) then begin
             Misc.fatal_errorf "Symbol projection@ %a@ on block which doesn't \
                 have tag zero:@ %a"
               Symbol_projection.print proj
-              Static_const.print defining_expr
+              Static_const_with_free_names.print defining_expr
           end;
           if Mutability.is_mutable mut then begin
             Misc.fatal_errorf "Symbol projection@ %a@ on mutable block:@ %a"
               Symbol_projection.print proj
-              Static_const.print defining_expr
+              Static_const_with_free_names.print defining_expr
           end;
           let index = Targetint.OCaml.to_int_exn index in
           begin match List.nth_opt fields index with
@@ -1068,7 +1076,7 @@ end = struct
             Misc.fatal_errorf "Symbol projection@ %a@ has out-of-range \
                 index:@ %a"
               Symbol_projection.print proj
-              Static_const.print defining_expr
+              Static_const_with_free_names.print defining_expr
           end;
         | Project_var { project_from; var; }, Set_of_closures set ->
           let decls = Set_of_closures.function_decls set in
@@ -1077,7 +1085,7 @@ end = struct
             Misc.fatal_errorf "Symbol projection@ %a@ has closure ID not \
                 bound by this set of closures:@ %a"
               Symbol_projection.print proj
-              Static_const.print defining_expr
+              Static_const_with_free_names.print defining_expr
           end;
           let closure_env = Set_of_closures.closure_elements set in
           begin match Var_within_closure.Map.find var closure_env with
@@ -1085,7 +1093,7 @@ end = struct
             Misc.fatal_errorf "Symbol projection@ %a@ has closure var not \
                 defined in the environment of this set of closures:@ %a"
               Symbol_projection.print proj
-              Static_const.print defining_expr
+              Static_const_with_free_names.print defining_expr
           | closure_entry -> closure_entry
           end
         | Block_load _,
@@ -1098,7 +1106,7 @@ end = struct
           | Immutable_float_array _ | Mutable_string _ | Immutable_string _) ->
           Misc.fatal_errorf "Symbol projection@ %a@ cannot be applied to:@ %a"
             Symbol_projection.print proj
-            Static_const.print defining_expr
+            Static_const_with_free_names.print defining_expr
       in
       Some simple
     | [] -> None

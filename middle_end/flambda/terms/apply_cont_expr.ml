@@ -228,9 +228,14 @@ let free_names { k; args; trap_action; dbg=_; } =
     (* A second occurrence of [k] is added to ensure that the continuation [k]
        is never inlined out (which cannot be done, or the trap action
        would be lost). *)
+    (* CR mshinwell: We don't need this for Simplify now -- but Un_cps is
+       still relying on this.  We should fix that. *)
     Name_occurrences.add_continuation
       (Name_occurrences.union default (Trap_action.free_names trap_action))
       k
+    (*
+    Name_occurrences.union default (Trap_action.free_names trap_action)
+    *)
 
 let apply_name_permutation ({ k; args; trap_action; dbg; } as t) perm =
   let k' = Name_permutation.apply_continuation perm k in

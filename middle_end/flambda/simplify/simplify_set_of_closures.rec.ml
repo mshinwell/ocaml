@@ -228,8 +228,9 @@ end = struct
 
   let bind_existing_code_to_new_code_ids denv ~old_to_new_code_ids_all_sets =
     Code_id.Map.fold (fun old_code_id new_code_id denv ->
+        let code = DE.find_code denv old_code_id in
         let code =
-          DE.find_code denv old_code_id
+          code
           |> Code.with_newer_version_of (Some old_code_id)
           |> Code.with_code_id new_code_id
         in
@@ -340,13 +341,12 @@ let simplify_function context ~used_closure_vars ~shareable_constants
   let name = Closure_id.to_string closure_id in
   Profile.record_call ~accumulate:true name (fun () ->
     let code_id = FD.code_id function_decl in
-    let code =
-      DE.find_code (DA.denv (C.dacc_prior_to_sets context)) code_id
-    in
+    let code = DE.find_code (DA.denv (C.dacc_prior_to_sets context)) code_id in
     let params_and_body =
       Code.params_and_body_must_be_present code ~error_context:"Simplifying"
     in
-    let params_and_body, dacc_after_body, uacc_after_upwards_traversal =
+    let params_and_body, dacc_after_body, free_names_of_code,
+        uacc_after_upwards_traversal =
       Function_params_and_body.pattern_match params_and_body
         ~f:(fun ~return_continuation exn_continuation params ~body
                 ~my_closure ~is_my_closure_used:_ ->
@@ -388,14 +388,44 @@ let simplify_function context ~used_closure_vars ~shareable_constants
             let dacc_after_body = UA.creation_dacc uacc in
             let dbg = Function_params_and_body.debuginfo params_and_body in
             (* CR mshinwell: Should probably look at [cont_uses]? *)
-            let free_names_of_body = Expr.free_names body in
+            let free_names_of_body = UA.name_occurrences uacc in
             let params_and_body =
               Function_params_and_body.create
                 ~free_names_of_body:(Known free_names_of_body)
                 ~return_continuation exn_continuation params ~dbg ~body
                 ~my_closure
             in
-            params_and_body, dacc_after_body, uacc
+            (* Free names of the code = free names of the body minus the
+               return and exception continuations, the parameters and the
+               [my_closure] variable. *)
+            let free_names_of_code =
+              Name_occurrences.remove_continuation free_names_of_body
+                return_continuation
+            in
+            let free_names_of_code =
+              Name_occurrences.remove_continuation free_names_of_code
+                (Exn_continuation.exn_handler exn_continuation)
+            in
+            let free_names_of_code =
+              Name_occurrences.remove_var free_names_of_code my_closure
+            in
+            let free_names_of_code =
+              Name_occurrences.diff free_names_of_code
+                (KP.List.free_names params)
+            in
+            if not (
+              Name_occurrences.no_variables free_names_of_code
+              && Name_occurrences.no_continuations free_names_of_code)
+            then begin
+              Misc.fatal_errorf "Unexpected free name(s):@ %a@ in:@ \n%a@ \n\
+                  Simplified version:@ fun %a %a ->@ \n  %a"
+                Name_occurrences.print free_names_of_code
+                Function_declaration.print function_decl
+                KP.List.print params
+                Variable.print my_closure
+                Expr.print body
+            end;
+            params_and_body, dacc_after_body, free_names_of_code, uacc
           | exception Misc.Fatal_error ->
             if !Clflags.flambda_context_on_error then begin
               Format.eprintf "\n%sContext is:%s simplifying function \
@@ -422,7 +452,8 @@ let simplify_function context ~used_closure_vars ~shareable_constants
       code
       |> Code.with_code_id new_code_id
       |> Code.with_newer_version_of (Some old_code_id)
-      |> Code.with_params_and_body (Present params_and_body)
+      |> Code.with_params_and_body
+           (Present (params_and_body, free_names_of_code))
     in
     let function_decl = FD.update_code_id function_decl new_code_id in
     let function_type =
@@ -642,7 +673,11 @@ let simplify_and_lift_set_of_closures dacc ~closure_bound_vars_inverse
     ListLabels.fold_left (Code_id.Lmap.bindings code)
       ~init:dacc
       ~f:(fun dacc (code_id, code) ->
-        let lifted_constant = LC.create_code code_id (Code code) in
+        let lifted_constant =
+          LC.create_code code_id
+            (Static_const_with_free_names.create (Code code)
+              ~free_names:Unknown)
+        in
         DA.add_lifted_constant dacc lifted_constant
         |> DA.map_denv ~f:(fun denv ->
           DE.add_lifted_constant denv lifted_constant))
@@ -652,7 +687,8 @@ let simplify_and_lift_set_of_closures dacc ~closure_bound_vars_inverse
       denv
       ~closure_symbols_with_types
       ~symbol_projections
-      (Set_of_closures set_of_closures)
+      (Static_const_with_free_names.create (Set_of_closures set_of_closures)
+        ~free_names:(Known (Set_of_closures.free_names set_of_closures)))
   in
   let dacc =
     DA.add_lifted_constant dacc set_of_closures_lifted_constant
@@ -672,7 +708,7 @@ let simplify_and_lift_set_of_closures dacc ~closure_bound_vars_inverse
           let typ = T.alias_type_of K.value simple in
           let denv = DE.add_variable denv bound_var typ in
           let bound_var = Bindable_let_bound.singleton bound_var in
-          denv, (bound_var, Reachable.reachable defining_expr) :: bindings)
+          denv, (bound_var, Simplified_named.reachable defining_expr) :: bindings)
       closure_bound_vars
       (denv, [])
   in
@@ -704,13 +740,17 @@ let simplify_non_lifted_set_of_closures0 dacc bound_vars ~closure_bound_vars
       ~closure_elements ~closure_element_types
   in
   let defining_expr =
-    Reachable.reachable (Named.create_set_of_closures set_of_closures)
+    let named = Named.create_set_of_closures set_of_closures in
+    Simplified_named.reachable_with_known_free_names
+      (Named.create_set_of_closures set_of_closures)
+      ~free_names:(Named.free_names named)
   in
   let lifted_constants =
     Code_id.Lmap.fold (fun code_id code lifted_constants ->
         let lifted_constant =
           LC.create_code code_id
-            (Code code)
+            (Static_const_with_free_names.create (Code code)
+              ~free_names:Unknown)
         in
         lifted_constant :: lifted_constants)
       code
@@ -890,12 +930,16 @@ let simplify_lifted_set_of_closures0 context ~closure_symbols
   in
   let code_static_consts =
     ListLabels.map (Code_id.Lmap.bindings code)
-      ~f:(fun (_code_id, code) : SC.t -> Code code)
+      ~f:(fun (_code_id, code) ->
+        Static_const_with_free_names.create (Code code) ~free_names:Unknown)
   in
-  let set_of_closures_static_const : SC.t = Set_of_closures set_of_closures in
+  let set_of_closures_static_const =
+    Static_const_with_free_names.create (Set_of_closures set_of_closures)
+      ~free_names:(Known (Set_of_closures.free_names set_of_closures))
+  in
   let static_consts =
     set_of_closures_static_const :: code_static_consts
-    |> Static_const.Group.create
+    |> Static_const_with_free_names.Group.create
   in
   bound_symbols, static_consts, dacc
 
@@ -944,8 +988,11 @@ let simplify_lifted_sets_of_closures dacc ~all_sets_of_closures_and_symbols
               [Bound_symbols.Pattern.set_of_closures closure_symbols]
           in
           let static_consts =
-            Static_const.Group.create
-              [Static_const.Set_of_closures set_of_closures]
+            Static_const_with_free_names.Group.create
+              [Static_const_with_free_names.create
+                (Set_of_closures set_of_closures)
+                ~free_names:
+                  (Known (Set_of_closures.free_names set_of_closures))]
           in
           bound_symbols, static_consts, dacc
         end else begin
@@ -956,10 +1003,12 @@ let simplify_lifted_sets_of_closures dacc ~all_sets_of_closures_and_symbols
       in
       (* The order doesn't matter here -- see comment in
          [Simplify_static_const] where this function is called from. *)
-      Bound_symbols.concat patterns patterns_acc,
-        Static_const.Group.concat static_consts static_consts_acc,
-        dacc)
-    (Bound_symbols.empty, Static_const.Group.empty, dacc)
+      let static_const_group =
+        Static_const_with_free_names.Group.concat
+          static_consts static_consts_acc
+      in
+      Bound_symbols.concat patterns patterns_acc, static_const_group, dacc)
+    (Bound_symbols.empty, Static_const_with_free_names.Group.empty, dacc)
     all_sets_of_closures_and_symbols
     closure_bound_names_inside_all_sets
     closure_elements_and_types_all_sets

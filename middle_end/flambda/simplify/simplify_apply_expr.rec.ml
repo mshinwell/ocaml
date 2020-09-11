@@ -28,12 +28,9 @@ let warn_not_inlined_if_needed apply reason =
 let simplify_direct_tuple_application dacc apply code_id ~down_to_up =
   let dbg = Apply.dbg apply in
   let callee's_code = DE.find_code (DA.denv dacc) code_id in
-  let param_arity =
-    Code.params_arity callee's_code
-  in
+  let param_arity = Code.params_arity callee's_code in
   let n = List.length param_arity in
-  (* Split the tuple argument from other potential
-     over application arguments *)
+  (* Split the tuple argument from other potential over application arguments *)
   let tuple, over_application_args =
     match Apply.args apply with
     | tuple :: others -> tuple, others
@@ -64,7 +61,9 @@ let simplify_direct_tuple_application dacc apply code_id ~down_to_up =
   let expr =
     List.fold_right (fun (v, defining_expr) body ->
         let var_bind = Var_in_binding_pos.create v Name_mode.normal in
-        Expr.create_let var_bind defining_expr body)
+        Let.create (Bindable_let_bound.singleton var_bind)
+          defining_expr ~body ~free_names_of_body:Unknown
+        |> Expr.create_let)
       vars_and_fields apply_expr
   in
   Simplify_expr.simplify_expr dacc expr ~down_to_up
@@ -82,6 +81,7 @@ let rebuild_non_inlined_direct_full_application apply ~use_id ~exn_cont_use_id
       Simplify_common.add_wrapper_for_fixed_arity_apply uacc ~use_id
         result_arity apply
   in
+  let uacc = UA.add_free_names uacc (Expr.free_names expr) in
   after_rebuild expr uacc
 
 let simplify_direct_full_application dacc apply function_decl_opt
@@ -248,17 +248,20 @@ let simplify_direct_partial_application dacc apply ~callee's_code_id
           | None -> expr
           | Some arg ->
             let arg = VB.create arg Name_mode.normal in
-            Expr.create_let arg
+            Let.create (Bindable_let_bound.singleton arg)
               (Named.create_prim
                 (Unary (Project_var {
                   project_from = wrapper_closure_id;
                   var = closure_var;
                 }, Simple.var my_closure))
                 dbg)
-              expr)
+              ~body:expr
+              ~free_names_of_body:Unknown
+            |> Expr.create_let)
         (Expr.create_apply full_application)
         (List.rev applied_args_with_closure_vars)
     in
+    let free_names_of_body = Expr.free_names body in
     let params_and_body =
       Function_params_and_body.create ~return_continuation
         exn_continuation
@@ -266,7 +269,7 @@ let simplify_direct_partial_application dacc apply ~callee's_code_id
         ~body
         ~dbg
         ~my_closure
-        ~free_names_of_body:Unknown
+        ~free_names_of_body:(Known free_names_of_body)
     in
     let code_id =
       Code_id.create
@@ -274,9 +277,10 @@ let simplify_direct_partial_application dacc apply ~callee's_code_id
         (Compilation_unit.get_current_exn ())
     in
     let code =
+      let free_names = Function_params_and_body.free_names params_and_body in
       Code.create
         code_id
-        ~params_and_body:(Present params_and_body)
+        ~params_and_body:(Present (params_and_body, free_names))
         ~newer_version_of:None
         ~params_arity:(KP.List.arity_with_subkinds remaining_params)
         ~result_arity
@@ -296,7 +300,8 @@ let simplify_direct_partial_application dacc apply ~callee's_code_id
       Var_within_closure.Map.of_list applied_args_with_closure_vars
     in
     let defining_expr =
-      Lifted_constant.create_code code_id (Code code)
+      Lifted_constant.create_code code_id
+        (Static_const_with_free_names.create (Code code) ~free_names:Unknown)
     in
     let dummy_defining_expr =
       (* We should not add the real piece of code in the lifted constant.
@@ -305,7 +310,9 @@ let simplify_direct_partial_application dacc apply ~callee's_code_id
          constant identifying deleted code.  This will ensure, if for some
          reason the constant makes it to Cmm stage, that code size is not
          increased unnecessarily. *)
-      Lifted_constant.create_code code_id (Code (Code.make_deleted code))
+      let code = Code.make_deleted code in
+      Lifted_constant.create_code code_id
+        (Static_const_with_free_names.create (Code code) ~free_names:Unknown)
     in
     let dacc =
       DA.add_lifted_constant dacc dummy_defining_expr
@@ -322,10 +329,12 @@ let simplify_direct_partial_application dacc apply ~callee's_code_id
   let expr =
     let wrapper_var = VB.create wrapper_var Name_mode.normal in
     let closure_vars = [wrapper_var] in
-    let pattern = Bindable_let_bound.set_of_closures ~closure_vars in
-    Expr.create_pattern_let pattern
+    let bound = Bindable_let_bound.set_of_closures ~closure_vars in
+    Let.create bound
       (Named.create_set_of_closures wrapper_taking_remaining_args)
-      (Expr.create_apply_cont apply_cont)
+      ~body:(Expr.create_apply_cont apply_cont)
+      ~free_names_of_body:Unknown
+    |> Expr.create_let
   in
   Simplify_expr.simplify_expr dacc expr
     ~down_to_up:(fun dacc ~rebuild ->
@@ -419,6 +428,7 @@ let rebuild_function_call_where_callee's_type_unavailable apply call_kind
     Simplify_common.add_wrapper_for_fixed_arity_apply uacc ~use_id
       (Call_kind.return_arity call_kind) apply
   in
+  let uacc = UA.add_free_names uacc (Expr.free_names expr) in
   after_rebuild expr uacc
 
 let simplify_function_call_where_callee's_type_unavailable dacc apply
@@ -599,7 +609,9 @@ let simplify_function_call dacc apply ~callee_ty
         | Indirect_unknown_arity
         | Indirect_known_arity _ -> None
       in
-      let must_be_detupled = call_must_be_detupled (N.is_tupled non_inlinable) in
+      let must_be_detupled =
+        call_must_be_detupled (N.is_tupled non_inlinable)
+      in
       let callee's_code_from_type =
         DE.find_code denv callee's_code_id_from_type
       in
@@ -653,6 +665,7 @@ let rebuild_method_call apply ~use_id ~exn_cont_use_id uacc ~after_rebuild =
     Simplify_common.add_wrapper_for_fixed_arity_apply uacc ~use_id
       (Flambda_arity.With_subkinds.create [K.With_subkind.any_value]) apply
   in
+  let uacc = UA.add_free_names uacc (Expr.free_names expr) in
   after_rebuild expr uacc
 
 let simplify_method_call dacc apply ~callee_ty ~kind:_ ~obj ~arg_types
@@ -712,6 +725,7 @@ let rebuild_c_call apply ~use_id ~exn_cont_use_id ~return_arity uacc
     | None ->
       Expr.create_apply apply
   in
+  let uacc = UA.add_free_names uacc (Expr.free_names expr) in
   after_rebuild expr uacc
 
 let simplify_c_call dacc apply ~callee_ty ~param_arity ~return_arity

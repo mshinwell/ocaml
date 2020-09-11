@@ -19,6 +19,7 @@
 type t = {
   code_id : Code_id.t;
   params_and_body : Function_params_and_body.t Or_deleted.t;
+  free_names_of_params_and_body : Name_occurrences.t;
   newer_version_of : Code_id.t option;
   params_arity : Flambda_arity.With_subkinds.t;
   result_arity : Flambda_arity.With_subkinds.t;
@@ -56,9 +57,32 @@ let is_a_functor { is_a_functor; _ } = is_a_functor
 
 let recursive { recursive; _ } = recursive
 
+let check_params_and_body code_id (params_and_body : _ Or_deleted.t) =
+  let free_names_of_params_and_body =
+    match params_and_body with
+    | Deleted -> Name_occurrences.empty
+    | Present (params_and_body, free_names) ->
+      if not (Name_occurrences.no_continuations free_names
+              && Name_occurrences.no_variables free_names)
+      then begin
+        Misc.fatal_errorf "Incorrect free names:@ %a@ for creation of code:@ \
+            %a@ =@ %a"
+          Name_occurrences.print free_names
+          Code_id.print code_id
+          Function_params_and_body.print params_and_body
+      end;
+      free_names
+  in
+  let params_and_body : _ Or_deleted.t =
+    match params_and_body with
+    | Deleted -> Deleted
+    | Present (params_and_body, _free_names) -> Present params_and_body
+  in
+  params_and_body, free_names_of_params_and_body
+
 let create
       code_id
-      ~params_and_body
+      ~(params_and_body : _ Or_deleted.t)
       ~newer_version_of
       ~params_arity
       ~result_arity
@@ -72,8 +96,12 @@ let create
   | true, (Always_inline | Unroll _) ->
     Misc.fatal_error "Stubs may not be annotated as [Always_inline] or [Unroll]"
   end;
+  let params_and_body, free_names_of_params_and_body =
+    check_params_and_body code_id params_and_body
+  in
   { code_id;
     params_and_body;
+    free_names_of_params_and_body;
     newer_version_of;
     params_arity;
     result_arity;
@@ -85,7 +113,11 @@ let create
 
 let with_code_id code_id t = { t with code_id }
 
-let with_params_and_body params_and_body t = { t with params_and_body }
+let with_params_and_body params_and_body t =
+  let params_and_body, free_names_of_params_and_body =
+    check_params_and_body t.code_id params_and_body
+  in
+  { t with params_and_body; free_names_of_params_and_body; }
 
 let with_newer_version_of newer_version_of t = { t with newer_version_of }
 
@@ -98,57 +130,69 @@ let print_params_and_body_with_cache ~cache ppf params_and_body =
 
 let print_with_cache ~cache ppf
       { code_id = _; params_and_body; newer_version_of; stub; inline;
-        is_a_functor; params_arity; result_arity; recursive; } =
+        is_a_functor; params_arity; result_arity; recursive;
+        free_names_of_params_and_body = _; } =
   let module C = Flambda_colours in
-  Format.fprintf ppf "@[<hov 1>(\
-      @[<hov 1>@<0>%s(newer_version_of@ %a)@<0>%s@]@ \
-      @[<hov 1>@<0>%s(stub@ %b)@<0>%s@]@ \
-      @[<hov 1>@<0>%s(inline@ %a)@<0>%s@]@ \
-      @[<hov 1>@<0>%s(is_a_functor@ %b)@<0>%s@]@ \
-      @[<hov 1>@<0>%s(params_arity@ @<0>%s%a@<0>%s)@<0>%s@]@ \
-      @[<hov 1>@<0>%s(result_arity@ @<0>%s%a@<0>%s)@<0>%s@]@ \
-      @[<hov 1>@<0>%s(recursive@ %a)@<0>%s@]@ \
-      %a\
-      )@]"
-    (if Option.is_none newer_version_of then Flambda_colours.elide ()
-     else Flambda_colours.normal ())
-    (Misc.Stdlib.Option.print_compact Code_id.print) newer_version_of
-    (Flambda_colours.normal ())
-    (if not stub then Flambda_colours.elide () else C.normal ())
-    stub
-    (Flambda_colours.normal ())
-    (if Inline_attribute.is_default inline
-     then Flambda_colours.elide ()
-     else C.normal ())
-    Inline_attribute.print inline
-    (Flambda_colours.normal ())
-    (if not is_a_functor then Flambda_colours.elide () else C.normal ())
-    is_a_functor
-    (Flambda_colours.normal ())
-    (if Flambda_arity.With_subkinds.is_singleton_value params_arity
-     then Flambda_colours.elide ()
-     else Flambda_colours.normal ())
-    (Flambda_colours.normal ())
-    Flambda_arity.With_subkinds.print params_arity
-    (if Flambda_arity.With_subkinds.is_singleton_value params_arity
-     then Flambda_colours.elide ()
-     else Flambda_colours.normal ())
-    (Flambda_colours.normal ())
-    (if Flambda_arity.With_subkinds.is_singleton_value result_arity
-     then Flambda_colours.elide ()
-     else Flambda_colours.normal ())
-    (Flambda_colours.normal ())
-    Flambda_arity.With_subkinds.print result_arity
-    (if Flambda_arity.With_subkinds.is_singleton_value result_arity
-     then Flambda_colours.elide ()
-     else Flambda_colours.normal ())
-    (Flambda_colours.normal ())
-    (match recursive with
-     | Non_recursive -> Flambda_colours.elide ()
-     | Recursive -> Flambda_colours.normal ())
-    Recursive.print recursive
-    (Flambda_colours.normal ())
-    (print_params_and_body_with_cache ~cache) params_and_body
+  match params_and_body with
+  | Present _ ->
+    Format.fprintf ppf "@[<hov 1>(\
+        @[<hov 1>@<0>%s(newer_version_of@ %a)@<0>%s@]@ \
+        @[<hov 1>@<0>%s(stub@ %b)@<0>%s@]@ \
+        @[<hov 1>@<0>%s(inline@ %a)@<0>%s@]@ \
+        @[<hov 1>@<0>%s(is_a_functor@ %b)@<0>%s@]@ \
+        @[<hov 1>@<0>%s(params_arity@ @<0>%s%a@<0>%s)@<0>%s@]@ \
+        @[<hov 1>@<0>%s(result_arity@ @<0>%s%a@<0>%s)@<0>%s@]@ \
+        @[<hov 1>@<0>%s(recursive@ %a)@<0>%s@]@ \
+        %a\
+        )@]"
+      (if Option.is_none newer_version_of then Flambda_colours.elide ()
+      else Flambda_colours.normal ())
+      (Misc.Stdlib.Option.print_compact Code_id.print) newer_version_of
+      (Flambda_colours.normal ())
+      (if not stub then Flambda_colours.elide () else C.normal ())
+      stub
+      (Flambda_colours.normal ())
+      (if Inline_attribute.is_default inline
+      then Flambda_colours.elide ()
+      else C.normal ())
+      Inline_attribute.print inline
+      (Flambda_colours.normal ())
+      (if not is_a_functor then Flambda_colours.elide () else C.normal ())
+      is_a_functor
+      (Flambda_colours.normal ())
+      (if Flambda_arity.With_subkinds.is_singleton_value params_arity
+      then Flambda_colours.elide ()
+      else Flambda_colours.normal ())
+      (Flambda_colours.normal ())
+      Flambda_arity.With_subkinds.print params_arity
+      (if Flambda_arity.With_subkinds.is_singleton_value params_arity
+      then Flambda_colours.elide ()
+      else Flambda_colours.normal ())
+      (Flambda_colours.normal ())
+      (if Flambda_arity.With_subkinds.is_singleton_value result_arity
+      then Flambda_colours.elide ()
+      else Flambda_colours.normal ())
+      (Flambda_colours.normal ())
+      Flambda_arity.With_subkinds.print result_arity
+      (if Flambda_arity.With_subkinds.is_singleton_value result_arity
+      then Flambda_colours.elide ()
+      else Flambda_colours.normal ())
+      (Flambda_colours.normal ())
+      (match recursive with
+      | Non_recursive -> Flambda_colours.elide ()
+      | Recursive -> Flambda_colours.normal ())
+      Recursive.print recursive
+      (Flambda_colours.normal ())
+      (print_params_and_body_with_cache ~cache) params_and_body
+  | Deleted ->
+    Format.fprintf ppf "@[<hov 1>(\
+        @[<hov 1>@<0>%s(newer_version_of@ %a)@<0>%s@]@ \
+        Deleted\
+        )@]"
+      (if Option.is_none newer_version_of then Flambda_colours.elide ()
+      else Flambda_colours.normal ())
+      (Misc.Stdlib.Option.print_compact Code_id.print) newer_version_of
+      (Flambda_colours.normal ())
 
 let print ppf code =
   print_with_cache ~cache:(Printing_cache.create ()) ppf code
@@ -156,30 +200,22 @@ let print ppf code =
 let compare { code_id = code_id1; _ } { code_id = code_id2; _ } =
   Code_id.compare code_id1 code_id2
 
-let free_names { code_id = _; params_and_body; newer_version_of;
-                 params_arity = _; result_arity = _; stub = _; inline = _;
-                 is_a_functor = _; recursive = _; } =
+let free_names t =
   (* [code_id] is only in [t] for the use of [compare]; it doesn't
-     count as a free name. *)
+      count as a free name. *)
   let from_newer_version_of =
-    match newer_version_of with
+    match t.newer_version_of with
     | None -> Name_occurrences.empty
     | Some older ->
       Name_occurrences.add_newer_version_of_code_id
         Name_occurrences.empty older Name_mode.normal
   in
-  let from_params_and_body =
-    match params_and_body with
-    | Deleted -> Name_occurrences.empty
-    | Present params_and_body ->
-      Function_params_and_body.free_names params_and_body
-  in
-  Name_occurrences.union from_newer_version_of from_params_and_body
+  Name_occurrences.union from_newer_version_of t.free_names_of_params_and_body
 
 let apply_name_permutation
       ({ code_id = _; params_and_body; newer_version_of = _; params_arity = _;
          result_arity = _; stub = _; inline = _; is_a_functor = _;
-         recursive = _; } as t)
+         recursive = _; free_names_of_params_and_body = _; } as t)
       perm =
   let params_and_body' : Function_params_and_body.t Or_deleted.t =
     match params_and_body with
@@ -194,13 +230,17 @@ let apply_name_permutation
       else
         Present params_and_body_inner'
   in
+  (* N.B. At present we don't need to apply the permutation to
+     [free_names_of_params_and_body] since we never permute symbols or
+     code IDs. *)
   if params_and_body == params_and_body' then t
   else
     { t with params_and_body = params_and_body'; }
 
 let all_ids_for_export { code_id; params_and_body; newer_version_of;
                          params_arity = _; result_arity = _; stub = _;
-                         inline = _; is_a_functor = _; recursive = _;} =
+                         inline = _; is_a_functor = _; recursive = _;
+                         free_names_of_params_and_body = _; } =
   let newer_version_of_ids =
     match newer_version_of with
     | None -> Ids_for_export.empty
@@ -220,7 +260,7 @@ let all_ids_for_export { code_id; params_and_body; newer_version_of;
 let import import_map
       ({ code_id; params_and_body; newer_version_of; params_arity = _;
          result_arity = _; stub = _; inline = _; is_a_functor = _;
-         recursive = _; } as t) =
+         recursive = _; free_names_of_params_and_body; } as t) =
   let code_id = Ids_for_export.Import_map.code_id import_map code_id in
   let params_and_body : Function_params_and_body.t Or_deleted.t =
     match params_and_body with
@@ -238,7 +278,36 @@ let import import_map
       let older = Ids_for_export.Import_map.code_id import_map older in
       Some older
   in
-  { t with code_id; params_and_body; newer_version_of; }
+  let free_names_of_params_and_body =
+    Name_occurrences.import free_names_of_params_and_body
+      ~import_name:(fun name ->
+        Name.pattern_match name
+          ~symbol:(fun symbol ->
+            Ids_for_export.Import_map.symbol import_map symbol
+            |> Name.symbol)
+          ~var:(fun var ->
+            Misc.fatal_errorf "Unexpected free variable %a in \
+                imported code:@ %a"
+              Variable.print var
+              print t))
+      ~import_code_id:(Ids_for_export.Import_map.code_id import_map)
+      ~import_continuation:(fun cont ->
+        Misc.fatal_errorf "Unexpected free continuation %a in \
+            imported code:@ %a"
+          Continuation.print cont
+          print t)
+  in
+  { t with
+    code_id;
+    params_and_body;
+    newer_version_of;
+    free_names_of_params_and_body;
+  }
 
 let make_deleted t =
   { t with params_and_body = Deleted; }
+
+let is_deleted t =
+  match t.params_and_body with
+  | Deleted -> true
+  | Present _ -> false

@@ -77,7 +77,7 @@ module Binary_arith_like (N : Binary_arith_like_sig) : sig
     -> arg2:Simple.t
     -> arg2_ty:Flambda_type.t
     -> result_var:Var_in_binding_pos.t
-    -> Reachable.t * TEE.t * DA.t
+    -> Simplified_named.t * TEE.t * DA.t
 end = struct
   module Possible_result = struct
     type t =
@@ -121,11 +121,11 @@ end = struct
     let kind = N.result_kind in
     let result_unknown () =
       let env_extension = TEE.one_equation result (N.unknown op) in
-      Reachable.reachable original_term, env_extension, dacc
+      Simplified_named.reachable original_term, env_extension, dacc
     in
     let result_invalid () =
       let env_extension = TEE.one_equation result (T.bottom kind) in
-      Reachable.invalid (), env_extension, dacc
+      Simplified_named.invalid (), env_extension, dacc
     in
     let check_possible_results ~possible_results =
       if PR.Set.is_empty possible_results then
@@ -157,7 +157,7 @@ end = struct
             | None -> N.unknown op
         in
         let env_extension = TEE.one_equation result ty in
-        Reachable.reachable named, env_extension, dacc
+        Simplified_named.reachable named, env_extension, dacc
     in
     let only_one_side_known op nums ~folder ~other_side =
       let possible_results =
@@ -889,19 +889,19 @@ let simplify_immutable_block_load (access_kind : P.Block_access_kind.t)
   let unchanged () =
     let ty = T.unknown result_kind in
     let env_extension = TEE.one_equation (Name.var result_var') ty in
-    Reachable.reachable original_term, env_extension, dacc
+    Simplified_named.reachable original_term, env_extension, dacc
   in
   let invalid () =
     let ty = T.bottom result_kind in
     let env_extension = TEE.one_equation (Name.var result_var') ty in
-    Reachable.invalid (), env_extension, dacc
+    Simplified_named.invalid (), env_extension, dacc
   in
   let exactly simple =
     let env_extension =
       TEE.one_equation (Name.var result_var')
         (T.alias_type_of result_kind simple)
     in
-    Reachable.reachable original_term, env_extension, dacc
+    Simplified_named.reachable original_term, env_extension, dacc
   in
   let typing_env = DA.typing_env dacc in
   match T.prove_equals_single_tagged_immediate typing_env index_ty with
@@ -963,7 +963,7 @@ let simplify_phys_equal (op : P.equality_comparison)
       TEE.one_equation result
         (T.this_naked_immediate (Target_imm.bool bool))
     in
-    Reachable.reachable (Named.create_simple (Simple.const_bool bool)),
+    Simplified_named.reachable (Named.create_simple (Simple.const_bool bool)),
       env_extension, dacc
   in
   if Simple.equal arg1 arg2 then
@@ -1007,7 +1007,7 @@ let simplify_phys_equal (op : P.equality_comparison)
             TEE.one_equation result
               (T.these_naked_immediates Target_imm.all_bools)
           in
-          Reachable.reachable original_term, env_extension, dacc
+          Simplified_named.reachable original_term, env_extension, dacc
         end
       end
     | Naked_number Naked_immediate ->
@@ -1023,7 +1023,7 @@ let simplify_phys_equal (op : P.equality_comparison)
           TEE.one_equation result
             (T.these_naked_immediates Target_imm.all_bools)
         in
-        Reachable.reachable original_term, env_extension, dacc
+        Simplified_named.reachable original_term, env_extension, dacc
       end
     | Naked_number Naked_float ->
       (* CR mshinwell: Should this case be statically disallowed in the type,
@@ -1072,7 +1072,7 @@ let simplify_binary_primitive dacc (prim : P.binary_primitive)
   let result_var' = Var_in_binding_pos.var result_var in
   let invalid ty =
     let env_extension = TEE.one_equation (Name.var result_var') ty in
-    Reachable.invalid (), env_extension, [arg1; arg2], dacc
+    Simplified_named.invalid (), env_extension, [arg1; arg2], dacc
   in
   match
     try_cse dacc prim arg1 arg2 ~min_name_mode ~result_var:result_var'
@@ -1139,7 +1139,7 @@ let simplify_binary_primitive dacc (prim : P.binary_primitive)
               let named = Named.create_prim (Binary (prim, arg1, arg2)) dbg in
               let ty = T.unknown result_kind in
               let env_extension = TEE.one_equation (Name.var result_var') ty in
-              Reachable.reachable named, env_extension, dacc
+              Simplified_named.reachable named, env_extension, dacc
         in
         let reachable, env_extension, dacc =
           simplifier dacc ~original_term dbg ~arg1 ~arg1_ty ~arg2 ~arg2_ty

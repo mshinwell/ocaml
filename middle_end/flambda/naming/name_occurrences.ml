@@ -54,6 +54,8 @@ end) : sig
 
   val remove : t -> N.t -> t
 
+  val remove_one_occurrence : t -> N.t -> Kind.t -> t
+
   val count : t -> N.t -> Num_occurrences.t
 
   val count_normal : t -> N.t -> Num_occurrences.t
@@ -67,6 +69,8 @@ end) : sig
   val for_all : t -> f:(N.t -> bool) -> bool
 
   val filter : t -> f:(N.t -> bool) -> t
+
+  val import : t -> import_name:(N.t -> N.t) -> t
 end = struct
   module For_one_name : sig
     type t
@@ -80,6 +84,13 @@ end = struct
     val one_occurrence : Kind.t -> t
 
     val add : t -> Kind.t -> t
+
+    type remove_one_occurrence_result = private
+      | No_more_occurrences
+      | One_remaining_occurrence of Kind.t
+      | Multiple_remaining_occurrences of t
+
+    val remove_one_occurrence : t -> Kind.t -> remove_one_occurrence_result
 
     val num_occurrences : t -> int
 
@@ -165,6 +176,49 @@ end = struct
         (encode_phantom_occurrences (1 + num_occurrences_phantom t))
           lor (without_phantom_occurrences t)
 
+    type remove_one_occurrence_result =
+      | No_more_occurrences
+      | One_remaining_occurrence of Kind.t
+      | Multiple_remaining_occurrences of t
+
+    let remove_one_occurrence t kind =
+      let t =
+        match Kind.descr kind with
+        | Normal ->
+          let num_occurrences =
+            let num = num_occurrences_normal t in
+            if num > 0 then num - 1 else 0
+          in
+          (encode_normal_occurrences num_occurrences)
+            lor (without_normal_occurrences t)
+        | In_types ->
+          let num_occurrences =
+            let num = num_occurrences_in_types t in
+            if num > 0 then num - 1 else 0
+          in
+          (encode_in_types_occurrences num_occurrences)
+            lor (without_in_types_occurrences t)
+        | Phantom ->
+          let num_occurrences =
+            let num = num_occurrences_phantom t in
+            if num > 0 then num - 1 else 0
+          in
+          (encode_phantom_occurrences num_occurrences)
+            lor (without_phantom_occurrences t)
+      in
+      match num_occurrences t with
+      | 0 -> No_more_occurrences
+      | 1 ->
+        if num_occurrences_normal t = 1 then
+          One_remaining_occurrence Kind.normal
+        else if num_occurrences_phantom t = 1 then
+          One_remaining_occurrence Kind.phantom
+        else if num_occurrences_in_types t = 1 then
+          One_remaining_occurrence Kind.in_types
+        else
+          assert false
+      | _ -> Multiple_remaining_occurrences t
+
     (* CR mshinwell: Add -strict-sequence to the build *)
 
     let downgrade_occurrences_at_strictly_greater_kind t max_kind =
@@ -231,7 +285,17 @@ end = struct
       N.equal n1 n2 && Kind.equal kind1 kind2
     | Potentially_many map1, Potentially_many map2 ->
       N.Map.equal For_one_name.equal map1 map2
-    | (Empty | One _ | Potentially_many _), _ -> false
+    | Empty, Potentially_many map
+    | Potentially_many map, Empty -> N.Map.is_empty map
+    | One (n1, kind1), Potentially_many map
+    | Potentially_many map, One (n1, kind1) ->
+      begin match N.Map.get_singleton map with
+      | None -> false
+      | Some (n2, for_one_name2) ->
+        let for_one_name1 = For_one_name.one_occurrence kind1 in
+        N.equal n1 n2 && For_one_name.equal for_one_name1 for_one_name2
+      end
+    | (Empty | One _), _ -> false
 
   let empty = Empty
 
@@ -391,6 +455,22 @@ end = struct
       if N.Map.is_empty map then Empty
       else Potentially_many map
 
+  let remove_one_occurrence t name kind =
+    match t with
+    | Empty -> Empty
+    | One (name', kind') ->
+      if N.equal name name' && Kind.equal kind kind' then Empty else t
+    | Potentially_many map ->
+      match N.Map.find name map with
+      | exception Not_found -> Empty
+      | for_one_name ->
+        match For_one_name.remove_one_occurrence for_one_name kind with
+        | No_more_occurrences -> Empty
+        | One_remaining_occurrence kind -> One (name, kind)
+        | Multiple_remaining_occurrences for_one_name ->
+          let map = N.Map.add name for_one_name map in
+          Potentially_many map
+
   let count t name : Num_occurrences.t =
     match t with
     | Empty -> Zero
@@ -488,21 +568,37 @@ end = struct
         Potentially_many map
       end
 
-    let for_all t ~f =
-      match t with
-      | Empty -> true
-      | One (name, _) -> f name
-      | Potentially_many map ->
-        N.Map.for_all (fun name _ -> f name) map
+  let for_all t ~f =
+    match t with
+    | Empty -> true
+    | One (name, _) -> f name
+    | Potentially_many map ->
+      N.Map.for_all (fun name _ -> f name) map
 
-    let filter t ~f =
-      match t with
-      | Empty -> t
-      | One (name, _) -> if f name then t else Empty
-      | Potentially_many map ->
-        let map = N.Map.filter (fun name _ -> f name) map in
-        if N.Map.is_empty map then Empty
-        else Potentially_many map
+  let filter t ~f =
+    match t with
+    | Empty -> t
+    | One (name, _) -> if f name then t else Empty
+    | Potentially_many map ->
+      let map = N.Map.filter (fun name _ -> f name) map in
+      if N.Map.is_empty map then Empty
+      else Potentially_many map
+
+  let import t ~import_name =
+    match t with
+    | Empty -> Empty
+    | One (name, kind) ->
+      let name = import_name name in
+      One (name, kind)
+    | Potentially_many map ->
+      let map =
+        N.Map.fold (fun name for_one_name result ->
+            let name = import_name name in
+            N.Map.add name for_one_name result)
+          map
+          N.Map.empty
+      in
+      Potentially_many map
 end [@@@inlined always]
 
 module For_names = For_one_variety_of_names (struct
@@ -788,12 +884,41 @@ let binary_op ~for_names ~for_continuations ~for_closure_vars ~for_code_ids
     newer_version_of_code_ids;
   }
 
-let diff t1 t2 =
-  binary_op ~for_names:For_names.diff
-    ~for_continuations:For_continuations.diff
-    ~for_closure_vars:For_closure_vars.diff
-    ~for_code_ids:For_code_ids.diff
-    t1 t2
+let diff
+      { names = names1;
+        continuations = continuations1;
+        continuations_in_trap_actions = continuations_in_trap_actions1;
+        closure_vars = closure_vars1;
+        code_ids = code_ids1;
+        newer_version_of_code_ids = newer_version_of_code_ids1;
+      }
+      { names = names2;
+        continuations = continuations2;
+        continuations_in_trap_actions = continuations_in_trap_actions2;
+        closure_vars = closure_vars2;
+        code_ids = code_ids2;
+        newer_version_of_code_ids = newer_version_of_code_ids2;
+      } =
+  let names = For_names.diff names1 names2 in
+  let continuations = For_continuations.diff continuations1 continuations2 in
+  let continuations_in_trap_actions =
+    For_continuations.diff continuations_in_trap_actions1
+      continuations_in_trap_actions2
+  in
+  let closure_vars = For_closure_vars.diff closure_vars1 closure_vars2 in
+  let code_ids = For_code_ids.diff code_ids1 code_ids2 in
+  let newer_version_of_code_ids =
+    For_code_ids.diff newer_version_of_code_ids1
+      (* Note special case here: *)
+      (For_code_ids.union newer_version_of_code_ids2 code_ids2)
+  in
+  { names;
+    continuations;
+    continuations_in_trap_actions;
+    closure_vars;
+    code_ids;
+    newer_version_of_code_ids;
+  }
 
 let union t1 t2 =
   binary_op ~for_names:For_names.union
@@ -814,6 +939,27 @@ let is_empty t = equal t empty
 (* CR mshinwell: It may be worth caching this or similar *)
 let no_variables t =
   For_names.for_all t.names ~f:(fun var -> not (Name.is_var var))
+
+let no_continuations
+      { names = _; continuations; continuations_in_trap_actions;
+        closure_vars = _; code_ids = _; newer_version_of_code_ids = _; } =
+  For_continuations.is_empty continuations
+    && For_continuations.is_empty continuations_in_trap_actions
+
+(*
+let has_only_symbols_and_code_ids
+      ({ names = _;
+         continuations;
+         continuations_in_trap_actions;
+         closure_vars;
+         code_ids = _;
+         newer_version_of_code_ids = _;
+      } as t) =
+  no_variables t
+    && For_continuations.is_empty continuations
+    && For_continuations.is_empty continuations_in_trap_actions
+    && For_closure_vars.is_empty closure_vars
+*)
 
 let subset_domain t1 t2 =
   binary_conjunction ~for_names:For_names.subset_domain
@@ -853,6 +999,8 @@ let mem_name t name = For_names.mem t.names name
 let mem_var t var = For_names.mem t.names (Name.var var)
 let mem_symbol t symbol = For_names.mem t.names (Name.symbol symbol)
 let mem_code_id t code_id = For_code_ids.mem t.code_ids code_id
+let mem_closure_var t closure_var =
+  For_closure_vars.mem t.closure_vars closure_var
 
 let remove_var t var =
   if For_names.is_empty t.names then t
@@ -861,6 +1009,33 @@ let remove_var t var =
     { t with
       names;
     }
+
+let remove_symbol t symbol =
+  if For_names.is_empty t.names then t
+  else
+    let names = For_names.remove t.names (Name.symbol symbol) in
+    { t with
+      names;
+    }
+
+let remove_code_id t code_id =
+  if For_code_ids.is_empty t.code_ids
+    && For_code_ids.is_empty t.newer_version_of_code_ids
+  then t
+  else
+    let code_ids = For_code_ids.remove t.code_ids code_id in
+    let newer_version_of_code_ids =
+      For_code_ids.remove t.newer_version_of_code_ids code_id
+    in
+    { t with
+      code_ids;
+      newer_version_of_code_ids;
+    }
+
+let remove_code_id_or_symbol t (cis : Code_id_or_symbol.t) =
+  match cis with
+  | Code_id code_id -> remove_code_id t code_id
+  | Symbol symbol -> remove_symbol t symbol
 
 let remove_continuation t k =
   if For_continuations.is_empty t.continuations
@@ -874,6 +1049,17 @@ let remove_continuation t k =
     { t with
       continuations;
       continuations_in_trap_actions;
+    }
+
+let remove_one_occurrence_of_closure_var t closure_var name_mode =
+  if For_closure_vars.is_empty t.closure_vars then t
+  else
+    let closure_vars =
+      For_closure_vars.remove_one_occurrence t.closure_vars closure_var
+        name_mode
+    in
+    { t with
+      closure_vars;
     }
 
 let greatest_name_mode_var t var =
@@ -934,6 +1120,11 @@ let without_code_ids t =
     newer_version_of_code_ids = For_code_ids.empty;
   }
 
+let without_closure_vars t =
+  { t with
+    closure_vars = For_closure_vars.empty;
+  }
+
 let fold_names t ~init ~f =
   For_names.fold t.names ~init ~f
 
@@ -952,3 +1143,34 @@ let filter_names t ~f =
 
 let fold_code_ids t ~init ~f =
   For_code_ids.fold t.code_ids ~init ~f
+
+let import
+      { names; continuations; continuations_in_trap_actions;
+        closure_vars; code_ids; newer_version_of_code_ids; }
+      ~import_name ~import_continuation ~import_code_id =
+  let names = For_names.import names ~import_name in
+  let continuations =
+    For_continuations.import continuations ~import_name:import_continuation
+  in
+  let continuations_in_trap_actions =
+    For_continuations.import continuations_in_trap_actions
+      ~import_name:import_continuation
+  in
+  let code_ids = For_code_ids.import code_ids ~import_name:import_code_id in
+  let newer_version_of_code_ids =
+    For_code_ids.import newer_version_of_code_ids ~import_name:import_code_id
+  in
+  { names;
+    continuations;
+    continuations_in_trap_actions;
+    closure_vars;
+    code_ids;
+    newer_version_of_code_ids;
+  }
+
+let restrict_to_closure_vars
+      { names = _; continuations = _; continuations_in_trap_actions = _;
+        closure_vars; code_ids = _; newer_version_of_code_ids = _; } =
+  { empty with
+    closure_vars;
+  }

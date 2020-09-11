@@ -49,7 +49,7 @@ val create_set_of_closures : Set_of_closures.t -> t
 
 (** Convert one or more statically-allocated constants into the defining
     expression of a [Let]. *)
-val create_static_consts : Static_const.t list -> t
+val create_static_consts : Static_const.Group.t -> t
 
 (** Build an expression boxing the name.  The returned kind is the
     one of the unboxed version. *)

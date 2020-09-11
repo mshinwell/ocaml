@@ -462,6 +462,9 @@ let unary_primitive env dbg f arg =
     | Some { offset; }, Some { offset = base; _ } ->
       None, C.get_field_gen Asttypes.Immutable arg (offset - base) dbg
     | Some _, None | None, Some _ | None, None ->
+      (* Note that if a closure var is missing from a set of closures
+         environment, then [Env.closure_offset] might return [None], even
+         though the set of closures has been seen by [Un_cps_closure]. *)
       None, C.unreachable
 
 let binary_primitive env dbg f x y =
@@ -789,9 +792,8 @@ and let_expr_prim body env res v ~num_normal_occurrences_of_bound_vars p dbg =
   expr env res body
 
 and decide_inline_cont h k ~num_free_occurrences =
-  not (Continuation_handler.is_exn_handler h)
-  && (Continuation_handler.stub h
-      || cont_is_known_to_have_exactly_one_occurrence k num_free_occurrences)
+  (not (Continuation_handler.is_exn_handler h))
+  && cont_is_known_to_have_exactly_one_occurrence k num_free_occurrences
 
 and let_cont env res = function
   | Let_cont.Non_recursive { handler; num_free_occurrences; } ->
@@ -896,8 +898,7 @@ and let_cont_rec env res conts body =
   wrap (C.ccatch ~rec_flag:true ~body ~handlers), res
 
 and continuation_handler_split h =
-  let h = Continuation_handler.params_and_handler h in
-  Continuation_params_and_handler.pattern_match' h
+  Continuation_handler.pattern_match' h
     ~f:(fun params ~num_normal_occurrences_of_params ~handler ->
       params, num_normal_occurrences_of_params, handler)
 
@@ -1130,6 +1131,7 @@ and apply_cont_ret env res e k = function
 and apply_cont_regular env res e k args =
   match Env.get_k env k with
   | Inline { handler_params; handler_body; handler_params_occurrences; } ->
+    (* CR mshinwell: We should fix this.  See comment in apply_cont_expr.ml *)
     if not (Apply_cont_expr.trap_action e = None) then begin
       Misc.fatal_errorf "This [Apply_cont] should not have a trap \
                          action:@ %a"

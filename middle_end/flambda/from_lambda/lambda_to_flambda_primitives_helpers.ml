@@ -114,7 +114,10 @@ let raise_exn_for_failure ~dbg exn_cont exn_bucket extra_let_binding =
   match extra_let_binding with
   | None -> apply_cont
   | Some (bound_var, defining_expr) ->
-    Expr.create_let bound_var defining_expr apply_cont
+    Let.create (Bindable_let_bound.singleton bound_var)
+      defining_expr ~body:apply_cont
+      ~free_names_of_body:Unknown
+    |> Expr.create_let
 
 let expression_for_failure ~backend exn_cont ~register_const_string
       primitive dbg (failure : failure) =
@@ -228,12 +231,8 @@ let rec bind_rec ~backend exn_cont
         bind_rec ~backend exn_cont ~register_const_string
           primitive dbg cont
       in
-      let params_and_handler =
-        Continuation_params_and_handler.create [] ~handler
-          ~free_names_of_handler:Unknown
-      in
-      Continuation_handler.create ~params_and_handler
-        ~stub:false
+      Continuation_handler.create [] ~handler
+        ~free_names_of_handler:Unknown
         ~is_exn_handler:false
     in
     let failure_cont = Continuation.create () in
@@ -242,24 +241,16 @@ let rec bind_rec ~backend exn_cont
         expression_for_failure ~backend exn_cont
           ~register_const_string primitive dbg failure
       in
-      let params_and_handler =
-        Continuation_params_and_handler.create [] ~handler
-          ~free_names_of_handler:Unknown
-      in
-      Continuation_handler.create ~params_and_handler
-        ~stub:false
+      Continuation_handler.create [] ~handler
+        ~free_names_of_handler:Unknown
         ~is_exn_handler:false
     in
     let check_validity_conditions =
       List.fold_left (fun rest expr_primitive ->
           let condition_passed_cont = Continuation.create () in
           let condition_passed_cont_handler =
-            let params_and_handler =
-              Continuation_params_and_handler.create [] ~handler:rest
-                ~free_names_of_handler:Unknown
-            in
-            Continuation_handler.create ~params_and_handler
-              ~stub:false
+            Continuation_handler.create [] ~handler:rest
+              ~free_names_of_handler:Unknown
               ~is_exn_handler:false
           in
           let body =
@@ -302,6 +293,9 @@ and bind_rec_primitive ~backend exn_cont ~register_const_string
     let var = Variable.create "prim" in
     let var' = VB.create var Name_mode.normal in
     let cont named =
-      Flambda.Expr.create_let var' named (cont (Simple.var var))
+      Let.create (Bindable_let_bound.singleton var') named
+        ~body:(cont (Simple.var var))
+        ~free_names_of_body:Unknown
+      |> Expr.create_let
     in
     bind_rec ~backend exn_cont ~register_const_string p dbg cont

@@ -16,9 +16,9 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-(** The alpha-equivalence class of the binding of a list of parameters around
-    an expression, forming a continuation handler, together with auxiliary
-    information about such handler. *)
+(** The representation of the alpha-equivalence class of bindings of a list
+    of parameters, with associated relations thereon, over the code of a
+    continuation handler. *)
 type t
 
 (** Printing, invariant checks, name manipulation, etc. *)
@@ -26,16 +26,74 @@ include Expr_std.S with type t := t
 
 include Contains_ids.S with type t := t
 
-(** Create the representation of a single continuation handler. *)
+val print_using_where_with_cache
+   : Recursive.t
+  -> cache:Printing_cache.t
+  -> Format.formatter
+  -> Continuation.t
+  -> t
+  -> first:bool
+  -> unit
+
+(** Create a value of type [t] given information about a continuation
+    handler. *)
 val create
-   : params_and_handler:Continuation_params_and_handler.t
-  -> stub:bool
+   : Kinded_parameter.t list
+  -> handler:Expr.t
+  -> free_names_of_handler:Name_occurrences.t Or_unknown.t
   -> is_exn_handler:bool
   -> t
 
-(** The alpha-equivalence class of the continuation's parameters bound over
-    its code. *)
-val params_and_handler : t -> Continuation_params_and_handler.t
+(** Choose a member of the alpha-equivalence class to enable examination
+    of the parameters, relations thereon and the code over which they
+    are scoped. *)
+val pattern_match'
+   : t
+  -> f:(Kinded_parameter.t list
+    -> num_normal_occurrences_of_params:Num_occurrences.t Variable.Map.t
+    -> handler:Expr.t
+    -> 'a)
+  -> 'a
+
+val pattern_match
+   : t
+  -> f:(Kinded_parameter.t list
+    -> handler:Expr.t
+    -> 'a)
+  -> 'a
+
+module Pattern_match_pair_error : sig
+  type t = Parameter_lists_have_different_lengths
+
+  val to_string : t -> string
+end
+
+(** Choose members of two bindings' alpha-equivalence classes using the same
+    parameters. *)
+val pattern_match_pair
+   : t
+  -> t
+  -> f:(Kinded_parameter.t list
+    -> handler1:Expr.t
+    -> handler2:Expr.t
+    -> 'a)
+  -> ('a, Pattern_match_pair_error.t) Result.t
+
+module Behaviour : sig
+  type t = private
+    | Unreachable of { arity : Flambda_arity.With_subkinds.t; }
+    | Alias_for of {
+        arity : Flambda_arity.With_subkinds.t;
+        alias_for : Continuation.t;
+      }
+    | Unknown of { arity : Flambda_arity.With_subkinds.t; }
+
+  include Contains_ids.S with type t := t
+end
+
+val behaviour : t -> Behaviour.t
+
+val arity : t -> Flambda_arity.With_subkinds.t
 
 (** Whether the continuation is an exception handler.
 
@@ -51,32 +109,3 @@ val params_and_handler : t -> Continuation_params_and_handler.t
     simultaneously-defined continuations when one or more of them is an
     exception handler.) *)
 val is_exn_handler : t -> bool
-
-(** Whether the continuation is a compiler-generated wrapper that should
-    always be inlined. *)
-(* CR mshinwell: Remove the notion of "stub" and enhance continuation and
-   function declarations to hold one or more wrappers themselves. *)
-val stub : t -> bool
-
-val arity : t -> Flambda_arity.With_subkinds.t
-
-val with_params_and_handler : t -> Continuation_params_and_handler.t -> t
-
-type behaviour = private
-  | Unreachable of { arity : Flambda_arity.With_subkinds.t; }
-  | Alias_for of {
-      arity : Flambda_arity.With_subkinds.t;
-      alias_for : Continuation.t;
-    }
-  | Unknown of { arity : Flambda_arity.With_subkinds.t; }
-
-val behaviour : t -> behaviour
-
-val print_using_where_with_cache
-   : Recursive.t
-  -> cache:Printing_cache.t
-  -> Format.formatter
-  -> Continuation.t
-  -> t
-  -> first:bool
-  -> unit

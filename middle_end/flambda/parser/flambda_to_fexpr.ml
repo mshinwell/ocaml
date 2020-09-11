@@ -716,16 +716,15 @@ and let_cont_expr env (lc : Flambda.Let_cont_expr.t) =
         Fexpr.Let_cont { recursive = Recursive; handlers; body }
       )
 and cont_handler env cont_id h =
-  let params_and_handler = Flambda.Continuation_handler.params_and_handler h in
-  let stub = Flambda.Continuation_handler.stub h in
   let is_exn_handler = Flambda.Continuation_handler.is_exn_handler h in
-  Flambda.Continuation_params_and_handler.pattern_match params_and_handler
+  Flambda.Continuation_handler.pattern_match h
     ~f:(fun params ~handler : Fexpr.continuation_handler ->
       let params, env =
         Misc.Stdlib.List.map_accum_left kinded_parameter env params
       in
       let handler = expr env handler in
-      { name = cont_id; params; stub; is_exn_handler; handler }
+      (* CR mshinwell: remove [stub], no longer used *)
+      { name = cont_id; params; stub = false; is_exn_handler; handler }
     )
 and apply_expr env (app : Apply_expr.t) : Fexpr.expr =
   let func =

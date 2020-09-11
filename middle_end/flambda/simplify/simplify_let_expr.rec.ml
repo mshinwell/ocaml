@@ -18,9 +18,11 @@
 
 open! Simplify_import
 
-let rebuild_let bindable_let_bound ~bindings
+let rebuild_let bindable_let_bound ~bindings_outermost_first
       ~lifted_constants_from_defining_expr ~at_unit_toplevel ~body uacc
       ~after_rebuild =
+  (* At this point, the free names in [uacc] are the free names of [body],
+     plus all used closure vars seen in the whole compilation unit. *)
   let no_constants_from_defining_expr =
     LCS.is_empty lifted_constants_from_defining_expr
   in
@@ -45,30 +47,33 @@ let rebuild_let bindable_let_bound ~bindings
           ~outermost:lifted_constants_from_defining_expr
         |> UA.with_lifted_constants uacc
     in
-    let body = Simplify_common.bind_let_bound ~bindings ~body in
+    let body, uacc =
+      EB.make_new_let_bindings uacc ~bindings_outermost_first ~body
+    in
     after_rebuild body uacc
   else
     let scoping_rule =
       (* If this is a "normal" let rather than a "let symbol", then we
          use [Dominator] scoping for any symbol bindings we place, as the
-         types of the symbols may have been used out of syntactic scope.
-      *)
+         types of the symbols may have been used out of syntactic scope. *)
       Option.value ~default:Symbol_scoping_rule.Dominator
         (Bindable_let_bound.let_symbol_scoping_rule bindable_let_bound)
     in
     let critical_deps_of_bindings =
-      ListLabels.fold_left bindings ~init:Name_occurrences.empty
+      ListLabels.fold_left bindings_outermost_first
+        ~init:Name_occurrences.empty
         ~f:(fun critical_deps (bound, _) ->
           Name_occurrences.union (Bindable_let_bound.free_names bound)
             critical_deps)
     in
     let body, uacc =
-      Simplify_common.place_lifted_constants uacc
+      EB.place_lifted_constants uacc
         scoping_rule
         ~lifted_constants_from_defining_expr
         ~lifted_constants_from_body
-        ~put_bindings_around_body:(fun ~body ->
-          Simplify_common.bind_let_bound ~bindings ~body)
+        ~put_bindings_around_body:
+          (fun uacc ~body ->
+            EB.make_new_let_bindings uacc ~bindings_outermost_first ~body)
         ~body
         ~critical_deps_of_bindings
     in
@@ -82,7 +87,7 @@ let simplify_let dacc let_expr ~down_to_up =
        of the defining expression and the [body]. *)
     let dacc, prior_lifted_constants = DA.get_and_clear_lifted_constants dacc in
     (* Simplify the defining expression. *)
-    let { Simplify_named. bindings_outermost_first = bindings; dacc; } =
+    let { Simplify_named. bindings_outermost_first; dacc; } =
       Simplify_named.simplify_named dacc bindable_let_bound
         (L.defining_expr let_expr)
     in
@@ -98,8 +103,7 @@ let simplify_let dacc let_expr ~down_to_up =
        Note that no lifted constants are ever placed during the simplification
        of the defining expression.  (Not even in the case of a
        [Set_of_closures] binding, since "let symbol" is disallowed under a
-       lambda.)
-    *)
+       lambda.) *)
     let lifted_constants_from_defining_expr =
       Sort_lifted_constants.sort (DA.get_lifted_constants dacc)
     in
@@ -113,6 +117,6 @@ let simplify_let dacc let_expr ~down_to_up =
       ~down_to_up:(fun dacc ~rebuild:rebuild_body ->
         down_to_up dacc ~rebuild:(fun uacc ~after_rebuild ->
           rebuild_body uacc ~after_rebuild:(fun body uacc ->
-            rebuild_let bindable_let_bound ~bindings
+            rebuild_let bindable_let_bound ~bindings_outermost_first
               ~lifted_constants_from_defining_expr ~at_unit_toplevel ~body uacc
               ~after_rebuild))))

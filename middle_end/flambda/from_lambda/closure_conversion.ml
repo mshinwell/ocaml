@@ -39,12 +39,21 @@ type t = {
   mutable declared_symbols : (Symbol.t * Static_const.t) list;
   mutable shareable_constants : Symbol.t Static_const.Map.t;
   mutable code : (Code_id.t * Code.t) list;
+  mutable free_names_of_current_function : Name_occurrences.t;
 }
+
+(* Do not use [Simple.symbol], use this function instead, to ensure that
+   we correctly compute the free names of [Code]. *)
+let use_of_symbol_as_simple t symbol =
+  t.free_names_of_current_function
+    <- Name_occurrences.add_symbol t.free_names_of_current_function
+         symbol Name_mode.normal;
+  Simple.symbol symbol
 
 let symbol_for_ident t id =
   let symbol = t.symbol_for_global' id in
   t.imported_symbols <- Symbol.Set.add symbol t.imported_symbols;
-  Simple.symbol symbol
+  use_of_symbol_as_simple t symbol
 
 let register_const0 t constant name =
   match Static_const.Map.find constant t.shareable_constants with
@@ -127,7 +136,7 @@ let close_const0 t (const : Lambda.structured_constant) =
   match declare_const t const with
   | Tagged_immediate c, name ->
     Simple.const (Reg_width_const.tagged_immediate c), name
-  | Symbol s, name -> Simple.symbol s, name
+  | Symbol s, name -> use_of_symbol_as_simple t s, name
   | Dynamically_computed _, name ->
     Misc.fatal_errorf "Declaring a computed constant %s" name
 
@@ -199,7 +208,7 @@ let close_c_call t ~let_bound_var (prim : Primitive.description)
   t.imported_symbols <- Symbol.Set.add call_symbol t.imported_symbols;
   let call args =
     let apply =
-      Apply.create ~callee:(Simple.symbol call_symbol)
+      Apply.create ~callee:(use_of_symbol_as_simple t call_symbol)
         ~continuation:(Return return_continuation)
         exn_continuation
         ~args
@@ -230,9 +239,11 @@ let close_c_call t ~let_bound_var (prim : Primitive.description)
              let unboxed_arg' =
                VB.create unboxed_arg Name_mode.normal
              in
-             Expr.create_let unboxed_arg'
+             Let.create (Bindable_let_bound.singleton unboxed_arg')
                (Named.create_prim (Unary (named, arg)) dbg)
-               (call ((Simple.var unboxed_arg) :: args))))
+               ~body:(call ((Simple.var unboxed_arg) :: args))
+               ~free_names_of_body:Unknown
+             |> Expr.create_let))
       call
       args
       prim.prim_native_repr_args
@@ -254,11 +265,13 @@ let close_c_call t ~let_bound_var (prim : Primitive.description)
       let let_bound_var' = VB.create let_bound_var Name_mode.normal in
       let handler_param = Variable.rename let_bound_var in
       let body =
-        Expr.create_let let_bound_var'
+        Let.create (Bindable_let_bound.singleton let_bound_var')
           (Named.create_prim
             (Unary (box_return_value, Simple.var handler_param))
             dbg)
-          body
+          ~body
+          ~free_names_of_body:Unknown
+        |> Expr.create_let
       in
       body, handler_param, true
   in
@@ -269,17 +282,13 @@ let close_c_call t ~let_bound_var (prim : Primitive.description)
         Flambda_kind.With_subkind.create return_kind Anything
       in
       let params = [Kinded_parameter.create handler_param return_kind] in
-      let params_and_handler =
-        Continuation_params_and_handler.create params
-          ~handler:code_after_call
-          (* Here and elsewhere in this pass, we specify [Unknown] for
-             free name sets like this, since the information isn't needed
-             until the translation to Cmm -- by which point Simplify will
-             have rebuilt the term and provided the free names. *)
-          ~free_names_of_handler:Unknown
-      in
-      Continuation_handler.create ~params_and_handler
-        ~stub:false
+      Continuation_handler.create params
+        ~handler:code_after_call
+        (* Here and elsewhere in this pass, we specify [Unknown] for
+           free name sets like this, since the information isn't needed
+           until the translation to Cmm -- by which point Simplify will
+           have rebuilt the term and provided the free names. *)
+        ~free_names_of_handler:Unknown
         ~is_exn_handler:false
     in
     Let_cont.create_non_recursive return_continuation after_call
@@ -380,7 +389,9 @@ let rec close t env (ilam : Ilambda.t) : Expr.t =
       | None -> body
       | Some defining_expr ->
         let var = VB.create var Name_mode.normal in
-        Expr.create_let var defining_expr body
+        Let.create (Bindable_let_bound.singleton var) defining_expr
+          ~body ~free_names_of_body:Unknown
+        |> Expr.create_let
     in
     close_named t env ~let_bound_var:var defining_expr cont
   | Let_mutable _ ->
@@ -410,14 +421,10 @@ let rec close t env (ilam : Ilambda.t) : Expr.t =
         params_with_kinds
     in
     let handler = close t handler_env handler in
-    let params_and_handler =
-      Continuation_params_and_handler.create params ~handler
-        ~free_names_of_handler:Unknown
-    in
     let handler =
-      Continuation_handler.create ~params_and_handler
-        ~stub:false
-        ~is_exn_handler:is_exn_handler
+      Continuation_handler.create params ~handler
+        ~free_names_of_handler:Unknown
+        ~is_exn_handler
     in
     let body = close t env body in
     begin match recursive with
@@ -505,8 +512,14 @@ let rec close t env (ilam : Ilambda.t) : Expr.t =
         in
         Expr.create_switch ~scrutinee:(Simple.var comparison_result) ~arms
       in
-      Expr.create_let untagged_scrutinee' untag
-        (Expr.create_let comparison_result' compare switch)
+      let body =
+        Let.create (Bindable_let_bound.singleton comparison_result')
+          compare ~body:switch ~free_names_of_body:Unknown
+        |> Expr.create_let
+      in
+      Let.create (Bindable_let_bound.singleton untagged_scrutinee')
+        untag ~body ~free_names_of_body:Unknown
+      |> Expr.create_let
     | _, _ ->
       let arms =
         match sw.failaction with
@@ -529,8 +542,12 @@ let rec close t env (ilam : Ilambda.t) : Expr.t =
       if Target_imm.Map.is_empty arms then
         Expr.create_invalid ()
       else
-        Expr.create_let untagged_scrutinee' untag
-          (Expr.create_switch ~scrutinee:(Simple.var untagged_scrutinee) ~arms)
+        let body =
+          Expr.create_switch ~scrutinee:(Simple.var untagged_scrutinee) ~arms
+        in
+        Let.create (Bindable_let_bound.singleton untagged_scrutinee')
+          untag ~body ~free_names_of_body:Unknown
+        |> Expr.create_let
 
 and close_named t env ~let_bound_var (named : Ilambda.named)
       (k : Named.t option -> Expr.t) : Expr.t =
@@ -623,10 +640,10 @@ and close_let_rec t env ~defs ~body =
         |> Closure_id.Lmap.bindings)
   in
   let body = close t env body in
-  Expr.create_pattern_let
-    (Bindable_let_bound.set_of_closures ~closure_vars)
+  Let.create (Bindable_let_bound.set_of_closures ~closure_vars)
     (Named.create_set_of_closures set_of_closures)
-    body
+    ~body ~free_names_of_body:Unknown
+  |> Expr.create_let
 
 and close_functions t external_env function_declarations =
   let compilation_unit = Compilation_unit.get_current_exn () in
@@ -676,6 +693,7 @@ and close_functions t external_env function_declarations =
 and close_one_function t ~external_env ~by_closure_id decl
       ~var_within_closures_from_idents ~closure_ids_from_idents
       function_declarations =
+  t.free_names_of_current_function <- Name_occurrences.empty;
   let body = Function_decl.body decl in
   let loc = Function_decl.loc decl in
   let dbg = Debuginfo.from_location loc in
@@ -780,38 +798,42 @@ and close_one_function t ~external_env ~by_closure_id decl
       raise Misc.Fatal_error
     end
   in
-  let free_names_of_body = Expr.free_names body in
   let my_closure' = Simple.var my_closure in
   let body =
     Variable.Map.fold (fun var closure_id body ->
-        if not (Name_occurrences.mem_var free_names_of_body var) then body
-        else
-          let move : Flambda_primitive.unary_primitive =
-            Select_closure {
-              move_from = my_closure_id;
-              move_to = closure_id;
-            }
-          in
-          let var = VB.create var Name_mode.normal in
-          Expr.create_let var
-            (Named.create_prim (Unary (move, my_closure')) Debuginfo.none)
-            body)
+        let move : Flambda_primitive.unary_primitive =
+          Select_closure {
+            move_from = my_closure_id;
+            move_to = closure_id;
+          }
+        in
+        let var = VB.create var Name_mode.normal in
+        Let.create (Bindable_let_bound.singleton var)
+          (Named.create_prim (Unary (move, my_closure')) Debuginfo.none)
+          ~body ~free_names_of_body:Unknown
+        |> Expr.create_let)
       project_closure_to_bind
       body
   in
+  t.free_names_of_current_function
+    <- Variable.Map.fold (fun _var closure_var free_names ->
+           Name_occurrences.add_closure_var free_names
+             closure_var Name_mode.normal)
+         var_within_closures_to_bind
+         t.free_names_of_current_function;
   let body =
     Variable.Map.fold (fun var var_within_closure body ->
-        if not (Name_occurrences.mem_var free_names_of_body var) then body
-        else
-          let var = VB.create var Name_mode.normal in
-          Expr.create_let var
-            (Named.create_prim
-              (Unary (Project_var {
-                 project_from = my_closure_id;
-                 var = var_within_closure;
-               }, my_closure'))
-              Debuginfo.none)
-            body)
+        let var = VB.create var Name_mode.normal in
+        Let.create (Bindable_let_bound.singleton var)
+          (Named.create_prim
+            (Unary (Project_var {
+                project_from = my_closure_id;
+                var = var_within_closure;
+              }, my_closure'))
+            Debuginfo.none)
+          ~body
+          ~free_names_of_body:Unknown
+        |> Expr.create_let)
       var_within_closures_to_bind
       body
   in
@@ -850,7 +872,8 @@ and close_one_function t ~external_env ~by_closure_id decl
   let code =
     Code.create
       code_id
-      ~params_and_body:(Present params_and_body)
+      ~params_and_body:
+        (Present (params_and_body, t.free_names_of_current_function))
       ~params_arity
       ~result_arity:[LC.value_kind return]
       ~stub
@@ -881,6 +904,7 @@ let ilambda_to_flambda ~backend ~module_ident ~module_block_size_in_words
       shareable_constants = Static_const.Map.empty;
       code = [];
       ilambda_exn_continuation = ilam.exn_continuation.exn_handler;
+      free_names_of_current_function = Name_occurrences.empty;
     }
   in
   let module_symbol =
@@ -911,16 +935,19 @@ let ilambda_to_flambda ~backend ~module_ident ~module_block_size_in_words
            here to ensure that its associated "let symbol" doesn't get
            deleted. *)
         Apply_cont.create return_cont
-          ~args:[Simple.symbol module_symbol]
+          ~args:[use_of_symbol_as_simple t module_symbol]
           ~dbg:Debuginfo.none
         |> Expr.create_apply_cont
       in
-      Expr.create_let_symbol
-        (Bound_symbols.singleton
-          (Bound_symbols.Pattern.block_like module_symbol))
-        Syntactic
-        (Static_const.Group.create [static_const])
-        return
+      let bound_symbols =
+        Bound_symbols.singleton
+          (Bound_symbols.Pattern.block_like module_symbol)
+      in
+      Let.create (Bindable_let_bound.symbols bound_symbols Syntactic)
+        (Named.create_static_consts (Static_const.Group.create [static_const]))
+        ~body:return
+        ~free_names_of_body:Unknown
+      |> Expr.create_let
     in
     let block_access : P.Block_access_kind.t =
       Values {
@@ -932,27 +959,24 @@ let ilambda_to_flambda ~backend ~module_ident ~module_block_size_in_words
     List.fold_left (fun body (pos, var) ->
         let var = VB.create var Name_mode.normal in
         let pos = Target_imm.int (Targetint.OCaml.of_int pos) in
-        Expr.create_let var
+        Let.create (Bindable_let_bound.singleton var)
           (Named.create_prim
             (Binary (
               Block_load (block_access, Immutable),
               Simple.var module_block_var,
               Simple.const (Reg_width_const.tagged_immediate pos)))
             Debuginfo.none)
-          body)
+          ~body
+          ~free_names_of_body:Unknown
+        |> Expr.create_let)
       body (List.rev field_vars)
   in
   let load_fields_cont_handler =
     let param =
       Kinded_parameter.create module_block_var K.With_subkind.any_value
     in
-    let params_and_handler =
-      Continuation_params_and_handler.create [param]
-        ~handler:load_fields_body
-        ~free_names_of_handler:Unknown
-    in
-    Continuation_handler.create ~params_and_handler
-      ~stub:false  (* CR mshinwell: remove "stub" notion *)
+    Continuation_handler.create [param] ~handler:load_fields_body
+      ~free_names_of_handler:Unknown
       ~is_exn_handler:false
   in
   let body =
@@ -982,8 +1006,13 @@ let ilambda_to_flambda ~backend ~module_ident ~module_block_size_in_words
         let static_const : Static_const.t =
           Code code
         in
-        Expr.create_let_symbol bound_symbols Syntactic
-          (Static_const.Group.create [static_const]) body)
+        let defining_expr =
+          Static_const.Group.create [static_const]
+          |> Named.create_static_consts
+        in
+        Let.create (Bindable_let_bound.symbols bound_symbols Syntactic)
+          defining_expr ~body ~free_names_of_body:Unknown
+        |> Expr.create_let)
       body
       t.code
   in
@@ -1006,8 +1035,13 @@ let ilambda_to_flambda ~backend ~module_ident ~module_block_size_in_words
         let bound_symbols =
           Bound_symbols.singleton (Bound_symbols.Pattern.block_like symbol)
         in
-        Expr.create_let_symbol bound_symbols Syntactic
-          (Static_const.Group.create [static_const]) body)
+        let defining_expr =
+          Static_const.Group.create [static_const]
+          |> Named.create_static_consts
+        in
+        Let.create (Bindable_let_bound.symbols bound_symbols Syntactic)
+          defining_expr ~body ~free_names_of_body:Unknown
+        |> Expr.create_let)
       body
       t.declared_symbols
   in

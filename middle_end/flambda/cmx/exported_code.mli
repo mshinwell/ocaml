@@ -39,10 +39,7 @@ val mem : Code_id.t -> t -> bool
 
 val find_code : t -> Code_id.t -> Flambda.Code.t
 
-val find_code_if_not_imported
-   : t
-  -> Code_id.t
-  -> Flambda.Code.t option
+val find_code_if_not_imported : t -> Code_id.t -> Flambda.Code.t option
 
 val find_calling_convention : t -> Code_id.t -> Calling_convention.t
 

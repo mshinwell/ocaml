@@ -61,24 +61,21 @@ let lift dacc ty ~bound_to static_const =
         Misc.fatal_errorf "Cannot lift non-[Value] variable: %a"
           Variable.print bound_to
       end;
+      let free_names = Static_const.free_names static_const in
       let symbol_projections =
-        Name_occurrences.fold_variables (Static_const.free_names static_const)
+        Name_occurrences.fold_variables free_names
           ~init:Variable.Map.empty
           ~f:(fun symbol_projections var ->
             match DE.find_symbol_projection (DA.denv dacc) var with
             | None -> symbol_projections
             | Some proj -> Variable.Map.add var proj symbol_projections)
       in
-      (*
-      if not (Variable.Map.is_empty symbol_projections) then begin
-        Format.eprintf "\nConstant:@ %a@ Symbol projections when created:@ %a\n%!"
-          Static_const.print static_const
-          (Variable.Map.print Symbol_projection.print) symbol_projections
-      end;
-      *)
       let dacc =
         let denv = DA.denv dacc in
-        Lifted_constant.create_block_like symbol static_const denv
+        Lifted_constant.create_block_like symbol
+          (Static_const_with_free_names.create static_const
+            ~free_names:(Known free_names))
+          denv
           ~symbol_projections
           ty
         |> DA.add_lifted_constant dacc
@@ -96,9 +93,9 @@ let lift dacc ty ~bound_to static_const =
     DA.map_denv dacc ~f:(fun denv ->
       DE.add_equation_on_variable denv bound_to var_ty)
   in
-  Reachable.reachable term, dacc, var_ty
+  Simplified_named.reachable term, dacc, var_ty
 
-let try_to_reify dacc (term : Reachable.t) ~bound_to ~allow_lifting =
+let try_to_reify dacc (term : Simplified_named.t) ~bound_to ~allow_lifting =
   let occ_kind = Var_in_binding_pos.name_mode bound_to in
   let bound_to = Var_in_binding_pos.var bound_to in
   let denv = DA.denv dacc in
@@ -107,7 +104,7 @@ let try_to_reify dacc (term : Reachable.t) ~bound_to ~allow_lifting =
   | Invalid _ ->
     let ty = T.bottom_like ty in
     let denv = DE.add_equation_on_variable denv bound_to ty in
-    Reachable.invalid (), DA.with_denv dacc denv, ty
+    Simplified_named.invalid (), DA.with_denv dacc denv, ty
   | Reachable _ ->
     let typing_env = DE.typing_env denv in
     let reify_result =
@@ -153,10 +150,10 @@ let try_to_reify dacc (term : Reachable.t) ~bound_to ~allow_lifting =
           DA.with_denv dacc denv
       in
       if Simple.equal (Simple.var bound_to) simple then term, dacc, ty
-      else Reachable.reachable (Named.create_simple simple), dacc, ty
+      else Simplified_named.reachable (Named.create_simple simple), dacc, ty
     | Lift_set_of_closures _  (* already dealt with in [Simplify_named] *)
     | Cannot_reify -> term, dacc, ty
     | Invalid ->
       let ty = T.bottom_like ty in
       let denv = DE.add_equation_on_variable denv bound_to ty in
-      Reachable.invalid (), DA.with_denv dacc denv, ty
+      Simplified_named.invalid (), DA.with_denv dacc denv, ty

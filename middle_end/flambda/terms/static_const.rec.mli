@@ -91,6 +91,8 @@ module Group : sig
 
   val concat : t -> t -> t
 
+  val map : t -> f:(static_const -> static_const) -> t
+
   val match_against_bound_symbols
      : t
     -> Bound_symbols.t
@@ -104,11 +106,11 @@ module Group : sig
     -> block_like:('a -> Symbol.t -> static_const -> 'a)
     -> 'a
 
-  val pieces_of_code : t -> Function_params_and_body.t Code_id.Map.t
+  (** This function ignores [Deleted] code. *)
+  val pieces_of_code : t -> Code.t Code_id.Map.t
 
+  (** This function ignores [Deleted] code. *)
   val pieces_of_code' : t -> Code.t list
-
-  val pieces_of_code_by_code_id : t -> Code.t Code_id.Map.t
 
   val is_fully_static : t -> bool
 end

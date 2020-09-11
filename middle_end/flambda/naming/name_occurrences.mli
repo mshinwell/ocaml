@@ -85,7 +85,9 @@ val create_closure_vars : Var_within_closure.Set.t -> t
 
 (** [diff t1 t2] removes from [t1] all those names that occur in [t2].
     The number of occurrences of any names in the return value will be exactly
-    the same as in [t1]. *)
+    the same as in [t1].
+    Note that a code ID in [t2] will not only be removed from the code ID
+    set in [t1] but also the newer-version-of code ID set in [t1]. *)
 val diff : t -> t -> t
 
 val union : t -> t -> t
@@ -101,6 +103,8 @@ val inter_domain_is_non_empty : t -> t -> bool
 
 val no_variables : t -> bool
 
+val no_continuations : t -> bool
+
 val continuations : t -> Continuation.Set.t
 
 val continuations_including_in_trap_actions : t -> Continuation.Set.t
@@ -115,9 +119,13 @@ val newer_version_of_code_ids : t -> Code_id.Set.t
 
 val only_newer_version_of_code_ids : t -> Code_id.Set.t
 
+val restrict_to_closure_vars : t -> t
+
 val code_ids_and_newer_version_of_code_ids : t -> Code_id.Set.t
 
 val without_code_ids : t -> t
+
+val without_closure_vars : t -> t
 
 val with_only_variables :  t -> t
 
@@ -131,9 +139,19 @@ val mem_name : t -> Name.t -> bool
 
 val mem_code_id : t -> Code_id.t -> bool
 
+val mem_closure_var : t -> Var_within_closure.t -> bool
+
 val remove_var : t -> Variable.t -> t
 
+val remove_code_id_or_symbol : t -> Code_id_or_symbol.t -> t
+
 val remove_continuation : t -> Continuation.t -> t
+
+val remove_one_occurrence_of_closure_var
+   : t
+  -> Var_within_closure.t
+  -> Name_mode.t
+  -> t
 
 val greatest_name_mode_var
    : t
@@ -173,3 +191,12 @@ val fold_code_ids
   -> init:'a
   -> f:('a -> Code_id.t -> 'a)
   -> 'a
+
+(** [import] cannot use [Ids_for_export] due to a circular dependency through
+    [Simple]. *)
+val import
+   : t
+  -> import_name:(Name.t -> Name.t)
+  -> import_continuation:(Continuation.t -> Continuation.t)
+  -> import_code_id:(Code_id.t -> Code_id.t)
+  -> t

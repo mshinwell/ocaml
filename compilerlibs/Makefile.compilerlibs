@@ -301,7 +301,8 @@ MIDDLE_END_FLAMBDA_SIMPLIFY=\
   middle_end/flambda/simplify/basic/apply_cont_rewrite.cmo \
   middle_end/flambda/simplify/env/continuation_env_and_param_types.cmo \
   middle_end/flambda/simplify/basic/continuation_in_env.cmo \
-  middle_end/flambda/simplify/basic/reachable.cmo \
+  middle_end/flambda/simplify/basic/simplified_named.cmo \
+  middle_end/flambda/simplify/static_const_with_free_names.cmo \
   middle_end/flambda/simplify/env/simplify_envs_intf.cmo \
   middle_end/flambda/simplify/env/simplify_envs.cmo \
   middle_end/flambda/simplify/typing_helpers/one_continuation_use.cmo \
@@ -311,6 +312,7 @@ MIDDLE_END_FLAMBDA_SIMPLIFY=\
   middle_end/flambda/simplify/env/continuation_uses_env_intf.cmo \
   middle_end/flambda/simplify/env/downwards_acc.cmo \
   middle_end/flambda/simplify/env/upwards_acc.cmo \
+  middle_end/flambda/simplify/expr_builder.cmo \
   middle_end/flambda/inlining/inlining_cost.cmo \
   middle_end/flambda/inlining/inlining_decision.cmo \
   middle_end/flambda/inlining/inlining_report.cmo \

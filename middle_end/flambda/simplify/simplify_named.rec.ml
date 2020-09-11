@@ -19,14 +19,14 @@
 open! Simplify_import
 
 type simplify_named_result = {
-  bindings_outermost_first : (Bindable_let_bound.t * Reachable.t) list;
+  bindings_outermost_first : (Bindable_let_bound.t * Simplified_named.t) list;
   dacc : Downwards_acc.t;
 }
 
 let bindings_result bindings_outermost_first dacc =
   { bindings_outermost_first; dacc; }
 
-let record_any_symbol_projection dacc (defining_expr : Reachable.t)
+let record_any_symbol_projection dacc (defining_expr : Simplified_named.t)
       (prim : P.t) args bindable_let_bound ~bound_var named =
   (* Projections from symbols bound to variables are important to remember,
      since if such a variable occurs in a set of closures environment or
@@ -47,8 +47,8 @@ let record_any_symbol_projection dacc (defining_expr : Reachable.t)
        position will also be at toplevel. *)
     (not (DE.at_unit_toplevel (DA.denv dacc)))
       && match defining_expr with
-         | Reachable (Prim _) -> true
-         | Reachable (Simple _ | Set_of_closures _ | Static_consts _)
+         | Reachable { named = Prim _; _ } -> true
+         | Reachable { named = (Simple _ | Set_of_closures _); _ }
          | Invalid _ -> false
   in
   let proj =
@@ -142,6 +142,13 @@ let record_any_symbol_projection dacc (defining_expr : Reachable.t)
     let var = Var_in_binding_pos.var bound_var in
     DA.map_denv dacc ~f:(fun denv -> DE.add_symbol_projection denv var proj)
 
+(* It is important that every set of closures returned by this function
+   (in [bindings_outermost_first]) arises from simplification in
+   [Simplify_set_of_closures], and not some other path such as reification.
+   This ensures that the returned [dacc] is equipped with the free name
+   information for such sets.  See comment in [Simplify_let_expr], function
+   [rebuild_let]. *)
+
 let simplify_named0 dacc (bindable_let_bound : Bindable_let_bound.t)
       (named : Named.t) =
   match named with
@@ -151,13 +158,13 @@ let simplify_named0 dacc (bindable_let_bound : Bindable_let_bound.t)
     begin match S.simplify_simple dacc simple ~min_name_mode with
     | Bottom, ty ->
       let dacc = DA.add_variable dacc bound_var (T.bottom (T.kind ty)) in
-      let defining_expr = Reachable.invalid () in
+      let defining_expr = Simplified_named.invalid () in
       bindings_result [bindable_let_bound, defining_expr] dacc
     | Ok new_simple, ty ->
       let dacc = DA.add_variable dacc bound_var ty in
       let defining_expr =
-        if simple == new_simple then Reachable.reachable named
-        else Reachable.reachable (Named.create_simple simple)
+        if simple == new_simple then Simplified_named.reachable named
+        else Simplified_named.reachable (Named.create_simple simple)
       in
       bindings_result [bindable_let_bound, defining_expr] dacc
     end
@@ -196,7 +203,7 @@ let simplify_named0 dacc (bindable_let_bound : Bindable_let_bound.t)
       Reification.try_to_reify dacc term ~bound_to:bound_var ~allow_lifting
     in
     let defining_expr =
-      if T.is_bottom (DA.typing_env dacc) ty then Reachable.invalid ()
+      if T.is_bottom (DA.typing_env dacc) ty then Simplified_named.invalid ()
       else defining_expr
     in
     let dacc =
@@ -264,7 +271,8 @@ let simplify_named0 dacc (bindable_let_bound : Bindable_let_bound.t)
           denv)
     in
     let dacc =
-      Static_const.Group.match_against_bound_symbols static_consts bound_symbols
+      Static_const_with_free_names.Group.match_against_bound_symbols
+        static_consts bound_symbols
         ~init:dacc
         ~code:(fun dacc _ _ -> dacc)
         ~set_of_closures:(fun dacc ~closure_symbols:_ _ -> dacc)
@@ -274,7 +282,7 @@ let simplify_named0 dacc (bindable_let_bound : Bindable_let_bound.t)
     let lifted_constants =
       ListLabels.map2
         (Bound_symbols.to_list bound_symbols)
-        (Static_const.Group.to_list static_consts)
+        (Static_const_with_free_names.Group.to_list static_consts)
         ~f:(fun (pat : Bound_symbols.Pattern.t) static_const ->
           match pat with
           | Block_like symbol ->
@@ -291,7 +299,8 @@ let simplify_named0 dacc (bindable_let_bound : Bindable_let_bound.t)
             let closure_symbols_with_types =
               Closure_id.Lmap.map (fun symbol ->
                   let typ =
-                    TE.find (DA.typing_env dacc) (Name.symbol symbol) (Some K.value)
+                    TE.find (DA.typing_env dacc) (Name.symbol symbol)
+                      (Some K.value)
                   in
                   symbol, typ)
                 closure_symbols

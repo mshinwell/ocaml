@@ -762,11 +762,6 @@ let mk_dflambda_no_invariants f =
       around each pass"
 ;;
 
-let mk_dflambda_let f =
-  "-dflambda-let", Arg.Int f, "<stamp>  Print when the given Flambda [Let] \
-      is created"
-;;
-
 let mk_dflambda_verbose f =
   "-dflambda-verbose", Arg.Unit f, " Print Flambda terms including around \
       each pass"
@@ -1195,7 +1190,6 @@ module type Optcommon_options = sig
   val _drawflambda : unit -> unit
   val _dflambda_invariants : unit -> unit
   val _dflambda_no_invariants : unit -> unit
-  val _dflambda_let : int -> unit
   val _dflambda_verbose : unit -> unit
   val _dfexpr : unit -> unit
   val _drawfexpr : unit -> unit
@@ -1622,7 +1616,6 @@ struct
     mk_drawflambda F._drawflambda;
     mk_dflambda_invariants F._dflambda_invariants;
     mk_dflambda_no_invariants F._dflambda_no_invariants;
-    mk_dflambda_let F._dflambda_let;
     mk_dflambda_verbose F._dflambda_verbose;
     mk_drawfexpr F._drawfexpr;
     mk_dfexpr F._dfexpr;
@@ -1961,7 +1954,6 @@ module Default = struct
     let _dfexpr = set dump_fexpr
     let _dflambda = set dump_flambda
     let _dflambda_invariants = set flambda_invariant_checks
-    let _dflambda_let stamp = dump_flambda_let := (Some stamp)
     let _dflambda_no_invariants = clear flambda_invariant_checks
     let _dflambda_verbose () =
       set dump_flambda (); set dump_flambda_verbose ()

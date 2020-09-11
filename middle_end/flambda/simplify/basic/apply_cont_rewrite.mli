@@ -20,6 +20,8 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+open! Flambda
+
 type t
 
 val print : Format.formatter -> t -> unit
@@ -41,15 +43,17 @@ val extra_args
   -> Continuation_extra_params_and_args.Extra_arg.t list
 
 type rewrite_use_result = private
-  | Apply_cont of Flambda.Apply_cont.t
-  | Expr of Flambda.Expr.t
+  | Apply_cont of Apply_cont.t
+  | Expr of (
+       apply_cont_to_expr:(Apply_cont.t -> (Expr.t * Name_occurrences.t))
+    -> Expr.t * Name_occurrences.t)
 
-val no_rewrite : Flambda.Apply_cont.t -> rewrite_use_result
+val no_rewrite : Apply_cont.t -> rewrite_use_result
 
 val rewrite_use
    : t
   -> Apply_cont_rewrite_id.t
-  -> Flambda.Apply_cont.t
+  -> Apply_cont.t
   -> rewrite_use_result
 
 val rewrite_exn_continuation

@@ -18,24 +18,36 @@
 
 open! Flambda.Import
 
-type t =
-  | Reachable of Named.t
+(** Unlike [Named.t], this type does not include [Static_consts] because
+    such constants are propagated separately after simplification. *)
+type simplified_named = private
+  | Simple of Simple.t
+  | Prim of Flambda_primitive.t * Debuginfo.t
+  | Set_of_closures of Set_of_closures.t
+
+val to_named : simplified_named -> Named.t
+
+type t = private
+  | Reachable of {
+      named : simplified_named;
+      free_names : Name_occurrences.t;
+    }
   | Invalid of Invalid_term_semantics.t
 
-let reachable named = Reachable named
+(** It is an error to pass [Set_of_closures] or [Static_consts] to this
+    function.  (Sets of closures are disallowed because computation of their
+    free names might be expensive; use [reachable_with_known_free_names]
+    instead.) *)
+val reachable : Named.t -> t
 
-let invalid () =
-  if !Clflags.treat_invalid_code_as_unreachable then
-    Invalid Treat_as_unreachable
-  else
-    Invalid Halt_and_catch_fire
+(** It is an error to pass [Static_consts] to this function. *)
+val reachable_with_known_free_names
+   : Named.t
+  -> free_names:Name_occurrences.t
+  -> t
 
-let print ppf t =
-  match t with
-  | Reachable named -> Named.print ppf named
-  | Invalid sem -> Invalid_term_semantics.print ppf sem
+val invalid : unit -> t
 
-let is_invalid t =
-  match t with
-  | Reachable _ -> false
-  | Invalid _ -> true
+val is_invalid : t -> bool
+
+val print : Format.formatter -> t -> unit

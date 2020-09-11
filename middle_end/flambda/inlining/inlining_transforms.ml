@@ -60,11 +60,18 @@ let inline dacc ~callee ~args function_decl
               |> Option.get  (* CR mshinwell: improve *)
             in
             Expr.apply_name_permutation
-              (Expr.bind_parameters_to_simples ~bind:params ~target:args
-                (Expr.create_let
-                  (VB.create my_closure Name_mode.normal)
-                  (Named.create_simple callee)
-                  body))
+              (Expr.bind_parameters_to_args_no_simplification
+                ~params ~args
+                ~body:(Let.create
+                   (Bindable_let_bound.singleton
+                     (VB.create my_closure Name_mode.normal))
+                   (Named.create_simple callee)
+                   ~body
+                   (* Here and below, we don't need to give any name occurrence
+                      information (thank goodness!) since the entirety of the
+                      expression we're building will be re-simplified. *)
+                   ~free_names_of_body:Unknown
+                 |> Expr.create_let))
               perm
           in
           let expr =
@@ -81,8 +88,8 @@ let inline dacc ~callee ~args function_decl
                  This means we also need to add a push trap before the inlined
                  body, and a pop trap after.
                  The push trap is simply a matter of jumping to the body, while
-                 the pop trap needs to replace the body's return continuation with
-                 a wrapper that pops then jumps back.
+                 the pop trap needs to replace the body's return continuation
+                 with a wrapper that pops then jumps back.
               *)
               let wrapper = Continuation.create ~sort:Exn () in
               let body_with_pop =
@@ -108,17 +115,10 @@ let inline dacc ~callee ~args function_decl
                         ~dbg:Debuginfo.none
                     in
                     let handler = Expr.create_apply_cont apply_cont in
-                    let params_and_handler =
-                      Continuation_params_and_handler.create
-                        (Kinded_parameter.List.create kinded_params)
-                        ~handler
-                        (* We don't need to give any name occurrence
-                           information since the entirety of the expression
-                           we're building will be re-simplified. *)
-                        ~free_names_of_handler:Unknown
-                    in
-                    Continuation_handler.create ~params_and_handler
-                      ~stub:false
+                    Continuation_handler.create
+                      (Kinded_parameter.List.create kinded_params)
+                      ~handler
+                      ~free_names_of_handler:Unknown
                       ~is_exn_handler:false
                   in
                   let body =
@@ -149,25 +149,17 @@ let inline dacc ~callee ~args function_decl
                                             compiler-generated raises not to
                                             have any debug info *)
                 in
-                let params_and_handler =
-                  Continuation_params_and_handler.create kinded_params ~handler
-                    ~free_names_of_handler:Unknown
-                in
-                Continuation_handler.create ~params_and_handler
-                  ~stub:false
+                Continuation_handler.create kinded_params ~handler
+                  ~free_names_of_handler:Unknown
                   ~is_exn_handler:true
               in
               let body_with_push =
                 (* Wrap the body between push and pop of the wrapper handler *)
                 let push_wrapper_cont = Continuation.create () in
                 let handler = body_with_pop in
-                let params_and_handler =
-                  Continuation_params_and_handler.create [] ~handler
-                    ~free_names_of_handler:Unknown
-                in
                 let push_wrapper_handler =
-                  Continuation_handler.create ~params_and_handler
-                    ~stub:false
+                  Continuation_handler.create [] ~handler
+                    ~free_names_of_handler:Unknown
                     ~is_exn_handler:false
                 in
                 let trap_action =

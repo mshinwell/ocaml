@@ -38,17 +38,23 @@ let rebuild_switch dacc ~arms ~scrutinee ~scrutinee_ty uacc
             else
               let cont = Apply_cont.continuation action in
               match UE.find_continuation (UA.uenv uacc) cont with
-              | Inline { arity = _; handler; }
-              | Unknown { arity = _; handler = Some handler; } ->
-                Continuation_params_and_handler.pattern_match
-                  (Continuation_handler.params_and_handler handler)
+              | Linearly_used_and_inlinable { arity = _; handler;
+                  free_names_of_handler = _; params; } ->
+                assert (List.length params = 0);
+                begin match Expr.descr handler with
+                | Apply_cont action -> Some action
+                | Let _ | Let_cont _ | Apply _
+                | Switch _ | Invalid _ -> Some action
+                end
+              | Other { arity = _; handler = Some handler; } ->
+                Continuation_handler.pattern_match handler
                   ~f:(fun params ~handler ->
                     assert (List.length params = 0);
                     match Expr.descr handler with
                     | Apply_cont action -> Some action
                     | Let _ | Let_cont _ | Apply _
                     | Switch _ | Invalid _ -> Some action)
-              | Unknown _ -> Some action
+              | Other _ -> Some action
               | Unreachable _ -> None
           in
           begin match action with
@@ -129,46 +135,71 @@ let rebuild_switch dacc ~arms ~scrutinee ~scrutinee_ty uacc
       |> Continuation.Set.of_list
       |> Continuation.Set.get_singleton
   in
-  let create_tagged_scrutinee k =
-    let bound_to = Variable.create "tagged_scrutinee" in
-    let bound_vars =
-      Bindable_let_bound.singleton (VB.create bound_to NM.normal)
+  let create_tagged_scrutinee dest ~make_body =
+    (* A problem with using [simplify_let] below is that the continuation
+       [dest] might have [Apply_cont_rewrite]s in the environment, left over
+       from the simplification of the existing uses.  We must clear these to
+       avoid a lookup failure for our new [Apply_cont] when
+       [Simplify_apply_cont] tries to rewrite the use.  There is no need for
+       the rewrites anyway; they have already been applied. *)
+    let uacc =
+      UA.map_uenv uacc ~f:(fun uenv ->
+        UE.delete_apply_cont_rewrite uenv dest)
     in
-    let named =
+    let bound_to = Variable.create "tagged_scrutinee" in
+    let body = make_body ~tagged_scrutinee:(Simple.var bound_to) in
+    let bound_to = Var_in_binding_pos.create bound_to NM.normal in
+    let defining_expr =
       Named.create_prim (Unary (Box_number Untagged_immediate, scrutinee))
         Debuginfo.none
     in
-    let dacc =
-      (* Disable inconstant lifting *)
-      DA.map_denv dacc ~f:DE.set_not_at_unit_toplevel
+    let let_expr =
+      Let.create (Bindable_let_bound.singleton bound_to)
+        defining_expr
+        ~body
+        (* [body] is a (very) small expression, so it is fine to call
+           [free_names] upon it. *)
+        ~free_names_of_body:(Known (Expr.free_names body))
     in
-    let { Simplify_named. bindings_outermost_first = bindings; dacc = _; } =
-      Simplify_named.simplify_named dacc bound_vars named
-    in
-    let body = k ~tagged_scrutinee:(Simple.var bound_to) in
-    Simplify_common.bind_let_bound ~bindings ~body, uacc
+    Simplify_let_expr.simplify_let dacc let_expr
+      ~down_to_up:(fun _dacc ~rebuild ->
+        (* We don't need to transfer any name occurrence info out of [dacc]
+           since we re-compute it below, prior to adding it to [uacc]. *)
+        rebuild uacc ~after_rebuild:(fun expr uacc -> expr, uacc))
   in
+  (* In some cases below the free name information will be changed in
+     [uacc] and in some cases it won't be.  To make things easier we save
+     the existing free name information here and then unilaterally update it
+     (see below) after we have constructed the necessary expressions. *)
+  let free_names_after = UA.name_occurrences uacc in
   let body, uacc =
+    let dbg = Debuginfo.none in
     match switch_is_identity with
     | Some dest ->
-      create_tagged_scrutinee (fun ~tagged_scrutinee ->
-        let apply_cont =
-          Apply_cont.create dest ~args:[tagged_scrutinee] ~dbg:Debuginfo.none
-        in
-        Expr.create_apply_cont apply_cont)
+      create_tagged_scrutinee dest ~make_body:(fun ~tagged_scrutinee ->
+        Apply_cont.create dest ~args:[tagged_scrutinee] ~dbg
+        |> Expr.create_apply_cont)
     | None ->
       match switch_is_boolean_not with
       | Some dest ->
-        create_tagged_scrutinee (fun ~tagged_scrutinee ->
+        create_tagged_scrutinee dest ~make_body:(fun ~tagged_scrutinee ->
           let not_scrutinee = Variable.create "not_scrutinee" in
-          let apply_cont =
-            Apply_cont.create dest ~args:[Simple.var not_scrutinee]
-              ~dbg:Debuginfo.none
+          let not_scrutinee' = Simple.var not_scrutinee in
+          let do_tagging =
+            Named.create_prim (P.Unary (Boolean_not, tagged_scrutinee))
+              Debuginfo.none
           in
-          Expr.create_let (VB.create not_scrutinee NM.normal)
-            (Named.create_prim (P.Unary (Boolean_not, tagged_scrutinee))
-              Debuginfo.none)
-            (Expr.create_apply_cont apply_cont))
+          let bound =
+            VB.create not_scrutinee NM.normal
+            |> Bindable_let_bound.singleton
+          in
+          let body =
+            Apply_cont.create dest ~args:[not_scrutinee'] ~dbg
+            |> Expr.create_apply_cont
+          in
+          Let.create bound do_tagging ~body
+            ~free_names_of_body:(Known (Expr.free_names body))
+          |> Expr.create_let)
       | None ->
         let expr = Expr.create_switch ~scrutinee ~arms in
         if !Clflags.flambda_invariant_checks
@@ -182,12 +213,19 @@ let rebuild_switch dacc ~arms ~scrutinee ~scrutinee_ty uacc
         end;
         expr, uacc
   in
+  (* The calls to [Expr.free_names] here are only on (very) small expressions,
+     so shouldn't be a performance hit. *)
   let expr =
     List.fold_left (fun body (new_cont, new_handler) ->
         Let_cont.create_non_recursive new_cont new_handler ~body
           ~free_names_of_body:(Known (Expr.free_names body)))
       body
       new_let_conts
+  in
+  let uacc =
+    UA.with_name_occurrences uacc
+      ~name_occurrences:
+        (Name_occurrences.union free_names_after (Expr.free_names expr))
   in
   after_rebuild expr uacc
 

@@ -42,3 +42,32 @@ let simplify_expr dacc expr ~down_to_up =
        [Invalid].  [Un_cps] should translate any [Invalid] that it sees as if
        it were [Halt_and_catch_fire]. *)
     down_to_up dacc ~rebuild:Simplify_common.rebuild_invalid
+
+let simplify_expr dacc expr ~down_to_up =
+  (* XXX Temporary debugging code, to be removed *)
+  match Sys.getenv "FREE_NAMES" with
+  | exception Not_found -> simplify_expr dacc expr ~down_to_up
+  | _ ->
+    simplify_expr dacc expr
+      ~down_to_up:(fun dacc ~rebuild ->
+        down_to_up dacc ~rebuild:(fun uacc ~after_rebuild ->
+          rebuild uacc ~after_rebuild:(fun expr uacc ->
+            let free_names_uacc =
+              UA.name_occurrences uacc
+              |> Name_occurrences.without_closure_vars
+            in
+            let free_names =
+              Expr.free_names expr
+              |> Name_occurrences.without_closure_vars
+            in
+            if not (Name_occurrences.equal free_names free_names_uacc)
+            then begin
+              Misc.fatal_errorf "Mismatch on free names:@ \n\
+                  From UA:@ %a@ \n\
+                  From expr:@ %a@ \n\
+                  Expression:@ %a"
+                Name_occurrences.print free_names_uacc
+                Name_occurrences.print free_names
+                Expr.print expr
+            end;
+            after_rebuild expr uacc)))

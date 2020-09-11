@@ -19,3 +19,5 @@
 type 'a t =
   | Present of 'a
   | Deleted
+
+val print : (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit

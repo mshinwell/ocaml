@@ -9,8 +9,6 @@
     continuation_handler.rec.mli
     continuation_handlers.rec.ml
     continuation_handlers.rec.mli
-    continuation_params_and_handler.rec.ml
-    continuation_params_and_handler.rec.mli
     expr.rec.ml
     expr.rec.mli
     function_params_and_body.rec.ml

@@ -22,4 +22,4 @@ val simplify_static_consts
    : Downwards_acc.t
   -> Bound_symbols.t
   -> Static_const.Group.t
-  -> Bound_symbols.t * Static_const.Group.t * Downwards_acc.t
+  -> Bound_symbols.t * Static_const_with_free_names.Group.t * Downwards_acc.t

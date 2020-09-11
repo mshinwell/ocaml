@@ -16,6 +16,8 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+open! Flambda
+
 module EA = Continuation_extra_params_and_args.Extra_arg
 module KP = Kinded_parameter
 module Id = Apply_cont_rewrite_id
@@ -105,21 +107,19 @@ let extra_args t id =
   | extra_args -> extra_args
 
 type rewrite_use_result =
-  | Apply_cont of Flambda.Apply_cont.t
-  | Expr of Flambda.Expr.t
-
-(* Suppress warning 37: this will be removed once variant unboxing is
-   introduced; that will use [Expr]. *)
-let _ = Expr (Flambda.Expr.create_invalid ())
+  | Apply_cont of Apply_cont.t
+  | Expr of (
+       apply_cont_to_expr:(Apply_cont.t -> (Expr.t * Name_occurrences.t))
+    -> Expr.t * Name_occurrences.t)
 
 let no_rewrite apply_cont = Apply_cont apply_cont
 
 let rewrite_use t id apply_cont : rewrite_use_result =
-  let args = Flambda.Apply_cont.args apply_cont in
+  let args = Apply_cont.args apply_cont in
   if List.compare_lengths args t.original_params <> 0 then begin
     Misc.fatal_errorf "Arguments to this [Apply_cont]@ (%a)@ do not match@ \
         [original_params] (%a):@ %a"
-      Flambda.Apply_cont.print apply_cont
+      Apply_cont.print apply_cont
       KP.List.print t.original_params
       Simple.List.print args
   end;
@@ -141,7 +141,7 @@ let rewrite_use t id apply_cont : rewrite_use_result =
           let extra_args_rev = Simple.var temp :: extra_args_rev in
           let extra_lets =
             (Var_in_binding_pos.create temp Name_mode.normal,
-             Flambda.Named.create_prim prim Debuginfo.none)
+             Named.create_prim prim Debuginfo.none)
               :: extra_lets
           in
           extra_args_rev, extra_lets)
@@ -150,13 +150,17 @@ let rewrite_use t id apply_cont : rewrite_use_result =
   in
   let args = args @ List.rev extra_args_rev in
   let apply_cont =
-    Flambda.Apply_cont.update_args apply_cont ~args
+    Apply_cont.update_args apply_cont ~args
   in
   match extra_lets with
   | [] -> Apply_cont apply_cont
   | _::_ ->
-    let expr = Flambda.Expr.create_apply_cont apply_cont in
-    Expr (Flambda.Expr.bind ~bindings:extra_lets ~body:expr)
+    let build_expr ~apply_cont_to_expr =
+      let body, free_names_of_body = apply_cont_to_expr apply_cont in
+      Expr.bind_no_simplification ~bindings:extra_lets ~body
+        ~free_names_of_body
+    in
+    Expr build_expr
 
 (* CR mshinwell: tidy up.
    Also remove confusion between "extra args" as added by e.g. unboxing and

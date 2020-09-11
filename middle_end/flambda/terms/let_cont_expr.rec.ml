@@ -89,33 +89,18 @@ let print_with_cache ~cache ppf t =
 let print ppf t =
   print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
+let create_non_recursive' ~cont handler ~body
+      ~num_free_occurrences_of_cont_in_body:num_free_occurrences =
+  let handler = Non_recursive_let_cont_handler.create cont handler ~body in
+  Expr.create_let_cont (Non_recursive { handler; num_free_occurrences; })
+
 let create_non_recursive cont handler ~body ~free_names_of_body =
-  let num_free_occurrences =
+  let num_free_occurrences_of_cont_in_body =
     Or_unknown.map free_names_of_body ~f:(fun free_names_of_body ->
       Name_occurrences.count_continuation free_names_of_body cont)
   in
-  (* We don't inline out linear uses of continuations here, as it could
-     result in quadratic behaviour.  However we can safely avoid creating
-     a completely unused continuation binding. *)
-  match num_free_occurrences with
-  | Known Zero -> body
-  | Known One | Known More_than_one | Unknown ->
-    match Expr.descr body with
-    | Apply_cont apply_cont when Apply_cont.is_goto_to apply_cont cont ->
-      (* CR mshinwell: This could work for the >0 arity-case too, to handle
-         continuation aliases. *)
-      Continuation_params_and_handler.pattern_match
-        (Continuation_handler.params_and_handler handler)
-        ~f:(fun params ~handler:handler_expr ->
-          match params with
-          | [] -> handler_expr
-          | _ ->
-            Misc.fatal_errorf
-              "Continuation handler expected to have zero arity: %a"
-              Continuation_handler.print handler)
-    | _ ->
-      let handler = Non_recursive_let_cont_handler.create cont handler ~body in
-      Expr.create_let_cont (Non_recursive { handler; num_free_occurrences; })
+  create_non_recursive' ~cont handler ~body
+    ~num_free_occurrences_of_cont_in_body
 
 let create_recursive handlers ~body =
   if Continuation_handlers.contains_exn_handler handlers then begin

@@ -22,7 +22,7 @@ val create_static_const : Flambda_type.to_lift -> Flambda.Static_const.t
 
 val try_to_reify
    : Downwards_acc.t
-  -> Reachable.t
+  -> Simplified_named.t
   -> bound_to:Var_in_binding_pos.t
   -> allow_lifting:bool
-  -> Reachable.t * Downwards_acc.t * Flambda_type.t
+  -> Simplified_named.t * Downwards_acc.t * Flambda_type.t

@@ -322,7 +322,9 @@ and subst_let_expr env let_expr =
     let bindable_let_bound = subst_bindable_let_bound env bindable_let_bound in
     let defining_expr = subst_named env (Let_expr.defining_expr let_expr) in
     let body = subst_expr env body in
-    Expr.create_pattern_let bindable_let_bound defining_expr body
+    Let.create bindable_let_bound defining_expr ~body
+      ~free_names_of_body:Unknown
+    |> Expr.create_let
   )
 and subst_named env (n : Named.t) =
   match n with
@@ -333,7 +335,7 @@ and subst_named env (n : Named.t) =
   | Static_consts sc ->
     Named.create_static_consts (subst_static_consts env sc)
 and subst_static_consts env (g : Static_const.Group.t) =
-  List.map (subst_static_const env) (g |> Static_const.Group.to_list)
+  Static_const.Group.map g ~f:(subst_static_const env)
 and subst_bindable_let_bound env (blb : Bindable_let_bound.t) =
   match blb with
   | Symbols { bound_symbols; scoping_rule } ->
@@ -380,7 +382,9 @@ and subst_code env (code : Code.t)
   let params_and_body =
     match Code.params_and_body code with
     | Or_deleted.Present params_and_body ->
-      Or_deleted.Present (subst_params_and_body env params_and_body)
+      let params_and_body = subst_params_and_body env params_and_body in
+      Or_deleted.Present (params_and_body,
+        Function_params_and_body.free_names params_and_body)
     | Or_deleted.Deleted ->
       Or_deleted.Deleted
   in
@@ -429,16 +433,11 @@ and subst_let_cont env (let_cont_expr : Let_cont_expr.t) =
         Let_cont_expr.create_recursive handlers ~body
       )
 and subst_cont_handler env cont_handler =
-  Continuation_params_and_handler.pattern_match
-    (Continuation_handler.params_and_handler cont_handler)
+  Continuation_handler.pattern_match cont_handler
     ~f:(fun params ~handler ->
       let handler = subst_expr env handler in
-      let params_and_handler =
-        Continuation_params_and_handler.create params ~handler
-          ~free_names_of_handler:Unknown
-      in
-      Continuation_handler.create ~params_and_handler
-        ~stub:(Continuation_handler.stub cont_handler)
+      Continuation_handler.create params ~handler
+        ~free_names_of_handler:Unknown
         ~is_exn_handler:(Continuation_handler.is_exn_handler cont_handler)
     )
 and subst_apply env apply =
@@ -1102,7 +1101,9 @@ and let_exprs env let_expr1 let_expr2 : Expr.t Comparison.t =
         let defining_expr = Comparison.approximant named_comp ~default:named2 in
         let body = Comparison.approximant body_comp ~default:body2 in
         let approximant =
-          Expr.create_pattern_let bindable_let_bound defining_expr body
+          Let_expr.create bindable_let_bound defining_expr ~body
+            ~free_names_of_body:Unknown
+          |> Expr.create_let
         in
         Different { approximant }
     )
@@ -1153,10 +1154,17 @@ and let_symbol_exprs env
   in
   if !ok
     then Equivalent
-    else Different { approximant =
-      Expr.create_let_symbol
-        bound_symbols1' scoping_rule1 static_consts1' body1'
-    }
+    else
+      let approximant =
+        Let.create
+          (Bindable_let_bound.symbols bound_symbols1' scoping_rule1)
+          (Named.create_static_consts static_consts1')
+          ~body:body1'
+          ~free_names_of_body:Unknown
+        |> Expr.create_let
+      in
+      Different { approximant; }
+
 and static_consts env (const1 : Static_const.t) (const2 : Static_const.t)
       : Static_const.t Comparison.t =
   match const1, const2 with
@@ -1206,6 +1214,13 @@ and codes env (code1 : Code.t) (code2 : Code.t) =
     env (Code.params_and_body code1, Code.newer_version_of code1)
     (Code.params_and_body code2, Code.newer_version_of code2)
   |> Comparison.map ~f:(fun (params_and_body, newer_version_of) ->
+      let params_and_body : _ Or_deleted.t =
+        match (params_and_body : _ Or_deleted.t) with
+        | Deleted -> Deleted
+        | Present params_and_body ->
+          Present (params_and_body,
+            Function_params_and_body.free_names params_and_body)
+      in
       code1
       |> Code.with_code_id (Code.code_id code2)
       |> Code.with_params_and_body params_and_body
@@ -1273,25 +1288,15 @@ and let_cont_exprs env (let_cont1 : Let_cont.t) (let_cont2 : Let_cont.t)
   | _, _ ->
     Different { approximant = subst_let_cont env let_cont1 }
 and cont_handlers env handler1 handler2 =
-  Continuation_params_and_handler.pattern_match_pair
-    (Continuation_handler.params_and_handler handler1)
-    (Continuation_handler.params_and_handler handler2)
+  Continuation_handler.pattern_match_pair handler1 handler2
     ~f:(fun params ~handler1:expr1 ~handler2:expr2 ->
       exprs env expr1 expr2
       |> Comparison.map ~f:(fun handler ->
-          let params_and_handler =
-            Continuation_params_and_handler.create params ~handler
-              ~free_names_of_handler:Unknown
-          in
-          Continuation_handler.create
-            ~params_and_handler
-            ~stub:(Continuation_handler.stub handler1)
+          Continuation_handler.create params ~handler
+            ~free_names_of_handler:Unknown
             ~is_exn_handler:(Continuation_handler.is_exn_handler handler2))
       |> Comparison.add_condition ~cond:(
         Bool.equal
-          (Continuation_handler.stub handler1)
-          (Continuation_handler.stub handler2)
-        && Bool.equal
           (Continuation_handler.is_exn_handler handler1)
           (Continuation_handler.is_exn_handler handler2))
         ~approximant:(fun () -> subst_cont_handler env handler1))

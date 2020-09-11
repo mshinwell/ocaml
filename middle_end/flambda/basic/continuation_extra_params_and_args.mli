@@ -48,3 +48,5 @@ val add
   -> t
 
 val concat : t -> t -> t
+
+val extra_params : t -> Kinded_parameter.t list
