@@ -630,22 +630,24 @@ type inlining_decision =
   | Regular (* the variable is used multiple times, do not try and inline it. *)
 
 let decide_inline_let effs
-      ~(num_occurrences_of_bound_var
-          : Name_occurrences.Num_occurrences.t Or_unknown.t) =
-  match num_occurrences_of_bound_var with
-  | Known Zero ->
+      ~(num_normal_occurrences
+        : Name_occurrences.Num_occurrences.t Variable.Map.t)
+      var =
+  match Variable.Map.find var num_normal_occurrences with
+  | exception Not_found -> Regular
+  | Zero ->
     begin match Env.classify effs with
     | Coeffect | Pure -> Skip
     | Effect -> Regular (* Could be Inline technically, but it doesn't matter
                            since it can only be flushed by the env. *)
     end
-  | Known One ->
+  | One ->
     begin match Env.classify effs with
     | Effect when not (Flambda_features.Expert.inline_effects_in_cmm ()) ->
       Regular
     | _ -> Inline
     end
-  | Known More_than_one | Unknown -> Regular
+  | More_than_one -> Regular
 
 (* Helpers for translating functions *)
 
@@ -681,8 +683,8 @@ let rec expr env res e =
   | Invalid e' -> invalid env res e'
 
 and let_expr env res t =
-  Let.pattern_match t ~f:(fun bindable_let_bound ~body ->
-    let mode = Bindable_let_bound.name_mode bindable_let_bound in
+  Let.pattern_match' t ~f:(fun bindable ~num_normal_occurrences ~body ->
+    let mode = Bindable_let_bound.name_mode bindable in
     begin match Name_mode.descr mode with
     | In_types ->
       Misc.fatal_errorf
@@ -691,15 +693,15 @@ and let_expr env res t =
       expr env res body
     | Normal ->
       let e = Let.defining_expr t in
-      let num_occurrences_of_bound_var = Let.num_occurrences_of_bound_var t in
-      begin match bindable_let_bound, e with
+      begin match bindable, e with
       (* Correct cases *)
       | Singleton v, Simple s ->
-        let_expr_simple body env res v ~num_occurrences_of_bound_var s
+        let_expr_simple body env res v ~num_normal_occurrences s
       | Singleton v, Prim (p, dbg) ->
-        let_expr_prim body env res v ~num_occurrences_of_bound_var p dbg
+        let_expr_prim body env res v ~num_normal_occurrences p dbg
       | Set_of_closures { closure_vars; _ }, Set_of_closures soc ->
-        let_set_of_closures env res body closure_vars soc
+        let_set_of_closures env res body closure_vars
+          ~num_normal_occurrences soc
       | Symbols { bound_symbols; scoping_rule; }, Static_consts consts ->
         let_symbol env res bound_symbols scoping_rule consts body
       (* Error cases *)
@@ -739,39 +741,39 @@ and let_symbol env res bound_symbols _scoping_rule consts body =
     let body, res = expr env res body in
     wrap (C.sequence update body), res
 
-and let_set_of_closures env res body closure_vars s =
+and let_set_of_closures env res body closure_vars ~num_normal_occurrences s =
   let fun_decls = Set_of_closures.function_decls s in
   let decls = Function_declarations.funs_in_order fun_decls in
   let elts = filter_closure_vars env (Set_of_closures.closure_elements s) in
   if Var_within_closure.Map.is_empty elts then
     let_static_set_of_closures env res body closure_vars s
   else
-    let_dynamic_set_of_closures env res body closure_vars decls elts
+    let_dynamic_set_of_closures env res body closure_vars
+      ~num_normal_occurrences decls elts
 
-
-and let_expr_bind ?extra env v ~num_occurrences_of_bound_var cmm_expr effs =
-  match decide_inline_let effs ~num_occurrences_of_bound_var with
+and let_expr_bind ?extra env v ~num_normal_occurrences cmm_expr effs =
+  match decide_inline_let effs ~num_normal_occurrences v with
   | Skip -> env
   | Inline -> Env.bind_variable env v ?extra effs true cmm_expr
   | Regular -> Env.bind_variable env v ?extra effs false cmm_expr
 
-and bind_simple (env, res) v ~num_occurrences_of_bound_var s =
+and bind_simple (env, res) v ~num_normal_occurrences s =
   let cmm_expr, env, effs = simple env s in
-  let_expr_bind env v ~num_occurrences_of_bound_var cmm_expr effs, res
+  let_expr_bind env v ~num_normal_occurrences cmm_expr effs, res
 
-and let_expr_simple body env res v ~num_occurrences_of_bound_var s =
+and let_expr_simple body env res v ~num_normal_occurrences s =
   let v = Var_in_binding_pos.var v in
   let env, res =
-    bind_simple (env, res) v ~num_occurrences_of_bound_var s
+    bind_simple (env, res) v ~num_normal_occurrences s
   in
   expr env res body
 
-and let_expr_prim body env res v ~num_occurrences_of_bound_var p dbg =
+and let_expr_prim body env res v ~num_normal_occurrences p dbg =
   let v = Var_in_binding_pos.var v in
   let cmm_expr, extra, env, effs = prim env dbg p in
   let effs = Ece.join effs (Flambda_primitive.effects_and_coeffects p) in
   let env =
-    let_expr_bind ?extra env v ~num_occurrences_of_bound_var cmm_expr effs
+    let_expr_bind ?extra env v ~num_normal_occurrences cmm_expr effs
   in
   expr env res body
 
@@ -1026,23 +1028,24 @@ and wrap_cont env res effs call e =
     | Inline { handler_params = []; handler_body = body;
                handler_params_occurrences = _; } ->
       let var = Variable.create "*apply_res*" in
-      let env =
-        let_expr_bind env var
-          ~num_occurrences_of_bound_var:(Or_unknown.Known
-            Name_occurrences.Num_occurrences.Zero)
-          call effs
+      let num_normal_occurrences =
+        Variable.Map.singleton var Name_occurrences.Num_occurrences.Zero
       in
+      let env = let_expr_bind env var ~num_normal_occurrences call effs in
       expr env res body
     | Inline { handler_params = [param]; handler_body = body;
                handler_params_occurrences; } ->
-      let num_occurrences_of_bound_var : _ Or_unknown.t =
+      let num_normal_occurrences =
         match Kinded_parameter.Map.find param handler_params_occurrences with
-        | exception Not_found -> Unknown
-        | num_occurrences_or_unknown -> num_occurrences_or_unknown
+        | exception Not_found -> Variable.Map.empty
+        | Unknown -> Variable.Map.empty
+        | Known num_occurrences ->
+          Variable.Map.singleton (Kinded_parameter.var param)
+            num_occurrences
       in
       let var = Kinded_parameter.var param in
       let env =
-        let_expr_bind env var ~num_occurrences_of_bound_var call effs
+        let_expr_bind env var ~num_normal_occurrences call effs
       in
       expr env res body
     | Jump _
@@ -1140,13 +1143,16 @@ and apply_cont_inline env res e k args handler_body handler_params
   if List.compare_lengths args handler_params = 0 then begin
     let env, res =
       List.fold_left2 (fun env_and_res param ->
-          let num_occurrences_of_bound_var : _ Or_unknown.t =
+          let num_normal_occurrences =
             match Kinded_parameter.Map.find param handler_params_occurrences with
-            | exception Not_found -> Unknown
-            | num_occurrences_or_unknown -> num_occurrences_or_unknown
+            | exception Not_found -> Variable.Map.empty
+            | Or_unknown.Unknown -> Variable.Map.empty
+            | Or_unknown.Known num_occurrences ->
+              Variable.Map.singleton (Kinded_parameter.var param)
+                num_occurrences
           in
           bind_simple env_and_res (Kinded_parameter.var param)
-            ~num_occurrences_of_bound_var)
+            ~num_normal_occurrences)
         (env, res)
         handler_params args
     in
@@ -1339,7 +1345,8 @@ and let_static_set_of_closures env res body closure_vars s =
   expr env res body
 
 (* Sets of closures with a non-empty environment are allocated *)
-and let_dynamic_set_of_closures env res body closure_vars decls elts =
+and let_dynamic_set_of_closures env res body closure_vars
+      ~num_normal_occurrences decls elts =
   (* Create the allocation block for the set of closures *)
   let layout = Env.layout env
                  (List.map fst (Closure_id.Lmap.bindings decls))
@@ -1364,9 +1371,7 @@ and let_dynamic_set_of_closures env res body closure_vars decls elts =
     List.fold_left2 (fun acc cid v ->
       let v = Var_in_binding_pos.var v in
       let e, effs = get_closure_by_offset env soc_cmm_var cid in
-      (* It doesn't seem important to know the number of occurrences here. *)
-      let_expr_bind acc v ~num_occurrences_of_bound_var:Or_unknown.Unknown
-        e effs
+      let_expr_bind acc v ~num_normal_occurrences e effs
     ) env (Closure_id.Lmap.keys decls) closure_vars in
   (* The set of closures, as well as the individual closures variables
      are correctly set in the env, go on translating the body. *)

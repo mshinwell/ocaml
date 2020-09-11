@@ -58,24 +58,59 @@ module type Common = sig
 end
 
 module Make (Bindable : Bindable.S) (Term : Term) = struct
-  type t = Bindable.t * Term.t
+  type t = {
+    bindable : Bindable.t;
+    num_normal_occurrences : Name_occurrences.Num_occurrences.t Variable.Map.t;
+    term : Term.t;
+  }
 
-  let create name term = name, term
+  let create ?free_names_of_term bindable term =
+    let num_normal_occurrences =
+      match free_names_of_term with
+      | None -> Variable.Map.empty
+      | Some free_names_of_term ->
+        Name_occurrences.fold_names (Bindable.free_names bindable)
+          ~init:Variable.Map.empty
+          ~f:(fun num_normal_occurrences bound_name ->
+            match Name.to_var bound_name with
+            | None -> num_normal_occurrences
+            | Some bound_var ->
+              let num_occurrences =
+                Name_occurrences.count_variable_normal_mode free_names_of_term
+                  bound_var
+              in
+              Variable.Map.add bound_var num_occurrences num_normal_occurrences)
+    in
+    { bindable;
+      num_normal_occurrences;
+      term;
+    }
 
-  let [@inline always] pattern_match (name, term) ~f =
-    let fresh_name = Bindable.rename name in
-    let perm = Bindable.name_permutation name ~guaranteed_fresh:fresh_name in
+  let [@inline always] pattern_match { bindable; term; _ } ~f =
+    let fresh_bindable = Bindable.rename bindable in
+    let perm =
+      Bindable.name_permutation bindable ~guaranteed_fresh:fresh_bindable
+    in
     let fresh_term = Term.apply_name_permutation term perm in
-    f fresh_name fresh_term
+    f fresh_bindable fresh_term
+
+  let [@inline always] pattern_match'
+        { bindable; term; num_normal_occurrences; } ~f =
+    let fresh_bindable = Bindable.rename bindable in
+    let perm =
+      Bindable.name_permutation bindable ~guaranteed_fresh:fresh_bindable
+    in
+    let fresh_term = Term.apply_name_permutation term perm in
+    f fresh_bindable ~num_normal_occurrences fresh_term
 
   let print ppf t =
     let style = !printing_style in
-    pattern_match t ~f:(fun name term ->
+    pattern_match t ~f:(fun bindable term ->
       Format.fprintf ppf "@[<hov 1>%s@<1>%s%s%a%s@<1>%s%s@ %a@]"
         (Flambda_colours.name_abstraction ())
         (before_binding_position style)
         (Flambda_colours.normal ())
-        Bindable.print name
+        Bindable.print bindable
         (Flambda_colours.name_abstraction ())
         (after_binding_position style)
         (Flambda_colours.normal ())
@@ -83,51 +118,70 @@ module Make (Bindable : Bindable.S) (Term : Term) = struct
 
   let print_with_cache ~cache ppf t =
     let style = !printing_style in
-    pattern_match t ~f:(fun name term ->
+    pattern_match t ~f:(fun bindable term ->
       Format.fprintf ppf "@[<hov 1>%s@<1>%s%s%a%s@<1>%s%s@ %a@]"
         (Flambda_colours.name_abstraction ())
         (before_binding_position style)
         (Flambda_colours.normal ())
-        Bindable.print name
+        Bindable.print bindable
         (Flambda_colours.name_abstraction ())
         (after_binding_position style)
         (Flambda_colours.normal ())
         (Term.print_with_cache ~cache) term)
 
   let [@inline always] pattern_match_mapi t ~f =
-    pattern_match t ~f:(fun fresh_name fresh_term ->
-      let new_term = f fresh_name fresh_term in
-      fresh_name, new_term)
+    pattern_match' t
+      ~f:(fun fresh_bindable ~num_normal_occurrences fresh_term ->
+        { bindable = fresh_bindable;
+          term = f fresh_bindable fresh_term;
+          num_normal_occurrences;
+        })
 
   let [@inline always] pattern_match_map t ~f =
-    pattern_match_mapi t ~f:(fun _fresh_name fresh_term -> f fresh_term)
+    pattern_match_mapi t ~f:(fun _fresh_bindable fresh_term -> f fresh_term)
 
-  let [@inline always] pattern_match_pair (name0, term0) (name1, term1) ~f =
-    let fresh_name = Bindable.rename name0 in
-    let perm0 = Bindable.name_permutation name0 ~guaranteed_fresh:fresh_name in
-    let perm1 = Bindable.name_permutation name1 ~guaranteed_fresh:fresh_name in
+  let [@inline always] pattern_match_pair
+        { bindable = bindable0; term = term0; _ }
+        { bindable = bindable1; term = term1; _ }
+        ~f =
+    let fresh_bindable = Bindable.rename bindable0 in
+    let perm0 =
+      Bindable.name_permutation bindable0 ~guaranteed_fresh:fresh_bindable
+    in
+    let perm1 =
+      Bindable.name_permutation bindable1 ~guaranteed_fresh:fresh_bindable
+    in
     let fresh_term0 = Term.apply_name_permutation term0 perm0 in
     let fresh_term1 = Term.apply_name_permutation term1 perm1 in
-    f fresh_name fresh_term0 fresh_term1
+    f fresh_bindable fresh_term0 fresh_term1
 
-  let apply_name_permutation ((name, term) as t) perm =
+  let apply_name_permutation
+        ({ bindable; term; num_normal_occurrences; } as t) perm =
     if Name_permutation.is_empty perm then t
     else
-      let name = Bindable.apply_name_permutation name perm in
+      let bindable = Bindable.apply_name_permutation bindable perm in
       let term = Term.apply_name_permutation term perm in
-      name, term
+      { bindable;
+        term;
+        num_normal_occurrences;
+      }
 
-  let free_names (name, term) =
-    let in_binding_position = Bindable.singleton_occurrence_in_terms name in
+  let free_names { bindable; term; _ } =
+    let in_binding_position =
+      Bindable.singleton_occurrence_in_terms bindable
+    in
     let free_in_term = Term.free_names term in
     Name_occurrences.diff free_in_term in_binding_position
 
-  let all_ids_for_export (name, term) =
-    Ids_for_export.union (Bindable.all_ids_for_export name)
+  let all_ids_for_export { bindable; term; _ } =
+    Ids_for_export.union (Bindable.all_ids_for_export bindable)
       (Term.all_ids_for_export term)
 
-  let import import_map (name, term) =
-    (Bindable.import import_map name, Term.import import_map term)
+  let import import_map { bindable; term; num_normal_occurrences; } =
+    { bindable = Bindable.import import_map bindable;
+      term = Term.import import_map term;
+      num_normal_occurrences;
+    }
 end [@@@inline always]
 
 module Make_list (Bindable : Bindable.S) (Term : Term) = struct

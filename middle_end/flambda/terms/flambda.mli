@@ -227,15 +227,20 @@ end and Let_expr : sig
   (** The defining expression of the [Let]. *)
   val defining_expr : t -> Named.t
 
-  val num_occurrences_of_bound_var
-     : t
-    -> Name_occurrences.Num_occurrences.t Or_unknown.t
-
   (** Look inside the [Let] by choosing a member of the alpha-equivalence
       class. *)
   val pattern_match
      : t
     -> f:(Bindable_let_bound.t -> body:Expr.t -> 'a)
+    -> 'a
+
+  val pattern_match'
+    : t
+    -> f:(Bindable_let_bound.t
+      -> num_normal_occurrences:
+           Name_occurrences.Num_occurrences.t Variable.Map.t
+      -> body:Expr.t
+      -> 'a)
     -> 'a
 
   module Pattern_match_pair_error : sig

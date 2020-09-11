@@ -41,9 +41,14 @@ val pattern_match
   -> f:(Bindable_let_bound.t -> body:Expr.t -> 'a)
   -> 'a
 
-val num_occurrences_of_bound_var
+val pattern_match'
    : t
-  -> Name_occurrences.Num_occurrences.t Or_unknown.t
+  -> f:(Bindable_let_bound.t
+    -> num_normal_occurrences:
+         Name_occurrences.Num_occurrences.t Variable.Map.t
+    -> body:Expr.t
+    -> 'a)
+  -> 'a
 
 module Pattern_match_pair_error : sig
   type t = Mismatched_let_bindings

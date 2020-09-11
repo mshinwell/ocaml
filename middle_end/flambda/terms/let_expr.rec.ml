@@ -24,13 +24,16 @@ module A = Name_abstraction.Make (Bindable_let_bound) (Expr)
 type t = {
   name_abstraction : A.t;
   defining_expr : Named.t;
-  num_occurrences_of_bound_var
-  : Name_occurrences.Num_occurrences.t Or_unknown.t;
 }
 
 let pattern_match t ~f =
   A.pattern_match t.name_abstraction
     ~f:(fun bindable_let_bound body -> f bindable_let_bound ~body)
+
+let pattern_match' t ~f =
+  A.pattern_match' t.name_abstraction
+    ~f:(fun bindable_let_bound ~num_normal_occurrences body ->
+      f bindable_let_bound ~num_normal_occurrences ~body)
 
 module Pattern_match_pair_error = struct
   type t = Mismatched_let_bindings
@@ -256,8 +259,7 @@ let print_let_symbol_with_cache ~cache ppf t =
 (* For printing all kinds of let-expressions: *)
 
 let print_with_cache ~cache ppf
-      ({ name_abstraction = _; defining_expr;
-         num_occurrences_of_bound_var = _; } as t) =
+      ({ name_abstraction = _; defining_expr; } as t) =
   let let_bound_var_colour bindable_let_bound =
     let kind = Bindable_let_bound.name_mode bindable_let_bound in
     if Name_mode.is_phantom kind then Flambda_colours.elide ()
@@ -265,8 +267,7 @@ let print_with_cache ~cache ppf
   in
   let rec let_body (expr : Expr.t) =
     match Expr.descr expr with
-    | Let ({ name_abstraction = _; defining_expr;
-             num_occurrences_of_bound_var = _; } as t) ->
+    | Let ({ name_abstraction = _; defining_expr; } as t) ->
       pattern_match t
         ~f:(fun (bindable_let_bound : Bindable_let_bound.t) ~body ->
           match bindable_let_bound with
@@ -302,19 +303,11 @@ let print_with_cache ~cache ppf
 let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
 let create ?free_names_of_body bindable_let_bound ~defining_expr ~body =
-  let num_occurrences_of_bound_var : _ Or_unknown.t =
-    match free_names_of_body with
-    | None -> Unknown
-    | Some free_names_of_body ->
-      match Bindable_let_bound.must_be_singleton_opt bindable_let_bound with
-      | None -> Unknown
-      | Some var_in_binding_pos ->
-        let var = Var_in_binding_pos.var var_in_binding_pos in
-        Known (Name_occurrences.count_variable free_names_of_body var)
+  let name_abstraction =
+    A.create ?free_names_of_term:free_names_of_body bindable_let_bound body
   in
-  { name_abstraction = A.create bindable_let_bound body;
+  { name_abstraction;
     defining_expr;
-    num_occurrences_of_bound_var;
   }
 
 let invariant env t =
@@ -356,11 +349,8 @@ let invariant env t =
     Expr.invariant env body)
 
 let defining_expr t = t.defining_expr
-let num_occurrences_of_bound_var t = t.num_occurrences_of_bound_var
 
-let free_names
-      ({ name_abstraction = _; defining_expr;
-         num_occurrences_of_bound_var = _; } as t) =
+let free_names ({ name_abstraction = _; defining_expr; } as t) =
   pattern_match t ~f:(fun bindable_let_bound ~body ->
     let from_bindable = Bindable_let_bound.free_names bindable_let_bound in
     let from_defining_expr =
@@ -374,9 +364,7 @@ let free_names
     Name_occurrences.union from_defining_expr
       (Name_occurrences.diff from_body from_bindable))
 
-let apply_name_permutation
-      ({ name_abstraction; defining_expr; num_occurrences_of_bound_var; } as t)
-      perm =
+let apply_name_permutation ({ name_abstraction; defining_expr; } as t) perm =
   let name_abstraction' = A.apply_name_permutation name_abstraction perm in
   let defining_expr' = Named.apply_name_permutation defining_expr perm in
   if name_abstraction == name_abstraction' && defining_expr == defining_expr'
@@ -384,17 +372,14 @@ let apply_name_permutation
   else
     { name_abstraction = name_abstraction';
       defining_expr = defining_expr';
-      num_occurrences_of_bound_var;
     }
 
-let all_ids_for_export
-      { name_abstraction; defining_expr; num_occurrences_of_bound_var = _; } =
+let all_ids_for_export { name_abstraction; defining_expr; } =
   let defining_expr_ids = Named.all_ids_for_export defining_expr in
   let name_abstraction_ids = A.all_ids_for_export name_abstraction in
   Ids_for_export.union defining_expr_ids name_abstraction_ids
 
-let import import_map
-      { name_abstraction; defining_expr; num_occurrences_of_bound_var; } =
+let import import_map { name_abstraction; defining_expr; } =
   let defining_expr = Named.import import_map defining_expr in
   let name_abstraction = A.import import_map name_abstraction in
-  { name_abstraction; defining_expr; num_occurrences_of_bound_var; }
+  { name_abstraction; defining_expr; }

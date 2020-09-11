@@ -49,10 +49,28 @@ module Make (Bindable : Bindable.S) (Term : Term) : sig
   include Contains_ids.S with type t := t
   include Common with type t := t
 
-  val create : Bindable.t -> Term.t -> t
+  val create
+     : ?free_names_of_term:Name_occurrences.t
+    -> Bindable.t
+    -> Term.t
+    -> t
 
   (** Concretion of an abstraction at a fresh name. *)
   val pattern_match : t -> f:(Bindable.t -> Term.t -> 'a) -> 'a
+
+  (** Like [pattern_match] but also gives the number of occurrences of
+      any variables free in the [Bindable.t] that occur at [Normal] name mode
+      in the term.  Note that absence from the map does not mean zero
+      occurrences: it means that either name is not free in the [Bindable.t],
+      or [free_names_of_term] was not provided to [create]. *)
+  val pattern_match'
+     : t
+    -> f:(Bindable.t
+      -> num_normal_occurrences:
+           Name_occurrences.Num_occurrences.t Variable.Map.t
+      -> Term.t
+      -> 'a)
+    -> 'a
 
   (** Concretion of an abstraction at a fresh name followed by reconstruction of
       the abstraction. *)
