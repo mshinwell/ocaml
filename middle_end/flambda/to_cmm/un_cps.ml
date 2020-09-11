@@ -884,12 +884,8 @@ and let_cont_rec env res conts body =
 and continuation_handler_split h =
   let h = Continuation_handler.params_and_handler h in
   Continuation_params_and_handler.pattern_match' h
-    ~f:(fun params ~params_num_occurrences ~handler ->
-      let num_occurrences_by_param =
-        Kinded_parameter.Map.of_list
-          (List.combine params params_num_occurrences)
-      in
-      params, num_occurrences_by_param, handler)
+    ~f:(fun params ~num_normal_occurrences:params_num_occurrences ~handler ->
+      params, params_num_occurrences, handler)
 
 and continuation_arg_tys h =
   let args, _, _ = continuation_handler_split h in
@@ -1034,15 +1030,7 @@ and wrap_cont env res effs call e =
       let env = let_expr_bind env var ~num_normal_occurrences call effs in
       expr env res body
     | Inline { handler_params = [param]; handler_body = body;
-               handler_params_occurrences; } ->
-      let num_normal_occurrences =
-        match Kinded_parameter.Map.find param handler_params_occurrences with
-        | exception Not_found -> Variable.Map.empty
-        | Unknown -> Variable.Map.empty
-        | Known num_occurrences ->
-          Variable.Map.singleton (Kinded_parameter.var param)
-            num_occurrences
-      in
+               handler_params_occurrences = num_normal_occurrences; } ->
       let var = Kinded_parameter.var param in
       let env =
         let_expr_bind env var ~num_normal_occurrences call effs
@@ -1143,16 +1131,8 @@ and apply_cont_inline env res e k args handler_body handler_params
   if List.compare_lengths args handler_params = 0 then begin
     let env, res =
       List.fold_left2 (fun env_and_res param ->
-          let num_normal_occurrences =
-            match Kinded_parameter.Map.find param handler_params_occurrences with
-            | exception Not_found -> Variable.Map.empty
-            | Or_unknown.Unknown -> Variable.Map.empty
-            | Or_unknown.Known num_occurrences ->
-              Variable.Map.singleton (Kinded_parameter.var param)
-                num_occurrences
-          in
           bind_simple env_and_res (Kinded_parameter.var param)
-            ~num_normal_occurrences)
+            ~num_normal_occurrences:handler_params_occurrences)
         (env, res)
         handler_params args
     in

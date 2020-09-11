@@ -40,8 +40,8 @@ val create
 val pattern_match'
    : t
   -> f:(Kinded_parameter.t list
-    -> params_num_occurrences:
-         Name_occurrences.Num_occurrences.t Or_unknown.t list
+    -> num_normal_occurrences:
+         Name_occurrences.Num_occurrences.t Variable.Map.t
     -> handler:Expr.t
     -> 'a)
   -> 'a

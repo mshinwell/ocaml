@@ -23,8 +23,7 @@ type cont =
   | Inline of { handler_params: Kinded_parameter.t list;
                 handler_body: Flambda.Expr.t;
                 handler_params_occurrences:
-                  Name_occurrences.Num_occurrences.t Or_unknown.t
-                    Kinded_parameter.Map.t; }
+                  Name_occurrences.Num_occurrences.t Variable.Map.t; }
 
 (* Extra information about bound variables. These extra information
    help keep track of some extra semantics that are useful to

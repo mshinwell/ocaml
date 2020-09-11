@@ -185,36 +185,82 @@ module Make (Bindable : Bindable.S) (Term : Term) = struct
 end [@@@inline always]
 
 module Make_list (Bindable : Bindable.S) (Term : Term) = struct
-  type t = Bindable.t list * Term.t
+  type t = {
+    bindables : Bindable.t list;
+    num_normal_occurrences : Name_occurrences.Num_occurrences.t Variable.Map.t;
+    term : Term.t;
+  }
 
-  let create names term =
-    let names_set = Bindable.Set.of_list names in
-    if List.length names <> Bindable.Set.cardinal names_set then begin
+  let create ?free_names_of_term bindables term =
+    let bindables_set = Bindable.Set.of_list bindables in
+    if List.length bindables <> Bindable.Set.cardinal bindables_set then begin
       Misc.fatal_errorf "Cannot create generalised abstraction value with \
-          non-disjoint names in binding position: %a"
+          non-disjoint bindables in binding position: %a"
         (Format.pp_print_list ~pp_sep:Format.pp_print_space
-          Bindable.print) names
+          Bindable.print) bindables
     end;
-    names, term
+    let num_normal_occurrences =
+      match free_names_of_term with
+      | None -> Variable.Map.empty
+      | Some free_names_of_term ->
+        ListLabels.fold_left bindables ~init:Variable.Map.empty
+          ~f:(fun num_normal_occurrences bindable ->
+            Name_occurrences.fold_names (Bindable.free_names bindable)
+              ~init:num_normal_occurrences
+              ~f:(fun num_normal_occurrences bound_name ->
+                match Name.to_var bound_name with
+                | None -> num_normal_occurrences
+                | Some bound_var ->
+                  let num_occurrences =
+                    Name_occurrences.count_variable_normal_mode
+                      free_names_of_term bound_var
+                  in
+                  Variable.Map.add bound_var num_occurrences
+                    num_normal_occurrences))
+    in
+    { bindables;
+      num_normal_occurrences;
+      term;
+    }
 
-  let [@inline always] pattern_match (names, term) ~f =
-    match names with
+  let [@inline always] pattern_match { bindables; term; _ } ~f =
+    match bindables with
     | [] -> f [] term
     | _ ->
-      let fresh_names_rev, perm =
-        List.fold_left (fun (fresh_names_rev, perm) stale_name ->
-            let fresh_name = Bindable.rename stale_name in
+      let fresh_bindables_rev, perm =
+        List.fold_left (fun (fresh_bindables_rev, perm) stale_bindable ->
+            let fresh_bindable = Bindable.rename stale_bindable in
             let perm =
-              Bindable.add_to_name_permutation stale_name
-                ~guaranteed_fresh:fresh_name perm
+              Bindable.add_to_name_permutation stale_bindable
+                ~guaranteed_fresh:fresh_bindable perm
             in
-            fresh_name :: fresh_names_rev, perm)
+            fresh_bindable :: fresh_bindables_rev, perm)
           ([], Name_permutation.empty)
-          names
+          bindables
       in
-      let fresh_names = List.rev fresh_names_rev in
+      let fresh_bindables = List.rev fresh_bindables_rev in
       let fresh_term = Term.apply_name_permutation term perm in
-      f fresh_names fresh_term
+      f fresh_bindables fresh_term
+
+  let [@inline always] pattern_match'
+        { bindables; term; num_normal_occurrences; } ~f =
+    match bindables with
+    | [] -> f [] ~num_normal_occurrences term
+    | _ ->
+      let fresh_bindables_rev, perm =
+        List.fold_left (fun (fresh_bindables_rev, perm) stale_bindable ->
+            let fresh_bindable = Bindable.rename stale_bindable in
+            let perm =
+              Bindable.add_to_name_permutation stale_bindable
+                ~guaranteed_fresh:fresh_bindable perm
+            in
+            fresh_bindable :: fresh_bindables_rev, perm)
+          ([], Name_permutation.empty)
+          bindables
+      in
+      let fresh_bindables = List.rev fresh_bindables_rev in
+      let fresh_term = Term.apply_name_permutation term perm in
+      f fresh_bindables ~num_normal_occurrences fresh_term
 
   let print_bindable_name_list ppf bns =
     let style = !printing_style in
@@ -232,84 +278,96 @@ module Make_list (Bindable : Bindable.S) (Term : Term) = struct
         (Flambda_colours.normal ())
 
   let print ppf t =
-    pattern_match t ~f:(fun names term ->
+    pattern_match t ~f:(fun bindables term ->
       Format.fprintf ppf "@[<hov 1>%a@ %a@]"
-        print_bindable_name_list names
+        print_bindable_name_list bindables
         Term.print term)
 
   let print_with_cache ~cache ppf t =
-    pattern_match t ~f:(fun names term ->
+    pattern_match t ~f:(fun bindables term ->
       Format.fprintf ppf "@[<hov 1>%a@ %a@]"
-        print_bindable_name_list names
+        print_bindable_name_list bindables
         (Term.print_with_cache ~cache) term)
 
   let [@inline always] pattern_match_mapi t ~f =
-    pattern_match t ~f:(fun fresh_names fresh_term ->
-      let new_term = f fresh_names fresh_term in
-      fresh_names, new_term)
+    pattern_match t ~f:(fun fresh_bindables fresh_term ->
+      let term = f fresh_bindables fresh_term in
+      { bindables = fresh_bindables;
+        term;
+        num_normal_occurrences = t.num_normal_occurrences;
+      })
 
   let [@inline always] pattern_match_map t ~f =
-    pattern_match_mapi t ~f:(fun _name term -> f term)
+    pattern_match_mapi t ~f:(fun _bindables term -> f term)
 
   let [@inline always] pattern_match_pair
-        ((names0, term0) as t1) ((names1, term1) as t2) ~f =
-    if List.compare_lengths names0 names1 <> 0 then begin
+        ({ bindables = bindables0; term = term0; _ } as t1)
+        ({ bindables = bindables1; term = term1; _ } as t2)
+        ~f =
+    if List.compare_lengths bindables0 bindables1 <> 0 then begin
       let print ppf t : unit = print ppf t in
       Misc.fatal_errorf "Cannot concrete a pair of generalised abstractions \
-          unless they have the same number of names in binding position:@ \
+          unless they have the same number of bindables in binding position:@ \
           %a@ and@ %a"
         print t1
         print t2
     end;
-    let fresh_names_rev, perm0, perm1 =
+    let fresh_bindables_rev, perm0, perm1 =
       List.fold_left2
-        (fun (fresh_names_rev, perm0, perm1) stale_name0 stale_name1 ->
-          let fresh_name = Bindable.rename stale_name0 in
+        (fun (fresh_bindables_rev, perm0, perm1)
+             stale_bindable0 stale_bindable1 ->
+          let fresh_bindable = Bindable.rename stale_bindable0 in
           let perm0 =
-            Bindable.add_to_name_permutation stale_name0
-              ~guaranteed_fresh:fresh_name perm0
+            Bindable.add_to_name_permutation stale_bindable0
+              ~guaranteed_fresh:fresh_bindable perm0
           in
           let perm1 =
-            Bindable.add_to_name_permutation stale_name1
-              ~guaranteed_fresh:fresh_name perm1
+            Bindable.add_to_name_permutation stale_bindable1
+              ~guaranteed_fresh:fresh_bindable perm1
           in
-          fresh_name :: fresh_names_rev, perm0, perm1)
+          fresh_bindable :: fresh_bindables_rev, perm0, perm1)
         ([], Name_permutation.empty, Name_permutation.empty)
-        names0 names1
+        bindables0 bindables1
     in
-    let fresh_names = List.rev fresh_names_rev in
+    let fresh_bindables = List.rev fresh_bindables_rev in
     let fresh_term0 = Term.apply_name_permutation term0 perm0 in
     let fresh_term1 = Term.apply_name_permutation term1 perm1 in
-    f fresh_names fresh_term0 fresh_term1
+    f fresh_bindables fresh_term0 fresh_term1
 
-  let apply_name_permutation (names, term) perm =
-    let names =
-      List.map (fun name -> Bindable.apply_name_permutation name perm) names
+  let apply_name_permutation { bindables; term; num_normal_occurrences; } perm =
+    let bindables =
+      List.map (fun name -> Bindable.apply_name_permutation name perm) bindables
     in
     let term = Term.apply_name_permutation term perm in
-    names, term
+    { bindables;
+      term;
+      num_normal_occurrences;
+    }
 
-  let free_names (names, term) =
+  let free_names { bindables; term; num_normal_occurrences = _; } =
     let in_binding_position =
-      List.fold_left (fun in_binding_position name ->
-          Bindable.add_occurrence_in_terms name in_binding_position)
+      List.fold_left (fun in_binding_position bindable ->
+          Bindable.add_occurrence_in_terms bindable in_binding_position)
         (Name_occurrences.empty)
-        names
+        bindables
     in
     let free_in_term = Term.free_names term in
     Name_occurrences.diff free_in_term in_binding_position
 
-  let all_ids_for_export (names, term) =
+  let all_ids_for_export { bindables; term; num_normal_occurrences = _; } =
     let term_ids = Term.all_ids_for_export term in
-    List.fold_left (fun ids name ->
-        Ids_for_export.union ids (Bindable.all_ids_for_export name))
+    List.fold_left (fun ids bindable ->
+        Ids_for_export.union ids (Bindable.all_ids_for_export bindable))
       term_ids
-      names
+      bindables
 
-  let import import_map (names, term) =
-    let names = List.map (Bindable.import import_map) names in
+  let import import_map { bindables; term; num_normal_occurrences; } =
+    let bindables = List.map (Bindable.import import_map) bindables in
     let term = Term.import import_map term in
-    names, term
+    { bindables;
+      term;
+      num_normal_occurrences;
+    }
 end [@@@inline always]
 
 module Make_map (Bindable : Bindable.S) (Term : Term) = struct

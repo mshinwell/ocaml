@@ -96,10 +96,23 @@ module Make_list (Bindable : Bindable.S) (Term : Term) : sig
   include Contains_ids.S with type t := t
   include Common with type t := t
 
-  val create : Bindable.t list -> Term.t -> t
+  val create
+     : ?free_names_of_term:Name_occurrences.t
+    -> Bindable.t list
+    -> Term.t
+    -> t
 
   (** Concretion of an abstraction at fresh names. *)
   val pattern_match : t -> f:(Bindable.t list -> Term.t -> 'a) -> 'a
+
+  val pattern_match'
+     : t
+    -> f:(Bindable.t list
+      -> num_normal_occurrences:
+           Name_occurrences.Num_occurrences.t Variable.Map.t
+      -> Term.t
+      -> 'a)
+    -> 'a
 
   (** Concretion of an abstraction at fresh names followed by reconstruction of
       the abstraction. *)
