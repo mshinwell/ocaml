@@ -107,9 +107,11 @@ val shareable_constants : t -> Symbol.t Flambda.Static_const.Map.t
 
 val add_use_of_closure_var : t -> Var_within_closure.t -> t
 
-val used_closure_vars : t -> Var_within_closure.Set.t
+(* The only free names that get collected here are free symbols from
+   lambdas under [Let]s.  (Both the down and upwards traversals are done for
+   such lambdas before moving onto the subsequent expressions.) *)
+val add_free_names : t -> Name_occurrences.t -> t
 
-val with_used_closure_vars
-   : t
-  -> used_closure_vars:Var_within_closure.Set.t
-  -> t
+val name_occurrences : t -> Name_occurrences.t
+
+val with_name_occurrences : t -> name_occurrences:Name_occurrences.t -> t

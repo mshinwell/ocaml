@@ -42,7 +42,7 @@ val extra_args
 
 type rewrite_use_result = private
   | Apply_cont of Flambda.Apply_cont.t
-  | Expr of Flambda.Expr.t
+  | Expr of Flambda.Expr.t * Name_occurrences.t
 
 val no_rewrite : Flambda.Apply_cont.t -> rewrite_use_result
 

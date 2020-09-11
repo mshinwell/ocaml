@@ -27,31 +27,31 @@ type t = {
   denv : DE.t;
   continuation_uses_env : CUE.t;
   shareable_constants : Symbol.t Static_const.Map.t;
-  used_closure_vars : Var_within_closure.Set.t;
+  name_occurrences : Name_occurrences.t;
   lifted_constants : LCS.t;
 }
 
 let print ppf
-      { denv; continuation_uses_env; shareable_constants; used_closure_vars;
+      { denv; continuation_uses_env; shareable_constants; name_occurrences;
         lifted_constants; } =
   Format.fprintf ppf "@[<hov 1>(\
       @[<hov 1>(denv@ %a)@]@ \
       @[<hov 1>(continuation_uses_env@ %a)@]@ \
       @[<hov 1>(shareable_constants@ %a)@]@ \
-      @[<hov 1>(used_closure_vars@ %a)@]@ \
+      @[<hov 1>(name_occurrences@ %a)@]@ \
       @[<hov 1>(lifted_constant_state@ %a)@]\
       )@]"
     DE.print denv
     CUE.print continuation_uses_env
     (Static_const.Map.print Symbol.print) shareable_constants
-    Var_within_closure.Set.print used_closure_vars
+    Name_occurrences.print name_occurrences
     LCS.print lifted_constants
 
 let create denv continuation_uses_env =
   { denv;
     continuation_uses_env;
     shareable_constants = Static_const.Map.empty;
-    used_closure_vars = Var_within_closure.Set.empty;
+    name_occurrences = Name_occurrences.empty;
     lifted_constants = LCS.empty;
   }
 
@@ -166,14 +166,21 @@ let shareable_constants t = t.shareable_constants
 
 let add_use_of_closure_var t closure_var =
   { t with
-    used_closure_vars =
-      Var_within_closure.Set.add closure_var t.used_closure_vars;
+    name_occurrences =
+      Name_occurrences.add_closure_var t.name_occurrences closure_var
+        Name_mode.normal;
   }
 
-let used_closure_vars t = t.used_closure_vars
+let add_free_names t free_names =
+  let name_occurrences =
+    Name_occurrences.union t.name_occurrences free_names
+  in
+  { t with name_occurrences; }
 
-let with_used_closure_vars t ~used_closure_vars =
-  { t with used_closure_vars; }
+let name_occurrences t = t.name_occurrences
+
+let with_name_occurrences t ~name_occurrences =
+  { t with name_occurrences; }
 
 let all_continuations_used t =
   CUE.all_continuations_used t.continuation_uses_env

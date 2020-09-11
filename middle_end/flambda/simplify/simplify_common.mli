@@ -93,11 +93,6 @@ val update_exn_continuation_extra_args
   -> Apply_expr.t
   -> Apply_expr.t
 
-val bind_let_bound
-   : bindings:((Bindable_let_bound.t * Reachable.t) list)
-  -> body:Flambda.Expr.t
-  -> Flambda.Expr.t
-
 (** Create [Let_symbol] expression(s) around a given body.  Two optimisations
     are performed:
     1. Best efforts are made not to create the [Let_symbol](s) if it/they

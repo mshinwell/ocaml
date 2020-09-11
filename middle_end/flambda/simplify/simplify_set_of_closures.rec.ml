@@ -289,7 +289,7 @@ end
 
 module C = Context_for_multiple_sets_of_closures
 
-let dacc_inside_function context ~used_closure_vars ~shareable_constants
+let dacc_inside_function context ~name_occurrences ~shareable_constants
       ~params ~my_closure closure_id ~closure_bound_names_inside_function =
   let dacc =
     DA.map_denv (C.dacc_inside_functions context) ~f:(fun denv ->
@@ -319,7 +319,7 @@ let dacc_inside_function context ~used_closure_vars ~shareable_constants
       closure_bound_names_inside_function
       denv)
   |> DA.with_shareable_constants ~shareable_constants
-  |> DA.with_used_closure_vars ~used_closure_vars
+  |> DA.with_name_occurrences ~name_occurrences
 
 type simplify_function_result = {
   function_decl : FD.t;
@@ -330,7 +330,7 @@ type simplify_function_result = {
   uacc_after_upwards_traversal : UA.t;
 }
 
-let simplify_function context ~used_closure_vars ~shareable_constants
+let simplify_function context ~name_occurrences ~shareable_constants
       closure_id function_decl ~closure_bound_names_inside_function
       code_age_relation ~lifted_consts_prev_functions =
   let name = Closure_id.to_string closure_id in
@@ -347,7 +347,7 @@ let simplify_function context ~used_closure_vars ~shareable_constants
         ~f:(fun ~return_continuation exn_continuation params ~body
                 ~my_closure ~is_my_closure_used:_ ->
           let dacc =
-            dacc_inside_function context ~used_closure_vars ~shareable_constants
+            dacc_inside_function context ~name_occurrences ~shareable_constants
               ~params ~my_closure closure_id
               ~closure_bound_names_inside_function
           in
@@ -384,7 +384,19 @@ let simplify_function context ~used_closure_vars ~shareable_constants
             let dacc_after_body = UA.creation_dacc uacc in
             let dbg = Function_params_and_body.debuginfo params_and_body in
             (* CR mshinwell: Should probably look at [cont_uses]? *)
-            let free_names_of_body = Expr.free_names body in
+            let free_names_of_body = UA.name_occurrences uacc in
+            let allowed_free_vars =
+              Variable.Set.add my_closure (KP.List.var_set params)
+            in
+            Name_occurrences.fold_variables free_names_of_body ~init:()
+              ~f:(fun () var ->
+                if not (Variable.Set.mem var allowed_free_vars) then begin
+                  Misc.fatal_errorf "Variable %a should not be free in \
+                      function body after simplification (closure ID %a):@ %a"
+                    Variable.print var
+                    Closure_id.print closure_id
+                    Expr.print body
+                end);
             let params_and_body =
               Function_params_and_body.create
                 ~free_names_of_body:(Known free_names_of_body)
@@ -454,15 +466,15 @@ let simplify_set_of_closures0 dacc context set_of_closures
       DA.print dacc
   end;
   let all_function_decls_in_set, code, fun_types, code_age_relation,
-      used_closure_vars, shareable_constants, lifted_consts =
+      name_occurrences, shareable_constants, lifted_consts =
     Closure_id.Lmap.fold
       (fun closure_id function_decl
            (result_function_decls_in_set, code, fun_types,
-            code_age_relation, used_closure_vars, shareable_constants,
+            code_age_relation, name_occurrences, shareable_constants,
             lifted_consts_prev_functions) ->
         let { function_decl; new_code_id; code = new_code; function_type;
               dacc_after_body; uacc_after_upwards_traversal; } =
-          simplify_function context ~used_closure_vars ~shareable_constants
+          simplify_function context ~name_occurrences ~shareable_constants
             closure_id function_decl
             ~closure_bound_names_inside_function:closure_bound_names_inside
             code_age_relation ~lifted_consts_prev_functions
@@ -491,17 +503,17 @@ let simplify_set_of_closures0 dacc context set_of_closures
           TE.code_age_relation (DA.typing_env dacc_after_body)
         in
         result_function_decls_in_set, code, fun_types, code_age_relation,
-          UA.used_closure_vars uacc_after_upwards_traversal,
+          UA.name_occurrences uacc_after_upwards_traversal,
           UA.shareable_constants uacc_after_upwards_traversal,
           lifted_consts_prev_functions)
       all_function_decls_in_set
       ([], [], Closure_id.Map.empty,
         TE.code_age_relation (DA.typing_env dacc),
-        DA.used_closure_vars dacc, DA.shareable_constants dacc, LCS.empty)
+        DA.name_occurrences dacc, DA.shareable_constants dacc, LCS.empty)
   in
   let dacc =
     DA.add_lifted_constants dacc lifted_consts
-    |> DA.with_used_closure_vars ~used_closure_vars
+    |> DA.with_name_occurrences ~name_occurrences
     |> DA.with_shareable_constants ~shareable_constants
   in
   let all_function_decls_in_set =

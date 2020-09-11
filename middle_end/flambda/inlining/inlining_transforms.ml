@@ -60,7 +60,7 @@ let inline dacc ~callee ~args function_decl
               |> Option.get  (* CR mshinwell: improve *)
             in
             Expr.apply_name_permutation
-              (Expr.bind_parameters_to_simples ~bind:params ~target:args
+              (Expr.bind_parameters_no_simplification ~bind:params ~target:args
                 (Expr.create_let
                   (VB.create my_closure Name_mode.normal)
                   (Named.create_simple callee)

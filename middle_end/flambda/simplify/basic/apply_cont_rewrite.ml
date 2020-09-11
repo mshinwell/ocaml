@@ -106,11 +106,7 @@ let extra_args t id =
 
 type rewrite_use_result =
   | Apply_cont of Flambda.Apply_cont.t
-  | Expr of Flambda.Expr.t
-
-(* Suppress warning 37: this will be removed once variant unboxing is
-   introduced; that will use [Expr]. *)
-let _ = Expr (Flambda.Expr.create_invalid ())
+  | Expr of Flambda.Expr.t * Name_occurrences.t
 
 let no_rewrite apply_cont = Apply_cont apply_cont
 
@@ -155,8 +151,11 @@ let rewrite_use t id apply_cont : rewrite_use_result =
   match extra_lets with
   | [] -> Apply_cont apply_cont
   | _::_ ->
-    let expr = Flambda.Expr.create_apply_cont apply_cont in
-    Expr (Flambda.Expr.bind ~bindings:extra_lets ~body:expr)
+    let expr =
+      Flambda.Expr.bind_no_simplification ~bindings:extra_lets
+        ~body:(Flambda.Expr.create_apply_cont apply_cont)
+    in
+    Expr (expr, Flambda.Expr.free_names expr)
 
 (* CR mshinwell: tidy up.
    Also remove confusion between "extra args" as added by e.g. unboxing and

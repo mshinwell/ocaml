@@ -59,6 +59,14 @@ val remember_code_for_cmx
 
 val all_code : t -> Exported_code.t
 
-val used_closure_vars : t -> Var_within_closure.Set.t
-
 val shareable_constants : t -> Symbol.t Flambda.Static_const.Map.t
+
+val name_occurrences : t -> Name_occurrences.t
+
+val with_name_occurrences : t -> name_occurrences:Name_occurrences.t -> t
+
+val clear_name_occurrences : t -> t
+
+val add_free_names : t -> Name_occurrences.t -> t
+
+val remove_all_occurrences_of_free_names : t -> Name_occurrences.t -> t

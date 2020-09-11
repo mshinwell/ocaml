@@ -18,9 +18,238 @@
 
 open! Simplify_import
 
+(* The constructed values of this type aren't currently used, but will be
+   needed when we import the Flambda 1 inliner. *)
+type let_creation_result =
+  | Have_deleted of Named.t
+  | Nothing_deleted
+
+let create_singleton_let uacc (bound_var : Var_in_binding_pos.t) defining_expr
+      ~body ~free_names_of_body =
+  let generate_phantom_lets =
+    !Clflags.debug && !Clflags.Flambda.Expert.phantom_lets
+  in
+  (* CR mshinwell: [let_creation_result] should really be some kind of
+     "benefit" type. *)
+  let bound_var, keep_binding, let_creation_result =
+    let greatest_name_mode =
+      Name_occurrences.greatest_name_mode_var free_names_of_body
+        (Var_in_binding_pos.var bound_var)
+    in
+    let declared_name_mode =
+      Var_in_binding_pos.name_mode bound_var
+    in
+    begin match
+      Name_mode.Or_absent.compare_partial_order
+         greatest_name_mode
+         (Name_mode.Or_absent.present declared_name_mode)
+    with
+    | None -> ()
+    | Some c ->
+      if c <= 0 then ()
+      else
+        Misc.fatal_errorf "[Let]-binding declares variable %a (mode %a) to \
+            be bound to@ %a,@ but this variable has occurrences at a higher \
+            mode@ (>= %a)@ in the body (free names %a):@ %a"
+          Var_in_binding_pos.print bound_var
+          Name_mode.print declared_name_mode
+          Named.print defining_expr
+          Name_mode.Or_absent.print greatest_name_mode
+          Name_occurrences.print free_names_of_body
+          print body
+    end;
+    if not (Named.at_most_generative_effects defining_expr) then begin
+      if not (Name_mode.is_normal declared_name_mode)
+      then begin
+        Misc.fatal_errorf "Cannot [Let]-bind non-normal variable to \
+            a primitive that has more than generative effects:@ %a@ =@ %a"
+          Var_in_binding_pos.print bound_var
+          Named.print defining_expr
+      end;
+      bound_var, true, Nothing_deleted
+    end else begin
+      let has_uses =
+        Name_mode.Or_absent.is_present greatest_name_mode
+      in
+      let user_visible =
+        Variable.user_visible (Var_in_binding_pos.var bound_var)
+      in
+      let will_delete_binding =
+        (* CR mshinwell: This should detect whether there is any
+           provenance info associated with the variable.  If there isn't, the
+           [Let] can be deleted even if debugging information is being
+           generated. *)
+        not (has_uses || (generate_phantom_lets && user_visible))
+      in
+      if will_delete_binding then begin
+        bound_var, false, Have_deleted defining_expr
+      end else
+        let name_mode =
+          match greatest_name_mode with
+          | Absent -> Name_mode.phantom
+          | Present name_mode -> name_mode
+        in
+        assert (Name_mode.can_be_in_terms name_mode);
+        let bound_var =
+          Var_in_binding_pos.with_name_mode bound_var name_mode
+        in
+        if Name_mode.is_normal name_mode then
+          bound_var, true, Nothing_deleted
+        else
+          bound_var, true, Have_deleted defining_expr
+    end
+  in
+  (* CR mshinwell: When leaving behind phantom lets, maybe we should turn
+     the defining expressions into simpler ones by using the type, if possible.
+     For example an Unbox_naked_int64 or something could potentially turn
+     into a variable.  This defining expression usually never exists as
+     the types propagate the information forward.
+     mshinwell: this might be done now in Simplify_named, check. *)
+  if not keep_binding then body, uacc, let_creation_result
+  else
+    let bound_vars = Bindable_let_bound.singleton bound_var in
+    let let_expr =
+      Let_expr.create bound_vars ~defining_expr ~body
+        ~free_names_of_body:(Known free_names_of_body)
+    in
+    let free_names_from_defining_expr =
+      let from_defining_expr = Named.free_names defining_expr in
+      if not generate_phantom_lets then (* CR mshinwell: refine condition *)
+        from_defining_expr
+      else
+        Name_occurrences.downgrade_occurrences_at_strictly_greater_kind
+          from_defining_expr
+          (Var_in_binding_pos.name_mode bound_var)
+    in
+    let uacc =
+      UA.remove_all_occurrences_of_free_names
+        (UA.add_free_names uacc free_names_from_defining_expr)
+        (Name_occurrences.singleton_variable (Var_in_binding_pos.var bound_var))
+    in
+    Expr.create_let let_expr, uacc, Nothing_deleted
+
+let create_set_of_closures_let uacc ~closure_vars defining_expr ~body
+      ~free_names_of_body =
+  (* CR-someday mshinwell: Think about how to phantomise these [Let]s. *)
+  let bound_vars = Bindable_let_bound.set_of_closures ~closure_vars in
+  let free_names_of_bound_vars = Bindable_let_bound.free_names bound_vars in
+  let unused_free_names_of_bound_vars =
+    Name_occurrences.diff free_names_of_bound_vars free_names_of_body
+  in
+  if Name_occurrences.equal free_names_of_bound_vars
+       unused_free_names_of_bound_vars
+  then
+    body, uacc, Have_deleted defining_expr
+  else
+    let let_expr =
+      Let_expr.create bound_vars ~defining_expr ~body
+        ~free_names_of_body:(Known free_names_of_body)
+    in
+    let uacc =
+      UA.remove_all_occurrences_of_free_names
+        (UA.add_free_names uacc (Named.free_names defining_expr))
+        free_names_of_bound_vars
+    in
+    let free_names =
+      let from_defining_expr = Named.free_names defining_expr in
+      Name_occurrences.union from_defining_expr
+        (Name_occurrences.diff free_names_of_body free_names_of_bound_vars)
+    in
+    Expr.create_let let_expr, uacc, Nothing_deleted
+
+let create_let_symbol bindable defining_expr body =
+  let free_names_of_body = free_names body in
+  let free_names_of_bindable = Bindable_let_bound.free_names bindable in
+  let let_expr =
+    Let_expr.create bindable ~defining_expr ~body
+      ~free_names_of_body:(Known free_names_of_body)
+  in
+  let free_names =
+    let from_defining_expr = Named.free_names defining_expr in
+    Name_occurrences.union from_defining_expr
+      (Name_occurrences.diff free_names_of_body free_names_of_bindable)
+  in
+  let t =
+    { descr = Let let_expr;
+      delayed_permutation = Name_permutation.empty;
+      free_names = Some free_names;
+    }
+  in
+  t, Nothing_deleted
+
+let create_pattern_let0 (bindable : Bindable_let_bound.t) defining_expr body
+      : t * let_creation_result =
+  match bindable with
+  | Singleton bound_var -> create_singleton_let bound_var defining_expr body
+  | Set_of_closures { closure_vars; _ } ->
+    create_set_of_closures_let ~closure_vars defining_expr body
+  | Symbols _ -> create_let_symbol bindable defining_expr body
+
+let create_let uacc bound_var defining_expr body : t =
+  let expr, uacc, _ = create_singleton_let uacc bound_var defining_expr body in
+  expr, uacc
+
+let create_pattern_let uacc bound_vars defining_expr body : t =
+  let expr, uacc, _ = create_pattern_let0 uacc bound_vars defining_expr body in
+  expr, uacc
+
+let create_let_symbol uacc bound_symbols scoping_rule static_consts body : t =
+  let expr, _ =
+    create_pattern_let0 uacc
+      (Bindable_let_bound.symbols bound_symbols scoping_rule)
+      (Named.create_static_consts static_consts)
+      body
+  in
+  expr, uacc
+
+let bind uacc ~bindings ~body =
+  ListLabels.fold_left (List.rev bindings)
+    ~init:(body, uacc)
+    ~f:(fun (expr, uacc) (var, (target : Named.t)) ->
+      create_let uacc var target expr)
+
+let bind_parameters_to_args uacc ~params ~args ~body ~free_names_of_body =
+  if List.compare_lengths params args <> 0 then begin
+    Misc.fatal_errorf "Mismatching parameters and arguments: %a and %a"
+      KP.List.print params
+      Simple.List.print args
+  end;
+  let bindings =
+    ListLabels.map2 params args
+      ~f:(fun param arg ->
+        let var = Var_in_binding_pos.create (KP.var param) Name_mode.normal in
+        var, Named.create_simple arg)
+  in
+  bind uacc ~bindings ~body ~free_names_of_body
+
+let bind_let_bound ~bindings ~body =
+  ListLabels.fold_left (List.rev bindings) ~init:body
+    ~f:(fun expr (bound, defining_expr) ->
+      match (defining_expr : Reachable.t) with
+      | Invalid _ -> Expr.create_invalid ()
+      | Reachable defining_expr ->
+        match (bound : Bindable_let_bound.t) with
+        | Singleton var -> create_singleton_let var defining_expr ~body:expr
+        | Set_of_closures _ -> create_pattern_let bound defining_expr expr
+        | Symbols { bound_symbols; scoping_rule; } ->
+          begin match defining_expr with
+          | Static_consts s ->
+            create_let_symbol bound_symbols scoping_rule s expr
+          | Simple _ | Prim _ | Set_of_closures _ ->
+            Misc.fatal_errorf "Cannot bind [Symbols] to anything other than \
+                a [Static_const]:@ %a@=@ %a"
+              Bindable_let_bound.print bound
+              Named.print defining_expr
+          end)
+
 let rebuild_let bindable_let_bound ~bindings
       ~lifted_constants_from_defining_expr ~at_unit_toplevel ~body uacc
       ~after_rebuild =
+
+(* XXX Don't forget that free names from non-lifted SOCs have already been
+   put into [uacc] *)
+
+
   let no_constants_from_defining_expr =
     LCS.is_empty lifted_constants_from_defining_expr
   in
@@ -45,7 +274,7 @@ let rebuild_let bindable_let_bound ~bindings
           ~outermost:lifted_constants_from_defining_expr
         |> UA.with_lifted_constants uacc
     in
-    let body = Simplify_common.bind_let_bound ~bindings ~body in
+    let body = bind_let_bound ~bindings ~body in
     after_rebuild body uacc
   else
     let scoping_rule =
@@ -67,8 +296,7 @@ let rebuild_let bindable_let_bound ~bindings
         scoping_rule
         ~lifted_constants_from_defining_expr
         ~lifted_constants_from_body
-        ~put_bindings_around_body:(fun ~body ->
-          Simplify_common.bind_let_bound ~bindings ~body)
+        ~put_bindings_around_body:(fun ~body -> bind_let_bound ~bindings ~body)
         ~body
         ~critical_deps_of_bindings
     in

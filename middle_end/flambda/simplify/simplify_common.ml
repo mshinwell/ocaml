@@ -134,12 +134,12 @@ let add_wrapper_for_fixed_arity_continuation0 uacc cont_or_apply_cont
        expressions to be inserted, so wrappers cannot always be avoided. *)
     let params = List.map (fun _kind -> Variable.create "param") arity in
     let kinded_params = List.map2 KP.create params arity in
-    let new_wrapper expr =
+    let new_wrapper expr ~free_names =
       let new_cont = Continuation.create () in
       let new_handler =
         let params_and_handler =
           Continuation_params_and_handler.create kinded_params ~handler:expr
-            ~free_names_of_handler:(Known (Expr.free_names expr))
+            ~free_names_of_handler:free_names
         in
         Continuation_handler.create ~params_and_handler
           ~stub:false
@@ -154,14 +154,16 @@ let add_wrapper_for_fixed_arity_continuation0 uacc cont_or_apply_cont
       let args = List.map KP.simple kinded_params in
       let apply_cont = Apply_cont.create cont ~args ~dbg:Debuginfo.none in
       begin match Apply_cont_rewrite.rewrite_use rewrite use_id apply_cont with
-      | Apply_cont apply_cont -> new_wrapper (Expr.create_apply_cont apply_cont)
-      | Expr expr -> new_wrapper expr
+      | Apply_cont apply_cont ->
+        new_wrapper (Expr.create_apply_cont apply_cont)
+          ~free_names:(Apply_cont.free_names apply_cont)
+      | Expr (expr, free_names) -> new_wrapper expr ~free_names
       end
     | Apply_cont apply_cont ->
       let apply_cont = Apply_cont.update_continuation apply_cont cont in
       match Apply_cont_rewrite.rewrite_use rewrite use_id apply_cont with
       | Apply_cont apply_cont -> Apply_cont apply_cont
-      | Expr expr -> new_wrapper expr
+      | Expr (expr, free_names) -> new_wrapper expr ~free_names
 
 type add_wrapper_for_switch_arm_result =
   | Apply_cont of Flambda.Apply_cont.t
@@ -219,39 +221,14 @@ let update_exn_continuation_extra_args uacc ~exn_cont_use_id apply =
       (Apply_cont_rewrite.rewrite_exn_continuation rewrite exn_cont_use_id
         (Apply.exn_continuation apply))
 
-(* CR mshinwell: Should probably move [Reachable] into the [Flambda] recursive
-   loop and then move this into [Expr].  Maybe this could be tidied up a bit
-   too? *)
-let bind_let_bound ~bindings ~body =
-  List.fold_left
-    (fun expr
-         ((bound : Bindable_let_bound.t), (defining_expr : Reachable.t)) ->
-      match defining_expr with
-      | Invalid _ -> Expr.create_invalid ()
-      | Reachable defining_expr ->
-        match bound with
-        | Singleton var -> Expr.bind ~bindings:[var, defining_expr] ~body:expr
-        | Set_of_closures _ -> Expr.create_pattern_let bound defining_expr expr
-        | Symbols { bound_symbols; scoping_rule; } ->
-          begin match defining_expr with
-          | Static_consts s ->
-            Expr.create_let_symbol bound_symbols scoping_rule s expr
-          | Simple _ | Prim _ | Set_of_closures _ ->
-            Misc.fatal_errorf "Cannot bind [Symbols] to anything other than \
-                a [Static_const]:@ %a@=@ %a"
-              Bindable_let_bound.print bound
-              Named.print defining_expr
-          end
-    )
-    body
-    (List.rev bindings)
+(* XXX Don't forget that this code needs to adjust uacc for occurrences *)
 
 let create_let_symbol0 uacc code_age_relation (bound_symbols : Bound_symbols.t)
       static_consts body =
 (*
   Format.eprintf "create_let_symbol %a\n%!" Bound_symbols.print bound_symbols;
 *)
-  let free_names_after = Expr.free_names body in
+  let free_names_after =  XXX Expr.free_names body in
   let bound_names_unused =
     let being_defined =
       Bound_symbols.everything_being_defined bound_symbols
@@ -345,7 +322,8 @@ let remove_unused_closure_vars uacc (static_const : Static_const.t)
     let closure_elements =
       Set_of_closures.closure_elements set_of_closures
       |> Var_within_closure.Map.filter (fun closure_var _ ->
-        Var_within_closure.Set.mem closure_var (UA.used_closure_vars uacc))
+        Name_occurrences.mem_closure_var (UA.name_occurrences uacc)
+          closure_var)
     in
     let set_of_closures =
       Set_of_closures.create (Set_of_closures.function_decls set_of_closures)

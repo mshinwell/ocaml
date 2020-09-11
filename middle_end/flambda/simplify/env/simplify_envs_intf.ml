@@ -249,12 +249,14 @@ module type Upwards_env = sig
     -> alias_for:Continuation.t
     -> t
 
-  val add_continuation_to_inline
+  val add_linearly_used_inlinable_continuation
      : t
     -> Continuation.t
     -> Scope.t
-    -> Flambda_arity.With_subkinds.t
-    -> Continuation_handler.t
+    -> Flambda_arity.With_subkinds.t  (* CR mshinwell: redundant *)
+    -> params:Kinded_parameter.t list
+    -> handler:Flambda.Expr.t
+    -> free_names_of_handler:Name_occurrences.t
     -> t
 
   val add_exn_continuation

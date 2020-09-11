@@ -29,24 +29,24 @@ type t = {
   code_age_relation : Code_age_relation.t;
   lifted_constants : LCS.t;
   all_code : Exported_code.t;
-  used_closure_vars : Var_within_closure.Set.t;
+  name_occurrences : Name_occurrences.t;
   shareable_constants : Symbol.t Static_const.Map.t;
 }
 
 let print ppf
       { uenv; creation_dacc = _; code_age_relation; lifted_constants;
-        used_closure_vars; all_code = _; shareable_constants; } =
+        name_occurrences; all_code = _; shareable_constants; } =
   Format.fprintf ppf "@[<hov 1>(\
       @[<hov 1>(uenv@ %a)@]@ \
       @[<hov 1>(code_age_relation@ %a)@]@ \
       @[<hov 1>(lifted_constants@ %a)@]@ \
-      @[<hov 1>(used_closure_vars@ %a)@]@ \
+      @[<hov 1>(name_occurrences@ %a)@]@ \
       @[<hov 1>(shareable_constants@ %a)@]\
       )@]"
     UE.print uenv
     Code_age_relation.print code_age_relation
     LCS.print lifted_constants
-    Var_within_closure.Set.print used_closure_vars
+    Name_occurrences.print name_occurrences
     (Static_const.Map.print Symbol.print) shareable_constants
 
 let create uenv dacc =
@@ -55,7 +55,7 @@ let create uenv dacc =
     code_age_relation = TE.code_age_relation (DA.typing_env dacc);
     lifted_constants = LCS.empty;
     all_code = Exported_code.empty;
-    used_closure_vars = DA.used_closure_vars dacc;
+    name_occurrences = DA.name_occurrences dacc;
     shareable_constants = DA.shareable_constants dacc;
   }
 
@@ -94,6 +94,24 @@ let remember_code_for_cmx t code =
 
 let all_code t = t.all_code
 
-let used_closure_vars t = t.used_closure_vars
+let name_occurrences t = t.name_occurrences
+
+let with_name_occurrences t ~name_occurrences =
+  { t with name_occurrences; }
+
+let clear_name_occurrences t =
+  with_name_occurrences t ~name_occurrences:Name_occurrences.empty
+
+let add_free_names t free_names =
+  let name_occurrences =
+    Name_occurrences.union t.name_occurrences free_names
+  in
+  { t with name_occurrences; }
 
 let shareable_constants t = t.shareable_constants
+
+let remove_all_occurrences_of_free_names t to_remove =
+  let name_occurrences =
+    Name_occurrences.diff t.name_occurrences to_remove
+  in
+  { t with name_occurrences; }

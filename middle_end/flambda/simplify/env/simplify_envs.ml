@@ -704,8 +704,10 @@ end = struct
       continuation_aliases;
     }
 
-  let add_continuation_to_inline t cont scope arity handler =
-    add_continuation0 t cont scope (Inline { arity; handler; })
+  let add_continuation_to_inline t cont scope arity handler
+        ~free_names_of_handler =
+    add_continuation0 t cont scope
+      (Inline { arity; handler; free_names_of_handler; })
 
   let add_exn_continuation t exn_cont scope =
     (* CR mshinwell: Think more about keeping these in both maps *)

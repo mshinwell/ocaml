@@ -131,6 +131,8 @@ val mem_name : t -> Name.t -> bool
 
 val mem_code_id : t -> Code_id.t -> bool
 
+val mem_closure_var : t -> Var_within_closure.t -> bool
+
 val remove_var : t -> Variable.t -> t
 
 val remove_continuation : t -> Continuation.t -> t

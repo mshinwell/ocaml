@@ -17,26 +17,32 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 type t =
-  | Unknown of {
+  | Linearly_used_and_inlinable of {
+      arity : Flambda_arity.With_subkinds.t;
+      params : Kinded_parameter.t list;
+      handler : Flambda.Expr.t;
+      free_names_of_handler : Name_occurrences.t;
+    }
+  | Other of {
       arity : Flambda_arity.With_subkinds.t;
       handler : Flambda.Continuation_handler.t option;
     }
   | Unreachable of { arity : Flambda_arity.With_subkinds.t; }
-  | Inline of {
-      arity : Flambda_arity.With_subkinds.t;
-      handler : Flambda.Continuation_handler.t;
-    }
 
 (* CR mshinwell: Write a proper printer *)
 let print ppf t =
   match t with
-  | Unknown { arity = _; handler = _; } -> Format.pp_print_string ppf "Unknown"
+  | Linearly_used_and_inlinable { arity = _; params = _; handler = _;
+      free_names_of_handler = _; } ->
+    Format.pp_print_string ppf "Linearly_used_and_inlinable _"
+  | Other { arity = _; handler = _; } ->
+    Format.pp_print_string ppf "Other"
   | Unreachable { arity = _; } -> Format.pp_print_string ppf "Unreachable"
-  | Inline { arity = _; handler = _; } ->
-    Format.pp_print_string ppf "Inline _"
 
 let arity t =
   match t with
-  | Unknown { arity; handler = _; }
-  | Unreachable { arity; }
-  | Inline { arity; handler = _; } -> arity
+  | Linearly_used_and_inlinable { arity; params = _; handler = _;
+      free_names_of_handler = _; }
+  | Other { arity; handler = _; }
+  | Unreachable { arity; } ->
+    arity

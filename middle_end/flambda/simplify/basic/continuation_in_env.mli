@@ -17,15 +17,22 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 type t =
-  | Unknown of {
+  | Linearly_used_and_inlinable of {
+      arity : Flambda_arity.With_subkinds.t;
+      (** To avoid re-opening name abstractions, we store the opened
+          parameters and handler here.  This is only correct because the
+          inlining we perform is linear. *)
+      params : Kinded_parameter.t list;
+      handler : Flambda.Expr.t;
+      (** [free_names_of_handler] includes entries for any occurrences of the
+          [params] in the [handler]. *)
+      free_names_of_handler : Name_occurrences.t;
+    }
+  | Other of {
       arity : Flambda_arity.With_subkinds.t;
       handler : Flambda.Continuation_handler.t option;
     }
   | Unreachable of { arity : Flambda_arity.With_subkinds.t; }
-  | Inline of {
-      arity : Flambda_arity.With_subkinds.t;
-      handler : Flambda.Continuation_handler.t;
-    }
 
 val print : Format.formatter -> t -> unit
 

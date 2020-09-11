@@ -75,6 +75,7 @@ let rebuild_non_inlined_direct_full_application apply ~use_id ~exn_cont_use_id
       Simplify_common.add_wrapper_for_fixed_arity_apply uacc ~use_id
         result_arity apply
   in
+  let uacc = UA.add_free_names uacc (Expr.free_names expr) in
   after_rebuild expr uacc
 
 let simplify_direct_full_application dacc apply function_decl_opt
@@ -394,6 +395,7 @@ let rebuild_function_call_where_callee's_type_unavailable apply call_kind
     Simplify_common.add_wrapper_for_fixed_arity_apply uacc ~use_id
       (Call_kind.return_arity call_kind) apply
   in
+  let uacc = UA.add_free_names uacc (Expr.free_names expr) in
   after_rebuild expr uacc
 
 let simplify_function_call_where_callee's_type_unavailable dacc apply
@@ -623,6 +625,7 @@ let rebuild_method_call apply ~use_id ~exn_cont_use_id uacc ~after_rebuild =
     Simplify_common.add_wrapper_for_fixed_arity_apply uacc ~use_id
       (Flambda_arity.With_subkinds.create [K.With_subkind.any_value]) apply
   in
+  let uacc = UA.add_free_names uacc (Expr.free_names expr) in
   after_rebuild expr uacc
 
 let simplify_method_call dacc apply ~callee_ty ~kind:_ ~obj ~arg_types
@@ -682,6 +685,7 @@ let rebuild_c_call apply ~use_id ~exn_cont_use_id ~return_arity uacc
     | None ->
       Expr.create_apply apply
   in
+  let uacc = UA.add_free_names uacc (Expr.free_names expr) in
   after_rebuild expr uacc
 
 let simplify_c_call dacc apply ~callee_ty ~param_arity ~return_arity
