@@ -24,4 +24,5 @@ module Expert : sig
   val code_id_and_symbol_scoping_checks : unit -> bool
   val fallback_inlining_heuristic : unit -> bool
   val inline_effects_in_cmm : unit -> bool
+  val max_block_size_for_projections : unit -> int option
 end

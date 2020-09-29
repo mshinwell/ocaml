@@ -437,6 +437,7 @@ module Flambda = struct
     let inline_effects_in_cmm = ref false
     let phantom_lets = ref true
     let max_inlining_depth = ref 1
+    let max_block_size_for_projections = ref None
   end
 
   module Debug = struct

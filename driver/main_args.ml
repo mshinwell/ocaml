@@ -984,6 +984,12 @@ let mk_flambda_expert_max_inlining_depth f =
   " Set maximum inlining depth"
 ;;
 
+let mk_flambda_expert_max_block_size_for_projections f =
+  "-flambda-expert-max-block-size-for-projections", Arg.Int f,
+  " Do not simplify projections from blocks if the block size exceeds \
+    this value"
+;;
+
 let mk_flambda_debug_concrete_types_only_on_canonicals f =
   "-flambda-debug-concrete-types-only-on-canonicals", Arg.Unit f,
     " Check that concrete types are only assigned to canonical names"
@@ -1230,6 +1236,7 @@ module type Optcommon_options = sig
   val _flambda_expert_phantom_lets : unit -> unit
   val _no_flambda_expert_phantom_lets : unit -> unit
   val _flambda_expert_max_inlining_depth : int -> unit
+  val _flambda_expert_max_block_size_for_projections : int -> unit
   val _flambda_debug_concrete_types_only_on_canonicals : unit -> unit
   val _no_flambda_debug_concrete_types_only_on_canonicals : unit -> unit
 
@@ -1592,6 +1599,8 @@ struct
       F._no_flambda_expert_phantom_lets;
     mk_flambda_expert_max_inlining_depth
       F._flambda_expert_max_inlining_depth;
+    mk_flambda_expert_max_block_size_for_projections
+      F._flambda_expert_max_block_size_for_projections;
     mk_flambda_debug_concrete_types_only_on_canonicals
       F._flambda_debug_concrete_types_only_on_canonicals;
     mk_no_flambda_debug_concrete_types_only_on_canonicals
@@ -1751,6 +1760,8 @@ module Make_opttop_options (F : Opttop_options) = struct
       F._no_flambda_expert_phantom_lets;
     mk_flambda_expert_max_inlining_depth
       F._flambda_expert_max_inlining_depth;
+    mk_flambda_expert_max_block_size_for_projections
+      F._flambda_expert_max_block_size_for_projections;
     mk_flambda_debug_concrete_types_only_on_canonicals
       F._flambda_debug_concrete_types_only_on_canonicals;
     mk_no_flambda_debug_concrete_types_only_on_canonicals
@@ -2059,7 +2070,8 @@ module Default = struct
       clear Flambda.Expert.phantom_lets
     let _flambda_expert_max_inlining_depth depth =
       Flambda.Expert.max_inlining_depth := depth
-
+    let _flambda_expert_max_block_size_for_projections size =
+      Flambda.Expert.max_block_size_for_projections := Some size
     let _flambda_debug_concrete_types_only_on_canonicals =
       set Flambda.Debug.concrete_types_only_on_canonicals
     let _no_flambda_debug_concrete_types_only_on_canonicals =

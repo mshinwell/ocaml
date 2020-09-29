@@ -853,32 +853,48 @@ let simplify_immutable_block_load (access_kind : P.Block_access_kind.t)
   | Invalid -> invalid ()
   | Unknown -> unchanged ()
   | Proved index ->
-    let n =
-      Targetint.OCaml.add (Target_imm.to_targetint index) Targetint.OCaml.one
+    let skip_simplification =
+      let size =
+        match access_kind with
+        | Values { size; _ } | Naked_floats { size; } -> size
+      in
+      match size with
+      | Unknown -> false
+      | Known size ->
+        match Flambda_features.Expert.max_block_size_for_projections () with
+        | None -> false
+        | Some max_size ->
+          let max_size = Targetint.OCaml.of_int max_size in
+          not (Targetint.OCaml.(<=) size max_size)
     in
-    (* CR mshinwell: We should be able to use the size in the [access_kind]
-       to constrain the type of the block *)
-    let tag : _ Or_unknown.t =
-      match access_kind with
-      | Values { tag; _ } -> Known (Tag.Scannable.to_tag tag)
-      | Naked_floats { size; } ->
-        match size with
-        | Known size ->
-          (* We don't expect blocks of naked floats of size zero (it doesn't
-             seem that the frontend currently emits code to create such blocks)
-             and so it isn't clear whether such blocks should have tag zero
-             (like zero-sized naked float arrays) or another tag. *)
-          if Targetint.OCaml.equal size Targetint.OCaml.zero then
-            Unknown
-          else
-            Known Tag.double_array_tag
-        | Unknown -> Unknown
-    in
-    Simplify_common.simplify_projection
-      dacc ~original_term ~deconstructing:block_ty
-      ~shape:(T.immutable_block_with_size_at_least ~tag ~n
-        ~field_kind:result_kind ~field_n_minus_one:result_var')
-      ~result_var ~result_kind
+    if skip_simplification then unchanged ()
+    else
+      let n =
+        Targetint.OCaml.add (Target_imm.to_targetint index) Targetint.OCaml.one
+      in
+      (* CR mshinwell: We should be able to use the size in the [access_kind]
+         to constrain the type of the block *)
+      let tag : _ Or_unknown.t =
+        match access_kind with
+        | Values { tag; _ } -> Known (Tag.Scannable.to_tag tag)
+        | Naked_floats { size; } ->
+          match size with
+          | Known size ->
+            (* We don't expect blocks of naked floats of size zero (it doesn't
+               seem that the frontend currently emits code to create such
+               blocks) and so it isn't clear whether such blocks should have
+               tag zero (like zero-sized naked float arrays) or another tag. *)
+            if Targetint.OCaml.equal size Targetint.OCaml.zero then
+              Unknown
+            else
+              Known Tag.double_array_tag
+          | Unknown -> Unknown
+      in
+      Simplify_common.simplify_projection
+        dacc ~original_term ~deconstructing:block_ty
+        ~shape:(T.immutable_block_with_size_at_least ~tag ~n
+          ~field_kind:result_kind ~field_n_minus_one:result_var')
+        ~result_var ~result_kind
 
 let simplify_phys_equal (op : P.equality_comparison)
       (kind : K.t) dacc ~original_term dbg

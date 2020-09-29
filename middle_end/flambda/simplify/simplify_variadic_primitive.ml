@@ -138,11 +138,9 @@ let simplify_variadic_primitive dacc ~original_named ~original_prim
             Named.create_prim (Variadic (prim, args)) dbg
           | Unchanged -> original_named
         in
-        let kind = P.result_kind_of_variadic_primitive' prim in
         let ty =
           match prim with
-          | Make_block _ ->
-            T.unknown kind
+          | Make_block _ -> T.any_block ()
           | Make_array _ ->
             let length =
               match Targetint.OCaml.of_int_option (List.length args) with

@@ -28,4 +28,6 @@ module Expert = struct
     !Clflags.Flambda.Expert.fallback_inlining_heuristic
   let inline_effects_in_cmm () =
     !Clflags.Flambda.Expert.inline_effects_in_cmm
+  let max_block_size_for_projections () =
+    !Clflags.Flambda.Expert.max_block_size_for_projections
 end
