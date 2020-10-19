@@ -20,7 +20,6 @@ val backend_cse_at_toplevel : unit -> bool
 val cse_depth : unit -> int
 
 module Expert : sig
-  val denest_at_toplevel : unit -> bool
   val code_id_and_symbol_scoping_checks : unit -> bool
   val fallback_inlining_heuristic : unit -> bool
   val inline_effects_in_cmm : unit -> bool

@@ -233,8 +233,6 @@ module type Optcommon_options = sig
   val _flambda_backend_cse_at_toplevel : unit -> unit
   val _no_flambda_backend_cse_at_toplevel : unit -> unit
   val _flambda_cse_depth : int -> unit
-  val _flambda_expert_denest_at_toplevel : unit -> unit
-  val _no_flambda_expert_denest_at_toplevel : unit -> unit
   val _flambda_expert_code_id_and_symbol_scoping_checks : unit -> unit
   val _no_flambda_expert_code_id_and_symbol_scoping_checks : unit -> unit
   val _flambda_expert_fallback_inlining_heuristic : unit -> unit

@@ -938,16 +938,6 @@ let mk_flambda_cse_depth f =
     " Depth threshold for eager tracking of CSE equations (default 2)"
 ;;
 
-let mk_flambda_expert_denest_at_toplevel f =
-  "-flambda-expert-denest-at-toplevel", Arg.Unit f,
-    " Denest continuations during Closure_conversion even at toplevel"
-;;
-
-let mk_no_flambda_expert_denest_at_toplevel f =
-  "-no-flambda-expert-denest-at-toplevel", Arg.Unit f,
-    " Never denest continuations during Closure_conversion at toplevel"
-;;
-
 let mk_flambda_expert_code_id_and_symbol_scoping_checks f =
   "-flambda-expert-code-id-and-symbol-scoping-checks", Arg.Unit f,
     " Perform checks on static scopes of code IDs and symbols during Un_cps"
@@ -1237,8 +1227,6 @@ module type Optcommon_options = sig
   val _flambda_backend_cse_at_toplevel : unit -> unit
   val _no_flambda_backend_cse_at_toplevel : unit -> unit
   val _flambda_cse_depth : int -> unit
-  val _flambda_expert_denest_at_toplevel : unit -> unit
-  val _no_flambda_expert_denest_at_toplevel : unit -> unit
   val _flambda_expert_code_id_and_symbol_scoping_checks : unit -> unit
   val _no_flambda_expert_code_id_and_symbol_scoping_checks : unit -> unit
   val _flambda_expert_fallback_inlining_heuristic : unit -> unit
@@ -1593,10 +1581,6 @@ struct
     mk_no_flambda_backend_cse_at_toplevel
       F._no_flambda_backend_cse_at_toplevel;
     mk_flambda_cse_depth F._flambda_cse_depth;
-    mk_flambda_expert_denest_at_toplevel
-      F._flambda_expert_denest_at_toplevel;
-    mk_no_flambda_expert_denest_at_toplevel
-      F._no_flambda_expert_denest_at_toplevel;
     mk_flambda_expert_code_id_and_symbol_scoping_checks
       F._flambda_expert_code_id_and_symbol_scoping_checks;
     mk_no_flambda_expert_code_id_and_symbol_scoping_checks
@@ -1756,10 +1740,6 @@ module Make_opttop_options (F : Opttop_options) = struct
     mk_no_flambda_backend_cse_at_toplevel
       F._no_flambda_backend_cse_at_toplevel;
     mk_flambda_cse_depth F._flambda_cse_depth;
-    mk_flambda_expert_denest_at_toplevel
-      F._flambda_expert_denest_at_toplevel;
-    mk_no_flambda_expert_denest_at_toplevel
-      F._no_flambda_expert_denest_at_toplevel;
     mk_flambda_expert_code_id_and_symbol_scoping_checks
       F._flambda_expert_code_id_and_symbol_scoping_checks;
     mk_no_flambda_expert_code_id_and_symbol_scoping_checks
@@ -2068,10 +2048,6 @@ module Default = struct
     let _no_flambda_backend_cse_at_toplevel =
       clear Flambda.backend_cse_at_toplevel
     let _flambda_cse_depth n = Flambda.cse_depth := n
-    let _flambda_expert_denest_at_toplevel =
-      set Flambda.Expert.denest_at_toplevel
-    let _no_flambda_expert_denest_at_toplevel =
-      clear Flambda.Expert.denest_at_toplevel
     let _flambda_expert_code_id_and_symbol_scoping_checks =
       set Flambda.Expert.code_id_and_symbol_scoping_checks
     let _no_flambda_expert_code_id_and_symbol_scoping_checks =

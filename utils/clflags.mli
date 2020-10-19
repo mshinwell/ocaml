@@ -252,7 +252,6 @@ module Flambda : sig
   val cse_depth : int ref
 
   module Expert : sig
-    val denest_at_toplevel : bool ref
     val code_id_and_symbol_scoping_checks : bool ref
     val fallback_inlining_heuristic : bool ref
     val inline_effects_in_cmm : bool ref

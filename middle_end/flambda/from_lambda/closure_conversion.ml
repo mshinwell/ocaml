@@ -41,56 +41,6 @@ type t = {
   mutable code : (Code_id.t * Code.t) list;
 }
 
-(* To avoid excessive nesting of continuations, we lift [Let_cont] expressions
-   higher, dropping them when one of their free names is about to go out of
-   scope. *)
-
-module Handler_SCC = Strongly_connected_components.Make (Continuation)
-
-let drop_handlers0 handlers ~around:body =
-  (* When dropping some number of handlers after a binding, we need to get
-     them in the correct order, as there may be dependencies between them.
-     The dependencies can only be on continuations. *)
-  let top_sorted =
-    let graph =
-      Continuation.Map.map (fun (_handler, free_names_of_handler) ->
-          free_names_of_handler
-          |> Name_occurrences.continuations)
-        handlers
-    in
-    Handler_SCC.connected_components_sorted_from_roots_to_leaf graph
-  in
-  Array.fold_left (fun body (component : Handler_SCC.component) ->
-      match component with
-      | No_loop cont ->
-        let handler, _ = Continuation.Map.find cont handlers in
-        Let_cont.create_non_recursive cont handler ~body
-      | Has_loop conts ->
-        let handlers =
-          conts
-          |> List.map (fun cont ->
-               cont, fst (Continuation.Map.find cont handlers))
-          |> Continuation.Map.of_list
-        in
-        Let_cont.create_recursive handlers ~body)
-    body
-    top_sorted
-
-let drop_handlers handlers ~leaving_scope_of ~around:body =
-  let to_drop =
-    (* If a free variable or continuation is about to go out of scope and
-       a continuation [k] depends on such variable or continuation, then the
-       continuation [k] must be dropped just after the corresponding binding,
-       together with any other continuations which have [k] free in them. *)
-    Delayed_handlers.find_rev_deps handlers leaving_scope_of
-  in
-  let body = drop_handlers0 to_drop ~around:body in
-  let handlers = Delayed_handlers.remove_domain_of_map handlers to_drop in
-  body, handlers
-
-let drop_all_handlers handlers ~around =
-  drop_handlers0 (Delayed_handlers.all handlers) ~around
-
 let symbol_for_ident t id =
   let symbol = t.symbol_for_global' id in
   t.imported_symbols <- Symbol.Set.add symbol t.imported_symbols;
@@ -209,14 +159,14 @@ let find_simples t env ids =
 
 let close_c_call t ~let_bound_var (prim : Primitive.description)
       ~(args : Simple.t list) exn_continuation dbg
-      (k : Named.t option -> Expr.t * _) : Expr.t * _ =
+      (k : Named.t option -> Expr.t) : Expr.t =
   (* XCR pchambart: there should be a special case if body is a
      apply_cont
      mshinwell: done. *)
   (* We always replace the original Ilambda [Let] with an Flambda
      expression, so we call [k] with [None], to get just the closure-converted
      body of that [Let]. *)
-  let body, delayed_handlers = k None in
+  let body = k None in
   let return_continuation, needs_wrapper =
     match Expr.descr body with
     | Apply_cont apply_cont
@@ -312,26 +262,23 @@ let close_c_call t ~let_bound_var (prim : Primitive.description)
       in
       body, handler_param, true
   in
-  let call =
-    if not needs_wrapper then call
-    else
-      let after_call =
-        let return_kind =
-          Flambda_kind.With_subkind.create return_kind Anything
-        in
-        let params = [Kinded_parameter.create handler_param return_kind] in
-        let params_and_handler =
-          Continuation_params_and_handler.create params
-            ~handler:code_after_call
-        in
-        Continuation_handler.create ~params_and_handler
-          ~stub:false
-          ~is_exn_handler:false
+  if not needs_wrapper then call
+  else
+    let after_call =
+      let return_kind =
+        Flambda_kind.With_subkind.create return_kind Anything
       in
-      Let_cont.create_non_recursive return_continuation after_call
-        ~body:call
-  in
-  call, delayed_handlers
+      let params = [Kinded_parameter.create handler_param return_kind] in
+      let params_and_handler =
+        Continuation_params_and_handler.create params
+          ~handler:code_after_call
+      in
+      Continuation_handler.create ~params_and_handler
+        ~stub:false
+        ~is_exn_handler:false
+    in
+    Let_cont.create_non_recursive return_continuation after_call
+      ~body:call
 
 let close_exn_continuation t env (exn_continuation : Ilambda.exn_continuation) =
   let extra_args =
@@ -344,7 +291,7 @@ let close_exn_continuation t env (exn_continuation : Ilambda.exn_continuation) =
 
 let close_primitive t env ~let_bound_var named (prim : Lambda.primitive) ~args
       loc (exn_continuation : Ilambda.exn_continuation option)
-      (k : Named.t option -> Expr.t * _) : Expr.t * _ =
+      (k : Named.t option -> Expr.t) : Expr.t =
   let exn_continuation =
     match exn_continuation with
     | None -> None
@@ -394,7 +341,7 @@ let close_primitive t env ~let_bound_var named (prim : Lambda.primitive) ~args
       Apply_cont.create ~trap_action exn_handler ~args ~dbg
     in
     (* Since raising of an exception doesn't terminate, we don't call [k]. *)
-    Expr.create_apply_cont apply_cont, Delayed_handlers.empty
+    Expr.create_apply_cont apply_cont
   | prim, args ->
     Lambda_to_flambda_primitives.convert_and_bind exn_continuation
       ~backend:t.backend
@@ -409,7 +356,7 @@ let close_trap_action_opt trap_action =
         Pop { exn_handler; raise_kind = None; })
     trap_action
 
-let rec close t env (ilam : Ilambda.t) : Expr.t * _ =
+let rec close t env (ilam : Ilambda.t) : Expr.t =
   match ilam with
   | Let (id, user_visible, _kind, defining_expr, body) ->
     (* CR mshinwell: Remove [kind] on the Ilambda terms? *)
@@ -422,18 +369,12 @@ let rec close t env (ilam : Ilambda.t) : Expr.t * _ =
         | Some _ | None -> body_env
       in
       (* CR pchambart: Not tail ! *)
-      let body, handlers = close t body_env body in
-      let body, handlers =
-        let leaving_scope_of =
-          Name_occurrences.singleton_variable var Name_mode.normal
-        in
-        drop_handlers handlers ~leaving_scope_of ~around:body
-      in
+      let body = close t body_env body in
       match defining_expr with
-      | None -> body, handlers
+      | None -> body
       | Some defining_expr ->
         let var = VB.create var Name_mode.normal in
-        Expr.create_let var defining_expr body, handlers
+        Expr.create_let var defining_expr body
     in
     close_named t env ~let_bound_var:var defining_expr cont
   | Let_mutable _ ->
@@ -462,50 +403,7 @@ let rec close t env (ilam : Ilambda.t) : Expr.t * _ =
         params
         params_with_kinds
     in
-    let body, delayed_handlers_body = close t env body in
-    (* If we are still at toplevel, don't un-nest handlers, otherwise we
-       may produce situations where reification of continuation parameters'
-       types (yielding new "let symbol" bindings) cause code IDs or symbols to
-       go out of syntactic scope (but not out of dominator scope). *)
-    let still_at_toplevel =
-      (* Same calculation as in [Simplify_expr]. *)
-      Env.still_at_toplevel env
-        && not (Flambda_features.Expert.denest_at_toplevel ())
-        && (not is_exn_handler)
-        && Continuation.Set.subset
-              (Name_occurrences.continuations (Expr.free_names body))
-              (Continuation.Set.of_list [name; t.ilambda_exn_continuation])
-    in
-    let body, delayed_handlers_body =
-      if still_at_toplevel then
-        drop_all_handlers delayed_handlers_body ~around:body,
-          Delayed_handlers.empty
-      else
-        let leaving_scope_of =
-          Name_occurrences.singleton_continuation name
-        in
-        drop_handlers delayed_handlers_body ~leaving_scope_of ~around:body
-    in
-    let handler_env =
-      if still_at_toplevel then handler_env
-      else Env.no_longer_at_toplevel handler_env
-    in
-    let handler, delayed_handlers_handler = close t handler_env handler in
-    let handler, delayed_handlers_handler =
-      if still_at_toplevel then
-        drop_all_handlers delayed_handlers_handler ~around:handler,
-          Delayed_handlers.empty
-      else
-        let leaving_scope_of =
-          Name_occurrences.add_continuation_in_trap_action
-            (Name_occurrences.add_continuation
-              (Kinded_parameter.List.free_names params)
-              name)
-            name
-        in
-        drop_handlers delayed_handlers_handler ~leaving_scope_of
-          ~around:handler
-    in
+    let handler = close t handler_env handler in
     let params_and_handler =
       Continuation_params_and_handler.create params ~handler
     in
@@ -514,16 +412,14 @@ let rec close t env (ilam : Ilambda.t) : Expr.t * _ =
         ~stub:false
         ~is_exn_handler:is_exn_handler
     in
-    let delayed_handlers =
-      Delayed_handlers.union delayed_handlers_handler delayed_handlers_body
-    in
-    let delayed_handlers =
-      Delayed_handlers.add_handler delayed_handlers name handler
-    in
-    if still_at_toplevel then
-      drop_all_handlers delayed_handlers ~around:body, Delayed_handlers.empty
-    else
-      body, delayed_handlers
+    let body = close t env body in
+    begin match recursive with
+    | Nonrecursive ->
+      Flambda.Let_cont.create_non_recursive name handler ~body
+    | Recursive ->
+      let handlers = Continuation.Map.singleton name handler in
+      Flambda.Let_cont.create_recursive handlers ~body
+    end
   | Apply { kind; func; args; continuation; exn_continuation;
       loc; should_be_tailcall = _; inlined; specialised = _; } ->
     let call_kind =
@@ -544,14 +440,14 @@ let rec close t env (ilam : Ilambda.t) : Expr.t * _ =
         ~inline:(LC.inline_attribute inlined)
         ~inlining_depth:0
     in
-    Expr.create_apply apply, Delayed_handlers.empty
+    Expr.create_apply apply
   | Apply_cont (cont, trap_action, args) ->
     let args = find_simples t env args in
     let trap_action = close_trap_action_opt trap_action in
     let apply_cont =
       Apply_cont.create ?trap_action cont ~args ~dbg:Debuginfo.none
     in
-    Expr.create_apply_cont apply_cont, Delayed_handlers.empty
+    Expr.create_apply_cont apply_cont
   | Switch (scrutinee, sw) ->
     let scrutinee = Simple.name (Env.find_name env scrutinee) in
     let untagged_scrutinee = Variable.create "untagged" in
@@ -602,8 +498,7 @@ let rec close t env (ilam : Ilambda.t) : Expr.t * _ =
         Expr.create_switch ~scrutinee:(Simple.var comparison_result) ~arms
       in
       Expr.create_let untagged_scrutinee' untag
-        (Expr.create_let comparison_result' compare switch),
-      Delayed_handlers.empty
+        (Expr.create_let comparison_result' compare switch)
     | _, _ ->
       let arms =
         match sw.failaction with
@@ -624,14 +519,13 @@ let rec close t env (ilam : Ilambda.t) : Expr.t * _ =
             (Target_imm.Map.of_list arms)
       in
       if Target_imm.Map.is_empty arms then
-        Expr.create_invalid (), Delayed_handlers.empty
+        Expr.create_invalid ()
       else
         Expr.create_let untagged_scrutinee' untag
-          (Expr.create_switch ~scrutinee:(Simple.var untagged_scrutinee) ~arms),
-        Delayed_handlers.empty
+          (Expr.create_switch ~scrutinee:(Simple.var untagged_scrutinee) ~arms)
 
 and close_named t env ~let_bound_var (named : Ilambda.named)
-      (k : Named.t option -> Expr.t * _) : Expr.t * _ =
+      (k : Named.t option -> Expr.t) : Expr.t =
   match named with
   | Simple (Var id) ->
     let simple =
@@ -720,22 +614,11 @@ and close_let_rec t env ~defs ~body =
           Set_of_closures.function_decls set_of_closures)
         |> Closure_id.Lmap.bindings)
   in
-  let body, handlers = close t env body in
-  let leaving_scope_of =
-    List.map VB.var closure_vars
-    |> Variable.Set.of_list
-    |> Name_occurrences.create_variables' Name_mode.normal
-  in
-  let body, handlers =
-    drop_handlers handlers ~leaving_scope_of ~around:body
-  in
-  let expr =
-    Expr.create_pattern_let
-      (Bindable_let_bound.set_of_closures ~closure_vars)
-      (Named.create_set_of_closures set_of_closures)
-      body
-  in
-  expr, handlers
+  let body = close t env body in
+  Expr.create_pattern_let
+    (Bindable_let_bound.set_of_closures ~closure_vars)
+    (Named.create_set_of_closures set_of_closures)
+    body
 
 and close_functions t external_env function_declarations =
   let compilation_unit = Compilation_unit.get_current_exn () in
@@ -873,7 +756,7 @@ and close_one_function t ~external_env ~by_closure_id decl
         Kinded_parameter.create var (LC.value_kind kind))
       param_vars
   in
-  let body, handlers =
+  let body =
     try close t closure_env body
     with Misc.Fatal_error -> begin
       if !Clflags.flambda_context_on_error then begin
@@ -889,7 +772,6 @@ and close_one_function t ~external_env ~by_closure_id decl
       raise Misc.Fatal_error
     end
   in
-  let body = drop_all_handlers handlers ~around:body in
   let free_names_of_body = Expr.free_names body in
   let my_closure' = Simple.var my_closure in
   let body =
@@ -1057,7 +939,7 @@ let ilambda_to_flambda ~backend ~module_ident ~module_block_size_in_words
     in
     let params_and_handler =
       Continuation_params_and_handler.create [param]
-        ~handler:load_fields_body;
+        ~handler:load_fields_body
     in
     Continuation_handler.create ~params_and_handler
       ~stub:false  (* CR mshinwell: remove "stub" notion *)
@@ -1069,8 +951,7 @@ let ilambda_to_flambda ~backend ~module_ident ~module_block_size_in_words
        tuple with fields indexed from zero to [module_block_size_in_words]. The
        handler extracts the fields; the variables bound to such fields are then
        used to define the module block symbol. *)
-    let body, handlers = close t Env.empty ilam.expr in
-    let body = drop_all_handlers handlers ~around:body in
+    let body = close t Env.empty ilam.expr in
     Let_cont.create_non_recursive ilam.return_continuation
       load_fields_cont_handler
       ~body

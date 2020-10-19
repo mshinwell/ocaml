@@ -432,7 +432,6 @@ module Flambda = struct
   let cse_depth = ref 2
 
   module Expert = struct
-    let denest_at_toplevel = ref true
     let code_id_and_symbol_scoping_checks = ref false
     let fallback_inlining_heuristic = ref false
     let inline_effects_in_cmm = ref false

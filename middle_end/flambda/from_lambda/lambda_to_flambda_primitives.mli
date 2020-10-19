@@ -21,5 +21,5 @@ val convert_and_bind
   -> Lambda.primitive
   -> args:Simple.t list
   -> Debuginfo.t
-  -> (Flambda.Named.t option -> Flambda.Expr.t * Delayed_handlers.t)
-  -> Flambda.Expr.t * Delayed_handlers.t
+  -> (Flambda.Named.t option -> Flambda.Expr.t)
+  -> Flambda.Expr.t

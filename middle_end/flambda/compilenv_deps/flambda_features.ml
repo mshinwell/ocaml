@@ -21,7 +21,6 @@ let backend_cse_at_toplevel () = !Clflags.Flambda.backend_cse_at_toplevel
 let cse_depth () = !Clflags.Flambda.cse_depth
 
 module Expert = struct
-  let denest_at_toplevel () = !Clflags.Flambda.Expert.denest_at_toplevel
   let code_id_and_symbol_scoping_checks () =
     !Clflags.Flambda.Expert.code_id_and_symbol_scoping_checks
   let fallback_inlining_heuristic () =

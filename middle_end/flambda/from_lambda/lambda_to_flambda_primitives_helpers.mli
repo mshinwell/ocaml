@@ -70,5 +70,5 @@ val bind_rec
   -> register_const_string:(string -> Symbol.t)
   -> expr_primitive
   -> Debuginfo.t
-  -> (Named.t -> Expr.t * Delayed_handlers.t)
-  -> Expr.t * Delayed_handlers.t
+  -> (Named.t -> Expr.t)
+  -> Expr.t

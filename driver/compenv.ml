@@ -478,9 +478,6 @@ let read_one_param ppf position name v =
   | "flambda-backend-cse-at-toplevel" ->
     set "flambda-backend-cse-at-toplevel"
       [ Flambda.backend_cse_at_toplevel ] v
-  | "flambda-expert-denest-at-toplevel" ->
-    set "flambda-expert-denest-at-toplevel"
-      [ Flambda.Expert.denest_at_toplevel ] v
   | "flambda-expert-code-id-and-symbol-scoping-checks" ->
     set "flambda-expert-code-id-and-symbol-scoping-checks"
       [ Flambda.Expert.code_id_and_symbol_scoping_checks ] v

@@ -177,8 +177,8 @@ let rec bind_rec ~backend exn_cont
           ~register_const_string
           (prim : expr_primitive)
           (dbg : Debuginfo.t)
-          (cont : Named.t -> Expr.t * _)
-  : Expr.t * _ =
+          (cont : Named.t -> Expr.t)
+  : Expr.t =
   match prim with
   | Simple simple -> cont (Named.create_simple simple)
   | Unary (prim, arg) ->
@@ -223,20 +223,17 @@ let rec bind_rec ~backend exn_cont
     build_cont (List.rev args) []
   | Checked { validity_conditions; primitive; failure; dbg; } ->
     let primitive_cont = Continuation.create () in
-    let primitive_cont_handler, delayed_handlers =
-      let handler, delayed_handlers =
+    let primitive_cont_handler =
+      let handler =
         bind_rec ~backend exn_cont ~register_const_string
           primitive dbg cont
       in
       let params_and_handler =
         Continuation_params_and_handler.create [] ~handler
       in
-      let cont_handler =
-        Continuation_handler.create ~params_and_handler
-          ~stub:false
-          ~is_exn_handler:false
-      in
-      cont_handler, delayed_handlers
+      Continuation_handler.create ~params_and_handler
+        ~stub:false
+        ~is_exn_handler:false
     in
     let failure_cont = Continuation.create () in
     let failure_cont_handler =
@@ -251,8 +248,8 @@ let rec bind_rec ~backend exn_cont
         ~stub:false
         ~is_exn_handler:false
     in
-    let check_validity_conditions, delayed_handlers =
-      List.fold_left (fun (rest, delayed_handlers) expr_primitive ->
+    let check_validity_conditions =
+      List.fold_left (fun rest expr_primitive ->
           let condition_passed_cont = Continuation.create () in
           let condition_passed_cont_handler =
             let params_and_handler =
@@ -262,7 +259,7 @@ let rec bind_rec ~backend exn_cont
               ~stub:false
               ~is_exn_handler:false
           in
-          let body, delayed_handlers' =
+          let body =
             bind_rec_primitive ~backend exn_cont ~register_const_string
               (Prim expr_primitive) dbg
               (fun prim_result ->
@@ -273,32 +270,25 @@ let rec bind_rec ~backend exn_cont
                       Apply_cont.goto condition_passed_cont;
                     Target_imm.bool_false,
                       Apply_cont.goto failure_cont;
-                  ])), Delayed_handlers.empty)
+                  ])))
           in
-          let body =
-            Let_cont.create_non_recursive condition_passed_cont
-              condition_passed_cont_handler ~body
-          in
-          body, Delayed_handlers.union delayed_handlers' delayed_handlers)
+          Let_cont.create_non_recursive condition_passed_cont
+            condition_passed_cont_handler ~body)
         (Expr.create_apply_cont
-           (Apply_cont.create primitive_cont ~args:[] ~dbg:Debuginfo.none),
-         delayed_handlers)
+           (Apply_cont.create primitive_cont ~args:[] ~dbg:Debuginfo.none))
         validity_conditions
     in
-    let expr =
-      Let_cont.create_non_recursive primitive_cont
-        primitive_cont_handler
-        ~body:(
-          Let_cont.create_non_recursive failure_cont
-            failure_cont_handler
-            ~body:check_validity_conditions)
-    in
-    expr, delayed_handlers
+    Let_cont.create_non_recursive primitive_cont
+      primitive_cont_handler
+      ~body:(
+        Let_cont.create_non_recursive failure_cont
+          failure_cont_handler
+          ~body:check_validity_conditions)
 
 and bind_rec_primitive ~backend exn_cont ~register_const_string
       (prim : simple_or_prim)
       (dbg : Debuginfo.t)
-      (cont : Simple.t -> Expr.t * _) : Expr.t * _ =
+      (cont : Simple.t -> Expr.t) : Expr.t =
   match prim with
   | Simple s ->
     cont s
@@ -306,7 +296,6 @@ and bind_rec_primitive ~backend exn_cont ~register_const_string
     let var = Variable.create "prim" in
     let var' = VB.create var Name_mode.normal in
     let cont named =
-      let body, delayed_handlers = cont (Simple.var var) in
-      Flambda.Expr.create_let var' named body, delayed_handlers
+      Flambda.Expr.create_let var' named (cont (Simple.var var))
     in
     bind_rec ~backend exn_cont ~register_const_string p dbg cont
