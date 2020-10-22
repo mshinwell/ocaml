@@ -184,6 +184,7 @@ let simplify_static_consts dacc (bound_symbols : Bound_symbols.t)
      (which may contain recursive references to symbols and/or code IDs
      being defined). *)
   let bound_symbols, static_consts, dacc =
+    (* XXX need to collect free names here *)
     Static_const.Group.match_against_bound_symbols static_consts bound_symbols
       ~init:([], [], dacc)
       ~code:(fun (bound_symbols, static_consts, dacc) code_id code ->
@@ -233,6 +234,7 @@ let simplify_static_consts dacc (bound_symbols : Bound_symbols.t)
             (closure_symbols, set_of_closures) :: sets_of_closures)
   in
   let bound_symbols', static_consts', dacc =
+    (* XXX need to get the free names here *)
     Simplify_set_of_closures.simplify_lifted_sets_of_closures dacc
       ~all_sets_of_closures_and_symbols
       ~closure_bound_names_all_sets

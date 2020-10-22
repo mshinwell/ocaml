@@ -352,6 +352,14 @@ let create_let_symbols uacc (scoping_rule : Symbol_scoping_rule.t)
   let static_consts =
     defining_exprs
     |> Static_const.Group.to_list
+    (* XXX We will need the free names of the static consts.
+       We will also need the free names of any static consts that are
+       directly in a [Static_consts] binding in rebuild_let (as opposed to
+       constants arising from LC).
+       Maybe Static_const should have the option to remember free
+       names? - no, this should be separate
+       That information would need to be available in
+       Simplify_set_of_closures and Simplify_static_const. *)
     |> remove_unused_closure_vars_list uacc
     |> Static_const.Group.create
   in
@@ -377,6 +385,7 @@ let create_let_symbols uacc (scoping_rule : Symbol_scoping_rule.t)
   end;
   *)
   let expr =
+    (* XXX This needs updating to augment free names *)
     Variable.Map.fold (fun var proj expr ->
         let rec apply_projection proj =
           match LC.apply_projection lifted_constant proj with

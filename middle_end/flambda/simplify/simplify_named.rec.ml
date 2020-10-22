@@ -142,6 +142,13 @@ let record_any_symbol_projection dacc (defining_expr : Reachable.t)
     let var = Var_in_binding_pos.var bound_var in
     DA.map_denv dacc ~f:(fun denv -> DE.add_symbol_projection denv var proj)
 
+(* It is important that every set of closures returned by this function
+   (in [bindings_outermost_first]) arises from simplification in
+   [Simplify_set_of_closures], and not some other path such as reification.
+   This ensures that the returned [dacc] is equipped with the free name
+   information for such sets.  See comment in [Simplify_let_expr], function
+   [rebuild_let]. *)
+
 let simplify_named0 dacc (bindable_let_bound : Bindable_let_bound.t)
       (named : Named.t) =
   match named with

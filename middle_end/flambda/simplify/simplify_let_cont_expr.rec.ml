@@ -163,6 +163,7 @@ let simplify_non_recursive_let_cont_handler ~denv_before_body ~dacc_after_body
     in
     let dacc = DA.with_continuation_uses_env dacc ~cont_uses_env in
     down_to_up dacc
+      ~continuation_has_zero_uses:true
       ~rebuild:(rebuild_non_recursive_let_cont_handler cont uses ~params
         ~is_single_inlinable_use:false ~is_single_use:false scope
         ~is_exn_handler cont_handler)
@@ -243,23 +244,13 @@ let simplify_non_recursive_let_cont_handler ~denv_before_body ~dacc_after_body
     simplify_one_continuation_handler dacc cont ~at_unit_toplevel
       Non_recursive cont_handler ~params ~handler ~extra_params_and_args
       ~down_to_up:(fun dacc ~rebuild ->
-        down_to_up dacc ~rebuild:(fun uacc ~after_rebuild ->
-          rebuild uacc ~after_rebuild:(fun cont_handler ~params
-                ~handler ~free_names_of_handler uacc ->
-            rebuild_non_recursive_let_cont_handler cont uses ~params ~handler
-              ~free_names_of_handler ~is_single_inlinable_use ~is_single_use
-              scope ~is_exn_handler cont_handler uacc ~after_rebuild)))
-
-let rebuild_non_recursive_let_cont cont ~body ~free_names_of_body
-      handler ~uenv_without_cont uacc ~after_rebuild =
-  (* The upwards environment of [uacc] is replaced so that out-of-scope
-     continuation bindings do not end up in the accumulator. *)
-  let uacc = UA.with_uenv uacc uenv_without_cont in
-  let expr =
-    Let_cont.create_non_recursive cont handler ~body
-      ~free_names_of_body:(Known free_names_of_body)
-  in
-  after_rebuild expr uacc
+        down_to_up dacc ~continuation_has_zero_uses:false
+          ~rebuild:(fun uacc ~after_rebuild ->
+            rebuild uacc ~after_rebuild:(fun cont_handler ~params
+                  ~handler ~free_names_of_handler uacc ->
+              rebuild_non_recursive_let_cont_handler cont uses ~params ~handler
+                ~free_names_of_handler ~is_single_inlinable_use ~is_single_use
+                scope ~is_exn_handler cont_handler uacc ~after_rebuild)))
 
 let simplify_non_recursive_let_cont dacc non_rec ~down_to_up =
   let cont_handler = Non_recursive_let_cont_handler.handler non_rec in
@@ -318,52 +309,70 @@ let simplify_non_recursive_let_cont dacc non_rec ~down_to_up =
                with returning the [DE] from the [handler] inside [dacc]
                since it will be replaced by the one from the surrounding
                context). *)
-            ~down_to_up:(fun dacc ~rebuild:rebuild_handler ->
+            ~down_to_up:(fun dacc ~continuation_has_zero_uses
+                    ~rebuild:rebuild_handler ->
               down_to_up dacc ~rebuild:(fun uacc ~after_rebuild ->
                 let uenv_without_cont = UA.uenv uacc in
-                (* We need to know the free name occurrences separately for
-                   the body and the handler, so we need to save and restore
-                   the name occurrence state in [UA]. *)
-                let prior_name_occurrences = UA.name_occurrences uacc in
-                let uacc = UA.clear_name_occurrences uacc in
-                (* Now, on the upwards traversal, the handler is rebuilt... *)
+                (* Now, on the upwards traversal, the handler is rebuilt.
+                   We need to be careful with the free name information
+                   returned in [uacc] in two ways:
+                   - Linear inlining of the continuation doesn't change
+                     the free names of the whole [Let_cont] (so nothing
+                     extra to do here).
+                   - If the continuation has zero uses, we must not
+                     count the free names of the handler, as it will be
+                     removed. *)
+                let name_occurrences_before_handler_rebuild =
+                  UA.name_occurrences uacc in
+                in
                 rebuild_handler uacc ~after_rebuild:(fun handler uacc ->
-                  let free_names_of_handler =
-                    (* XXX Can't this be passed up from below? *)
-                    free_names_of_non_recursive_let_cont_handler uacc ~params
-                  in
-                  let uacc = UA.clear_name_occurrences uacc in
-                  (* ...and then the body. *)
-                  rebuild_body uacc ~after_rebuild:(fun body uacc ->
-                    (* Having rebuilt both the body and handler, the [Let_cont]
-                       expression itself is rebuilt. *)
-                    let free_names_of_body = UA.name_occurrences uacc in
-
-                    (* XXX If the continuation is being inlined, or has no
-                       uses, then we must not count the free names of the
-                       handler here.
-
-                       Need to move the logic about the trap action check
-                       from Apply_cont into this file, so things aren't
-                       classed as Used_linearly_and_inlinable.  Otherwise
-                       we won't know here whether to include the handler's
-                       free names or not.
-
-                       XXX Don't forget that continuation occurrences need
-                       to be tracked too.
-                    *)
-
-                    let uacc =
+                  let uacc =
+                    (* If the continuation has zero uses, ignore all name
+                       occurrences in the handler, since that expression is
+                       about to be dropped. *)
+                    if not continuation_has_zero_uses then uacc
+                    else
                       UA.with_name_occurrences uacc
-                        ~name_occurrences:(Name_occurrences.union_list [
-                          prior_name_occurrences;
-                          free_names_of_handler;
-                          free_names_of_body;
-                        ])
+                        name_occurrences_before_handler_rebuild
+                  in
+                  (* Having rebuilt the handler, we now rebuild the body. *)
+                  rebuild_body uacc ~after_rebuild:(fun body uacc ->
+                    let num_free_occurrences_of_cont_in_body =
+                      (* [UA.name_occurrences uacc] includes free names of the
+                         handler and also those of any expressions rebuilt
+                         prior to the current [Let_cont].  However the
+                         continuation [cont] can never be one of those free
+                         names.  This means we can directly call
+                         [count_continuation] on this name occurrences
+                         structure in order to count the number of occurrences
+                         of [cont] in the [body]. *)
+                      Name_occurrences.count_continuation
+                        (UA.name_occurrences uacc)
+                        cont
                     in
-                    rebuild_non_recursive_let_cont cont ~body
-                      ~free_names_of_body handler
-                      ~uenv_without_cont uacc ~after_rebuild)))))))
+                    (* We are passing back over a binder, so remove the
+                       bound continuation from the free name information. *)
+                    let uacc =
+                      Name_occurrences.remove_continuation
+                        (UA.name_occurrences uacc) cont
+                      |> UA.with_name_occurrences uacc
+                    in
+                    (* Having rebuilt both the body and handler, the [Let_cont]
+                       expression itself is rebuilt -- unless the continuation
+                       had zero uses, in which case we're just left with the
+                       body.
+                       The upwards environment of [uacc] is replaced so that
+                       out-of-scope continuation bindings do not end up in the
+                       accumulator. *)
+                    let uacc = UA.with_uenv uacc uenv_without_cont in
+                    let expr =
+                      if continuation_has_zero_uses then body
+                      else
+                        Let_cont.create_non_recursive' cont handler ~body
+                          ~num_free_occurrences_of_cont_in_body:
+                            (Known num_free_occurrences_of_cont_in_body)
+                    in
+                    after_rebuild expr uacc)))))))
 
 let rebuild_recursive_let_cont_handlers cont arity ~original_cont_scope_level
       handler uacc ~after_rebuild =
@@ -466,6 +475,13 @@ let simplify_recursive_let_cont dacc recs ~down_to_up : Expr.t * UA.t =
                 let uenv_without_cont = UA.uenv uacc in
                 rebuild_handlers uacc ~after_rebuild:(fun handlers uacc ->
                   rebuild_body uacc ~after_rebuild:(fun body uacc ->
+                    (* We are passing back over a binder, so remove the
+                       bound continuation from the free name information. *)
+                    let uacc =
+                      Name_occurrences.remove_continuation
+                        (UA.name_occurrences uacc) cont
+                      |> UA.with_name_occurrences uacc
+                    in
                     rebuild_recursive_let_cont ~body handlers
                       ~uenv_without_cont uacc ~after_rebuild)))))))
 

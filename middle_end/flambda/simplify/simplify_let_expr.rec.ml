@@ -202,12 +202,6 @@ let create_let_symbol uacc bound_symbols scoping_rule static_consts body : t =
   in
   expr, uacc
 
-let bind uacc ~bindings ~body =
-  ListLabels.fold_left (List.rev bindings)
-    ~init:(body, uacc)
-    ~f:(fun (expr, uacc) (var, (target : Named.t)) ->
-      create_let uacc var target expr)
-
 let bind_parameters_to_args uacc ~params ~args ~body ~free_names_of_body =
   if List.compare_lengths params args <> 0 then begin
     Misc.fatal_errorf "Mismatching parameters and arguments: %a and %a"
@@ -222,19 +216,26 @@ let bind_parameters_to_args uacc ~params ~args ~body ~free_names_of_body =
   in
   bind uacc ~bindings ~body ~free_names_of_body
 
-let bind_let_bound ~bindings ~body =
-  ListLabels.fold_left (List.rev bindings) ~init:body
-    ~f:(fun expr (bound, defining_expr) ->
+let bind_let_bound uacc ~bindings ~body =
+  (* The name occurrences component of [uacc] is expected to be in the state
+     described in the comment below at the top of [rebuild_let]. *)
+  ListLabels.fold_left (List.rev bindings) ~init:(uacc, body)
+    ~f:(fun (uacc, expr) (bound, defining_expr) ->
       match (defining_expr : Reachable.t) with
-      | Invalid _ -> Expr.create_invalid ()
+      | Invalid _ ->
+        let uacc = UA.with_name_occurrences uacc Name_occurrences.empty in
+        uacc, Expr.create_invalid ()
       | Reachable defining_expr ->
         match (bound : Bindable_let_bound.t) with
-        | Singleton var -> create_singleton_let var defining_expr ~body:expr
-        | Set_of_closures _ -> create_pattern_let bound defining_expr expr
+        | Singleton var ->
+          create_singleton_let uacc var defining_expr ~body:expr
+        | Set_of_closures _ ->
+          (* XXX use create_set_of_closures_let? *)
+          create_pattern_let uacc bound defining_expr expr
         | Symbols { bound_symbols; scoping_rule; } ->
           begin match defining_expr with
           | Static_consts s ->
-            create_let_symbol bound_symbols scoping_rule s expr
+            create_let_symbol uacc bound_symbols scoping_rule s expr
           | Simple _ | Prim _ | Set_of_closures _ ->
             Misc.fatal_errorf "Cannot bind [Symbols] to anything other than \
                 a [Static_const]:@ %a@=@ %a"
@@ -242,14 +243,51 @@ let bind_let_bound ~bindings ~body =
               Named.print defining_expr
           end)
 
-let rebuild_let bindable_let_bound ~bindings
+let rebuild_let bindable_let_bound ~bindings_outermost_first:bindings
       ~lifted_constants_from_defining_expr ~at_unit_toplevel ~body uacc
       ~after_rebuild =
+  (* At this point, the free names in [uacc] are:
+     - the free names of [body]; plus
+     - the free names of any non-lifted sets of closures in the [bindings]
+       (these names are already in [uacc] because we complete both the
+       downwards and upwards traversal for such sets of closures before
+       simplifying the body of the [Let]).
 
-(* XXX Don't forget that free names from non-lifted SOCs have already been
-   put into [uacc] *)
+     This means that we need to:
+     1. add in the free names from the [bindings] except for any sets of
+        closures;
+     2. remove any name occurrences corresponding to the bound variable(s).
 
-
+     For step number 1 to be correct, it needs to be the case that all sets of
+     closures in [bindings] have already already had their free names added
+     to [uacc].  The code in [Simplify_named] preserves this property: sets of
+     closures always go through [Simplify_set_of_closures] (which deals with
+     additions to [dacc] that will in turn produce corresponding additions
+     to [uacc] at the start of the downwards traversal).  In particular, sets
+     of closures are never returned via reification, which does not have this
+     handling.
+   *)
+   (*
+  let name_occurrences =
+    ListLabels.fold_left (List.rev bindings)
+      ~init:(UA.name_occurrences uacc)
+      ~f:(fun name_occurrences (bound, (reachable : Reachable.t)) ->
+        let name_occurrences =
+          match reachable with
+          | Invalid _ -> name_occurrences
+          | Reachable named ->
+            match named with
+            | Simple _ | Prim _ | Static_consts _ ->
+              Name_occurrences.union (Named.free_names named) name_occurrences
+            | Set_of_closures _ ->
+              (* See comment above. *)
+              name_occurrences
+        in
+        let bound_names = Bindable_let_bound.free_names bound in
+        Name_occurrences.diff name_occurrences bound_names)
+  in
+  let uacc = UA.with_name_occurrences uacc name_occurrences in
+  *)
   let no_constants_from_defining_expr =
     LCS.is_empty lifted_constants_from_defining_expr
   in
@@ -274,7 +312,7 @@ let rebuild_let bindable_let_bound ~bindings
           ~outermost:lifted_constants_from_defining_expr
         |> UA.with_lifted_constants uacc
     in
-    let body = bind_let_bound ~bindings ~body in
+    let uacc, body = bind_let_bound uacc ~bindings ~body in
     after_rebuild body uacc
   else
     let scoping_rule =
@@ -310,7 +348,7 @@ let simplify_let dacc let_expr ~down_to_up =
        of the defining expression and the [body]. *)
     let dacc, prior_lifted_constants = DA.get_and_clear_lifted_constants dacc in
     (* Simplify the defining expression. *)
-    let { Simplify_named. bindings_outermost_first = bindings; dacc; } =
+    let { Simplify_named. bindings_outermost_first; dacc; } =
       Simplify_named.simplify_named dacc bindable_let_bound
         (L.defining_expr let_expr)
     in
@@ -341,6 +379,6 @@ let simplify_let dacc let_expr ~down_to_up =
       ~down_to_up:(fun dacc ~rebuild:rebuild_body ->
         down_to_up dacc ~rebuild:(fun uacc ~after_rebuild ->
           rebuild_body uacc ~after_rebuild:(fun body uacc ->
-            rebuild_let bindable_let_bound ~bindings
+            rebuild_let bindable_let_bound ~bindings_outermost_first
               ~lifted_constants_from_defining_expr ~at_unit_toplevel ~body uacc
               ~after_rebuild))))

@@ -97,7 +97,8 @@ let all_code t = t.all_code
 let name_occurrences t = t.name_occurrences
 
 let with_name_occurrences t ~name_occurrences =
-  { t with name_occurrences; }
+  if name_occurrences == t.name_occurrences then t
+  else { t with name_occurrences; }
 
 let clear_name_occurrences t =
   with_name_occurrences t ~name_occurrences:Name_occurrences.empty
