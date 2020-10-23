@@ -137,6 +137,12 @@ val remove_var : t -> Variable.t -> t
 
 val remove_continuation : t -> Continuation.t -> t
 
+val remove_one_occurrence_of_closure_var
+   : t
+  -> Var_within_closure.t
+  -> Name_mode.t
+  -> t
+
 val greatest_name_mode_var
    : t
   -> Variable.t
@@ -175,3 +181,5 @@ val fold_code_ids
   -> init:'a
   -> f:('a -> Code_id.t -> 'a)
   -> 'a
+
+val import : Ids_for_export.Import_map.t -> t -> t

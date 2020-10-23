@@ -54,7 +54,7 @@ val with_uenv : t -> Simplify_envs.Upwards_env.t -> t
 
 val remember_code_for_cmx
     : t
-  -> Flambda.Code.t Code_id.Map.t
+  -> (Flambda.Code.t * Name_occurrences.t) Code_id.Map.t
   -> t
 
 val all_code : t -> Exported_code.t

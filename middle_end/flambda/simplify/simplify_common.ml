@@ -224,7 +224,7 @@ let update_exn_continuation_extra_args uacc ~exn_cont_use_id apply =
 (* XXX Don't forget that this code needs to adjust uacc for occurrences *)
 
 let create_let_symbol0 uacc code_age_relation (bound_symbols : Bound_symbols.t)
-      static_consts body =
+      (static_consts : Static_const.Group.With_free_names.t) body =
 (*
   Format.eprintf "create_let_symbol %a\n%!" Bound_symbols.print bound_symbols;
 *)
@@ -297,14 +297,13 @@ let create_let_symbol0 uacc code_age_relation (bound_symbols : Bound_symbols.t)
         code_ids_only_used_in_newer_version_of
     in
     let static_consts =
-      ListLabels.map (Static_const.Group.to_list static_consts)
+      Static_const.Group.With_free_names.map_consts static_consts
         ~f:(fun static_const : Static_const.t ->
           match Static_const.to_code static_const with
           | Some code
             when Code_id.Set.mem (Code.code_id code) code_ids_to_make_deleted ->
             Code (Code.make_deleted code)
           | Some _ | None -> static_const)
-      |> Static_const.Group.create
     in
     let expr =
       Expr.create_let_symbol bound_symbols Syntactic static_consts body
@@ -315,21 +314,35 @@ let create_let_symbol0 uacc code_age_relation (bound_symbols : Bound_symbols.t)
     in
     expr, uacc
 
-let remove_unused_closure_vars uacc (static_const : Static_const.t)
-      : Static_const.t =
-  match static_const with
+let remove_unused_closure_vars uacc static_const =
+  match Static_const.With_free_names.const static_const with
   | Set_of_closures set_of_closures ->
+    let name_occurrences = UA.name_occurrences uacc in
+    let closure_vars_to_remove =
+      |> Var_within_closure.Map.keys
+      |> Var_within_closure.Set.filter (fun closure_var ->
+    in
+    let free_names =
+      Var_within_closure.Map.fold (fun closure_var _ free_names ->
+          if Name_occurrences.mem_closure_var name_occurrences then
+            free_names
+          else
+            Name_occurrences.remove_one_occurrence_of_closure_var free_names
+              closure_var)
+        (Set_of_closures.closure_elements set_of_closures)
+        (Static_const.With_free_names.free_names static_const)
+    in
     let closure_elements =
       Set_of_closures.closure_elements set_of_closures
       |> Var_within_closure.Map.filter (fun closure_var _ ->
-        Name_occurrences.mem_closure_var (UA.name_occurrences uacc)
-          closure_var)
+        Name_occurrences.mem_closure_var name_occurrences closure_var)
     in
     let set_of_closures =
       Set_of_closures.create (Set_of_closures.function_decls set_of_closures)
         ~closure_elements
     in
-    Set_of_closures set_of_closures
+    Static_const.With_free_names.create (Set_of_closures set_of_closures)
+      free_names
   | Code _
   | Block _
   | Boxed_float _
@@ -351,7 +364,7 @@ let create_let_symbols uacc (scoping_rule : Symbol_scoping_rule.t)
   let symbol_projections = LC.symbol_projections lifted_constant in
   let static_consts =
     defining_exprs
-    |> Static_const.Group.to_list
+    |> Static_const.Group.With_free_names.to_list
     (* XXX We will need the free names of the static consts.
        We will also need the free names of any static consts that are
        directly in a [Static_consts] binding in rebuild_let (as opposed to
@@ -361,7 +374,7 @@ let create_let_symbols uacc (scoping_rule : Symbol_scoping_rule.t)
        That information would need to be available in
        Simplify_set_of_closures and Simplify_static_const. *)
     |> remove_unused_closure_vars_list uacc
-    |> Static_const.Group.create
+    |> Static_const.Group.With_free_names.create
   in
   let expr, uacc =
     match scoping_rule with
@@ -372,7 +385,8 @@ let create_let_symbols uacc (scoping_rule : Symbol_scoping_rule.t)
         Expr.create_let_symbol bound_symbols scoping_rule static_consts body
       in
       let uacc =
-        Static_const.Group.pieces_of_code_by_code_id defining_exprs
+        defining_exprs
+        |> Static_const.Group.With_free_names.pieces_of_code_by_code_id
         |> UA.remember_code_for_cmx uacc
       in
       expr, uacc

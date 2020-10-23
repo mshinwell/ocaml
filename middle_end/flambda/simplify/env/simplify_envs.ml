@@ -942,6 +942,8 @@ end = struct
       symbol_projections = Definition.symbol_projections definition;
     }
 
+  (* XXX We don't want to be using Defintion.free_names really *)
+
   let create_set_of_closures denv ~closure_symbols_with_types
         ~symbol_projections defining_expr =
     let definition =

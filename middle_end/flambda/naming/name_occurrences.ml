@@ -23,6 +23,7 @@ module Kind = Name_mode
 module For_one_variety_of_names (N : sig
   include Identifiable.S
   val apply_name_permutation : t -> Name_permutation.t -> t
+  val import : Ids_for_export.Import_map.t -> t -> t
 end) : sig
   type t
 
@@ -54,6 +55,8 @@ end) : sig
 
   val remove : t -> N.t -> t
 
+  val remove_one_occurrence : t -> N.t -> Kind.t -> t
+
   val count : t -> N.t -> Num_occurrences.t
 
   val count_normal : t -> N.t -> Num_occurrences.t
@@ -67,6 +70,8 @@ end) : sig
   val for_all : t -> f:(N.t -> bool) -> bool
 
   val filter : t -> f:(N.t -> bool) -> t
+
+  val import : Ids_for_export.Import_map.t -> t -> t
 end = struct
   module For_one_name : sig
     type t
@@ -80,6 +85,13 @@ end = struct
     val one_occurrence : Kind.t -> t
 
     val add : t -> Kind.t -> t
+
+    type remove_one_occurrence_result = private
+      | No_more_occurrences
+      | One_remaining_occurrence of Kind.t
+      | Multiple_remaining_occurrences of t
+
+    val remove_one_occurrence : t -> Kind.t -> remove_one_occurrence_result
 
     val num_occurrences : t -> int
 
@@ -164,6 +176,49 @@ end = struct
       | Phantom ->
         (encode_phantom_occurrences (1 + num_occurrences_phantom t))
           lor (without_phantom_occurrences t)
+
+    type remove_one_occurrence_result =
+      | No_more_occurrences
+      | One_remaining_occurrence of Kind.t
+      | Multiple_remaining_occurrences of t
+
+    let remove_one_occurrence t kind =
+      let t =
+        match Kind.descr kind with
+        | Normal ->
+          let num_occurrences =
+            let num = num_occurrences_normal t in
+            if num > 0 then num - 1 else 0
+          in
+          (encode_normal_occurrences num_occurrences)
+            lor (without_normal_occurrences t)
+        | In_types ->
+          let num_occurrences =
+            let num = num_occurrences_in_types t in
+            if num > 0 then num - 1 else 0
+          in
+          (encode_in_types_occurrences num_occurrences)
+            lor (without_in_types_occurrences t)
+        | Phantom ->
+          let num_occurrences =
+            let num = num_occurrences_phantom t in
+            if num > 0 then num - 1 else 0
+          in
+          (encode_phantom_occurrences num_occurrences)
+            lor (without_phantom_occurrences t)
+      in
+      match num_occurrences t with
+      | 0 -> No_more_occurrences
+      | 1 ->
+        if num_occurrences_normal t = 1 then
+          One_remaining_occurrence Kind.normal
+        else if num_occurrences_phantom t = 1 then
+          One_remaining_occurrence Kind.phantom
+        else if num_occurrences_in_types t = 1 then
+          One_remaining_occurrence Kind.in_types
+        else
+          assert false
+      | _ -> Multiple_remaining_occurrences t
 
     (* CR mshinwell: Add -strict-sequence to the build *)
 
@@ -391,6 +446,22 @@ end = struct
       if N.Map.is_empty map then Empty
       else Potentially_many map
 
+  let remove_one_occurrence t name kind =
+    match t with
+    | Empty -> Empty
+    | One (name', kind') ->
+      if N.equal name name' && Kind.equal kind kind' then Empty else t
+    | Potentially_many map ->
+      match N.Map.find name map with
+      | exception Not_found -> Empty
+      | for_one_name ->
+        match For_one_name.remove_one_occurrence for_one_name kind with
+        | No_more_occurrences -> Empty
+        | One_remaining_occurrence kind -> One (name, kind)
+        | Multiple_remaining_occurrences for_one_name ->
+          let map = N.Map.add name for_one_name map in
+          Potentially_many map
+
   let count t name : Num_occurrences.t =
     match t with
     | Empty -> Zero
@@ -488,43 +559,65 @@ end = struct
         Potentially_many map
       end
 
-    let for_all t ~f =
-      match t with
-      | Empty -> true
-      | One (name, _) -> f name
-      | Potentially_many map ->
-        N.Map.for_all (fun name _ -> f name) map
+  let for_all t ~f =
+    match t with
+    | Empty -> true
+    | One (name, _) -> f name
+    | Potentially_many map ->
+      N.Map.for_all (fun name _ -> f name) map
 
-    let filter t ~f =
-      match t with
-      | Empty -> t
-      | One (name, _) -> if f name then t else Empty
-      | Potentially_many map ->
-        let map = N.Map.filter (fun name _ -> f name) map in
-        if N.Map.is_empty map then Empty
-        else Potentially_many map
+  let filter t ~f =
+    match t with
+    | Empty -> t
+    | One (name, _) -> if f name then t else Empty
+    | Potentially_many map ->
+      let map = N.Map.filter (fun name _ -> f name) map in
+      if N.Map.is_empty map then Empty
+      else Potentially_many map
+
+  let import import_map t =
+    match t with
+    | Empty -> Empty
+    | One (name, kind) ->
+      let name = N.import import_map name in
+      One (name, kind)
+    | Potentially_many map ->
+      let map =
+        N.Map.fold (fun name for_one_name result ->
+            let name = N.import import_map name in
+            N.Map.add name for_one_name result)
+          map
+          N.Map.empty
+      in
+      Potentially_many map
 end [@@@inlined always]
 
 module For_names = For_one_variety_of_names (struct
   include Name
   let apply_name_permutation t perm = Name_permutation.apply_name perm t
+  let import = Ids_for_export.Import_map.name
 end)
 
 module For_continuations = For_one_variety_of_names (struct
   include Continuation
   let apply_name_permutation t perm = Name_permutation.apply_continuation perm t
+  let import = Ids_for_export.Import_map.continuation
 end)
 
 module For_closure_vars = For_one_variety_of_names (struct
   include Var_within_closure
   (* We never bind [Var_within_closure]s using [Name_abstraction]. *)
   let apply_name_permutation t _perm = t
+  (* CR mshinwell: check: are Var_within_closure values never rewritten
+     upon import?  Doesn't look like it. *)
+  let import _import_map t = t
 end)
 
 module For_code_ids = For_one_variety_of_names (struct
   include Code_id
   (* We never bind [Code_id]s using [Name_abstraction]. *)
   let apply_name_permutation t _perm = t
+  let import = Ids_for_export.Import_map.code_id
 end)
 
 type t = {
@@ -815,6 +908,21 @@ let is_empty t = equal t empty
 let no_variables t =
   For_names.for_all t.names ~f:(fun var -> not (Name.is_var var))
 
+(*
+let has_only_symbols_and_code_ids
+      ({ names = _;
+         continuations;
+         continuations_in_trap_actions;
+         closure_vars;
+         code_ids = _;
+         newer_version_of_code_ids = _;
+      } as t) =
+  no_variables t
+    && For_continuations.is_empty continuations
+    && For_continuations.is_empty continuations_in_trap_actions
+    && For_closure_vars.is_empty closure_vars
+*)
+
 let subset_domain t1 t2 =
   binary_conjunction ~for_names:For_names.subset_domain
     ~for_continuations:For_continuations.subset_domain
@@ -876,6 +984,17 @@ let remove_continuation t k =
     { t with
       continuations;
       continuations_in_trap_actions;
+    }
+
+let remove_one_occurrence_of_closure_var t closure_var name_mode =
+  if For_closure_vars.is_empty t.closure_vars then t
+  else
+    let closure_vars =
+      For_closure_vars.remove_one_occurrence t.closure_vars closure_var
+        name_mode
+    in
+    { t with
+      closure_vars;
     }
 
 let greatest_name_mode_var t var =
@@ -954,3 +1073,24 @@ let filter_names t ~f =
 
 let fold_code_ids t ~init ~f =
   For_code_ids.fold t.code_ids ~init ~f
+
+let import import_map
+      { names; continuations; continuations_in_trap_actions;
+        closure_vars; code_ids; newer_version_of_code_ids; } =
+  let names = For_names.import import_map names in
+  let continuations = For_continuations.import import_map continuations in
+  let continuations_in_trap_actions =
+    For_continuations.import import_map continuations_in_trap_actions
+  in
+  let closure_vars = For_closure_vars.import import_map closure_vars in
+  let code_ids = For_code_ids.import import_map code_ids in
+  let newer_version_of_code_ids =
+    For_code_ids.import import_map newer_version_of_code_ids
+  in
+  { names;
+    continuations;
+    continuations_in_trap_actions;
+    closure_vars;
+    code_ids;
+    newer_version_of_code_ids;
+  }
