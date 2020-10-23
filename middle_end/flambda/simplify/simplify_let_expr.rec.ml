@@ -225,16 +225,30 @@ let bind_let_bound uacc ~bindings ~body =
       | Invalid _ ->
         let uacc = UA.with_name_occurrences uacc Name_occurrences.empty in
         uacc, Expr.create_invalid ()
-      | Reachable defining_expr ->
+      | Reachable {
+          named = defining_expr;
+          free_names = free_names_of_defining_expr;
+        } ->
         match (bound : Bindable_let_bound.t) with
         | Singleton var ->
-          create_singleton_let uacc var defining_expr ~body:expr
+          create_singleton_let uacc var defining_expr
+            ~free_names_of_defining_expr ~body:expr
         | Set_of_closures _ ->
           (* XXX use create_set_of_closures_let? *)
           create_pattern_let uacc bound defining_expr expr
         | Symbols { bound_symbols; scoping_rule; } ->
           begin match defining_expr with
           | Static_consts s ->
+            (* XXX This case never arises when called from [rebuild_let] as
+               it transmits constants through LC.
+               Maybe we should change [Reachable] to eliminate the
+               [Static_consts] case
+               We also need a [create_let] function for e.g. Simplify_common
+               though, and that does maybe have to handle
+               [Static_consts] -- or maybe not?  Check
+               Actually: maybe it's quite good if we don't allow Static_consts
+               when rebuilding anywhere, since they should indeed go through
+               the LC infrastructure! *)
             create_let_symbol uacc bound_symbols scoping_rule s expr
           | Simple _ | Prim _ | Set_of_closures _ ->
             Misc.fatal_errorf "Cannot bind [Symbols] to anything other than \
@@ -246,27 +260,7 @@ let bind_let_bound uacc ~bindings ~body =
 let rebuild_let bindable_let_bound ~bindings_outermost_first:bindings
       ~lifted_constants_from_defining_expr ~at_unit_toplevel ~body uacc
       ~after_rebuild =
-  (* At this point, the free names in [uacc] are:
-     - the free names of [body]; plus
-     - the free names of any non-lifted sets of closures in the [bindings]
-       (these names are already in [uacc] because we complete both the
-       downwards and upwards traversal for such sets of closures before
-       simplifying the body of the [Let]).
-
-     This means that we need to:
-     1. add in the free names from the [bindings] except for any sets of
-        closures;
-     2. remove any name occurrences corresponding to the bound variable(s).
-
-     For step number 1 to be correct, it needs to be the case that all sets of
-     closures in [bindings] have already already had their free names added
-     to [uacc].  The code in [Simplify_named] preserves this property: sets of
-     closures always go through [Simplify_set_of_closures] (which deals with
-     additions to [dacc] that will in turn produce corresponding additions
-     to [uacc] at the start of the downwards traversal).  In particular, sets
-     of closures are never returned via reification, which does not have this
-     handling.
-   *)
+  (* At this point, the free names in [uacc] are the free names of [body]. *)
    (*
   let name_occurrences =
     ListLabels.fold_left (List.rev bindings)

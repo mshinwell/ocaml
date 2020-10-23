@@ -271,7 +271,8 @@ let simplify_named0 dacc (bindable_let_bound : Bindable_let_bound.t)
           denv)
     in
     let dacc =
-      Static_const.Group.match_against_bound_symbols static_consts bound_symbols
+      Static_const.Group.With_free_names.match_against_bound_symbols
+        static_consts bound_symbols
         ~init:dacc
         ~code:(fun dacc _ _ -> dacc)
         ~set_of_closures:(fun dacc ~closure_symbols:_ _ -> dacc)
@@ -281,7 +282,7 @@ let simplify_named0 dacc (bindable_let_bound : Bindable_let_bound.t)
     let lifted_constants =
       ListLabels.map2
         (Bound_symbols.to_list bound_symbols)
-        (Static_const.Group.to_list static_consts)
+        (Static_const.Group.With_free_names.to_list static_consts)
         ~f:(fun (pat : Bound_symbols.Pattern.t) static_const ->
           match pat with
           | Block_like symbol ->
@@ -298,7 +299,8 @@ let simplify_named0 dacc (bindable_let_bound : Bindable_let_bound.t)
             let closure_symbols_with_types =
               Closure_id.Lmap.map (fun symbol ->
                   let typ =
-                    TE.find (DA.typing_env dacc) (Name.symbol symbol) (Some K.value)
+                    TE.find (DA.typing_env dacc) (Name.symbol symbol)
+                      (Some K.value)
                   in
                   symbol, typ)
                 closure_symbols

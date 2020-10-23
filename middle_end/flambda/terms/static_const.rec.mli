@@ -127,9 +127,29 @@ module Group : sig
        : t
       -> (Code.t * Name_occurrences.t) Code_id.Map.t
 
+    val map
+       : t
+      -> f:(Static_const.With_free_names.t -> Static_const.With_free_names.t)
+      -> t
+
     val map_consts
        : t
       -> f:(Static_const.t -> Static_const.t)
       -> t
+
+    val match_against_bound_symbols
+      : t
+      -> Bound_symbols.t
+      -> init:'a
+      -> code:('a -> Code_id.t -> Code.t -> 'a)
+      -> set_of_closures:(
+          'a
+        -> closure_symbols:Symbol.t Closure_id.Lmap.t
+        -> Set_of_closures.t
+        -> 'a)
+      -> block_like:('a -> Symbol.t -> static_const -> 'a)
+      -> 'a
+
+    val concat : t -> t -> t
   end
 end

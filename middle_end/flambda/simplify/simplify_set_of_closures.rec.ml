@@ -703,6 +703,7 @@ let simplify_non_lifted_set_of_closures0 dacc bound_vars ~closure_bound_vars
   in
   let { set_of_closures;
         code;
+        free_names;
         dacc;
       } =
     simplify_set_of_closures0 (C.dacc_prior_to_sets context) context
@@ -710,7 +711,9 @@ let simplify_non_lifted_set_of_closures0 dacc bound_vars ~closure_bound_vars
       ~closure_elements ~closure_element_types
   in
   let defining_expr =
-    Reachable.reachable (Named.create_set_of_closures set_of_closures)
+    Reachable.reachable_with_known_free_names
+      (Named.create_set_of_closures set_of_closures)
+      ~free_names
   in
   let lifted_constants =
     Code_id.Lmap.fold (fun code_id code lifted_constants ->

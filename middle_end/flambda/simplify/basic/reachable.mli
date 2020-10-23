@@ -19,10 +19,19 @@
 open! Flambda.Import
 
 type t = private
-  | Reachable of Named.t
+  | Reachable of {
+      named : Named.t;
+      free_names : Name_occurrences.t;
+    }
   | Invalid of Invalid_term_semantics.t
 
 val reachable : Named.t -> t
+
+val reachable_with_known_free_names
+   : Named.t
+  -> free_names:Name_occurrences.t
+  -> t
+
 val invalid : unit -> t
 
 val is_invalid : t -> bool

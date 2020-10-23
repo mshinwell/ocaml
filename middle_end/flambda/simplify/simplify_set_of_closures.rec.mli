@@ -26,6 +26,12 @@ val simplify_non_lifted_set_of_closures
    : Downwards_acc.t
   -> Bindable_let_bound.t
   -> Set_of_closures.t
+  (* XXX We can't just push set of closures free names into uacc at the
+     bottom, as that gives wrong results for free names of enclosing
+     expressions, until the corresponding let-binding is reached.
+     Maybe Reachable should be renamed and include the free names?  Then it
+     can be used uniformly in rebuild_let and we can delete all the
+     comments from the other day *)
   -> (Bindable_let_bound.t * Reachable.t) list * Downwards_acc.t
 
 (** Simplify a group of possibly-recursive sets of closures, as may occur on
@@ -35,4 +41,4 @@ val simplify_lifted_sets_of_closures
   -> all_sets_of_closures_and_symbols:
     (Symbol.t Closure_id.Lmap.t * Set_of_closures.t) list
   -> closure_bound_names_all_sets:Name_in_binding_pos.t Closure_id.Map.t list
-  -> Bound_symbols.t * Static_const.Group.t * Downwards_acc.t
+  -> Bound_symbols.t * Static_const.Group.With_free_names.t * Downwards_acc.t

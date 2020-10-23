@@ -318,10 +318,6 @@ let remove_unused_closure_vars uacc static_const =
   match Static_const.With_free_names.const static_const with
   | Set_of_closures set_of_closures ->
     let name_occurrences = UA.name_occurrences uacc in
-    let closure_vars_to_remove =
-      |> Var_within_closure.Map.keys
-      |> Var_within_closure.Set.filter (fun closure_var ->
-    in
     let free_names =
       Var_within_closure.Map.fold (fun closure_var _ free_names ->
           if Name_occurrences.mem_closure_var name_occurrences then
@@ -354,27 +350,13 @@ let remove_unused_closure_vars uacc static_const =
   | Mutable_string _
   | Immutable_string _ -> static_const
 
-let remove_unused_closure_vars_list uacc static_consts =
-  List.map (remove_unused_closure_vars uacc) static_consts
-
 let create_let_symbols uacc (scoping_rule : Symbol_scoping_rule.t)
       code_age_relation lifted_constant body =
   let bound_symbols = LC.bound_symbols lifted_constant in
-  let defining_exprs = LC.defining_exprs lifted_constant in
   let symbol_projections = LC.symbol_projections lifted_constant in
   let static_consts =
-    defining_exprs
-    |> Static_const.Group.With_free_names.to_list
-    (* XXX We will need the free names of the static consts.
-       We will also need the free names of any static consts that are
-       directly in a [Static_consts] binding in rebuild_let (as opposed to
-       constants arising from LC).
-       Maybe Static_const should have the option to remember free
-       names? - no, this should be separate
-       That information would need to be available in
-       Simplify_set_of_closures and Simplify_static_const. *)
-    |> remove_unused_closure_vars_list uacc
-    |> Static_const.Group.With_free_names.create
+    Static_const.Group.With_free_names.map (LC.defining_exprs lifted_constant)
+      ~f:(remove_unused_closure_vars_list uacc)
   in
   let expr, uacc =
     match scoping_rule with
@@ -391,16 +373,8 @@ let create_let_symbols uacc (scoping_rule : Symbol_scoping_rule.t)
       in
       expr, uacc
   in
-  (*
-  if not (Variable.Map.is_empty symbol_projections) then begin
-    Format.eprintf "PLACING Constant:@ %a@ \nProjections:@ %a\n%!"
-      LC.print lifted_constant
-      (Variable.Map.print Symbol_projection.print) symbol_projections
-  end;
-  *)
   let expr =
-    (* XXX This needs updating to augment free names *)
-    Variable.Map.fold (fun var proj expr ->
+    Variable.Map.fold (fun var proj (expr, uacc) ->
         let rec apply_projection proj =
           match LC.apply_projection lifted_constant proj with
           | Some simple ->
@@ -448,10 +422,10 @@ let create_let_symbols uacc (scoping_rule : Symbol_scoping_rule.t)
            projection operation, but it's unlikely there will be a
            significant number, and since we're at toplevel we tolerate
            them. *)
-        let named = apply_projection proj in
-        Expr.create_let (Var_in_binding_pos.create var NM.normal) named expr)
+        create_let uacc (Var_in_binding_pos.create var NM.normal)
+          (apply_projection proj) expr)
       symbol_projections
-      expr
+      expr, uacc
   in
   expr, uacc
 
