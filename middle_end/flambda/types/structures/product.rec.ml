@@ -54,6 +54,11 @@ module Make (Index : Product_intf.Index) = struct
 
   let components t = Index.Map.data t.components_by_index
 
+  let project t index : _ Or_unknown.t =
+    match Index.Map.find_opt index t.components_by_index with
+    | None -> Unknown
+    | Some ty -> Known ty
+
   let meet env
         { components_by_index = components_by_index1; kind = kind1; }
         { components_by_index = components_by_index2; kind = kind2; }
@@ -190,6 +195,10 @@ module Int_indexed = struct
 
   let components t = Array.to_list t.fields
 
+  let project t index : _ Or_unknown.t =
+    if Array.length t.fields <= index then Unknown
+    else Known t.fields.(index)
+
   let meet env t1 t2 : _ Or_bottom.t =
     if not (Flambda_kind.equal t1.kind t2.kind) then begin
       Misc.fatal_errorf "Product.Int_indexed.meet between mismatching \
@@ -214,7 +223,7 @@ module Int_indexed = struct
         | Some t, None | None, Some t -> t
         | Some ty1, Some ty2 ->
           let ty, env_extension' = Type_grammar.meet' env ty1 ty2 in
-          env_extension := TEE.meet env !env_extension env_extension';
+          env_extension := TEE.extend env !env_extension ~ext:env_extension';
           if (Type_grammar.is_obviously_bottom ty) then begin
             any_bottom := true
           end;

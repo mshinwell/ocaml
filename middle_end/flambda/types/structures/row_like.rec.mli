@@ -47,6 +47,8 @@ module For_blocks : sig
 
   val get_singleton : t -> (Tag_and_size.t * Product.Int_indexed.t) option
 
+  val get_field : t -> Target_imm.t -> Type_grammar.t Or_unknown.t
+
   val is_bottom : t -> bool
 
   (** The [Maps_to] value which [meet] returns contains the join of all

@@ -95,6 +95,17 @@ let meet env (t1 : t) (t2 : t) : t =
   let abst = A.pattern_match t1.abst ~f in
   { abst; }
 
+let extend env (t1 : t) ~ext:(t2 : t) : t =
+  let [@inline always] f level_1 =
+    let [@inline always] f level_2 =
+      let level = Typing_env_level.extend env level_1 ~ext:level_2 in
+      A.create (Typing_env_level.defined_vars level) level
+    in
+    A.pattern_match t2.abst ~f
+  in
+  let abst = A.pattern_match t1.abst ~f in
+  { abst; }
+
 let rec n_way_meet env ts =
   match ts with
   | [] -> empty ()

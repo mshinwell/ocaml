@@ -62,12 +62,15 @@ module type Unboxing_spec = sig
     -> fields:T.t Index.Map.t
     -> T.t * TEE.t
 
-  val make_boxed_value_accommodating
+  val extend_with_projection
      : Info.t
+    -> TE.t
+    -> T.t
     -> Index.t
     -> index_var:Variable.t
     -> untagged_index_var:Variable.t
-    -> T.t
+    -> result_kind:K.t
+    -> TEE.t Or_bottom.t
 
   val project_field
      : Info.t
@@ -113,28 +116,11 @@ module Make (U : Unboxing_spec) = struct
                 (Var_in_binding_pos.create untagged_field_var NM.normal))
               K.naked_immediate
           in
-          let shape =
-            (* CR mshinwell: Rename, something about "shape" *)
-            U.make_boxed_value_accommodating info index ~index_var:field_var
-              ~untagged_index_var:untagged_field_var
-          in
           let env_extension =
-            let result_var =
-              Var_in_binding_pos.create field_var Name_mode.normal
-            in
-            (*
-            Format.eprintf "Shape:@ %a@ arg_type_at_use:@ %a@ env:@ %a\n%!"
-              T.print shape
-              T.print arg_type_at_use
-              TE.print typing_env_at_use;
-            *)
-            T.meet_shape typing_env_at_use arg_type_at_use
-              ~shape ~result_var ~result_kind:param_kind
+            U.extend_with_projection info typing_env_at_use arg_type_at_use
+              index ~index_var:field_var ~untagged_index_var:untagged_field_var
+              ~result_kind:param_kind
           in
-          (*
-          Format.eprintf "Env extension from meet is:@ %a\n%!"
-            (Or_bottom.print TEE.print) env_extension;
-          *)
           let field = Simple.var field_var in
           let block =
             (* CR mshinwell: Also done in [Simplify_toplevel], move to [TE] *)
@@ -363,6 +349,8 @@ module Make (U : Unboxing_spec) = struct
             ~params:(Index.Map.data new_params)
         in
         let typing_env = TE.add_env_extension typing_env env_extension in
+        (* Format.eprintf "@[<v 2>Meet:@ @[block_type:@ %a@]@ @[param_type:@ %a@]@]@."
+         *   T.print block_type T.print param_type; *)
         match T.meet typing_env block_type param_type with
         | Bottom ->
           Misc.fatal_errorf "[meet] between %a and %a should not have \
@@ -429,6 +417,34 @@ struct
       ~n:(Targetint.OCaml.add index Targetint.OCaml.one)
       ~field_kind:K.value
       ~field_n_minus_one:index_var
+
+  let extend_with_projection tag typing_env block_ty index ~index_var
+        ~untagged_index_var ~result_kind : _ Or_bottom.t =
+    match T.prove_block_field_simple
+            typing_env block_ty (Target_imm.int index)
+    with
+    | Invalid ->
+      Ok (TEE.one_equation (Name.var index_var) (T.bottom result_kind))
+    | Proved simple ->
+      Ok (TEE.one_equation (Name.var index_var)
+            (T.alias_type_of result_kind simple))
+    | Unknown ->
+      let shape =
+        (* CR mshinwell: Rename, something about "shape" *)
+        make_boxed_value_accommodating tag index ~index_var
+          ~untagged_index_var
+      in
+      let result_var =
+        Var_in_binding_pos.create index_var Name_mode.normal
+      in
+      (*
+      Format.eprintf "Shape:@ %a@ arg_type_at_use:@ %a@ env:@ %a\n%!"
+        T.print shape
+        T.print arg_type_at_use
+        TE.print typing_env_at_use;
+      *)
+      T.meet_shape typing_env block_ty
+        ~shape ~result_var ~result_kind
 
   let project_field _tag () ~block:_ ~index:_ : project_field_result =
     Default_behaviour No_untagging
@@ -669,6 +685,25 @@ struct
         ~n:(Targetint.OCaml.add index Targetint.OCaml.one)
         ~field_n_minus_one:index_var
 
+  let extend_with_projection tag typing_env base_ty index ~index_var
+        ~untagged_index_var ~result_kind =
+    let shape =
+      (* CR mshinwell: Rename, something about "shape" *)
+      make_boxed_value_accommodating tag index ~index_var
+        ~untagged_index_var
+    in
+    let result_var =
+      Var_in_binding_pos.create index_var Name_mode.normal
+    in
+    (*
+    Format.eprintf "Shape:@ %a@ arg_type_at_use:@ %a@ env:@ %a\n%!"
+      T.print shape
+      T.print arg_type_at_use
+      TE.print typing_env_at_use;
+    *)
+    T.meet_shape typing_env base_ty
+      ~shape ~result_var ~result_kind
+
   (* CR mshinwell: Could extend to handle cases where e.g. it's always a
      constant ctor at a use, but not a unique one, and likewise for blocks
      where the sizes are equal but the tags differ.  This sort of thing will
@@ -740,6 +775,25 @@ struct
       ~field_kind:K.naked_float
       ~field_n_minus_one:index_var
 
+  let extend_with_projection tag typing_env base_ty index ~index_var
+        ~untagged_index_var ~result_kind =
+    let shape =
+      (* CR mshinwell: Rename, something about "shape" *)
+      make_boxed_value_accommodating tag index ~index_var
+        ~untagged_index_var
+    in
+    let result_var =
+      Var_in_binding_pos.create index_var Name_mode.normal
+    in
+    (*
+    Format.eprintf "Shape:@ %a@ arg_type_at_use:@ %a@ env:@ %a\n%!"
+      T.print shape
+      T.print arg_type_at_use
+      TE.print typing_env_at_use;
+    *)
+    T.meet_shape typing_env base_ty
+      ~shape ~result_var ~result_kind
+
   let project_field _tag () ~block:_ ~index:_ : project_field_result =
     Default_behaviour No_untagging
 end
@@ -795,6 +849,25 @@ struct
       ~this_closure:info.closure_id
       ~closure_element_var:index_var
 
+  let extend_with_projection tag typing_env base_ty index ~index_var
+        ~untagged_index_var ~result_kind =
+    let shape =
+      (* CR mshinwell: Rename, something about "shape" *)
+      make_boxed_value_accommodating tag index ~index_var
+        ~untagged_index_var
+    in
+    let result_var =
+      Var_in_binding_pos.create index_var Name_mode.normal
+    in
+    (*
+    Format.eprintf "Shape:@ %a@ arg_type_at_use:@ %a@ env:@ %a\n%!"
+      T.print shape
+      T.print arg_type_at_use
+      TE.print typing_env_at_use;
+    *)
+    T.meet_shape typing_env base_ty
+      ~shape ~result_var ~result_kind
+
   let project_field _tag () ~block:_ ~index:_ : project_field_result =
     Default_behaviour No_untagging
 end
@@ -842,6 +915,25 @@ end) = struct
        Misc.fatal_errorf "Boxed %ss only have one field" N.name
     end;
     N.box (T.alias_type_of N.unboxed_kind (Simple.var index_var))
+
+  let extend_with_projection tag typing_env base_ty index ~index_var
+        ~untagged_index_var ~result_kind =
+    let shape =
+      (* CR mshinwell: Rename, something about "shape" *)
+      make_boxed_value_accommodating tag index ~index_var
+        ~untagged_index_var
+    in
+    let result_var =
+      Var_in_binding_pos.create index_var Name_mode.normal
+    in
+    (*
+    Format.eprintf "Shape:@ %a@ arg_type_at_use:@ %a@ env:@ %a\n%!"
+      T.print shape
+      T.print arg_type_at_use
+      TE.print typing_env_at_use;
+    *)
+    T.meet_shape typing_env base_ty
+      ~shape ~result_var ~result_kind
 
   let project_field _tag () ~block:_ ~index:_ : project_field_result =
     Default_behaviour No_untagging
@@ -1018,7 +1110,7 @@ let make_unboxing_decisions0 typing_env ~arg_types_by_use_id ~params
     List.fold_left (fun (typing_env, param_types_rev, extra_params_and_args)
               (arg_types_by_use_id, (param, param_type)) ->
         let typing_env, param_type, extra_params_and_args =
-          make_unboxing_decision typing_env ~depth:0 ~arg_types_by_use_id
+          make_unboxing_decision typing_env ~depth:1 ~arg_types_by_use_id
             ~param_being_unboxed:param ~param_type extra_params_and_args
         in
         typing_env, param_type :: param_types_rev, extra_params_and_args)

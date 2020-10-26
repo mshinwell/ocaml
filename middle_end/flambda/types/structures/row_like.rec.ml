@@ -565,6 +565,13 @@ struct
         else
           Known by_tag
 
+    let get_field t field_index : _ Or_unknown.t =
+      match get_singleton t with
+      | None -> Unknown
+      | Some ((_tag, size), maps_to) ->
+        let index = Target_imm.to_targetint field_index in
+        if Targetint.OCaml.(<=) size index then Unknown
+        else Product.Int_indexed.project maps_to (Targetint.OCaml.to_int index)
   end
 
   module For_closures_entry_by_set_of_closures_contents = struct

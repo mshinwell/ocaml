@@ -896,6 +896,13 @@ let simplify_immutable_block_load (access_kind : P.Block_access_kind.t)
     let env_extension = TEE.one_equation (Name.var result_var') ty in
     Reachable.invalid (), env_extension, dacc
   in
+  let exactly simple =
+    let env_extension =
+      TEE.one_equation (Name.var result_var')
+        (T.alias_type_of result_kind simple)
+    in
+    Reachable.reachable original_term, env_extension, dacc
+  in
   let typing_env = DA.typing_env dacc in
   match T.prove_equals_single_tagged_immediate typing_env index_ty with
   | Invalid -> invalid ()
@@ -915,8 +922,11 @@ let simplify_immutable_block_load (access_kind : P.Block_access_kind.t)
           let max_size = Targetint.OCaml.of_int max_size in
           not (Targetint.OCaml.(<=) size max_size)
     in
-    if skip_simplification then unchanged ()
-    else
+    match T.prove_block_field_simple typing_env block_ty index with
+    | Invalid -> invalid ()
+    | Proved simple -> exactly simple
+    | Unknown when skip_simplification -> unchanged ()
+    | Unknown ->
       let n =
         Targetint.OCaml.add (Target_imm.to_targetint index) Targetint.OCaml.one
       in

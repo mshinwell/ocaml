@@ -68,6 +68,10 @@ val concat : t -> t -> t
 
 val meet : Meet_env.t -> t -> t -> t
 
+(** Same as [meet], but more efficient when the domains are disjoint.
+    Optimised for when the [ext] argument is smaller. *)
+val extend : Meet_env.t -> t -> ext:t -> t
+
 val n_way_join
    : env_at_fork:Typing_env.t
   -> (Typing_env.t * Apply_cont_rewrite_id.t * Continuation_use_kind.t

@@ -418,6 +418,7 @@ let meet_equation env t name typ =
     raise Misc.Fatal_error
 
 let meet0 env (t1 : t) (t2 : t) =
+  (* Format.eprintf "Typing_env_level.meet:@ t1=%a@ t2=%a@." print t1 print t2; *)
   let defined_vars =
     Variable.Map.union (fun var kind1 kind2 ->
         if Flambda_kind.equal kind1 kind2 then Some kind1
@@ -510,6 +511,80 @@ let meet env t1 t2 =
   if is_empty t1 then t2
   else if is_empty t2 then t1
   else meet0 env t1 t2
+
+let extend env t1 ~ext:t2 =
+  let defined_vars =
+    Variable.Map.fold (fun var kind defined_vars ->
+        match Variable.Map.find_opt var defined_vars with
+        | None -> Variable.Map.add var kind defined_vars
+        | Some kind2 ->
+          if Flambda_kind.equal kind kind2 then defined_vars
+          else
+            Misc.fatal_errorf "Cannot meet levels that have overlapping \
+                defined variables (e.g. %a) that disagree on kind and/or \
+                binding time:@ %a@ and@ %a"
+              Variable.print var
+              print t1
+              print t2)
+      t2.defined_vars
+      t1.defined_vars
+  in
+  let binding_times =
+    Binding_time.Map.fold (fun bt vars binding_times ->
+        match Binding_time.Map.find_opt bt binding_times with
+        | None -> Binding_time.Map.add bt vars binding_times
+        | Some vars2 ->
+          let vars = Variable.Set.union vars vars2 in
+          Binding_time.Map.add bt vars binding_times)
+      t2.binding_times
+      t1.binding_times
+  in
+  let rec add_equation name typ equations =
+    match Name.Map.find name equations with
+    | exception Not_found ->
+      if equation_is_directly_recursive name typ then equations
+      else Name.Map.add name typ equations
+    | existing_typ ->
+      let meet_typ, extension = Type_grammar.meet' env typ existing_typ in
+      if equation_is_directly_recursive name meet_typ then equations
+      else
+        let equations = Name.Map.add name meet_typ equations in
+        Typing_env_extension.pattern_match extension ~f:(fun t ->
+          (* Sanity check *)
+          if not (Variable.Map.is_empty t.defined_vars) then begin
+            Misc.fatal_errorf "Didn't expect [defined_vars] in:@ %a"
+              print t
+          end;
+          Name.Map.fold add_equation t.equations equations)
+  in
+  let equations = Name.Map.fold add_equation t2.equations t1.equations in
+  let cse =
+    let module FEM = Flambda_primitive.Eligible_for_cse.Map in
+    FEM.fold (fun prim simple cse ->
+        match FEM.find prim cse with
+        | exception Not_found -> FEM.add prim simple cse
+        | existing_simple ->
+          if Simple.equal simple existing_simple then cse
+          else FEM.remove prim cse)
+      t2.cse
+      t1.cse
+  in
+  let symbol_projections =
+    Variable.Map.fold (fun var proj symbol_projections ->
+        match Variable.Map.find var symbol_projections with
+        | exception Not_found -> Variable.Map.add var proj symbol_projections
+        | existing_proj ->
+          if Symbol_projection.equal proj existing_proj then symbol_projections
+          else Variable.Map.remove var symbol_projections)
+      t2.symbol_projections
+      t1.symbol_projections
+  in
+  { defined_vars;
+    binding_times;
+    equations;
+    cse;
+    symbol_projections;
+  }
 
 let join_types ~env_at_fork envs_with_levels ~extra_lifted_consts_in_use_envs =
   (* Add all the variables defined by the branches as existentials to the

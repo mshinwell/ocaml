@@ -550,6 +550,12 @@ val prove_single_closures_entry'
 
 val prove_strings : Typing_env.t -> t -> String_info.Set.t proof
 
+val prove_block_field_simple
+   : Typing_env.t
+  -> t
+  -> Target_imm.t
+  -> Simple.t proof
+
 type var_or_symbol_or_tagged_immediate = private
   | Var of Variable.t
   | Symbol of Symbol.t
