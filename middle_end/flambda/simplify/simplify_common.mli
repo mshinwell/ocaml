@@ -93,35 +93,10 @@ val update_exn_continuation_extra_args
   -> Apply_expr.t
   -> Apply_expr.t
 
-(** Create [Let_symbol] expression(s) around a given body.  Two optimisations
-    are performed:
-    1. Best efforts are made not to create the [Let_symbol](s) if it/they
-       would be redundant.
-    2. Closure variables are removed if they are not used according to the
-       given [r].  Such [r] must have seen all uses in the whole
-       compilation unit. *)
-val create_let_symbols
-   : Upwards_acc.t
-  -> Symbol_scoping_rule.t
-  -> Code_age_relation.t
-  -> Simplify_envs.Lifted_constant.t
-  -> Flambda.Expr.t
-  -> Flambda.Expr.t * Upwards_acc.t
-
-val place_lifted_constants
-   : Upwards_acc.t
-  -> Symbol_scoping_rule.t
-  -> lifted_constants_from_defining_expr:Simplify_envs.Lifted_constant_state.t
-  -> lifted_constants_from_body:Simplify_envs.Lifted_constant_state.t
-  -> put_bindings_around_body:(body:Flambda.Expr.t -> Flambda.Expr.t)
-  -> body:Flambda.Expr.t
-  -> critical_deps_of_bindings:Name_occurrences.t
-  -> Flambda.Expr.t * Upwards_acc.t
-
-(** Create the projection of a tuple (assumed to be a size-tuple of
-   ocaml values. *)
+(** Create a projection from a tuple (assumed to be a [size]-tuple of
+    OCaml values). *)
 val project_tuple
-  : dbg:Debuginfo.t
+   : dbg:Debuginfo.t
   -> size:int
   -> field:int
   -> Simple.t

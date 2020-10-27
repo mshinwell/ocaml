@@ -23,13 +23,27 @@
 
 open! Simplify_import
 
-(** Create [Let_symbol] expression(s) around a given body.  Two optimisations
-    are performed:
+(** Create [Let] binding(s) around a given body.  (The type of this function
+    prevents it from being used to create "let symbol" bindings; use the
+    other functions in this module instead.)  Bindings will be elided if they
+    are unused.
+    The [name_occurrences] in the provided [uacc] must contain exactly the
+    free names of the [body]. *)
+val make_new_let_bindings
+   : Upwards_acc.t
+  -> bindings_outermost_first:(Bindable_let_bound.t * Simplified_named.t) list
+  -> body:Expr.t
+  -> Expr.t
+
+(** Create the "let symbol" binding(s) around a given body necessary to define
+    the given lifted constant.  Two optimisations are performed:
     1. Best efforts are made not to create the [Let_symbol](s) if it/they
        would be redundant.
     2. Closure variables are removed if they are not used according to the
        given [r].  Such [r] must have seen all uses in the whole
-       compilation unit. *)
+       compilation unit.
+    The [name_occurrences] in the provided [uacc] must contain exactly the
+    free names of the [body]. *)
 val create_let_symbols
    : Upwards_acc.t
   -> Symbol_scoping_rule.t
@@ -40,7 +54,9 @@ val create_let_symbols
 
 (** Place lifted constants whose defining expressions involve [Name]s (for
     example those bound by a [Let] or a [Let_cont]) that are about to go out
-    of scope. *)
+    of scope.
+    The [name_occurrences] in the provided [uacc] must contain exactly the
+    free names of the [body]. *)
 val place_lifted_constants
    : Upwards_acc.t
   -> Symbol_scoping_rule.t

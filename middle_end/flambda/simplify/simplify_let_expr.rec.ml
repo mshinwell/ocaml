@@ -18,7 +18,7 @@
 
 open! Simplify_import
 
-let rebuild_let bindable_let_bound ~bindings_outermost_first:bindings
+let rebuild_let bindable_let_bound ~bindings_outermost_first
       ~lifted_constants_from_defining_expr ~at_unit_toplevel ~body uacc
       ~after_rebuild =
   (* At this point, the free names in [uacc] are the free names of [body]. *)
@@ -46,7 +46,9 @@ let rebuild_let bindable_let_bound ~bindings_outermost_first:bindings
           ~outermost:lifted_constants_from_defining_expr
         |> UA.with_lifted_constants uacc
     in
-    let uacc, body = EB.make_new_let_bindings uacc ~bindings ~body in
+    let uacc, body =
+      EB.make_new_let_bindings uacc ~bindings_outermost_first ~body
+    in
     after_rebuild body uacc
   else
     let scoping_rule =
@@ -57,7 +59,8 @@ let rebuild_let bindable_let_bound ~bindings_outermost_first:bindings
         (Bindable_let_bound.let_symbol_scoping_rule bindable_let_bound)
     in
     let critical_deps_of_bindings =
-      ListLabels.fold_left bindings ~init:Name_occurrences.empty
+      ListLabels.fold_left bindings_outermost_first
+        ~init:Name_occurrences.empty
         ~f:(fun critical_deps (bound, _) ->
           Name_occurrences.union (Bindable_let_bound.free_names bound)
             critical_deps)
@@ -67,7 +70,8 @@ let rebuild_let bindable_let_bound ~bindings_outermost_first:bindings
         scoping_rule
         ~lifted_constants_from_defining_expr
         ~lifted_constants_from_body
-        ~put_bindings_around_body:(EB.make_new_let_bindings ~bindings)
+        ~put_bindings_around_body:
+          (EB.make_new_let_bindings ~bindings_outermost_first)
         ~body
         ~critical_deps_of_bindings
     in
