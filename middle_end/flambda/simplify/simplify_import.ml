@@ -45,6 +45,7 @@ module CUE = Continuation_uses_env
 module DA = Downwards_acc
 module DE = Simplify_envs.Downwards_env
 module EA = Continuation_extra_params_and_args.Extra_arg
+module EB = Expr_builder
 module EPA = Continuation_extra_params_and_args
 module FD = Function_declaration
 module FU = Flambda_unit
