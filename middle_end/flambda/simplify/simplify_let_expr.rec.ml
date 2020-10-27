@@ -24,7 +24,7 @@ type let_creation_result =
   | Have_deleted of Named.t
   | Nothing_deleted
 
-let create_singleton_let uacc (bound_var : Var_in_binding_pos.t) defining_expr
+let create_singleton_let uacc (bound_var : VB.t) defining_expr
       ~free_names_of_defining_expr ~body =
   let generate_phantom_lets =
     !Clflags.debug && !Clflags.Flambda.Expert.phantom_lets
@@ -34,11 +34,9 @@ let create_singleton_let uacc (bound_var : Var_in_binding_pos.t) defining_expr
   let bound_var, keep_binding, let_creation_result =
     let greatest_name_mode =
       Name_occurrences.greatest_name_mode_var free_names_of_body
-        (Var_in_binding_pos.var bound_var)
+        (VB.var bound_var)
     in
-    let declared_name_mode =
-      Var_in_binding_pos.name_mode bound_var
-    in
+    let declared_name_mode = VB.name_mode bound_var in
     begin match
       Name_mode.Or_absent.compare_partial_order
          greatest_name_mode
@@ -51,7 +49,7 @@ let create_singleton_let uacc (bound_var : Var_in_binding_pos.t) defining_expr
         Misc.fatal_errorf "[Let]-binding declares variable %a (mode %a) to \
             be bound to@ %a,@ but this variable has occurrences at a higher \
             mode@ (>= %a)@ in the body (free names %a):@ %a"
-          Var_in_binding_pos.print bound_var
+          VB.print bound_var
           Name_mode.print declared_name_mode
           Named.print defining_expr
           Name_mode.Or_absent.print greatest_name_mode
@@ -63,16 +61,14 @@ let create_singleton_let uacc (bound_var : Var_in_binding_pos.t) defining_expr
       then begin
         Misc.fatal_errorf "Cannot [Let]-bind non-normal variable to \
             a primitive that has more than generative effects:@ %a@ =@ %a"
-          Var_in_binding_pos.print bound_var
+          VB.print bound_var
           Named.print defining_expr
       end;
       bound_var, true, Nothing_deleted
     end else begin
-      let has_uses =
-        Name_mode.Or_absent.is_present greatest_name_mode
-      in
+      let has_uses = Name_mode.Or_absent.is_present greatest_name_mode in
       let user_visible =
-        Variable.user_visible (Var_in_binding_pos.var bound_var)
+        Variable.user_visible (VB.var bound_var)
       in
       let will_delete_binding =
         (* CR mshinwell: This should detect whether there is any
@@ -90,13 +86,9 @@ let create_singleton_let uacc (bound_var : Var_in_binding_pos.t) defining_expr
           | Present name_mode -> name_mode
         in
         assert (Name_mode.can_be_in_terms name_mode);
-        let bound_var =
-          Var_in_binding_pos.with_name_mode bound_var name_mode
-        in
-        if Name_mode.is_normal name_mode then
-          bound_var, true, Nothing_deleted
-        else
-          bound_var, true, Have_deleted defining_expr
+        let bound_var = VB.with_name_mode bound_var name_mode in
+        if Name_mode.is_normal name_mode then bound_var, true, Nothing_deleted
+        else bound_var, true, Have_deleted defining_expr
     end
   in
   (* CR mshinwell: When leaving behind phantom lets, maybe we should turn
@@ -108,20 +100,16 @@ let create_singleton_let uacc (bound_var : Var_in_binding_pos.t) defining_expr
   if not keep_binding then body, uacc, let_creation_result
   else
     let free_names_of_body = UA.name_occurrences uacc in
-    let free_names_of_body_without_bound_var =
-      Name_occurrences.remove_var free_names bound_var
-    in
     let free_names_of_defining_expr =
       if not generate_phantom_lets then (* CR mshinwell: refine condition *)
         free_names_of_defining_expr
       else
         Name_occurrences.downgrade_occurrences_at_strictly_greater_kind
-          free_names_of_defining_expr
-          (Var_in_binding_pos.name_mode bound_var)
+          free_names_of_defining_expr (VB.name_mode bound_var)
     in
     let free_names_of_let =
-      Name_occurrences.union free_names_of_body_without_bound_var
-        free_names_of_defining_expr
+      Name_occurrences.remove_var free_names_of_body (VB.var bound_var)
+      |> Name_occurrences.union free_names_of_defining_expr
     in
     let uacc = UA.with_name_occurrences uacc free_names_of_let in
     let let_expr =
@@ -136,21 +124,16 @@ let create_set_of_closures_let uacc bound_vars defining_expr
   (* CR-someday mshinwell: Think about how to phantomise these [Let]s. *)
   let all_bound_vars_unused =
     ListLabels.for_all closure_vars ~f:(fun closure_var ->
-      let closure_var = Var_in_binding_pos.var closure_var in
-      not (Name_occurrences.mem_var free_names_of_body closure_var))
+      not (Name_occurrences.mem_var free_names_of_body (VB.var closure_var)))
   in
   if all_bound_vars_unused then body, uacc, Have_deleted defining_expr
   else
     let free_names_of_body = UA.name_occurrences uacc in
-    let free_names_of_body_without_bound_vars =
+    let free_names_of_let =
       ListLabels.fold_left closure_vars ~init:free_names_of_body
         ~f:(fun free_names closure_var ->
-          let closure_var = Var_in_binding_pos.var closure_var in
-          Name_occurrences.remove_var free_names closure_var)
-    in
-    let free_names_of_let =
-      Name_occurrences.union free_names_of_body_without_bound_vars
-        free_names_of_defining_expr
+          Name_occurrences.remove_var free_names (VB.var closure_var))
+      |> Name_occurrences.union free_names_of_defining_expr
     in
     let uacc = UA.with_name_occurrences uacc free_names_of_let in
     let let_expr =
@@ -159,10 +142,10 @@ let create_set_of_closures_let uacc bound_vars defining_expr
     in
     Expr.create_let let_expr, uacc, Nothing_deleted
 
-let make_new_let_bindings uacc ~bindings ~body =
+let make_new_let_bindings uacc ~bindings_outermost_first ~body =
   (* The name occurrences component of [uacc] is expected to be in the state
      described in the comment below at the top of [rebuild_let]. *)
-  ListLabels.fold_left (List.rev bindings) ~init:(body, uacc)
+  ListLabels.fold_left (List.rev bindings_outermost_first) ~init:(body, uacc)
     ~f:(fun (expr, uacc) (bound, defining_expr) ->
       match (defining_expr : Simplified_named.t) with
       | Invalid _ ->
@@ -226,8 +209,7 @@ let rebuild_let bindable_let_bound ~bindings_outermost_first:bindings
     let scoping_rule =
       (* If this is a "normal" let rather than a "let symbol", then we
          use [Dominator] scoping for any symbol bindings we place, as the
-         types of the symbols may have been used out of syntactic scope.
-      *)
+         types of the symbols may have been used out of syntactic scope. *)
       Option.value ~default:Symbol_scoping_rule.Dominator
         (Bindable_let_bound.let_symbol_scoping_rule bindable_let_bound)
     in
@@ -272,8 +254,7 @@ let simplify_let dacc let_expr ~down_to_up =
        Note that no lifted constants are ever placed during the simplification
        of the defining expression.  (Not even in the case of a
        [Set_of_closures] binding, since "let symbol" is disallowed under a
-       lambda.)
-    *)
+       lambda.) *)
     let lifted_constants_from_defining_expr =
       Sort_lifted_constants.sort (DA.get_lifted_constants dacc)
     in
