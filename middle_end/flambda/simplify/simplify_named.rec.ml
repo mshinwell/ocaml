@@ -19,14 +19,14 @@
 open! Simplify_import
 
 type simplify_named_result = {
-  bindings_outermost_first : (Bindable_let_bound.t * Reachable.t) list;
+  bindings_outermost_first : (Bindable_let_bound.t * Simplified_named.t) list;
   dacc : Downwards_acc.t;
 }
 
 let bindings_result bindings_outermost_first dacc =
   { bindings_outermost_first; dacc; }
 
-let record_any_symbol_projection dacc (defining_expr : Reachable.t)
+let record_any_symbol_projection dacc (defining_expr : Simplified_named.t)
       (prim : P.t) args bindable_let_bound ~bound_var named =
   (* Projections from symbols bound to variables are important to remember,
      since if such a variable occurs in a set of closures environment or
@@ -158,13 +158,13 @@ let simplify_named0 dacc (bindable_let_bound : Bindable_let_bound.t)
     begin match S.simplify_simple dacc simple ~min_name_mode with
     | Bottom, ty ->
       let dacc = DA.add_variable dacc bound_var (T.bottom (T.kind ty)) in
-      let defining_expr = Reachable.invalid () in
+      let defining_expr = Simplified_named.invalid () in
       bindings_result [bindable_let_bound, defining_expr] dacc
     | Ok new_simple, ty ->
       let dacc = DA.add_variable dacc bound_var ty in
       let defining_expr =
-        if simple == new_simple then Reachable.reachable named
-        else Reachable.reachable (Named.create_simple simple)
+        if simple == new_simple then Simplified_named.reachable named
+        else Simplified_named.reachable (Named.create_simple simple)
       in
       bindings_result [bindable_let_bound, defining_expr] dacc
     end
@@ -203,7 +203,7 @@ let simplify_named0 dacc (bindable_let_bound : Bindable_let_bound.t)
       Reification.try_to_reify dacc term ~bound_to:bound_var ~allow_lifting
     in
     let defining_expr =
-      if T.is_bottom (DA.typing_env dacc) ty then Reachable.invalid ()
+      if T.is_bottom (DA.typing_env dacc) ty then Simplified_named.invalid ()
       else defining_expr
     in
     let dacc =

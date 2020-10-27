@@ -105,7 +105,7 @@ let simplify_project_var closure_id closure_element ~min_name_mode dacc
         match TE.get_canonical_simple_exn ~min_name_mode typing_env alias with
         | exception Not_found -> reachable, false
         | canonical ->
-          let reachable = Reachable.reachable (Named.create_simple canonical) in
+          let reachable = Simplified_named.reachable (Named.create_simple canonical) in
           reachable, true
       end
     | Invalid _ -> reachable, false
@@ -160,7 +160,7 @@ let simplify_box_number (boxable_number_kind : K.Boxable_number.t)
     | Naked_nativeint -> T.box_nativeint naked_number_ty
     | Untagged_immediate -> T.tag_immediate naked_number_ty
   in
-  Reachable.reachable original_term,
+  Simplified_named.reachable original_term,
     TEE.one_equation (Name.var (Var_in_binding_pos.var result_var)) ty,
     dacc
 
@@ -169,7 +169,7 @@ let simplify_is_int_or_get_tag dacc ~original_term ~scrutinee ~scrutinee_ty:_
   (* CR mshinwell: Check [scrutinee_ty] (e.g. its kind)? *)
   let name = Name.var (Var_in_binding_pos.var result_var) in
   let env_extension = TEE.one_equation name (make_shape scrutinee) in
-  Reachable.reachable original_term, env_extension, dacc
+  Simplified_named.reachable original_term, env_extension, dacc
 
 let simplify_is_int dacc ~original_term ~arg:scrutinee ~arg_ty:scrutinee_ty
       ~result_var =
@@ -199,23 +199,23 @@ let simplify_string_length dacc ~original_term ~arg:_ ~arg_ty:str_ty
   | Proved str_infos ->
     if String_info.Set.is_empty str_infos then
       let ty = T.bottom K.naked_immediate in
-      Reachable.invalid (), TEE.one_equation name ty, dacc
+      Simplified_named.invalid (), TEE.one_equation name ty, dacc
     else
       begin match String_info.Set.get_singleton str_infos with
       | None ->
         let ty = T.unknown K.naked_immediate in
-        Reachable.reachable original_term, TEE.one_equation name ty, dacc
+        Simplified_named.reachable original_term, TEE.one_equation name ty, dacc
       | Some str ->
         let length = Target_imm.int (String_info.size str) in
         let ty = T.this_naked_immediate length in
-        Reachable.reachable original_term, TEE.one_equation name ty, dacc
+        Simplified_named.reachable original_term, TEE.one_equation name ty, dacc
       end
   | Unknown ->
     let ty = T.unknown K.naked_immediate in
-    Reachable.reachable original_term, TEE.one_equation name ty, dacc
+    Simplified_named.reachable original_term, TEE.one_equation name ty, dacc
   | Invalid ->
     let ty = T.bottom K.naked_immediate in
-    Reachable.invalid (), TEE.one_equation name ty, dacc
+    Simplified_named.invalid (), TEE.one_equation name ty, dacc
 
 module Unary_int_arith (I : A.Int_number_kind) = struct
   let simplify (op : P.unary_int_arith_op) dacc ~original_term ~arg:_
@@ -229,14 +229,14 @@ module Unary_int_arith (I : A.Int_number_kind) = struct
         TEE.one_equation result
           (T.unknown (K.Standard_int_or_float.to_kind I.kind))
       in
-      Reachable.reachable original_term, env_extension, dacc
+      Simplified_named.reachable original_term, env_extension, dacc
     in
     let result_invalid () =
       let env_extension =
         TEE.one_equation result
           (T.bottom (K.Standard_int_or_float.to_kind I.kind))
       in
-      Reachable.reachable original_term, env_extension, dacc
+      Simplified_named.reachable original_term, env_extension, dacc
     in
     match proof with
     | Proved ints ->
@@ -246,14 +246,14 @@ module Unary_int_arith (I : A.Int_number_kind) = struct
         let possible_results = I.Num.Set.map (fun i -> I.Num.neg i) ints in
         let ty = I.these_unboxed possible_results in
         let env_extension = TEE.one_equation result ty in
-        Reachable.reachable original_term, env_extension, dacc
+        Simplified_named.reachable original_term, env_extension, dacc
       | Swap_byte_endianness ->
         let possible_results =
           I.Num.Set.map (fun i -> I.Num.swap_byte_endianness i) ints
         in
         let ty = I.these_unboxed possible_results in
         let env_extension = TEE.one_equation result ty in
-        Reachable.reachable original_term, env_extension, dacc
+        Simplified_named.reachable original_term, env_extension, dacc
       end
     | Unknown -> result_unknown ()
     | Invalid -> result_invalid ()
@@ -275,7 +275,7 @@ module Make_simplify_int_conv (N : A.Number_kind) = struct
     let typing_env = DE.typing_env denv in
     if K.Standard_int_or_float.equal N.kind dst then
       let env_extension = TEE.one_equation result arg_ty in
-      Reachable.reachable original_term, env_extension, dacc
+      Simplified_named.reachable original_term, env_extension, dacc
     else
       let proof = N.unboxed_prover typing_env arg_ty in
       let module Num = N.Num in
@@ -292,7 +292,7 @@ module Make_simplify_int_conv (N : A.Number_kind) = struct
           in
           let ty = T.these_tagged_immediates imms in
           let env_extension = TEE.one_equation result ty in
-          Reachable.reachable original_term, env_extension, dacc
+          Simplified_named.reachable original_term, env_extension, dacc
         | Naked_immediate ->
           let imms =
             Num.Set.fold (fun i imms ->
@@ -302,7 +302,7 @@ module Make_simplify_int_conv (N : A.Number_kind) = struct
           in
           let ty = T.these_naked_immediates imms in
           let env_extension = TEE.one_equation result ty in
-          Reachable.reachable original_term, env_extension, dacc
+          Simplified_named.reachable original_term, env_extension, dacc
         | Naked_float ->
           let fs =
             Num.Set.fold (fun i fs -> Float.Set.add (Num.to_naked_float i) fs)
@@ -311,7 +311,7 @@ module Make_simplify_int_conv (N : A.Number_kind) = struct
           in
           let ty = T.these_naked_floats fs in
           let env_extension = TEE.one_equation result ty in
-          Reachable.reachable original_term, env_extension, dacc
+          Simplified_named.reachable original_term, env_extension, dacc
         | Naked_int32 ->
           let is =
             Num.Set.fold (fun i is -> Int32.Set.add (Num.to_naked_int32 i) is)
@@ -320,7 +320,7 @@ module Make_simplify_int_conv (N : A.Number_kind) = struct
           in
           let ty = T.these_naked_int32s is in
           let env_extension = TEE.one_equation result ty in
-          Reachable.reachable original_term, env_extension, dacc
+          Simplified_named.reachable original_term, env_extension, dacc
         | Naked_int64 ->
           let is =
             Num.Set.fold (fun i is -> Int64.Set.add (Num.to_naked_int64 i) is)
@@ -329,7 +329,7 @@ module Make_simplify_int_conv (N : A.Number_kind) = struct
           in
           let ty = T.these_naked_int64s is in
           let env_extension = TEE.one_equation result ty in
-          Reachable.reachable original_term, env_extension, dacc
+          Simplified_named.reachable original_term, env_extension, dacc
         | Naked_nativeint ->
           let is =
             Num.Set.fold (fun i is ->
@@ -339,16 +339,16 @@ module Make_simplify_int_conv (N : A.Number_kind) = struct
           in
           let ty = T.these_naked_nativeints is in
           let env_extension = TEE.one_equation result ty in
-          Reachable.reachable original_term, env_extension, dacc
+          Simplified_named.reachable original_term, env_extension, dacc
         end
       | Unknown ->
         let ty = T.unknown (K.Standard_int_or_float.to_kind dst) in
         let env_extension = TEE.one_equation result ty in
-        Reachable.reachable original_term, env_extension, dacc
+        Simplified_named.reachable original_term, env_extension, dacc
       | Invalid ->
         let ty = T.bottom (K.Standard_int_or_float.to_kind dst) in
         let env_extension = TEE.one_equation result ty in
-        Reachable.reachable original_term, env_extension, dacc
+        Simplified_named.reachable original_term, env_extension, dacc
 end
 
 module Simplify_int_conv_tagged_immediate =
@@ -369,12 +369,12 @@ let simplify_boolean_not dacc ~original_term ~arg:_ ~arg_ty ~result_var =
   let result_unknown () =
     let ty = T.unknown K.value in
     let env_extension = TEE.one_equation result ty in
-    Reachable.reachable original_term, env_extension, dacc
+    Simplified_named.reachable original_term, env_extension, dacc
   in
   let result_invalid () =
     let ty = T.bottom K.value in
     let env_extension = TEE.one_equation result ty in
-    Reachable.invalid (), env_extension, dacc
+    Simplified_named.invalid (), env_extension, dacc
   in
   match proof with
   | Proved imms ->
@@ -396,13 +396,13 @@ let simplify_boolean_not dacc ~original_term ~arg:_ ~arg_ty ~result_var =
       in
       let ty = T.these_tagged_immediates imms in
       let env_extension = TEE.one_equation result ty in
-      Reachable.reachable original_term, env_extension, dacc
+      Simplified_named.reachable original_term, env_extension, dacc
   | Unknown ->
     (* CR-someday mshinwell: This could say something like (in the type) "when
        the input is 0, the value is 1" and vice-versa. *)
     let ty = T.these_tagged_immediates Target_imm.all_bools in
     let env_extension = TEE.one_equation result ty in
-    Reachable.reachable original_term, env_extension, dacc
+    Simplified_named.reachable original_term, env_extension, dacc
   | Invalid -> result_invalid ()
 
 let simplify_float_arith_op (op : P.unary_float_arith_op) dacc ~original_term
@@ -418,12 +418,12 @@ let simplify_float_arith_op (op : P.unary_float_arith_op) dacc ~original_term
     (* CR mshinwell: If this says [invalid] not [reachable] then a function
        that just returns the negation of its float argument will fail to
        compile.  This may indicate a bug elsewhere. *)
-    Reachable.reachable original_term, env_extension, dacc
+    Simplified_named.reachable original_term, env_extension, dacc
   in
   let result_invalid () =
     let ty = T.bottom K.naked_float in
     let env_extension = TEE.one_equation result ty in
-    Reachable.invalid (), env_extension, dacc
+    Simplified_named.invalid (), env_extension, dacc
   in
   match proof with
   | Proved fs when DE.float_const_prop denv ->
@@ -435,7 +435,7 @@ let simplify_float_arith_op (op : P.unary_float_arith_op) dacc ~original_term
     in
     let ty = T.these_naked_floats possible_results in
     let env_extension = TEE.one_equation result ty in
-    Reachable.reachable original_term, env_extension, dacc
+    Simplified_named.reachable original_term, env_extension, dacc
   | Proved _ | Unknown -> result_unknown ()
   | Invalid -> result_invalid ()
 
@@ -457,7 +457,7 @@ let simplify_unary_primitive dacc (prim : P.unary_primitive)
   let result_var' = Var_in_binding_pos.var result_var in
   let invalid ty =
     let env_extension = TEE.one_equation (Name.var result_var') ty in
-    Reachable.invalid (), env_extension, [arg], dacc
+    Simplified_named.invalid (), env_extension, [arg], dacc
   in
   match try_cse dacc prim arg ~min_name_mode ~result_var:result_var' with
   | Invalid ty -> invalid ty
@@ -513,7 +513,7 @@ let simplify_unary_primitive dacc (prim : P.unary_primitive)
             let named = Named.create_prim (Unary (prim, arg)) dbg in
             let ty = T.unknown result_kind in
             let env_extension = TEE.one_equation (Name.var result_var') ty in
-            Reachable.reachable named, env_extension, dacc
+            Simplified_named.reachable named, env_extension, dacc
       in
       let reachable, env_extension, dacc =
         simplifier dacc ~original_term ~arg ~arg_ty ~result_var

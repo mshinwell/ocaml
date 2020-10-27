@@ -45,7 +45,7 @@ let simplify_ternary_primitive dacc (prim : P.ternary_primitive)
   let result_var' = Var_in_binding_pos.var result_var in
   let invalid ty =
     let env_extension = TEE.one_equation (Name.var result_var') ty in
-    Reachable.invalid (), env_extension, [arg1; arg2; arg3], dacc
+    Simplified_named.invalid (), env_extension, [arg1; arg2; arg3], dacc
   in
   match
     try_cse dacc prim arg1 arg2 arg3 ~min_name_mode
@@ -74,4 +74,4 @@ let simplify_ternary_primitive dacc (prim : P.ternary_primitive)
             in
             let ty = T.unknown result_kind in
             let env_extension = TEE.one_equation (Name.var result_var') ty in
-            Reachable.reachable named, env_extension, [arg1; arg2; arg3], dacc
+            Simplified_named.reachable named, env_extension, [arg1; arg2; arg3], dacc

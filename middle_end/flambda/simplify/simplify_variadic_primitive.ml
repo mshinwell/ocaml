@@ -26,7 +26,7 @@ let simplify_make_block_of_values dacc _prim dbg tag ~shape
   let invalid () =
     let ty = T.bottom K.value in
     let env_extension = TEE.one_equation (Name.var result_var) ty in
-    Reachable.invalid (), env_extension, args, dacc
+    Simplified_named.invalid (), env_extension, args, dacc
   in
   if List.compare_lengths shape args <> 0 then begin
     (* CR mshinwell: improve message *)
@@ -69,7 +69,7 @@ let simplify_make_block_of_values dacc _prim dbg tag ~shape
       | Mutable -> T.any_value ()
     in
     let env_extension = TEE.one_equation (Name.var result_var) ty in
-    Reachable.reachable term, env_extension, args, dacc
+    Simplified_named.reachable term, env_extension, args, dacc
   end
 
 let try_cse dacc ~original_prim prim args ~min_name_mode ~result_var
@@ -111,7 +111,7 @@ let simplify_variadic_primitive dacc ~original_named ~original_prim
   let result_var' = Var_in_binding_pos.var result_var in
   let invalid ty =
     let env_extension = TEE.one_equation (Name.var result_var') ty in
-    Reachable.invalid (), env_extension, args, dacc
+    Simplified_named.invalid (), env_extension, args, dacc
   in
   match
     try_cse dacc ~original_prim prim args ~min_name_mode ~result_var:result_var'
@@ -152,4 +152,4 @@ let simplify_variadic_primitive dacc ~original_named ~original_prim
             T.array_of_length ~length
         in
         let env_extension = TEE.one_equation (Name.var result_var') ty in
-        Reachable.reachable named, env_extension, args, dacc
+        Simplified_named.reachable named, env_extension, args, dacc

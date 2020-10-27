@@ -47,13 +47,13 @@ let simplify_projection dacc ~original_term ~deconstructing ~shape ~result_var
       ~result_kind =
   let env = DA.typing_env dacc in
   match T.meet_shape env deconstructing ~shape ~result_var ~result_kind with
-  | Bottom -> Reachable.invalid (), TEE.empty (), dacc
+  | Bottom -> Simplified_named.invalid (), TEE.empty (), dacc
   | Ok env_extension ->
-    Reachable.reachable original_term, env_extension, dacc
+    Simplified_named.reachable original_term, env_extension, dacc
 
 type cse =
   | Invalid of T.t
-  | Applied of (Reachable.t * TEE.t * Simple.t list * DA.t)
+  | Applied of (Simplified_named.t * TEE.t * Simple.t list * DA.t)
   | Not_applied of DA.t
 
 let apply_cse dacc ~original_prim =
@@ -78,7 +78,7 @@ let try_cse dacc ~original_prim ~result_kind ~min_name_mode ~args
       let named = Named.create_simple replace_with in
       let ty = T.alias_type_of result_kind replace_with in
       let env_extension = TEE.one_equation (Name.var result_var) ty in
-      Applied (Reachable.reachable named, env_extension, args, dacc)
+      Applied (Simplified_named.reachable named, env_extension, args, dacc)
     | None ->
       let dacc =
         match P.Eligible_for_cse.create original_prim with
@@ -223,6 +223,33 @@ let update_exn_continuation_extra_args uacc ~exn_cont_use_id apply =
 
 (* XXX Don't forget that this code needs to adjust uacc for occurrences *)
 
+let create_let_symbol bindable defining_expr body =
+  let free_names_of_body = free_names body in
+  let free_names_of_bindable = Bindable_let_bound.free_names bindable in
+  let let_expr =
+    Let_expr.create bindable ~defining_expr ~body
+      ~free_names_of_body:(Known free_names_of_body)
+  in
+  let free_names =
+    let from_defining_expr = Named.free_names defining_expr in
+    Name_occurrences.union from_defining_expr
+      (Name_occurrences.diff free_names_of_body free_names_of_bindable)
+  in
+  { descr = Let let_expr;
+    delayed_permutation = Name_permutation.empty;
+    free_names = Some free_names;
+  }
+  (* XXX *)
+
+let create_let_symbol uacc bound_symbols scoping_rule static_consts body : t =
+  let expr, _ =
+    create_pattern_let0 uacc
+      (Bindable_let_bound.symbols bound_symbols scoping_rule)
+      (Named.create_static_consts static_consts)
+      body
+  in
+  expr, uacc
+
 let create_let_symbol0 uacc code_age_relation (bound_symbols : Bound_symbols.t)
       (static_consts : Static_const.Group.With_free_names.t) body =
 (*
@@ -306,7 +333,7 @@ let create_let_symbol0 uacc code_age_relation (bound_symbols : Bound_symbols.t)
           | Some _ | None -> static_const)
     in
     let expr =
-      Expr.create_let_symbol bound_symbols Syntactic static_consts body
+      create_let_symbol bound_symbols Syntactic static_consts body
     in
     let uacc =
       Static_const.Group.pieces_of_code_by_code_id static_consts
@@ -559,3 +586,16 @@ let split_direct_over_application apply ~param_arity =
   in
   expr
 
+let bind_parameters_to_args uacc ~params ~args ~body ~free_names_of_body =
+  if List.compare_lengths params args <> 0 then begin
+    Misc.fatal_errorf "Mismatching parameters and arguments: %a and %a"
+      KP.List.print params
+      Simple.List.print args
+  end;
+  let bindings =
+    ListLabels.map2 params args
+      ~f:(fun param arg ->
+        let var = Var_in_binding_pos.create (KP.var param) Name_mode.normal in
+        var, Named.create_simple arg)
+  in
+  bind uacc ~bindings ~body ~free_names_of_body

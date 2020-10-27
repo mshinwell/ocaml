@@ -678,7 +678,7 @@ let simplify_and_lift_set_of_closures dacc ~closure_bound_vars_inverse
           let typ = T.alias_type_of K.value simple in
           let denv = DE.add_variable denv bound_var typ in
           let bound_var = Bindable_let_bound.singleton bound_var in
-          denv, (bound_var, Reachable.reachable defining_expr) :: bindings)
+          denv, (bound_var, Simplified_named.reachable defining_expr) :: bindings)
       closure_bound_vars
       (denv, [])
   in
@@ -711,7 +711,7 @@ let simplify_non_lifted_set_of_closures0 dacc bound_vars ~closure_bound_vars
       ~closure_elements ~closure_element_types
   in
   let defining_expr =
-    Reachable.reachable_with_known_free_names
+    Simplified_named.reachable_with_known_free_names
       (Named.create_set_of_closures set_of_closures)
       ~free_names
   in
