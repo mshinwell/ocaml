@@ -37,7 +37,7 @@ val make_new_let_bindings
 
 (** Create the "let symbol" binding(s) around a given body necessary to define
     the given lifted constant.  Two optimisations are performed:
-    1. Best efforts are made not to create the [Let_symbol](s) if it/they
+    1. Best efforts are made not to create the binding(s) if it/they
        would be redundant.
     2. Closure variables are removed if they are not used according to the
        given [r].  Such [r] must have seen all uses in the whole

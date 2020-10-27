@@ -176,9 +176,17 @@ let make_new_let_bindings uacc ~bindings_outermost_first ~body =
 
 (* XXX Don't forget that this code needs to adjust uacc for occurrences *)
 
-let create_let_symbol bindable defining_expr body =
-  let free_names_of_body = free_names body in
+let create_raw_let_symbol uacc bound_symbols scoping_rule static_consts body =
+  (* Upon entry to this function, [UA.name_occurrences uacc] must precisely
+     indicate the free names of [body]. *)
+  let bindable = Bindable_let_bound.symbols bound_symbols scoping_rule in
+  let defining_expr = Named.create_static_consts static_consts in
+  let free_names_of_body = UA.name_occurrences uacc in
   let free_names_of_bindable = Bindable_let_bound.free_names bindable in
+
+  (* XXX Wed.: share this next piece of code with the code used in the
+     singleton case above? *)
+
   let let_expr =
     Let_expr.create bindable ~defining_expr ~body
       ~free_names_of_body:(Known free_names_of_body)
@@ -194,21 +202,17 @@ let create_let_symbol bindable defining_expr body =
   }
   (* XXX *)
 
-let create_let_symbol uacc bound_symbols scoping_rule static_consts body : t =
   let expr, _ =
     create_pattern_let0 uacc
-      (Bindable_let_bound.symbols bound_symbols scoping_rule)
-      (Named.create_static_consts static_consts)
       body
   in
   expr, uacc
 
 let create_let_symbol0 uacc code_age_relation (bound_symbols : Bound_symbols.t)
       (static_consts : Static_const.Group.With_free_names.t) body =
-(*
-  Format.eprintf "create_let_symbol %a\n%!" Bound_symbols.print bound_symbols;
-*)
-  let free_names_after =  XXX Expr.free_names body in
+  (* Upon entry to this function, [UA.name_occurrences uacc] must precisely
+     indicate the free names of [body]. *)
+  let free_names_after = UA.name_occurrences uacc in
   let bound_names_unused =
     let being_defined =
       Bound_symbols.everything_being_defined bound_symbols
@@ -285,8 +289,8 @@ let create_let_symbol0 uacc code_age_relation (bound_symbols : Bound_symbols.t)
             Code (Code.make_deleted code)
           | Some _ | None -> static_const)
     in
-    let expr =
-      create_let_symbol bound_symbols Syntactic static_consts body
+    let expr, uacc =
+      create_raw_let_symbol uacc bound_symbols Syntactic static_consts body
     in
     let uacc =
       Static_const.Group.pieces_of_code_by_code_id static_consts
@@ -299,6 +303,8 @@ let remove_unused_closure_vars uacc static_const =
   | Set_of_closures set_of_closures ->
     let name_occurrences = UA.name_occurrences uacc in
     let free_names =
+      (* If we are deleting a closure variable, the free names structure in
+         [uacc] must be adjusted correspondingly. *)
       Var_within_closure.Map.fold (fun closure_var _ free_names ->
           if Name_occurrences.mem_closure_var name_occurrences then
             free_names
@@ -343,8 +349,8 @@ let create_let_symbols uacc (scoping_rule : Symbol_scoping_rule.t)
     | Syntactic ->
       create_let_symbol0 uacc code_age_relation bound_symbols static_consts body
     | Dominator ->
-      let expr =
-        Expr.create_let_symbol bound_symbols scoping_rule static_consts body
+      let expr, uacc =
+        create_raw_let_symbol uacc bound_symbols scoping_rule static_consts body
       in
       let uacc =
         defining_exprs
@@ -405,7 +411,7 @@ let create_let_symbols uacc (scoping_rule : Symbol_scoping_rule.t)
         create_let uacc (Var_in_binding_pos.create var NM.normal)
           (apply_projection proj) expr)
       symbol_projections
-      expr, uacc
+      (expr, uacc)
   in
   expr, uacc
 
