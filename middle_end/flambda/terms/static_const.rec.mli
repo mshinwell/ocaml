@@ -72,20 +72,9 @@ val match_against_bound_symbols_pattern
   -> block_like:(Symbol.t -> t -> 'a)
   -> 'a
 
-module With_free_names : sig
-  type static_const = t
-  type t
-
-  val create : static_const -> Name_occurrences.t -> t
-
-  val const : t -> static_const
-  val free_names : t -> Name_occurrences.t
-end
-
 (* CR mshinwell: This should probably move to its own file. *)
 module Group : sig
   type t
-  type group = t
 
   include Contains_names.S with type t := t
   include Contains_ids.S with type t := t
@@ -102,6 +91,8 @@ module Group : sig
 
   val concat : t -> t -> t
 
+  val map : t -> f:(static_const -> static_const) -> t
+
   val match_against_bound_symbols
      : t
     -> Bound_symbols.t
@@ -115,8 +106,10 @@ module Group : sig
     -> block_like:('a -> Symbol.t -> static_const -> 'a)
     -> 'a
 
-  val pieces_of_code : t -> Function_params_and_body.t Code_id.Map.t
+  (** This function ignores [Deleted] code. *)
+  val pieces_of_code : t -> Code.t Code_id.Map.t
 
+  (** This function ignores [Deleted] code. *)
   val pieces_of_code' : t -> Code.t list
 
   val is_fully_static : t -> bool

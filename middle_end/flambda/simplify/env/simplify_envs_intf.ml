@@ -178,6 +178,7 @@ module type Downwards_env = sig
      : t
     -> code_id:Code_id.t
     -> code:Code.t
+    -> free_names_of_code:Name_occurrences.t
     -> t
 
   val mem_code : t -> Code_id.t -> bool
@@ -359,7 +360,7 @@ module type Lifted_constant = sig
   val create_block_like
      : Symbol.t
     -> symbol_projections:Symbol_projection.t Variable.Map.t
-    -> Flambda.Static_const_with_free_names.t
+    -> Static_const_with_free_names.t
     -> downwards_env
     -> Flambda_type.t
     -> t
@@ -368,12 +369,12 @@ module type Lifted_constant = sig
      : downwards_env
     -> closure_symbols_with_types:(Symbol.t * Flambda_type.t) Closure_id.Lmap.t
     -> symbol_projections:Symbol_projection.t Variable.Map.t
-    -> Flambda.Static_const_with_free_names.t
+    -> Static_const_with_free_names.t
     -> t
 
   val create_code
      : Code_id.t
-    -> Flambda.Static_const_with_free_names.t
+    -> Static_const_with_free_names.t
     -> t
 
   val definitions : t -> Definition.t list

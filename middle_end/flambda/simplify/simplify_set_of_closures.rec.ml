@@ -224,12 +224,14 @@ end = struct
 
   let bind_existing_code_to_new_code_ids denv ~old_to_new_code_ids_all_sets =
     Code_id.Map.fold (fun old_code_id new_code_id denv ->
+        let code, free_names_of_code = DE.find_code denv old_code_id in
         let code =
-          DE.find_code denv old_code_id
+          code
           |> Code.with_newer_version_of (Some old_code_id)
           |> Code.with_code_id new_code_id
         in
-        DE.define_code denv ~code_id:new_code_id ~code)
+        DE.define_code denv ~code_id:new_code_id ~code
+          ~free_names_of_code)
       old_to_new_code_ids_all_sets
       denv
 
@@ -449,7 +451,7 @@ let simplify_function context ~name_occurrences ~shareable_constants
 
 type simplify_set_of_closures0_result = {
   set_of_closures : Flambda.Set_of_closures.t;
-  code : Code.t Code_id.Lmap.t;
+  code : (Code.t * Name_occurrences.t) Code_id.Lmap.t;
   dacc : Downwards_acc.t;
 }
 
@@ -881,8 +883,8 @@ let simplify_lifted_set_of_closures0 context ~closure_symbols
   let dacc =
     DA.map_denv dacc ~f:(fun denv ->
       (* CR mshinwell: factor out *)
-      Code_id.Lmap.fold (fun code_id code denv ->
-          DE.define_code denv ~code_id ~code)
+      Code_id.Lmap.fold (fun code_id (code, free_names_of_code) denv ->
+          DE.define_code denv ~code_id ~code ~free_names_of_code)
         code
         denv)
   in

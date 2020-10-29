@@ -242,3 +242,8 @@ let import import_map
 
 let make_deleted t =
   { t with params_and_body = Deleted; }
+
+let is_deleted t =
+  match t.params_and_body with
+  | Deleted -> true
+  | Present _ -> false

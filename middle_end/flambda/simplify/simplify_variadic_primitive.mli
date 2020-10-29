@@ -26,5 +26,5 @@ val simplify_variadic_primitive
   -> Simple.t list
   -> Debuginfo.t
   -> result_var:Var_in_binding_pos.t
-  -> Reachable.t * Flambda_type.Typing_env_extension.t
+  -> Simplified_named.t * Flambda_type.Typing_env_extension.t
        * Simple.t list * Downwards_acc.t

@@ -142,7 +142,7 @@ end and Named : sig
 
   (** Convert one or more statically-allocated constants into the defining
       expression of a [Let]. *)
-  val create_static_consts : Static_const.t list -> t
+  val create_static_consts : Static_const.Group.t -> t
 
   (** Build an expression boxing the name.  The returned kind is the
       one of the unboxed version. *)
@@ -185,7 +185,7 @@ end and Let_expr : sig
 
   val create
      : Bindable_let_bound.t
-    -> defining_expr:Named.t
+    -> Named.t
     -> body:Expr.t
     -> free_names_of_body:Name_occurrences.t Or_unknown.t
     -> t
@@ -613,6 +613,8 @@ end and Static_const : sig
 
     val concat : t -> t -> t
 
+    val map : t -> f:(Static_const.t -> Static_const.t) -> t
+
     val match_against_bound_symbols
        : t
       -> Bound_symbols.t
@@ -626,16 +628,15 @@ end and Static_const : sig
       -> block_like:('a -> Symbol.t -> Static_const.t -> 'a)
       -> 'a
 
-    val pieces_of_code : t -> Function_params_and_body.t Code_id.Map.t
+    (** This function ignores [Deleted] code. *)
+    val pieces_of_code : t -> Code.t Code_id.Map.t
 
+    (** This function ignores [Deleted] code. *)
     val pieces_of_code' : t -> Code.t list
-
-    val pieces_of_code_by_code_id : t -> Code.t Code_id.Map.t
 
     val is_fully_static : t -> bool
   end
 end and Code : sig
-
   (** A piece of code, comprising of the parameters and body of a function,
       together with a field indicating whether the piece of code is a newer
       version of one that existed previously (and may still exist), for
@@ -693,6 +694,7 @@ end and Code : sig
 
   val make_deleted : t -> t
 
+  val is_deleted : t -> bool
 end
 
 module Function_declaration = Function_declaration

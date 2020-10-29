@@ -291,7 +291,7 @@ let simplify_non_recursive_let_cont dacc non_rec ~down_to_up =
       let dacc_for_body =
         DA.with_continuation_uses_env dacc_for_body ~cont_uses_env:CUE.empty
       in
-      assert (DA.no_lifted_constants dacc_for_body);
+    assert (DA.no_lifted_constants dacc_for_body);
       (* First the downwards traversal is done on the body. *)
       Simplify_expr.simplify_expr dacc_for_body body
         ~down_to_up:(fun dacc_after_body ~rebuild:rebuild_body ->

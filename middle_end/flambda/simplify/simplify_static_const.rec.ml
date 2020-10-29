@@ -199,7 +199,8 @@ let simplify_static_consts dacc (bound_symbols : Bound_symbols.t)
           | Deleted -> dacc
           | Present _ ->
             DA.map_denv dacc ~f:(fun denv ->
-              DE.define_code denv ~code_id ~code)
+              (* XXX Where do the free names come from? *)
+              DE.define_code denv ~code_id ~code ~free_names_of_code)
         in
         (Bound_symbols.Pattern.code code_id) :: bound_symbols,
           (SC.Code code) :: static_consts,

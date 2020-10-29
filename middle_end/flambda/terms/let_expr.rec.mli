@@ -26,7 +26,7 @@ include Contains_ids.S with type t := t
 
 val create
    : Bindable_let_bound.t
-  -> defining_expr:Named.t
+  -> Named.t
   -> body:Expr.t
   -> free_names_of_body:Name_occurrences.t Or_unknown.t
   -> t

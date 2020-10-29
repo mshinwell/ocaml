@@ -42,7 +42,7 @@ end = struct
     can_inline : bool;
     inlining_depth_increment : int;
     float_const_prop : bool;
-    code : Code.t Code_id.Map.t;
+    code : (Code.t * Name_occurrences.t) Code_id.Map.t;
     at_unit_toplevel : bool;
     unit_toplevel_exn_continuation : Continuation.t;
     symbols_currently_being_defined : Symbol.Set.t;
@@ -79,7 +79,7 @@ end = struct
       Continuation.print unit_toplevel_exn_continuation
       Symbol.Set.print symbols_currently_being_defined
       Variable.Set.print variables_defined_at_toplevel
-      (Code_id.Map.print Code.print) code
+      (Code_id.Map.print (fun ppf (code, _) -> Code.print ppf code) code
 
   let invariant _t = ()
 
@@ -453,7 +453,7 @@ end = struct
         print t
     end
 
-  let define_code t ~code_id ~code =
+  let define_code t ~code_id ~code ~free_names_of_code =
     if not (Code_id.in_compilation_unit code_id
       (Compilation_unit.get_current_exn ()))
     then begin
@@ -480,7 +480,7 @@ end = struct
     in
     { t with
       typing_env;
-      code = Code_id.Map.add code_id code t.code;
+      code = Code_id.Map.add code_id (code, free_names_of_code) t.code;
     }
 
   let find_code t id =

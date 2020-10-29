@@ -74,7 +74,7 @@ let invalid () =
 
 let print ppf t =
   match t with
-  | Reachable named ->
+  | Reachable { named; _ } ->
     let named =
       match named with
       | Simple simple -> Named.create_simple simple

@@ -18,6 +18,8 @@
 
 open! Flambda.Import
 
+module VB = Var_in_binding_pos
+
 (* The constructed values of this type aren't currently used, but will be
    needed when we import the Flambda 1 inliner. *)
 type let_creation_result =

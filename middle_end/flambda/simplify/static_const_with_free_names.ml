@@ -23,6 +23,8 @@ type t = {
   free_names : Name_occurrences.t;
 }
 
+type const_wfn = t
+
 let create const ~free_names =
   { const;
     free_names;
@@ -37,8 +39,6 @@ let is_fully_static t = Static_const.is_fully_static t.const
 let print ppf t = Static_const.print ppf t.const
 
 module Group = struct
-  type const_wfn = t
-
   type t = {
     consts : const_wfn list;
     mutable free_names : Name_occurrences.t Or_unknown.t;
@@ -55,7 +55,7 @@ module Group = struct
     ListLabels.map t.consts ~f:(fun (const : const_wfn) -> const.const)
     |> Static_const.Group.create
 
-  let print ppf t = Static_const.Group.print (group t)
+  let print ppf t = Static_const.Group.print ppf (group t)
 
   let free_names t =
     match t.free_names with
@@ -69,8 +69,16 @@ module Group = struct
       t.free_names <- Known free_names;
       free_names
 
-  let pieces_of_code_by_code_id t =
-    Static_const.Group.pieces_of_code_by_code_id (group t)
+  let pieces_of_code t =
+    t.consts
+    |> List.filter_map (fun (const : const_wfn) ->
+      match Static_const.to_code const.const with
+      | None -> None
+      | Some code -> Some (code, const.free_names))
+    |> List.filter_map (fun (code, free_names) ->
+      if Code.is_deleted code then None
+      else Some (Code.code_id code, (code, free_names)))
+    |> Code_id.Map.of_list
 
   let match_against_bound_symbols t bound_symbols ~init ~code ~set_of_closures
         ~block_like =

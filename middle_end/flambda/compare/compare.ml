@@ -322,7 +322,9 @@ and subst_let_expr env let_expr =
     let bindable_let_bound = subst_bindable_let_bound env bindable_let_bound in
     let defining_expr = subst_named env (Let_expr.defining_expr let_expr) in
     let body = subst_expr env body in
-    Expr.create_pattern_let bindable_let_bound defining_expr body
+    Let.create bindable_let_bound defining_expr ~body
+      ~free_names_of_body:Unknown
+    |> Expr.create_let
   )
 and subst_named env (n : Named.t) =
   match n with
@@ -333,7 +335,7 @@ and subst_named env (n : Named.t) =
   | Static_consts sc ->
     Named.create_static_consts (subst_static_consts env sc)
 and subst_static_consts env (g : Static_const.Group.t) =
-  List.map (subst_static_const env) (g |> Static_const.Group.to_list)
+  Static_const.Group.map g ~f:(subst_static_const env)
 and subst_bindable_let_bound env (blb : Bindable_let_bound.t) =
   match blb with
   | Symbols { bound_symbols; scoping_rule } ->
@@ -1102,7 +1104,9 @@ and let_exprs env let_expr1 let_expr2 : Expr.t Comparison.t =
         let defining_expr = Comparison.approximant named_comp ~default:named2 in
         let body = Comparison.approximant body_comp ~default:body2 in
         let approximant =
-          Expr.create_pattern_let bindable_let_bound defining_expr body
+          Let_expr.create bindable_let_bound defining_expr ~body
+            ~free_names_of_body:Unknown
+          |> Expr.create_let
         in
         Different { approximant }
     )
@@ -1153,10 +1157,17 @@ and let_symbol_exprs env
   in
   if !ok
     then Equivalent
-    else Different { approximant =
-      Expr.create_let_symbol
-        bound_symbols1' scoping_rule1 static_consts1' body1'
-    }
+    else
+      let approximant =
+        Let.create
+          (Bindable_let_bound.symbols bound_symbols1' scoping_rule1)
+          (Named.create_static_consts static_consts1')
+          ~body:body1'
+          ~free_names_of_body:Unknown
+        |> Expr.create_let
+      in
+      Different { approximant; }
+
 and static_consts env (const1 : Static_const.t) (const2 : Static_const.t)
       : Static_const.t Comparison.t =
   match const1, const2 with

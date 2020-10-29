@@ -67,6 +67,8 @@ val with_newer_version_of : Code_id.t option -> t -> t
 
 val make_deleted : t -> t
 
+val is_deleted : t -> bool
+
 include Contains_names.S with type t := t
 
 val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit

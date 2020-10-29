@@ -218,7 +218,7 @@ let bind_no_simplification ~bindings ~body =
   ListLabels.fold_left (List.rev bindings)
     ~init:body
     ~f:(fun expr (var, defining_expr) ->
-      Let.create (Bindable_let_bound.singleton var)
+      Let_expr.create (Bindable_let_bound.singleton var)
         defining_expr
         ~body:expr
         ~free_names_of_body:Unknown
@@ -234,7 +234,7 @@ let bind_parameters_to_args_no_simplification ~params ~args ~body =
     ~init:body
     ~f:(fun expr param arg ->
       let var = Var_in_binding_pos.create (KP.var param) Name_mode.normal in
-      Let.create (Bindable_let_bound.singleton var)
+      Let_expr.create (Bindable_let_bound.singleton var)
         (Named.create_simple arg)
         ~body:expr
         ~free_names_of_body:Unknown

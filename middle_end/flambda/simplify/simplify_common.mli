@@ -49,14 +49,14 @@ val simplify_projection
   -> shape:Flambda_type.t
   -> result_var:Var_in_binding_pos.t
   -> result_kind:Flambda_kind.t
-  -> Reachable.t * Flambda_type.Typing_env_extension.t * Downwards_acc.t
+  -> Simplified_named.t * Flambda_type.Typing_env_extension.t * Downwards_acc.t
 
 type cse =
   | Invalid of Flambda_type.t
   (* CR mshinwell: Use a record type for the following and all of the
      simplify_*primitive.mli files *)
   | Applied of
-      (Reachable.t * Flambda_type.Typing_env_extension.t
+      (Simplified_named.t * Flambda_type.Typing_env_extension.t
         * Simple.t list * Downwards_acc.t)
   | Not_applied of Downwards_acc.t
 

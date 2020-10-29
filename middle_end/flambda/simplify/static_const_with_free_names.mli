@@ -43,9 +43,8 @@ module Group : sig
 
   val free_names : t -> Name_occurrences.t
 
-  val pieces_of_code_by_code_id
-     : t
-    -> (Code.t * Name_occurrences.t) Code_id.Map.t
+  (** This function ignores [Deleted] code. *)
+  val pieces_of_code : t -> (Code.t * Name_occurrences.t) Code_id.Map.t
 
   val match_against_bound_symbols
      : t

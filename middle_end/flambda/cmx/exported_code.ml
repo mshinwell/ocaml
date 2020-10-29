@@ -209,7 +209,8 @@ let import import_map t =
               ~import_name:(fun name ->
                 Name.pattern_match name
                   ~symbol:(fun symbol ->
-                    Ids_for_export.Import_map.symbol import_map symbol)
+                    Ids_for_export.Import_map.symbol import_map symbol
+                    |> Name.symbol)
                   ~var:(fun var ->
                     Misc.fatal_errorf "Unexpected free variable %a in \
                         imported code:@ %a"

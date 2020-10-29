@@ -348,7 +348,7 @@ let print_with_cache ~cache ppf
 
 let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
-let create bindable_let_bound ~defining_expr ~body
+let create bindable_let_bound defining_expr ~body
       ~(free_names_of_body : _ Or_unknown.t) =
   let num_normal_occurrences_of_bound_vars =
     match free_names_of_body with

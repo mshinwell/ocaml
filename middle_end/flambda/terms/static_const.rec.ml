@@ -589,21 +589,17 @@ module Group = struct
   let pieces_of_code t =
     List.filter_map to_code t
     |> List.filter_map (fun code ->
-      Option.map (fun params_and_body -> Code.code_id code, params_and_body)
-        (Code.params_and_body_opt code))
+      if Code.is_deleted code then None
+      else Some (Code.code_id code, code))
     |> Code_id.Map.of_list
 
-  let pieces_of_code' t = List.filter_map to_code t
-
-  let pieces_of_code_by_code_id t =
-    List.filter_map (fun const ->
-      match const with
-      | Code code -> Some (Code.code_id code, code)
-      | _ -> None
-    ) t
-    |> Code_id.Map.of_list
+  let pieces_of_code' t =
+    pieces_of_code t
+    |> Code_id.Map.data
 
   let is_fully_static t = List.for_all is_fully_static t
 
   let concat t1 t2 = t1 @ t2
+
+  let map t ~f = List.map f t
 end
