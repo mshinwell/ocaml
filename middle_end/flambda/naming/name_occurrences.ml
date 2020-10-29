@@ -23,7 +23,6 @@ module Kind = Name_mode
 module For_one_variety_of_names (N : sig
   include Identifiable.S
   val apply_name_permutation : t -> Name_permutation.t -> t
-  val import : Ids_for_export.Import_map.t -> t -> t
 end) : sig
   type t
 
@@ -71,7 +70,7 @@ end) : sig
 
   val filter : t -> f:(N.t -> bool) -> t
 
-  val import : Ids_for_export.Import_map.t -> t -> t
+  val import : t -> import_name:(N.t -> N.t) -> t
 end = struct
   module For_one_name : sig
     type t
@@ -575,16 +574,16 @@ end = struct
       if N.Map.is_empty map then Empty
       else Potentially_many map
 
-  let import import_map t =
+  let import t ~import_name =
     match t with
     | Empty -> Empty
     | One (name, kind) ->
-      let name = N.import import_map name in
+      let name = import_name name in
       One (name, kind)
     | Potentially_many map ->
       let map =
         N.Map.fold (fun name for_one_name result ->
-            let name = N.import import_map name in
+            let name = import_name name in
             N.Map.add name for_one_name result)
           map
           N.Map.empty
@@ -595,29 +594,23 @@ end [@@@inlined always]
 module For_names = For_one_variety_of_names (struct
   include Name
   let apply_name_permutation t perm = Name_permutation.apply_name perm t
-  let import = Ids_for_export.Import_map.name
 end)
 
 module For_continuations = For_one_variety_of_names (struct
   include Continuation
   let apply_name_permutation t perm = Name_permutation.apply_continuation perm t
-  let import = Ids_for_export.Import_map.continuation
 end)
 
 module For_closure_vars = For_one_variety_of_names (struct
   include Var_within_closure
   (* We never bind [Var_within_closure]s using [Name_abstraction]. *)
   let apply_name_permutation t _perm = t
-  (* CR mshinwell: check: are Var_within_closure values never rewritten
-     upon import?  Doesn't look like it. *)
-  let import _import_map t = t
 end)
 
 module For_code_ids = For_one_variety_of_names (struct
   include Code_id
   (* We never bind [Code_id]s using [Name_abstraction]. *)
   let apply_name_permutation t _perm = t
-  let import = Ids_for_export.Import_map.code_id
 end)
 
 type t = {
@@ -1101,18 +1094,21 @@ let filter_names t ~f =
 let fold_code_ids t ~init ~f =
   For_code_ids.fold t.code_ids ~init ~f
 
-let import import_map
+let import
       { names; continuations; continuations_in_trap_actions;
-        closure_vars; code_ids; newer_version_of_code_ids; } =
-  let names = For_names.import import_map names in
-  let continuations = For_continuations.import import_map continuations in
-  let continuations_in_trap_actions =
-    For_continuations.import import_map continuations_in_trap_actions
+        closure_vars; code_ids; newer_version_of_code_ids; }
+      ~import_name ~import_continuation ~import_code_id =
+  let names = For_names.import names ~import_name in
+  let continuations =
+    For_continuations.import continuations ~import_name:import_continuation
   in
-  let closure_vars = For_closure_vars.import import_map closure_vars in
-  let code_ids = For_code_ids.import import_map code_ids in
+  let continuations_in_trap_actions =
+    For_continuations.import continuations_in_trap_actions
+      ~import_name:import_continuation
+  in
+  let code_ids = For_code_ids.import code_ids ~import_name:import_code_id in
   let newer_version_of_code_ids =
-    For_code_ids.import import_map newer_version_of_code_ids
+    For_code_ids.import newer_version_of_code_ids ~import_name:import_code_id
   in
   { names;
     continuations;

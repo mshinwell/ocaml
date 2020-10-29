@@ -203,11 +203,24 @@ let import import_map t =
       let code_data =
         match code_data with
         | Present { calling_convention; free_names_of_code; code; } ->
-          let code =
-            Flambda.Code.import import_map code
-          in
+          let code = Flambda.Code.import import_map code in
           let free_names_of_code =
-            Name_occurrences.import import_map free_names_of_code
+            Name_occurrences.import free_names_of_code
+              ~import_name:(fun name ->
+                Name.pattern_match name
+                  ~symbol:(fun symbol ->
+                    Ids_for_export.Import_map.symbol import_map symbol)
+                  ~var:(fun var ->
+                    Misc.fatal_errorf "Unexpected free variable %a in \
+                        imported code:@ %a"
+                      Variable.print var
+                      Flambda.Code.print code))
+              ~import_code_id:(Ids_for_export.Import_map.code_id import_map)
+              ~import_continuation:(fun cont ->
+                Misc.fatal_errorf "Unexpected free continuation %a in \
+                    imported code:@ %a"
+                  Continuation.print cont
+                  Flambda.Code.print code)
           in
           Present { calling_convention; free_names_of_code; code; }
         | Imported { calling_convention; } ->

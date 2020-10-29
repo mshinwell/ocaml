@@ -184,4 +184,11 @@ val fold_code_ids
   -> f:('a -> Code_id.t -> 'a)
   -> 'a
 
-val import : Ids_for_export.Import_map.t -> t -> t
+(** [import] cannot use [Ids_for_export] due to a circular dependency through
+    [Simple]. *)
+val import
+   : t
+  -> import_name:(Name.t -> Name.t)
+  -> import_continuation:(Continuation.t -> Continuation.t)
+  -> import_code_id:(Code_id.t -> Code_id.t)
+  -> t
