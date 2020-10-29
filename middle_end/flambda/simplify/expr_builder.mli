@@ -21,7 +21,7 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
-open! Simplify_import
+open! Flambda.Import
 
 (** Create [Let] binding(s) around a given body.  (The type of this function
     prevents it from being used to create "let symbol" bindings; use the

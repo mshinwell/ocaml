@@ -52,7 +52,7 @@ module Group = struct
   let group t =
     (* The length of [t.consts] should be short and is usually going to be
        just one, so this seems ok. *)
-    ListLabels.map t.consts ~f:(fun (const : const_wfn) -> const.const))
+    ListLabels.map t.consts ~f:(fun (const : const_wfn) -> const.const)
     |> Static_const.Group.create
 
   let print ppf t = Static_const.Group.print (group t)

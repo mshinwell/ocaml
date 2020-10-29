@@ -323,7 +323,7 @@ let simplify_non_recursive_let_cont dacc non_rec ~down_to_up =
                      count the free names of the handler, as it will be
                      removed. *)
                 let name_occurrences_before_handler_rebuild =
-                  UA.name_occurrences uacc in
+                  UA.name_occurrences uacc
                 in
                 rebuild_handler uacc ~after_rebuild:(fun handler uacc ->
                   let uacc =

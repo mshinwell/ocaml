@@ -16,7 +16,7 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
-open! Simplify_import
+open! Flambda.Import
 
 (* The constructed values of this type aren't currently used, but will be
    needed when we import the Flambda 1 inliner. *)
