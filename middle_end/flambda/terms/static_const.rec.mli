@@ -120,41 +120,4 @@ module Group : sig
   val pieces_of_code' : t -> Code.t list
 
   val is_fully_static : t -> bool
-
-  module With_free_names : sig
-    type t
-
-    val create : group -> t
-
-    val free_names : t -> Name_occurrences.t
-
-    val pieces_of_code_by_code_id
-       : t
-      -> (Code.t * Name_occurrences.t) Code_id.Map.t
-
-    val match_against_bound_symbols
-      : t
-      -> Bound_symbols.t
-      -> init:'a
-      -> code:('a -> Code_id.t -> Code.t -> 'a)
-      -> set_of_closures:(
-          'a
-        -> closure_symbols:Symbol.t Closure_id.Lmap.t
-        -> Set_of_closures.t
-        -> 'a)
-      -> block_like:('a -> Symbol.t -> static_const -> 'a)
-      -> 'a
-
-    val map
-       : t
-      -> f:(Static_const.With_free_names.t -> Static_const.With_free_names.t)
-      -> t
-
-    val map_consts
-       : t
-      -> f:(Static_const.t -> Static_const.t)
-      -> t
-
-    val concat : t -> t -> t
-  end
 end

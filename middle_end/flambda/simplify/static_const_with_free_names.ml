@@ -1,0 +1,94 @@
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*                                                                        *)
+(*   Copyright 2013--2020 OCamlPro SAS                                    *)
+(*   Copyright 2014--2020 Jane Street Group LLC                           *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
+
+[@@@ocaml.warning "+a-30-40-41-42"]
+
+open! Flambda.Import
+
+type t = {
+  const : Static_const.t;
+  free_names : Name_occurrences.t;
+}
+
+let create const ~free_names =
+  { const;
+    free_names;
+  }
+
+let const t = t.const
+
+let free_names t = t.free_names
+
+module Group = struct
+  type const_wfn = t
+
+  type t = {
+    consts : const_wfn list;
+    mutable free_names : Name_occurrences.t Or_unknown.t;
+  }
+
+  let create consts =
+    { consts;
+      free_names = Unknown;
+    }
+
+  let group t =
+    (* The length of [t.consts] should be short and is usually going to be
+       just one, so this seems ok. *)
+    ListLabels.map t.consts ~f:(fun (const : const_wfn) -> const.const))
+    |> Static_const.Group.create
+
+  let free_names t =
+    match t.free_names with
+    | Known free_names -> free_names
+    | Unknown ->
+      let free_names =
+        ListLabels.fold_left t.consts ~init:Name_occurrences.empty
+          ~f:(fun free_names (const : const_wfn) ->
+            Name_occurrences.union free_names const.free_names)
+      in
+      t.free_names <- Known free_names;
+      free_names
+
+  let pieces_of_code_by_code_id t =
+    Static_const.Group.pieces_of_code_by_code_id (group t)
+
+  let match_against_bound_symbols t bound_symbols ~init ~code ~set_of_closures
+        ~block_like =
+    Static_const.Group.match_against_bound_symbols (group t)
+      bound_symbols ~init ~code ~set_of_closures ~block_like
+
+  let map t ~f =
+    let changed = ref false in
+    let consts =
+      ListLabels.map t.consts ~f:(fun const ->
+        let const' = f const in
+        if const != const' then begin
+          changed := true;
+        end;
+        const')
+    in
+    if not !changed then t
+    else
+      { consts;
+        free_names = Unknown;
+      }
+
+  let concat t1 t2 =
+    { consts = t1.consts @ t2.consts;
+      free_names = Unknown;
+    }
+end
