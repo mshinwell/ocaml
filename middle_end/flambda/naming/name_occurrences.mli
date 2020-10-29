@@ -135,6 +135,8 @@ val mem_closure_var : t -> Var_within_closure.t -> bool
 
 val remove_var : t -> Variable.t -> t
 
+val remove_code_id_or_symbol : t -> Code_id_or_symbol.t -> t
+
 val remove_continuation : t -> Continuation.t -> t
 
 val remove_one_occurrence_of_closure_var

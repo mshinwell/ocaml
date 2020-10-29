@@ -40,8 +40,8 @@ val make_new_let_bindings
     1. Best efforts are made not to create the binding(s) if it/they
        would be redundant.
     2. Closure variables are removed if they are not used according to the
-       given [r].  Such [r] must have seen all uses in the whole
-       compilation unit.
+       given [uacc].  (Such [uacc] must have seen all uses in the whole
+       compilation unit.)
     The [name_occurrences] in the provided [uacc] must contain exactly the
     free names of the [body]. *)
 val create_let_symbols
@@ -49,7 +49,7 @@ val create_let_symbols
   -> Symbol_scoping_rule.t
   -> Code_age_relation.t
   -> Simplify_envs.Lifted_constant.t
-  -> Flambda.Expr.t
+  -> body:Flambda.Expr.t
   -> Flambda.Expr.t * Upwards_acc.t
 
 (** Place lifted constants whose defining expressions involve [Name]s (for

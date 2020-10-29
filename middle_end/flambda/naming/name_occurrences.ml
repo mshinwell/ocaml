@@ -972,6 +972,33 @@ let remove_var t var =
       names;
     }
 
+let remove_symbol t symbol =
+  if For_names.is_empty t.names then t
+  else
+    let names = For_names.remove t.names (Name.symbol symbol) in
+    { t with
+      names;
+    }
+
+let remove_code_id t code_id =
+  if For_code_ids.is_empty t.code_ids
+    && For_code_ids.is_empty t.newer_version_of_code_ids
+  then t
+  else
+    let code_ids = For_code_ids.remove t.code_ids code_id in
+    let newer_version_of_code_ids =
+      For_code_ids.remove t.newer_version_of_code_ids code_id
+    in
+    { t with
+      code_ids;
+      newer_version_of_code_ids;
+    }
+
+let remove_code_id_or_symbol t (cis : Code_id_or_symbol.t) =
+  match cis with
+  | Code_id code_id -> remove_code_id t code_id
+  | Symbol symbol -> remove_symbol t symbol
+
 let remove_continuation t k =
   if For_continuations.is_empty t.continuations
     && For_continuations.is_empty t.continuations_in_trap_actions

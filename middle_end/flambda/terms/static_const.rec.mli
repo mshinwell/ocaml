@@ -85,6 +85,7 @@ end
 (* CR mshinwell: This should probably move to its own file. *)
 module Group : sig
   type t
+  type group = t
 
   include Contains_names.S with type t := t
   include Contains_ids.S with type t := t
@@ -123,19 +124,13 @@ module Group : sig
   module With_free_names : sig
     type t
 
+    val create : group -> t
+
+    val free_names : t -> Name_occurrences.t
+
     val pieces_of_code_by_code_id
        : t
       -> (Code.t * Name_occurrences.t) Code_id.Map.t
-
-    val map
-       : t
-      -> f:(Static_const.With_free_names.t -> Static_const.With_free_names.t)
-      -> t
-
-    val map_consts
-       : t
-      -> f:(Static_const.t -> Static_const.t)
-      -> t
 
     val match_against_bound_symbols
       : t
@@ -149,6 +144,16 @@ module Group : sig
         -> 'a)
       -> block_like:('a -> Symbol.t -> static_const -> 'a)
       -> 'a
+
+    val map
+       : t
+      -> f:(Static_const.With_free_names.t -> Static_const.With_free_names.t)
+      -> t
+
+    val map_consts
+       : t
+      -> f:(Static_const.t -> Static_const.t)
+      -> t
 
     val concat : t -> t -> t
   end
