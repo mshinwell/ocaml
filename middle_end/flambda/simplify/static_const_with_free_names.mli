@@ -24,14 +24,20 @@ open! Flambda.Import
 type t
 type const_wfn = t
 
+val print : Format.formatter -> t -> unit
+
 val create : Static_const.t -> free_names:Name_occurrences.t -> t
 
 val const : t -> Static_const.t
 
 val free_names : t -> Name_occurrences.t
 
+val is_fully_static : t -> bool
+
 module Group : sig
   type t
+
+  val print : Format.formatter -> t -> unit
 
   val create : const_wfn list -> t
 

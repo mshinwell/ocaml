@@ -32,6 +32,10 @@ let const t = t.const
 
 let free_names t = t.free_names
 
+let is_fully_static t = Static_const.is_fully_static t.const
+
+let print ppf t = Static_const.print ppf t.const
+
 module Group = struct
   type const_wfn = t
 
@@ -50,6 +54,8 @@ module Group = struct
        just one, so this seems ok. *)
     ListLabels.map t.consts ~f:(fun (const : const_wfn) -> const.const))
     |> Static_const.Group.create
+
+  let print ppf t = Static_const.Group.print (group t)
 
   let free_names t =
     match t.free_names with
@@ -88,7 +94,13 @@ module Group = struct
       }
 
   let concat t1 t2 =
+    let free_names : _ Or_unknown.t =
+      match t1.free_names, t2.free_names with
+      | Known free_names1, Known free_names2 ->
+        Known (Name_occurrences.union free_names1 free_names2)
+      | Known _, Unknown | Unknown, Known _ | Unknown, Unknown -> Unknown
+    in
     { consts = t1.consts @ t2.consts;
-      free_names = Unknown;
+      free_names;
     }
 end

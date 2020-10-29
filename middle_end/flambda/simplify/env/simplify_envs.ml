@@ -778,7 +778,7 @@ end = struct
 
     type t = {
       descr : descr;
-      defining_expr : Static_const.t;
+      defining_expr : Static_const_with_free_names.t;
     }
 
     let binds_symbol t sym =
@@ -791,7 +791,7 @@ end = struct
 
     let free_names t =
       match t.descr with
-      | Code _ -> Static_const.free_names t.defining_expr
+      | Code _ -> Static_const_with_free_names.free_names t.defining_expr
       | Set_of_closures { symbol_projections; _ }
       | Block_like { symbol_projections; _ } ->
         (* The symbols mentioned in any symbol projections must be counted
@@ -801,7 +801,7 @@ end = struct
             Name_occurrences.add_symbol free_names
               (Symbol_projection.symbol proj) Name_mode.normal)
           symbol_projections
-          (Static_const.free_names t.defining_expr)
+          (Static_const_with_free_names.free_names t.defining_expr)
 
     let print_descr ppf descr =
       match descr with
@@ -822,7 +822,7 @@ end = struct
           @[<hov 1>(defining_expr@ %a)@]\
           @]"
         print_descr descr
-        Static_const.print defining_expr
+        Static_const_with_free_names.print defining_expr
 
     let descr t = t.descr
     let defining_expr t = t.defining_expr
@@ -834,8 +834,8 @@ end = struct
       | Block_like { symbol_projections; _ } -> symbol_projections
 
     let code code_id defining_expr =
-      match defining_expr with
-      | Static_const.Code code ->
+      match Static_const_with_free_names.const defining_expr with
+      | Code code ->
         if Code_id.equal code_id (Code.code_id code) then
           { descr = Code code_id;
             defining_expr;
@@ -899,8 +899,7 @@ end = struct
   type t = {
     definitions : Definition.t list;
     bound_symbols : Bound_symbols.t;
-    defining_exprs : Static_const.Group.t;
-    free_names : Name_occurrences.t;
+    defining_exprs : Static_const_with_free_names.Group.t;
     symbol_projections : Symbol_projection.t Variable.Map.t;
     is_fully_static : bool;
   }
@@ -908,13 +907,14 @@ end = struct
   let definitions t = t.definitions
   let symbol_projections t = t.symbol_projections
 
-  let free_names_of_defining_exprs t = t.free_names
+  let free_names_of_defining_exprs t =
+    Static_const_with_free_names.Group.free_names t.defining_exprs
 
   let is_fully_static t = t.is_fully_static
 
   let print ppf
         { definitions; bound_symbols = _; defining_exprs = _;
-          free_names = _; is_fully_static = _; symbol_projections = _; } =
+          is_fully_static = _; symbol_projections = _; } =
     Format.fprintf ppf "@[<hov 1>(%a)@]"
       (Format.pp_print_list ~pp_sep:Format.pp_print_space Definition.print)
       definitions
@@ -937,12 +937,10 @@ end = struct
     { definitions;
       bound_symbols = compute_bound_symbols definitions;
       defining_exprs = compute_defining_exprs definitions;
-      free_names = Definition.free_names definition;
-      is_fully_static = Static_const.is_fully_static defining_expr;
+      is_fully_static =
+        Static_const_with_free_names.is_fully_static defining_expr;
       symbol_projections = Definition.symbol_projections definition;
     }
-
-  (* XXX We don't want to be using Defintion.free_names really *)
 
   let create_set_of_closures denv ~closure_symbols_with_types
         ~symbol_projections defining_expr =
@@ -954,8 +952,8 @@ end = struct
     { definitions;
       bound_symbols = compute_bound_symbols definitions;
       defining_exprs = compute_defining_exprs definitions;
-      free_names = Definition.free_names definition;
-      is_fully_static = Static_const.is_fully_static defining_expr;
+      is_fully_static =
+        Static_const_with_free_names.is_fully_static defining_expr;
       symbol_projections = Definition.symbol_projections definition;
     }
 
@@ -965,8 +963,8 @@ end = struct
     { definitions;
       bound_symbols = compute_bound_symbols definitions;
       defining_exprs = compute_defining_exprs definitions;
-      free_names = Definition.free_names definition;
-      is_fully_static = Static_const.is_fully_static defining_expr;
+      is_fully_static =
+        Static_const_with_free_names.is_fully_static defining_expr;
       symbol_projections = Definition.symbol_projections definition;
     }
 
@@ -989,12 +987,6 @@ end = struct
         Static_const.Group.empty
         ts
     in
-    let free_names =
-      List.fold_left (fun free_names t ->
-          Name_occurrences.union t.free_names free_names)
-        Name_occurrences.empty
-        ts
-    in
     let is_fully_static =
       List.fold_left (fun is_fully_static t ->
           t.is_fully_static && is_fully_static)
@@ -1011,7 +1003,6 @@ end = struct
     { definitions;
       bound_symbols;
       defining_exprs;
-      free_names;
       is_fully_static;
       symbol_projections;
     }

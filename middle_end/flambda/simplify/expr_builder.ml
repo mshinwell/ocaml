@@ -287,7 +287,7 @@ let create_let_symbol0 uacc code_age_relation (bound_symbols : Bound_symbols.t)
     expr, uacc
 
 let remove_unused_closure_vars uacc static_const =
-  match Static_const.With_free_names.const static_const with
+  match Static_const_with_free_names.const static_const with
   | Set_of_closures set_of_closures ->
     let name_occurrences = UA.name_occurrences uacc in
     let closure_elements =
@@ -299,7 +299,7 @@ let remove_unused_closure_vars uacc static_const =
       Set_of_closures.create (Set_of_closures.function_decls set_of_closures)
         ~closure_elements
     in
-    Static_const.With_free_names.create (Set_of_closures set_of_closures)
+    Static_const_with_free_names.create (Set_of_closures set_of_closures)
       free_names
   | Code _
   | Block _

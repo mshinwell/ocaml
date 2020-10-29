@@ -157,7 +157,7 @@ let simplify_static_const_of_kind_value dacc static_const ~result_sym =
     simplify_static_const_of_kind_value0 dacc static_const ~result_sym
   in
   let free_names = Static_const.free_names static_const in
-  Static_const.With_free_names.create static_const free_names, dacc
+  Static_const_with_free_names.create static_const ~free_names, dacc
 
 let simplify_static_consts dacc (bound_symbols : Bound_symbols.t)
       static_consts =
