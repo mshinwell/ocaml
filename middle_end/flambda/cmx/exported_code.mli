@@ -29,7 +29,10 @@ val print : Format.formatter -> t -> unit
 
 val empty : t
 
-val add_code : (Flambda.Code.t * Name_occurrences.t) Code_id.Map.t -> t -> t
+val add_code
+   : (Flambda.Code.t * (Name_occurrences.t Or_unknown.t)) Code_id.Map.t
+  -> t
+  -> t
 
 val mark_as_imported : t -> t
 

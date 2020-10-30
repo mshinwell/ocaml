@@ -20,12 +20,38 @@ open! Flambda.Import
 
 type t = {
   const : Static_const.t;
-  free_names : Name_occurrences.t;
+  free_names : Name_occurrences.t Or_unknown.t;
 }
 
 type const_wfn = t
 
-let create const ~free_names =
+let create (const : Static_const.t) ~(free_names : _ Or_unknown.t) =
+  begin match const, free_names with
+  | Code _, (Known _ | Unknown) -> ()
+  | Set_of_closures _, Known _
+  | Block _, Known _
+  | Boxed_float _, Known _
+  | Boxed_int32 _, Known _
+  | Boxed_int64 _, Known _
+  | Boxed_nativeint _, Known _
+  | Immutable_float_block _, Known _
+  | Immutable_float_array _, Known _
+  | Mutable_string _, Known _
+  | Immutable_string _, Known _ -> ()
+  | Set_of_closures _, Unknown
+  | Block _, Unknown
+  | Boxed_float _, Unknown
+  | Boxed_int32 _, Unknown
+  | Boxed_int64 _, Unknown
+  | Boxed_nativeint _, Unknown
+  | Immutable_float_block _, Unknown
+  | Immutable_float_array _, Unknown
+  | Mutable_string _, Unknown
+  | Immutable_string _, Unknown ->
+    Misc.fatal_errorf "Free names of non-[Code] static constant not \
+        provided:@ %a"
+      Static_const.print const
+  end;
   { const;
     free_names;
   }

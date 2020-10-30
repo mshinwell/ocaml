@@ -27,31 +27,31 @@ type t = {
   denv : DE.t;
   continuation_uses_env : CUE.t;
   shareable_constants : Symbol.t Static_const.Map.t;
-  closure_var_uses : Name_occurrences.t;
+  used_closure_vars : Name_occurrences.t;
   lifted_constants : LCS.t;
 }
 
 let print ppf
-      { denv; continuation_uses_env; shareable_constants; closure_var_uses;
+      { denv; continuation_uses_env; shareable_constants; used_closure_vars;
         lifted_constants; } =
   Format.fprintf ppf "@[<hov 1>(\
       @[<hov 1>(denv@ %a)@]@ \
       @[<hov 1>(continuation_uses_env@ %a)@]@ \
       @[<hov 1>(shareable_constants@ %a)@]@ \
-      @[<hov 1>(closure_var_uses@ %a)@]@ \
+      @[<hov 1>(used_closure_vars@ %a)@]@ \
       @[<hov 1>(lifted_constant_state@ %a)@]\
       )@]"
     DE.print denv
     CUE.print continuation_uses_env
     (Static_const.Map.print Symbol.print) shareable_constants
-    Name_occurrences.print closure_var_uses
+    Name_occurrences.print used_closure_vars
     LCS.print lifted_constants
 
 let create denv continuation_uses_env =
   { denv;
     continuation_uses_env;
     shareable_constants = Static_const.Map.empty;
-    closure_var_uses = Name_occurrences.empty;
+    used_closure_vars = Name_occurrences.empty;
     lifted_constants = LCS.empty;
   }
 
@@ -166,12 +166,15 @@ let shareable_constants t = t.shareable_constants
 
 let add_use_of_closure_var t closure_var =
   { t with
-    closure_var_uses =
-      Name_occurrences.add_closure_var t.closure_var_uses closure_var
+    used_closure_vars =
+      Name_occurrences.add_closure_var t.used_closure_vars closure_var
         Name_mode.normal;
   }
 
-let closure_var_uses t = t.closure_var_uses
+let used_closure_vars t = t.used_closure_vars
 
 let all_continuations_used t =
   CUE.all_continuations_used t.continuation_uses_env
+
+let with_used_closure_vars t ~used_closure_vars =
+  { t with used_closure_vars = used_closure_vars; }

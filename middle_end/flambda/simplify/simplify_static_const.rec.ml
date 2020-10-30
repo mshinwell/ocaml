@@ -199,14 +199,18 @@ let simplify_static_consts dacc (bound_symbols : Bound_symbols.t)
           | Deleted -> dacc
           | Present _ ->
             DA.map_denv dacc ~f:(fun denv ->
-              (* XXX Where do the free names come from?
-                 Maybe we could just say "unknown" here since it will always
-                 be re-simplified before export, which is where the free names
-                 are needed. *)
-              DE.define_code denv ~code_id ~code ~free_names_of_code)
+              (* The free names of "old" (pre-simplification) code are only
+                 needed rarely, for example if a join causes a reference to
+                 an old piece of code via the code age relation.  As such
+                 the free names are only computed when needed in these
+                 cases.  See [Exported_code]. *)
+              DE.define_code denv ~code_id ~code ~free_names_of_code:Unknown)
+        in
+        let static_const =
+          Static_const_with_free_names.create (Code code) ~free_names:Unknown
         in
         (Bound_symbols.Pattern.code code_id) :: bound_symbols,
-          (SC.Code code) :: static_consts,
+          static_const :: static_consts,
           dacc)
       ~set_of_closures:(fun acc ~closure_symbols:_ _ -> acc)
       ~block_like:
@@ -220,7 +224,7 @@ let simplify_static_consts dacc (bound_symbols : Bound_symbols.t)
             dacc)
   in
   let bound_symbols = Bound_symbols.create bound_symbols in
-  let static_consts = Static_const.Group.With_free_names.create static_consts in
+  let static_consts = Static_const_with_free_names.Group.create static_consts in
   (* We now collect together all of the closures, from all of the sets
      being defined, and simplify them together. *)
   let closure_bound_names_all_sets, all_sets_of_closures_and_symbols =
@@ -244,7 +248,6 @@ let simplify_static_consts dacc (bound_symbols : Bound_symbols.t)
             (closure_symbols, set_of_closures) :: sets_of_closures)
   in
   let bound_symbols', static_consts', dacc =
-    (* XXX need to get the free names here *)
     Simplify_set_of_closures.simplify_lifted_sets_of_closures dacc
       ~all_sets_of_closures_and_symbols
       ~closure_bound_names_all_sets
@@ -252,5 +255,5 @@ let simplify_static_consts dacc (bound_symbols : Bound_symbols.t)
   (* The ordering of these lists doesn't matter as they will go through
      [Sort_lifted_constants] before the terms are constructed. *)
   Bound_symbols.concat bound_symbols bound_symbols',
-    Static_const.Group.With_free_names.concat static_consts static_consts',
+    Static_const_with_free_names.Group.concat static_consts static_consts',
     dacc

@@ -34,7 +34,7 @@ type let_creation_result =
 let create_singleton_let uacc (bound_var : VB.t) defining_expr
       ~free_names_of_defining_expr ~body =
   (* The name occurrences component of [uacc] is expected to be in the state
-     described in the comment below at the top of [rebuild_let]. *)
+     described in the comment at the top of [Simplify_let.rebuild_let]. *)
   let generate_phantom_lets =
     !Clflags.debug && !Clflags.Flambda.Expert.phantom_lets
   in
@@ -130,7 +130,7 @@ let create_singleton_let uacc (bound_var : VB.t) defining_expr
 let create_set_of_closures_let uacc bound_vars defining_expr
       ~free_names_of_defining_expr ~body ~bound_closure_vars =
   (* The name occurrences component of [uacc] is expected to be in the state
-     described in the comment below at the top of [rebuild_let]. *)
+     described in the comment at the top of [Simplify_let.rebuild_let]. *)
   (* CR-someday mshinwell: Think about how to phantomise these [Let]s. *)
   let free_names_of_body = UA.name_occurrences uacc in
   let all_bound_vars_unused =
@@ -157,7 +157,7 @@ let create_set_of_closures_let uacc bound_vars defining_expr
 
 let make_new_let_bindings uacc ~bindings_outermost_first ~body =
   (* The name occurrences component of [uacc] is expected to be in the state
-     described in the comment below at the top of [rebuild_let]. *)
+     described in the comment at the top of [Simplify_let.rebuild_let]. *)
   ListLabels.fold_left (List.rev bindings_outermost_first) ~init:(body, uacc)
     ~f:(fun (expr, uacc) (bound, defining_expr) ->
       match (defining_expr : Simplified_named.t) with
@@ -197,7 +197,10 @@ let create_raw_let_symbol uacc bound_symbols scoping_rule static_consts ~body =
      indicate the free names of [body]. *)
   let bindable = Bindable_let_bound.symbols bound_symbols scoping_rule in
   let free_names_of_static_consts =
-    Static_const_with_free_names.Group.free_names static_consts
+    (* Since we know we are definitely going to generate a [Let], it's ok
+       to force the computation of the free names of any "old" pieces of
+       [Code] whose free names are not yet known. *)
+    Static_const_with_free_names.Group.really_need_free_names static_consts
   in
   let defining_expr =
     Static_const_with_free_names.Group.consts static_consts

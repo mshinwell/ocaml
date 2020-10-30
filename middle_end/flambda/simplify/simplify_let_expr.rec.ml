@@ -21,7 +21,8 @@ open! Simplify_import
 let rebuild_let bindable_let_bound ~bindings_outermost_first
       ~lifted_constants_from_defining_expr ~at_unit_toplevel ~body uacc
       ~after_rebuild =
-  (* At this point, the free names in [uacc] are the free names of [body]. *)
+  (* At this point, the free names in [uacc] are the free names of [body],
+     plus all used closure vars seen in the whole compilation unit. *)
   let no_constants_from_defining_expr =
     LCS.is_empty lifted_constants_from_defining_expr
   in

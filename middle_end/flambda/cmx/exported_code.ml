@@ -93,6 +93,15 @@ let add_code code t =
           let calling_convention =
             Calling_convention.compute ~params_and_body
           in
+          let free_names_of_code =
+            (* If we've never simplified [code] then we won't know its free
+               names.  In these cases we have to do the computation now.
+               This case should only arise rarely, e.g. as a result of a join
+               via the code age relation, so the overhead should be low. *)
+            match (free_names_of_code : _ Or_unknown.t) with
+            | Known free_names -> free_names
+            | Unknown -> Flambda.Code.free_names code
+          in
           Some (Present { code; free_names_of_code; calling_convention; })
         | Deleted ->
           (* CR lmaurer for vlaviron: Okay to just ignore deleted code? *)

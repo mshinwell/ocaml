@@ -55,7 +55,7 @@ let create uenv dacc =
     code_age_relation = TE.code_age_relation (DA.typing_env dacc);
     lifted_constants = LCS.empty;
     all_code = Exported_code.empty;
-    name_occurrences = DA.closure_var_uses dacc;
+    name_occurrences = DA.used_closure_vars dacc;
     shareable_constants = DA.shareable_constants dacc;
   }
 
