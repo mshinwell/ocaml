@@ -25,6 +25,8 @@ type simplified_named = private
   | Prim of Flambda_primitive.t * Debuginfo.t
   | Set_of_closures of Set_of_closures.t
 
+val to_named : simplified_named -> Named.t
+
 type t = private
   | Reachable of {
       named : simplified_named;

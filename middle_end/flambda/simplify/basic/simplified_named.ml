@@ -23,6 +23,11 @@ type simplified_named =
   | Prim of Flambda_primitive.t * Debuginfo.t
   | Set_of_closures of Set_of_closures.t
 
+let to_named = function
+  | Simple simple -> Named.create_simple simple
+  | Prim (prim, dbg) -> Named.create_prim prim dbg
+  | Set_of_closures set -> Named.create_set_of_closures set
+
 type t =
   | Reachable of {
       named : simplified_named;
@@ -75,13 +80,7 @@ let invalid () =
 let print ppf t =
   match t with
   | Reachable { named; _ } ->
-    let named =
-      match named with
-      | Simple simple -> Named.create_simple simple
-      | Prim (prim, dbg) -> Named.create_prim prim dbg
-      | Set_of_closures set -> Named.create_set_of_closures set
-    in
-    Named.print ppf named
+    Named.print ppf (to_named named)
   | Invalid sem -> Invalid_term_semantics.print ppf sem
 
 let is_invalid t =

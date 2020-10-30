@@ -174,6 +174,8 @@ end and Named : sig
   val is_static_consts : t -> bool
 
   val must_be_static_consts : t -> Static_const.Group.t
+
+  val at_most_generative_effects : t -> bool
 end and Let_expr : sig
   (** The alpha-equivalence classes of expressions that bind variables; and
       the expressions that bind symbols (which are not treated up to

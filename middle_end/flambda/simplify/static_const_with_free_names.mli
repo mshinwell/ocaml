@@ -45,6 +45,8 @@ module Group : sig
 
   val free_names : t -> Name_occurrences.t
 
+  val consts : t -> Static_const.Group.t
+
   (** This function ignores [Deleted] code. *)
   val pieces_of_code : t -> (Code.t * Name_occurrences.t) Code_id.Map.t
 
