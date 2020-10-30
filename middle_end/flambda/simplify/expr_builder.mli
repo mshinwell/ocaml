@@ -62,7 +62,8 @@ val place_lifted_constants
   -> Symbol_scoping_rule.t
   -> lifted_constants_from_defining_expr:Simplify_envs.Lifted_constant_state.t
   -> lifted_constants_from_body:Simplify_envs.Lifted_constant_state.t
-  -> put_bindings_around_body:(body:Flambda.Expr.t -> Flambda.Expr.t)
+  -> put_bindings_around_body:
+       (Upwards_acc.t -> body:Flambda.Expr.t -> Flambda.Expr.t * Upwards_acc.t)
   -> body:Flambda.Expr.t
   -> critical_deps_of_bindings:Name_occurrences.t
   -> Flambda.Expr.t * Upwards_acc.t

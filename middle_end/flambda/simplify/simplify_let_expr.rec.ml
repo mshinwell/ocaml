@@ -66,12 +66,13 @@ let rebuild_let bindable_let_bound ~bindings_outermost_first
             critical_deps)
     in
     let body, uacc =
-      Simplify_common.place_lifted_constants uacc
+      EB.place_lifted_constants uacc
         scoping_rule
         ~lifted_constants_from_defining_expr
         ~lifted_constants_from_body
         ~put_bindings_around_body:
-          (EB.make_new_let_bindings ~bindings_outermost_first)
+          (fun uacc ~body ->
+            EB.make_new_let_bindings uacc ~bindings_outermost_first ~body)
         ~body
         ~critical_deps_of_bindings
     in

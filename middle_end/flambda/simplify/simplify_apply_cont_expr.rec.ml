@@ -71,13 +71,19 @@ let rebuild_apply_cont apply_cont ~args ~rewrite_id uacc ~after_rebuild =
                 in
                 bound, Simplified_named.reachable (Named.create_simple arg))
           in
+          let name_occurrences = UA.name_occurrences uacc in
           let expr, uacc =
-            (* XXX what is the free name state in uacc? *)
+            let uacc =
+              UA.with_name_occurrences uacc
+                ~name_occurrences:free_names_of_handler
+            in
             Expr_builder.make_new_let_bindings uacc ~bindings_outermost_first
               ~body:handler
-              ~args:(AC.args apply_cont) ~body:handler
-              ~free_names_of_body:free_names_of_handler
           in
+          let name_occurrences =
+            Name_occurrences.union name_occurrences (UA.name_occurrences uacc)
+          in
+          let uacc = UA.with_name_occurrences uacc ~name_occurrences in
           Some (expr, uacc)
       end
     | Other { arity; handler = _; } -> None

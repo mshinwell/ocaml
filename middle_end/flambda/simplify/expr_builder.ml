@@ -509,5 +509,5 @@ let place_lifted_constants uacc (scoping_rule : Symbol_scoping_rule.t)
   let body, uacc =
     place_constants uacc ~around:body to_place_around_body
   in
-  let body = put_bindings_around_body ~body in
+  let body, uacc = put_bindings_around_body uacc ~body in
   place_constants uacc ~around:body to_place_around_defining_expr
