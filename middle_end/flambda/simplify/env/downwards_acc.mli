@@ -106,3 +106,5 @@ val with_shareable_constants
 val shareable_constants : t -> Symbol.t Flambda.Static_const.Map.t
 
 val add_use_of_closure_var : t -> Var_within_closure.t -> t
+
+val closure_var_uses : t -> Name_occurrences.t

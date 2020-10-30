@@ -42,7 +42,7 @@ end = struct
     can_inline : bool;
     inlining_depth_increment : int;
     float_const_prop : bool;
-    code : (Code.t * Name_occurrences.t) Code_id.Map.t;
+    code : (Code.t * (Name_occurrences.t Or_unknown.t)) Code_id.Map.t;
     at_unit_toplevel : bool;
     unit_toplevel_exn_continuation : Continuation.t;
     symbols_currently_being_defined : Symbol.Set.t;
@@ -486,7 +486,10 @@ end = struct
   let find_code t id =
     match Code_id.Map.find id t.code with
     | exception Not_found ->
-      Exported_code.find_code (t.get_imported_code ()) id
+      let code, free_names_of_code =
+        Exported_code.find_code (t.get_imported_code ()) id
+      in
+      code, Or_unknown.Known free_names_of_code
     | code -> code
 
   let with_code ~from t =
@@ -544,7 +547,8 @@ end = struct
             | Present _ ->
               if maybe_already_defined && mem_code t code_id then t
               else
-                define_code t ~code_id ~code ~free_names_of_code
+                define_code t ~code_id ~code
+                  ~free_names_of_code:(Known free_names_of_code)
             | Deleted -> t)
           pieces_of_code
           t)

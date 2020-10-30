@@ -50,7 +50,7 @@ let make_decision_for_function_declaration denv ?params_and_body function_decl
   (* At present, we follow Closure, taking inlining decisions without
      first examining call sites. *)
   let code_id = Function_declaration.code_id function_decl in
-  let code = DE.find_code denv code_id in
+  let code, _free_names_of_code = DE.find_code denv code_id in
   match Code.inline code with
   | Never_inline -> Never_inline_attribute
   | Always_inline -> Inline

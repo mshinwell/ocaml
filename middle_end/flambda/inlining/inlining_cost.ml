@@ -437,7 +437,7 @@ let smaller' denv expr ~than:threshold =
       let funs = Function_declarations.funs func_decls in
       Closure_id.Map.iter (fun _ func_decl ->
           let code_id = Function_declaration.code_id func_decl in
-          let code = DE.find_code denv code_id in
+          let code, _free_names_of_code = DE.find_code denv code_id in
           match Code.params_and_body code with
           | Present params_and_body ->
             Function_params_and_body.pattern_match params_and_body
