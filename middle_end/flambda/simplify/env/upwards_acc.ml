@@ -89,6 +89,16 @@ let with_uenv t uenv =
   }
 
 let remember_code_for_cmx t code =
+  let code =
+    Code_id.Map.map (fun (code, (free_names : _ Or_unknown.t)) ->
+        match free_names with
+        | Known free_names -> code, free_names
+        | Unknown ->
+          Misc.fatal_errorf "Code cannot be submitted to a .cmx file if its \
+              free names are not known:@ %a"
+            Flambda.Code.print code)
+      code
+  in
   let all_code = Exported_code.add_code code t.all_code in
   { t with all_code; }
 

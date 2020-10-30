@@ -78,6 +78,8 @@ module Group = struct
     ListLabels.map t.consts ~f:(fun (const : const_wfn) -> const.const)
     |> Static_const.Group.create
 
+  let to_list t = t.consts
+
   let pieces_of_code t =
     t.consts
     |> List.filter_map (fun (const : const_wfn) ->

@@ -193,22 +193,26 @@ let create_raw_let_symbol uacc bound_symbols scoping_rule static_consts ~body =
   (* Upon entry to this function, [UA.name_occurrences uacc] must precisely
      indicate the free names of [body]. *)
   let bindable = Bindable_let_bound.symbols bound_symbols scoping_rule in
-  let static_consts = Static_const_with_free_names.Group.consts static_consts in
   let free_names_of_static_consts =
-    Static_const_with_free_names.Group.free_names
+    Static_const_with_free_names.Group.free_names static_consts
   in
-  let defining_expr = Named.create_static_consts static_consts in
+  let defining_expr =
+    Static_const_with_free_names.Group.consts static_consts
+    |> Named.create_static_consts
+  in
   let free_names_of_body = UA.name_occurrences uacc in
   let free_names_of_let =
-    Symbol.Set.fold (fun code_id_or_sym free_names ->
+    Code_id_or_symbol.Set.fold (fun code_id_or_sym free_names ->
         Name_occurrences.remove_code_id_or_symbol free_names code_id_or_sym)
       (Bound_symbols.everything_being_defined bound_symbols)
       free_names_of_body
     |> Name_occurrences.union free_names_of_static_consts
   in
-  let uacc = UA.with_name_occurrences uacc free_names_of_let in
+  let uacc =
+    UA.with_name_occurrences uacc ~name_occurrences:free_names_of_let
+  in
   let let_expr =
-    Let_expr.create bindable ~defining_expr ~body
+    Let.create bindable defining_expr ~body
       ~free_names_of_body:(Known free_names_of_body)
   in
   Expr.create_let let_expr, uacc
@@ -259,10 +263,11 @@ let create_let_symbol0 uacc code_age_relation (bound_symbols : Bound_symbols.t)
       (* CR-someday mshinwell: This could be made more precise, but would
          probably require a proper analysis. *)
       let code_ids_static_consts =
-        ListLabels.fold_left (Static_const.Group.to_list static_consts)
+        ListLabels.fold_left
+          (Static_const_with_free_names.Group.to_list static_consts)
           ~init:Code_id.Set.empty
           ~f:(fun code_ids static_const ->
-            Static_const.free_names static_const
+            Static_const_with_free_names.free_names static_const
             |> Name_occurrences.code_ids
             |> Code_id.Set.union code_ids)
       in
@@ -286,19 +291,24 @@ let create_let_symbol0 uacc code_age_relation (bound_symbols : Bound_symbols.t)
         code_ids_only_used_in_newer_version_of
     in
     let static_consts =
-      Static_const_with_free_names.Group.map_consts static_consts
-        ~f:(fun static_const : Static_const.t ->
-          match Static_const.to_code static_const with
+      Static_const_with_free_names.Group.map static_consts
+        ~f:(fun static_const ->
+          match
+            Static_const_with_free_names.const static_const
+            |> Static_const.to_code
+          with
           | Some code
             when Code_id.Set.mem (Code.code_id code) code_ids_to_make_deleted ->
-            Code (Code.make_deleted code)
+            let static_const : Static_const.t = Code (Code.make_deleted code) in
+            Static_const_with_free_names.create static_const
+              ~free_names:(Static_const.free_names static_const)
           | Some _ | None -> static_const)
     in
     let expr, uacc =
       create_raw_let_symbol uacc bound_symbols Syntactic static_consts ~body
     in
     let uacc =
-      Static_const.Group.pieces_of_code_by_code_id static_consts
+      Static_const_with_free_names.Group.pieces_of_code static_consts
       |> UA.remember_code_for_cmx uacc
     in
     expr, uacc

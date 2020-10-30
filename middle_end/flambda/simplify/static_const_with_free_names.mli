@@ -47,6 +47,8 @@ module Group : sig
 
   val consts : t -> Static_const.Group.t
 
+  val to_list : t -> const_wfn list
+
   (** This function ignores [Deleted] code. *)
   val pieces_of_code : t -> (Code.t * Name_occurrences.t) Code_id.Map.t
 
