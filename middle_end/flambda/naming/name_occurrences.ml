@@ -901,6 +901,12 @@ let is_empty t = equal t empty
 let no_variables t =
   For_names.for_all t.names ~f:(fun var -> not (Name.is_var var))
 
+let no_continuations =
+      { names = _; continuations; continuations_in_trap_actions;
+        closure_vars = _; code_ids = _; newer_version_of_code_ids = _; } =
+  For_continuations.is_empty continuations
+    && For_continuations.is_empty continuations_in_trap_actions
+
 (*
 let has_only_symbols_and_code_ids
       ({ names = _;

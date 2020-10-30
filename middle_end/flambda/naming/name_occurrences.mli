@@ -101,6 +101,8 @@ val inter_domain_is_non_empty : t -> t -> bool
 
 val no_variables : t -> bool
 
+val no_continuations : t -> bool
+
 val continuations : t -> Continuation.Set.t
 
 val continuations_including_in_trap_actions : t -> Continuation.Set.t

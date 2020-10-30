@@ -327,6 +327,7 @@ type simplify_function_result = {
   function_decl : FD.t;
   new_code_id : Code_id.t;
   code : Code.t;
+  free_names_of_code : Name_occurrences.t;
   function_type : T.Function_declaration_type.t;
   dacc_after_body : DA.t;
   uacc_after_upwards_traversal : UA.t;
@@ -344,7 +345,8 @@ let simplify_function context ~name_occurrences ~shareable_constants
     let params_and_body =
       Code.params_and_body_must_be_present code ~error_context:"Simplifying"
     in
-    let params_and_body, dacc_after_body, uacc_after_upwards_traversal =
+    let params_and_body, dacc_after_body, free_names_of_code,
+        uacc_after_upwards_traversal =
       Function_params_and_body.pattern_match params_and_body
         ~f:(fun ~return_continuation exn_continuation params ~body
                 ~my_closure ~is_my_closure_used:_ ->
@@ -405,7 +407,40 @@ let simplify_function context ~name_occurrences ~shareable_constants
                 ~return_continuation exn_continuation params ~dbg ~body
                 ~my_closure
             in
-            params_and_body, dacc_after_body, uacc
+            (* Free names of the code = free names of the body minus the
+               return and exception continuations, the parameters and the
+               [my_closure] variable. *)
+            (* CR mshinwell: I wonder if we should make [free_names] on
+               [Function_params_and_body] produce a fatal error, because we
+               shouldn't be calling it. *)
+            let free_names_of_code =
+              Name_occurrences.remove_continuation free_names_of_body
+                return_continuation
+            in
+            let free_names_of_code =
+              Name_occurrences.remove_continuation free_names_of_code
+                (Exn_continuation.exn_handler exn_continuation)
+            in
+            let free_names_of_code =
+              Name_occurrences.remove_var free_names_of_code my_closure
+            in
+            let free_names_of_code =
+              Name_occurrences.diff free_names_of_code
+                (KP.List.free_names params)
+            in
+            if not (
+              Name_occurrences.no_variables free_names_of_code
+              && Name_occurrences.no_continuations free_names_of_code)
+            then begin
+              Misc.fatal_errorf "Unexpected free name(s):@ %a@ in:@ %a@ \
+                  Simplified version:@ fun %a %a -> %a"
+                Name_occurrences.print free_names_of_code
+                Function_declaration.print function_decl
+                KP.List.print params
+                Variable.print my_closure
+                Expr.print body
+            end;
+            params_and_body, dacc_after_body, free_names_of_code, uacc
           | exception Misc.Fatal_error ->
             if !Clflags.flambda_context_on_error then begin
               Format.eprintf "\n%sContext is:%s simplifying function \
@@ -444,6 +479,7 @@ let simplify_function context ~name_occurrences ~shareable_constants
     { function_decl;
       new_code_id;
       code;
+      free_names_of_code;
       function_type;
       dacc_after_body;
       uacc_after_upwards_traversal;
