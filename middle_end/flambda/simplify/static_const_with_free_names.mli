@@ -39,6 +39,8 @@ module Group : sig
 
   val print : Format.formatter -> t -> unit
 
+  val empty : t
+
   val create : const_wfn list -> t
 
   val free_names : t -> Name_occurrences.t

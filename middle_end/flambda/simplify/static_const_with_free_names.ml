@@ -44,6 +44,11 @@ module Group = struct
     mutable free_names : Name_occurrences.t Or_unknown.t;
   }
 
+  let empty = {
+    consts = [];
+    free_names = Known Name_occurrences.empty;
+  }
+
   let create consts =
     { consts;
       free_names = Unknown;

@@ -436,7 +436,8 @@ let rec expr env (e : Fexpr.expr) : Flambda.Expr.t =
         |> Flambda.Named.create_set_of_closures
       in
       let body = expr env body in
-      Flambda.Expr.create_pattern_let bound named body
+      Flambda.Let.create bound named ~body ~free_names_of_body:Unknown
+      |> Flambda.Expr.create_let
   | Let { bindings = _ :: _ :: _; _ } ->
     Misc.fatal_errorf
       "Multiple let bindings only allowed when defining closures"
@@ -452,7 +453,9 @@ let rec expr env (e : Fexpr.expr) : Flambda.Expr.t =
     let var =
       Var_in_binding_pos.create id Name_mode.normal
     in
-    Flambda.Expr.create_let var named body
+    let bound = Bindable_let_bound.singleton var in
+    Flambda.Let.create bound named ~body ~free_names_of_body:Unknown
+    |> Flambda.Expr.create_let
   | Let_cont
       { recursive; body;
         handlers = [handler] } -> begin
@@ -679,7 +682,11 @@ let rec expr env (e : Fexpr.expr) : Flambda.Expr.t =
       |> Flambda.Static_const.Group.create
     in
     let body = expr env body in
-    Flambda.Expr.create_let_symbol bound_symbols Syntactic static_consts body
+    Flambda.Let.create (Bindable_let_bound.symbols bound_symbols Syntactic)
+      (Flambda.Named.create_static_consts static_consts)
+      ~body
+      ~free_names_of_body:Unknown
+    |> Flambda.Expr.create_let
 
   | Apply {
     func;
