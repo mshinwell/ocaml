@@ -62,8 +62,19 @@ let rebuild_apply_cont apply_cont ~args ~rewrite_id uacc ~after_rebuild =
              However there's no need to simplify the inlined body except to
              make use of parameter-to-argument bindings; we just leave them for
              a subsequent round of [Simplify] or [Un_cps] to clean up. *)
+          let bindings_outermost_first =
+            ListLabels.map2 params (AC.args apply_cont)
+              ~f:(fun param arg ->
+                let bound =
+                  Var_in_binding_pos.create (KP.var param) Name_mode.normal
+                  |> Bindable_let_bound.singleton
+                in
+                bound, Simplified_named.reachable (Named.create_simple arg))
+          in
           let expr, uacc =
-            Expr_builder.bind_parameters_to_args uacc ~params
+            (* XXX what is the free name state in uacc? *)
+            Expr_builder.make_new_let_bindings uacc ~bindings_outermost_first
+              ~body:handler
               ~args:(AC.args apply_cont) ~body:handler
               ~free_names_of_body:free_names_of_handler
           in
