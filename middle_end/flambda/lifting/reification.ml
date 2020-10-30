@@ -61,24 +61,20 @@ let lift dacc ty ~bound_to static_const =
         Misc.fatal_errorf "Cannot lift non-[Value] variable: %a"
           Variable.print bound_to
       end;
+      let free_names = Static_const.free_names static_const in
       let symbol_projections =
-        Name_occurrences.fold_variables (Static_const.free_names static_const)
+        Name_occurrences.fold_variables free_names
           ~init:Variable.Map.empty
           ~f:(fun symbol_projections var ->
             match DE.find_symbol_projection (DA.denv dacc) var with
             | None -> symbol_projections
             | Some proj -> Variable.Map.add var proj symbol_projections)
       in
-      (*
-      if not (Variable.Map.is_empty symbol_projections) then begin
-        Format.eprintf "\nConstant:@ %a@ Symbol projections when created:@ %a\n%!"
-          Static_const.print static_const
-          (Variable.Map.print Symbol_projection.print) symbol_projections
-      end;
-      *)
       let dacc =
         let denv = DA.denv dacc in
-        Lifted_constant.create_block_like symbol static_const denv
+        Lifted_constant.create_block_like symbol
+          (Static_const_with_free_names.create static_const ~free_names)
+          denv
           ~symbol_projections
           ty
         |> DA.add_lifted_constant dacc

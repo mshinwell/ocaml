@@ -20,13 +20,10 @@ open! Simplify_import
 
 let simplify_direct_tuple_application dacc apply code_id ~down_to_up =
   let dbg = Apply.dbg apply in
-  let callee's_code = DE.find_code (DA.denv dacc) code_id in
-  let param_arity =
-    Code.params_arity callee's_code
-  in
+  let callee's_code, _free_names = DE.find_code (DA.denv dacc) code_id in
+  let param_arity = Code.params_arity callee's_code in
   let n = List.length param_arity in
-  (* Split the tuple argument from other potential
-     over application arguments *)
+  (* Split the tuple argument from other potential over application arguments *)
   let tuple, over_application_args =
     match Apply.args apply with
     | tuple :: others -> tuple, others
@@ -57,7 +54,9 @@ let simplify_direct_tuple_application dacc apply code_id ~down_to_up =
   let expr =
     List.fold_right (fun (v, defining_expr) body ->
         let var_bind = Var_in_binding_pos.create v Name_mode.normal in
-        Expr.create_let var_bind defining_expr body)
+        Let.create (Bindable_let_bound.singleton var_bind)
+          defining_expr ~body ~free_names_of_body:Unknown
+        |> Expr.create_let)
       vars_and_fields apply_expr
   in
   Simplify_expr.simplify_expr dacc expr ~down_to_up
@@ -224,14 +223,16 @@ let simplify_direct_partial_application dacc apply ~callee's_code_id
           | None -> expr
           | Some arg ->
             let arg = VB.create arg Name_mode.normal in
-            Expr.create_let arg
+            Let.create (Bindable_let_bound.singleton arg)
               (Named.create_prim
                 (Unary (Project_var {
                   project_from = wrapper_closure_id;
                   var = closure_var;
                 }, Simple.var my_closure))
                 dbg)
-              expr)
+              ~body:expr
+              ~free_names_of_body:Unknown
+            |> Expr.create_let)
         (Expr.create_apply full_application)
         (List.rev applied_args_with_closure_vars)
     in
@@ -272,7 +273,9 @@ let simplify_direct_partial_application dacc apply ~callee's_code_id
       Var_within_closure.Map.of_list applied_args_with_closure_vars
     in
     let defining_expr =
-      Lifted_constant.create_code code_id (Code code)
+      Lifted_constant.create_code code_id
+        (Static_const_with_free_names.create (Code code)
+          ~free_names:(Code.free_names code))
     in
     let dummy_defining_expr =
       (* We should not add the real piece of code in the lifted constant.
@@ -281,7 +284,10 @@ let simplify_direct_partial_application dacc apply ~callee's_code_id
          constant identifying deleted code.  This will ensure, if for some
          reason the constant makes it to Cmm stage, that code size is not
          increased unnecessarily. *)
-      Lifted_constant.create_code code_id (Code (Code.make_deleted code))
+      let code = Code.make_deleted code in
+      Lifted_constant.create_code code_id
+        (Static_const_with_free_names.create (Code code)
+          ~free_names:(Code.free_names code))
     in
     let dacc =
       DA.add_lifted_constant dacc dummy_defining_expr
@@ -298,10 +304,12 @@ let simplify_direct_partial_application dacc apply ~callee's_code_id
   let expr =
     let wrapper_var = VB.create wrapper_var Name_mode.normal in
     let closure_vars = [wrapper_var] in
-    let pattern = Bindable_let_bound.set_of_closures ~closure_vars in
-    Expr.create_pattern_let pattern
+    let bound = Bindable_let_bound.set_of_closures ~closure_vars in
+    Let.create bound
       (Named.create_set_of_closures wrapper_taking_remaining_args)
-      (Expr.create_apply_cont apply_cont)
+      ~body:(Expr.create_apply_cont apply_cont)
+      ~free_names_of_body:Unknown
+    |> Expr.create_let
   in
   Simplify_expr.simplify_expr dacc expr
     ~down_to_up:(fun dacc ~rebuild ->
@@ -358,7 +366,7 @@ let simplify_direct_function_call dacc apply ~callee's_code_id_from_type
     else begin
       let args = Apply.args apply in
       let provided_num_args = List.length args in
-      let callee's_code = DE.find_code (DA.denv dacc) callee's_code_id in
+      let callee's_code, _ = DE.find_code (DA.denv dacc) callee's_code_id in
       (* A function declaration with [is_tupled = true] may effectively have
          an arity that does not match that of the underlying code.
          Since direct calls adopt the calling convention of the code's body
@@ -553,7 +561,7 @@ let simplify_function_call dacc apply ~callee_ty
         | Some newer -> Rec_info.merge rec_info ~newer
       in
       let callee's_code_id_from_type = I.code_id inlinable in
-      let callee's_code = DE.find_code denv callee's_code_id_from_type in
+      let callee's_code, _ = DE.find_code denv callee's_code_id_from_type in
       let must_be_detupled = call_must_be_detupled (I.is_tupled inlinable) in
       simplify_direct_function_call dacc apply ~callee's_code_id_from_type
         ~callee's_code_id_from_call_kind ~callee's_closure_id ~arg_types
@@ -572,7 +580,7 @@ let simplify_function_call dacc apply ~callee_ty
         | Indirect_known_arity _ -> None
       in
       let must_be_detupled = call_must_be_detupled (N.is_tupled non_inlinable) in
-      let callee's_code_from_type =
+      let callee's_code_from_type, _ =
         DE.find_code denv callee's_code_id_from_type
       in
       simplify_direct_function_call dacc apply ~callee's_code_id_from_type

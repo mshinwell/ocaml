@@ -59,15 +59,18 @@ let inline dacc ~callee ~args function_decl
                 ~newer_rec_info:(Some (Rec_info.create ~depth:1 ~unroll_to))
               |> Option.get  (* CR mshinwell: improve *)
             in
-            let free_names_of_body =
-              ???
-            in
             Expr.apply_name_permutation
-              (Expr.bind_parameters_no_simplification ~bind:params ~target:args
-                (Let.create (VB.create my_closure Name_mode.normal)
+              (Expr.bind_parameters_to_args_no_simplification
+                ~params ~args
+                ~body:(Let.create
+                   (Bindable_let_bound.singleton
+                     (VB.create my_closure Name_mode.normal))
                    (Named.create_simple callee)
                    ~body
-                   ~free_names_of_body
+                   (* Here and below, we don't need to give any name occurrence
+                      information (thank goodness!) since the entirety of the
+                      expression we're building will be re-simplified. *)
+                   ~free_names_of_body:Unknown
                  |> Expr.create_let))
               perm
           in
@@ -85,8 +88,8 @@ let inline dacc ~callee ~args function_decl
                  This means we also need to add a push trap before the inlined
                  body, and a pop trap after.
                  The push trap is simply a matter of jumping to the body, while
-                 the pop trap needs to replace the body's return continuation with
-                 a wrapper that pops then jumps back.
+                 the pop trap needs to replace the body's return continuation
+                 with a wrapper that pops then jumps back.
               *)
               let wrapper = Continuation.create ~sort:Exn () in
               let body_with_pop =
@@ -116,9 +119,6 @@ let inline dacc ~callee ~args function_decl
                       Continuation_params_and_handler.create
                         (Kinded_parameter.List.create kinded_params)
                         ~handler
-                        (* We don't need to give any name occurrence
-                           information since the entirety of the expression
-                           we're building will be re-simplified. *)
                         ~free_names_of_handler:Unknown
                     in
                     Continuation_handler.create ~params_and_handler

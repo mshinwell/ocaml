@@ -63,7 +63,7 @@ let rebuild_apply_cont apply_cont ~args ~rewrite_id uacc ~after_rebuild =
              make use of parameter-to-argument bindings; we just leave them for
              a subsequent round of [Simplify] or [Un_cps] to clean up. *)
           let expr, uacc =
-            Simplify_let.bind_parameters_to_args uacc ~params
+            Expr_builder.bind_parameters_to_args uacc ~params
               ~args:(AC.args apply_cont) ~body:handler
               ~free_names_of_body:free_names_of_handler
           in

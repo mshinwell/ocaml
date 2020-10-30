@@ -156,14 +156,16 @@ let add_wrapper_for_fixed_arity_continuation0 uacc cont_or_apply_cont
       begin match Apply_cont_rewrite.rewrite_use rewrite use_id apply_cont with
       | Apply_cont apply_cont ->
         new_wrapper (Expr.create_apply_cont apply_cont)
-          ~free_names:(Apply_cont.free_names apply_cont)
-      | Expr (expr, free_names) -> new_wrapper expr ~free_names
+          ~free_names:(Known (Apply_cont.free_names apply_cont))
+      | Expr (expr, free_names) ->
+        new_wrapper expr ~free_names:(Known free_names)
       end
     | Apply_cont apply_cont ->
       let apply_cont = Apply_cont.update_continuation apply_cont cont in
       match Apply_cont_rewrite.rewrite_use rewrite use_id apply_cont with
       | Apply_cont apply_cont -> Apply_cont apply_cont
-      | Expr (expr, free_names) -> new_wrapper expr ~free_names
+      | Expr (expr, free_names) ->
+        new_wrapper expr ~free_names:(Known free_names)
 
 type add_wrapper_for_switch_arm_result =
   | Apply_cont of Flambda.Apply_cont.t
@@ -276,17 +278,3 @@ let split_direct_over_application apply ~param_arity =
       ~free_names_of_body:(Known (Apply.free_names full_apply))
   in
   expr
-
-let bind_parameters_to_args uacc ~params ~args ~body ~free_names_of_body =
-  if List.compare_lengths params args <> 0 then begin
-    Misc.fatal_errorf "Mismatching parameters and arguments: %a and %a"
-      KP.List.print params
-      Simple.List.print args
-  end;
-  let bindings =
-    ListLabels.map2 params args
-      ~f:(fun param arg ->
-        let var = Var_in_binding_pos.create (KP.var param) Name_mode.normal in
-        var, Named.create_simple arg)
-  in
-  bind uacc ~bindings ~body ~free_names_of_body

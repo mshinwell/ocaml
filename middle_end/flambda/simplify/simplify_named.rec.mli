@@ -19,7 +19,7 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 type simplify_named_result = private {
-  bindings_outermost_first : (Bindable_let_bound.t * Reachable.t) list;
+  bindings_outermost_first : (Bindable_let_bound.t * Simplified_named.t) list;
   dacc : Downwards_acc.t;
 }
 
