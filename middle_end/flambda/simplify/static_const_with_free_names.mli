@@ -26,6 +26,9 @@ type const_wfn = t
 
 val print : Format.formatter -> t -> unit
 
+(* XXX For code constants, we will now have the free names, in the
+   [Code] itself in [Static_const]. *)
+
 (** Free names must be provided except for [Code] constants, where sometimes
     this information would be unnecessarily expensive to compute.  See
     comment in [Simplify_static_const]. *)

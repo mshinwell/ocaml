@@ -98,6 +98,9 @@ let add_code code t =
                names.  In these cases we have to do the computation now.
                This case should only arise rarely, e.g. as a result of a join
                via the code age relation, so the overhead should be low. *)
+            (* CR mshinwell: It's possible we don't need this here since
+               [Expr_builder.create_raw_let_symbol] should always have forced
+               free name computation for code like this. *)
             match (free_names_of_code : _ Or_unknown.t) with
             | Known free_names -> free_names
             | Unknown -> Flambda.Code.free_names code

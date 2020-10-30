@@ -39,12 +39,21 @@ type t = {
   mutable declared_symbols : (Symbol.t * Static_const.t) list;
   mutable shareable_constants : Symbol.t Static_const.Map.t;
   mutable code : (Code_id.t * Code.t) list;
+  mutable symbols_used_in_current_function : Name_occurrences.t;
 }
+
+(* Do not use [Simple.symbol], use this function instead, to ensure that
+   we correctly compute the free names of [Code]. *)
+let use_of_symbol_as_simple t symbol =
+  t.symbols_used_in_current_function
+    <- Name_occurrences.add_symbol t.symbols_used_in_current_function
+         symbol Name_mode.normal;
+  Simple.symbol symbol
 
 let symbol_for_ident t id =
   let symbol = t.symbol_for_global' id in
   t.imported_symbols <- Symbol.Set.add symbol t.imported_symbols;
-  Simple.symbol symbol
+  use_of_symbol_as_simple symbol
 
 let register_const0 t constant name =
   match Static_const.Map.find constant t.shareable_constants with
@@ -127,7 +136,7 @@ let close_const0 t (const : Lambda.structured_constant) =
   match declare_const t const with
   | Tagged_immediate c, name ->
     Simple.const (Reg_width_const.tagged_immediate c), name
-  | Symbol s, name -> Simple.symbol s, name
+  | Symbol s, name -> use_of_symbol_as_simple s, name
   | Dynamically_computed _, name ->
     Misc.fatal_errorf "Declaring a computed constant %s" name
 
@@ -199,7 +208,7 @@ let close_c_call t ~let_bound_var (prim : Primitive.description)
   t.imported_symbols <- Symbol.Set.add call_symbol t.imported_symbols;
   let call args =
     let apply =
-      Apply.create ~callee:(Simple.symbol call_symbol)
+      Apply.create ~callee:(use_of_symbol_as_simple call_symbol)
         ~continuation:(Return return_continuation)
         exn_continuation
         ~args
@@ -692,6 +701,7 @@ and close_functions t external_env function_declarations =
 and close_one_function t ~external_env ~by_closure_id decl
       ~var_within_closures_from_idents ~closure_ids_from_idents
       function_declarations =
+  t.symbols_used_in_current_function <- Name_occurrences.empty;
   let body = Function_decl.body decl in
   let loc = Function_decl.loc decl in
   let dbg = Debuginfo.from_location loc in
@@ -796,41 +806,36 @@ and close_one_function t ~external_env ~by_closure_id decl
       raise Misc.Fatal_error
     end
   in
-  let free_names_of_body = Expr.free_names body in
   let my_closure' = Simple.var my_closure in
   let body =
     Variable.Map.fold (fun var closure_id body ->
-        if not (Name_occurrences.mem_var free_names_of_body var) then body
-        else
-          let move : Flambda_primitive.unary_primitive =
-            Select_closure {
-              move_from = my_closure_id;
-              move_to = closure_id;
-            }
-          in
-          let var = VB.create var Name_mode.normal in
-          Let.create (Bindable_let_bound.singleton var)
-            (Named.create_prim (Unary (move, my_closure')) Debuginfo.none)
-            ~body ~free_names_of_body:Unknown
-          |> Expr.create_let)
+        let move : Flambda_primitive.unary_primitive =
+          Select_closure {
+            move_from = my_closure_id;
+            move_to = closure_id;
+          }
+        in
+        let var = VB.create var Name_mode.normal in
+        Let.create (Bindable_let_bound.singleton var)
+          (Named.create_prim (Unary (move, my_closure')) Debuginfo.none)
+          ~body ~free_names_of_body:Unknown
+        |> Expr.create_let)
       project_closure_to_bind
       body
   in
   let body =
     Variable.Map.fold (fun var var_within_closure body ->
-        if not (Name_occurrences.mem_var free_names_of_body var) then body
-        else
-          let var = VB.create var Name_mode.normal in
-          Let.create (Bindable_let_bound.singleton var)
-            (Named.create_prim
-              (Unary (Project_var {
-                 project_from = my_closure_id;
-                 var = var_within_closure;
-               }, my_closure'))
-              Debuginfo.none)
-            ~body
-            ~free_names_of_body:Unknown
-          |> Expr.create_let)
+        let var = VB.create var Name_mode.normal in
+        Let.create (Bindable_let_bound.singleton var)
+          (Named.create_prim
+            (Unary (Project_var {
+                project_from = my_closure_id;
+                var = var_within_closure;
+              }, my_closure'))
+            Debuginfo.none)
+          ~body
+          ~free_names_of_body:Unknown
+        |> Expr.create_let)
       var_within_closures_to_bind
       body
   in
@@ -877,6 +882,13 @@ and close_one_function t ~external_env ~by_closure_id decl
       ~is_a_functor:(Function_decl.is_a_functor decl)
       ~recursive
       ~newer_version_of:None
+
+    (* XXX We need to record the following for code:
+       - code IDs
+       - symbols
+       - used closure vars (this isn't needed for renaming upon import but
+         is needed when creating [Let]s).
+    *)
   in
   t.code <- (code_id, code) :: t.code;
   Closure_id.Map.add my_closure_id fun_decl by_closure_id
@@ -900,6 +912,7 @@ let ilambda_to_flambda ~backend ~module_ident ~module_block_size_in_words
       shareable_constants = Static_const.Map.empty;
       code = [];
       ilambda_exn_continuation = ilam.exn_continuation.exn_handler;
+      symbols_used_in_current_function = Name_occurrences.empty;
     }
   in
   let module_symbol =
@@ -930,7 +943,7 @@ let ilambda_to_flambda ~backend ~module_ident ~module_block_size_in_words
            here to ensure that its associated "let symbol" doesn't get
            deleted. *)
         Apply_cont.create return_cont
-          ~args:[Simple.symbol module_symbol]
+          ~args:[use_of_symbol_as_simple module_symbol]
           ~dbg:Debuginfo.none
         |> Expr.create_apply_cont
       in
