@@ -28,7 +28,7 @@ let inline dacc ~callee ~args function_decl
       ~apply_inlining_depth ~unroll_to dbg =
   (* CR mshinwell: Add meet constraint to the return continuation *)
   let denv = DA.denv dacc in
-  let code = DE.find_code denv (I.code_id function_decl) in
+  let code, _free_names = DE.find_code denv (I.code_id function_decl) in
   let params_and_body =
     Code.params_and_body_must_be_present code ~error_context:"Inlining"
   in
@@ -59,12 +59,16 @@ let inline dacc ~callee ~args function_decl
                 ~newer_rec_info:(Some (Rec_info.create ~depth:1 ~unroll_to))
               |> Option.get  (* CR mshinwell: improve *)
             in
+            let free_names_of_body =
+              ???
+            in
             Expr.apply_name_permutation
               (Expr.bind_parameters_no_simplification ~bind:params ~target:args
-                (Expr.create_let
-                  (VB.create my_closure Name_mode.normal)
-                  (Named.create_simple callee)
-                  body))
+                (Let.create (VB.create my_closure Name_mode.normal)
+                   (Named.create_simple callee)
+                   ~body
+                   ~free_names_of_body
+                 |> Expr.create_let))
               perm
           in
           let expr =

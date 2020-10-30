@@ -18,6 +18,9 @@
 
 open! Flambda.Import
 
+module LC = Simplify_envs.Lifted_constant
+module LCS = Simplify_envs.Lifted_constant_state
+module P = Flambda_primitive
 module UA = Upwards_acc
 module VB = Var_in_binding_pos
 
@@ -317,17 +320,30 @@ let remove_unused_closure_vars uacc static_const =
   match Static_const_with_free_names.const static_const with
   | Set_of_closures set_of_closures ->
     let name_occurrences = UA.name_occurrences uacc in
+    let closure_vars = Set_of_closures.closure_elements set_of_closures in
+    let free_names =
+      Var_within_closure.Map.fold (fun closure_var _ free_names ->
+          if not (Name_occurrences.mem_closure_var name_occurrences
+            closure_var)
+          then
+            Name_occurrences.remove_one_occurrence_of_closure_var
+              free_names closure_var Name_mode.normal
+          else
+            free_names)
+        closure_vars
+        (Static_const_with_free_names.free_names static_const)
+    in
     let closure_elements =
-      Set_of_closures.closure_elements set_of_closures
-      |> Var_within_closure.Map.filter (fun closure_var _ ->
-        Name_occurrences.mem_closure_var name_occurrences closure_var)
+      Var_within_closure.Map.filter (fun closure_var _ ->
+          Name_occurrences.mem_closure_var name_occurrences closure_var)
+        closure_vars
     in
     let set_of_closures =
       Set_of_closures.create (Set_of_closures.function_decls set_of_closures)
         ~closure_elements
     in
     Static_const_with_free_names.create (Set_of_closures set_of_closures)
-      free_names
+      ~free_names
   | Code _
   | Block _
   | Boxed_float _
@@ -345,7 +361,7 @@ let create_let_symbols uacc (scoping_rule : Symbol_scoping_rule.t)
   let symbol_projections = LC.symbol_projections lifted_constant in
   let static_consts =
     Static_const_with_free_names.Group.map (LC.defining_exprs lifted_constant)
-      ~f:(remove_unused_closure_vars_list uacc)
+      ~f:(remove_unused_closure_vars uacc)
   in
   let expr, uacc =
     match scoping_rule with
@@ -358,72 +374,69 @@ let create_let_symbols uacc (scoping_rule : Symbol_scoping_rule.t)
           ~body
       in
       let uacc =
-        defining_exprs
-        |> Static_const_with_free_names.Group.pieces_of_code_by_code_id
+        (LC.defining_exprs lifted_constant)
+        |> Static_const_with_free_names.Group.pieces_of_code
         |> UA.remember_code_for_cmx uacc
       in
       expr, uacc
   in
-  let expr =
-    Variable.Map.fold (fun var proj (expr, uacc) ->
-        let rec apply_projection proj =
-          match LC.apply_projection lifted_constant proj with
-          | Some simple ->
-            (* If the projection is from one of the symbols bound by the
-               "let symbol" that we've just created, we'll always end up here,
-               avoiding any problem about where to do the projection versus
-               the initialisation of a possibly-recursive group of symbols.
-               We may end up with a "variable = variable" [Let] here, but
-               [Un_cps] (or a subsequent pass of [Simplify]) will remove it.
-               This is the same situation as when continuations are inlined;
-               we can't use a name permutation to resolve the problem as both
-               [var] and [var'] may occur in [expr], and permuting could cause
-               an unbound name.
-               It is possible for one projection to yield a variable that is
-               in turn defined by another symbol projection, so we need to
-               expand transitively. *)
-            Simple.pattern_match' simple
-              ~const:(fun _ -> Named.create_simple simple)
-              ~symbol:(fun _ -> Named.create_simple simple)
-              ~var:(fun var ->
-                match Variable.Map.find var symbol_projections with
-                | exception Not_found -> Named.create_simple simple
-                | proj -> apply_projection proj)
-          | None ->
-            let prim : P.t =
-              let symbol = Simple.symbol (Symbol_projection.symbol proj) in
-              match Symbol_projection.projection proj with
-              | Block_load { index; } ->
-                let index = Simple.const_int index in
-                let block_access_kind : P.Block_access_kind.t =
-                  Values {
-                    tag = Tag.Scannable.zero;
-                    size = Unknown;
-                    field_kind = Any_value;
-                  }
-                in
-                Binary (Block_load (block_access_kind, Immutable), symbol,
-                  index)
-              | Project_var { project_from; var; } ->
-                Unary (Project_var { project_from; var; }, symbol)
-            in
-            Named.create_prim prim Debuginfo.none
-        in
-        (* It's possible that this might create duplicates of the same
-           projection operation, but it's unlikely there will be a
-           significant number, and since we're at toplevel we tolerate
-           them. *)
-        let defining_expr = apply_projection proj in
-        let free_names_of_defining_expr = Named.free_names defining_expr in
-        let expr, uacc, _ =
-          create_singleton_let uacc (Var_in_binding_pos.create var NM.normal)
-            defining_expr ~free_names_of_defining_expr ~body:expr
-        in
-        expr, uacc)
-      symbol_projections
-      (expr, uacc)
-  in
-  expr, uacc
+  Variable.Map.fold (fun var proj (expr, uacc) ->
+      let rec apply_projection proj =
+        match LC.apply_projection lifted_constant proj with
+        | Some simple ->
+          (* If the projection is from one of the symbols bound by the
+             "let symbol" that we've just created, we'll always end up here,
+             avoiding any problem about where to do the projection versus
+             the initialisation of a possibly-recursive group of symbols.
+             We may end up with a "variable = variable" [Let] here, but
+             [Un_cps] (or a subsequent pass of [Simplify]) will remove it.
+             This is the same situation as when continuations are inlined;
+             we can't use a name permutation to resolve the problem as both
+             [var] and [var'] may occur in [expr], and permuting could cause
+             an unbound name.
+             It is possible for one projection to yield a variable that is
+             in turn defined by another symbol projection, so we need to
+             expand transitively. *)
+          Simple.pattern_match' simple
+            ~const:(fun _ -> Named.create_simple simple)
+            ~symbol:(fun _ -> Named.create_simple simple)
+            ~var:(fun var ->
+              match Variable.Map.find var symbol_projections with
+              | exception Not_found -> Named.create_simple simple
+              | proj -> apply_projection proj)
+        | None ->
+          let prim : P.t =
+            let symbol = Simple.symbol (Symbol_projection.symbol proj) in
+            match Symbol_projection.projection proj with
+            | Block_load { index; } ->
+              let index = Simple.const_int index in
+              let block_access_kind : P.Block_access_kind.t =
+                Values {
+                  tag = Tag.Scannable.zero;
+                  size = Unknown;
+                  field_kind = Any_value;
+                }
+              in
+              Binary (Block_load (block_access_kind, Immutable), symbol,
+                index)
+            | Project_var { project_from; var; } ->
+              Unary (Project_var { project_from; var; }, symbol)
+          in
+          Named.create_prim prim Debuginfo.none
+      in
+      (* It's possible that this might create duplicates of the same
+         projection operation, but it's unlikely there will be a
+         significant number, and since we're at toplevel we tolerate
+         them. *)
+      let defining_expr = apply_projection proj in
+      let free_names_of_defining_expr = Named.free_names defining_expr in
+      let expr, uacc, _ =
+        create_singleton_let uacc (VB.create var Name_mode.normal)
+          defining_expr ~free_names_of_defining_expr ~body:expr
+      in
+      expr, uacc)
+    symbol_projections
+    (expr, uacc)
 
 let place_lifted_constants uacc (scoping_rule : Symbol_scoping_rule.t)
       ~lifted_constants_from_defining_expr ~lifted_constants_from_body
@@ -491,7 +504,7 @@ let place_lifted_constants uacc (scoping_rule : Symbol_scoping_rule.t)
     LCS.fold_innermost_first constants ~init:(around, uacc)
       ~f:(fun (body, uacc) lifted_const ->
         create_let_symbols uacc scoping_rule
-          (UA.code_age_relation uacc) lifted_const body)
+          (UA.code_age_relation uacc) lifted_const ~body)
   in
   let body, uacc =
     place_constants uacc ~around:body to_place_around_body

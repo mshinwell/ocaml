@@ -62,10 +62,7 @@ let compute_reachable_names_and_code ~module_symbol typing_env code =
       let fold_code_id names_to_add code_id =
         match Exported_code.find_code_if_not_imported code code_id with
         | None -> names_to_add
-        | Some code ->
-          let code_names =
-            Code.free_names code
-          in
+        | Some (_code, code_names) ->
           let names_to_consider =
             Name_occurrences.with_only_names_and_code_ids code_names
           in
