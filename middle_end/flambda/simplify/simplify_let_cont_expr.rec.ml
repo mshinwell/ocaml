@@ -30,11 +30,11 @@ let rebuild_one_continuation_handler cont ~at_unit_toplevel
       || List.compare_length_with params 0 = 0
     then handler, uacc
     else
-      Simplify_common.place_lifted_constants uacc
+      EB.place_lifted_constants uacc
         Dominator
         ~lifted_constants_from_defining_expr:LCS.empty
         ~lifted_constants_from_body:(UA.lifted_constants uacc)
-        ~put_bindings_around_body:(fun ~body -> body)
+        ~put_bindings_around_body:(fun uacc ~body -> body, uacc)
         ~body:handler
         ~critical_deps_of_bindings:(KP.List.free_names params)
   in
@@ -81,7 +81,7 @@ let rebuild_one_continuation_handler cont ~at_unit_toplevel
       UE.add_apply_cont_rewrite uenv cont rewrite)
   in
   after_rebuild cont_handler ~params:params' ~handler
-    ~free_names_of_handler:(Known free_names) uacc
+    ~free_names_of_handler:free_names uacc
 
 let simplify_one_continuation_handler dacc cont ~at_unit_toplevel recursive
       cont_handler ~params ~handler ~extra_params_and_args ~down_to_up =
@@ -99,6 +99,8 @@ let rebuild_non_recursive_let_cont_handler cont
       ~is_exn_handler cont_handler uacc ~after_rebuild =
   let uenv = UA.uenv uacc in
   let uenv =
+    (* CR mshinwell: Change types so that [free_names_of_handler] only
+       needs to be provided in the [Uses] case. *)
     match uses with
     | No_uses -> uenv
     | Uses _ ->
@@ -115,18 +117,18 @@ let rebuild_non_recursive_let_cont_handler cont
         UE.add_linearly_used_inlinable_continuation uenv cont scope arity
           ~params ~handler ~free_names_of_handler
       else
-        match CH.behaviour handler with
+        match CH.behaviour cont_handler with
         | Unreachable { arity; } ->
           UE.add_unreachable_continuation uenv cont scope arity
         | Alias_for { arity; alias_for; } ->
           UE.add_continuation_alias uenv cont arity ~alias_for
         | Unknown { arity; } ->
           if is_single_use then
-            UE.add_continuation_with_handler uenv cont scope arity handler
+            UE.add_continuation_with_handler uenv cont scope arity cont_handler
           else
             UE.add_continuation uenv cont scope arity
   in
-  after_rebuild handler (UA.with_uenv uacc uenv)
+  after_rebuild cont_handler (UA.with_uenv uacc uenv)
 
 let simplify_non_recursive_let_cont_handler ~denv_before_body ~dacc_after_body
       cont params ~(handler : Expr.t) cont_handler ~prior_lifted_constants
@@ -164,9 +166,11 @@ let simplify_non_recursive_let_cont_handler ~denv_before_body ~dacc_after_body
     let dacc = DA.with_continuation_uses_env dacc ~cont_uses_env in
     down_to_up dacc
       ~continuation_has_zero_uses:true
-      ~rebuild:(rebuild_non_recursive_let_cont_handler cont uses ~params
-        ~is_single_inlinable_use:false ~is_single_use:false scope
-        ~is_exn_handler cont_handler)
+      ~rebuild:(fun uacc ~after_rebuild ->
+        rebuild_non_recursive_let_cont_handler cont uses ~params
+          ~handler ~free_names_of_handler:Name_occurrences.empty
+          ~is_single_inlinable_use:false ~is_single_use:false scope
+          ~is_exn_handler cont_handler uacc ~after_rebuild)
   (* CR mshinwell: Refactor so we don't have the
      [is_single_use] hack.  The problem is that we want to
      have the code of the handler available if we might want to
@@ -316,8 +320,8 @@ let simplify_non_recursive_let_cont dacc non_rec ~down_to_up =
                 (* Now, on the upwards traversal, the handler is rebuilt.
                    We need to be careful with the free name information
                    returned in [uacc] in two ways:
-                   - Linear inlining of the continuation doesn't change
-                     the free names of the whole [Let_cont] (so nothing
+                   - Observe that linear inlining of the continuation doesn't
+                     change the free names of the whole [Let_cont] (so nothing
                      extra to do here).
                    - If the continuation has zero uses, we must not
                      count the free names of the handler, as it will be
@@ -333,7 +337,8 @@ let simplify_non_recursive_let_cont dacc non_rec ~down_to_up =
                     if not continuation_has_zero_uses then uacc
                     else
                       UA.with_name_occurrences uacc
-                        name_occurrences_before_handler_rebuild
+                        ~name_occurrences:
+                          name_occurrences_before_handler_rebuild
                   in
                   (* Having rebuilt the handler, we now rebuild the body. *)
                   rebuild_body uacc ~after_rebuild:(fun body uacc ->
@@ -353,9 +358,11 @@ let simplify_non_recursive_let_cont dacc non_rec ~down_to_up =
                     (* We are passing back over a binder, so remove the
                        bound continuation from the free name information. *)
                     let uacc =
-                      Name_occurrences.remove_continuation
-                        (UA.name_occurrences uacc) cont
-                      |> UA.with_name_occurrences uacc
+                      let name_occurrences =
+                        Name_occurrences.remove_continuation
+                          (UA.name_occurrences uacc) cont
+                      in
+                      UA.with_name_occurrences uacc ~name_occurrences
                     in
                     (* Having rebuilt both the body and handler, the [Let_cont]
                        expression itself is rebuilt -- unless the continuation
@@ -368,7 +375,7 @@ let simplify_non_recursive_let_cont dacc non_rec ~down_to_up =
                     let expr =
                       if continuation_has_zero_uses then body
                       else
-                        Let_cont.create_non_recursive' cont handler ~body
+                        Let_cont.create_non_recursive' ~cont handler ~body
                           ~num_free_occurrences_of_cont_in_body:
                             (Known num_free_occurrences_of_cont_in_body)
                     in
@@ -423,9 +430,10 @@ let simplify_recursive_let_cont_handlers ~denv_before_body ~dacc_after_body
           UA.map_uenv uacc ~f:(fun uenv ->
             UE.add_continuation uenv cont original_cont_scope_level arity)
         in
-        rebuild_handler uacc ~after_rebuild:(fun handler uacc ->
+        rebuild_handler uacc ~after_rebuild:(fun cont_handler ~params:_
+              ~handler:_ ~free_names_of_handler:_ uacc ->
           rebuild_recursive_let_cont_handlers cont arity
-            ~original_cont_scope_level handler uacc ~after_rebuild)))
+            ~original_cont_scope_level cont_handler uacc ~after_rebuild)))
 
 let rebuild_recursive_let_cont ~body handlers ~uenv_without_cont uacc
       ~after_rebuild : Expr.t * UA.t =
@@ -478,9 +486,11 @@ let simplify_recursive_let_cont dacc recs ~down_to_up : Expr.t * UA.t =
                     (* We are passing back over a binder, so remove the
                        bound continuation from the free name information. *)
                     let uacc =
-                      Name_occurrences.remove_continuation
-                        (UA.name_occurrences uacc) cont
-                      |> UA.with_name_occurrences uacc
+                      let name_occurrences =
+                        Name_occurrences.remove_continuation
+                          (UA.name_occurrences uacc) cont
+                      in
+                      UA.with_name_occurrences uacc ~name_occurrences
                     in
                     rebuild_recursive_let_cont ~body handlers
                       ~uenv_without_cont uacc ~after_rebuild)))))))

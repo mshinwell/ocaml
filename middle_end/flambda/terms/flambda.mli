@@ -278,6 +278,13 @@ end and Let_cont_expr : sig
     -> free_names_of_body:Name_occurrences.t Or_unknown.t
     -> Expr.t
 
+  val create_non_recursive'
+     : cont:Continuation.t
+    -> Continuation_handler.t
+    -> body:Expr.t
+    -> num_free_occurrences_of_cont_in_body:Num_occurrences.t Or_unknown.t
+    -> Expr.t
+
   (** Create a definition of a set of possibly-recursive continuations. *)
   val create_recursive
      : Continuation_handler.t Continuation.Map.t

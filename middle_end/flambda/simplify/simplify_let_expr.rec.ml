@@ -65,7 +65,7 @@ let rebuild_let bindable_let_bound ~bindings_outermost_first
           Name_occurrences.union (Bindable_let_bound.free_names bound)
             critical_deps)
     in
-    let body, uacc =
+    let uacc, body =
       EB.place_lifted_constants uacc
         scoping_rule
         ~lifted_constants_from_defining_expr
