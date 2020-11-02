@@ -39,14 +39,14 @@ type t = {
   mutable declared_symbols : (Symbol.t * Static_const.t) list;
   mutable shareable_constants : Symbol.t Static_const.Map.t;
   mutable code : (Code_id.t * Code.t) list;
-  mutable symbols_used_in_current_function : Name_occurrences.t;
+  mutable free_names_of_current_function : Name_occurrences.t;
 }
 
 (* Do not use [Simple.symbol], use this function instead, to ensure that
    we correctly compute the free names of [Code]. *)
 let use_of_symbol_as_simple t symbol =
-  t.symbols_used_in_current_function
-    <- Name_occurrences.add_symbol t.symbols_used_in_current_function
+  t.free_names_of_current_function
+    <- Name_occurrences.add_symbol t.free_names_of_current_function
          symbol Name_mode.normal;
   Simple.symbol symbol
 
@@ -701,7 +701,7 @@ and close_functions t external_env function_declarations =
 and close_one_function t ~external_env ~by_closure_id decl
       ~var_within_closures_from_idents ~closure_ids_from_idents
       function_declarations =
-  t.symbols_used_in_current_function <- Name_occurrences.empty;
+  t.free_names_of_current_function <- Name_occurrences.empty;
   let body = Function_decl.body decl in
   let loc = Function_decl.loc decl in
   let dbg = Debuginfo.from_location loc in
@@ -823,6 +823,12 @@ and close_one_function t ~external_env ~by_closure_id decl
       project_closure_to_bind
       body
   in
+  t.free_names_of_current_function
+    <- Variable.Map.fold (fun _var closure_var free_names ->
+           Name_occurrences.add_closure_var free_names
+             closure_var Name_mode.normal)
+         var_within_closures_to_bind
+         t.free_names_of_current_function;
   let body =
     Variable.Map.fold (fun var var_within_closure body ->
         let var = VB.create var Name_mode.normal in
@@ -874,7 +880,8 @@ and close_one_function t ~external_env ~by_closure_id decl
   let code =
     Code.create
       code_id
-      ~params_and_body:(Present params_and_body)
+      ~params_and_body:
+        (Present (params_and_body, t.free_names_of_current_function))
       ~params_arity
       ~result_arity:[LC.value_kind return]
       ~stub
@@ -882,13 +889,6 @@ and close_one_function t ~external_env ~by_closure_id decl
       ~is_a_functor:(Function_decl.is_a_functor decl)
       ~recursive
       ~newer_version_of:None
-
-    (* XXX We need to record the following for code:
-       - code IDs
-       - symbols
-       - used closure vars (this isn't needed for renaming upon import but
-         is needed when creating [Let]s).
-    *)
   in
   t.code <- (code_id, code) :: t.code;
   Closure_id.Map.add my_closure_id fun_decl by_closure_id

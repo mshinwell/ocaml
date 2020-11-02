@@ -26,17 +26,13 @@ type const_wfn = t
 
 val print : Format.formatter -> t -> unit
 
-(* XXX For code constants, we will now have the free names, in the
-   [Code] itself in [Static_const]. *)
-
-(** Free names must be provided except for [Code] constants, where sometimes
-    this information would be unnecessarily expensive to compute.  See
-    comment in [Simplify_static_const]. *)
+(** Free names must be provided except for [Code] constants, which already
+    hold the necessary information. *)
 val create : Static_const.t -> free_names:Name_occurrences.t Or_unknown.t -> t
 
 val const : t -> Static_const.t
 
-val free_names : t -> Name_occurrences.t Or_unknown.t
+val free_names : t -> Name_occurrences.t
 
 val is_fully_static : t -> bool
 
@@ -49,12 +45,7 @@ module Group : sig
 
   val create : const_wfn list -> t
 
-  val free_names : t -> Name_occurrences.t Or_unknown.t
-
-  (** This function computes (and caches) the free names of any [Code]
-      whose free names are not already known.  Only use when essential due
-      to computational cost. *)
-  val really_need_free_names : t -> Name_occurrences.t
+  val free_names : t -> Name_occurrences.t
 
   val consts : t -> Static_const.Group.t
 

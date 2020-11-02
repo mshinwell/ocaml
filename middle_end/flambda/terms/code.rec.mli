@@ -49,7 +49,7 @@ val recursive : t -> Recursive.t
 
 val create
    : Code_id.t  (** needed for [compare], although useful otherwise too *)
-  -> params_and_body_with_free_names:
+  -> params_and_body:
     (Function_params_and_body.t * Name_occurrences.t) Or_deleted.t
   -> newer_version_of:Code_id.t option
   -> params_arity:Flambda_arity.With_subkinds.t

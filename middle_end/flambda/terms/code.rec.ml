@@ -26,6 +26,7 @@ type t = {
   inline : Inline_attribute.t;
   is_a_functor : bool;
   recursive : Recursive.t;
+  free_names : Name_occurrences.t;
 }
 
 let code_id { code_id; _ } = code_id
@@ -58,7 +59,7 @@ let recursive { recursive; _ } = recursive
 
 let create
       code_id
-      ~params_and_body
+      ~(params_and_body : _ Or_deleted.t)
       ~newer_version_of
       ~params_arity
       ~result_arity
@@ -72,6 +73,37 @@ let create
   | true, (Always_inline | Unroll _) ->
     Misc.fatal_error "Stubs may not be annotated as [Always_inline] or [Unroll]"
   end;
+  let free_names =
+    (* [code_id] is only in [t] for the use of [compare]; it doesn't
+       count as a free name. *)
+    let from_newer_version_of =
+      match newer_version_of with
+      | None -> Name_occurrences.empty
+      | Some older ->
+        Name_occurrences.add_newer_version_of_code_id
+          Name_occurrences.empty older Name_mode.normal
+    in
+    let from_params_and_body =
+      match params_and_body with
+      | Deleted -> Name_occurrences.empty
+      | Present (_params_and_body, free_names) -> free_names
+    in
+    Name_occurrences.union from_newer_version_of from_params_and_body
+  in
+  let params_and_body : _ Or_deleted.t =
+    match params_and_body with
+    | Deleted -> Deleted
+    | Present (params_and_body, _free_names) -> Present params_and_body
+  in
+  if not (Name_occurrences.no_continuations free_names
+           && Name_occurrences.no_variables free_names)
+  then begin
+    Misc.fatal_errorf "Incorrect free names:@ %a@ for creation of code:@ \
+        %a@ =@ %a"
+      Name_occurrences.print free_names
+      Code_id.print code_id
+      (Or_deleted.print Function_params_and_body.print) params_and_body
+  end
   { code_id;
     params_and_body;
     newer_version_of;
@@ -81,6 +113,7 @@ let create
     inline;
     is_a_functor;
     recursive;
+    free_names;
   }
 
 let with_code_id code_id t = { t with code_id }
@@ -98,7 +131,8 @@ let print_params_and_body_with_cache ~cache ppf params_and_body =
 
 let print_with_cache ~cache ppf
       { code_id = _; params_and_body; newer_version_of; stub; inline;
-        is_a_functor; params_arity; result_arity; recursive; } =
+        is_a_functor; params_arity; result_arity; recursive;
+        free_names = _; } =
   let module C = Flambda_colours in
   Format.fprintf ppf "@[<hov 1>(\
       @[<hov 1>@<0>%s(newer_version_of@ %a)@<0>%s@]@ \
@@ -156,30 +190,12 @@ let print ppf code =
 let compare { code_id = code_id1; _ } { code_id = code_id2; _ } =
   Code_id.compare code_id1 code_id2
 
-let free_names { code_id = _; params_and_body; newer_version_of;
-                 params_arity = _; result_arity = _; stub = _; inline = _;
-                 is_a_functor = _; recursive = _; } =
-  (* [code_id] is only in [t] for the use of [compare]; it doesn't
-     count as a free name. *)
-  let from_newer_version_of =
-    match newer_version_of with
-    | None -> Name_occurrences.empty
-    | Some older ->
-      Name_occurrences.add_newer_version_of_code_id
-        Name_occurrences.empty older Name_mode.normal
-  in
-  let from_params_and_body =
-    match params_and_body with
-    | Deleted -> Name_occurrences.empty
-    | Present params_and_body ->
-      Function_params_and_body.free_names params_and_body
-  in
-  Name_occurrences.union from_newer_version_of from_params_and_body
+let free_names t = t.free_names
 
 let apply_name_permutation
       ({ code_id = _; params_and_body; newer_version_of = _; params_arity = _;
          result_arity = _; stub = _; inline = _; is_a_functor = _;
-         recursive = _; } as t)
+         recursive = _; free_names = _; } as t)
       perm =
   let params_and_body' : Function_params_and_body.t Or_deleted.t =
     match params_and_body with
@@ -194,6 +210,8 @@ let apply_name_permutation
       else
         Present params_and_body_inner'
   in
+  (* N.B. At present we don't need to apply the permutation to [free_names]
+     since we never permute symbols or code IDs. *)
   if params_and_body == params_and_body' then t
   else
     { t with params_and_body = params_and_body'; }

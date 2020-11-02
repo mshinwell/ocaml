@@ -178,7 +178,7 @@ module type Downwards_env = sig
      : t
     -> code_id:Code_id.t
     -> code:Code.t
-    -> free_names_of_code:Name_occurrences.t Or_unknown.t
+    -> free_names_of_code:Name_occurrences.t
     -> t
 
   val mem_code : t -> Code_id.t -> bool

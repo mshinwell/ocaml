@@ -42,7 +42,7 @@ end = struct
     can_inline : bool;
     inlining_depth_increment : int;
     float_const_prop : bool;
-    code : (Code.t * (Name_occurrences.t Or_unknown.t)) Code_id.Map.t;
+    code : (Code.t * Name_occurrences.t) Code_id.Map.t;
     at_unit_toplevel : bool;
     unit_toplevel_exn_continuation : Continuation.t;
     symbols_currently_being_defined : Symbol.Set.t;
