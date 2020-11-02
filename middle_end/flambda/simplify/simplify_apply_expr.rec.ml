@@ -20,7 +20,7 @@ open! Simplify_import
 
 let simplify_direct_tuple_application dacc apply code_id ~down_to_up =
   let dbg = Apply.dbg apply in
-  let callee's_code, _free_names = DE.find_code (DA.denv dacc) code_id in
+  let callee's_code = DE.find_code (DA.denv dacc) code_id in
   let param_arity = Code.params_arity callee's_code in
   let n = List.length param_arity in
   (* Split the tuple argument from other potential over application arguments *)
@@ -236,6 +236,7 @@ let simplify_direct_partial_application dacc apply ~callee's_code_id
         (Expr.create_apply full_application)
         (List.rev applied_args_with_closure_vars)
     in
+    let free_names_of_body = Expr.free_names body in
     let params_and_body =
       Function_params_and_body.create ~return_continuation
         exn_continuation
@@ -243,7 +244,7 @@ let simplify_direct_partial_application dacc apply ~callee's_code_id
         ~body
         ~dbg
         ~my_closure
-        ~free_names_of_body:Unknown
+        ~free_names_of_body:(Known free_names_of_body)
     in
     let code_id =
       Code_id.create
@@ -251,9 +252,10 @@ let simplify_direct_partial_application dacc apply ~callee's_code_id
         (Compilation_unit.get_current_exn ())
     in
     let code =
+      let free_names = Function_params_and_body.free_names params_and_body in
       Code.create
         code_id
-        ~params_and_body:(Present params_and_body)
+        ~params_and_body:(Present (params_and_body, free_names))
         ~newer_version_of:None
         ~params_arity:(KP.List.arity_with_subkinds remaining_params)
         ~result_arity
@@ -274,8 +276,7 @@ let simplify_direct_partial_application dacc apply ~callee's_code_id
     in
     let defining_expr =
       Lifted_constant.create_code code_id
-        (Static_const_with_free_names.create (Code code)
-          ~free_names:(Code.free_names code))
+        (Static_const_with_free_names.create (Code code) ~free_names:Unknown)
     in
     let dummy_defining_expr =
       (* We should not add the real piece of code in the lifted constant.
@@ -286,8 +287,7 @@ let simplify_direct_partial_application dacc apply ~callee's_code_id
          increased unnecessarily. *)
       let code = Code.make_deleted code in
       Lifted_constant.create_code code_id
-        (Static_const_with_free_names.create (Code code)
-          ~free_names:(Code.free_names code))
+        (Static_const_with_free_names.create (Code code) ~free_names:Unknown)
     in
     let dacc =
       DA.add_lifted_constant dacc dummy_defining_expr
@@ -366,7 +366,7 @@ let simplify_direct_function_call dacc apply ~callee's_code_id_from_type
     else begin
       let args = Apply.args apply in
       let provided_num_args = List.length args in
-      let callee's_code, _ = DE.find_code (DA.denv dacc) callee's_code_id in
+      let callee's_code = DE.find_code (DA.denv dacc) callee's_code_id in
       (* A function declaration with [is_tupled = true] may effectively have
          an arity that does not match that of the underlying code.
          Since direct calls adopt the calling convention of the code's body
@@ -561,7 +561,7 @@ let simplify_function_call dacc apply ~callee_ty
         | Some newer -> Rec_info.merge rec_info ~newer
       in
       let callee's_code_id_from_type = I.code_id inlinable in
-      let callee's_code, _ = DE.find_code denv callee's_code_id_from_type in
+      let callee's_code = DE.find_code denv callee's_code_id_from_type in
       let must_be_detupled = call_must_be_detupled (I.is_tupled inlinable) in
       simplify_direct_function_call dacc apply ~callee's_code_id_from_type
         ~callee's_code_id_from_call_kind ~callee's_closure_id ~arg_types
@@ -579,8 +579,10 @@ let simplify_function_call dacc apply ~callee_ty
         | Indirect_unknown_arity
         | Indirect_known_arity _ -> None
       in
-      let must_be_detupled = call_must_be_detupled (N.is_tupled non_inlinable) in
-      let callee's_code_from_type, _ =
+      let must_be_detupled =
+        call_must_be_detupled (N.is_tupled non_inlinable)
+      in
+      let callee's_code_from_type =
         DE.find_code denv callee's_code_id_from_type
       in
       simplify_direct_function_call dacc apply ~callee's_code_id_from_type

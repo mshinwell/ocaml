@@ -39,7 +39,13 @@ let rebuild_switch dacc ~arms ~scrutinee ~scrutinee_ty uacc
               let cont = Apply_cont.continuation action in
               match UE.find_continuation (UA.uenv uacc) cont with
               | Linearly_used_and_inlinable { arity = _; handler;
-                  free_names_of_handler = _; }
+                  free_names_of_handler = _; params; } ->
+                assert (List.length params = 0);
+                begin match Expr.descr handler with
+                | Apply_cont action -> Some action
+                | Let _ | Let_cont _ | Apply _
+                | Switch _ | Invalid _ -> Some action
+                end
               | Other { arity = _; handler = Some handler; } ->
                 Continuation_params_and_handler.pattern_match
                   (Continuation_handler.params_and_handler handler)
@@ -140,13 +146,13 @@ let rebuild_switch dacc ~arms ~scrutinee ~scrutinee_ty uacc
     in
     let let_expr =
       Let.create (Bindable_let_bound.singleton bound_to)
-        ~defining_expr
+        defining_expr
         ~body
-        (* [body] is a (very) small expression, so it seems fine to call
+        (* [body] is a (very) small expression, so it is fine to call
            [free_names] upon it. *)
-        ~free_names_of_body:(Expr.free_names body)
+        ~free_names_of_body:(Known (Expr.free_names body))
     in
-    Simplify_let.simplify_let dacc (Expr.create_let let_expr)
+    Simplify_let_expr.simplify_let dacc let_expr
       ~down_to_up:(fun _dacc ~rebuild ->
         (* We don't need to transfer any name occurrence info out of [dacc]
            since we re-compute it below, prior to adding it to [uacc]. *)
@@ -169,9 +175,16 @@ let rebuild_switch dacc ~arms ~scrutinee ~scrutinee_ty uacc
             Named.create_prim (P.Unary (Boolean_not, tagged_scrutinee))
               Debuginfo.none
           in
-          Apply_cont.create dest ~args:[not_scrutinee'] ~dbg
-          |> Expr.create_apply_cont
-          |> Let_expr.create (VB.create not_scrutinee NM.normal) do_tagging
+          let bound =
+            VB.create not_scrutinee NM.normal
+            |> Bindable_let_bound.singleton
+          in
+          let body =
+            Apply_cont.create dest ~args:[not_scrutinee'] ~dbg
+            |> Expr.create_apply_cont
+          in
+          Let.create bound do_tagging ~body
+            ~free_names_of_body:(Known (Expr.free_names body))
           |> Expr.create_let)
       | None ->
         let expr = Expr.create_switch ~scrutinee ~arms in

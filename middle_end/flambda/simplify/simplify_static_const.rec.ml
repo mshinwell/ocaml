@@ -157,7 +157,8 @@ let simplify_static_const_of_kind_value dacc static_const ~result_sym =
     simplify_static_const_of_kind_value0 dacc static_const ~result_sym
   in
   let free_names = Static_const.free_names static_const in
-  Static_const_with_free_names.create static_const ~free_names, dacc
+  Static_const_with_free_names.create static_const
+    ~free_names:(Known free_names), dacc
 
 let simplify_static_consts dacc (bound_symbols : Bound_symbols.t)
       static_consts =
@@ -198,13 +199,7 @@ let simplify_static_consts dacc (bound_symbols : Bound_symbols.t)
           match Code.params_and_body code with
           | Deleted -> dacc
           | Present _ ->
-            DA.map_denv dacc ~f:(fun denv ->
-              (* The free names of "old" (pre-simplification) code are only
-                 needed rarely, for example if a join causes a reference to
-                 an old piece of code via the code age relation.  As such
-                 the free names are only computed when needed in these
-                 cases.  See [Exported_code]. *)
-              DE.define_code denv ~code_id ~code ~free_names_of_code:Unknown)
+            DA.map_denv dacc ~f:(fun denv -> DE.define_code denv ~code_id ~code)
         in
         let static_const =
           Static_const_with_free_names.create (Code code) ~free_names:Unknown
@@ -228,7 +223,8 @@ let simplify_static_consts dacc (bound_symbols : Bound_symbols.t)
   (* We now collect together all of the closures, from all of the sets
      being defined, and simplify them together. *)
   let closure_bound_names_all_sets, all_sets_of_closures_and_symbols =
-    Static_const.Group.match_against_bound_symbols static_consts bound_symbols
+    Static_const_with_free_names.Group.match_against_bound_symbols
+      static_consts bound_symbols
       ~init:([], [])
       ~code:(fun acc _ _ -> acc)
       ~block_like:(fun acc _ _ -> acc)

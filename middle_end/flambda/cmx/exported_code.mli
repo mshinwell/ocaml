@@ -29,10 +29,7 @@ val print : Format.formatter -> t -> unit
 
 val empty : t
 
-val add_code
-   : (Flambda.Code.t * (Name_occurrences.t Or_unknown.t)) Code_id.Map.t
-  -> t
-  -> t
+val add_code : Flambda.Code.t Code_id.Map.t -> t -> t
 
 val mark_as_imported : t -> t
 
@@ -40,12 +37,9 @@ val merge : t -> t -> t
 
 val mem : Code_id.t -> t -> bool
 
-val find_code : t -> Code_id.t -> Flambda.Code.t * Name_occurrences.t
+val find_code : t -> Code_id.t -> Flambda.Code.t
 
-val find_code_if_not_imported
-   : t
-  -> Code_id.t
-  -> (Flambda.Code.t * Name_occurrences.t) option
+val find_code_if_not_imported : t -> Code_id.t -> Flambda.Code.t option
 
 val find_calling_convention : t -> Code_id.t -> Calling_convention.t
 

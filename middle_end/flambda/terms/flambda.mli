@@ -677,7 +677,8 @@ end and Code : sig
 
   val create
      : Code_id.t
-    -> params_and_body:Function_params_and_body.t Or_deleted.t
+    -> params_and_body:
+         (Function_params_and_body.t * Name_occurrences.t) Or_deleted.t
     -> newer_version_of:Code_id.t option
     -> params_arity:Flambda_arity.With_subkinds.t
     -> result_arity:Flambda_arity.With_subkinds.t
@@ -689,7 +690,10 @@ end and Code : sig
 
   val with_code_id : Code_id.t -> t -> t
 
-  val with_params_and_body : Function_params_and_body.t Or_deleted.t -> t -> t
+  val with_params_and_body
+     : (Function_params_and_body.t * Name_occurrences.t) Or_deleted.t
+    -> t
+    -> t
 
   val with_newer_version_of : Code_id.t option -> t -> t
 

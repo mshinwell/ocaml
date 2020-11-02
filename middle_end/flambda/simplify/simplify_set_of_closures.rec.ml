@@ -224,14 +224,13 @@ end = struct
 
   let bind_existing_code_to_new_code_ids denv ~old_to_new_code_ids_all_sets =
     Code_id.Map.fold (fun old_code_id new_code_id denv ->
-        let code, free_names_of_code = DE.find_code denv old_code_id in
+        let code = DE.find_code denv old_code_id in
         let code =
           code
           |> Code.with_newer_version_of (Some old_code_id)
           |> Code.with_code_id new_code_id
         in
-        DE.define_code denv ~code_id:new_code_id ~code
-          ~free_names_of_code)
+        DE.define_code denv ~code_id:new_code_id ~code)
       old_to_new_code_ids_all_sets
       denv
 
@@ -327,7 +326,6 @@ type simplify_function_result = {
   function_decl : FD.t;
   new_code_id : Code_id.t;
   code : Code.t;
-  free_names_of_code : Name_occurrences.t;
   function_type : T.Function_declaration_type.t;
   dacc_after_body : DA.t;
   uacc_after_upwards_traversal : UA.t;
@@ -339,9 +337,7 @@ let simplify_function context ~used_closure_vars ~shareable_constants
   let name = Closure_id.to_string closure_id in
   Profile.record_call ~accumulate:true name (fun () ->
     let code_id = FD.code_id function_decl in
-    let code, _free_names_of_old_code =
-      DE.find_code (DA.denv (C.dacc_prior_to_sets context)) code_id
-    in
+    let code = DE.find_code (DA.denv (C.dacc_prior_to_sets context)) code_id in
     let params_and_body =
       Code.params_and_body_must_be_present code ~error_context:"Simplifying"
     in
@@ -452,7 +448,8 @@ let simplify_function context ~used_closure_vars ~shareable_constants
       code
       |> Code.with_code_id new_code_id
       |> Code.with_newer_version_of (Some old_code_id)
-      |> Code.with_params_and_body (Present params_and_body)
+      |> Code.with_params_and_body
+           (Present (params_and_body, free_names_of_code))
     in
     let function_decl = FD.update_code_id function_decl new_code_id in
     let function_type =
@@ -464,7 +461,6 @@ let simplify_function context ~used_closure_vars ~shareable_constants
     { function_decl;
       new_code_id;
       code;
-      free_names_of_code;
       function_type;
       dacc_after_body;
       uacc_after_upwards_traversal;
@@ -472,7 +468,7 @@ let simplify_function context ~used_closure_vars ~shareable_constants
 
 type simplify_set_of_closures0_result = {
   set_of_closures : Flambda.Set_of_closures.t;
-  code : (Code.t * Name_occurrences.t) Code_id.Lmap.t;
+  code : Code.t Code_id.Lmap.t;
   dacc : Downwards_acc.t;
 }
 
@@ -496,8 +492,7 @@ let simplify_set_of_closures0 dacc context set_of_closures
             code_age_relation, used_closure_vars, shareable_constants,
             lifted_consts_prev_functions) ->
         let { function_decl; new_code_id; code = new_code; function_type;
-              dacc_after_body; uacc_after_upwards_traversal;
-              free_names_of_code; } =
+              dacc_after_body; uacc_after_upwards_traversal; } =
           simplify_function context ~used_closure_vars ~shareable_constants
             closure_id function_decl
             ~closure_bound_names_inside_function:closure_bound_names_inside
@@ -518,7 +513,7 @@ let simplify_set_of_closures0 dacc context set_of_closures
         let result_function_decls_in_set =
           (closure_id, function_decl) :: result_function_decls_in_set
         in
-        let code = (new_code_id, (new_code, free_names_of_code)) :: code in
+        let code = (new_code_id, new_code) :: code in
         let fun_types = Closure_id.Map.add closure_id function_type fun_types in
         let lifted_consts_prev_functions =
           LCS.union lifted_consts_this_function lifted_consts_prev_functions
@@ -672,10 +667,11 @@ let simplify_and_lift_set_of_closures dacc ~closure_bound_vars_inverse
   let dacc =
     ListLabels.fold_left (Code_id.Lmap.bindings code)
       ~init:dacc
-      ~f:(fun dacc (code_id, (code, free_names)) ->
+      ~f:(fun dacc (code_id, code) ->
         let lifted_constant =
           LC.create_code code_id
-            (Static_const_with_free_names.create (Code code) ~free_names)
+            (Static_const_with_free_names.create (Code code)
+              ~free_names:Unknown)
         in
         DA.add_lifted_constant dacc lifted_constant
         |> DA.map_denv ~f:(fun denv ->
@@ -687,7 +683,7 @@ let simplify_and_lift_set_of_closures dacc ~closure_bound_vars_inverse
       ~closure_symbols_with_types
       ~symbol_projections
       (Static_const_with_free_names.create (Set_of_closures set_of_closures)
-        ~free_names:(Set_of_closures.free_names set_of_closures))
+        ~free_names:(Known (Set_of_closures.free_names set_of_closures)))
   in
   let dacc =
     DA.add_lifted_constant dacc set_of_closures_lifted_constant
@@ -745,10 +741,11 @@ let simplify_non_lifted_set_of_closures0 dacc bound_vars ~closure_bound_vars
       ~free_names:(Named.free_names named)
   in
   let lifted_constants =
-    Code_id.Lmap.fold (fun code_id (code, free_names) lifted_constants ->
+    Code_id.Lmap.fold (fun code_id code lifted_constants ->
         let lifted_constant =
           LC.create_code code_id
-            (Static_const_with_free_names.create (Code code) ~free_names)
+            (Static_const_with_free_names.create (Code code)
+              ~free_names:Unknown)
         in
         lifted_constant :: lifted_constants)
       code
@@ -910,9 +907,8 @@ let simplify_lifted_set_of_closures0 context ~closure_symbols
   let dacc =
     DA.map_denv dacc ~f:(fun denv ->
       (* CR mshinwell: factor out *)
-      Code_id.Lmap.fold (fun code_id (code, free_names_of_code) denv ->
-          DE.define_code denv ~code_id ~code
-            ~free_names_of_code:(Known free_names_of_code))
+      Code_id.Lmap.fold (fun code_id code denv ->
+          DE.define_code denv ~code_id ~code)
         code
         denv)
   in
@@ -929,12 +925,12 @@ let simplify_lifted_set_of_closures0 context ~closure_symbols
   in
   let code_static_consts =
     ListLabels.map (Code_id.Lmap.bindings code)
-      ~f:(fun (_code_id, (code, free_names)) ->
-        Static_const_with_free_names.create (Code code) ~free_names)
+      ~f:(fun (_code_id, code) ->
+        Static_const_with_free_names.create (Code code) ~free_names:Unknown)
   in
   let set_of_closures_static_const =
     Static_const_with_free_names.create (Set_of_closures set_of_closures)
-      ~free_names:(Set_of_closures.free_names set_of_closures)
+      ~free_names:(Known (Set_of_closures.free_names set_of_closures))
   in
   let static_consts =
     set_of_closures_static_const :: code_static_consts
@@ -990,7 +986,8 @@ let simplify_lifted_sets_of_closures dacc ~all_sets_of_closures_and_symbols
             Static_const_with_free_names.Group.create
               [Static_const_with_free_names.create
                 (Set_of_closures set_of_closures)
-                ~free_names:(Set_of_closures.free_names set_of_closures)]
+                ~free_names:
+                  (Known (Set_of_closures.free_names set_of_closures))]
           in
           bound_symbols, static_consts, dacc
         end else begin

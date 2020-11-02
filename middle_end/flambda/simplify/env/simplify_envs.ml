@@ -453,7 +453,7 @@ end = struct
         print t
     end
 
-  let define_code t ~code_id ~code ~free_names_of_code =
+  let define_code t ~code_id ~code =
     if not (Code_id.in_compilation_unit code_id
       (Compilation_unit.get_current_exn ()))
     then begin
@@ -480,16 +480,12 @@ end = struct
     in
     { t with
       typing_env;
-      code = Code_id.Map.add code_id (code, free_names_of_code) t.code;
+      code = Code_id.Map.add code_id code t.code;
     }
 
   let find_code t id =
     match Code_id.Map.find id t.code with
-    | exception Not_found ->
-      let code, free_names_of_code =
-        Exported_code.find_code (t.get_imported_code ()) id
-      in
-      code, Or_unknown.Known free_names_of_code
+    | exception Not_found -> Exported_code.find_code (t.get_imported_code ()) id
     | code -> code
 
   let with_code ~from t =
@@ -542,13 +538,11 @@ end = struct
           LC.defining_exprs lifted_constant
           |> Static_const_with_free_names.Group.pieces_of_code
         in
-        Code_id.Map.fold (fun code_id (code, free_names_of_code) t ->
+        Code_id.Map.fold (fun code_id code t ->
             match Code.params_and_body code with
             | Present _ ->
               if maybe_already_defined && mem_code t code_id then t
-              else
-                define_code t ~code_id ~code
-                  ~free_names_of_code:(Known free_names_of_code)
+              else define_code t ~code_id ~code
             | Deleted -> t)
           pieces_of_code
           t)

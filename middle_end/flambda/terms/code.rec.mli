@@ -62,7 +62,10 @@ val create
 
 val with_code_id : Code_id.t -> t -> t
 
-val with_params_and_body : Function_params_and_body.t Or_deleted.t -> t -> t
+val with_params_and_body
+   : (Function_params_and_body.t * Name_occurrences.t) Or_deleted.t
+  -> t
+  -> t
 
 val with_newer_version_of : Code_id.t option -> t -> t
 

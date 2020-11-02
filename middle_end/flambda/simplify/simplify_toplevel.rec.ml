@@ -47,11 +47,10 @@ let simplify_toplevel dacc expr ~return_continuation ~return_arity
         && (not (Continuation.equal cont exn_continuation))
       then begin
         Misc.fatal_errorf "Continuation %a should not be free in \
-            function body after simplification (closure ID %a, \
-            return continuation %a, exn continuation %a):@ %a"
+            toplevel expression after simplification (return \
+            continuation %a, exn continuation %a):@ %a"
           Continuation.print cont
-          Closure_id.print closure_id
-          Expr.print body
+          Expr.print expr
           Continuation.print return_continuation
           Continuation.print exn_continuation
       end);

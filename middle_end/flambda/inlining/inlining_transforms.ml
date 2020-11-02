@@ -28,7 +28,7 @@ let inline dacc ~callee ~args function_decl
       ~apply_inlining_depth ~unroll_to dbg =
   (* CR mshinwell: Add meet constraint to the return continuation *)
   let denv = DA.denv dacc in
-  let code, _free_names = DE.find_code denv (I.code_id function_decl) in
+  let code = DE.find_code denv (I.code_id function_decl) in
   let params_and_body =
     Code.params_and_body_must_be_present code ~error_context:"Inlining"
   in

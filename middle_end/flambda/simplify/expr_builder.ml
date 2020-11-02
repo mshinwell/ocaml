@@ -197,10 +197,7 @@ let create_raw_let_symbol uacc bound_symbols scoping_rule static_consts ~body =
      indicate the free names of [body]. *)
   let bindable = Bindable_let_bound.symbols bound_symbols scoping_rule in
   let free_names_of_static_consts =
-    (* Since we know we are definitely going to generate a [Let], it's ok
-       to force the computation of the free names of any "old" pieces of
-       [Code] whose free names are not yet known. *)
-    Static_const_with_free_names.Group.really_need_free_names static_consts
+    Static_const_with_free_names.Group.free_names static_consts
   in
   let defining_expr =
     Static_const_with_free_names.Group.consts static_consts
@@ -307,7 +304,7 @@ let create_let_symbol0 uacc code_age_relation (bound_symbols : Bound_symbols.t)
             when Code_id.Set.mem (Code.code_id code) code_ids_to_make_deleted ->
             let static_const : Static_const.t = Code (Code.make_deleted code) in
             Static_const_with_free_names.create static_const
-              ~free_names:(Static_const.free_names static_const)
+              ~free_names:Unknown
           | Some _ | None -> static_const)
     in
     let expr, uacc =
@@ -324,18 +321,6 @@ let remove_unused_closure_vars uacc static_const =
   | Set_of_closures set_of_closures ->
     let name_occurrences = UA.name_occurrences uacc in
     let closure_vars = Set_of_closures.closure_elements set_of_closures in
-    let free_names =
-      Var_within_closure.Map.fold (fun closure_var _ free_names ->
-          if not (Name_occurrences.mem_closure_var name_occurrences
-            closure_var)
-          then
-            Name_occurrences.remove_one_occurrence_of_closure_var
-              free_names closure_var Name_mode.normal
-          else
-            free_names)
-        closure_vars
-        (Static_const_with_free_names.free_names static_const)
-    in
     let closure_elements =
       Var_within_closure.Map.filter (fun closure_var _ ->
           Name_occurrences.mem_closure_var name_occurrences closure_var)
@@ -346,7 +331,7 @@ let remove_unused_closure_vars uacc static_const =
         ~closure_elements
     in
     Static_const_with_free_names.create (Set_of_closures set_of_closures)
-      ~free_names
+      ~free_names:(Known (Set_of_closures.free_names set_of_closures))
   | Code _
   | Block _
   | Boxed_float _

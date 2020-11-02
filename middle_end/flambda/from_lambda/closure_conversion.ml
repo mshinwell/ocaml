@@ -53,7 +53,7 @@ let use_of_symbol_as_simple t symbol =
 let symbol_for_ident t id =
   let symbol = t.symbol_for_global' id in
   t.imported_symbols <- Symbol.Set.add symbol t.imported_symbols;
-  use_of_symbol_as_simple symbol
+  use_of_symbol_as_simple t symbol
 
 let register_const0 t constant name =
   match Static_const.Map.find constant t.shareable_constants with
@@ -136,7 +136,7 @@ let close_const0 t (const : Lambda.structured_constant) =
   match declare_const t const with
   | Tagged_immediate c, name ->
     Simple.const (Reg_width_const.tagged_immediate c), name
-  | Symbol s, name -> use_of_symbol_as_simple s, name
+  | Symbol s, name -> use_of_symbol_as_simple t s, name
   | Dynamically_computed _, name ->
     Misc.fatal_errorf "Declaring a computed constant %s" name
 
@@ -208,7 +208,7 @@ let close_c_call t ~let_bound_var (prim : Primitive.description)
   t.imported_symbols <- Symbol.Set.add call_symbol t.imported_symbols;
   let call args =
     let apply =
-      Apply.create ~callee:(use_of_symbol_as_simple call_symbol)
+      Apply.create ~callee:(use_of_symbol_as_simple t call_symbol)
         ~continuation:(Return return_continuation)
         exn_continuation
         ~args
@@ -912,7 +912,7 @@ let ilambda_to_flambda ~backend ~module_ident ~module_block_size_in_words
       shareable_constants = Static_const.Map.empty;
       code = [];
       ilambda_exn_continuation = ilam.exn_continuation.exn_handler;
-      symbols_used_in_current_function = Name_occurrences.empty;
+      free_names_of_current_function = Name_occurrences.empty;
     }
   in
   let module_symbol =
@@ -943,7 +943,7 @@ let ilambda_to_flambda ~backend ~module_ident ~module_block_size_in_words
            here to ensure that its associated "let symbol" doesn't get
            deleted. *)
         Apply_cont.create return_cont
-          ~args:[use_of_symbol_as_simple module_symbol]
+          ~args:[use_of_symbol_as_simple t module_symbol]
           ~dbg:Debuginfo.none
         |> Expr.create_apply_cont
       in

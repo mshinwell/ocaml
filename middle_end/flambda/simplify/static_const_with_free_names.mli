@@ -28,6 +28,11 @@ val print : Format.formatter -> t -> unit
 
 (** Free names must be provided except for [Code] constants, which already
     hold the necessary information. *)
+(* CR mshinwell: Maybe instead of [Or_unknown] we should use
+   | Code
+   | Known of Name_occurrences.t
+   | Compute_now
+   or something *)
 val create : Static_const.t -> free_names:Name_occurrences.t Or_unknown.t -> t
 
 val const : t -> Static_const.t
@@ -52,9 +57,7 @@ module Group : sig
   val to_list : t -> const_wfn list
 
   (** This function ignores [Deleted] code. *)
-  val pieces_of_code
-     : t
-    -> (Code.t * (Name_occurrences.t Or_unknown.t)) Code_id.Map.t
+  val pieces_of_code : t -> Code.t Code_id.Map.t
 
   val match_against_bound_symbols
      : t

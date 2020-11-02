@@ -382,7 +382,9 @@ and subst_code env (code : Code.t)
   let params_and_body =
     match Code.params_and_body code with
     | Or_deleted.Present params_and_body ->
-      Or_deleted.Present (subst_params_and_body env params_and_body)
+      let params_and_body = subst_params_and_body env params_and_body in
+      Or_deleted.Present (params_and_body,
+        Function_params_and_body.free_names params_and_body)
     | Or_deleted.Deleted ->
       Or_deleted.Deleted
   in
@@ -1217,6 +1219,13 @@ and codes env (code1 : Code.t) (code2 : Code.t) =
     env (Code.params_and_body code1, Code.newer_version_of code1)
     (Code.params_and_body code2, Code.newer_version_of code2)
   |> Comparison.map ~f:(fun (params_and_body, newer_version_of) ->
+      let params_and_body : _ Or_deleted.t =
+        match (params_and_body : _ Or_deleted.t) with
+        | Deleted -> Deleted
+        | Present params_and_body ->
+          Present (params_and_body,
+            Function_params_and_body.free_names params_and_body)
+      in
       code1
       |> Code.with_code_id (Code.code_id code2)
       |> Code.with_params_and_body params_and_body

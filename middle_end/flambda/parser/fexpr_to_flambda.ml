@@ -657,7 +657,10 @@ let rec expr env (e : Fexpr.expr) : Flambda.Expr.t =
                 exn_continuation params ~body ~my_closure ~dbg
                 ~free_names_of_body:Unknown
             in
-            Present params_and_body
+            let free_names =
+              Flambda.Function_params_and_body.free_names params_and_body
+            in
+            Present (params_and_body, free_names)
         in
         let recursive = convert_recursive_flag recursive in
         let inline =

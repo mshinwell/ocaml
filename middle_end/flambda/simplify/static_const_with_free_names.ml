@@ -114,12 +114,10 @@ module Group = struct
   let pieces_of_code t =
     t.consts
     |> List.filter_map (fun (const : const_wfn) ->
-      match Static_const.to_code const.const with
-      | None -> None
-      | Some code -> Some (code, const.free_names))
-    |> List.filter_map (fun (code, free_names) ->
+      Static_const.to_code const.const)
+    |> List.filter_map (fun code ->
       if Code.is_deleted code then None
-      else Some (Code.code_id code, (code, free_names)))
+      else Some (Code.code_id code, code))
     |> Code_id.Map.of_list
 
   let match_against_bound_symbols t bound_symbols ~init ~code ~set_of_closures

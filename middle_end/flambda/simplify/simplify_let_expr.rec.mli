@@ -19,11 +19,3 @@
 open! Simplify_import
 
 val simplify_let : Let.t Simplify_common.expr_simplifier
-
-val bind_parameters_to_args
-   : Upwards_acc.t
-  -> params:Kinded_parameter.t list
-  -> args:Simple.t list
-  -> body:Expr.t
-  -> free_names_of_body:Name_occurrences.t
-  -> Expr.t
