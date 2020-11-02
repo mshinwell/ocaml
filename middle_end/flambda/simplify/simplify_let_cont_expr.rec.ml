@@ -66,8 +66,8 @@ let rebuild_one_continuation_handler cont ~at_unit_toplevel
   in
   let params' = used_params @ used_extra_params in
   let cont_handler =
-    CH.with_params_and_handler cont_handler
-      (CPH.create params' ~handler ~free_names_of_handler:(Known free_names))
+    CH.create params' ~handler ~free_names_of_handler:(Known free_names)
+      ~is_exn_handler:(CH.is_exn_handler cont_handler)
   in
   let rewrite =
     Apply_cont_rewrite.create ~original_params:params
@@ -96,7 +96,7 @@ let simplify_one_continuation_handler dacc cont ~at_unit_toplevel recursive
 let rebuild_non_recursive_let_cont_handler cont
       (uses : Continuation_env_and_param_types.t) ~params ~handler
       ~free_names_of_handler ~is_single_inlinable_use ~is_single_use scope
-      ~is_exn_handler cont_handler uacc ~after_rebuild =
+      extra_params_and_args cont_handler uacc ~after_rebuild =
   let uenv = UA.uenv uacc in
   let uenv =
     (* CR mshinwell: Change types so that [free_names_of_handler] only
@@ -104,16 +104,24 @@ let rebuild_non_recursive_let_cont_handler cont
     match uses with
     | No_uses -> uenv
     | Uses _ ->
-      (* CR mshinwell: This check must line up with Continuation_uses.
-          Remove the duplication. *)
-      if is_single_inlinable_use && (not is_exn_handler) then
-        (* CR mshinwell: tidy up *)
-        let arity =
-          match CH.behaviour cont_handler with
-          | Unreachable { arity; }
-          | Alias_for { arity; _ }
-          | Unknown { arity; } -> arity
-        in
+      (* We must make the final decision now as to whether to inline this
+         continuation or not; we can't wait until
+         [Simplify_apply_cont.rebuild_apply_cont] because we need to decide
+         sooner than that whether to keep the [Let_cont].  To make this
+         process more straightforward:
+         - We do not currently support inlining if there is a wrapper.
+         - For inlinable continuations we don't use [Apply_cont_rewrite] to
+           remove parameters; any bindings to unused parameters will be
+           removed anyway when the corresponding [Let]s are created.
+           (Any such [Apply_cont_rewrite] will still be created, but will
+           be ignored.)
+         Note that there cannot yet be an alias to resolve (unlike in
+         [Simplify_apply_cont.rebuild_apply_cont]) since it is this code which
+         identifies such an alias, and we haven't done that yet. *)
+      if is_single_inlinable_use && EPA.is_empty extra_params_and_args then
+        (* Note that [Continuation_uses] won't set [is_single_inlinable_use]
+           if [cont] is an exception handler. *)
+        let arity = CH.arity cont_handler in
         UE.add_linearly_used_inlinable_continuation uenv cont scope arity
           ~params ~handler ~free_names_of_handler
       else
@@ -170,7 +178,7 @@ let simplify_non_recursive_let_cont_handler ~denv_before_body ~dacc_after_body
         rebuild_non_recursive_let_cont_handler cont uses ~params
           ~handler ~free_names_of_handler:Name_occurrences.empty
           ~is_single_inlinable_use:false ~is_single_use:false scope
-          ~is_exn_handler cont_handler uacc ~after_rebuild)
+          EPA.empty cont_handler uacc ~after_rebuild)
   (* CR mshinwell: Refactor so we don't have the
      [is_single_use] hack.  The problem is that we want to
      have the code of the handler available if we might want to
@@ -254,7 +262,7 @@ let simplify_non_recursive_let_cont_handler ~denv_before_body ~dacc_after_body
                   ~handler ~free_names_of_handler uacc ->
               rebuild_non_recursive_let_cont_handler cont uses ~params ~handler
                 ~free_names_of_handler ~is_single_inlinable_use ~is_single_use
-                scope ~is_exn_handler cont_handler uacc ~after_rebuild)))
+                scope extra_params_and_args cont_handler uacc ~after_rebuild)))
 
 let simplify_non_recursive_let_cont dacc non_rec ~down_to_up =
   let cont_handler = Non_recursive_let_cont_handler.handler non_rec in
@@ -276,9 +284,8 @@ let simplify_non_recursive_let_cont dacc non_rec ~down_to_up =
       DE.get_inlined_debuginfo (DA.denv dacc)
     in
     let scope = DE.get_continuation_scope_level (DA.denv dacc) in
-    let params_and_handler = CH.params_and_handler cont_handler in
     let is_exn_handler = CH.is_exn_handler cont_handler in
-    CPH.pattern_match params_and_handler ~f:(fun params ~handler ->
+    CH.pattern_match cont_handler ~f:(fun params ~handler ->
       let denv_before_body =
         (* We add the parameters assuming that none of them are at toplevel.
            When we do the toplevel calculation before simplifying the
@@ -445,7 +452,6 @@ let rebuild_recursive_let_cont ~body handlers ~uenv_without_cont uacc
    entry point -- could loop forever.  (Need to think about this again.) *)
 let simplify_recursive_let_cont dacc recs ~down_to_up : Expr.t * UA.t =
   let module CH = Continuation_handler in
-  let module CPH = Continuation_params_and_handler in
   Recursive_let_cont_handlers.pattern_match recs ~f:(fun ~body rec_handlers ->
     assert (not (Continuation_handlers.contains_exn_handler rec_handlers));
     let denv_before_body = DA.denv dacc in
@@ -460,8 +466,7 @@ let simplify_recursive_let_cont dacc recs ~down_to_up : Expr.t * UA.t =
           continuations is not yet implemented"
       | [c] -> c
     in
-    let params_and_handler = CH.params_and_handler cont_handler in
-    CPH.pattern_match params_and_handler ~f:(fun params ~handler ->
+    CH.pattern_match cont_handler ~f:(fun params ~handler ->
       let arity = KP.List.arity_with_subkinds params in
       let dacc =
         DA.map_denv dacc ~f:DE.increment_continuation_scope_level

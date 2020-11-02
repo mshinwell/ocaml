@@ -40,7 +40,6 @@ module Switch = Flambda.Switch
 module AC = Apply_cont
 module CH = Continuation_handler
 module CIS = Code_id_or_symbol
-module CPH = Continuation_params_and_handler
 module CUE = Continuation_uses_env
 module DA = Downwards_acc
 module DE = Simplify_envs.Downwards_env

@@ -166,8 +166,6 @@ Format.eprintf "Unknown at or later than %a\n%!"
     let handler_env, extra_params_and_args, is_single_inlinable_use,
         is_single_use =
       match use_envs_with_ids with
-      (* CR mshinwell: This [when] guard must match up with [Simplify_expr]'s
-         inlinability criterion.  Remove the duplication. *)
       | [use_env, _, Inlinable]
           when not (Continuation.is_exn t.continuation) ->
         (* We need to make sure any lifted constants generated during the
@@ -240,8 +238,7 @@ Format.eprintf "The extra params and args are:@ %a\n%!"
           | [] | _::_::_ -> false
         in
         match use_envs_with_ids with
-        | [_, _, Inlinable] ->
-          handler_env, extra_params_and_args, true, true
+        | [_, _, Inlinable] -> assert false  (* handled above *)
         | [] | [_, _, Non_inlinable]
         | (_, _, (Inlinable | Non_inlinable)) :: _ ->
           handler_env, extra_params_and_args, false, is_single_use
