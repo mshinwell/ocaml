@@ -42,15 +42,11 @@ module Calling_convention = struct
     Flambda_arity.equal params_arity1 params_arity2
 
   let compute ~params_and_body =
-    let f ~return_continuation:_ _exn_continuation params ~body:_
-          ~my_closure:_ ~(is_my_closure_used : _ Or_unknown.t) =
-      let is_my_closure_used =
-        match is_my_closure_used with
-        | Unknown -> true
-        | Known is_my_closure_used -> is_my_closure_used
-      in
+    let f ~return_continuation:_ _exn_continuation params ~body ~my_closure =
+      let free_vars = Flambda.Expr.free_names body in
+      let needs_closure_arg = Name_occurrences.mem_var free_vars my_closure in
       let params_arity = Kinded_parameter.List.arity params in
-      { needs_closure_arg = is_my_closure_used; params_arity; }
+      { needs_closure_arg; params_arity; }
     in
     P.pattern_match params_and_body ~f
 end
@@ -173,8 +169,7 @@ let find_calling_convention t code_id =
   match Code_id.Map.find code_id t with
   | exception Not_found ->
     Misc.fatal_errorf "Code ID %a not bound" Code_id.print code_id
-  | Present { code = _; free_names_of_code = _; calling_convention; } ->
-    calling_convention
+  | Present { code = _; calling_convention; } -> calling_convention
   | Imported { calling_convention; } -> calling_convention
 
 let remove_unreachable t ~reachable_names =
@@ -198,25 +193,8 @@ let import import_map t =
       let code_data =
         match code_data with
         | Present { calling_convention; code; } ->
-          let code = Flambda.Code.import import_map code in
-          let free_names_of_code =
-            Name_occurrences.import (Code.free_names code)
-              ~import_name:(fun name ->
-                Name.pattern_match name
-                  ~symbol:(fun symbol ->
-                    Ids_for_export.Import_map.symbol import_map symbol
-                    |> Name.symbol)
-                  ~var:(fun var ->
-                    Misc.fatal_errorf "Unexpected free variable %a in \
-                        imported code:@ %a"
-                      Variable.print var
-                      Flambda.Code.print code))
-              ~import_code_id:(Ids_for_export.Import_map.code_id import_map)
-              ~import_continuation:(fun cont ->
-                Misc.fatal_errorf "Unexpected free continuation %a in \
-                    imported code:@ %a"
-                  Continuation.print cont
-                  Flambda.Code.print code)
+          let code =
+            Flambda.Code.import import_map code
           in
           Present { calling_convention; code; }
         | Imported { calling_convention; } ->

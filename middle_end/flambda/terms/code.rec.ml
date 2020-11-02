@@ -218,7 +218,8 @@ let apply_name_permutation
 
 let all_ids_for_export { code_id; params_and_body; newer_version_of;
                          params_arity = _; result_arity = _; stub = _;
-                         inline = _; is_a_functor = _; recursive = _;} =
+                         inline = _; is_a_functor = _; recursive = _;
+                         free_names = _; } =
   let newer_version_of_ids =
     match newer_version_of with
     | None -> Ids_for_export.empty
@@ -238,7 +239,7 @@ let all_ids_for_export { code_id; params_and_body; newer_version_of;
 let import import_map
       ({ code_id; params_and_body; newer_version_of; params_arity = _;
          result_arity = _; stub = _; inline = _; is_a_functor = _;
-         recursive = _; } as t) =
+         recursive = _; free_names; } as t) =
   let code_id = Ids_for_export.Import_map.code_id import_map code_id in
   let params_and_body : Function_params_and_body.t Or_deleted.t =
     match params_and_body with
@@ -256,7 +257,26 @@ let import import_map
       let older = Ids_for_export.Import_map.code_id import_map older in
       Some older
   in
-  { t with code_id; params_and_body; newer_version_of; }
+  let free_names =
+    Name_occurrences.import free_names
+      ~import_name:(fun name ->
+        Name.pattern_match name
+          ~symbol:(fun symbol ->
+            Ids_for_export.Import_map.symbol import_map symbol
+            |> Name.symbol)
+          ~var:(fun var ->
+            Misc.fatal_errorf "Unexpected free variable %a in \
+                imported code:@ %a"
+              Variable.print var
+              Flambda.Code.print code))
+      ~import_code_id:(Ids_for_export.Import_map.code_id import_map)
+      ~import_continuation:(fun cont ->
+        Misc.fatal_errorf "Unexpected free continuation %a in \
+            imported code:@ %a"
+          Continuation.print cont
+          Flambda.Code.print code)
+  in
+  { t with code_id; params_and_body; newer_version_of; free_names; }
 
 let make_deleted t =
   { t with params_and_body = Deleted; }
