@@ -49,8 +49,8 @@ val create_let_symbols
   -> Symbol_scoping_rule.t
   -> Code_age_relation.t
   -> Simplify_envs.Lifted_constant.t
-  -> body:Flambda.Expr.t
-  -> Flambda.Expr.t * Upwards_acc.t
+  -> body:Expr.t
+  -> Expr.t * Upwards_acc.t
 
 (** Place lifted constants whose defining expressions involve [Name]s (for
     example those bound by a [Let] or a [Let_cont]) that are about to go out
@@ -63,7 +63,7 @@ val place_lifted_constants
   -> lifted_constants_from_defining_expr:Simplify_envs.Lifted_constant_state.t
   -> lifted_constants_from_body:Simplify_envs.Lifted_constant_state.t
   -> put_bindings_around_body:
-       (Upwards_acc.t -> body:Flambda.Expr.t -> Flambda.Expr.t * Upwards_acc.t)
-  -> body:Flambda.Expr.t
+       (Upwards_acc.t -> body:Expr.t -> Expr.t * Upwards_acc.t)
+  -> body:Expr.t
   -> critical_deps_of_bindings:Name_occurrences.t
-  -> Flambda.Expr.t * Upwards_acc.t
+  -> Expr.t * Upwards_acc.t

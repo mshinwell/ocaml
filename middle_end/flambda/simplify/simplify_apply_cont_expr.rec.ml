@@ -39,7 +39,7 @@ let rebuild_apply_cont apply_cont ~args ~rewrite_id uacc ~after_rebuild =
   in
   let expr_and_uacc =
     match UE.find_continuation uenv cont with
-    | Linearly_used_and_inlinable { arity; params; handler;
+    | Linearly_used_and_inlinable { arity = _; params; handler;
         free_names_of_handler; } ->
       begin match rewrite_use_result with
       | Expr _ ->
@@ -86,8 +86,8 @@ let rebuild_apply_cont apply_cont ~args ~rewrite_id uacc ~after_rebuild =
           let uacc = UA.with_name_occurrences uacc ~name_occurrences in
           Some (expr, uacc)
       end
-    | Other { arity; handler = _; } -> None
-    | Unreachable { arity; } ->
+    | Other { arity = _; handler = _; } -> None
+    | Unreachable { arity = _; } ->
       (* N.B. We allow this transformation even if there is a trap action,
         on the basis that there wouldn't be any opportunity to collect any
         backtrace, even if the [Apply_cont] were compiled as "raise". *)
