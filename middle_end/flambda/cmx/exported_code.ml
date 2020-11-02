@@ -58,7 +58,6 @@ end
 type t0 =
   | Present of {
     code : C.t;
-    free_names_of_code : Name_occurrences.t;
     calling_convention : Calling_convention.t;
   }
   | Imported of { calling_convention : Calling_convention.t; }
@@ -67,7 +66,7 @@ type t = t0 Code_id.Map.t
 
 let print0 ppf t0 =
   match t0 with
-  | Present { code; free_names_of_code = _; calling_convention; } ->
+  | Present { code; calling_convention; } ->
     Format.fprintf ppf
       "@[<hov 1>(Present@ (\
          @[<hov 1>(code@ %a)@]\
@@ -87,25 +86,13 @@ let empty = Code_id.Map.empty
 
 let add_code code t =
   let with_calling_convention =
-    Code_id.Map.filter_map (fun _code_id (code, free_names_of_code) ->
+    Code_id.Map.filter_map (fun _code_id code ->
         match C.params_and_body code with
         | Present params_and_body ->
           let calling_convention =
             Calling_convention.compute ~params_and_body
           in
-          let free_names_of_code =
-            (* If we've never simplified [code] then we won't know its free
-               names.  In these cases we have to do the computation now.
-               This case should only arise rarely, e.g. as a result of a join
-               via the code age relation, so the overhead should be low. *)
-            (* CR mshinwell: It's possible we don't need this here since
-               [Expr_builder.create_raw_let_symbol] should always have forced
-               free name computation for code like this. *)
-            match (free_names_of_code : _ Or_unknown.t) with
-            | Known free_names -> free_names
-            | Unknown -> Flambda.Code.free_names code
-          in
-          Some (Present { code; free_names_of_code; calling_convention; })
+          Some (Present { code; calling_convention; })
         | Deleted ->
           (* CR lmaurer for vlaviron: Okay to just ignore deleted code? *)
           None)
@@ -117,7 +104,7 @@ let mark_as_imported t =
   let forget_params_and_body t0 =
     match t0 with
     | Imported _ -> t0
-    | Present { code = _; free_names_of_code = _; calling_convention; } ->
+    | Present { code = _; calling_convention; } ->
       Imported { calling_convention; }
   in
   Code_id.Map.map forget_params_and_body t
@@ -139,10 +126,8 @@ let merge t1 t2 =
       Misc.fatal_errorf "Cannot merge two definitions for code id %a"
         Code_id.print code_id
     | Imported { calling_convention = cc_imported; },
-      (Present { calling_convention = cc_present; code = _;
-                 free_names_of_code = _; } as t0)
-    | (Present { calling_convention = cc_present; code = _;
-                 free_names_of_code = _; } as t0),
+      (Present { calling_convention = cc_present; code = _; } as t0)
+    | (Present { calling_convention = cc_present; code = _; } as t0),
       Imported { calling_convention = cc_imported; } ->
       if Calling_convention.equal cc_present cc_imported then Some t0
       else
@@ -162,8 +147,7 @@ let find_code t code_id =
   match Code_id.Map.find code_id t with
   | exception Not_found ->
     Misc.fatal_errorf "Code ID %a not bound" Code_id.print code_id
-  | Present { code; free_names_of_code; calling_convention = _; } ->
-    code, free_names_of_code
+  | Present { code; calling_convention = _; } -> code
   | Imported _ ->
     Misc.fatal_errorf "Actual code for Code ID %a is missing"
       Code_id.print code_id
@@ -181,8 +165,7 @@ let find_code_if_not_imported t code_id =
        instead so we can end up with missing code IDs during the reachability
        computation, and have to assume that it fits the above case. *)
     None
-  | Present { code; free_names_of_code; calling_convention = _; } ->
-    Some (code, free_names_of_code)
+  | Present { code; calling_convention = _; } -> Some code
   | Imported _ ->
     None
 
@@ -203,7 +186,7 @@ let all_ids_for_export t =
   Code_id.Map.fold (fun code_id code_data all_ids ->
       let all_ids = Ids_for_export.add_code_id all_ids code_id in
       match code_data with
-      | Present { code; free_names_of_code = _; calling_convention = _; } ->
+      | Present { code; calling_convention = _; } ->
         Ids_for_export.union all_ids (C.all_ids_for_export code)
       | Imported { calling_convention = _; } -> all_ids)
     t
@@ -214,10 +197,10 @@ let import import_map t =
       let code_id = Ids_for_export.Import_map.code_id import_map code_id in
       let code_data =
         match code_data with
-        | Present { calling_convention; free_names_of_code; code; } ->
+        | Present { calling_convention; code; } ->
           let code = Flambda.Code.import import_map code in
           let free_names_of_code =
-            Name_occurrences.import free_names_of_code
+            Name_occurrences.import (Code.free_names code)
               ~import_name:(fun name ->
                 Name.pattern_match name
                   ~symbol:(fun symbol ->
@@ -235,7 +218,7 @@ let import import_map t =
                   Continuation.print cont
                   Flambda.Code.print code)
           in
-          Present { calling_convention; free_names_of_code; code; }
+          Present { calling_convention; code; }
         | Imported { calling_convention; } ->
           Imported { calling_convention; }
       in

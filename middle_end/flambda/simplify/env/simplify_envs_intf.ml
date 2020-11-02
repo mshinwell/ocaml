@@ -174,12 +174,7 @@ module type Downwards_env = sig
     -> lifted_constant_state
     -> t
 
-  val define_code
-     : t
-    -> code_id:Code_id.t
-    -> code:Code.t
-    -> free_names_of_code:Name_occurrences.t
-    -> t
+  val define_code : t -> code_id:Code_id.t -> code:Code.t -> t
 
   val mem_code : t -> Code_id.t -> bool
 
