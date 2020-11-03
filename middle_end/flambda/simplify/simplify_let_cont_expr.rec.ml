@@ -20,7 +20,8 @@ open! Simplify_import
 
 let rebuild_one_continuation_handler cont ~at_unit_toplevel
       (recursive : Recursive.t) (cont_handler : CH.t) ~params
-      ~(extra_params_and_args : EPA.t) handler uacc ~after_rebuild =
+      ~(extra_params_and_args : EPA.t) ~is_single_inlinable_use handler uacc
+      ~after_rebuild =
   let handler, uacc =
     let params = params @ extra_params_and_args.extra_params in
     (* We might need to place lifted constants now, as they could
@@ -45,19 +46,24 @@ let rebuild_one_continuation_handler cont ~at_unit_toplevel
     match recursive with
     | Recursive -> params
     | Non_recursive ->
-      let first = ref true in
-      List.filter (fun param ->
-          (* CR mshinwell: We should have a robust means of propagating which
-             parameter is the exception bucket.  Then this hack can be
-             removed. *)
-          if !first && Continuation.is_exn cont then begin
-            first := false;
-            true
-          end else begin
-            first := false;
-            Name_occurrences.mem_var free_names (KP.var param)
-          end)
-        params
+      (* As per comment below, if the continuation is going to be inlined
+         out, removal of unused parameters does not go via an
+         [Apply_cont_rewrite]. *)
+      if is_single_inlinable_use then params
+      else
+        let first = ref true in
+        List.filter (fun param ->
+            (* CR mshinwell: We should have a robust means of propagating which
+              parameter is the exception bucket.  Then this hack can be
+              removed. *)
+            if !first && Continuation.is_exn cont then begin
+              first := false;
+              true
+            end else begin
+              first := false;
+              Name_occurrences.mem_var free_names (KP.var param)
+            end)
+          params
   in
   let used_extra_params =
     List.filter (fun extra_param ->
@@ -84,14 +90,15 @@ let rebuild_one_continuation_handler cont ~at_unit_toplevel
     ~free_names_of_handler:free_names uacc
 
 let simplify_one_continuation_handler dacc cont ~at_unit_toplevel recursive
-      cont_handler ~params ~handler ~extra_params_and_args ~down_to_up =
+      cont_handler ~params ~handler ~extra_params_and_args
+      ~is_single_inlinable_use ~down_to_up =
   Simplify_expr.simplify_expr dacc handler
     ~down_to_up:(fun dacc ~rebuild ->
       down_to_up dacc ~rebuild:(fun uacc ~after_rebuild ->
         rebuild uacc ~after_rebuild:(fun handler uacc ->
           rebuild_one_continuation_handler cont ~at_unit_toplevel recursive
-            cont_handler ~params ~extra_params_and_args handler uacc
-            ~after_rebuild)))
+            cont_handler ~params ~extra_params_and_args
+            ~is_single_inlinable_use handler uacc ~after_rebuild)))
 
 let rebuild_non_recursive_let_cont_handler cont
       (uses : Continuation_env_and_param_types.t) ~params ~handler
@@ -191,13 +198,6 @@ let simplify_non_recursive_let_cont_handler ~denv_before_body ~dacc_after_body
           ~handler ~free_names_of_handler:Name_occurrences.empty
           ~is_single_inlinable_use:false ~is_single_use:false scope
           EPA.empty cont_handler uacc ~after_rebuild)
-  (* CR mshinwell: Refactor so we don't have the
-     [is_single_use] hack.  The problem is that we want to
-     have the code of the handler available if we might want to
-     substitute it into a Switch---which we only want to do if
-     we won't duplicate code (i.e. if there is only one use)
-     ---but this is not a normal "inlinable" position and cannot
-     be treated as such (e.g. for join calculations). *)
   | Uses { handler_env; arg_types_by_use_id; extra_params_and_args;
            is_single_inlinable_use; is_single_use; } ->
     let handler_typing_env, extra_params_and_args =
@@ -267,7 +267,7 @@ let simplify_non_recursive_let_cont_handler ~denv_before_body ~dacc_after_body
     in
     simplify_one_continuation_handler dacc cont ~at_unit_toplevel
       Non_recursive cont_handler ~params ~handler ~extra_params_and_args
-      ~down_to_up:(fun dacc ~rebuild ->
+      ~is_single_inlinable_use ~down_to_up:(fun dacc ~rebuild ->
         down_to_up dacc ~continuation_has_zero_uses:false
           ~rebuild:(fun uacc ~after_rebuild ->
             rebuild uacc ~after_rebuild:(fun cont_handler ~params
@@ -480,8 +480,8 @@ let simplify_recursive_let_cont_handlers ~denv_before_body ~dacc_after_body
   simplify_one_continuation_handler dacc cont
     ~at_unit_toplevel:false Recursive
     cont_handler ~params ~handler
-    ~extra_params_and_args:
-      Continuation_extra_params_and_args.empty
+    ~extra_params_and_args:Continuation_extra_params_and_args.empty
+    ~is_single_inlinable_use:false
     ~down_to_up:(fun dacc ~rebuild:rebuild_handler ->
       let cont_uses_env = CUE.remove (DA.continuation_uses_env dacc) cont in
       let dacc = DA.with_continuation_uses_env dacc ~cont_uses_env in
