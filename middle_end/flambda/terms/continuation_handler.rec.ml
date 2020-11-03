@@ -25,6 +25,15 @@ module Behaviour = struct
       }
     | Unknown of { arity : Flambda_arity.With_subkinds.t; }
 
+  let apply_name_permutation t perm =
+    match t with
+    | Unreachable { arity = _; }
+    | Unknown { arity = _; } -> t
+    | Alias_for { arity; alias_for; } ->
+      let alias_for' = Name_permutation.apply_continuation perm alias_for in
+      if alias_for == alias_for' then t
+      else Alias_for { arity; alias_for = alias_for'; }
+
   let arity t =
     match t with
     | Unreachable { arity; }
@@ -112,29 +121,27 @@ let create params ~handler ~(free_names_of_handler : _ Or_unknown.t)
   let behaviour : Behaviour.t =
     (* CR-someday mshinwell: This could be replaced by a more sophisticated
        analysis, but for the moment we just use a simple syntactic check. *)
-    Continuation_params_and_handler.pattern_match t.params_and_handler
-      ~f:(fun params ~handler ->
-        let arity = Kinded_parameter.List.arity_with_subkinds params in
-        if is_exn_handler then
-          Unknown { arity; }
-        else
-          match Expr.descr handler with
-          | Apply_cont apply_cont ->
-            begin match Apply_cont.trap_action apply_cont with
-            | Some _ -> Unknown { arity; }
-            | None ->
-              let args = Apply_cont.args apply_cont in
-              let params = List.map KP.simple params in
-              if Misc.Stdlib.List.compare Simple.compare args params = 0 then
-                Alias_for {
-                  arity;
-                  alias_for = Apply_cont.continuation apply_cont;
-                }
-              else
-                Unknown { arity; }
-            end
-          | Invalid Treat_as_unreachable -> Unreachable { arity; }
-          | _ -> Unknown { arity; })
+    let arity = Kinded_parameter.List.arity_with_subkinds params in
+    if is_exn_handler then
+      Unknown { arity; }
+    else
+      match Expr.descr handler with
+      | Apply_cont apply_cont ->
+        begin match Apply_cont.trap_action apply_cont with
+        | Some _ -> Unknown { arity; }
+        | None ->
+          let args = Apply_cont.args apply_cont in
+          let params = List.map KP.simple params in
+          if Misc.Stdlib.List.compare Simple.compare args params = 0 then
+            Alias_for {
+              arity;
+              alias_for = Apply_cont.continuation apply_cont;
+            }
+          else
+            Unknown { arity; }
+        end
+      | Invalid Treat_as_unreachable -> Unreachable { arity; }
+      | _ -> Unknown { arity; }
   in
   let t0 : T0.t =
     { num_normal_occurrences_of_params;
@@ -188,10 +195,9 @@ let print_using_where_with_cache (recursive : Recursive.t) ~cache ppf k
     | Apply_cont _ | Invalid _ -> fprintf ppf "@[<hov 1>"
     | _ -> fprintf ppf "@[<v 1>"
     end;
-    fprintf ppf "@<0>%s%a@<0>%s@<0>%s@<0>%s%s@<0>%s"
+    fprintf ppf "@<0>%s%a@<0>%s%s@<0>%s%s@<0>%s"
       (Flambda_colours.continuation_definition ())
       Continuation.print k
-      (Flambda_colours.normal ())
       (Flambda_colours.expr_keyword ())
       (match recursive with Non_recursive -> "" | Recursive -> " (rec)")
       (Flambda_colours.continuation_annotation ())
@@ -216,3 +222,30 @@ let print_with_cache ~cache ppf { abst; behaviour = _; is_exn_handler; } =
 
 let print ppf t =
   print_with_cache ~cache:(Printing_cache.create ()) ppf t
+
+let is_exn_handler t = t.is_exn_handler
+
+let arity t = Behaviour.arity t.behaviour
+
+let behaviour t = t.behaviour
+
+let free_names t = A.free_names t.abst
+
+let apply_name_permutation ({ abst; behaviour; is_exn_handler; } as t) perm =
+  let abst' = A.apply_name_permutation abst perm in
+  let behaviour' = Behaviour.apply_name_permutation behaviour perm in
+  if abst == abst' && behaviour == behaviour' then t
+  else
+    { abst = abst';
+      behaviour = behaviour';
+      is_exn_handler;
+    }
+
+let import import_map { abst; behaviour; is_exn_handler; } =
+  let abst = A.import import_map abst in
+  let behaviour = Behaviour.import import_map behaviour in
+  { abst; behaviour; is_exn_handler; }
+
+let all_ids_for_export { abst; behaviour; is_exn_handler = _; } =
+  Ids_for_export.union (A.all_ids_for_export abst)
+    (Behaviour.all_ids_for_export behaviour)

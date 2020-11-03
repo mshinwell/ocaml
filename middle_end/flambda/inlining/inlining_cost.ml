@@ -450,8 +450,7 @@ let smaller' denv expr ~than:threshold =
       size := !size + prim_size prim
     | Static_consts _ -> ()
   and continuation_handler_size denv handler =
-    let params_and_handler = Continuation_handler.params_and_handler handler in
-    Continuation_params_and_handler.pattern_match params_and_handler
+    Continuation_handler.pattern_match handler
       ~f:(fun _params ~handler -> expr_size denv handler)
   in
   try

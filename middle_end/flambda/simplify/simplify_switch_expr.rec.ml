@@ -47,8 +47,7 @@ let rebuild_switch dacc ~arms ~scrutinee ~scrutinee_ty uacc
                 | Switch _ | Invalid _ -> Some action
                 end
               | Other { arity = _; handler = Some handler; } ->
-                Continuation_params_and_handler.pattern_match
-                  (Continuation_handler.params_and_handler handler)
+                Continuation_handler.pattern_match handler
                   ~f:(fun params ~handler ->
                     assert (List.length params = 0);
                     match Expr.descr handler with

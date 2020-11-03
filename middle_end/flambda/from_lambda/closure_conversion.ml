@@ -282,17 +282,13 @@ let close_c_call t ~let_bound_var (prim : Primitive.description)
         Flambda_kind.With_subkind.create return_kind Anything
       in
       let params = [Kinded_parameter.create handler_param return_kind] in
-      let params_and_handler =
-        Continuation_params_and_handler.create params
-          ~handler:code_after_call
-          (* Here and elsewhere in this pass, we specify [Unknown] for
-             free name sets like this, since the information isn't needed
-             until the translation to Cmm -- by which point Simplify will
-             have rebuilt the term and provided the free names. *)
-          ~free_names_of_handler:Unknown
-      in
-      Continuation_handler.create ~params_and_handler
-        ~stub:false
+      Continuation_handler.create params
+        ~handler:code_after_call
+        (* Here and elsewhere in this pass, we specify [Unknown] for
+           free name sets like this, since the information isn't needed
+           until the translation to Cmm -- by which point Simplify will
+           have rebuilt the term and provided the free names. *)
+        ~free_names_of_handler:Unknown
         ~is_exn_handler:false
     in
     Let_cont.create_non_recursive return_continuation after_call
@@ -425,14 +421,10 @@ let rec close t env (ilam : Ilambda.t) : Expr.t =
         params_with_kinds
     in
     let handler = close t handler_env handler in
-    let params_and_handler =
-      Continuation_params_and_handler.create params ~handler
-        ~free_names_of_handler:Unknown
-    in
     let handler =
-      Continuation_handler.create ~params_and_handler
-        ~stub:false
-        ~is_exn_handler:is_exn_handler
+      Continuation_handler.create params ~handler
+        ~free_names_of_handler:Unknown
+        ~is_exn_handler
     in
     let body = close t env body in
     begin match recursive with
@@ -983,13 +975,8 @@ let ilambda_to_flambda ~backend ~module_ident ~module_block_size_in_words
     let param =
       Kinded_parameter.create module_block_var K.With_subkind.any_value
     in
-    let params_and_handler =
-      Continuation_params_and_handler.create [param]
-        ~handler:load_fields_body
-        ~free_names_of_handler:Unknown
-    in
-    Continuation_handler.create ~params_and_handler
-      ~stub:false  (* CR mshinwell: remove "stub" notion *)
+    Continuation_handler.create [param] ~handler:load_fields_body
+      ~free_names_of_handler:Unknown
       ~is_exn_handler:false
   in
   let body =

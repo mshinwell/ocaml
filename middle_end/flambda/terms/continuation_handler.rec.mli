@@ -26,6 +26,15 @@ include Expr_std.S with type t := t
 
 include Contains_ids.S with type t := t
 
+val print_using_where_with_cache
+   : Recursive.t
+  -> cache:Printing_cache.t
+  -> Format.formatter
+  -> Continuation.t
+  -> t
+  -> first:bool
+  -> unit
+
 (** Create a value of type [t] given information about a continuation
     handler. *)
 val create

@@ -326,69 +326,14 @@ end and Continuation_handler : sig
 
   (** Create the representation of a single continuation handler. *)
   val create
-     : params_and_handler:Continuation_params_and_handler.t
-    -> stub:bool
-    -> is_exn_handler:bool
-    -> t
-
-  (** The alpha-equivalence class of the continuation's parameters bound over
-      its code. *)
-  val params_and_handler : t -> Continuation_params_and_handler.t
-
-  (** Whether the continuation is an exception handler.
-
-      Continuations used as exception handlers are always [Non_recursive]. To
-      enable identification of them in passes not invoked from [Simplify] (where
-      they could be identified by looking at the [Apply_cont]s that reference
-      them) they are marked explicitly.
-
-      Continuations used as exception handlers may have more than one
-      parameter (see [Exn_continuation]).
-
-      (Relevant piece of background info: the backend cannot compile
-      simultaneously-defined continuations when one or more of them is an
-      exception handler.) *)
-  val is_exn_handler : t -> bool
-
-  (** Whether the continuation is a compiler-generated wrapper that should
-      always be inlined. *)
-  (* CR mshinwell: Remove the notion of "stub" and enhance continuation and
-     function declarations to hold one or more wrappers themselves. *)
-  val stub : t -> bool
-
-  val arity : t -> Flambda_arity.With_subkinds.t
-
-  val with_params_and_handler : t -> Continuation_params_and_handler.t -> t
-
-  type behaviour = private
-    | Unreachable of { arity : Flambda_arity.With_subkinds.t; }
-    | Alias_for of {
-        arity : Flambda_arity.With_subkinds.t;
-        alias_for : Continuation.t;
-      }
-    | Unknown of { arity : Flambda_arity.With_subkinds.t; }
-
-  val behaviour : t -> behaviour
-end and Continuation_params_and_handler : sig
-  (** The representation of the alpha-equivalence class of bindings of a list
-      of parameters, with associated relations thereon, over the code of a
-      continuation handler. *)
-  type t
-
-  (** Printing, invariant checks, name manipulation, etc. *)
-  include Expr_std.S with type t := t
-
-  (** Create a value of type [t] given information about a continuation
-      handler. *)
-  val create
      : Kinded_parameter.t list
     -> handler:Expr.t
     -> free_names_of_handler:Name_occurrences.t Or_unknown.t
+    -> is_exn_handler:bool
     -> t
 
   (** Choose a member of the alpha-equivalence class to enable examination
-      of the parameters, relations thereon and the code over which they
-      are scoped. *)
+      of the parameters and the code over which they are scoped. *)
   val pattern_match'
      : t
     -> f:(Kinded_parameter.t list
@@ -421,6 +366,34 @@ end and Continuation_params_and_handler : sig
       -> 'a)
     -> ('a, Pattern_match_pair_error.t) Result.t
 
+  (** Whether the continuation is an exception handler.
+
+      Continuations used as exception handlers are always [Non_recursive]. To
+      enable identification of them in passes not invoked from [Simplify] (where
+      they could be identified by looking at the [Apply_cont]s that reference
+      them) they are marked explicitly.
+
+      Continuations used as exception handlers may have more than one
+      parameter (see [Exn_continuation]).
+
+      (Relevant piece of background info: the backend cannot compile
+      simultaneously-defined continuations when one or more of them is an
+      exception handler.) *)
+  val is_exn_handler : t -> bool
+
+  module Behaviour : sig
+    type t = private
+      | Unreachable of { arity : Flambda_arity.With_subkinds.t; }
+      | Alias_for of {
+          arity : Flambda_arity.With_subkinds.t;
+          alias_for : Continuation.t;
+        }
+      | Unknown of { arity : Flambda_arity.With_subkinds.t; }
+  end
+
+  val arity : t -> Flambda_arity.With_subkinds.t
+
+  val behaviour : t -> Behaviour.t
 end and Recursive_let_cont_handlers : sig
   (** The representation of the alpha-equivalence class of a group of possibly
       (mutually-) recursive continuation handlers that are bound both over a
@@ -724,7 +697,6 @@ module Import : sig
   module Code = Code
   module Continuation_handler = Continuation_handler
   module Continuation_handlers = Continuation_handlers
-  module Continuation_params_and_handler = Continuation_params_and_handler
   module Expr = Expr
   module Function_declaration = Function_declaration
   module Function_declarations = Function_declarations

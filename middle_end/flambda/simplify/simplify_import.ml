@@ -21,7 +21,6 @@ module Apply_cont = Flambda.Apply_cont
 module Code = Flambda.Code
 module Continuation_handler = Flambda.Continuation_handler
 module Continuation_handlers = Flambda.Continuation_handlers
-module Continuation_params_and_handler = Flambda.Continuation_params_and_handler
 module Expr = Flambda.Expr
 module Function_declaration = Flambda.Function_declaration
 module Function_declarations = Flambda.Function_declarations

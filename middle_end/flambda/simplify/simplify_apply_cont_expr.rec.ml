@@ -19,7 +19,7 @@
 open! Simplify_import
 
 let inline_linearly_used_continuation uacc apply_cont ~params ~handler
-      ~free_names_of_handler =
+      ~free_names_of_handler ~after_rebuild =
   (* CR mshinwell: With -g, we can end up with continuations that are
      just a sequence of phantom lets then "goto".  These would normally
      be treated as aliases, but of course aren't in this scenario,
@@ -51,7 +51,7 @@ let inline_linearly_used_continuation uacc apply_cont ~params ~handler
     Name_occurrences.union name_occurrences (UA.name_occurrences uacc)
   in
   let uacc = UA.with_name_occurrences uacc ~name_occurrences in
-  Some (expr, uacc)
+  after_rebuild expr uacc
 
 let rebuild_apply_cont apply_cont ~args ~rewrite_id uacc ~after_rebuild =
   let uenv = UA.uenv uacc in
@@ -62,7 +62,7 @@ let rebuild_apply_cont apply_cont ~args ~rewrite_id uacc ~after_rebuild =
     (* We must not fail to inline here, since we've already decided that the
        relevant [Let_cont] is no longer needed. *)
     inline_linearly_used_continuation uacc apply_cont ~params ~handler
-      ~free_names_of_handler
+      ~free_names_of_handler ~after_rebuild
   | Unreachable { arity = _; } ->
     (* We allow this transformation even if there is a trap action, on the
        basis that there wouldn't be any opportunity to collect any backtrace,

@@ -485,13 +485,9 @@ let rec expr env (e : Fexpr.expr) : Flambda.Expr.t =
       let handler =
         expr handler_env handler.handler
       in
-      let params_and_handler =
-        Flambda.Continuation_params_and_handler.create params ~handler
-          ~free_names_of_handler:Unknown
-      in
       let handler =
-        Flambda.Continuation_handler.create ~params_and_handler
-          ~stub:false
+        Flambda.Continuation_handler.create params ~handler
+          ~free_names_of_handler:Unknown
           ~is_exn_handler:is_exn_handler
       in
       match recursive with

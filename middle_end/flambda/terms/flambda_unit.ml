@@ -115,8 +115,7 @@ module Iter = struct
     expr f_c f_s body
 
   and continuation_handler f_c f_s _ h =
-    let h = Continuation_handler.params_and_handler h in
-    Continuation_params_and_handler.pattern_match h ~f:(fun _ ~handler ->
+    Continuation_handler.pattern_match h ~f:(fun _ ~handler ->
         expr f_c f_s handler
       )
 

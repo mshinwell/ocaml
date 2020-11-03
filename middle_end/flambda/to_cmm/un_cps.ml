@@ -789,9 +789,8 @@ and let_expr_prim body env res v ~num_normal_occurrences_of_bound_vars p dbg =
   expr env res body
 
 and decide_inline_cont h k ~num_free_occurrences =
-  not (Continuation_handler.is_exn_handler h)
-  && (Continuation_handler.stub h
-      || cont_is_known_to_have_exactly_one_occurrence k num_free_occurrences)
+  (not (Continuation_handler.is_exn_handler h))
+  && cont_is_known_to_have_exactly_one_occurrence k num_free_occurrences
 
 and let_cont env res = function
   | Let_cont.Non_recursive { handler; num_free_occurrences; } ->
@@ -896,8 +895,7 @@ and let_cont_rec env res conts body =
   wrap (C.ccatch ~rec_flag:true ~body ~handlers), res
 
 and continuation_handler_split h =
-  let h = Continuation_handler.params_and_handler h in
-  Continuation_params_and_handler.pattern_match' h
+  Continuation_handler.pattern_match' h
     ~f:(fun params ~num_normal_occurrences_of_params ~handler ->
       params, num_normal_occurrences_of_params, handler)
 

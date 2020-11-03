@@ -231,12 +231,8 @@ let rec bind_rec ~backend exn_cont
         bind_rec ~backend exn_cont ~register_const_string
           primitive dbg cont
       in
-      let params_and_handler =
-        Continuation_params_and_handler.create [] ~handler
-          ~free_names_of_handler:Unknown
-      in
-      Continuation_handler.create ~params_and_handler
-        ~stub:false
+      Continuation_handler.create [] ~handler
+        ~free_names_of_handler:Unknown
         ~is_exn_handler:false
     in
     let failure_cont = Continuation.create () in
@@ -245,24 +241,16 @@ let rec bind_rec ~backend exn_cont
         expression_for_failure ~backend exn_cont
           ~register_const_string primitive dbg failure
       in
-      let params_and_handler =
-        Continuation_params_and_handler.create [] ~handler
-          ~free_names_of_handler:Unknown
-      in
-      Continuation_handler.create ~params_and_handler
-        ~stub:false
+      Continuation_handler.create [] ~handler
+        ~free_names_of_handler:Unknown
         ~is_exn_handler:false
     in
     let check_validity_conditions =
       List.fold_left (fun rest expr_primitive ->
           let condition_passed_cont = Continuation.create () in
           let condition_passed_cont_handler =
-            let params_and_handler =
-              Continuation_params_and_handler.create [] ~handler:rest
-                ~free_names_of_handler:Unknown
-            in
-            Continuation_handler.create ~params_and_handler
-              ~stub:false
+            Continuation_handler.create [] ~handler:rest
+              ~free_names_of_handler:Unknown
               ~is_exn_handler:false
           in
           let body =
