@@ -205,11 +205,14 @@ let create_raw_let_symbol uacc bound_symbols scoping_rule static_consts ~body =
   in
   let free_names_of_body = UA.name_occurrences uacc in
   let free_names_of_let =
+    (* Care: these bindings can be recursive (e.g. via a set of closures). *)
+    let name_occurrences =
+      Name_occurrences.union free_names_of_static_consts free_names_of_body
+    in
     Code_id_or_symbol.Set.fold (fun code_id_or_sym free_names ->
         Name_occurrences.remove_code_id_or_symbol free_names code_id_or_sym)
       (Bound_symbols.everything_being_defined bound_symbols)
-      free_names_of_body
-    |> Name_occurrences.union free_names_of_static_consts
+      name_occurrences
   in
   let uacc =
     UA.with_name_occurrences uacc ~name_occurrences:free_names_of_let

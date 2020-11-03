@@ -133,55 +133,66 @@ let print_with_cache ~cache ppf
         is_a_functor; params_arity; result_arity; recursive;
         free_names_of_params_and_body = _; } =
   let module C = Flambda_colours in
-  Format.fprintf ppf "@[<hov 1>(\
-      @[<hov 1>@<0>%s(newer_version_of@ %a)@<0>%s@]@ \
-      @[<hov 1>@<0>%s(stub@ %b)@<0>%s@]@ \
-      @[<hov 1>@<0>%s(inline@ %a)@<0>%s@]@ \
-      @[<hov 1>@<0>%s(is_a_functor@ %b)@<0>%s@]@ \
-      @[<hov 1>@<0>%s(params_arity@ @<0>%s%a@<0>%s)@<0>%s@]@ \
-      @[<hov 1>@<0>%s(result_arity@ @<0>%s%a@<0>%s)@<0>%s@]@ \
-      @[<hov 1>@<0>%s(recursive@ %a)@<0>%s@]@ \
-      %a\
-      )@]"
-    (if Option.is_none newer_version_of then Flambda_colours.elide ()
-     else Flambda_colours.normal ())
-    (Misc.Stdlib.Option.print_compact Code_id.print) newer_version_of
-    (Flambda_colours.normal ())
-    (if not stub then Flambda_colours.elide () else C.normal ())
-    stub
-    (Flambda_colours.normal ())
-    (if Inline_attribute.is_default inline
-     then Flambda_colours.elide ()
-     else C.normal ())
-    Inline_attribute.print inline
-    (Flambda_colours.normal ())
-    (if not is_a_functor then Flambda_colours.elide () else C.normal ())
-    is_a_functor
-    (Flambda_colours.normal ())
-    (if Flambda_arity.With_subkinds.is_singleton_value params_arity
-     then Flambda_colours.elide ()
-     else Flambda_colours.normal ())
-    (Flambda_colours.normal ())
-    Flambda_arity.With_subkinds.print params_arity
-    (if Flambda_arity.With_subkinds.is_singleton_value params_arity
-     then Flambda_colours.elide ()
-     else Flambda_colours.normal ())
-    (Flambda_colours.normal ())
-    (if Flambda_arity.With_subkinds.is_singleton_value result_arity
-     then Flambda_colours.elide ()
-     else Flambda_colours.normal ())
-    (Flambda_colours.normal ())
-    Flambda_arity.With_subkinds.print result_arity
-    (if Flambda_arity.With_subkinds.is_singleton_value result_arity
-     then Flambda_colours.elide ()
-     else Flambda_colours.normal ())
-    (Flambda_colours.normal ())
-    (match recursive with
-     | Non_recursive -> Flambda_colours.elide ()
-     | Recursive -> Flambda_colours.normal ())
-    Recursive.print recursive
-    (Flambda_colours.normal ())
-    (print_params_and_body_with_cache ~cache) params_and_body
+  match params_and_body with
+  | Present _ ->
+    Format.fprintf ppf "@[<hov 1>(\
+        @[<hov 1>@<0>%s(newer_version_of@ %a)@<0>%s@]@ \
+        @[<hov 1>@<0>%s(stub@ %b)@<0>%s@]@ \
+        @[<hov 1>@<0>%s(inline@ %a)@<0>%s@]@ \
+        @[<hov 1>@<0>%s(is_a_functor@ %b)@<0>%s@]@ \
+        @[<hov 1>@<0>%s(params_arity@ @<0>%s%a@<0>%s)@<0>%s@]@ \
+        @[<hov 1>@<0>%s(result_arity@ @<0>%s%a@<0>%s)@<0>%s@]@ \
+        @[<hov 1>@<0>%s(recursive@ %a)@<0>%s@]@ \
+        %a\
+        )@]"
+      (if Option.is_none newer_version_of then Flambda_colours.elide ()
+      else Flambda_colours.normal ())
+      (Misc.Stdlib.Option.print_compact Code_id.print) newer_version_of
+      (Flambda_colours.normal ())
+      (if not stub then Flambda_colours.elide () else C.normal ())
+      stub
+      (Flambda_colours.normal ())
+      (if Inline_attribute.is_default inline
+      then Flambda_colours.elide ()
+      else C.normal ())
+      Inline_attribute.print inline
+      (Flambda_colours.normal ())
+      (if not is_a_functor then Flambda_colours.elide () else C.normal ())
+      is_a_functor
+      (Flambda_colours.normal ())
+      (if Flambda_arity.With_subkinds.is_singleton_value params_arity
+      then Flambda_colours.elide ()
+      else Flambda_colours.normal ())
+      (Flambda_colours.normal ())
+      Flambda_arity.With_subkinds.print params_arity
+      (if Flambda_arity.With_subkinds.is_singleton_value params_arity
+      then Flambda_colours.elide ()
+      else Flambda_colours.normal ())
+      (Flambda_colours.normal ())
+      (if Flambda_arity.With_subkinds.is_singleton_value result_arity
+      then Flambda_colours.elide ()
+      else Flambda_colours.normal ())
+      (Flambda_colours.normal ())
+      Flambda_arity.With_subkinds.print result_arity
+      (if Flambda_arity.With_subkinds.is_singleton_value result_arity
+      then Flambda_colours.elide ()
+      else Flambda_colours.normal ())
+      (Flambda_colours.normal ())
+      (match recursive with
+      | Non_recursive -> Flambda_colours.elide ()
+      | Recursive -> Flambda_colours.normal ())
+      Recursive.print recursive
+      (Flambda_colours.normal ())
+      (print_params_and_body_with_cache ~cache) params_and_body
+  | Deleted ->
+    Format.fprintf ppf "@[<hov 1>(\
+        @[<hov 1>@<0>%s(newer_version_of@ %a)@<0>%s@]@ \
+        Deleted\
+        )@]"
+      (if Option.is_none newer_version_of then Flambda_colours.elide ()
+      else Flambda_colours.normal ())
+      (Misc.Stdlib.Option.print_compact Code_id.print) newer_version_of
+      (Flambda_colours.normal ())
 
 let print ppf code =
   print_with_cache ~cache:(Printing_cache.create ()) ppf code
