@@ -51,7 +51,6 @@ module Import = struct
   module Code = Code
   module Continuation_handler = Continuation_handler
   module Continuation_handlers = Continuation_handlers
-  module Continuation_params_and_handler = Continuation_params_and_handler
   module Expr = Expr
   module Function_declaration = Function_declaration
   module Function_declarations = Function_declarations

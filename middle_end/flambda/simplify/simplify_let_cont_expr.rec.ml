@@ -136,6 +136,18 @@ let rebuild_non_recursive_let_cont_handler cont
           else
             UE.add_continuation uenv cont scope arity
   in
+  (* The parameters are removed from the free name information as they are no
+     longer in scope. *)
+  let uacc =
+    let name_occurrences =
+      ListLabels.fold_left (params @ EPA.extra_params extra_params_and_args)
+        ~init:(UA.name_occurrences uacc)
+        ~f:(fun name_occurrences param ->
+          KP.var param
+          |> Name_occurrences.remove_var name_occurrences)
+    in
+    UA.with_name_occurrences uacc ~name_occurrences
+  in
   after_rebuild cont_handler (UA.with_uenv uacc uenv)
 
 let simplify_non_recursive_let_cont_handler ~denv_before_body ~dacc_after_body

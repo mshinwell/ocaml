@@ -185,7 +185,7 @@ let pattern_match_pair t1 t2 ~f =
         Error Pattern_match_pair_error.Parameter_lists_have_different_lengths))
 
 let print_using_where_with_cache (recursive : Recursive.t) ~cache ppf k
-      ({ abst; behaviour = _; is_exn_handler; } as t) ~first =
+      ({ abst = _; behaviour = _; is_exn_handler; } as t) ~first =
   let fprintf = Format.fprintf in
   if not first then begin
     fprintf ppf "@ "

@@ -109,3 +109,5 @@ let concat t1 t2 =
       extra_args;
     }
   end
+
+let extra_params t = t.extra_params
