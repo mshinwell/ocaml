@@ -371,6 +371,10 @@ let simplify_non_recursive_let_cont dacc non_rec ~down_to_up =
                       in
                       UA.with_name_occurrences uacc ~name_occurrences
                     in
+                    let remove_let_cont =
+                      continuation_has_zero_uses
+                        || UE.will_inline_continuation (UA.uenv uacc) cont
+                    in
                     (* Having rebuilt both the body and handler, the [Let_cont]
                        expression itself is rebuilt -- unless the continuation
                        had zero uses, in which case we're just left with the
@@ -380,7 +384,7 @@ let simplify_non_recursive_let_cont dacc non_rec ~down_to_up =
                        accumulator. *)
                     let uacc = UA.with_uenv uacc uenv_without_cont in
                     let expr =
-                      if continuation_has_zero_uses then body
+                      if remove_let_cont then body
                       else
                         Let_cont.create_non_recursive' ~cont handler ~body
                           ~num_free_occurrences_of_cont_in_body:

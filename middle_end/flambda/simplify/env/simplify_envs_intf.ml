@@ -288,6 +288,8 @@ module type Upwards_env = sig
      : t
     -> Continuation.t
     -> Apply_cont_rewrite.t option
+
+  val will_inline_continuation : t -> Continuation.t -> bool
 end
 
 (* CR mshinwell: The name of this module is a bit misleading *)

@@ -755,6 +755,11 @@ end = struct
     match Continuation.Map.find cont t.apply_cont_rewrites with
     | exception Not_found -> None
     | rewrite -> Some rewrite
+
+  let will_inline_continuation t cont =
+    match find_continuation t cont with
+    | Other _ | Unreachable _ -> false
+    | Linearly_used_and_inlinable _ -> true
 end and Lifted_constant : sig
   include I.Lifted_constant
     with type downwards_env := Downwards_env.t
