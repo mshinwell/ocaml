@@ -302,7 +302,11 @@ let simplify_non_recursive_let_cont dacc non_rec ~down_to_up =
       let dacc_for_body =
         DA.with_continuation_uses_env dacc_for_body ~cont_uses_env:CUE.empty
       in
-    assert (DA.no_lifted_constants dacc_for_body);
+      assert (DA.no_lifted_constants dacc_for_body);
+      (* XXX
+      Format.eprintf "HANDLER:@ %a\n%!" Expr.print handler;
+      Format.eprintf "BODY:@ %a\n%!" Expr.print body;
+      *)
       (* First the downwards traversal is done on the body. *)
       Simplify_expr.simplify_expr dacc_for_body body
         ~down_to_up:(fun dacc_after_body ~rebuild:rebuild_body ->
@@ -357,7 +361,7 @@ let simplify_non_recursive_let_cont dacc non_rec ~down_to_up =
                          names.  This means we can directly call
                          [count_continuation] on this name occurrences
                          structure in order to count the number of occurrences
-                         of [cont] in the [body]. *)
+                         of [cont] in the rebuilt [body]. *)
                       Name_occurrences.count_continuation
                         (UA.name_occurrences uacc)
                         cont
@@ -371,24 +375,57 @@ let simplify_non_recursive_let_cont dacc non_rec ~down_to_up =
                       in
                       UA.with_name_occurrences uacc ~name_occurrences
                     in
-                    let remove_let_cont =
-                      continuation_has_zero_uses
-                        || UE.will_inline_continuation (UA.uenv uacc) cont
+                    let remove_let_cont_leaving_body =
+                      match num_free_occurrences_of_cont_in_body with
+                      | Zero -> true
+                      | One | More_than_one -> false
                     in
+                    (* XXX
+                    Format.eprintf "Remove let cont %a? %b, body:@ %a@ \
+                        handler:@ %a\n%!"
+                      Continuation.print cont
+                      remove_let_cont
+                      Expr.print body
+                      CH.print handler;
+                    Format.eprintf "Free names of the above body:@ %a\n%!"
+                      Name_occurrences.print (UA.name_occurrences uacc);
+                    *)
                     (* Having rebuilt both the body and handler, the [Let_cont]
-                       expression itself is rebuilt -- unless the continuation
-                       had zero uses, in which case we're just left with the
-                       body.
+                       expression itself is rebuilt -- unless either the
+                       continuation had zero uses, in which case we're left
+                       with the body; or if the body is just an [Apply_cont]
+                       (with no trap action) of [cont], in which case we're
+                       left with the handler.
                        The upwards environment of [uacc] is replaced so that
                        out-of-scope continuation bindings do not end up in the
                        accumulator. *)
                     let uacc = UA.with_uenv uacc uenv_without_cont in
                     let expr =
-                      if remove_let_cont then body
+                      if remove_let_cont_leaving_body then body
                       else
-                        Let_cont.create_non_recursive' ~cont handler ~body
-                          ~num_free_occurrences_of_cont_in_body:
-                            (Known num_free_occurrences_of_cont_in_body)
+                        let remove_let_cont_leaving_handler =
+                          match Expr.descr body with
+                          | Apply_cont apply_cont ->
+                            if not (Continuation.equal cont
+                              (Apply_cont.continuation apply_cont))
+                            then false
+                            else
+                              begin match Apply_cont.args apply_cont with
+                              | [] ->
+                                Option.is_none
+                                  (Apply_cont.trap_action apply_cont)
+                              | _::_ -> false
+                              end
+                          | Let _ | Apply _ | Switch _ | Invalid _
+                          | Let_cont _ -> false
+                        in
+                        if remove_let_cont_leaving_handler then
+                          CH.pattern_match handler ~f:(fun _params ~handler ->
+                            handler)
+                        else
+                          Let_cont.create_non_recursive' ~cont handler ~body
+                            ~num_free_occurrences_of_cont_in_body:
+                              (Known num_free_occurrences_of_cont_in_body)
                     in
                     after_rebuild expr uacc)))))))
 

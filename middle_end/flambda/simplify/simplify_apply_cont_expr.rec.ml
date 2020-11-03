@@ -20,6 +20,11 @@ open! Simplify_import
 
 let inline_linearly_used_continuation uacc apply_cont ~params ~handler
       ~free_names_of_handler ~after_rebuild =
+(* XXX
+  Format.eprintf "Inlining: %a using handler:@ %a\n%!"
+    AC.print apply_cont
+    Expr.print handler;
+*)
   (* CR mshinwell: With -g, we can end up with continuations that are
      just a sequence of phantom lets then "goto".  These would normally
      be treated as aliases, but of course aren't in this scenario,
