@@ -34,3 +34,78 @@
    (with-stdout-to %{targets}
      (bash
        "sed -e \"s|%%VERSION%%|`sed -e 1q %{version} | tr -d '\r'`|\" %{p}"))))
+
+(rule
+  (targets camlheader)
+  (deps Makefile StdlibModules .depend)
+  (action (run make camlheader)))
+
+(install
+  (files
+    stdlib.cmxa
+    stdlib.a
+    .stdlib.objs/native/std_exit.o
+    .stdlib.objs/native/stdlib__Sys.cmx
+    .stdlib.objs/native/stdlib__Hashtbl.cmx
+    .stdlib.objs/native/camlinternalMod.cmx
+    .stdlib.objs/native/stdlib__Filename.cmx
+    .stdlib.objs/native/stdlib__Queue.cmx
+    .stdlib.objs/native/stdlib__StdLabels.cmx
+    .stdlib.objs/native/stdlib__Weak.cmx
+    .stdlib.objs/native/camlinternalFormatBasics.cmx
+    .stdlib.objs/native/stdlib__Float.cmx
+    .stdlib.objs/native/stdlib__Pervasives.cmx
+    .stdlib.objs/native/stdlib__Fun.cmx
+    .stdlib.objs/native/stdlib__Bigarray.cmx
+    .stdlib.objs/native/stdlib__Array.cmx
+    .stdlib.objs/native/stdlib__Int32.cmx
+    .stdlib.objs/native/stdlib__Lexing.cmx
+    .stdlib.objs/native/stdlib__ArrayLabels.cmx
+    .stdlib.objs/native/camlinternalLazy.cmx
+    .stdlib.objs/native/stdlib__Obj.cmx
+    .stdlib.objs/native/stdlib__Result.cmx
+    .stdlib.objs/native/stdlib__Map.cmx
+    .stdlib.objs/native/stdlib__Char.cmx
+    .stdlib.objs/native/stdlib__Stream.cmx
+    .stdlib.objs/native/stdlib__Printexc.cmx
+    .stdlib.objs/native/stdlib__Lazy.cmx
+    .stdlib.objs/native/stdlib__Parsing.cmx
+    .stdlib.objs/native/stdlib__Option.cmx
+    .stdlib.objs/native/stdlib__Uchar.cmx
+    .stdlib.objs/native/stdlib__Buffer.cmx
+    .stdlib.objs/native/camlinternalOO.cmx
+    .stdlib.objs/native/stdlib__StringLabels.cmx
+    .stdlib.objs/native/stdlib__Ephemeron.cmx
+    .stdlib.objs/native/stdlib__String.cmx
+    .stdlib.objs/native/stdlib__Spacetime.cmx
+    .stdlib.objs/native/stdlib__Nativeint.cmx
+    .stdlib.objs/native/stdlib__Set.cmx
+    .stdlib.objs/native/stdlib__ListLabels.cmx
+    .stdlib.objs/native/stdlib__Bool.cmx
+    .stdlib.objs/native/stdlib__Gc.cmx
+    .stdlib.objs/native/stdlib__Seq.cmx
+    .stdlib.objs/native/stdlib__Random.cmx
+    .stdlib.objs/native/stdlib__Int.cmx
+    .stdlib.objs/native/stdlib__Int64.cmx
+    .stdlib.objs/native/stdlib__Scanf.cmx
+    .stdlib.objs/native/stdlib__Printf.cmx
+    .stdlib.objs/native/stdlib__Complex.cmx
+    .stdlib.objs/native/stdlib.cmx
+    .stdlib.objs/native/stdlib__Stack.cmx
+    .stdlib.objs/native/stdlib__Bytes.cmx
+    .stdlib.objs/native/stdlib__MoreLabels.cmx
+    .stdlib.objs/native/stdlib__Genlex.cmx
+    .stdlib.objs/native/std_exit.cmx
+    .stdlib.objs/native/stdlib__Oo.cmx
+    .stdlib.objs/native/stdlib__Format.cmx
+    .stdlib.objs/native/camlinternalFormat.cmx
+    .stdlib.objs/native/stdlib__Unit.cmx
+    .stdlib.objs/native/stdlib__List.cmx
+    .stdlib.objs/native/stdlib__Arg.cmx
+    .stdlib.objs/native/stdlib__Callback.cmx
+    .stdlib.objs/native/stdlib__Marshal.cmx
+    .stdlib.objs/native/stdlib__BytesLabels.cmx
+    .stdlib.objs/native/stdlib__Digest.cmx
+  )
+  (section lib)
+  (package ocaml))

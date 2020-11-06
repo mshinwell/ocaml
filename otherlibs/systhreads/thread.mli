@@ -20,7 +20,7 @@ type t
 
 (** {1 Thread creation and termination} *)
 
-val create : ('a -> 'b) -> 'a -> t
+val create : ('a -> unit) -> 'a -> t
 (** [Thread.create funct arg] creates a new thread of control,
    in which the function application [funct arg]
    is executed concurrently with the other threads of the program.

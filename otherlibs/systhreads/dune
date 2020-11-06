@@ -1,0 +1,61 @@
+;**************************************************************************
+;*                                                                        *
+;*                                 OCaml                                  *
+;*                                                                        *
+;*                    Mark Shinwell, Jane Street Europe                   *
+;*                                                                        *
+;*   Copyright 2020 Jane Street Group LLC                                 *
+;*                                                                        *
+;*   All rights reserved.  This file is distributed under the terms of    *
+;*   the GNU Lesser General Public License version 2.1, with the          *
+;*   special exception on linking described in the file LICENSE.          *
+;*                                                                        *
+;**************************************************************************
+
+(library
+  (name threads)
+  (modes byte native)
+  (wrapped false)
+  (modules
+    condition
+    event
+    mutex
+    thread
+    threadUnix)
+  (libraries stdlib unix)
+  (foreign_stubs
+    (language c)
+    (names st_stubs.byte)
+    (mode byte)
+    (flags "")
+    (include_dirs %{project_root}/runtime))
+  (foreign_stubs
+    (language c)
+    (names st_stubs.native)
+    (mode native)
+    (flags -DNATIVE_CODE -DCAML_NAME_SPACE)
+    (include_dirs %{project_root}/runtime)))
+
+(rule
+  (targets st_stubs.byte.c)
+  (action (copy st_stubs.c %{targets})))
+
+(rule
+  (targets st_stubs.native.c)
+  (action (copy st_stubs.c %{targets})))
+
+(install
+  (files
+    .threads.objs/native/condition.cmx
+    .threads.objs/native/event.cmx
+    .threads.objs/native/mutex.cmx
+    .threads.objs/native/thread.cmx
+    .threads.objs/native/threadUnix.cmx
+    threads.cma
+    threads.cmxa
+    threads.a
+    threads.cmxs
+  )
+  (section lib)
+  (package ocaml))
+

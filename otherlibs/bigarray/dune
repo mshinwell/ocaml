@@ -2,9 +2,9 @@
 ;*                                                                        *
 ;*                                 OCaml                                  *
 ;*                                                                        *
-;*                     Thomas Refis, Jane Street Europe                   *
+;*                    Mark Shinwell, Jane Street Europe                   *
 ;*                                                                        *
-;*   Copyright 2018 Jane Street Group LLC                                 *
+;*   Copyright 2020 Jane Street Group LLC                                 *
 ;*                                                                        *
 ;*   All rights reserved.  This file is distributed under the terms of    *
 ;*   the GNU Lesser General Public License version 2.1, with the          *
@@ -13,18 +13,18 @@
 ;**************************************************************************
 
 (library
- (name str)
+ (name bigarray)
+ (wrapped false)
  (modes byte native)
- (flags (:standard -nostdlib))
- (libraries stdlib)
- (foreign_stubs (language c) (names strstubs)))
+ (flags (:standard -nostdlib -nolabels))
+ (libraries stdlib))
 
 (install
   (files
-    .str.objs/native/str.cmx
-    str.cmxa
-    str.a
-    str.cmxs
+    .bigarray.objs/native/bigarray.cmx
+    bigarray.cmxa
+    bigarray.a
+    bigarray.cmxs
   )
   (section lib)
   (package ocaml))
