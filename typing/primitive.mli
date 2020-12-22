@@ -25,10 +25,17 @@ type native_repr =
   | Unboxed_integer of boxed_integer
   | Untagged_int
 
+(* See [middle_end/semantics_of_primitives.mli] *)
+type effects = No_effects | Only_generative_effects | Arbitrary_effects
+type coeffects = No_coeffects | Has_coeffects
+
 type description = private
   { prim_name: string;         (* Name of primitive  or C function *)
     prim_arity: int;           (* Number of arguments *)
     prim_alloc: bool;          (* Does it allocates or raise? *)
+    prim_builtin: bool;        (* Is the compiler allowed to replace it? *)
+    prim_effects: effects;
+    prim_coeffects: coeffects;
     prim_native_name: string;  (* Name of C function for the nat. code gen. *)
     prim_native_repr_args: native_repr list;
     prim_native_repr_res: native_repr }
@@ -44,6 +51,9 @@ val simple
 val make
   :  name:string
   -> alloc:bool
+  -> builtin:bool
+  -> effects:effects
+  -> coeffects:coeffects
   -> native_name:string
   -> native_repr_args: native_repr list
   -> native_repr_res: native_repr
@@ -72,5 +82,7 @@ type error =
   | Old_style_float_with_native_repr_attribute
   | Old_style_noalloc_with_noalloc_attribute
   | No_native_primitive_with_repr_attribute
+  | Inconsistent_attributes_for_effects
+  | Inconsistent_noalloc_attributes_for_effects
 
 exception Error of Location.t * error

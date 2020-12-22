@@ -114,6 +114,16 @@ type phantom_defining_expr =
   (** The phantom-let-bound variable points at a block with the given
       structure. *)
 
+type extcall =
+  { name: string;
+    ret: machtype;
+    alloc: bool;
+    builtin: bool;
+    label_after: label option;
+        (** If specified, the given label will be placed immediately after the
+            call (at the same place as any frame descriptor would reference). *)
+  }
+
 type memory_chunk =
     Byte_unsigned
   | Byte_signed
@@ -129,7 +139,7 @@ type memory_chunk =
 
 and operation =
     Capply of machtype
-  | Cextcall of string * machtype * bool * label option
+  | Cextcall of extcall
   | Cload of memory_chunk * Asttypes.mutable_flag
   | Calloc
   | Cstore of memory_chunk * Lambda.initialization_or_assignment

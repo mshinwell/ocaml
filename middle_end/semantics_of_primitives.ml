@@ -33,6 +33,21 @@ let for_primitive (prim : Clambda_primitives.primitive) =
                ( "caml_format_float" | "caml_format_int" | "caml_int32_format"
                | "caml_nativeint_format" | "caml_int64_format" ) } ->
       No_effects, No_coeffects
+  | Pccall { prim_builtin = true; prim_effects; prim_coeffects } ->
+      (* Only builtins can be compiled to external calls with No_coeffects
+         and No_coeffects. User must guarantee safety of these annotations. *)
+      let effects =
+        (match prim_effects with
+         | No_effects -> No_effects
+         | Only_generative_effects -> Only_generative_effects
+         | Arbitrary_effects -> Arbitrary_effects)
+      in
+      let coeffects =
+        (match prim_coeffects with
+         | No_coeffects-> No_coeffects
+         | Has_coeffects -> Has_coeffects)
+      in
+      (effects, coeffects)
   | Pccall _ -> Arbitrary_effects, Has_coeffects
   | Pprobe_is_enabled _ -> No_effects, Has_coeffects
   | Praise _ -> Arbitrary_effects, No_coeffects

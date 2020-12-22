@@ -26,10 +26,16 @@ type native_repr =
   | Unboxed_integer of boxed_integer
   | Untagged_int
 
+type effects = No_effects | Only_generative_effects | Arbitrary_effects
+type coeffects = No_coeffects | Has_coeffects
+
 type description =
   { prim_name: string;         (* Name of primitive  or C function *)
     prim_arity: int;           (* Number of arguments *)
     prim_alloc: bool;          (* Does it allocates or raise? *)
+    prim_builtin: bool;        (* Is the compiler allowed to replace it? *)
+    prim_effects: effects;
+    prim_coeffects: coeffects;
     prim_native_name: string;  (* Name of C function for the nat. code gen. *)
     prim_native_repr_args: native_repr list;
     prim_native_repr_res: native_repr }
@@ -38,6 +44,8 @@ type error =
   | Old_style_float_with_native_repr_attribute
   | Old_style_noalloc_with_noalloc_attribute
   | No_native_primitive_with_repr_attribute
+  | Inconsistent_attributes_for_effects
+  | Inconsistent_noalloc_attributes_for_effects
 
 exception Error of Location.t * error
 
@@ -69,14 +77,21 @@ let simple ~name ~arity ~alloc =
   {prim_name = name;
    prim_arity = arity;
    prim_alloc = alloc;
+   prim_builtin = false;
+   prim_effects = Arbitrary_effects;
+   prim_coeffects = Has_coeffects;
    prim_native_name = "";
    prim_native_repr_args = make_native_repr_args arity Same_as_ocaml_repr;
    prim_native_repr_res = Same_as_ocaml_repr}
 
-let make ~name ~alloc ~native_name ~native_repr_args ~native_repr_res =
+let make ~name ~alloc ~builtin ~effects ~coeffects
+      ~native_name ~native_repr_args ~native_repr_res =
   {prim_name = name;
    prim_arity = List.length native_repr_args;
    prim_alloc = alloc;
+   prim_builtin = builtin;
+   prim_effects = effects;
+   prim_coeffects = coeffects;
    prim_native_name = native_name;
    prim_native_repr_args = native_repr_args;
    prim_native_repr_res = native_repr_res}
@@ -97,6 +112,35 @@ let parse_declaration valdecl ~native_repr_args ~native_repr_res =
   let noalloc_attribute =
     Attr_helper.has_no_payload_attribute ["noalloc"; "ocaml.noalloc"]
       valdecl.pval_attributes
+  in
+  let builtin_attribute =
+    Attr_helper.has_no_payload_attribute ["builtin"; "ocaml.builtin"]
+      valdecl.pval_attributes
+  in
+  let no_effects_attribute =
+    Attr_helper.has_no_payload_attribute ["no_effects"; "ocaml.no_effects"]
+      valdecl.pval_attributes
+  in
+  let only_generative_effects_attribute =
+    Attr_helper.has_no_payload_attribute ["only_generative__effects";
+                                          "ocaml.only_generative__effects"]
+      valdecl.pval_attributes
+  in
+  if no_effects_attribute && only_generative_effects_attribute then
+    raise (Error (valdecl.pval_loc,
+                  Inconsistent_attributes_for_effects));
+  let effects =
+    if no_effects_attribute then No_effects
+    else if only_generative_effects_attribute then Only_generative_effects
+    else Arbitrary_effects
+  in
+  let no_coeffects_attribute =
+    Attr_helper.has_no_payload_attribute ["no_coeffects"; "ocaml.no_coeffects"]
+      valdecl.pval_attributes
+  in
+  let coeffects =
+    if no_coeffects_attribute then No_coeffects
+    else Has_coeffects
   in
   if old_style_float &&
      not (List.for_all is_ocaml_repr native_repr_args &&
@@ -122,6 +166,9 @@ let parse_declaration valdecl ~native_repr_args ~native_repr_res =
     raise (Error (valdecl.pval_loc,
                   No_native_primitive_with_repr_attribute));
   let noalloc = old_style_noalloc || noalloc_attribute in
+  if noalloc && only_generative_effects_attribute then
+    raise (Error (valdecl.pval_loc,
+                  Inconsistent_noalloc_attributes_for_effects));
   let native_repr_args, native_repr_res =
     if old_style_float then
       (make_native_repr_args arity Unboxed_float, Unboxed_float)
@@ -131,6 +178,9 @@ let parse_declaration valdecl ~native_repr_args ~native_repr_res =
   {prim_name = name;
    prim_arity = arity;
    prim_alloc = not noalloc;
+   prim_builtin = builtin_attribute;
+   prim_effects = effects;
+   prim_coeffects = coeffects;
    prim_native_name = native_name;
    prim_native_repr_args = native_repr_args;
    prim_native_repr_res = native_repr_res}
@@ -155,6 +205,7 @@ let rec add_native_repr_attributes ty attrs =
 let oattr_unboxed = { oattr_name = "unboxed" }
 let oattr_untagged = { oattr_name = "untagged" }
 let oattr_noalloc = { oattr_name = "noalloc" }
+let oattr_builtin = { oattr_name = "builtin" }
 
 let print p osig_val_decl =
   let prims =
@@ -169,6 +220,7 @@ let print p osig_val_decl =
   let all_unboxed = for_all is_unboxed in
   let all_untagged = for_all is_untagged in
   let attrs = if p.prim_alloc then [] else [oattr_noalloc] in
+  let attrs = if p.prim_builtin then oattr_builtin::attrs else attrs in
   let attrs =
     if all_unboxed then
       oattr_unboxed :: attrs
@@ -216,6 +268,12 @@ let report_error ppf err =
     Format.fprintf ppf
       "[@The native code version of the primitive is mandatory@ \
        when attributes [%@untagged] or [%@unboxed] are present.@]"
+  | Inconsistent_attributes_for_effects ->
+    Format.fprintf ppf "Use at most one of [%@no_effects] and \
+                        [%@only_generative_effects]."
+  | Inconsistent_noalloc_attributes_for_effects ->
+    Format.fprintf ppf "Cannot use [%@%@no_generative_effects] \
+                        in conjunction with [%@%@noalloc]."
 
 let () =
   Location.register_error_of_exn
