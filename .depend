@@ -2723,6 +2723,7 @@ asmcomp/reg.cmi : \
 asmcomp/reload.cmo : \
     asmcomp/reloadgen.cmi \
     asmcomp/reg.cmi \
+    asmcomp/proc.cmi \
     asmcomp/mach.cmi \
     asmcomp/cmm.cmi \
     utils/clflags.cmi \
@@ -2731,6 +2732,7 @@ asmcomp/reload.cmo : \
 asmcomp/reload.cmx : \
     asmcomp/reloadgen.cmx \
     asmcomp/reg.cmx \
+    asmcomp/proc.cmx \
     asmcomp/mach.cmx \
     asmcomp/cmm.cmx \
     utils/clflags.cmx \
