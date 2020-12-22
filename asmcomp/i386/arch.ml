@@ -17,9 +17,15 @@
 
 let fast_math = ref false
 
+(* POPCNT instruction is not available prior to Nehalem. *)
+let popcnt_support = ref false
+
 let command_line_options =
   [ "-ffast-math", Arg.Set fast_math,
-      " Inline trigonometric and exponential functions" ]
+      " Inline trigonometric and exponential functions";
+    "-fpopcnt", Arg.Set popcnt_support,
+      " Use popcnt instruction to count the number of bits set";
+  ]
 
 (* Specific operations for the Intel 386 processor *)
 

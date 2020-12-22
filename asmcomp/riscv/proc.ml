@@ -335,3 +335,7 @@ let assemble_file infile outfile =
     (Config.asm ^ " -o " ^ Filename.quote outfile ^ " " ^ Filename.quote infile)
 
 let init () = ()
+
+let operation_supported = function
+  | Cpopcnt | Cprefetch _ | Cclz _ -> false (* Not implemented *)
+  | _ -> true

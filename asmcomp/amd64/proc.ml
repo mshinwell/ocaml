@@ -399,3 +399,7 @@ let init () =
     num_available_registers.(0) <- 12
   end else
     num_available_registers.(0) <- 13
+
+let operation_supported = function
+  | Cpopcnt -> !popcnt_support
+  | _ -> true

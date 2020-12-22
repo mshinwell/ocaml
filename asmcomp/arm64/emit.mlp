@@ -482,6 +482,8 @@ module BR = Branch_relaxation.Make (struct
     | Lop (Ispecific (Ibswap 16)) -> 2
     | Lop (Ispecific (Ibswap _)) -> 1
     | Lop (Iname_for_debugger _) -> 0
+    | Lop (Iprobe _ | Iprobe_is_enabled _) ->
+      Misc.fatal_error "No support for probes"
     | Lreloadretaddr -> 0
     | Lreturn -> epilogue_size ()
     | Llabel _ -> 0
@@ -740,6 +742,8 @@ let emit_instr i =
     | Lop(Iintop Imod) ->
         `	sdiv	{emit_reg reg_tmp1}, {emit_reg i.arg.(0)}, {emit_reg i.arg.(1)}\n`;
         `	msub	{emit_reg i.res.(0)}, {emit_reg reg_tmp1}, {emit_reg i.arg.(1)}, {emit_reg i.arg.(0)}\n`
+    | Lop(Iintop (Iclz _)) ->
+        `       clz     {emit_reg i.res.(0)}, {emit_reg i.arg.(0)}\n`;
     | Lop(Iintop Imulh) ->
         `	smulh	{emit_reg i.res.(0)}, {emit_reg i.arg.(0)}, {emit_reg i.arg.(1)}\n`
     | Lop(Iintop op) ->
@@ -801,6 +805,8 @@ let emit_instr i =
             assert false
         end
     | Lop (Iname_for_debugger _) -> ()
+    | Lop (Iprobe _ | Iprobe_is_enabled _) ->
+        Misc.fatal_error "No support for probes"
     | Lreloadretaddr ->
         ()
     | Lreturn ->

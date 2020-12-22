@@ -120,6 +120,16 @@ let print_instr b = function
   | AND (arg1, arg2) -> i2 b "and" arg1 arg2
   | ANDPD (arg1, arg2) -> i2 b "andpd" arg1 arg2
   | BSWAP arg -> i1 b "bswap" arg
+  | BSR (arg1, arg2) -> i2 b "bsr" arg1 arg2
+  | BSF (arg1, arg2) -> i2 b "bsf" arg1 arg2
+  | LZCNT (arg1, arg2) -> i2 b "lzcnt" arg1 arg2
+  | POPCNT (arg1, arg2) -> i2 b "popcnt" arg1 arg2
+  | CRC32 (arg1, arg2) -> i2 b "crc32q" arg1 arg2
+  | PREFETCH (is_write, locality, arg1) ->
+    (match is_write, locality with
+     | true, T0 -> i1 b "prefetchw" arg1
+     | true, _ -> i1 b "prefetchwt1" arg1
+     | false, _ -> i1 b ("prefetch" ^ string_of_hint locality) arg1)
   | CALL arg  -> i1_call_jmp b "call" arg
   | CDQ -> i0 b "cdq"
   | CMOV (c, arg1, arg2) -> i2 b ("cmov" ^ string_of_condition c) arg1 arg2
@@ -196,6 +206,8 @@ let print_instr b = function
   | OR (arg1, arg2) -> i2 b "or" arg1 arg2
   | POP arg -> i1 b "pop" arg
   | PUSH arg -> i1 b "push" arg
+  | RDTSC  -> i0 b "rdtsc"
+  | RDPMC -> i0 b "rdpmc"
   | RET -> i0 b "ret"
   | ROUNDSD (r, arg1, arg2) -> i2 b (string_of_rounding r) arg1 arg2
   | SAL (arg1, arg2) -> i2 b "sal" arg1 arg2

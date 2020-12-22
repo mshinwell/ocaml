@@ -570,6 +570,13 @@ val send :
   Lambda.meth_kind -> expression -> expression -> expression list ->
   Debuginfo.t -> expression
 
+
+(** [transl_builtin prim args dbg]
+    returns None if the built=in [prim] is not supported, otherwise constructs
+    and returns the corresponding Cmm expression. *)
+val transl_builtin : string -> expression list -> Debuginfo.t
+  -> expression option
+
 (** Generic Cmm fragments *)
 
 (** Generate generic functions *)

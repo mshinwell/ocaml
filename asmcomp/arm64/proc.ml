@@ -268,3 +268,8 @@ let assemble_file infile outfile =
 
 
 let init () = ()
+
+let operation_supported = function
+  | Cpopcnt -> false   (* ARM does not support popcnt *)
+  | Cprefetch _ -> false (* Not implemented *)
+  | _ -> true

@@ -98,13 +98,13 @@ method is_immediate n =
 
 method! is_simple_expr = function
   (* inlined floating-point ops are simple if their arguments are *)
-  | Cop(Cextcall (fn, _, _, _), args, _) when List.mem fn inline_ops ->
+  | Cop(Cextcall { name = fn }, args, _) when List.mem fn inline_ops ->
       List.for_all self#is_simple_expr args
   | e -> super#is_simple_expr e
 
 method! effects_of e =
   match e with
-  | Cop(Cextcall (fn, _, _, _), args, _) when List.mem fn inline_ops ->
+  | Cop(Cextcall { name = fn }, args, _) when List.mem fn inline_ops ->
       Selectgen.Effect_and_coeffect.join_list_map args self#effects_of
   | e -> super#effects_of e
 
@@ -227,17 +227,19 @@ method! select_operation op args dbg =
       | _ ->
           super#select_operation op args dbg
       end
-  (* Recognize floating-point square root *)
-  | Cextcall("sqrt", _, _, _) ->
-      (Ispecific Isqrtf, args)
-  (* Recognize bswap instructions *)
-  | Cextcall("caml_bswap16_direct", _, _, _) ->
+  | Cextcall { name; } ->
+    begin match name with
+    (* Recognize floating-point square root *)
+    | "sqrt" -> (Ispecific Isqrtf, args)
+    (* Recognize bswap instructions *)
+    | "caml_bswap16_direct" ->
       (Ispecific(Ibswap 16), args)
-  | Cextcall("caml_int32_direct_bswap", _, _, _) ->
+    | "caml_int32_direct_bswap" ->
       (Ispecific(Ibswap 32), args)
-  | Cextcall(("caml_int64_direct_bswap"|"caml_nativeint_direct_bswap"),
-              _, _, _) ->
+    | "caml_int64_direct_bswap" |"caml_nativeint_direct_bswap" ->
       (Ispecific (Ibswap 64), args)
+    | _ -> super#select_operation op args dbg
+    end
   (* Other operations are regular *)
   | _ ->
       super#select_operation op args dbg

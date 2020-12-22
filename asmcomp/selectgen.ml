@@ -76,7 +76,7 @@ let oper_result_type = function
   | Calloc -> typ_val
   | Cstore (_c, _) -> typ_void
   | Caddi | Csubi | Cmuli | Cmulhi | Cdivi | Cmodi |
-    Cand | Cor | Cxor | Clsl | Clsr | Casr |
+    Cand | Cor | Cxor | Clsl | Clsr | Casr | Cclz _ | Cpopcnt |
     Ccmpi _ | Ccmpa _ | Ccmpf _ -> typ_int
   | Caddv -> typ_val
   | Cadda -> typ_addr
@@ -85,6 +85,7 @@ let oper_result_type = function
   | Cintoffloat -> typ_int
   | Craise _ -> typ_void
   | Ccheckbound -> typ_void
+  | Cprefetch _ -> typ_void
   | Cprobe _ -> typ_void
   | Cprobe_is_enabled _ -> typ_int
 
@@ -332,9 +333,12 @@ method is_simple_expr = function
       | Cprobe_is_enabled _ -> false
         (* The remaining operations are simple if their args are *)
       | Cload _ | Caddi | Csubi | Cmuli | Cmulhi | Cdivi | Cmodi | Cand | Cor
-      | Cxor | Clsl | Clsr | Casr | Ccmpi _ | Caddv | Cadda | Ccmpa _ | Cnegf
-      | Cabsf | Caddf | Csubf | Cmulf | Cdivf | Cfloatofint | Cintoffloat
-      | Ccmpf _ | Ccheckbound -> List.for_all self#is_simple_expr args
+      | Cxor | Clsl | Clsr | Casr | Cclz _ | Cpopcnt
+      | Cprefetch _
+      | Ccmpi _ | Caddv | Cadda | Ccmpa _
+      | Cnegf | Cabsf | Caddf | Csubf | Cmulf | Cdivf | Cfloatofint
+      | Cintoffloat | Ccmpf _ | Ccheckbound ->
+        List.for_all self#is_simple_expr args
       end
   | Cassign _ | Cifthenelse _ | Cswitch _ | Ccatch _ | Cexit _
   | Ctrywith _ -> false
@@ -377,8 +381,11 @@ method effects_of exp =
       | Cload (_, Asttypes.Mutable) -> EC.coeffect_only Coeffect.Read_mutable
       | Cprobe_is_enabled _ -> EC.coeffect_only Coeffect.Arbitrary
       | Caddi | Csubi | Cmuli | Cmulhi | Cdivi | Cmodi | Cand | Cor | Cxor
-      | Clsl | Clsr | Casr | Ccmpi _ | Caddv | Cadda | Ccmpa _ | Cnegf | Cabsf
-      | Caddf | Csubf | Cmulf | Cdivf | Cfloatofint | Cintoffloat | Ccmpf _ ->
+      | Clsl | Clsr | Casr | Cclz _ | Cpopcnt
+      | Ccmpi _ | Caddv | Cadda | Ccmpa _ | Cnegf
+      | Cabsf | Caddf | Csubf | Cmulf | Cdivf | Cfloatofint | Cintoffloat
+      | Cprefetch _
+      | Ccmpf _ ->
         EC.none
     in
     EC.join from_op (EC.join_list_map args self#effects_of)
@@ -489,6 +496,8 @@ method select_operation op args _dbg =
   | (Clsl, _) -> self#select_shift Ilsl args
   | (Clsr, _) -> self#select_shift Ilsr args
   | (Casr, _) -> self#select_shift Iasr args
+  | (Cclz {non_zero}, _) -> (Iintop (Iclz{non_zero}), args)
+  | (Cpopcnt, _) -> (Iintop Ipopcnt, args)
   | (Ccmpi comp, _) -> self#select_arith_comp (Isigned comp) args
   | (Caddv, _) -> self#select_arith_comm Iadd args
   | (Cadda, _) -> self#select_arith_comm Iadd args

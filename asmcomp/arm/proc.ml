@@ -361,3 +361,10 @@ let assemble_file infile outfile =
 
 
 let init () = ()
+
+let operation_supported = function
+  | Cpopcnt -> false   (* ARM does not support popcnt *)
+  | Cclz _ -> !arch >= ARMv6   (* Supported in ARMv6 and above *)
+  | Cprefetch _ -> false
+  | _ -> true
+

@@ -13,17 +13,53 @@
 (*                                                                        *)
 (**************************************************************************)
 
+(* LZCNT instruction is not available on Intel Architectures prior to Haswell.
+
+   Important: lzcnt assembles to bsr on architectures prior to Haswell.  Code
+   that uses lzcnt will run on older Intels and silently produce wrong
+   results. *)
+let lzcnt_support = ref true
+
+(* POPCNT instruction is not available prior to Nehalem. *)
+let popcnt_support = ref true
+
+(* PREFETCHW instruction is not available on processors
+   based on Haswell or earlier microarchitectures.
+*)
+let prefetchw_support = ref true
+
 (* Machine-specific command-line options *)
 
 let command_line_options =
   [ "-fPIC", Arg.Set Clflags.pic_code,
       " Generate position-independent machine code (default)";
     "-fno-PIC", Arg.Clear Clflags.pic_code,
-      " Generate position-dependent machine code" ]
+      " Generate position-dependent machine code";
+    "-flzcnt", Arg.Set lzcnt_support,
+      " Use lzcnt instruction to count leading zeros";
+    "-fno-lzcnt", Arg.Clear lzcnt_support,
+      " Do not use lzcnt instruction to count leading zeros";
+    "-fpopcnt", Arg.Set popcnt_support,
+      " Use popcnt instruction to count the number of bits set";
+    "-fno-popcnt", Arg.Clear popcnt_support,
+      " Do not use popcnt instruction to count the number of bits set";
+    "-fprefetchw", Arg.Set prefetchw_support,
+      " Use prefetchw and prefetchwt1 instructions";
+    "-fno-prefetchw", Arg.Clear prefetchw_support,
+      " Do not use prefetchw and prefetchwt1 instructions";
+  ]
 
 (* Specific operations for the AMD64 processor *)
 
 open Format
+
+type temporal_locality = Not_at_all | Low | Moderate | High
+
+let temporal_locality = function
+  | Not_at_all -> "none"
+  | Low -> "low"
+  | Moderate -> "moderate"
+  | High -> "high"
 
 type addressing_mode =
     Ibased of string * int              (* symbol + displ *)
@@ -31,6 +67,12 @@ type addressing_mode =
   | Iindexed2 of int                    (* reg + reg + displ *)
   | Iscaled of int * int                (* reg * scale + displ *)
   | Iindexed2scaled of int * int        (* reg + reg * scale + displ *)
+
+type hint = {
+  is_write: bool;
+  locality: temporal_locality;
+  addr: addressing_mode;
+}
 
 type specific_operation =
     Ilea of addressing_mode             (* "lea" gives scaled adds *)
@@ -46,6 +88,13 @@ type specific_operation =
                                           extension *)
   | Izextend32                         (* 32 to 64 bit conversion with zero
                                           extension *)
+  | Ilzcnt                             (* count leading zeros instruction *)
+  | Ibsr of { non_zero : bool }        (* bit scan reverse instruction *)
+  | Ibsf of { non_zero : bool }        (* bit scan forward instruction *)
+  | Irdtsc                             (* read timestamp *)
+  | Irdpmc                             (* read performance counter *)
+  | Icrc32q                            (* compute crc *)
+  | Iprefetch of hint                  (* memory prefetching hint *)
 
 and float_operation =
     Ifloatadd | Ifloatsub | Ifloatmul | Ifloatdiv
@@ -135,7 +184,21 @@ let print_specific_operation printreg op ppf arg =
       fprintf ppf "sextend32 %a" printreg arg.(0)
   | Izextend32 ->
       fprintf ppf "zextend32 %a" printreg arg.(0)
-
+  | Ilzcnt ->
+      fprintf ppf "lzcnt %a" printreg arg.(0)
+  | Ibsr {non_zero} ->
+      fprintf ppf "bsr non_zero=%b %a" non_zero printreg arg.(0)
+  | Ibsf {non_zero} ->
+      fprintf ppf "bsf non_zero=%b %a" non_zero printreg arg.(0)
+  | Irdtsc ->
+      fprintf ppf "rdtsc"
+  | Irdpmc ->
+      fprintf ppf "rdpmc %a" printreg arg.(0)
+  | Icrc32q ->
+      fprintf ppf "crc32 %a %a" printreg arg.(0) printreg arg.(1)
+  | Iprefetch {is_write; locality} ->
+      fprintf ppf "prefetch is_write=%b temporal_locality=%s %a" is_write
+        (temporal_locality locality) printreg arg.(0)
 let win64 =
   match Config.system with
   | "win64" | "mingw64" | "cygwin" -> true

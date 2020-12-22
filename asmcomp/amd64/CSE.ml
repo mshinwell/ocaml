@@ -32,6 +32,12 @@ method! class_of_operation op =
     | Ioffset_loc(_, _) -> Op_store true
     | Ifloatarithmem _ | Ifloatsqrtf _ -> Op_load
     | Ibswap _ | Isqrtf -> super#class_of_operation op
+    | Ilzcnt -> Op_pure
+    | Ibsr _ -> Op_pure
+    | Ibsf _ -> Op_pure
+    | Irdtsc | Irdpmc -> Op_other
+    | Icrc32q -> Op_pure
+    | Iprefetch _ -> Op_other
     end
   | _ -> super#class_of_operation op
 

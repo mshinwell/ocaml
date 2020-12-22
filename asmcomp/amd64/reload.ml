@@ -16,6 +16,7 @@
 open Cmm
 open Reg
 open Mach
+open Arch
 
 (* Reloading for the AMD64 *)
 
@@ -46,6 +47,7 @@ open Mach
      Iintoffloat                R       S
      Ispecific(Ilea)            R       R       R
      Ispecific(Ifloatarithmem)  R       R       R
+     Ispecific(Icrc32q)         R       R       S   (and Res = Arg1)
 
    Conditional branches:
      Iinttest                           S       R
@@ -59,11 +61,18 @@ let stackp r =
     Stack _ -> true
   | _ -> false
 
+let rax = Proc.phys_reg 0
+let rdx = Proc.phys_reg 4
+let rcx = Proc.phys_reg 5
+
 class reload = object (self)
 
 inherit Reloadgen.reload_generic as super
 
 method! reload_operation op arg res =
+  let force r target_reg =
+    if r = target_reg then r
+    else self#makereg target_reg in
   match op with
   | Iintop(Iadd|Isub|Iand|Ior|Ixor|Icomp _|Icheckbound _) ->
       (* One of the two arguments can reside in the stack, but not both *)
@@ -86,6 +95,26 @@ method! reload_operation op arg res =
       if stackp arg.(0)
       then (let r = self#makereg arg.(0) in ([|r; arg.(1)|], [|r|]))
       else (arg, res)
+  | Ispecific Irdtsc ->
+    let rdx = force res.(0) rdx in
+    let rax = force res.(1) rax in
+    ([| |], [| rdx; rax |])
+  | Ispecific Irdpmc ->
+    let rcx = force arg.(0) rcx in
+    let rdx = force res.(0) rdx in
+    let rax = force res.(1) rax in
+    ([| rcx |], [| rdx; rax |])
+  | Ispecific Icrc32q ->
+    (* First argument and result must be in the same register.
+       Second argument can be either in register or on stack. *)
+    (match stackp arg.(0), stackp res.(0), arg.(0).loc = res.(0).loc with
+     | true, false, false -> ([| res.(0); arg.(1) |], res)
+     | false, true, false -> (arg, [| arg.(0) |])
+     | false, false, false -> (arg, [| arg.(0) |])
+     | false, false, true -> (arg, res)
+     | true, true, _ ->
+       (let r = self#makereg arg.(0) in ([|r; arg.(1)|], [|r|]))
+     | _ -> assert false (* impossible *))
   | Ifloatofint | Iintoffloat ->
       (* Result must be in register, but argument can be on stack *)
       (arg, (if stackp res.(0) then [| self#makereg res.(0) |] else res))

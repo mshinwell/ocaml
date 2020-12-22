@@ -111,6 +111,8 @@ let new_label() = incr label_counter; !label_counter
 
 type rec_flag = Nonrecursive | Recursive
 
+type temporal_locality = Not_at_all | Low | Moderate | High
+
 type phantom_defining_expr =
   | Cphantom_const_int of Targetint.t
   | Cphantom_const_symbol of string
@@ -149,6 +151,8 @@ and operation =
   | Cstore of memory_chunk * Lambda.initialization_or_assignment
   | Caddi | Csubi | Cmuli | Cmulhi | Cdivi | Cmodi
   | Cand | Cor | Cxor | Clsl | Clsr | Casr
+  | Cclz of {non_zero: bool} | Cpopcnt
+  | Cprefetch of { is_write: bool; locality: temporal_locality; }
   | Ccmpi of integer_comparison
   | Caddv | Cadda
   | Ccmpa of integer_comparison

@@ -258,3 +258,8 @@ let assemble_file infile outfile =
   X86_proc.assemble_file infile outfile
 
 let init () = ()
+
+let operation_supported = function
+  | Cpopcnt -> !popcnt_support (* Some Intel targets do not support popcnt *)
+  | Cprefetch _ -> false (* Not implemented *)
+  | _ -> true

@@ -367,3 +367,9 @@ let assemble_file infile outfile =
                  " -o " ^ Filename.quote outfile ^ " " ^ Filename.quote infile)
 
 let init () = ()
+
+let operation_supported = function
+  | Cpopcnt ->   (* Not supported prior to ppc64le *)
+    Config.model = "ppc64le"
+  | Cprefetch _ -> false (* Not implemented *)
+  | _ -> true

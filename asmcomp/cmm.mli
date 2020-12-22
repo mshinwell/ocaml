@@ -87,6 +87,8 @@ val cur_label: unit -> label
 
 type rec_flag = Nonrecursive | Recursive
 
+type temporal_locality = Not_at_all | Low | Moderate | High
+
 type phantom_defining_expr =
   (* CR-soon mshinwell: Convert this to [Targetint.OCaml.t] (or whatever the
      representation of "target-width OCaml integers of type [int]"
@@ -145,6 +147,8 @@ and operation =
   | Cstore of memory_chunk * Lambda.initialization_or_assignment
   | Caddi | Csubi | Cmuli | Cmulhi | Cdivi | Cmodi
   | Cand | Cor | Cxor | Clsl | Clsr | Casr
+  | Cclz of {non_zero: bool} | Cpopcnt
+  | Cprefetch of { is_write: bool; locality: temporal_locality; }
   | Ccmpi of integer_comparison
   | Caddv (* pointer addition that produces a [Val] (well-formed Caml value) *)
   | Cadda (* pointer addition that produces a [Addr] (derived heap pointer) *)

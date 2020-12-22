@@ -112,14 +112,36 @@ let pseudoregs_for_operation op arg res =
       ([| rax; rcx |], [| rax |])
   | Iintop(Imod) ->
       ([| rax; rcx |], [| rdx |])
+  | Ispecific Irdtsc ->
+  (* Read the timestamp into edx (high) and eax (low). *)
+    ([| |], [| rdx; rax |])
+  | Ispecific Irdpmc ->
+  (* Read performance counter specified by ecx into edx (high) and eax (low). *)
+    ([| rcx |], [| rdx; rax |])
   (* Other instructions are regular *)
   | _ -> raise Use_default
 
 (* If you update [inline_ops], you may need to update [is_simple_expr] and/or
    [effects_of], below. *)
 let inline_ops =
-  [ "sqrt"; "caml_bswap16_direct"; "caml_int32_direct_bswap";
-    "caml_int64_direct_bswap"; "caml_nativeint_direct_bswap" ]
+  [ "caml_bswap16_direct"; "caml_int32_direct_bswap";
+    "caml_int64_direct_bswap"; "caml_nativeint_direct_bswap";
+    "caml_rdpmc_unboxed"; "caml_rdtsc_unboxed";
+    "caml_int_lzcnt_untagged";
+    "caml_int64_bsr_unboxed";
+    "caml_int_bsr_untagged";
+    "%int64_bsr";
+    "caml_int64_ctz_unboxed";
+    "caml_nativeint_ctz_unboxed";
+    "caml_untagged_int_ctz";
+  ]
+
+let select_locality (l : Cmm.temporal_locality) : Arch.temporal_locality =
+  match l with
+  | Not_at_all -> Not_at_all
+  | Low -> Low
+  | Moderate -> Moderate
+  | High -> High
 
 (* The selector class *)
 
@@ -135,16 +157,22 @@ method is_immediate_natint n = n <= 0x7FFFFFFFn && n >= -0x80000000n
 
 method! is_simple_expr e =
   match e with
-  | Cop(Cextcall (fn, _, _, _), args, _)
+  | Cop(Cprefetch _, _, _) -> false
+  (* inlined ops are simple if their arguments are *)
+  | Cop(Cextcall { name = "sqrt" }, args, _) ->
+      List.for_all self#is_simple_expr args
+  | Cop(Cextcall { name = fn; builtin = true }, args, _)
     when List.mem fn inline_ops ->
-      (* inlined ops are simple if their arguments are *)
       List.for_all self#is_simple_expr args
   | _ ->
       super#is_simple_expr e
 
 method! effects_of e =
   match e with
-  | Cop(Cextcall(fn, _, _, _), args, _)
+  | Cop(Cprefetch _, _, _) -> Selectgen.Effect_and_coeffect.arbitrary
+  | Cop(Cextcall { name = "sqrt" }, args, _) ->
+      Selectgen.Effect_and_coeffect.join_list_map args self#effects_of
+  | Cop(Cextcall { name = fn; builtin = true }, args, _)
     when List.mem fn inline_ops ->
       Selectgen.Effect_and_coeffect.join_list_map args self#effects_of
   | _ ->
@@ -201,7 +229,7 @@ method! select_operation op args dbg =
       self#select_floatarith true Imulf Ifloatmul args
   | Cdivf ->
       self#select_floatarith false Idivf Ifloatdiv args
-  | Cextcall("sqrt", _, false, _) ->
+  | Cextcall { name = "sqrt"; alloc = false; } ->
      begin match args with
        [Cop(Cload ((Double|Double_u as chunk), _), [loc], _dbg)] ->
          let (addr, arg) = self#select_addressing chunk loc in
@@ -220,14 +248,57 @@ method! select_operation op args dbg =
           (Ispecific(Ioffset_loc(n, addr)), [arg])
       | _ ->
           super#select_operation op args dbg
-      end
-  | Cextcall("caml_bswap16_direct", _, _, _) ->
-      (Ispecific (Ibswap 16), args)
-  | Cextcall("caml_int32_direct_bswap", _, _, _) ->
-      (Ispecific (Ibswap 32), args)
-  | Cextcall("caml_int64_direct_bswap", _, _, _)
-  | Cextcall("caml_nativeint_direct_bswap", _, _, _) ->
-      (Ispecific (Ibswap 64), args)
+    end
+  | Cextcall { name; builtin = true; ret; label_after } ->
+    begin match name with
+    | "caml_bswap16_direct" -> (Ispecific (Ibswap 16), args)
+    | "caml_int32_direct_bswap" -> (Ispecific (Ibswap 32), args)
+    | "caml_nativeint_direct_bswap"
+    | "caml_int64_direct_bswap" -> (Ispecific (Ibswap 64), args)
+    | "caml_rdtsc_unboxed" -> (Ispecific Irdtsc, args)
+    | "caml_rdpmc_unboxed" -> (Ispecific Irdpmc, args)
+    | "caml_int64_bsr_unboxed" | "caml_nativeint_bsr_unboxed" ->
+      (Ispecific(Ibsr {non_zero=false}), args)
+    | "caml_int_bsr_untagged" ->
+      (* '%' guarantees that it won't clash with user defined names *)
+      ((Iintop_imm (Isub, 1)),
+       [ Cop(Cextcall{ name = "%int64_bsr"; builtin = true; ret;
+                       alloc = false; label_after },
+             args, dbg) ])
+    | "%int64_bsr" -> (Ispecific(Ibsr {non_zero=true}), args)
+    | "caml_untagged_int_ctz" ->
+      (* Takes untagged int and returns untagged int.
+         Setting the top bit does not change the result of 63 bit operation,
+         and guarantees the input is non-zero. *)
+      (* Constant shift value generates a very long instruction (10 bytes),
+         emit shift instruction instead. It saves only 1 byte. *)
+      (* let c = Cconst_natint ((Nativeint.shift_left 1n 63), dbg)  in *)
+      let c = Cop(Clsl, [Cconst_natint (1n, dbg); Cconst_int (63, dbg)], dbg)  in
+      (Ispecific (Ibsf {non_zero=true}),
+       [Cop(Cor, [List.hd args; c], dbg)])
+    | "caml_int64_ctz_unboxed"
+    | "caml_nativeint_ctz_unboxed" -> (Ispecific(Ibsf {non_zero=false}), args)
+    | "caml_int64_crc_unboxed" | "caml_int_crc_untagged" ->
+      (Ispecific Icrc32q, args)
+    (* Some Intel targets do not support popcnt and lzcnt *)
+    | "caml_int_lzcnt_untagged" when !lzcnt_support ->
+      (Ispecific Ilzcnt, args)
+    | _ -> super#select_operation op args dbg
+    end
+  | Cclz _ when !lzcnt_support ->
+    (Ispecific Ilzcnt, args)
+  | Cprefetch { is_write; locality; } ->
+      (* Emit a regular prefetch hint when prefetchw is not supported.
+         Matches the behavior of gcc's __builtin_prefetch *)
+      let is_write =
+        if is_write && not !prefetchw_support
+        then false
+        else is_write
+      in
+      let (addr, eloc) = self#select_addressing Word_int (List.hd args) in
+      (Ispecific (Iprefetch {is_write;
+                             addr;
+                             locality = select_locality locality}), [eloc])
   (* AMD64 does not support immediate operands for multiply high signed *)
   | Cmulhi ->
       (Iintop Imulh, args)

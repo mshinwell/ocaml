@@ -241,3 +241,8 @@ let assemble_file infile outfile =
                  " -o " ^ Filename.quote outfile ^ " " ^ Filename.quote infile)
 
 let init () = ()
+
+let operation_supported = function
+  | Cpopcnt -> false   (* Z does not support popcnt *)
+  | Cprefetch _ -> false (* Not implemented *)
+  | _ -> true
