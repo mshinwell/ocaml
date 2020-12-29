@@ -1360,6 +1360,8 @@ let int64_native_prim name arity ~alloc =
   Primitive.make ~name ~native_name:(name ^ "_native")
     ~alloc
     ~builtin:false
+    (* CR mshinwell: I don't think this is correct -- some of these have
+       [alloc = true], so must have (at least) effects *)
     ~effects:No_effects ~coeffects:No_coeffects
     ~native_repr_args:(make_args arity)
     ~native_repr_res:u64
@@ -2147,6 +2149,9 @@ let arraylength kind arg dbg =
   | Pfloatarray ->
       Cop(Cor, [float_array_length_shifted hdr dbg; Cconst_int (1, dbg)], dbg)
 
+(* CR mshinwell: Please check if there are test cases that ensure we are
+   compiling the byte-swapping instructions as expected, since there have
+   been some changes here. *)
 let bbswap bi arg dbg =
   let prim = match (bi : Primitive.boxed_integer) with
     | Pnativeint -> "nativeint"
@@ -2166,15 +2171,18 @@ let bswap16 arg dbg =
        [arg],
        dbg))
 
+(* CR mshinwell: Maybe rename to [if_operation_supported]? *)
 let operation_supported op ~f =
   match Proc.operation_supported op with
   | true -> Some (f ())
   | false -> None
 
 let clz bi arg dbg =
-  let op = Cclz {non_zero=false} in
+  let op = Cclz { non_zero = false; } in
   operation_supported op ~f:(fun () ->
-    let res = (Cop(op,[make_unsigned_int bi arg dbg], dbg)) in
+    let res = Cop(op, [make_unsigned_int bi arg dbg], dbg) in
+    (* CR mshinwell: Use an exhaustive match on [bi] *)
+    (* CR mshinwell: Please ensure there are test cases that cover this case *)
     if bi = Primitive.Pint32 && size_int = 8 then
       Cop(Caddi, [res; Cconst_int (-32, dbg)], dbg)
     else
@@ -2327,15 +2335,15 @@ let bigstring_load size unsafe arg1 arg2 dbg =
           (unaligned_load size ba_data idx dbg)))))
 
 let two_args name args =
-    match args with
-    | [arg1;arg2] -> arg1,arg2
-    | _ -> Misc.fatal_errorf "Cmm_helpers: expected exactly 2 arguments for %s"
-             name
+  match args with
+  | [arg1; arg2] -> arg1, arg2
+  | _ ->
+    Misc.fatal_errorf "Cmm_helpers: expected exactly 2 arguments for %s" name
 
 let bigstring_prefetch ~is_write locality args dbg =
-  let op = Cprefetch {is_write; locality;} in
+  let op = Cprefetch { is_write; locality; } in
   operation_supported op ~f:(fun () ->
-    let (arg1, arg2) = two_args "bigstring_prefetch" args in
+    let arg1, arg2 = two_args "bigstring_prefetch" args in
     bind "ba" arg1 (fun ba ->
       bind "index" arg2 (fun idx ->
         bind "ba_data"
@@ -2344,17 +2352,14 @@ let bigstring_prefetch ~is_write locality args dbg =
              (* pointer to element "idx" of "ba" of type
                 (char, int8_unsigned_elt, c_layout) Bigarray.Array1.t
                 is simply offset "idx" from "ba_data" *)
-             (Cop (op,
-                   [add_int ba_data idx dbg],
-                   dbg
-                  ))))))
+             (Cop (op, [add_int ba_data idx dbg], dbg))))))
 
 let prefetch ~is_write locality arg dbg =
-  let op = Cprefetch {is_write; locality;} in
-  operation_supported op ~f:(fun () ->
-    (Cop (op, [ arg ], dbg)))
+  let op = Cprefetch { is_write; locality; } in
+  operation_supported op ~f:(fun () -> (Cop (op, [arg], dbg)))
 
 let ext_pointer_prefetch ~is_write locality arg dbg =
+  (* CR mshinwell: Use [int_as_pointer] if possible *)
   prefetch ~is_write locality (add_const arg (-1) dbg) dbg
 
 let arrayref_unsafe kind arg1 arg2 dbg =
@@ -2565,20 +2570,40 @@ let transl_builtin name args dbg =
   | "caml_int_clz_untagged" ->
     (* Takes tagged int and returns untagged int.
        The tag does not change the number of leading zeros. *)
-    let op = Cclz {non_zero=true} in
-    operation_supported op ~f:(fun () ->
-      Cop(op, args, dbg))
+    (* CR mshinwell: I don't understand what's going on here.  In the [clz]
+       function above there is no [tag_int] after the [Cclz] operation.  There
+       is also a subtraction of 32 in the 32-bit-int-on-64-bit-platform case.
+       That subtraction operates on tagged integers, which implies [Cclz]
+       must return a tagged integer -- yet here, it appears to be returning
+       an untagged one... *)
+    let op = Cclz { non_zero = true; } in
+    operation_supported op ~f:(fun () -> Cop(op, args, dbg))
+  (* CR mshinwell: We shouldn't just use [List.hd] as it could throw an
+     unhelpful exception.  I think a helper function is needed, similarly
+     to the one added for pairs of arguments, above. *)
+  (* CR mshinwell: Let's document whether all of these return tagged or
+     untagged integers too. *)
   | "caml_int64_clz_unboxed" -> clz Pint64 (List.hd args) dbg
   | "caml_int32_clz_unboxed" -> clz Pint32 (List.hd args) dbg
   | "caml_nativeint_clz_unboxed" -> clz Pnativeint (List.hd args) dbg
   | "caml_int_popcnt_untagged" ->
     operation_supported Cpopcnt ~f:(fun () ->
+      (* CR mshinwell: Presumably this calculation is for untagging; if so
+         we should use [untag_int] instead. *)
       Cop(Caddi, [Cop(Cpopcnt, args, dbg); Cconst_int (-1, dbg)], dbg))
   | "caml_int64_popcnt_unboxed" -> popcnt Pint64 (List.hd args) dbg
   | "caml_int32_popcnt_unboxed" -> popcnt Pint32 (List.hd args) dbg
   | "caml_nativeint_popcnt_unboxed" ->
     popcnt Pnativeint (List.hd args) dbg
   | "caml_int_as_native_pointer_unboxed" ->
+    (* CR mshinwell: The "_unboxed" is confusing here; there are no
+       int32/int64/nativeint/float values involved.  I think it would be
+       better to add a comment in this file explaining:
+       - native pointers are handled in Cmm as unboxed nativeints
+       - Ext pointers are handled as [...]
+    *)
+    (* CR mshinwell: If this is the same as %int_as_pointer, why is this
+       case needed? *)
     Some(int_as_pointer (List.hd args) dbg)
   | "caml_native_pointer_load_int_unboxed" ->
     Some(Cop(Cload (Word_int, Mutable), args, dbg))
@@ -2597,12 +2622,22 @@ let transl_builtin name args dbg =
     Some(Cop(Cstore (Word_int, Assignment), [p; arg2], dbg ))
   | "caml_ext_pointer_load_float_unboxed" ->
     let p = int_as_pointer (List.hd args) dbg in
+    (* CR mshinwell: Is this definitely meant to be Double_u instead of
+       Double?  It might be worth checking what the code generation difference
+       is.  I presume the one requiring alignment might be faster; maybe we
+       should expose both?
+       Same comment for the next (store) case. *)
     Some(Cop(Cload (Double_u, Mutable), [p], dbg))
   | "caml_ext_pointer_store_float_unboxed" ->
     let arg1, arg2 = two_args name args in
     let p = int_as_pointer arg1 dbg in
     Some(Cop(Cstore (Double_u, Assignment), [p; arg2], dbg ))
   (* Bigstring prefetch *)
+  (* CR mshinwell: These names seem very Intel-specific.  I think if we're
+     going to have prefetch as a Cmm operations, these C function names
+     should probably match the data constructors (High, Moderate, etc).
+     This would also make it obvious that this piece of code is correct; it
+     is not obvious at all at present. *)
   | "caml_prefetch_write_bigstring_untagged" ->
     bigstring_prefetch ~is_write:true High args dbg
   | "caml_prefetch_write_t1_bigstring_untagged" ->
@@ -2628,7 +2663,7 @@ let transl_builtin name args dbg =
     ext_pointer_prefetch ~is_write:false Moderate (List.hd args) dbg
   | "caml_prefetch_t2_ext_pointer" ->
     ext_pointer_prefetch ~is_write:false Low (List.hd args) dbg
-  (* Native_pointer prefetch*)
+  (* Native_pointer prefetch *)
   | "caml_prefetch_write_native_pointer_unboxed" ->
     prefetch ~is_write:true High (List.hd args) dbg
   | "caml_prefetch_write_t1_native_pointer_unboxed" ->
@@ -2641,7 +2676,7 @@ let transl_builtin name args dbg =
     prefetch ~is_write:false Moderate (List.hd args) dbg
   | "caml_prefetch_t2_native_pointer_unboxed" ->
     prefetch ~is_write:false Low (List.hd args) dbg
-  | _ ->  None
+  | _ -> None
 
 (* Symbols *)
 

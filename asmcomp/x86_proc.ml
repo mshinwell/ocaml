@@ -96,6 +96,7 @@ let string_of_symbol prefix s =
       s;
     Buffer.contents b
 
+(* CR mshinwell: Rename to [string_of_prefetch_locality_hint] or similar. *)
 let string_of_hint = function
   | Nta -> "nta"
   | T2 -> "t2"

@@ -121,6 +121,8 @@ let parse_declaration valdecl ~native_repr_args ~native_repr_res =
     Attr_helper.has_no_payload_attribute ["no_effects"; "ocaml.no_effects"]
       valdecl.pval_attributes
   in
+  (* CR mshinwell: There seems to be a spurious double underscore in the
+     "only generative effects" names? *)
   let only_generative_effects_attribute =
     Attr_helper.has_no_payload_attribute ["only_generative__effects";
                                           "ocaml.only_generative__effects"]
@@ -207,6 +209,7 @@ let oattr_untagged = { oattr_name = "untagged" }
 let oattr_noalloc = { oattr_name = "noalloc" }
 let oattr_builtin = { oattr_name = "builtin" }
 
+(* CR mshinwell: Should the effects/coeffects annotations also be printed? *)
 let print p osig_val_decl =
   let prims =
     if p.prim_native_name <> "" then
@@ -269,8 +272,8 @@ let report_error ppf err =
       "[@The native code version of the primitive is mandatory@ \
        when attributes [%@untagged] or [%@unboxed] are present.@]"
   | Inconsistent_attributes_for_effects ->
-    Format.fprintf ppf "Use at most one of [%@no_effects] and \
-                        [%@only_generative_effects]."
+    Format.fprintf ppf "At most one of [%@no_effects] and \
+                        [%@only_generative_effects] can be specified."
   | Inconsistent_noalloc_attributes_for_effects ->
     Format.fprintf ppf "Cannot use [%@%@no_generative_effects] \
                         in conjunction with [%@%@noalloc]."

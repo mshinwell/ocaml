@@ -126,9 +126,12 @@ let print_instr b = function
   | BSR (arg1, arg2) -> i2_s b "bsr" arg1 arg2
   | BSF (arg1, arg2) -> i2_s b "bsf" arg1 arg2
   | CRC32 (arg1, arg2) -> i2_s b "crc32" arg1 arg2
+  (* CR mshinwell: Let's keep this list in alphabetical order! *)
   | PREFETCH (is_write, locality, arg1) ->
     (match is_write, locality with
      | true, T0 -> i1 b "prefetchw" arg1
+     (* CR mshinwell: Make this match exhaustive, it might save time in the
+        future *)
      | true, _ -> i1 b "prefetchwt1" arg1
      | false, _ -> i1 b ("prefetch" ^ string_of_hint locality) arg1)
   | LZCNT (arg1, arg2) -> i2_s b "lzcnt" arg1 arg2

@@ -87,6 +87,8 @@ val cur_label: unit -> label
 
 type rec_flag = Nonrecursive | Recursive
 
+(* CR mshinwell: Rename to [prefetch_temporal_locality] so it's clear what
+   this refers to. *)
 type temporal_locality = Not_at_all | Low | Moderate | High
 
 type phantom_defining_expr =
@@ -116,14 +118,17 @@ type phantom_defining_expr =
   (** The phantom-let-bound variable points at a block with the given
       structure. *)
 
+(* CR mshinwell: Please pull out the change to use a record for Cextcall
+   into a separate patch.  (Also, just to check, I presume there's some
+   reason why this can't be an inline record?) *)
 type extcall =
   { name: string;
     ret: machtype;
     alloc: bool;
     builtin: bool;
     label_after: label option;
-        (** If specified, the given label will be placed immediately after the
-            call (at the same place as any frame descriptor would reference). *)
+    (** If specified, the given label will be placed immediately after the
+        call (at the same place as any frame descriptor would reference). *)
   }
 
 type memory_chunk =
@@ -147,7 +152,11 @@ and operation =
   | Cstore of memory_chunk * Lambda.initialization_or_assignment
   | Caddi | Csubi | Cmuli | Cmulhi | Cdivi | Cmodi
   | Cand | Cor | Cxor | Clsl | Clsr | Casr
-  | Cclz of {non_zero: bool} | Cpopcnt
+  (* CR mshinwell: Why is count leading zeros here but count trailing zeros
+     is not?  Moving it here will probably simplify selection.ml, which is
+     harder to get right than the Cmm stages. *)
+  | Cclz of { non_zero: bool; }
+  | Cpopcnt
   | Cprefetch of { is_write: bool; locality: temporal_locality; }
   | Ccmpi of integer_comparison
   | Caddv (* pointer addition that produces a [Val] (well-formed Caml value) *)

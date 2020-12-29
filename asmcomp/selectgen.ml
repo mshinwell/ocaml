@@ -330,11 +330,10 @@ method is_simple_expr = function
       begin match op with
         (* The following may have side effects *)
       | Capply _ | Cextcall _ | Calloc | Cstore _ | Craise _ | Cprobe _
-      | Cprobe_is_enabled _ -> false
+      | Cprobe_is_enabled _ | Cprefetch _ -> false
         (* The remaining operations are simple if their args are *)
       | Cload _ | Caddi | Csubi | Cmuli | Cmulhi | Cdivi | Cmodi | Cand | Cor
       | Cxor | Clsl | Clsr | Casr | Cclz _ | Cpopcnt
-      | Cprefetch _
       | Ccmpi _ | Caddv | Cadda | Ccmpa _
       | Cnegf | Cabsf | Caddf | Csubf | Cmulf | Cdivf | Cfloatofint
       | Cintoffloat | Ccmpf _ | Ccheckbound ->
@@ -384,9 +383,8 @@ method effects_of exp =
       | Clsl | Clsr | Casr | Cclz _ | Cpopcnt
       | Ccmpi _ | Caddv | Cadda | Ccmpa _ | Cnegf
       | Cabsf | Caddf | Csubf | Cmulf | Cdivf | Cfloatofint | Cintoffloat
-      | Cprefetch _
-      | Ccmpf _ ->
-        EC.none
+      | Ccmpf _ -> EC.none
+      | Cprefetch _ -> EC.arbitrary
     in
     EC.join from_op (EC.join_list_map args self#effects_of)
   | Cassign _ | Cswitch _ | Ccatch _ | Cexit _ | Ctrywith _ ->

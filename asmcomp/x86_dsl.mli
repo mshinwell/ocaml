@@ -108,6 +108,7 @@ module I : sig
   val andpd: arg -> arg -> unit
   val bsr : arg -> arg -> unit
   val bsf : arg -> arg -> unit
+  (* CR mshinwell: Let's keep this list in alphabetical order! *)
   val prefetch : bool -> locality_hint -> arg -> unit
   val crc32 : arg -> arg -> unit
   val lzcnt : arg -> arg -> unit

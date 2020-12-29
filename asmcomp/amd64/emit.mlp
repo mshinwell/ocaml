@@ -861,12 +861,17 @@ let emit_instr fallthrough i =
   | Lop(Iintop(Ilsl | Ilsr | Iasr as op)) ->
       (* We have i.arg.(0) = i.res.(0) and i.arg.(1) = %rcx *)
       instr_for_intop op cl (res i 0)
-  | Lop(Iintop(Iclz {non_zero})) ->
-      (* CR gyorsh: can we do it at selection? *)
+  | Lop(Iintop(Iclz { non_zero; })) ->
+      (* CR gyorsh: can we do it at selection?
+         mshinwell: We need to address this and the similar CRs below.
+         My feeling is that we should try to do this earlier, based on
+         previous experience with similar things, but maybe the change
+         should be left for later.  Let's discuss. *)
       if non_zero then begin
-        (* No need to handle that bsr is undefind on 0 input. *)
-         I.bsr (arg i 0) (res i 0);
-         I.xor (int 63) (res i 0)
+        (* No need to handle that bsr is undefined on 0 input. *)
+        I.bsr (arg i 0) (res i 0);
+        (* We need (63 - result_of_bsr), which can be done with xor. *)
+        I.xor (int 63) (res i 0)
       end else begin
         let lbl_z = new_label () in
         let lbl_nz = new_label () in
@@ -878,18 +883,22 @@ let emit_instr fallthrough i =
         I.mov (int 64) (res i 0);
         def_label lbl_nz
       end
-  | Lop(Ispecific(Irdtsc)) ->
-    (* Fixed registers: results in res i 0 is rdx and res i 1 is rax. *)
+  | Lop(Ispecific Irdtsc) ->
+    (* Fixed registers: res i 0 is rdx and res i 1 is rax. *)
+    (* CR mshinwell: Instead of the above comment, let's write assertions to
+       ensure that the constraints have been satisfied.  Likewise for any other
+       intrinsic cases below with hard register constraints. *)
     I.rdtsc ();
-    (* The instruction fills in the low 32-bit of the result registers. *)
+    (* The instruction fills in the low 32 bits of the result registers. *)
     (* Combine edx and eax into a single 64-bit result in rdx. *)
     I.sal (int 32) (res i 0); (* shift edx to the high part of rdx *)
+    (* CR mshinwell: Why is this sign extension needed?  (same below) *)
     I.movsxd (res32 i 1) (res i 1); (* sign extend eax *)
     I.or_ (res i 1) (res i 0) (* combine high and low into rdx *)
-  | Lop(Ispecific(Irdpmc)) ->
+  | Lop(Ispecific Irdpmc) ->
     (* Fixed registers: arg i 0 in rcx, res i 0 is rdx and res i 1 is rax. *)
     I.rdpmc ();
-    (* The instruction fills in the low 32-bit of the result registers. *)
+    (* The instruction fills in the low 32 bits of the result registers. *)
     (* Combine edx and eax into a single 64-bit result in rdx. *)
     I.sal (int 32) (res i 0); (* shift edx to the high part of rdx *)
     I.movsxd (res32 i 1) (res i 1); (* sign extend eax *)
@@ -949,13 +958,15 @@ let emit_instr fallthrough i =
       I.movsxd (arg32 i 0) (res i 0)
   | Lop(Ispecific(Izextend32)) ->
       I.mov (arg32 i 0) (res32 i 0)
-  | Lop(Ispecific(Ilzcnt)) ->
+  (* CR mshinwell: Please either move this block up above, or vice-versa, so
+     all the intrinsic cases are together. *)
+  | Lop(Ispecific Ilzcnt) ->
       I.lzcnt (arg i 0) (res i 0)
-  | Lop(Ispecific(Ibsr {non_zero})) ->
+  | Lop(Ispecific(Ibsr { non_zero; })) ->
       (* CR gyorsh: can we do it at selection? *)
       if non_zero then begin
-        (* No need to handle that bsr is undefind on 0 input. *)
-         I.bsr (arg i 0) (res i 0);
+        (* No need to handle that bsr is undefined on 0 input. *)
+        I.bsr (arg i 0) (res i 0)
       end else begin
         let lbl_nz = new_label () in
         I.bsr (arg i 0) (res i 0);
@@ -963,11 +974,11 @@ let emit_instr fallthrough i =
         I.mov (int (-1)) (res i 0);
         def_label lbl_nz
       end
-  | Lop(Ispecific(Ibsf {non_zero})) ->
+  | Lop(Ispecific(Ibsf { non_zero; })) ->
       (* CR gyorsh: can we do it at selection? *)
       if non_zero then begin
-        (* No need to handle that bsr is undefind on 0 input. *)
-         I.bsf (arg i 0) (res i 0);
+        (* No need to handle that bsr is undefined on 0 input. *)
+        I.bsf (arg i 0) (res i 0)
       end else begin
         let lbl_nz = new_label () in
         I.bsf (arg i 0) (res i 0);
@@ -975,8 +986,7 @@ let emit_instr fallthrough i =
         I.mov (int 64) (res i 0);
         def_label lbl_nz
       end
-  | Lop (Iname_for_debugger _) -> ()
-  | Lop (Ispecific (Iprefetch {is_write;locality;addr})) ->
+  | Lop (Ispecific (Iprefetch { is_write; locality; addr; })) ->
     let locality =
       match locality with
       | Not_at_all -> Nta
@@ -987,7 +997,9 @@ let emit_instr fallthrough i =
     I.prefetch is_write locality (addressing addr QWORD i 0)
   | Lop (Ispecific Icrc32q) ->
     (* We have i.arg.(0) = i.res.(0) *)
+    (* CR mshinwell: write an assertion, not a comment! *)
     I.crc32 (arg i 1) (res i 0)
+  | Lop (Iname_for_debugger _) -> ()
   | Lop (Iprobe _) ->
     let probe_label = new_label () in
     let probe =

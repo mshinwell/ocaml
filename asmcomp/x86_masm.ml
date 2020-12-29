@@ -122,11 +122,13 @@ let print_instr b = function
   | BSWAP arg -> i1 b "bswap" arg
   | BSR (arg1, arg2) -> i2 b "bsr" arg1 arg2
   | BSF (arg1, arg2) -> i2 b "bsf" arg1 arg2
+  (* CR mshinwell: Let's keep this list in alphabetical order! *)
   | LZCNT (arg1, arg2) -> i2 b "lzcnt" arg1 arg2
   | POPCNT (arg1, arg2) -> i2 b "popcnt" arg1 arg2
   | CRC32 (arg1, arg2) -> i2 b "crc32q" arg1 arg2
   | PREFETCH (is_write, locality, arg1) ->
     (match is_write, locality with
+     (* CR mshinwell: Exhaustive match again please *)
      | true, T0 -> i1 b "prefetchw" arg1
      | true, _ -> i1 b "prefetchwt1" arg1
      | false, _ -> i1 b ("prefetch" ^ string_of_hint locality) arg1)

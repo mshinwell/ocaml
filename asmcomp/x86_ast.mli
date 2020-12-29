@@ -104,6 +104,7 @@ type instruction =
   | BSWAP of arg
   | BSR of arg * arg
   | BSF of arg * arg
+  (* CR mshinwell: Let's keep this list in alphabetical order! *)
   | PREFETCH of bool * locality_hint * arg
   | CRC32 of arg * arg
   | LZCNT of arg * arg

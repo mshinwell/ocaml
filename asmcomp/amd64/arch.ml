@@ -13,6 +13,12 @@
 (*                                                                        *)
 (**************************************************************************)
 
+(* CR mshinwell: How do we determine the defaults for these values?
+   It seems like maybe a configure script test is needed. *)
+
+(* CR mshinwell: This potentially major caveat should probably go in the help
+   text of the relevant option below. *)
+
 (* LZCNT instruction is not available on Intel Architectures prior to Haswell.
 
    Important: lzcnt assembles to bsr on architectures prior to Haswell.  Code
@@ -20,6 +26,8 @@
    results. *)
 let lzcnt_support = ref true
 
+(* CR mshinwell: Likewise, I would put something to this effect in the help
+   text below. *)
 (* POPCNT instruction is not available prior to Nehalem. *)
 let popcnt_support = ref true
 
@@ -56,7 +64,7 @@ open Format
 type temporal_locality = Not_at_all | Low | Moderate | High
 
 let temporal_locality = function
-  | Not_at_all -> "none"
+  | Not_at_all -> "none" (* CR mshinwell: same comment as in the Cmm part *)
   | Low -> "low"
   | Moderate -> "moderate"
   | High -> "high"
@@ -68,6 +76,8 @@ type addressing_mode =
   | Iscaled of int * int                (* reg * scale + displ *)
   | Iindexed2scaled of int * int        (* reg + reg * scale + displ *)
 
+(* CR mshinwell: rename to prefetch_locality_hint or something?  (I left a
+   similar CR elsewhere; it would be worth ensuring the names match.) *)
 type hint = {
   is_write: bool;
   locality: temporal_locality;
@@ -89,6 +99,9 @@ type specific_operation =
   | Izextend32                         (* 32 to 64 bit conversion with zero
                                           extension *)
   | Ilzcnt                             (* count leading zeros instruction *)
+  (* CR mshinwell: [non_zero] isn't very descriptive.  Maybe
+     "arg_is_definitely_non_zero" or something (assuming that's what it
+     means)? *)
   | Ibsr of { non_zero : bool }        (* bit scan reverse instruction *)
   | Ibsf of { non_zero : bool }        (* bit scan forward instruction *)
   | Irdtsc                             (* read timestamp *)
@@ -186,9 +199,9 @@ let print_specific_operation printreg op ppf arg =
       fprintf ppf "zextend32 %a" printreg arg.(0)
   | Ilzcnt ->
       fprintf ppf "lzcnt %a" printreg arg.(0)
-  | Ibsr {non_zero} ->
+  | Ibsr { non_zero; } ->
       fprintf ppf "bsr non_zero=%b %a" non_zero printreg arg.(0)
-  | Ibsf {non_zero} ->
+  | Ibsf { non_zero; } ->
       fprintf ppf "bsf non_zero=%b %a" non_zero printreg arg.(0)
   | Irdtsc ->
       fprintf ppf "rdtsc"
@@ -196,9 +209,10 @@ let print_specific_operation printreg op ppf arg =
       fprintf ppf "rdpmc %a" printreg arg.(0)
   | Icrc32q ->
       fprintf ppf "crc32 %a %a" printreg arg.(0) printreg arg.(1)
-  | Iprefetch {is_write; locality} ->
+  | Iprefetch { is_write; locality; } ->
       fprintf ppf "prefetch is_write=%b temporal_locality=%s %a" is_write
         (temporal_locality locality) printreg arg.(0)
+
 let win64 =
   match Config.system with
   | "win64" | "mingw64" | "cygwin" -> true

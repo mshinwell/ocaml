@@ -72,8 +72,9 @@ let chunk = function
   | Double -> "float64"
   | Double_u -> "float64u"
 
-
 let temporal_locality = function
+  (* CR mshinwell: It's probably better to have this print "not_at_all" to
+     avoid confusion *)
   | Not_at_all -> "none"
   | Low -> "low"
   | Moderate -> "moderate"
@@ -108,7 +109,7 @@ let location d =
 
 let operation d = function
   | Capply _ty -> "app" ^ location d
-  | Cextcall { name = lbl; } ->
+  | Cextcall { name = lbl; _ } ->
       Printf.sprintf "extcall \"%s\"%s" lbl (location d)
   | Cload (c, Asttypes.Immutable) -> Printf.sprintf "load %s" (chunk c)
   | Cload (c, Asttypes.Mutable) -> Printf.sprintf "load_mut %s" (chunk c)
@@ -133,7 +134,7 @@ let operation d = function
   | Clsl -> "<<"
   | Clsr -> ">>u"
   | Casr -> ">>s"
-  | Cclz { non_zero } -> Printf.sprintf "clz %B" non_zero
+  | Cclz { non_zero; } -> Printf.sprintf "clz %B" non_zero
   | Cpopcnt -> "popcnt"
   | Ccmpi c -> integer_comparison c
   | Caddv -> "+v"
@@ -153,7 +154,7 @@ let operation d = function
   | Cprobe { name; handler_code_sym } ->
     Printf.sprintf "probe[%s %s]" name handler_code_sym
   | Cprobe_is_enabled {name} -> Printf.sprintf "probe_is_enabled[%s]" name
-  | Cprefetch {is_write; locality} ->
+  | Cprefetch { is_write; locality; } ->
     Printf.sprintf "prefetch is_write=%b temporal_locality=%s" is_write
       (temporal_locality locality)
 

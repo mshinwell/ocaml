@@ -55,6 +55,11 @@ let pseudoregs_for_operation op arg res =
     ( [| arg.(0); arg.(1); res.(0) |], [| res.(0) |])
   (* One-address unary operations: arg.(0) and res.(0) must be the same *)
   |  Iintop_imm((Imul|Iand|Ior|Ixor), _) -> (res, res)
+  (* CR mshinwell: To get this reviewed and deployed faster, I'd like to
+     only deal with the x86-64 implementation to start with, given the
+     complexity of this change.  Please revert the changes for the other
+     architectures and stash them on a branch somewhere, so we can come
+     back to them later. *)
   (* To implement clz on s390, emit code using flogr instruction.
      For flogr, the first result register must be an even register,
      the second result register must be the consecutive register after the first

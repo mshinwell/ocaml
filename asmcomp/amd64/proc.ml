@@ -401,5 +401,6 @@ let init () =
     num_available_registers.(0) <- 13
 
 let operation_supported = function
+  (* CR mshinwell: This should be an exhaustive match. *)
   | Cpopcnt -> !popcnt_support
   | _ -> true
