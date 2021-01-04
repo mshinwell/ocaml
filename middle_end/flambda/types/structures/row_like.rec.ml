@@ -535,7 +535,7 @@ struct
             in
             let maps_to =
               Product.Int_indexed.create_from_list field_kind field_tys
-            in 
+            in
             let size = Targetint.OCaml.of_int (List.length field_tys) in
             { maps_to;
               index = Known size;
@@ -570,6 +570,8 @@ struct
       | None -> Unknown
       | Some ((_tag, size), maps_to) ->
         let index = Target_imm.to_targetint field_index in
+        (* CR mshinwell: Shouldn't this return [Invalid] if the index is
+           definitely out of range? *)
         if Targetint.OCaml.(<=) size index then Unknown
         else Product.Int_indexed.project maps_to (Targetint.OCaml.to_int index)
   end

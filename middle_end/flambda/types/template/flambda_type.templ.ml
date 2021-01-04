@@ -716,6 +716,9 @@ let prove_block_field_simple env t field_index : Simple.t proof =
     | Unknown -> Unknown
     | Known imms ->
       if not (is_obviously_bottom imms) then
+        (* CR mshinwell: If blocks is actually [Known blocks'] where
+           [blocks'] satisfies [is_obviously_bottom], we should presumably
+           return [Invalid]? *)
         Unknown
       else
         begin match blocks with
