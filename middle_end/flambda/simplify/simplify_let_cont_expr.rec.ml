@@ -103,6 +103,10 @@ let simplify_one_continuation_handler dacc cont ~at_unit_toplevel recursive
   Simplify_expr.simplify_expr dacc handler
     ~down_to_up:(fun dacc ~rebuild ->
       down_to_up dacc ~rebuild:(fun uacc ~after_rebuild ->
+        (* The name occurrences component of this [uacc] is cleared (see
+           further down this file) before simplifying a handler.  This is done
+           so we can precisely identify the free names of the handler. *)
+        assert (Name_occurrences.is_empty (UA.name_occurrences uacc));
         rebuild uacc ~after_rebuild:(fun handler uacc ->
           rebuild_one_continuation_handler cont ~at_unit_toplevel recursive
             cont_handler ~params ~extra_params_and_args
@@ -355,20 +359,6 @@ let simplify_non_recursive_let_cont dacc non_rec ~down_to_up =
                 in
                 let uacc = UA.clear_name_occurrences uacc in
                 rebuild_handler uacc ~after_rebuild:(fun handler uacc ->
-                  (*
-                  let uacc =
-                    (* If the continuation has zero uses, ignore all name
-                       occurrences in the handler, since that expression is
-                       about to be dropped. *)
-                    if not continuation_has_zero_uses then uacc
-                    else
-                      UA.with_name_occurrences uacc
-                        ~name_occurrences:
-                          name_occurrences_before_handler_rebuild
-                  in
-                  Format.eprintf "UA free names, after handler rebuild:@ %a\n%!"
-                    Name_occurrences.print (UA.name_occurrences uacc);
-                  *)
                   let name_occurrences_handler =
                     if continuation_has_zero_uses then Name_occurrences.empty
                     else UA.name_occurrences uacc

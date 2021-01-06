@@ -157,6 +157,11 @@ let rebuild_switch dacc ~arms ~scrutinee ~scrutinee_ty uacc
            since we re-compute it below, prior to adding it to [uacc]. *)
         rebuild uacc ~after_rebuild:(fun expr uacc -> expr, uacc))
   in
+  (* In some cases below the free name information will be changed in
+     [uacc] and in some cases it won't be.  To make things easier we save
+     the existing free name information here and then unilaterally update it
+     (see below) after we have constructed the necessary expressions. *)
+  let free_names_after = UA.name_occurrences uacc in
   let body, uacc =
     let dbg = Debuginfo.none in
     match switch_is_identity with
@@ -207,7 +212,11 @@ let rebuild_switch dacc ~arms ~scrutinee ~scrutinee_ty uacc
       body
       new_let_conts
   in
-  let uacc = UA.add_free_names uacc (Expr.free_names expr) in
+  let uacc =
+    UA.with_name_occurrences uacc
+      ~name_occurrences:
+        (Name_occurrences.union free_names_after (Expr.free_names expr))
+  in
   after_rebuild expr uacc
 
 let simplify_switch dacc switch ~down_to_up =
