@@ -22,8 +22,6 @@ let rebuild_one_continuation_handler cont ~at_unit_toplevel
       (recursive : Recursive.t) (cont_handler : CH.t) ~params
       ~(extra_params_and_args : EPA.t) ~is_single_inlinable_use handler uacc
       ~after_rebuild =
-  Format.eprintf "Cont %a: EPA=%a\n%!"
-    Continuation.print cont EPA.print extra_params_and_args;
   let handler, uacc =
     let params = params @ extra_params_and_args.extra_params in
     (* We might need to place lifted constants now, as they could
@@ -87,9 +85,6 @@ let rebuild_one_continuation_handler cont ~at_unit_toplevel
       ~extra_args:extra_params_and_args.extra_args
       ~used_extra_params:(KP.Set.of_list used_extra_params)
   in
-  Format.eprintf "Apply cont rewrite for %a is:@ %a\n%!"
-    Continuation.print cont
-    Apply_cont_rewrite.print rewrite;
   let uacc =
     UA.map_uenv uacc ~f:(fun uenv ->
       UE.add_apply_cont_rewrite uenv cont rewrite)
@@ -322,8 +317,6 @@ let simplify_non_recursive_let_cont dacc non_rec ~down_to_up =
         DA.with_continuation_uses_env dacc_for_body ~cont_uses_env:CUE.empty
       in
       assert (DA.no_lifted_constants dacc_for_body);
-      Format.eprintf "HANDLER:@ %a\n%!" Expr.print handler;
-      Format.eprintf "BODY:@ %a\n%!" Expr.print body;
       (* First the downwards traversal is done on the body. *)
       Simplify_expr.simplify_expr dacc_for_body body
         ~down_to_up:(fun dacc_after_body ~rebuild:rebuild_body ->
@@ -364,8 +357,6 @@ let simplify_non_recursive_let_cont dacc non_rec ~down_to_up =
                     else UA.name_occurrences uacc
                   in
                   let uacc = UA.clear_name_occurrences uacc in
-                  Format.eprintf "The handler is:@ %a\n%!"
-                    Continuation_handler.print handler;
                   (* Having rebuilt the handler, we now rebuild the body. *)
                   rebuild_body uacc ~after_rebuild:(fun body uacc ->
                     let name_occurrences_body = UA.name_occurrences uacc in
@@ -379,14 +370,6 @@ let simplify_non_recursive_let_cont dacc non_rec ~down_to_up =
                       | Zero -> true
                       | One | More_than_one -> false
                     in
-                    Format.eprintf "Remove let cont %a? %b, body:@ %a@ \
-                        handler:@ %a\n%!"
-                      Continuation.print cont
-                      remove_let_cont_leaving_body
-                      Expr.print body
-                      CH.print handler;
-                    Format.eprintf "Free names of the above body:@ %a\n%!"
-                      Name_occurrences.print (UA.name_occurrences uacc);
                     (* We are passing back over a binder, so remove the
                        bound continuation from the free name information.
                        Then compute the free names of the whole [Let_cont]. *)

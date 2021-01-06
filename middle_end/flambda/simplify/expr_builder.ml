@@ -221,9 +221,6 @@ let create_raw_let_symbol uacc bound_symbols scoping_rule static_consts ~body =
     Let.create bindable defining_expr ~body
       ~free_names_of_body:(Known free_names_of_body)
   in
-  Format.eprintf "About to create let_expr:@ %a\nfree names of let:@ %a\n%!"
-    Let.print let_expr
-    Name_occurrences.print free_names_of_let;
   Expr.create_let let_expr, uacc
 
 let create_let_symbol0 uacc code_age_relation (bound_symbols : Bound_symbols.t)
