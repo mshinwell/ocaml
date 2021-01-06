@@ -22,6 +22,8 @@ let rebuild_one_continuation_handler cont ~at_unit_toplevel
       (recursive : Recursive.t) (cont_handler : CH.t) ~params
       ~(extra_params_and_args : EPA.t) ~is_single_inlinable_use handler uacc
       ~after_rebuild =
+  Format.eprintf "Cont %a: EPA=%a\n%!"
+    Continuation.print cont EPA.print extra_params_and_args;
   let handler, uacc =
     let params = params @ extra_params_and_args.extra_params in
     (* We might need to place lifted constants now, as they could
@@ -39,23 +41,24 @@ let rebuild_one_continuation_handler cont ~at_unit_toplevel
         ~body:handler
         ~critical_deps_of_bindings:(KP.List.free_names params)
   in
-  let free_names = Expr.free_names handler in
+  let free_names = UA.name_occurrences uacc in
   let used_params =
     (* Removal of unused parameters of recursive continuations is not
        currently supported. *)
     match recursive with
     | Recursive -> params
     | Non_recursive ->
-      (* As per comment below, if the continuation is going to be inlined
-         out, removal of unused parameters does not go via an
-         [Apply_cont_rewrite]. *)
+      (* If the continuation is going to be inlined out, we don't need to
+         spend time here calculating unused parameters, since the creation of
+         [Let]-expressions around the continuation's handler will do that
+         anyway. *)
       if is_single_inlinable_use then params
       else
         let first = ref true in
         List.filter (fun param ->
             (* CR mshinwell: We should have a robust means of propagating which
-              parameter is the exception bucket.  Then this hack can be
-              removed. *)
+               parameter is the exception bucket.  Then this hack can be
+               removed. *)
             if !first && Continuation.is_exn cont then begin
               first := false;
               true
@@ -66,9 +69,11 @@ let rebuild_one_continuation_handler cont ~at_unit_toplevel
           params
   in
   let used_extra_params =
-    List.filter (fun extra_param ->
-        Name_occurrences.mem_var free_names (KP.var extra_param))
-      extra_params_and_args.extra_params
+    if is_single_inlinable_use then extra_params_and_args.extra_params
+    else
+      List.filter (fun extra_param ->
+          Name_occurrences.mem_var free_names (KP.var extra_param))
+        extra_params_and_args.extra_params
   in
   let params' = used_params @ used_extra_params in
   let cont_handler =
@@ -82,6 +87,9 @@ let rebuild_one_continuation_handler cont ~at_unit_toplevel
       ~extra_args:extra_params_and_args.extra_args
       ~used_extra_params:(KP.Set.of_list used_extra_params)
   in
+  Format.eprintf "Apply cont rewrite for %a is:@ %a\n%!"
+    Continuation.print cont
+    Apply_cont_rewrite.print rewrite;
   let uacc =
     UA.map_uenv uacc ~f:(fun uenv ->
       UE.add_apply_cont_rewrite uenv cont rewrite)
@@ -103,9 +111,8 @@ let simplify_one_continuation_handler dacc cont ~at_unit_toplevel recursive
 let rebuild_non_recursive_let_cont_handler cont
       (uses : Continuation_env_and_param_types.t) ~params ~handler
       ~free_names_of_handler ~is_single_inlinable_use ~is_single_use scope
-      extra_params_and_args cont_handler uacc ~after_rebuild =
+      (extra_params_and_args : EPA.t) cont_handler uacc ~after_rebuild =
   let uenv = UA.uenv uacc in
-  Format.eprintf "rebuild_non_rec_lch, handler:@ %a\n%!" Expr.print handler;
   let uenv =
     (* CR mshinwell: Change types so that [free_names_of_handler] only
        needs to be provided in the [Uses] case. *)
@@ -115,27 +122,18 @@ let rebuild_non_recursive_let_cont_handler cont
       (* We must make the final decision now as to whether to inline this
          continuation or not; we can't wait until
          [Simplify_apply_cont.rebuild_apply_cont] because we need to decide
-         sooner than that whether to keep the [Let_cont].  To make this
-         process more straightforward:
-         - We do not currently support inlining if there is a wrapper.
-         - For inlinable continuations we don't use [Apply_cont_rewrite] to
-           remove parameters; any bindings to unused parameters will be
-           removed anyway when the corresponding [Let]s are created.
-           (Any such [Apply_cont_rewrite] will still be created, but will
-           be ignored.)
-         Note that there cannot yet be an alias to resolve (unlike in
-         [Simplify_apply_cont.rebuild_apply_cont]) since it is this code which
-         identifies such an alias, and we haven't done that yet. *)
-      (* CR mshinwell: Remove condition that [extra_params_and_args] must be
-         empty.  This will stop continuations whose parameters get unboxed
-         from being inlined. *)
-      if is_single_inlinable_use && EPA.is_empty extra_params_and_args then
+         sooner than that whether to keep the [Let_cont] (in order to keep
+         free name sets correct). *)
+      if is_single_inlinable_use then begin
         (* Note that [Continuation_uses] won't set [is_single_inlinable_use]
            if [cont] is an exception handler. *)
+        assert (not (CH.is_exn_handler cont_handler));
         let arity = CH.arity cont_handler in
+        (* We pass the parameters and the handler expression, rather than
+           the [CH.t], to avoid re-opening the name abstraction. *)
         UE.add_linearly_used_inlinable_continuation uenv cont scope arity
           ~params ~handler ~free_names_of_handler
-      else
+      end else begin
         match CH.behaviour cont_handler with
         | Unreachable { arity; } ->
           UE.add_unreachable_continuation uenv cont scope arity
@@ -146,6 +144,7 @@ let rebuild_non_recursive_let_cont_handler cont
             UE.add_continuation_with_handler uenv cont scope arity cont_handler
           else
             UE.add_continuation uenv cont scope arity
+      end
   in
   (* The parameters are removed from the free name information as they are no
      longer in scope. *)

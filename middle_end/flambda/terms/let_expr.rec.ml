@@ -427,8 +427,10 @@ let free_names
     in
     let from_body = Expr.free_names body in
     (* CR mshinwell: See comment in expr.rec.ml *)
-    Name_occurrences.union from_defining_expr
-      (Name_occurrences.diff from_body from_bindable))
+    (* Care: there can be recursive bindings. *)
+    Name_occurrences.diff
+      (Name_occurrences.union from_defining_expr from_body)
+      from_bindable)
 
 let apply_name_permutation ({ name_abstraction; defining_expr; } as t) perm =
   let name_abstraction' = A.apply_name_permutation name_abstraction perm in

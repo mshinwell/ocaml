@@ -51,8 +51,14 @@ let simplify_expr dacc expr ~down_to_up =
       ~down_to_up:(fun dacc ~rebuild ->
         down_to_up dacc ~rebuild:(fun uacc ~after_rebuild ->
           rebuild uacc ~after_rebuild:(fun expr uacc ->
-            let free_names_uacc = UA.name_occurrences uacc in
-            let free_names = Expr.free_names expr in
+            let free_names_uacc =
+              UA.name_occurrences uacc
+              |> Name_occurrences.without_closure_vars
+            in
+            let free_names =
+              Expr.free_names expr
+              |> Name_occurrences.without_closure_vars
+            in
             if not (Name_occurrences.equal free_names free_names_uacc)
             then begin
               Misc.fatal_errorf "Mismatch on free names:@ \n\

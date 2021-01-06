@@ -214,15 +214,22 @@ let create_if_then_else ~scrutinee ~if_true ~if_false =
   in
   create_switch ~scrutinee ~arms
 
-let bind_no_simplification ~bindings ~body =
+let bind_no_simplification ~bindings ~body ~free_names_of_body =
   ListLabels.fold_left (List.rev bindings)
-    ~init:body
-    ~f:(fun expr (var, defining_expr) ->
-      Let_expr.create (Bindable_let_bound.singleton var)
-        defining_expr
-        ~body:expr
-        ~free_names_of_body:Unknown
-      |> create_let)
+    ~init:(body, free_names_of_body)
+    ~f:(fun (expr, free_names) (var, defining_expr) ->
+      let expr =
+        Let_expr.create (Bindable_let_bound.singleton var)
+          defining_expr
+          ~body:expr
+          ~free_names_of_body:(Known free_names)
+        |> create_let
+      in
+      let free_names =
+        Name_occurrences.union (Named.free_names defining_expr)
+          (Name_occurrences.remove_var free_names (Var_in_binding_pos.var var))
+      in
+      expr, free_names)
 
 let bind_parameters_to_args_no_simplification ~params ~args ~body =
   if List.compare_lengths params args <> 0 then begin

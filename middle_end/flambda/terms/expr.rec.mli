@@ -88,7 +88,8 @@ val create_invalid : ?semantics:Invalid_term_semantics.t -> unit -> t
 val bind_no_simplification
    : bindings:(Var_in_binding_pos.t * Named.t) list
   -> body:Expr.t
-  -> Expr.t
+  -> free_names_of_body:Name_occurrences.t
+  -> Expr.t * Name_occurrences.t
 
 val bind_parameters_to_args_no_simplification
    : params:Kinded_parameter.t list

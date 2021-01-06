@@ -18,70 +18,58 @@
 
 open! Simplify_import
 
-let inline_linearly_used_continuation uacc apply_cont ~params ~handler
-      ~free_names_of_handler ~after_rebuild =
-  Format.eprintf "Inlining: %a using handler:@ %a\n%!"
-    AC.print apply_cont
-    Expr.print handler;
+let inline_linearly_used_continuation uacc ~create_apply_cont ~params ~handler
+      ~free_names_of_handler =
   (* CR mshinwell: With -g, we can end up with continuations that are
      just a sequence of phantom lets then "goto".  These would normally
      be treated as aliases, but of course aren't in this scenario,
      unless the continuations are used linearly. *)
-  assert (Option.is_none (AC.trap_action apply_cont));
-  (* We can't easily call [simplify_expr] on the inlined body since
-     [dacc] isn't the correct accumulator and environment any more.
-     However there's no need to simplify the inlined body except to
-     make use of parameter-to-argument bindings; we just leave them for
-     a subsequent round of [Simplify] or [Un_cps] to clean up. *)
-  let args = AC.args apply_cont in
-  if List.compare_lengths params args <> 0 then begin
-    Misc.fatal_errorf "Parameter list@ [%a]@ does not match argument \
-        list@ [%a]@ when inlining at [Apply_cont]:@ %a@ Handler to inline:@ %a"
-      KP.List.print params
-      Simple.List.print args
-      Apply_cont.print apply_cont
-      Expr.print handler
-  end;
-  let bindings_outermost_first =
-    ListLabels.map2 params args
-      ~f:(fun param arg ->
-        let bound =
-          Var_in_binding_pos.create (KP.var param) Name_mode.normal
-          |> Bindable_let_bound.singleton
-        in
-        bound, Simplified_named.reachable (Named.create_simple arg))
-  in
-  let name_occurrences = UA.name_occurrences uacc in
-  let expr, uacc =
-    let uacc =
-      UA.with_name_occurrences uacc ~name_occurrences:free_names_of_handler
+  create_apply_cont ~apply_cont_to_expr:(fun apply_cont ->
+    assert (Option.is_none (AC.trap_action apply_cont));
+    (* We can't easily call [simplify_expr] on the inlined body since
+       [dacc] isn't the correct accumulator and environment any more.
+       However there's no need to simplify the inlined body except to
+       make use of parameter-to-argument bindings; we just leave them for
+       a subsequent round of [Simplify] or [Un_cps] to clean up. *)
+    let args = AC.args apply_cont in
+    if List.compare_lengths params args <> 0 then begin
+      Misc.fatal_errorf "Parameter list@ [%a]@ does not match argument \
+          list@ [%a]@ when inlining at [Apply_cont]:@ %a@ \
+          Handler to inline:@ %a"
+        KP.List.print params
+        Simple.List.print args
+        Apply_cont.print apply_cont
+        Expr.print handler
+    end;
+    let bindings_outermost_first =
+      ListLabels.map2 params args
+        ~f:(fun param arg ->
+          let bound =
+            Var_in_binding_pos.create (KP.var param) Name_mode.normal
+            |> Bindable_let_bound.singleton
+          in
+          bound, Simplified_named.reachable (Named.create_simple arg))
     in
-    Expr_builder.make_new_let_bindings uacc ~bindings_outermost_first
-      ~body:handler
-  in
-  let name_occurrences =
-    Name_occurrences.union name_occurrences (UA.name_occurrences uacc)
-  in
-  let uacc = UA.with_name_occurrences uacc ~name_occurrences in
-  after_rebuild expr uacc
+    let expr, uacc =
+      let uacc =
+        UA.with_name_occurrences uacc ~name_occurrences:free_names_of_handler
+      in
+      Expr_builder.make_new_let_bindings uacc ~bindings_outermost_first
+        ~body:handler
+    in
+    expr, UA.name_occurrences uacc)
 
 let rebuild_apply_cont apply_cont ~args ~rewrite_id uacc ~after_rebuild =
   Format.eprintf "rebuild_apply_cont:@ %a\n%!" AC.print apply_cont;
   let uenv = UA.uenv uacc in
   let cont = AC.continuation apply_cont in
-  match UE.find_continuation uenv cont with
-  | Linearly_used_and_inlinable { arity = _; params; handler;
-      free_names_of_handler; } ->
-    (* We must not fail to inline here, since we've already decided that the
-       relevant [Let_cont] is no longer needed. *)
-    inline_linearly_used_continuation uacc apply_cont ~params ~handler
-      ~free_names_of_handler ~after_rebuild
-  | Unreachable { arity = _; } ->
-    (* We allow this transformation even if there is a trap action, on the
-       basis that there wouldn't be any opportunity to collect any backtrace,
-       even if the [Apply_cont] were compiled as "raise". *)
-    after_rebuild (Expr.create_invalid ()) uacc
-  | Other { arity = _; handler = _; } ->
+  let create_apply_cont ~apply_cont_to_expr =
+    (* The function returned by this code accepts another function, which
+       will be called with the [Apply_cont] expression after subjecting it
+       to any rewrites (e.g. adding or removing parameters).  This gives the
+       chance of replacing the [Apply_cont] with something else -- in
+       particular an inlined continuation -- before it is wrapped in any
+       [Let]-expressions needed as a result of the rewrite. *)
     let rewrite = UE.find_apply_cont_rewrite uenv cont in
     let cont = UE.resolve_continuation_aliases uenv cont in
     let rewrite_use_result =
@@ -100,11 +88,29 @@ let rebuild_apply_cont apply_cont ~args ~rewrite_id uacc ~after_rebuild =
     in
     match rewrite_use_result with
     | Apply_cont apply_cont ->
-      let uacc = UA.add_free_names uacc (AC.free_names apply_cont) in
-      after_rebuild (Expr.create_apply_cont apply_cont) uacc
-    | Expr (expr, free_names) ->
+      let expr, free_names = apply_cont_to_expr apply_cont in
       let uacc = UA.add_free_names uacc free_names in
       after_rebuild expr uacc
+    | Expr build_expr ->
+      let expr, free_names = build_expr ~apply_cont_to_expr in
+      let uacc = UA.add_free_names uacc free_names in
+      after_rebuild expr uacc
+  in
+  match UE.find_continuation uenv cont with
+  | Linearly_used_and_inlinable { arity = _; params; handler;
+      free_names_of_handler; } ->
+    (* We must not fail to inline here, since we've already decided that the
+       relevant [Let_cont] is no longer needed. *)
+    inline_linearly_used_continuation uacc ~create_apply_cont ~params ~handler
+      ~free_names_of_handler
+  | Unreachable { arity = _; } ->
+    (* We allow this transformation even if there is a trap action, on the
+       basis that there wouldn't be any opportunity to collect any backtrace,
+       even if the [Apply_cont] were compiled as "raise". *)
+    after_rebuild (Expr.create_invalid ()) uacc
+  | Other { arity = _; handler = _; } ->
+    create_apply_cont ~apply_cont_to_expr:(fun apply_cont ->
+      Expr.create_apply_cont apply_cont, Apply_cont.free_names apply_cont)
 
 let simplify_apply_cont dacc apply_cont ~down_to_up =
   let min_name_mode = Name_mode.normal in

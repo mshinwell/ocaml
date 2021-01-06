@@ -153,14 +153,22 @@ let add_wrapper_for_fixed_arity_continuation0 uacc cont_or_apply_cont
       | Apply_cont apply_cont ->
         new_wrapper (Expr.create_apply_cont apply_cont)
           ~free_names:(Known (Apply_cont.free_names apply_cont))
-      | Expr (expr, free_names) ->
+      | Expr build_expr ->
+        let expr, free_names =
+          build_expr ~apply_cont_to_expr:(fun apply_cont ->
+            Expr.create_apply_cont apply_cont, Apply_cont.free_names apply_cont)
+        in
         new_wrapper expr ~free_names:(Known free_names)
       end
     | Apply_cont apply_cont ->
       let apply_cont = Apply_cont.update_continuation apply_cont cont in
       match Apply_cont_rewrite.rewrite_use rewrite use_id apply_cont with
       | Apply_cont apply_cont -> Apply_cont apply_cont
-      | Expr (expr, free_names) ->
+      | Expr build_expr ->
+        let expr, free_names =
+          build_expr ~apply_cont_to_expr:(fun apply_cont ->
+            Expr.create_apply_cont apply_cont, Apply_cont.free_names apply_cont)
+        in
         new_wrapper expr ~free_names:(Known free_names)
 
 type add_wrapper_for_switch_arm_result =

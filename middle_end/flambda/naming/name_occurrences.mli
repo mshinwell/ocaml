@@ -125,6 +125,8 @@ val code_ids_and_newer_version_of_code_ids : t -> Code_id.Set.t
 
 val without_code_ids : t -> t
 
+val without_closure_vars : t -> t
+
 val with_only_variables :  t -> t
 
 val with_only_names_and_code_ids :  t -> t

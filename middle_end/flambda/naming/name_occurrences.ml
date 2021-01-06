@@ -1120,6 +1120,11 @@ let without_code_ids t =
     newer_version_of_code_ids = For_code_ids.empty;
   }
 
+let without_closure_vars t =
+  { t with
+    closure_vars = For_closure_vars.empty;
+  }
+
 let fold_names t ~init ~f =
   For_names.fold t.names ~init ~f
 
