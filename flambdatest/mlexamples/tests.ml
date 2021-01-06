@@ -17,6 +17,7 @@ let f c m n x' y' =
     | None -> 1
     | Some b ->
       to_inline (x + y) (a + b)
+(*
 let [@inline always] to_inline' x y = x + y
 
 let f' c m n x' y' =
@@ -117,3 +118,4 @@ let f c m n x' y' =
   let x = if c < 0 then x' else x' + 10 in
   let y = if c < 0 then y' else y' + 20 in
   x + y, 2L
+*)

@@ -105,6 +105,7 @@ let rebuild_non_recursive_let_cont_handler cont
       ~free_names_of_handler ~is_single_inlinable_use ~is_single_use scope
       extra_params_and_args cont_handler uacc ~after_rebuild =
   let uenv = UA.uenv uacc in
+  Format.eprintf "rebuild_non_rec_lch, handler:@ %a\n%!" Expr.print handler;
   let uenv =
     (* CR mshinwell: Change types so that [free_names_of_handler] only
        needs to be provided in the [Uses] case. *)
@@ -125,6 +126,9 @@ let rebuild_non_recursive_let_cont_handler cont
          Note that there cannot yet be an alias to resolve (unlike in
          [Simplify_apply_cont.rebuild_apply_cont]) since it is this code which
          identifies such an alias, and we haven't done that yet. *)
+      (* CR mshinwell: Remove condition that [extra_params_and_args] must be
+         empty.  This will stop continuations whose parameters get unboxed
+         from being inlined. *)
       if is_single_inlinable_use && EPA.is_empty extra_params_and_args then
         (* Note that [Continuation_uses] won't set [is_single_inlinable_use]
            if [cont] is an exception handler. *)
@@ -315,10 +319,8 @@ let simplify_non_recursive_let_cont dacc non_rec ~down_to_up =
         DA.with_continuation_uses_env dacc_for_body ~cont_uses_env:CUE.empty
       in
       assert (DA.no_lifted_constants dacc_for_body);
-      (* XXX
       Format.eprintf "HANDLER:@ %a\n%!" Expr.print handler;
       Format.eprintf "BODY:@ %a\n%!" Expr.print body;
-      *)
       (* First the downwards traversal is done on the body. *)
       Simplify_expr.simplify_expr dacc_for_body body
         ~down_to_up:(fun dacc_after_body ~rebuild:rebuild_body ->
@@ -349,10 +351,12 @@ let simplify_non_recursive_let_cont dacc non_rec ~down_to_up =
                    - If the continuation has zero uses, we must not
                      count the free names of the handler, as it will be
                      removed. *)
-                let name_occurrences_before_handler_rebuild =
+                let name_occurrences_subsequent_exprs =
                   UA.name_occurrences uacc
                 in
+                let uacc = UA.clear_name_occurrences uacc in
                 rebuild_handler uacc ~after_rebuild:(fun handler uacc ->
+                  (*
                   let uacc =
                     (* If the continuation has zero uses, ignore all name
                        occurrences in the handler, since that expression is
@@ -363,45 +367,44 @@ let simplify_non_recursive_let_cont dacc non_rec ~down_to_up =
                         ~name_occurrences:
                           name_occurrences_before_handler_rebuild
                   in
+                  Format.eprintf "UA free names, after handler rebuild:@ %a\n%!"
+                    Name_occurrences.print (UA.name_occurrences uacc);
+                  *)
+                  let name_occurrences_handler =
+                    if continuation_has_zero_uses then Name_occurrences.empty
+                    else UA.name_occurrences uacc
+                  in
+                  let uacc = UA.clear_name_occurrences uacc in
+                  Format.eprintf "The handler is:@ %a\n%!"
+                    Continuation_handler.print handler;
                   (* Having rebuilt the handler, we now rebuild the body. *)
                   rebuild_body uacc ~after_rebuild:(fun body uacc ->
+                    let name_occurrences_body = UA.name_occurrences uacc in
                     let num_free_occurrences_of_cont_in_body =
-                      (* [UA.name_occurrences uacc] includes free names of the
-                         handler and also those of any expressions rebuilt
-                         prior to the current [Let_cont].  However the
-                         continuation [cont] can never be one of those free
-                         names.  This means we can directly call
-                         [count_continuation] on this name occurrences
-                         structure in order to count the number of occurrences
-                         of [cont] in the rebuilt [body]. *)
                       Name_occurrences.count_continuation
-                        (UA.name_occurrences uacc)
+                        name_occurrences_body
                         cont
-                    in
-                    (* We are passing back over a binder, so remove the
-                       bound continuation from the free name information. *)
-                    let uacc =
-                      let name_occurrences =
-                        Name_occurrences.remove_continuation
-                          (UA.name_occurrences uacc) cont
-                      in
-                      UA.with_name_occurrences uacc ~name_occurrences
                     in
                     let remove_let_cont_leaving_body =
                       match num_free_occurrences_of_cont_in_body with
                       | Zero -> true
                       | One | More_than_one -> false
                     in
-                    (* XXX
                     Format.eprintf "Remove let cont %a? %b, body:@ %a@ \
                         handler:@ %a\n%!"
                       Continuation.print cont
-                      remove_let_cont
+                      remove_let_cont_leaving_body
                       Expr.print body
                       CH.print handler;
                     Format.eprintf "Free names of the above body:@ %a\n%!"
                       Name_occurrences.print (UA.name_occurrences uacc);
-                    *)
+                    (* We are passing back over a binder, so remove the
+                       bound continuation from the free name information.
+                       Then compute the free names of the whole [Let_cont]. *)
+                    let name_occurrences_body =
+                      Name_occurrences.remove_continuation
+                        name_occurrences_body cont
+                    in
                     (* Having rebuilt both the body and handler, the [Let_cont]
                        expression itself is rebuilt -- unless either the
                        continuation had zero uses, in which case we're left
@@ -412,8 +415,16 @@ let simplify_non_recursive_let_cont dacc non_rec ~down_to_up =
                        out-of-scope continuation bindings do not end up in the
                        accumulator. *)
                     let uacc = UA.with_uenv uacc uenv_without_cont in
-                    let expr =
-                      if remove_let_cont_leaving_body then body
+                    let expr, uacc =
+                      if remove_let_cont_leaving_body then
+                        let uacc =
+                          let name_occurrences =
+                            Name_occurrences.union name_occurrences_body
+                              name_occurrences_subsequent_exprs
+                          in
+                          UA.with_name_occurrences uacc ~name_occurrences
+                        in
+                        body, uacc
                       else
                         let remove_let_cont_leaving_handler =
                           match Expr.descr body with
@@ -432,12 +443,33 @@ let simplify_non_recursive_let_cont dacc non_rec ~down_to_up =
                           | Let_cont _ -> false
                         in
                         if remove_let_cont_leaving_handler then
-                          CH.pattern_match handler ~f:(fun _params ~handler ->
-                            handler)
+                          let handler =
+                            CH.pattern_match handler ~f:(fun _params ~handler ->
+                              handler)
+                          in
+                          let uacc =
+                            let name_occurrences =
+                              Name_occurrences.union name_occurrences_handler
+                                name_occurrences_subsequent_exprs
+                            in
+                            UA.with_name_occurrences uacc ~name_occurrences
+                          in
+                          handler, uacc
                         else
-                          Let_cont.create_non_recursive' ~cont handler ~body
-                            ~num_free_occurrences_of_cont_in_body:
-                              (Known num_free_occurrences_of_cont_in_body)
+                          let uacc =
+                            let name_occurrences =
+                              Name_occurrences.union name_occurrences_body
+                                (Name_occurrences.union name_occurrences_handler
+                                  name_occurrences_subsequent_exprs)
+                            in
+                            UA.with_name_occurrences uacc ~name_occurrences
+                          in
+                          let expr =
+                            Let_cont.create_non_recursive' ~cont handler ~body
+                              ~num_free_occurrences_of_cont_in_body:
+                                (Known num_free_occurrences_of_cont_in_body)
+                          in
+                          expr, uacc
                     in
                     after_rebuild expr uacc)))))))
 

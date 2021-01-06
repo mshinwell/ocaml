@@ -285,7 +285,17 @@ end = struct
       N.equal n1 n2 && Kind.equal kind1 kind2
     | Potentially_many map1, Potentially_many map2 ->
       N.Map.equal For_one_name.equal map1 map2
-    | (Empty | One _ | Potentially_many _), _ -> false
+    | Empty, Potentially_many map
+    | Potentially_many map, Empty -> N.Map.is_empty map
+    | One (n1, kind1), Potentially_many map
+    | Potentially_many map, One (n1, kind1) ->
+      begin match N.Map.get_singleton map with
+      | None -> false
+      | Some (n2, for_one_name2) ->
+        let for_one_name1 = For_one_name.one_occurrence kind1 in
+        N.equal n1 n2 && For_one_name.equal for_one_name1 for_one_name2
+      end
+    | (Empty | One _), _ -> false
 
   let empty = Empty
 
@@ -874,12 +884,41 @@ let binary_op ~for_names ~for_continuations ~for_closure_vars ~for_code_ids
     newer_version_of_code_ids;
   }
 
-let diff t1 t2 =
-  binary_op ~for_names:For_names.diff
-    ~for_continuations:For_continuations.diff
-    ~for_closure_vars:For_closure_vars.diff
-    ~for_code_ids:For_code_ids.diff
-    t1 t2
+let diff
+      { names = names1;
+        continuations = continuations1;
+        continuations_in_trap_actions = continuations_in_trap_actions1;
+        closure_vars = closure_vars1;
+        code_ids = code_ids1;
+        newer_version_of_code_ids = newer_version_of_code_ids1;
+      }
+      { names = names2;
+        continuations = continuations2;
+        continuations_in_trap_actions = continuations_in_trap_actions2;
+        closure_vars = closure_vars2;
+        code_ids = code_ids2;
+        newer_version_of_code_ids = newer_version_of_code_ids2;
+      } =
+  let names = For_names.diff names1 names2 in
+  let continuations = For_continuations.diff continuations1 continuations2 in
+  let continuations_in_trap_actions =
+    For_continuations.diff continuations_in_trap_actions1
+      continuations_in_trap_actions2
+  in
+  let closure_vars = For_closure_vars.diff closure_vars1 closure_vars2 in
+  let code_ids = For_code_ids.diff code_ids1 code_ids2 in
+  let newer_version_of_code_ids =
+    For_code_ids.diff newer_version_of_code_ids1
+      (* Note special case here: *)
+      (For_code_ids.union newer_version_of_code_ids2 code_ids2)
+  in
+  { names;
+    continuations;
+    continuations_in_trap_actions;
+    closure_vars;
+    code_ids;
+    newer_version_of_code_ids;
+  }
 
 let union t1 t2 =
   binary_op ~for_names:For_names.union

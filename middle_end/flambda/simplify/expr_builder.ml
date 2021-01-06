@@ -221,6 +221,9 @@ let create_raw_let_symbol uacc bound_symbols scoping_rule static_consts ~body =
     Let.create bindable defining_expr ~body
       ~free_names_of_body:(Known free_names_of_body)
   in
+  Format.eprintf "About to create let_expr:@ %a\nfree names of let:@ %a\n%!"
+    Let.print let_expr
+    Name_occurrences.print free_names_of_let;
   Expr.create_let let_expr, uacc
 
 let create_let_symbol0 uacc code_age_relation (bound_symbols : Bound_symbols.t)
@@ -228,6 +231,17 @@ let create_let_symbol0 uacc code_age_relation (bound_symbols : Bound_symbols.t)
   (* Upon entry to this function, [UA.name_occurrences uacc] must precisely
      indicate the free names of [body]. *)
   let free_names_after = UA.name_occurrences uacc in
+  let free_names = Expr.free_names body in
+  if not (Name_occurrences.equal free_names free_names_after)
+  then begin
+    Misc.fatal_errorf "Mismatch on free names (create_let_symbol0):@ \n\
+        From UA:@ %a@ \n\
+        From expr:@ %a@ \n\
+        Body:@ %a"
+      Name_occurrences.print free_names_after
+      Name_occurrences.print free_names
+      Expr.print body
+  end;
   let bound_names_unused =
     let being_defined =
       Bound_symbols.everything_being_defined bound_symbols

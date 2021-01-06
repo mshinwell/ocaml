@@ -97,6 +97,9 @@ let all_code t = t.all_code
 let name_occurrences t = t.name_occurrences
 
 let with_name_occurrences t ~name_occurrences =
+  Format.eprintf "REPLACING free names in UA:@ %a@ \n%s\n%!"
+    Name_occurrences.print name_occurrences
+    (Printexc.raw_backtrace_to_string (Printexc.get_callstack 20));
   if name_occurrences == t.name_occurrences then t
   else { t with name_occurrences; }
 
