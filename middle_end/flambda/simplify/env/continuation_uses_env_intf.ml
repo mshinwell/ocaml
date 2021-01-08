@@ -32,6 +32,8 @@ module type S = sig
     -> arg_types:Flambda_type.t list
     -> t * Apply_cont_rewrite_id.t
 
+  val delete_continuation_uses : t -> Continuation.t -> t
+
   val get_typing_env_no_more_than_one_use
      : t
     -> Continuation.t

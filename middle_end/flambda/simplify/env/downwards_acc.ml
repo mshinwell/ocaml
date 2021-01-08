@@ -80,6 +80,12 @@ let record_continuation_use t cont use_kind ~env_at_use
   in
   with_continuation_uses_env t ~cont_uses_env, id
 
+let delete_continuation_uses t cont =
+  let cont_uses_env =
+    CUE.delete_continuation_uses t.continuation_uses_env cont
+  in
+  with_continuation_uses_env t ~cont_uses_env
+
 let compute_handler_env t ~env_at_fork_plus_params_and_consts
       ~consts_lifted_during_body cont ~params =
   CUE.compute_handler_env t.continuation_uses_env

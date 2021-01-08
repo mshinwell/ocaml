@@ -91,3 +91,5 @@ let union t1 t2 =
 let remove t cont =
   { continuation_uses = Continuation.Map.remove cont t.continuation_uses;
   }
+
+let delete_continuation_uses = remove

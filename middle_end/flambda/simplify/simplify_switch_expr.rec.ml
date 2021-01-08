@@ -141,7 +141,10 @@ let rebuild_switch dacc ~arms ~scrutinee ~scrutinee_ty uacc
        from the simplification of the existing uses.  We must clear these to
        avoid a lookup failure for our new [Apply_cont] when
        [Simplify_apply_cont] tries to rewrite the use.  There is no need for
-       the rewrites anyway; they have already been applied. *)
+       the rewrites anyway; they have already been applied.
+       Likewise, we need to clear the continuation uses environment for
+       [dest] in [dacc], since our new [Apply_cont] might not match the
+       original uses (e.g. if a parameter has been removed). *)
     let uacc =
       UA.map_uenv uacc ~f:(fun uenv ->
         UE.delete_apply_cont_rewrite uenv dest)
@@ -173,45 +176,48 @@ let rebuild_switch dacc ~arms ~scrutinee ~scrutinee_ty uacc
      (see below) after we have constructed the necessary expressions. *)
   let free_names_after = UA.name_occurrences uacc in
   let body, uacc =
-    let dbg = Debuginfo.none in
-    match switch_is_identity with
-    | Some dest ->
-      create_tagged_scrutinee dest ~make_body:(fun ~tagged_scrutinee ->
-        Apply_cont.create dest ~args:[tagged_scrutinee] ~dbg
-        |> Expr.create_apply_cont)
-    | None ->
-      match switch_is_boolean_not with
+    if Target_imm.Map.cardinal arms < 1 then
+      Expr.create_invalid (), uacc
+    else
+      let dbg = Debuginfo.none in
+      match switch_is_identity with
       | Some dest ->
         create_tagged_scrutinee dest ~make_body:(fun ~tagged_scrutinee ->
-          let not_scrutinee = Variable.create "not_scrutinee" in
-          let not_scrutinee' = Simple.var not_scrutinee in
-          let do_tagging =
-            Named.create_prim (P.Unary (Boolean_not, tagged_scrutinee))
-              Debuginfo.none
-          in
-          let bound =
-            VB.create not_scrutinee NM.normal
-            |> Bindable_let_bound.singleton
-          in
-          let body =
-            Apply_cont.create dest ~args:[not_scrutinee'] ~dbg
-            |> Expr.create_apply_cont
-          in
-          Let.create bound do_tagging ~body
-            ~free_names_of_body:(Known (Expr.free_names body))
-          |> Expr.create_let)
+          Apply_cont.create dest ~args:[tagged_scrutinee] ~dbg
+          |> Expr.create_apply_cont)
       | None ->
-        let expr = Expr.create_switch ~scrutinee ~arms in
-        if !Clflags.flambda_invariant_checks
-          && Simple.is_const scrutinee
-          && Target_imm.Map.cardinal arms > 1
-        then begin
-          Misc.fatal_errorf "[Switch] with constant scrutinee (type: %a) \
-              should have been simplified away:@ %a"
-            T.print scrutinee_ty
-            Expr.print expr
-        end;
-        expr, uacc
+        match switch_is_boolean_not with
+        | Some dest ->
+          create_tagged_scrutinee dest ~make_body:(fun ~tagged_scrutinee ->
+            let not_scrutinee = Variable.create "not_scrutinee" in
+            let not_scrutinee' = Simple.var not_scrutinee in
+            let do_tagging =
+              Named.create_prim (P.Unary (Boolean_not, tagged_scrutinee))
+                Debuginfo.none
+            in
+            let bound =
+              VB.create not_scrutinee NM.normal
+              |> Bindable_let_bound.singleton
+            in
+            let body =
+              Apply_cont.create dest ~args:[not_scrutinee'] ~dbg
+              |> Expr.create_apply_cont
+            in
+            Let.create bound do_tagging ~body
+              ~free_names_of_body:(Known (Expr.free_names body))
+            |> Expr.create_let)
+        | None ->
+          let expr = Expr.create_switch ~scrutinee ~arms in
+          if !Clflags.flambda_invariant_checks
+            && Simple.is_const scrutinee
+            && Target_imm.Map.cardinal arms > 1
+          then begin
+            Misc.fatal_errorf "[Switch] with constant scrutinee (type: %a) \
+                should have been simplified away:@ %a"
+              T.print scrutinee_ty
+              Expr.print expr
+          end;
+          expr, uacc
   in
   (* The calls to [Expr.free_names] here are only on (very) small expressions,
      so shouldn't be a performance hit. *)
