@@ -149,6 +149,7 @@ let rebuild_switch dacc ~arms ~scrutinee ~scrutinee_ty uacc
       UA.map_uenv uacc ~f:(fun uenv ->
         UE.delete_apply_cont_rewrite uenv dest)
     in
+    let dacc = DA.delete_continuation_uses dacc dest in
     let bound_to = Variable.create "tagged_scrutinee" in
     let body = make_body ~tagged_scrutinee:(Simple.var bound_to) in
     let bound_to = Var_in_binding_pos.create bound_to NM.normal in
