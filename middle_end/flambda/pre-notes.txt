@@ -1,0 +1,19 @@
+PDCE
+
+- predicate on primitives
+- no coeffects, at most generative effects
+- these things can be delayed and removed
+- delay as late as possible but no later than first existing use
+- at a fork point, push everywhere, but the end result will be that
+on branches where the prim isn't needed, just won't be there
+- join: propagate: var = prim assuming that exists for all params.
+We need to make sure the simples used to build the primitives are
+also propagated - a bit like the unboxing.  Need to add new parameters.
+CSE params are also like this.
+- thus far it duplicates things
+- so, need to insert them at first point where they are totally anticipated
+- upwards propagation based on uses
+- join on the way up (i.e. a fork): if only used down one side, need to
+add another continuation to bounce through.
+- maybe simple usage of var tracking on the way up is sufficient
+(incl cont parameters).

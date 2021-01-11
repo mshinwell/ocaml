@@ -251,9 +251,6 @@ let create_let_symbol0 uacc code_age_relation (bound_symbols : Bound_symbols.t)
   let code_ids_after =
     Name_occurrences.code_ids free_names_after
   in
-  let code_ids_only_used_in_newer_version_of_after =
-    Code_id.Set.diff newer_version_of_code_ids_after code_ids_after
-  in
   let all_code_ids_free_names_after =
     Code_id.Set.union newer_version_of_code_ids_after code_ids_after
   in
@@ -276,6 +273,9 @@ let create_let_symbol0 uacc code_age_relation (bound_symbols : Bound_symbols.t)
             Static_const_with_free_names.free_names static_const
             |> Name_occurrences.code_ids
             |> Code_id.Set.union code_ids)
+      in
+      let code_ids_only_used_in_newer_version_of_after =
+        Code_id.Set.diff newer_version_of_code_ids_after code_ids_after
       in
       let code_ids_only_used_in_newer_version_of =
         Code_id.Set.inter all_code_ids_bound_names
