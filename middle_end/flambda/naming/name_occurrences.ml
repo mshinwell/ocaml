@@ -1046,6 +1046,8 @@ let mem_name t name = For_names.mem t.names name
 let mem_var t var = For_names.mem t.names (Name.var var)
 let mem_symbol t symbol = For_names.mem t.names (Name.symbol symbol)
 let mem_code_id t code_id = For_code_ids.mem t.code_ids code_id
+let mem_newer_version_of_code_id t code_id =
+  For_code_ids.mem t.newer_version_of_code_ids code_id
 let mem_closure_var t closure_var =
   For_closure_vars.mem t.closure_vars closure_var
 

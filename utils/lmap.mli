@@ -82,6 +82,8 @@ module type S = sig
   val filter_map: (key -> 'a -> 'b option) -> 'a t -> 'b t
   val to_seq : 'a t -> (key * 'a) Seq.t
 
+  val for_all_with_fixed_arg : (key -> 'a -> 'b -> bool) -> 'a t -> 'b -> bool
+
   val exists : (key -> 'a -> bool) -> 'a t -> bool
 
   (** Keys in the sequence must be distinct from each other and from keys

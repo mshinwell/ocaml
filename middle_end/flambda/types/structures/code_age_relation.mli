@@ -59,6 +59,16 @@ val newer_versions_form_linear_chain
   -> all_code_ids_still_existing:Code_id.Set.t
   -> bool
 
+(* Like [newer_versions_form_linear_chain] but takes a [Name_occurrences.t]
+   to specify which code IDs still exist.  Both the code IDs and
+   "newer version of" code IDs in the [Name_occurrences.t] are taken into
+   account. *)
+val newer_versions_form_linear_chain'
+   : t
+  -> Code_id.t
+  -> all_free_names_still_existing:Name_occurrences.t
+  -> bool
+
 val union : t -> t -> t
 
 val all_code_ids_for_export : t -> Code_id.Set.t

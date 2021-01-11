@@ -117,6 +117,19 @@ let rec newer_versions_form_linear_chain t id ~all_code_ids_still_existing =
       newer_versions_form_linear_chain t id ~all_code_ids_still_existing
     | More_than_one_newer_version -> false
 
+let rec newer_versions_form_linear_chain' t id
+      ~all_free_names_still_existing =
+  if (not (Name_occurrences.mem_code_id all_free_names_still_existing id))
+    && (not (Name_occurrences.mem_newer_version_of_code_id
+      all_free_names_still_existing id))
+  then true
+  else
+    match has_at_most_one_newer_version t id with
+    | No_newer_version -> true
+    | Exactly_one_newer_version id ->
+      newer_versions_form_linear_chain' t id ~all_free_names_still_existing
+    | More_than_one_newer_version -> false
+
 let union t1 t2 =
   Code_id.Map.disjoint_union ~eq:Code_id.equal t1 t2
 

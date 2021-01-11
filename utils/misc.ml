@@ -386,6 +386,11 @@ module Stdlib = struct
       let next (acc, env) x = let (y, env) = f env x in (y :: acc, env) in
       let (acc, env) = List.fold_left next ([], env) l in
       (List.rev acc, env)
+
+    let rec for_all_with_fixed_arg f t fixed_arg =
+      match t with
+      | [] -> true
+      | x::t -> f x fixed_arg && for_all_with_fixed_arg f t fixed_arg
   end
 
   module Option = struct

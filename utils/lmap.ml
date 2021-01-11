@@ -33,6 +33,7 @@ module type S = sig
   val map_sharing: ('a -> 'a) -> 'a t -> 'a t
   val filter_map: (key -> 'a -> 'b option) -> 'a t -> 'b t
   val to_seq : 'a t -> (key * 'a) Seq.t
+  val for_all_with_fixed_arg : (key -> 'a -> 'b -> bool) -> 'a t -> 'b -> bool
   val exists : (key -> 'a -> bool) -> 'a t -> bool
   val add_seq : (key * 'a) Seq.t -> 'a t -> 'a t
   val of_seq : (key * 'a) Seq.t -> 'a t
@@ -57,6 +58,12 @@ module Make (T : Thing) : S with type key = T.t = struct
   let iter f m = List.iter (fun (k, v) -> f k v) m
   let fold f m b = List.fold_left (fun b (k, v) -> f k v b) b m
   let filter p m = List.filter (fun (k, v) -> p k v) m
+
+  let rec for_all_with_fixed_arg f m fixed_arg =
+    match m with
+    | [] -> true
+    | (k, v)::m -> f k v fixed_arg && for_all_with_fixed_arg f m fixed_arg
+
   let exists f m = List.exists (fun (k, v) -> f k v) m
   let keys m = List.map fst m
   let data m = List.map snd m

@@ -62,6 +62,11 @@ module Pattern = struct
     | Code code_id -> Code_id.Set.singleton code_id
     | Set_of_closures _ | Block_like _ -> Code_id.Set.empty
 
+  let binds_code t =
+    match t with
+    | Code _ -> true
+    | Set_of_closures _ | Block_like _ -> false
+
   let closure_symbols_being_defined t =
     match t with
     | Code _ | Block_like _ -> Symbol.Set.empty
@@ -79,6 +84,16 @@ module Pattern = struct
       |> Symbol.Set.of_list
       |> Code_id_or_symbol.set_of_symbol_set
     | Block_like symbol -> Code_id_or_symbol.Set.singleton (Symbol symbol)
+
+  let for_all_everything_being_defined t ~f =
+    match t with
+    | Code code_id -> f (Code_id_or_symbol.Code_id code_id)
+    | Set_of_closures closure_symbols ->
+      Closure_id.Lmap.for_all_with_fixed_arg (fun _closure_id symbol f ->
+          f (Code_id_or_symbol.Symbol symbol))
+        closure_symbols
+        f
+    | Block_like symbol -> f (Code_id_or_symbol.Symbol symbol)
 
   let all_ids_for_export t =
     match t with
@@ -137,12 +152,23 @@ let non_closure_symbols_being_defined t =
   Symbol.Set.diff (being_defined t) (closure_symbols_being_defined t)
 
 let code_being_defined t =
-  List.map Pattern.code_being_defined t
-  |> Code_id.Set.union_list
+  List.fold_left (fun code_ids pattern ->
+      Code_id.Set.union code_ids (Pattern.code_being_defined pattern))
+    Code_id.Set.empty
+    t
+
+let binds_code t =
+  List.exists Pattern.binds_code t
 
 let everything_being_defined t =
   List.map Pattern.everything_being_defined t
   |> Code_id_or_symbol.Set.union_list
+
+let for_all_everything_being_defined t ~f =
+  Misc.Stdlib.List.for_all_with_fixed_arg (fun pattern f ->
+      Pattern.for_all_everything_being_defined pattern ~f)
+    t
+    f
 
 let apply_name_permutation t _perm = t
 
