@@ -243,9 +243,28 @@ module Int_indexed = struct
     let length1 = Array.length fields1 in
     let length2 = Array.length fields2 in
     let length = min length1 length2 in
+    let exception Exit in
+    let all_phys_equal =
+      try
+        for index = 0 to length - 1 do
+          if fields1.(index) != fields2.(index) then begin
+            raise Exit
+          end
+        done;
+        true
+      with Exit -> false
+    in
     let fields =
-      Array.init length (fun index ->
-        Type_grammar.join' env fields1.(index) fields2.(index))
+      if all_phys_equal then
+        if length1 = length then fields1
+        else begin
+          assert (length2 = length);
+          fields2
+        end
+      else
+        Array.init length (fun index ->
+          if fields1.(index) == fields2.(index) then fields1.(index)
+          else Type_grammar.join' env fields1.(index) fields2.(index))
     in
     { kind = t1.kind; fields }
 
