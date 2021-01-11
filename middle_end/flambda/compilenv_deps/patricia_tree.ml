@@ -1074,17 +1074,20 @@ struct
 
   (* CR mshinwell: fix this *)
   let disjoint_union ?eq ?print t1 t2 =
-    ignore print;
-    let fail key =
-      Misc.fatal_errorf
-        "Patricia_tree.disjoint_union: key %a is in intersection"
-        Key.print key
-    in
-    union (fun key datum1 datum2 ->
-        match eq with
-        | None -> fail key
-        | Some eq -> if eq datum1 datum2 then Some datum1 else fail key)
-      t1 t2
+    if t1 == t2 then t1
+    else begin
+      ignore print;
+      let fail key =
+        Misc.fatal_errorf
+          "Patricia_tree.disjoint_union: key %a is in intersection"
+          Key.print key
+      in
+      union (fun key datum1 datum2 ->
+          match eq with
+          | None -> fail key
+          | Some eq -> if eq datum1 datum2 then Some datum1 else fail key)
+        t1 t2
+    end
 
   let union_left _ _ = Misc.fatal_error "union_left not yet implemented"
 
