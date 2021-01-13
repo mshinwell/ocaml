@@ -17,3 +17,97 @@ CSE params are also like this.
 add another continuation to bounce through.
 - maybe simple usage of var tracking on the way up is sufficient
 (incl cont parameters).
+
+On the downwards pass, there seems to be overlap with typing information.
+
+All our variables are unique, so we effectively have global value numbering.
+- not sure this is right, we still need to track across continuations.
+
+Available expressions analysis (forwards):
+
+This is like a normal availability analysis (following the dominator
+relation) except that we force availability by adding extra continuation
+parameters as required. This makes the actual [Named.t] expressions,
+computing primitives that are being sunk, available at every program point
+that postdominates their definition.
+
+In dacc we store a map from variables to eligible primitives.
+PDCE eligibility criterion = CSE eligibility criterion in general, but for
+the moment let's do Box_number only.  This will also help speed.
+
+We only need to deal with mappings from variables; lifted constants don't
+need to be counted, since they are available everywhere without further
+computation.
+
+New idea:
+- Identify x = prim(a0 ... an), eligible.
+- Track v \in {x, a0, ..., an} all the way to the bottom of the program, i.e.
+for each of these variables v, form a set of variables all of which are
+aliases to that variable v.
+- Add extra continuation parameters to ensure that all such v remain
+available to the bottom of the program. (**)
+- Then on the way up, we can identify:
+  (a) uses of the original expression (by looking for x and its aliases); and
+  (b) have available all variables required to compute the original expression
+      at any program point.  For this we would need to pick each of a0...an
+      in turn and filter the set of their aliases to find one which is
+      currently in scope.  There must always be at least one by virtue of the
+      step (**) above.
+
+Maybe we don't need to accumulate all the way to the bottom.  Instead we can
+read DA in simplify_apply_cont on the way down, then just remember what
+needs to happen at that continuation's application in the closure of the
+rebuilding function.  This also needs to happen for continuations in other
+contexts though, e.g. return continuations of Apply and Switch.  These will
+need to be dealt with using wrappers.  Maybe all of this can just go through
+the normal Apply_cont_rewrite mechanism?
+
+Hmm, perhaps that isn't enough.  When we get to a continuation handler on
+the way up we may need to place an expression.  However this requires knowing
+what variables are currently in scope for that.  I suppose that could go
+in DA, indexed by Continuation.t, and be transferred to UA on the way up.
+Look up continuation -> look up var bound to prim -> find args to use.
+In fact -- maybe this can just be communicated via the closure to the function
+rebuilding the Let_cont?
+
+Does increasing the granularity of placement on the way up help?  May still
+need to intersperse with [Let] though probably.
+
+Anticipated expressions analysis (backwards):
+
+We again start at occurrences of the primitives of interest. For each
+definition we propagate backwards, following the postdominator relation,
+stopping when we reach a fork point (in the dominator graph) where one of the
+incoming edges does not anticipate the expression. The expression must then
+be placed (in the dominator graph, just before that fork point, on every
+incoming edge where it is required). The variables required to build the
+expression must be in scope because it is available at this point, and we
+added extra continuation parameters when going downwards. The definition can
+then be removed from the set of ones being considered.
+- This isn't quite right, the variables for building the expression may
+have changed on the way down, e.g. via a [Let] alias or continuation
+parameter.
+
+On the way upwards, we need to track:
+- [Let]s that are aliases, in case any still exist
+- continuation parameter bindings, from the use sites
+
+We need to think about how this interacts with continuation inlining.
+
+The placement on the upwards pass isn't the same as for lifted
+constants.  For lifted constants:
+
+<body>
+where k ... =
+  <constant expr>
+  ...
+
+Since <constant expr> can't reference anything in <body> due to the scoping
+then it can be lifted outside the whole Let_cont.
+
+However: it would be ok (but maybe slower?) to lift <constant_expr> back
+through <body>, assuming the definition wasn't duplicated, I suppose.
+
+We need to do fine-grained placement between [Let] bindings, as for lifted
+constants.  We also need to be careful of dependencies between the
+available expressions.

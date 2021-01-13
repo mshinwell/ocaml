@@ -21,6 +21,7 @@ type t = {
   binding_times : Variable.Set.t Binding_time.Map.t;
   equations : Type_grammar.t Name.Map.t;
   cse : Simple.t Flambda_primitive.Eligible_for_cse.Map.t;
+  pdce : Flambda_primitive.Eligible_for_pdce.t Variable.Map.t;
   symbol_projections : Symbol_projection.t Variable.Map.t;
 }
 
@@ -39,7 +40,7 @@ let defines_name_but_no_equations t name =
 *)
 
 let print_with_cache ~cache ppf
-      { defined_vars; binding_times = _; equations; cse;
+      { defined_vars; binding_times = _; equations; cse; pdce;
         symbol_projections = _; } =
   (* CR mshinwell: print symbol projections along with tidying up this
      function *)
@@ -58,42 +59,17 @@ let print_with_cache ~cache ppf
         ppf equations;
       Format.pp_print_string ppf ")"
   in
-  (* CR mshinwell: Print [defined_vars] when not called from
-     [Typing_env.print] *)
-  if Variable.Map.is_empty defined_vars then
-    if Flambda_primitive.Eligible_for_cse.Map.is_empty cse then
-      Format.fprintf ppf
-        "@[<hov 1>(\
-          @[<hov 1>(equations@ @[<v 1>%a@])@])\
-          @]"
-        print_equations equations
-    else
-      Format.fprintf ppf
-        "@[<hov 1>(\
-          @[<hov 1>(equations@ @[<v 1>%a@])@])@ \
-          @[<hov 1>(cse@ @[<hov 1>%a@])@]\
-          @]"
-        print_equations equations
-        (Flambda_primitive.Eligible_for_cse.Map.print Simple.print) cse
-  else
-    if Flambda_primitive.Eligible_for_cse.Map.is_empty cse then
-      Format.fprintf ppf
-        "@[<hov 1>(\
-          @[<hov 1>(defined_vars@ @[<hov 1>%a@])@]@ \
-          @[<hov 1>(equations@ @[<v 1>%a@])@]@ \
-          )@]"
-        Variable.Set.print (Variable.Map.keys defined_vars) (* XXX *)
-        print_equations equations
-    else
-      Format.fprintf ppf
-        "@[<hov 1>(\
-          @[<hov 1>(defined_vars@ @[<hov 1>%a@])@]@ \
-          @[<hov 1>(equations@ @[<v 1>%a@])@]@ \
-          @[<hov 1>(cse@ @[<hov 1>%a@])@]\
-          )@]"
-        Variable.Set.print (Variable.Map.keys defined_vars)
-        print_equations equations
-        (Flambda_primitive.Eligible_for_cse.Map.print Simple.print) cse
+  Format.fprintf ppf
+      "@[<hov 1>(\
+       @[<hov 1>(defined_vars@ @[<hov 1>%a@])@]@ \
+       @[<hov 1>(equations@ @[<v 1>%a@])@]@ \
+       @[<hov 1>(cse@ @[<hov 1>%a@])@]\
+       @[<hov 1>(pdce@ @[<hov 1>%a@])@]\
+       )@]"
+    Variable.Set.print (Variable.Map.keys defined_vars)
+    print_equations equations
+    (Flambda_primitive.Eligible_for_cse.Map.print Simple.print) cse
+    (Variable.Map.print Flambda_primitive.Eligible_for_pdce.print) pdce
 
 let print ppf t =
   print_with_cache ~cache:(Printing_cache.create ()) ppf t
@@ -111,8 +87,8 @@ let fold_on_defined_vars f t init =
     init
 
 let apply_name_permutation
-      ({ defined_vars; binding_times; equations; cse; symbol_projections; }
-        as t)
+      ({ defined_vars; binding_times; equations; cse; pdce;
+         symbol_projections; } as t)
       perm =
   let defined_vars_changed = ref false in
   let defined_vars' =
@@ -165,23 +141,40 @@ let apply_name_permutation
       cse
       Flambda_primitive.Eligible_for_cse.Map.empty
   in
+  let pdce_changed = ref false in
+  let pdce' =
+    Variable.Map.fold (fun var prim pdce' ->
+        let var' = Name_permutation.apply_variable perm var in
+        let prim' =
+          Flambda_primitive.Eligible_for_pdce.apply_name_permutation prim perm
+        in
+        if (not (var == var')) || (not (prim == prim')) then begin
+          pdce_changed := true
+        end;
+        Variable.Map.add var' prim' pdce')
+      pdce
+      Variable.Map.empty
+  in
   (* CR mshinwell: Maybe we should call
      [Symbol_projection.apply_name_permutation] even though it currently
      does nothing? *)
   if (not !defined_vars_changed)
     && (not !equations_changed)
     && (not !cse_changed)
+    && (not !pdce_changed)
   then t
   else
     { defined_vars = defined_vars';
       binding_times = binding_times';
       equations = equations';
       cse = cse';
+      pdce = pdce';
       symbol_projections;
     }
 
 let free_names
-      { defined_vars; binding_times = _; equations; cse; symbol_projections; } =
+      { defined_vars; binding_times = _; equations; cse; pdce;
+        symbol_projections; } =
   let free_names_defined_vars =
     Name_occurrences.create_variables (Variable.Map.keys defined_vars)
       Name_mode.in_types
@@ -196,7 +189,7 @@ let free_names
       equations
       free_names_defined_vars
   in
-  let free_names =
+  let free_names_cse =
     Flambda_primitive.Eligible_for_cse.Map.fold
       (fun prim (bound_to : Simple.t) acc ->
         Simple.pattern_match bound_to
@@ -212,6 +205,17 @@ let free_names
       cse
       free_names_equations
   in
+  let free_names =
+    Variable.Map.fold (fun bound_to prim acc ->
+        let free_in_prim =
+          Name_occurrences.downgrade_occurrences_at_strictly_greater_kind
+            (Flambda_primitive.Eligible_for_cse.free_names prim)
+            Name_mode.in_types
+        in
+        Name_occurrences.add_variable free_in_prim bound_to Name_mode.in_types)
+      pdce
+      free_names_cse
+  in
   Variable.Map.fold (fun _var proj free_names ->
       Name_occurrences.union free_names
         (Symbol_projection.free_names proj))
@@ -223,21 +227,25 @@ let empty () =
     binding_times = Binding_time.Map.empty;
     equations = Name.Map.empty;
     cse = Flambda_primitive.Eligible_for_cse.Map.empty;
+    pdce = Variable.Map.empty;
     symbol_projections = Variable.Map.empty;
   }
 
 let is_empty
-      { defined_vars; binding_times; equations; cse;
+      { defined_vars; binding_times; equations; cse; pdce;
         symbol_projections; } =
   Variable.Map.is_empty defined_vars
     && Binding_time.Map.is_empty binding_times
     && Name.Map.is_empty equations
     && Flambda_primitive.Eligible_for_cse.Map.is_empty cse
+    && Variable.Map.is_empty pdce
     && Variable.Map.is_empty symbol_projections
 
 let equations t = t.equations
 
 let cse t = t.cse
+
+let pdce t = t.pdce
 
 let symbol_projections t = t.symbol_projections
 
@@ -295,6 +303,7 @@ let one_equation name ty =
     binding_times = Binding_time.Map.empty;
     equations = Name.Map.singleton name ty;
     cse = Flambda_primitive.Eligible_for_cse.Map.empty;
+    pdce = Variable.Map.empty;
     symbol_projections = Variable.Map.empty;
   }
 
@@ -317,6 +326,18 @@ let add_cse t prim ~bound_to =
     in
     { t with cse; }
   | _bound_to -> t
+
+let add_pdce t ~bound_to prim =
+  match Variable.Map.find bound_to t.pdce with
+  | exception Not_found ->
+    let pdce = Variable.Map.add bound_to prim t.pdce in
+    { t with pdce; }
+  | _bound_to ->
+    Misc.fatal_errorf "Cannot add new binding %a = %a for PDCE since there \
+        is already a binding for this variable:@ %a"
+      Variable.print bound_to
+      Flambda_primitive.Eligible_for_pdce.print prim
+      print t
 
 let concat (t1 : t) (t2 : t) =
   let defined_vars =
@@ -348,9 +369,16 @@ let concat (t1 : t) (t2 : t) =
     Name.Map.union (fun _ _ty1 ty2 -> Some ty2) t1.equations t2.equations
   in
   let cse =
+    (* CR mshinwell: Is this inconsistent with the semantics of [add_cse]
+       above for existing bindings? *)
     Flambda_primitive.Eligible_for_cse.Map.union (fun _prim _t1 t2 -> Some t2)
       t1.cse
       t2.cse
+  in
+  let pdce =
+    Variable.Map.union (fun _prim _t1 t2 -> Some t2)
+      t1.pdce
+      t2.pdce
   in
   let symbol_projections =
     Variable.Map.union (fun _var _proj1 proj2 -> Some proj2)
@@ -361,6 +389,7 @@ let concat (t1 : t) (t2 : t) =
     binding_times;
     equations;
     cse;
+    pdce;
     symbol_projections;
   }
 
@@ -484,6 +513,16 @@ let meet0 env (t1 : t) (t2 : t) =
           else None)
       t1.cse t2.cse
   in
+  let pdce =
+    Variable.Map.merge (fun _ prim1 prim2 ->
+        match prim1, prim2 with
+        | None, None | None, Some _ | Some _, None -> None
+        | Some prim1, Some prim2 ->
+          if Flambda_primitive.Eligible_for_pdce.equal prim1 prim2
+          then Some prim1
+          else None)
+      t1.pdce t2.pdce
+  in
   let symbol_projections =
     Variable.Map.union (fun _ proj1 proj2 ->
         (* CR vlaviron:
@@ -500,6 +539,7 @@ let meet0 env (t1 : t) (t2 : t) =
   in
   { t with
     cse;
+    pdce;
     symbol_projections;
   }
 
@@ -569,6 +609,17 @@ let extend env t1 ~ext:t2 =
       t2.cse
       t1.cse
   in
+  let pdce =
+    Variable.Map.fold (fun var prim pdce ->
+        match Variable.Map.find var pdce with
+        | exception Not_found -> Variable.Map.add var prim pdce
+        | existing_prim ->
+          if Flambda_primitive.Eligible_for_pdce.equal prim existing_prim
+          then pdce
+          else Variable.Map.remove var pdce)
+      t2.pdce
+      t1.pdce
+  in
   let symbol_projections =
     Variable.Map.fold (fun var proj symbol_projections ->
         match Variable.Map.find var symbol_projections with
@@ -583,6 +634,7 @@ let extend env t1 ~ext:t2 =
     binding_times;
     equations;
     cse;
+    pdce;
     symbol_projections;
   }
 
@@ -925,9 +977,36 @@ let join_cse envs_with_levels cse ~allowed =
      Name.Map.empty,
      allowed)
 
+let join_pdce ~env_at_fork envs_with_levels extra_params ~allowed =
+  let joined_pdce =
+    ListLabels.fold_left envs_with_levels
+      ~init:Variable.Map.empty
+      ~f:(fun joined_pdce (_env_at_use, _, _, t) ->
+        Variable.Map.merge (fun _bound_to prim joined_prim ->
+            match prim, joined_prim with
+            (* The PDCE equation must be present at all use sites in order to
+               be propagated to the join point.  There is no need to resolve
+               aliases (either for [bound_to] or any variables inside
+               [prim]). *)
+            | None, None | None, Some _ | Some _, None -> None
+            | Some prim, Some joined_prim ->
+              if Flambda_primitive.Eligible_for_pdce.equal prim joined_prim
+              then Some prim
+              else None)
+          t.pdce
+          joined_pdce)
+  in
+  let extra_params =
+    Variable.Map.fold (fun bound_to prim extra_params ->
+
+      joined_pdce
+      extra_params
+  in
+  let allowed = Variable.Set.union allowed (Variable.Map.keys joined_pdce) in
+  joined_pdce, extra_params, allowed
+
 let construct_joined_level envs_with_levels ~env_at_fork ~allowed
-      ~joined_types ~cse =
-  let module EP = Flambda_primitive.Eligible_for_cse in
+      ~joined_types ~cse ~pdce =
   let defined_vars, binding_times =
     List.fold_left (fun (defined_vars, binding_times)
                      (_env_at_use, _id, _use_kind, t) ->
@@ -978,7 +1057,7 @@ let construct_joined_level envs_with_levels ~env_at_fork ~allowed
     (* Any CSE equation whose right-hand side identifies a name in the [allowed]
        set is propagated.  We don't need to check the left-hand sides because
        we know all of those names are in [env_at_fork]. *)
-    EP.Map.filter (fun _prim bound_to ->
+    Flambda_primitive.Eligible_for_cse.Map.filter (fun _prim bound_to ->
         Simple.pattern_match bound_to
           ~const:(fun _ -> true)
           ~name:(fun name -> Name_occurrences.mem_name allowed name))
@@ -1001,12 +1080,16 @@ let construct_joined_level envs_with_levels ~env_at_fork ~allowed
       Variable.Map.empty
       envs_with_levels
   in
-  { defined_vars;
-    binding_times;
-    equations;
-    cse;
-    symbol_projections;
-  }
+  let t =
+    { defined_vars;
+      binding_times;
+      equations;
+      cse;
+      pdce;
+      symbol_projections;
+    }
+  in
+  (* add types for new pdce
 
 let check_join_inputs ~env_at_fork _envs_with_levels ~params
       ~extra_lifted_consts_in_use_envs =
@@ -1177,6 +1260,9 @@ let join ~env_at_fork envs_with_levels ~params
     do_rounds 1 EP.Map.empty Continuation_extra_params_and_args.empty
       Name.Map.empty allowed
   in
+  let pdce, extra_params, allowed =
+    join_pdce ~env_at_fork envs_with_levels extra_params ~allowed
+  in
   let joined_types =
     Name.Map.union (fun name _ty_join _ty_cse ->
         Misc.fatal_errorf "Name %a from cse already present in joined_types"
@@ -1193,7 +1279,7 @@ let join ~env_at_fork envs_with_levels ~params
      now be constructed. *)
   let t =
     construct_joined_level envs_with_levels ~env_at_fork ~allowed
-      ~joined_types ~cse
+      ~joined_types ~cse ~pdce
   in
   (*
   Format.eprintf "Join result:@ %a\n%!" print t;
@@ -1228,6 +1314,15 @@ let all_ids_for_export t =
     Ids_for_export.add_simple ids simple
   in
   let ids = Flambda_primitive.Eligible_for_cse.Map.fold cse t.cse ids in
+  let pdce var prim ids =
+    let ids, _ =
+      Flambda_primitive.Eligible_for_pdce.fold_args prim
+        ~init:ids ~f:(fun ids simple ->
+          Ids_for_export.add_simple ids simple, simple)
+    in
+    Ids_for_export.add_variable ids var
+  in
+  let ids = Variable.Map.fold pdce t.pdce ids in
   let symbol_projection var proj ids =
     let ids =
       Ids_for_export.union ids (Symbol_projection.all_ids_for_export proj)

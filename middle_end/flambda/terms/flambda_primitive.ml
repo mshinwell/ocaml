@@ -597,6 +597,28 @@ let unary_primitive_eligible_for_cse p ~arg =
        be deduplicated -- so there's no point in adding CSE variables to
        hold them. *)
     Simple.is_var arg
+    (* CR mshinwell: the above check appears redundant with one in
+       [Eligible_for_cse.create] *)
+  | Select_closure _
+  | Project_var _ -> false
+
+let unary_primitive_eligible_for_pdce p =
+  match p with
+  | Box_number _ -> true
+  | Duplicate_array _
+  | Duplicate_block _
+  | Is_int
+  | Get_tag
+  | Array_length _
+  | Bigarray_length _
+  | String_length _
+  | Int_as_pointer
+  | Opaque_identity
+  | Int_arith _
+  | Float_arith _
+  | Num_conv _
+  | Boolean_not
+  | Unbox_number _
   | Select_closure _
   | Project_var _ -> false
 
@@ -949,6 +971,19 @@ let binary_primitive_eligible_for_cse p =
        we would also CSE floating-point arithmetic operations. *)
     !Clflags.float_const_prop
 
+let binary_primitive_eligible_for_pdce p =
+  match p with
+  | Array_load _
+  | Block_load _
+  | String_or_bigstring_load _
+  | Bigarray_load _
+  | Phys_equal _
+  | Int_arith _
+  | Int_shift _
+  | Int_comp _
+  | Float_arith _
+  | Float_comp _ -> false
+
 let compare_binary_primitive p1 p2 =
   let binary_primitive_numbering p =
     match p with
@@ -1145,6 +1180,13 @@ let ternary_primitive_eligible_for_cse p =
   | Bytes_or_bigstring_set _
   | Bigarray_set _ -> false
 
+let ternary_primitive_eligible_for_pdce p =
+  match p with
+  | Block_set _
+  | Array_set _
+  | Bytes_or_bigstring_set _
+  | Bigarray_set _ -> false
+
 let compare_ternary_primitive p1 p2 =
   let ternary_primitive_numbering p =
     match p with
@@ -1266,6 +1308,11 @@ let variadic_primitive_eligible_for_cse p ~args =
   | Make_block (_, Immutable_unique)
   | Make_array (_, Immutable_unique) -> false
   | Make_block (_, Mutable) | Make_array (_, Mutable) -> false
+
+let variadic_primitive_eligible_for_pdce p =
+  match p with
+  | Make_block _
+  | Make_array _ -> false
 
 let compare_variadic_primitive p1 p2 =
   match p1, p2 with
@@ -1762,6 +1809,81 @@ module Eligible_for_cse = struct
         if List.for_all2 (==) args args' then Some t
         else Some (Variadic (prim, args'))
       else None
+
+  let free_names = free_names
+  let apply_name_permutation = apply_name_permutation
+
+  include Identifiable.Make (struct
+    type nonrec t = t
+
+    let compare = compare
+    let equal = equal
+    let hash = hash
+    let print = print
+    let output = output
+  end)
+
+  let equal t1 t2 =
+    compare t1 t2 = 0
+end
+
+module Eligible_for_pdce = struct
+  type t = primitive_application
+
+  let create ?map_arg t =
+    let prim_eligible =
+      match t with
+      | Unary (prim, _) -> unary_primitive_eligible_for_pdce prim
+      | Binary (prim, _, _) -> binary_primitive_eligible_for_pdce prim
+      | Ternary (prim, _, _, _) -> ternary_primitive_eligible_for_pdce prim
+      | Variadic (prim, _) -> variadic_primitive_eligible_for_pdce prim
+    in
+    let eligible =
+      prim_eligible && List.exists Simple.is_var (args t)
+    in
+    let effects_and_coeffects_ok =
+      match effects_and_coeffects t with
+      | No_effects, No_coeffects -> true
+      | Only_generative_effects Immutable, No_coeffects -> true
+      | _, _ -> false
+    in
+    if not (((not eligible) || effects_and_coeffects_ok)) then begin
+      Misc.fatal_errorf "Eligible_for_pdce.create inconsistency: %a"
+        print t
+    end;
+    if not eligible then None
+    else
+      match map_arg with
+      | None -> Some t
+      | Some map_arg ->
+        let t =
+          match t with
+          | Unary (prim, arg) ->
+            let arg' = map_arg arg in
+            if arg == arg' then t
+            else Unary (prim, arg')
+          | Binary (prim, arg1, arg2) ->
+            let arg1' = map_arg arg1 in
+            let arg2' = map_arg arg2 in
+            if arg1 == arg1' && arg2 == arg2' then t
+            else Binary (prim, arg1', arg2')
+          | Ternary (prim, arg1, arg2, arg3) ->
+            let arg1' = map_arg arg1 in
+            let arg2' = map_arg arg2 in
+            let arg3' = map_arg arg3 in
+            if arg1 == arg1' && arg2 == arg2' && arg3 == arg3' then t
+            else Ternary (prim, arg1', arg2', arg3')
+          | Variadic (prim, args) ->
+            let args' = List.map map_arg args in
+            if List.for_all2 (==) args args' then t
+            else Variadic (prim, args')
+        in
+        Some t
+
+  let create_exn prim =
+    match create prim with
+    | Some t -> t
+    | None -> Misc.fatal_errorf "Primitive %a not eligible for PDCE" print prim
 
   let free_names = free_names
   let apply_name_permutation = apply_name_permutation

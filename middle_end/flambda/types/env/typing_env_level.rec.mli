@@ -60,6 +60,12 @@ val add_cse
   -> bound_to:Simple.t
   -> t
 
+val add_pdce
+   : t
+  -> bound_to:Variable.t
+  -> Flambda_primitive.Eligible_for_pdce.t
+  -> t
+
 val add_symbol_projection : t -> Variable.t -> Symbol_projection.t -> t
 
 val symbol_projections : t -> Symbol_projection.t Variable.Map.t
@@ -81,6 +87,8 @@ val n_way_join
   -> t * Continuation_extra_params_and_args.t
 
 val cse : t -> Simple.t Flambda_primitive.Eligible_for_cse.Map.t
+
+val pdce : t -> Flambda_primitive.Eligible_for_pdce.t Variable.Map.t
 
 include Contains_names.S with type t := t
 
