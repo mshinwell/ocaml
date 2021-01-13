@@ -19,6 +19,9 @@
     corresponding argument types across the recorded uses; and the environment
     to be used for simplifying the continuation itself. *)
 
+(* CR mshinwell: The join code should go into a new compilation unit called
+   Join_points or similar. *)
+
 [@@@ocaml.warning "+a-30-40-41-42"]
 
 type t

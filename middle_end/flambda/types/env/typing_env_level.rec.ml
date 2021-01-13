@@ -20,7 +20,6 @@ type t = {
   defined_vars : Flambda_kind.t Variable.Map.t;
   binding_times : Variable.Set.t Binding_time.Map.t;
   equations : Type_grammar.t Name.Map.t;
-  cse : Simple.t Flambda_primitive.Eligible_for_cse.Map.t;
   symbol_projections : Symbol_projection.t Variable.Map.t;
 }
 
@@ -39,7 +38,7 @@ let defines_name_but_no_equations t name =
 *)
 
 let print_with_cache ~cache ppf
-      { defined_vars; binding_times = _; equations; cse;
+      { defined_vars; binding_times = _; equations;
         symbol_projections = _; } =
   (* CR mshinwell: print symbol projections along with tidying up this
      function *)
@@ -61,39 +60,19 @@ let print_with_cache ~cache ppf
   (* CR mshinwell: Print [defined_vars] when not called from
      [Typing_env.print] *)
   if Variable.Map.is_empty defined_vars then
-    if Flambda_primitive.Eligible_for_cse.Map.is_empty cse then
-      Format.fprintf ppf
-        "@[<hov 1>(\
-          @[<hov 1>(equations@ @[<v 1>%a@])@])\
-          @]"
-        print_equations equations
-    else
-      Format.fprintf ppf
-        "@[<hov 1>(\
-          @[<hov 1>(equations@ @[<v 1>%a@])@])@ \
-          @[<hov 1>(cse@ @[<hov 1>%a@])@]\
-          @]"
-        print_equations equations
-        (Flambda_primitive.Eligible_for_cse.Map.print Simple.print) cse
+    Format.fprintf ppf
+      "@[<hov 1>(\
+        @[<hov 1>(equations@ @[<v 1>%a@])@])\
+        @]"
+      print_equations equations
   else
-    if Flambda_primitive.Eligible_for_cse.Map.is_empty cse then
-      Format.fprintf ppf
-        "@[<hov 1>(\
-          @[<hov 1>(defined_vars@ @[<hov 1>%a@])@]@ \
-          @[<hov 1>(equations@ @[<v 1>%a@])@]@ \
-          )@]"
-        Variable.Set.print (Variable.Map.keys defined_vars) (* XXX *)
-        print_equations equations
-    else
-      Format.fprintf ppf
-        "@[<hov 1>(\
-          @[<hov 1>(defined_vars@ @[<hov 1>%a@])@]@ \
-          @[<hov 1>(equations@ @[<v 1>%a@])@]@ \
-          @[<hov 1>(cse@ @[<hov 1>%a@])@]\
-          )@]"
-        Variable.Set.print (Variable.Map.keys defined_vars)
-        print_equations equations
-        (Flambda_primitive.Eligible_for_cse.Map.print Simple.print) cse
+    Format.fprintf ppf
+      "@[<hov 1>(\
+        @[<hov 1>(defined_vars@ @[<hov 1>%a@])@]@ \
+        @[<hov 1>(equations@ @[<v 1>%a@])@]@ \
+        )@]"
+      Variable.Set.print (Variable.Map.keys defined_vars) (* XXX *)
+      print_equations equations
 
 let print ppf t =
   print_with_cache ~cache:(Printing_cache.create ()) ppf t
@@ -111,7 +90,7 @@ let fold_on_defined_vars f t init =
     init
 
 let apply_name_permutation
-      ({ defined_vars; binding_times; equations; cse; symbol_projections; }
+      ({ defined_vars; binding_times; equations; symbol_projections; }
         as t)
       perm =
   let defined_vars_changed = ref false in
@@ -151,42 +130,26 @@ let apply_name_permutation
       equations
       Name.Map.empty
   in
-  let cse_changed = ref false in
-  let cse' =
-    Flambda_primitive.Eligible_for_cse.Map.fold (fun prim simple cse' ->
-        let simple' = Simple.apply_name_permutation simple perm in
-        let prim' =
-          Flambda_primitive.Eligible_for_cse.apply_name_permutation prim perm
-        in
-        if (not (simple == simple')) || (not (prim == prim')) then begin
-          cse_changed := true
-        end;
-        Flambda_primitive.Eligible_for_cse.Map.add prim' simple' cse')
-      cse
-      Flambda_primitive.Eligible_for_cse.Map.empty
-  in
   (* CR mshinwell: Maybe we should call
      [Symbol_projection.apply_name_permutation] even though it currently
      does nothing? *)
   if (not !defined_vars_changed)
     && (not !equations_changed)
-    && (not !cse_changed)
   then t
   else
     { defined_vars = defined_vars';
       binding_times = binding_times';
       equations = equations';
-      cse = cse';
       symbol_projections;
     }
 
 let free_names
-      { defined_vars; binding_times = _; equations; cse; symbol_projections; } =
+      { defined_vars; binding_times = _; equations; symbol_projections; } =
   let free_names_defined_vars =
     Name_occurrences.create_variables (Variable.Map.keys defined_vars)
       Name_mode.in_types
   in
-  let free_names_equations =
+  let free_names =
     Name.Map.fold (fun name typ free_names ->
         let free_names' =
           Name_occurrences.add_name (Type_grammar.free_names typ)
@@ -195,22 +158,6 @@ let free_names
         Name_occurrences.union free_names free_names')
       equations
       free_names_defined_vars
-  in
-  let free_names =
-    Flambda_primitive.Eligible_for_cse.Map.fold
-      (fun prim (bound_to : Simple.t) acc ->
-        Simple.pattern_match bound_to
-          ~const:(fun _ -> acc)
-          ~name:(fun name ->
-            let free_in_prim =
-              Name_occurrences.downgrade_occurrences_at_strictly_greater_kind
-                (Flambda_primitive.Eligible_for_cse.free_names prim)
-                Name_mode.in_types
-            in
-            Name_occurrences.add_name free_in_prim
-              name Name_mode.in_types))
-      cse
-      free_names_equations
   in
   Variable.Map.fold (fun _var proj free_names ->
       Name_occurrences.union free_names
@@ -222,22 +169,18 @@ let empty () =
   { defined_vars = Variable.Map.empty;
     binding_times = Binding_time.Map.empty;
     equations = Name.Map.empty;
-    cse = Flambda_primitive.Eligible_for_cse.Map.empty;
     symbol_projections = Variable.Map.empty;
   }
 
 let is_empty
-      { defined_vars; binding_times; equations; cse;
+      { defined_vars; binding_times; equations;
         symbol_projections; } =
   Variable.Map.is_empty defined_vars
     && Binding_time.Map.is_empty binding_times
     && Name.Map.is_empty equations
-    && Flambda_primitive.Eligible_for_cse.Map.is_empty cse
     && Variable.Map.is_empty symbol_projections
 
 let equations t = t.equations
-
-let cse t = t.cse
 
 let symbol_projections t = t.symbol_projections
 
@@ -294,7 +237,6 @@ let one_equation name ty =
   { defined_vars = Variable.Map.empty;
     binding_times = Binding_time.Map.empty;
     equations = Name.Map.singleton name ty;
-    cse = Flambda_primitive.Eligible_for_cse.Map.empty;
     symbol_projections = Variable.Map.empty;
   }
 
@@ -308,15 +250,6 @@ let add_or_replace_equation t name ty =
     { t with
       equations = Name.Map.add name ty t.equations;
     }
-
-let add_cse t prim ~bound_to =
-  match Flambda_primitive.Eligible_for_cse.Map.find prim t.cse with
-  | exception Not_found ->
-    let cse =
-      Flambda_primitive.Eligible_for_cse.Map.add prim bound_to t.cse
-    in
-    { t with cse; }
-  | _bound_to -> t
 
 let concat (t1 : t) (t2 : t) =
   let defined_vars =
@@ -347,11 +280,6 @@ let concat (t1 : t) (t2 : t) =
   let equations =
     Name.Map.union (fun _ _ty1 ty2 -> Some ty2) t1.equations t2.equations
   in
-  let cse =
-    Flambda_primitive.Eligible_for_cse.Map.union (fun _prim _t1 t2 -> Some t2)
-      t1.cse
-      t2.cse
-  in
   let symbol_projections =
     Variable.Map.union (fun _var _proj1 proj2 -> Some proj2)
       t1.symbol_projections
@@ -360,7 +288,6 @@ let concat (t1 : t) (t2 : t) =
   { defined_vars;
     binding_times;
     equations;
-    cse;
     symbol_projections;
   }
 
@@ -475,15 +402,6 @@ let meet0 env (t1 : t) (t2 : t) =
       t2.equations
       (t, env)
   in
-  let cse =
-    Flambda_primitive.Eligible_for_cse.Map.merge (fun _ simple1 simple2 ->
-        match simple1, simple2 with
-        | None, None | None, Some _ | Some _, None -> None
-        | Some simple1, Some simple2 ->
-          if Simple.equal simple1 simple2 then Some simple1
-          else None)
-      t1.cse t2.cse
-  in
   let symbol_projections =
     Variable.Map.union (fun _ proj1 proj2 ->
         (* CR vlaviron:
@@ -499,7 +417,6 @@ let meet0 env (t1 : t) (t2 : t) =
       t1.symbol_projections t2.symbol_projections
   in
   { t with
-    cse;
     symbol_projections;
   }
 
@@ -558,17 +475,6 @@ let extend env t1 ~ext:t2 =
           Name.Map.fold add_equation t.equations equations)
   in
   let equations = Name.Map.fold add_equation t2.equations t1.equations in
-  let cse =
-    let module FEM = Flambda_primitive.Eligible_for_cse.Map in
-    FEM.fold (fun prim simple cse ->
-        match FEM.find prim cse with
-        | exception Not_found -> FEM.add prim simple cse
-        | existing_simple ->
-          if Simple.equal simple existing_simple then cse
-          else FEM.remove prim cse)
-      t2.cse
-      t1.cse
-  in
   let symbol_projections =
     Variable.Map.fold (fun var proj symbol_projections ->
         match Variable.Map.find var symbol_projections with
@@ -582,7 +488,6 @@ let extend env t1 ~ext:t2 =
   { defined_vars;
     binding_times;
     equations;
-    cse;
     symbol_projections;
   }
 
@@ -712,222 +617,8 @@ let join_types ~env_at_fork envs_with_levels ~extra_lifted_consts_in_use_envs =
   |> fun (_, joined_types, _) ->
   joined_types
 
-module Rhs_kind = struct
-  type t =
-    | Needs_extra_binding of { bound_to : Simple.t; }
-    | Rhs_in_scope of { bound_to : Simple.t; }
-
-  let bound_to t =
-    match t with
-    | Needs_extra_binding { bound_to; }
-    | Rhs_in_scope { bound_to; } -> bound_to
-
-  include Identifiable.Make (struct
-    type nonrec t = t
-
-    let print ppf t =
-      match t with
-      | Needs_extra_binding { bound_to; } ->
-        Format.fprintf ppf "@[<hov 1>(Needs_extra_binding@ %a)@]"
-          Simple.print bound_to
-      | Rhs_in_scope { bound_to; } ->
-        Format.fprintf ppf "@[<hov 1>(Rhs_in_scope@ %a)@]"
-          Simple.print bound_to
-
-    let output _ _ = Misc.fatal_error "Rhs_kind.output not yet implemented"
-    let hash _ = Misc.fatal_error "Rhs_kind.hash not yet implemented"
-    let equal _ = Misc.fatal_error "Rhs_kind.equal not yet implemented"
-
-    let compare t1 t2 =
-      match t1, t2 with
-      | Needs_extra_binding { bound_to = bound_to1; },
-          Needs_extra_binding { bound_to = bound_to2; } ->
-        Simple.compare bound_to1 bound_to2
-      | Rhs_in_scope { bound_to = bound_to1; },
-          Rhs_in_scope { bound_to = bound_to2; } ->
-        Simple.compare bound_to1 bound_to2
-      | Needs_extra_binding _, _ -> -1
-      | Rhs_in_scope _, _ -> 1
-  end)
-end
-
-let cse_with_eligible_lhs ~env_at_fork envs_with_levels ~params prev_cse
-      (extra_bindings: Continuation_extra_params_and_args.t) extra_equations =
-  let module EP = Flambda_primitive.Eligible_for_cse in
-  let params = Kinded_parameter.List.simple_set params in
-  List.fold_left (fun eligible (env_at_use, id, _, t) ->
-      let find_new_name =
-        if Continuation_extra_params_and_args.is_empty extra_bindings
-        then (fun _arg -> None)
-        else begin
-          let extra_args =
-            Apply_cont_rewrite_id.Map.find id
-              extra_bindings.extra_args
-          in
-          let rec find_name simple params args =
-            match args, params with
-            | [], [] -> None
-            | [], _ | _, [] ->
-              Misc.fatal_error "Mismatching params and args arity"
-            | arg :: args, param :: params ->
-              begin
-              match (arg : Continuation_extra_params_and_args.Extra_arg.t) with
-              | Already_in_scope arg when Simple.equal arg simple ->
-                (* If [param] has an extra equation associated to it,
-                   we shouldn't propagate equations on it as it will mess
-                   with the application of constraints later *)
-                if Name.Map.mem (Kinded_parameter.name param) extra_equations
-                then None
-                else Some (Kinded_parameter.simple param)
-              | Already_in_scope _ | New_let_binding _ ->
-                find_name simple params args
-              end
-          in
-          (fun arg -> find_name arg extra_bindings.extra_params extra_args)
-        end
-      in
-      EP.Map.fold (fun prim bound_to eligible ->
-        let prim =
-          EP.filter_map_args prim ~f:(fun arg ->
-            match
-              Typing_env.get_canonical_simple_exn env_at_use arg
-                ~min_name_mode:Name_mode.normal
-            with
-            | exception Not_found -> None
-            | arg ->
-              begin match find_new_name arg with
-              | None ->
-                if Typing_env.mem_simple env_at_fork arg
-                then Some arg
-                else None
-              | Some _ as arg_opt -> arg_opt
-              end)
-        in
-        match prim with
-        | None -> eligible
-        | Some prim when EP.Map.mem prim prev_cse ->
-          (* We've already got it from a previous round *)
-          eligible
-        | Some prim ->
-          match
-            Typing_env.get_canonical_simple_exn env_at_use bound_to
-              ~min_name_mode:Name_mode.normal
-          with
-          | exception Not_found -> eligible
-          | bound_to ->
-            let bound_to =
-              (* CR mshinwell: Think about whether this is the best fix.
-                 The canonical simple might end up being one of the [params]
-                 since they are defined in [env_at_fork].  However these
-                 aren't bound at the use sites, so we must choose another
-                 alias that is. *)
-              if not (Simple.Set.mem bound_to params) then Some bound_to
-              else
-                let aliases =
-                  Typing_env.aliases_of_simple env_at_use
-                    ~min_name_mode:Name_mode.normal bound_to
-                  |> Simple.Set.filter (fun simple ->
-                    not (Simple.Set.mem simple params))
-                in
-                Simple.Set.get_singleton aliases
-            in
-            match bound_to with
-            | None -> eligible
-            | Some bound_to ->
-              let bound_to : Rhs_kind.t =
-                if Typing_env.mem_simple env_at_fork bound_to then
-                  Rhs_in_scope { bound_to; }
-                else
-                  Needs_extra_binding { bound_to; }
-              in
-              (* CR mshinwell: Add [Map.add_or_replace]. *)
-              match EP.Map.find prim eligible with
-              | exception Not_found ->
-                EP.Map.add prim
-                  (Apply_cont_rewrite_id.Map.singleton id bound_to)
-                  eligible
-              | from_prev_levels ->
-                let map =
-                  Apply_cont_rewrite_id.Map.add id bound_to from_prev_levels
-                in
-                EP.Map.add prim map eligible)
-      t.cse
-      eligible)
-    EP.Map.empty
-    envs_with_levels
-
-let join_cse envs_with_levels cse ~allowed =
-  let module EP = Flambda_primitive.Eligible_for_cse in
-  EP.Map.fold (fun prim bound_to_map
-                (cse, extra_bindings, extra_equations, allowed) ->
-      let has_value_on_all_paths =
-        List.for_all (fun (_, id, _, _) ->
-            Apply_cont_rewrite_id.Map.mem id bound_to_map)
-          envs_with_levels
-      in
-      if not has_value_on_all_paths then
-        cse, extra_bindings, extra_equations, allowed
-      else
-        let bound_to_set =
-          Apply_cont_rewrite_id.Map.data bound_to_map
-          |> Rhs_kind.Set.of_list
-        in
-        match Rhs_kind.Set.get_singleton bound_to_set with
-        | Some (Rhs_kind.Rhs_in_scope { bound_to; }) ->
-          EP.Map.add prim bound_to cse, extra_bindings, extra_equations, allowed
-        | None | Some (Rhs_kind.Needs_extra_binding { bound_to = _; }) ->
-          let prim_result_kind =
-            Flambda_primitive.result_kind' (EP.to_primitive prim)
-          in
-          let var = Variable.create "cse_param" in
-          let extra_param =
-            Kinded_parameter.create var
-              (Flambda_kind.With_subkind.create prim_result_kind Anything)
-          in
-          let bound_to =
-            Apply_cont_rewrite_id.Map.map Rhs_kind.bound_to bound_to_map
-          in
-          let cse = EP.Map.add prim (Simple.var var) cse in
-          let extra_args =
-            Apply_cont_rewrite_id.Map.map
-              (fun simple : Continuation_extra_params_and_args.Extra_arg.t ->
-                Already_in_scope simple)
-              bound_to
-          in
-          let extra_bindings =
-            Continuation_extra_params_and_args.add extra_bindings
-              ~extra_param ~extra_args
-          in
-          let extra_equations =
-            (* For the primitives Is_int and Get_tag, they're strongly linked
-               to their argument: additional information on the cse parameter
-               should translate into additional information on the argument.
-               This can be done by giving them the appropriate type. *)
-            match EP.to_primitive prim with
-            | Unary (Is_int, scrutinee) ->
-              Name.Map.add
-                (Name.var var) (Type_grammar.is_int_for_scrutinee ~scrutinee)
-                extra_equations
-            | Unary (Get_tag, block) ->
-              Name.Map.add
-                (Name.var var) (Type_grammar.get_tag_for_block ~block)
-                extra_equations
-            | _ -> extra_equations
-          in
-          let allowed =
-            Name_occurrences.add_name allowed (Name.var var)
-              Name_mode.normal
-          in
-          cse, extra_bindings, extra_equations, allowed)
-    cse
-    (EP.Map.empty,
-     Continuation_extra_params_and_args.empty,
-     Name.Map.empty,
-     allowed)
-
 let construct_joined_level envs_with_levels ~env_at_fork ~allowed
-      ~joined_types ~cse =
-  let module EP = Flambda_primitive.Eligible_for_cse in
+      ~joined_types =
   let defined_vars, binding_times =
     List.fold_left (fun (defined_vars, binding_times)
                      (_env_at_use, _id, _use_kind, t) ->
@@ -974,16 +665,6 @@ let construct_joined_level envs_with_levels ~env_at_fork ~allowed
     Name.Map.filter (fun name _ty -> Name_occurrences.mem_name allowed name)
       joined_types
   in
-  let cse =
-    (* Any CSE equation whose right-hand side identifies a name in the [allowed]
-       set is propagated.  We don't need to check the left-hand sides because
-       we know all of those names are in [env_at_fork]. *)
-    EP.Map.filter (fun _prim bound_to ->
-        Simple.pattern_match bound_to
-          ~const:(fun _ -> true)
-          ~name:(fun name -> Name_occurrences.mem_name allowed name))
-      cse
-  in
   let symbol_projections =
     List.fold_left (fun symbol_projections (_env_at_use, _id, _use_kind, t) ->
         let projs_this_level =
@@ -1004,7 +685,6 @@ let construct_joined_level envs_with_levels ~env_at_fork ~allowed
   { defined_vars;
     binding_times;
     equations;
-    cse;
     symbol_projections;
   }
 
@@ -1033,25 +713,13 @@ let check_join_inputs ~env_at_fork _envs_with_levels ~params
     extra_lifted_consts_in_use_envs
 
 let join ~env_at_fork envs_with_levels ~params
-      ~extra_lifted_consts_in_use_envs =
-  let module EP = Flambda_primitive.Eligible_for_cse in
-  (*
-  Format.eprintf "JOIN\n%!";
-  Format.eprintf "At fork:@ %a\n%!" Typing_env.print env_at_fork;
-  List.iter (fun (_, _, _, t) ->
-      Format.eprintf "One level:@ %a\n%!" print t)
-    envs_with_levels;
-  *)
+      ~extra_lifted_consts_in_use_envs ~extra_allowed_names:allowed =
   check_join_inputs ~env_at_fork envs_with_levels ~params
     ~extra_lifted_consts_in_use_envs;
   (* Calculate the joined types of all the names involved. *)
   let joined_types =
     join_types ~env_at_fork envs_with_levels ~extra_lifted_consts_in_use_envs
   in
-  (*
-  Format.eprintf "joined_types:@ %a\n%!"
-    (Name.Map.print Type_grammar.print) joined_types;
-  *)
   (* Next calculate which equations (describing joined types) to propagate to
      the join point.  (Recall that the environment at the fork point includes
      the parameters of the continuation being called at the join. We wish to
@@ -1063,10 +731,6 @@ let join ~env_at_fork envs_with_levels ~params
      propagated. The definition of any such propagated name (i.e. one that
      does not occur in the environment at the fork point) will be made
      existential. *)
-  (*
-  Format.eprintf "ENV WITH EXISTENTIALS:@ %a\n%!"
-    Typing_env.print env_at_fork_with_existentials_defined;
-  *)
   (* CR vlaviron: We need to compute the free names of joined_types,
      we can't use a typing environment *)
   let free_names_transitive typ =
@@ -1088,10 +752,6 @@ let join ~env_at_fork envs_with_levels ~params
   in
   let allowed =
     Name.Map.fold (fun name ty allowed ->
-      (*
-        Format.eprintf "Processing %a : %a\n%!"
-          Name.print name Type_grammar.print ty;
-      *)
         if Typing_env.mem env_at_fork name
           || Name.is_symbol name
         then
@@ -1102,7 +762,7 @@ let join ~env_at_fork envs_with_levels ~params
         else
           allowed)
       joined_types
-      Name_occurrences.empty
+      allowed
   in
   let allowed =
     Symbol.Set.fold (fun symbol allowed ->
@@ -1110,103 +770,17 @@ let join ~env_at_fork envs_with_levels ~params
       extra_lifted_consts_in_use_envs
       allowed
   in
-  (*
-  Format.eprintf "allowed (1):@ %a\n%!" Name_occurrences.print allowed;
-  *)
-  let compute_cse_one_round prev_cse extra_params extra_equations allowed =
-  (* CSE equations have a left-hand side specifying a primitive and a
-     right-hand side specifying a [Simple].  The left-hand side is matched
-     against portions of terms.  As such, the [Simple]s therein must have
-     name mode [Normal], since we do not do CSE for phantom bindings (see
-     [Simplify_common]).  It follows that any CSE equation whose left-hand side
-     involves a name not defined at the fork point, having canonicalised such
-     name, cannot be propagated.  This step also canonicalises the right-hand
-     sides of the CSE equations. *)
-  (*
-  Format.eprintf "params:@ %a\n%!" Kinded_parameter.List.print params;
-  *)
-    let new_cse =
-      cse_with_eligible_lhs ~env_at_fork envs_with_levels ~params
-        prev_cse extra_params extra_equations
-    in
-  (*
-  Format.eprintf "CSE with eligible LHS:@ %a\n%!"
-    (Flambda_primitive.Eligible_for_cse.Map.print
-      (Apply_cont_rewrite_id.Map.print Rhs_kind.print))
-    cse;
-  *)
-  (* To make use of a CSE equation at or after the join point, its right-hand
-     side must have the same value, no matter which path is taken from the
-     fork point to the join point.  We filter out equations that do not
-     satisfy this.  Sometimes we can force an equation to satisfy the
-     property by explicitly passing the value of the right-hand side as an
-     extra parameter to the continuation at the join point. *)
-    let cse', extra_params', extra_equations', allowed =
-      join_cse envs_with_levels new_cse ~allowed
-    in
-    let need_other_round =
-      (* If we introduce new parameters, then CSE equations involving the
-         corresponding arguments can be considered again, so we need
-         another round. *)
-      not (Continuation_extra_params_and_args.is_empty extra_params')
-    in
-    let cse = EP.Map.disjoint_union prev_cse cse' in
-    let extra_params =
-      Continuation_extra_params_and_args.concat extra_params' extra_params
-    in
-    let extra_equations =
-      Name.Map.disjoint_union extra_equations extra_equations'
-    in
-    cse, extra_params, extra_equations, allowed, need_other_round
-  in
-  let cse, extra_params, extra_equations, allowed =
-    let rec do_rounds current_round cse extra_params extra_equations allowed =
-      let cse, extra_params, extra_equations, allowed, need_other_round =
-        compute_cse_one_round cse extra_params extra_equations allowed
-      in
-      if need_other_round && current_round < Flambda_features.cse_depth ()
-      then begin
-        do_rounds (succ current_round)
-          cse extra_params extra_equations allowed
-      end else begin
-        (* Either a fixpoint has been reached or we've already explored far
-           enough *)
-        cse, extra_params, extra_equations, allowed
-      end
-    in
-    do_rounds 1 EP.Map.empty Continuation_extra_params_and_args.empty
-      Name.Map.empty allowed
-  in
-  let joined_types =
-    Name.Map.union (fun name _ty_join _ty_cse ->
-        Misc.fatal_errorf "Name %a from cse already present in joined_types"
-          Name.print name)
-      joined_types
-      extra_equations
-  in
-  (*
-  Format.eprintf "Joined CSE:@ %a\n%!"
-    (Flambda_primitive.Eligible_for_cse.Map.print Simple.print) cse;
-  Format.eprintf "allowed (final):@ %a\n%!" Name_occurrences.print allowed;
-  *)
   (* Having calculated which equations to propagate, the resulting level can
      now be constructed. *)
-  let t =
-    construct_joined_level envs_with_levels ~env_at_fork ~allowed
-      ~joined_types ~cse
-  in
-  (*
-  Format.eprintf "Join result:@ %a\n%!" print t;
-  *)
-  t, extra_params
+  construct_joined_level envs_with_levels ~env_at_fork ~allowed ~joined_types
 
 let n_way_join ~env_at_fork envs_with_levels ~params
-      ~extra_lifted_consts_in_use_envs =
+      ~extra_lifted_consts_in_use_envs ~extra_allowed_names =
   match envs_with_levels with
-  | [] -> empty (), Continuation_extra_params_and_args.empty
+  | [] -> empty ()
   | envs_with_levels ->
-    join ~env_at_fork envs_with_levels ~params
-      ~extra_lifted_consts_in_use_envs
+    join ~env_at_fork envs_with_levels ~params ~extra_lifted_consts_in_use_envs
+      ~extra_allowed_names
 
 let all_ids_for_export t =
   let variables = Variable.Map.keys t.defined_vars in
@@ -1219,15 +793,6 @@ let all_ids_for_export t =
     Ids_for_export.add_name ids name
   in
   let ids = Name.Map.fold equation t.equations ids in
-  let cse prim simple ids =
-    let ids, _ =
-      Flambda_primitive.Eligible_for_cse.fold_args prim
-        ~init:ids ~f:(fun ids simple ->
-          Ids_for_export.add_simple ids simple, simple)
-    in
-    Ids_for_export.add_simple ids simple
-  in
-  let ids = Flambda_primitive.Eligible_for_cse.Map.fold cse t.cse ids in
   let symbol_projection var proj ids =
     let ids =
       Ids_for_export.union ids (Symbol_projection.all_ids_for_export proj)

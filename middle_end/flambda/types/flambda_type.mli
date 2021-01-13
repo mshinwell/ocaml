@@ -52,12 +52,6 @@ module Typing_env_extension : sig
   val one_equation : Name.t -> flambda_type -> t
 
   val add_or_replace_equation : t -> Name.t -> flambda_type -> t
-
-  val add_cse
-     : t
-    -> prim:Flambda_primitive.Eligible_for_cse.t
-    -> bound_to:Simple.t
-    -> t
 end
 
 module Typing_env : sig
@@ -112,12 +106,6 @@ module Typing_env : sig
     -> param_types:flambda_type list
     -> t
 
-  val add_cse
-     : t
-    -> Flambda_primitive.Eligible_for_cse.t
-    -> bound_to:Simple.t
-    -> t
-
   val mem : ?min_name_mode:Name_mode.t -> t -> Name.t -> bool
 
   val mem_simple : ?min_name_mode:Name_mode.t -> t -> Simple.t -> bool
@@ -127,8 +115,6 @@ module Typing_env : sig
   val find_or_missing : t -> Name.t -> flambda_type option
 
   val find_params : t -> Kinded_parameter.t list -> flambda_type list
-
-  val find_cse : t -> Flambda_primitive.Eligible_for_cse.t -> Simple.t option
 
   val add_env_extension : t -> Typing_env_extension.t -> t
 
@@ -158,12 +144,19 @@ module Typing_env : sig
     -> params:Kinded_parameter.t list
     -> unknown_if_defined_at_or_later_than:Scope.t
     -> extra_lifted_consts_in_use_envs:Symbol.Set.t
-    -> Typing_env_extension.t * Continuation_extra_params_and_args.t
+    -> extra_allowed_names:Name_occurrences.t
+    -> Typing_env_extension.t
 
   val free_names_transitive
      : t
     -> flambda_type
     -> Name_occurrences.t
+
+  val aliases_of_simple
+     : t
+    -> min_name_mode:Name_mode.t
+    -> Simple.t
+    -> Simple.Set.t
 
   val clean_for_export : t -> reachable_names:Name_occurrences.t -> t
 

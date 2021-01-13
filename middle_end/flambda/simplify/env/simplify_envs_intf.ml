@@ -203,6 +203,20 @@ module type Downwards_env = sig
   val set_inlining_depth_increment : t -> int -> t
 
   val get_inlining_depth_increment : t -> int
+
+  val add_cse
+     : t
+    -> Flambda_primitive.Eligible_for_cse.t
+    -> bound_to:Simple.t
+    -> t
+
+  val find_cse : t -> Flambda_primitive.Eligible_for_cse.t -> Simple.t option
+
+  val cse : t -> Common_subexpression_elimination.t
+
+  val with_cse : t -> Common_subexpression_elimination.t -> t
+
+  val concat_cse : t -> Common_subexpression_elimination.t -> t
 end
 
 module type Upwards_env = sig

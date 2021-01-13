@@ -74,14 +74,6 @@ let add_or_replace_equation { abst; } name ty =
   in
   { abst; }
 
-let add_cse { abst; } ~prim ~bound_to =
-  let abst =
-    A.pattern_match abst ~f:(fun level ->
-      let level = Typing_env_level.add_cse level prim ~bound_to in
-      A.create (Typing_env_level.defined_vars level) level)
-  in
-  { abst; }
-
 let meet env (t1 : t) (t2 : t) : t =
   (* CR mshinwell: Add [@inlined] annotations inside [pattern_match] itself
      once a means of suppressing warning 55 has been produced *)
@@ -112,19 +104,17 @@ let rec n_way_meet env ts =
   | t::ts -> meet env t (n_way_meet env ts)
 
 let n_way_join ~env_at_fork envs_with_extensions ~params
-      ~extra_lifted_consts_in_use_envs : t * _ =
-  let abst, extra_cse_bindings =
+      ~extra_lifted_consts_in_use_envs : t =
+  let abst =
     let rec open_binders envs_with_extensions envs_with_levels =
       match envs_with_extensions with
       | [] ->
-        let level, extra_cse_bindings =
+        let level =
           Typing_env_level.n_way_join ~env_at_fork envs_with_levels ~params
             ~extra_lifted_consts_in_use_envs
+            ~extra_allowed_names:Name_occurrences.empty
         in
-        let abst =
-          A.create (Typing_env_level.defined_vars level) level
-        in
-        abst, extra_cse_bindings
+        A.create (Typing_env_level.defined_vars level) level
       | (env_at_use, id, use_kind, t)::envs_with_extensions ->
         A.pattern_match t.abst ~f:(fun level ->
           let env =
@@ -142,7 +132,7 @@ let n_way_join ~env_at_fork envs_with_extensions ~params
     in
     open_binders envs_with_extensions []
   in
-  { abst; }, extra_cse_bindings
+  { abst; }
 
 let join env ~params ext1 ext2 =
   (* CR mshinwell: This may only be used now when there are no
@@ -150,12 +140,9 @@ let join env ~params ext1 ext2 =
   let left_env = Meet_or_join_env.left_join_env env in
   let right_env = Meet_or_join_env.right_join_env env in
   let env_at_fork = Meet_or_join_env.target_join_env env in
-  let env_extension, _ =
-    n_way_join ~params
-      ~extra_lifted_consts_in_use_envs:Symbol.Set.empty
-      ~env_at_fork
-      [ left_env, Apply_cont_rewrite_id.create (), Non_inlinable, ext1;
-        right_env, Apply_cont_rewrite_id.create (), Non_inlinable, ext2;
-      ]
-  in
-  env_extension
+  n_way_join ~params
+    ~extra_lifted_consts_in_use_envs:Symbol.Set.empty
+    ~env_at_fork
+    [ left_env, Apply_cont_rewrite_id.create (), Non_inlinable, ext1;
+      right_env, Apply_cont_rewrite_id.create (), Non_inlinable, ext2;
+    ]

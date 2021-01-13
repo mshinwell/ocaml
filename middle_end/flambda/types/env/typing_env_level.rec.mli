@@ -54,12 +54,6 @@ val add_definition : t -> Variable.t -> Flambda_kind.t -> Binding_time.t -> t
 
 val add_or_replace_equation : t -> Name.t -> Type_grammar.t -> t
 
-val add_cse
-   : t
-  -> Flambda_primitive.Eligible_for_cse.t
-  -> bound_to:Simple.t
-  -> t
-
 val add_symbol_projection : t -> Variable.t -> Symbol_projection.t -> t
 
 val symbol_projections : t -> Symbol_projection.t Variable.Map.t
@@ -78,9 +72,8 @@ val n_way_join
        * t) list
   -> params:Kinded_parameter.t list
   -> extra_lifted_consts_in_use_envs:Symbol.Set.t
-  -> t * Continuation_extra_params_and_args.t
-
-val cse : t -> Simple.t Flambda_primitive.Eligible_for_cse.Map.t
+  -> extra_allowed_names:Name_occurrences.t
+  -> t
 
 include Contains_names.S with type t := t
 

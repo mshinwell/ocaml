@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2013--2019 OCamlPro SAS                                    *)
-(*   Copyright 2014--2019 Jane Street Group LLC                           *)
+(*   Copyright 2013--2021 OCamlPro SAS                                    *)
+(*   Copyright 2014--2021 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -14,35 +14,44 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Typing environment extensions: typing environment levels that are
-    surrounded by a binder that captures defined names as existentials. *)
+(** Maintenance of environments and associated calculations for
+    common subexpression elimination, performed during Simplify. *)
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
+
+module EPA = Continuation_extra_params_and_args
+module KP = Kinded_parameter
+module P = Flambda_primitive
+module RI = Apply_cont_rewrite_id
+module T = Flambda_type
+module TE = Flambda_type.Typing_env
 
 type t
 
 val print : Format.formatter -> t -> unit
 
-val invariant : t -> unit
+val empty : t
 
-val empty : unit -> t
+val add : t -> P.Eligible_for_cse.t -> bound_to:Simple.t -> t
 
-val is_empty : t -> bool
+val find : t -> P.Eligible_for_cse.t -> Simple.t option
 
-val create : Typing_env_level.t -> t
+val concat : t -> t -> t
 
-val pattern_match : t -> f:(Typing_env_level.t -> 'a) -> 'a
+val meet : t -> t -> t
 
-val one_equation : Name.t -> Type_grammar.t -> t
+module Join_result : sig
+  type nonrec t = private
+    { cse_at_join_point : t;
+      extra_params : EPA.t;
+      extra_equations : T.t Name.Map.t;
+      extra_allowed_names : Name_occurrences.t;
+    }
+end
 
-val add_or_replace_equation : t -> Name.t -> Type_grammar.t -> t
-
-val meet : Meet_env.t -> t -> t -> t
-
-(** Same as [meet], but more efficient when the domains are disjoint.
-    Optimised for when the [ext] argument is smaller. *)
-val extend : Meet_env.t -> t -> ext:t -> t
-
-val n_way_meet : Meet_env.t -> t list -> t
-
-val join : Meet_or_join_env.t -> params:Kinded_parameter.t list -> t -> t -> t
+val join
+   : typing_env_at_fork:TE.t
+  -> cse_at_fork:t
+  -> cse_at_each_use:(TE.t * RI.t * t) list
+  -> params:KP.t list
+  -> Join_result.t

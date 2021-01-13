@@ -83,17 +83,6 @@ val mem : ?min_name_mode:Name_mode.t -> t -> Name.t -> bool
 
 val mem_simple : ?min_name_mode:Name_mode.t -> t -> Simple.t -> bool
 
-val add_cse
-   : t
-  -> Flambda_primitive.Eligible_for_cse.t
-  -> bound_to:Simple.t
-  -> t
-
-val find_cse
-   : t
-  -> Flambda_primitive.Eligible_for_cse.t
-  -> Simple.t option
-
 val add_env_extension_from_level
    : t
   -> Typing_env_level.t
@@ -148,7 +137,8 @@ val cut_and_n_way_join
   -> params:Kinded_parameter.t list
   -> unknown_if_defined_at_or_later_than:Scope.t
   -> extra_lifted_consts_in_use_envs:Symbol.Set.t
-  -> Typing_env_extension.t * Continuation_extra_params_and_args.t
+  -> extra_allowed_names:Name_occurrences.t
+  -> Typing_env_extension.t
 
 val free_names_transitive : t -> Type_grammar.t -> Name_occurrences.t
 

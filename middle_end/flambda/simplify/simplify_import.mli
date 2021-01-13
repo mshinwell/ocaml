@@ -53,6 +53,7 @@ module LC = Simplify_envs.Lifted_constant
 module LCS = Simplify_envs.Lifted_constant_state
 module NM = Name_mode
 module P = Flambda_primitive
+module RI = Apply_cont_rewrite_id
 module S = Simplify_simple
 module SC = Static_const
 module T = Flambda_type

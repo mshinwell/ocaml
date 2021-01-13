@@ -47,6 +47,7 @@ end = struct
     unit_toplevel_exn_continuation : Continuation.t;
     symbols_currently_being_defined : Symbol.Set.t;
     variables_defined_at_toplevel : Variable.Set.t;
+    cse : Common_subexpression_elimination.t;
   }
 
   let print ppf { backend = _; round; typing_env; get_imported_code = _;
@@ -54,7 +55,7 @@ end = struct
                   inlining_depth_increment; float_const_prop;
                   code; at_unit_toplevel; unit_toplevel_exn_continuation;
                   symbols_currently_being_defined;
-                  variables_defined_at_toplevel;
+                  variables_defined_at_toplevel; cse;
                 } =
     Format.fprintf ppf "@[<hov 1>(\
         @[<hov 1>(round@ %d)@]@ \
@@ -67,6 +68,7 @@ end = struct
         @[<hov 1>(unit_toplevel_exn_continuation@ %a)@]@ \
         @[<hov 1>(symbols_currently_being_defined@ %a)@]@ \
         @[<hov 1>(variables_defined_at_toplevel@ %a)@]@ \
+        @[<hov 1>(cse@ @[<hov 1>%a@])@]@ \
         @[<hov 1>(code@ %a)@]\
         )@]"
       round
@@ -79,6 +81,7 @@ end = struct
       Continuation.print unit_toplevel_exn_continuation
       Symbol.Set.print symbols_currently_being_defined
       Variable.Set.print variables_defined_at_toplevel
+      Common_subexpression_elimination.print cse
       (Code_id.Map.print Code.print) code
 
   let invariant _t = ()
@@ -100,6 +103,7 @@ end = struct
       unit_toplevel_exn_continuation;
       symbols_currently_being_defined = Symbol.Set.empty;
       variables_defined_at_toplevel = Variable.Set.empty;
+      cse = Common_subexpression_elimination.empty;
     }
 
   let resolver t = TE.resolver t.typing_env
@@ -176,7 +180,7 @@ end = struct
                       float_const_prop; code; at_unit_toplevel = _;
                       unit_toplevel_exn_continuation;
                       symbols_currently_being_defined;
-                      variables_defined_at_toplevel;
+                      variables_defined_at_toplevel; cse = _;
                     } =
     { backend;
       round;
@@ -191,6 +195,7 @@ end = struct
       unit_toplevel_exn_continuation;
       symbols_currently_being_defined;
       variables_defined_at_toplevel;
+      cse = Common_subexpression_elimination.empty;
     }
 
   let define_variable t var kind =
@@ -573,6 +578,19 @@ end = struct
       can_inline = false;
     }
 
+  let cse t = t.cse
+
+  let add_cse t prim ~bound_to =
+    let cse = Common_subexpression_elimination.add t.cse prim ~bound_to in
+    { t with cse; }
+
+  let find_cse t prim =
+    Common_subexpression_elimination.find t.cse prim
+
+  let with_cse t cse = { t with cse; }
+
+  let concat_cse t cse =
+    { t with cse = Common_subexpression_elimination.concat t.cse cse; }
 end and Upwards_env : sig
   include I.Upwards_env
     with type downwards_env := Downwards_env.t

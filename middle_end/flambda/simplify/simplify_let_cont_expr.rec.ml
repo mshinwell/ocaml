@@ -202,28 +202,28 @@ let simplify_non_recursive_let_cont_handler ~denv_before_body ~dacc_after_body
           EPA.empty cont_handler uacc ~after_rebuild)
   | Uses { handler_env; arg_types_by_use_id; extra_params_and_args;
            is_single_inlinable_use; is_single_use; } ->
-    let handler_typing_env, extra_params_and_args =
-      let handler_typing_env = DE.typing_env handler_env in
+    let handler_env, extra_params_and_args =
       (* Unbox the parameters of the continuation if possible.
          Any such unboxing will induce a rewrite (or wrapper) on
          the application sites of the continuation. *)
       match Continuation.sort cont with
       | Normal when is_single_inlinable_use ->
         assert (not is_exn_handler);
-        handler_typing_env, extra_params_and_args
+        handler_env, extra_params_and_args
       | Normal | Define_root_symbol ->
         assert (not is_exn_handler);
-        let param_types = TE.find_params handler_typing_env params in
-        Unbox_continuation_params.make_unboxing_decisions handler_typing_env
+        let param_types =
+          TE.find_params (DE.typing_env handler_env) params
+        in
+        Unbox_continuation_params.make_unboxing_decisions handler_env
           ~arg_types_by_use_id ~params ~param_types extra_params_and_args
       | Return | Toplevel_return ->
         assert (not is_exn_handler);
-        handler_typing_env, extra_params_and_args
+        handler_env, extra_params_and_args
       | Exn ->
         assert is_exn_handler;
-        handler_typing_env, extra_params_and_args
+        handler_env, extra_params_and_args
     in
-    let handler_env = DE.with_typing_env handler_env handler_typing_env in
     let at_unit_toplevel =
       (* We try to show that [handler] postdominates [body] (which is done by
          showing that [body] can only return through [cont]) and that if [body]

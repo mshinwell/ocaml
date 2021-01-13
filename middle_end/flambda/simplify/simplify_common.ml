@@ -60,11 +60,10 @@ let apply_cse dacc ~original_prim =
   match P.Eligible_for_cse.create original_prim with
   | None -> None
   | Some with_fixed_value ->
-    let typing_env = DA.typing_env dacc in
-    match TE.find_cse typing_env with_fixed_value with
+    match DE.find_cse (DA.denv dacc) with_fixed_value with
     | None -> None
     | Some simple ->
-      match TE.get_canonical_simple_exn typing_env simple with
+      match TE.get_canonical_simple_exn (DA.typing_env dacc) simple with
       | exception Not_found -> None
       | simple -> Some simple
 
@@ -86,8 +85,7 @@ let try_cse dacc ~original_prim ~result_kind ~min_name_mode ~args
         | Some eligible_prim ->
           let bound_to = Simple.var result_var in
           DA.map_denv dacc ~f:(fun denv ->
-            DE.with_typing_env denv
-            (TE.add_cse (DE.typing_env denv) eligible_prim ~bound_to))
+            DE.add_cse denv eligible_prim ~bound_to)
       in
       Not_applied dacc
 

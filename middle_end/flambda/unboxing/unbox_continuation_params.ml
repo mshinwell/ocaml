@@ -18,6 +18,8 @@
 
 open! Simplify_import
 
+module CSE = Common_subexpression_elimination
+
 (* CR mshinwell: Add a command-line flag. *)
 let max_unboxing_depth = 1
 
@@ -60,7 +62,7 @@ module type Unboxing_spec = sig
     -> param_being_unboxed:KP.t
     -> new_params:KP.t Index.Map.t
     -> fields:T.t Index.Map.t
-    -> T.t * TEE.t
+    -> T.t * CSE.t * TEE.t
 
   val extend_with_projection
      : Info.t
@@ -296,7 +298,7 @@ module Make (U : Unboxing_spec) = struct
       Continue (param_types, List.rev all_field_types_by_id_rev,
         extra_params_and_args)
 
-  let unbox_one_parameter typing_env ~depth ~arg_types_by_use_id
+  let unbox_one_parameter denv ~depth ~arg_types_by_use_id
         ~param_being_unboxed ~param_type extra_params_and_args ~unbox_value
         info indexes =
     let orig_arg_types_by_use_id = arg_types_by_use_id in
@@ -317,7 +319,7 @@ module Make (U : Unboxing_spec) = struct
         <> Apply_cont_rewrite_id.Map.cardinal arg_types_by_use_id
     in
     if do_not_unbox then
-      typing_env, param_type, extra_params_and_args
+      denv, param_type, extra_params_and_args
     else
       let new_params =
         Index.Set.fold (fun index new_params ->
@@ -339,48 +341,53 @@ module Make (U : Unboxing_spec) = struct
           ~arg_types_by_use_id extra_params_and_args
       in
       match result with
-      | Aborted -> typing_env, param_type, extra_params_and_args
+      | Aborted -> denv, param_type, extra_params_and_args
       | Continue (fields, all_field_types_by_id, extra_params_and_args) ->
-        let block_type, env_extension =
+        let block_type, cse, env_extension =
           U.make_boxed_value info ~param_being_unboxed ~new_params ~fields
         in
-        let typing_env =
-          TE.add_definitions_of_params typing_env
-            ~params:(Index.Map.data new_params)
+        let denv = DE.concat_cse denv cse in
+        let denv =
+          DE.map_typing_env denv ~f:(fun typing_env ->
+            let typing_env =
+              TE.add_definitions_of_params typing_env
+                ~params:(Index.Map.data new_params)
+            in
+            TE.add_env_extension typing_env env_extension)
         in
-        let typing_env = TE.add_env_extension typing_env env_extension in
-        (* Format.eprintf "@[<v 2>Meet:@ @[block_type:@ %a@]@ @[param_type:@ %a@]@]@."
-         *   T.print block_type T.print param_type; *)
-        match T.meet typing_env block_type param_type with
+        match T.meet (DE.typing_env denv) block_type param_type with
         | Bottom ->
           Misc.fatal_errorf "[meet] between %a and %a should not have \
             failed.  Typing env:@ %a"
             T.print block_type
             T.print param_type
-            TE.print typing_env
+            DE.print denv
         | Ok (param_type, env_extension) ->
-          let typing_env = TE.add_env_extension typing_env env_extension in
+          let denv =
+            DE.map_typing_env denv ~f:(fun typing_env ->
+              TE.add_env_extension typing_env env_extension)
+          in
           assert (Index.Map.cardinal fields =
             List.length all_field_types_by_id);
-          let typing_env, extra_params_and_args =
+          let denv, extra_params_and_args =
             List.fold_left2
-              (fun (typing_env, extra_params_and_args)
+              (fun (denv, extra_params_and_args)
                   field_type field_types_by_id ->
                 if not (U.unbox_recursively ~field_type) then
-                  typing_env, extra_params_and_args
+                  denv, extra_params_and_args
                 else begin
-                  let typing_env, _, extra_params_and_args =
-                    unbox_value typing_env ~depth:(depth + 1)
+                  let denv, _, extra_params_and_args =
+                    unbox_value denv ~depth:(depth + 1)
                       ~arg_types_by_use_id:field_types_by_id
                       ~param_being_unboxed
                       ~param_type:field_type extra_params_and_args
                   in
-                  typing_env, extra_params_and_args
+                  denv, extra_params_and_args
                 end)
-              (typing_env, extra_params_and_args)
+              (denv, extra_params_and_args)
               (Index.Map.data fields) all_field_types_by_id
           in
-          typing_env, param_type, extra_params_and_args
+          denv, param_type, extra_params_and_args
 end
 
 module Block_of_values_spec : Unboxing_spec
@@ -393,7 +400,7 @@ struct
   module Use_info = struct
     type t = unit
 
-    let create _typing_env ~type_at_use:_ : _ create_use_info_result = Ok ()
+    let create _denv ~type_at_use:_ : _ create_use_info_result = Ok ()
   end
 
   let var_name = "unboxed"
@@ -409,7 +416,8 @@ struct
   let make_boxed_value tag ~param_being_unboxed:_ ~new_params:_ ~fields =
     let fields = Index.Map.data fields in
     T.immutable_block ~is_unique:false tag ~field_kind:K.value ~fields,
-    TEE.empty ()
+      CSE.empty,
+      TEE.empty ()
 
   let make_boxed_value_accommodating tag index ~index_var
         ~untagged_index_var:_ =
@@ -649,27 +657,22 @@ struct
     let is_int = Simple.name is_int_name in
     let get_tag = Simple.name get_tag_name in
     let is_int_prim =
-      P.Unary (Is_int, param_being_unboxed)
-      |> P.Eligible_for_cse.create_exn
+      P.Eligible_for_cse.create_exn (Unary (Is_int, param_being_unboxed))
     in
     let get_tag_prim =
-      P.Unary (Get_tag, param_being_unboxed)
-      |> P.Eligible_for_cse.create_exn
+      P.Eligible_for_cse.create_exn (Unary (Get_tag, param_being_unboxed))
     in
+    let cse = CSE.add CSE.empty is_int_prim ~bound_to:is_int in
+    let cse = CSE.add cse get_tag_prim ~bound_to:get_tag in
     let env_extension =
-      TEE.empty ()
-      |> TEE.add_cse ~prim:is_int_prim ~bound_to:is_int
-      |> TEE.add_cse ~prim:get_tag_prim ~bound_to:get_tag
-    in
-    let env_extension =
-      TEE.add_or_replace_equation env_extension is_int_name
+      TEE.one_equation is_int_name
         (T.is_int_for_scrutinee ~scrutinee:param_being_unboxed)
     in
     let env_extension =
       TEE.add_or_replace_equation env_extension get_tag_name
         (T.get_tag_for_block ~block:param_being_unboxed)
     in
-    ty, env_extension
+    ty, cse, env_extension
 
   let make_boxed_value_accommodating _variant (index : Index.t) ~index_var
         ~untagged_index_var =
@@ -766,7 +769,8 @@ struct
   let make_boxed_value tag ~param_being_unboxed:_ ~new_params:_ ~fields =
     let fields = Index.Map.data fields in
     T.immutable_block ~is_unique:false tag ~field_kind:K.naked_float ~fields,
-    TEE.empty ()
+      CSE.empty,
+      TEE.empty ()
 
   let make_boxed_value_accommodating tag index ~index_var
         ~untagged_index_var:_ =
@@ -841,7 +845,7 @@ struct
         ~all_closures_in_set
         ~all_closure_vars_in_set:closure_vars
     in
-    ty, TEE.empty ()
+    ty, CSE.empty, TEE.empty ()
 
   let make_boxed_value_accommodating (info : Info.t) closure_var ~index_var
         ~untagged_index_var:_ =
@@ -905,7 +909,7 @@ end) = struct
     assert (Tag.equal tag N.tag);
     let fields = Index.Map.data fields in
     match fields with
-    | [field] -> N.box field, TEE.empty ()
+    | [field] -> N.box field, CSE.empty, TEE.empty ()
     | _ -> Misc.fatal_errorf "Boxed %ss only have one field" N.name
 
   let make_boxed_value_accommodating _tag index ~index_var
@@ -1012,12 +1016,12 @@ let unboxed_number_decisions = [
   T.prove_is_a_boxed_nativeint, Nativeints.unbox_one_parameter, Tag.custom_tag;
 ]
 
-let rec make_unboxing_decision typing_env ~depth ~arg_types_by_use_id
+let rec make_unboxing_decision denv ~depth ~arg_types_by_use_id
       ~param_being_unboxed ~param_type extra_params_and_args =
   if depth > max_unboxing_depth then
-    typing_env, param_type, extra_params_and_args
+    denv, param_type, extra_params_and_args
   else
-    match T.prove_unique_tag_and_size typing_env param_type with
+    match T.prove_unique_tag_and_size (DE.typing_env denv) param_type with
     | Proved (tag, size) ->
       let indexes =
         let size = Targetint.OCaml.to_int size in
@@ -1027,14 +1031,14 @@ let rec make_unboxing_decision typing_env ~depth ~arg_types_by_use_id
       (* If the fields have kind [Naked_float] then the [tag] will always
          be [Tag.double_array_tag].  See [Row_like.For_blocks]. *)
       if Tag.equal tag Tag.double_array_tag then
-        Blocks_of_naked_floats.unbox_one_parameter typing_env ~depth
+        Blocks_of_naked_floats.unbox_one_parameter denv ~depth
           ~arg_types_by_use_id ~param_being_unboxed ~param_type
           extra_params_and_args ~unbox_value:make_unboxing_decision
           tag indexes
       else
         begin match Tag.Scannable.of_tag tag with
         | Some _ ->
-          Blocks_of_values.unbox_one_parameter typing_env ~depth
+          Blocks_of_values.unbox_one_parameter denv ~depth
             ~arg_types_by_use_id ~param_being_unboxed ~param_type
             extra_params_and_args ~unbox_value:make_unboxing_decision
             tag indexes
@@ -1042,10 +1046,10 @@ let rec make_unboxing_decision typing_env ~depth ~arg_types_by_use_id
           Misc.fatal_errorf "Block that is not of tag [Double_array_tag] \
               and yet also not scannable:@ %a@ in env:@ %a"
             T.print param_type
-            TE.print typing_env
+            DE.print denv
         end
     | Wrong_kind | Invalid | Unknown ->
-      match T.prove_variant typing_env param_type with
+      match T.prove_variant (DE.typing_env denv) param_type with
       | Proved variant ->
         (*
         Format.eprintf "Starting variant unboxing\n%!";
@@ -1064,12 +1068,12 @@ let rec make_unboxing_decision typing_env ~depth ~arg_types_by_use_id
           |> Variant_index.Set.add Tag
           |> Variant_index.Set.union fields
         in
-        Variants.unbox_one_parameter typing_env ~depth
+        Variants.unbox_one_parameter denv ~depth
           ~arg_types_by_use_id ~param_being_unboxed ~param_type
           extra_params_and_args ~unbox_value:make_unboxing_decision
           variant indexes
       | Invalid | Unknown | Wrong_kind ->
-        match T.prove_single_closures_entry' typing_env param_type with
+        match T.prove_single_closures_entry' (DE.typing_env denv) param_type with
         | Proved (closure_id, closures_entry, Ok _func_decl_type) ->
           let closure_var_types =
             T.Closures_entry.closure_var_types closures_entry
@@ -1080,58 +1084,55 @@ let rec make_unboxing_decision typing_env ~depth ~arg_types_by_use_id
             }
           in
           let closure_vars = Var_within_closure.Map.keys closure_var_types in
-          Closures.unbox_one_parameter typing_env ~depth
+          Closures.unbox_one_parameter denv ~depth
             ~arg_types_by_use_id ~param_being_unboxed ~param_type
             extra_params_and_args ~unbox_value:make_unboxing_decision
             info closure_vars
         | Proved (_, _, (Unknown | Bottom)) | Wrong_kind | Invalid | Unknown ->
           let rec try_unboxing = function
-            | [] -> typing_env, param_type, extra_params_and_args
+            | [] -> denv, param_type, extra_params_and_args
             | (prover, unboxer, tag) :: decisions ->
               let proof : _ T.proof_allowing_kind_mismatch =
-                prover typing_env param_type
+                prover (DE.typing_env denv) param_type
               in
               match proof with
               | Proved () ->
                 let indexes =
                   Targetint.OCaml.Set.singleton Targetint.OCaml.zero
                 in
-                unboxer typing_env ~depth ~arg_types_by_use_id
+                unboxer denv ~depth ~arg_types_by_use_id
                   ~param_being_unboxed ~param_type extra_params_and_args
                   ~unbox_value:make_unboxing_decision tag indexes
               | Wrong_kind | Invalid | Unknown -> try_unboxing decisions
           in
           try_unboxing unboxed_number_decisions
 
-let make_unboxing_decisions0 typing_env ~arg_types_by_use_id ~params
+let make_unboxing_decisions0 denv ~arg_types_by_use_id ~params
       ~param_types extra_params_and_args =
   assert (List.compare_lengths params param_types = 0);
-  let typing_env, param_types_rev, extra_params_and_args =
-    List.fold_left (fun (typing_env, param_types_rev, extra_params_and_args)
+  let denv, param_types_rev, extra_params_and_args =
+    List.fold_left (fun (denv, param_types_rev, extra_params_and_args)
               (arg_types_by_use_id, (param, param_type)) ->
-        let typing_env, param_type, extra_params_and_args =
-          make_unboxing_decision typing_env ~depth:1 ~arg_types_by_use_id
+        let denv, param_type, extra_params_and_args =
+          make_unboxing_decision denv ~depth:1 ~arg_types_by_use_id
             ~param_being_unboxed:param ~param_type extra_params_and_args
         in
-        typing_env, param_type :: param_types_rev, extra_params_and_args)
-      (typing_env, [], extra_params_and_args)
+        denv, param_type :: param_types_rev, extra_params_and_args)
+      (denv, [], extra_params_and_args)
       (List.combine arg_types_by_use_id
         (List.combine params param_types))
   in
-  let typing_env =
-    TE.add_equations_on_params typing_env
-      ~params ~param_types:(List.rev param_types_rev)
+  let denv =
+    DE.map_typing_env denv ~f:(fun typing_env ->
+      TE.add_equations_on_params typing_env
+        ~params ~param_types:(List.rev param_types_rev))
   in
-  (*
-  Format.eprintf "Final typing env:@ %a\n%!" TE.print typing_env;
-  Format.eprintf "EPA:@ %a\n%!" EPA.print extra_params_and_args;
-  *)
-  typing_env, extra_params_and_args
+  denv, extra_params_and_args
 
-let make_unboxing_decisions typing_env ~arg_types_by_use_id ~params
+let make_unboxing_decisions denv ~arg_types_by_use_id ~params
       ~param_types extra_params_and_args =
   if Flambda_features.unbox_along_intra_function_control_flow () then
-    make_unboxing_decisions0 typing_env ~arg_types_by_use_id ~params
+    make_unboxing_decisions0 denv ~arg_types_by_use_id ~params
       ~param_types extra_params_and_args
   else
-    typing_env, extra_params_and_args
+    denv, extra_params_and_args

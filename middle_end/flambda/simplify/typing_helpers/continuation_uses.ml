@@ -191,7 +191,7 @@ Format.eprintf "Unknown at or later than %a\n%!"
         let extra_lifted_consts_in_use_envs =
           LCS.all_defined_symbols consts_lifted_during_body
         in
-        let use_envs_with_ids =
+        let use_envs_with_ids' =
           List.map (fun (use_env, id, use_kind) ->
               DE.typing_env use_env, id, use_kind)
             use_envs_with_ids
@@ -200,15 +200,29 @@ Format.eprintf "Unknown at or later than %a\n%!"
         let handler_env, extra_params_and_args =
           if not (Flambda_features.join_points ()) then
             let handler_env = simple_join typing_env uses ~params in
-            handler_env, Continuation_extra_params_and_args.empty
+            let denv = DE.with_typing_env denv handler_env in
+            denv, Continuation_extra_params_and_args.empty
           else
-            let env_extension, extra_params_and_args =
+            let cse_at_each_use =
+              ListLabels.map use_envs_with_ids ~f:(fun (use_env, id, _) ->
+                DE.typing_env use_env, id, DE.cse use_env)
+            in
+            let module CSE = Common_subexpression_elimination in
+            let cse_join_result =
+              CSE.join ~typing_env_at_fork:typing_env
+                ~cse_at_fork:(DE.cse denv)
+                ~cse_at_each_use
+                ~params
+            in
+            let extra_params_and_args = cse_join_result.extra_params in
+            let env_extension =
               TE.cut_and_n_way_join typing_env
-                use_envs_with_ids
+                use_envs_with_ids'
                 ~params
                 ~unknown_if_defined_at_or_later_than:
                   (Scope.next definition_scope_level)
                 ~extra_lifted_consts_in_use_envs
+                ~extra_allowed_names:cse_join_result.extra_allowed_names
             in
 (*
 Format.eprintf "handler env extension for %a is:@ %a\n%!"
@@ -223,15 +237,25 @@ Format.eprintf "The extra params and args are:@ %a\n%!"
                 ~params:extra_params_and_args.extra_params
             in
             let handler_env =
+              Name.Map.fold (fun name ty handler_env ->
+                  TE.add_equation handler_env name ty)
+                cse_join_result.extra_equations
+                handler_env
+            in
+            let handler_env =
               TE.add_env_extension handler_env env_extension
             in
-            handler_env, extra_params_and_args
+            let denv =
+              DE.with_cse (DE.with_typing_env denv handler_env)
+                cse_join_result.cse_at_join_point
+            in
+            denv, extra_params_and_args
         in
-        let handler_env =
-          TE.with_code_age_relation handler_env
-            code_age_relation_after_body
+        let denv =
+          DE.map_typing_env handler_env ~f:(fun handler_env ->
+            TE.with_code_age_relation handler_env
+              code_age_relation_after_body)
         in
-        let handler_env = DE.with_typing_env denv handler_env in
         let is_single_use =
           match uses with
           | [_] -> true
@@ -241,7 +265,7 @@ Format.eprintf "The extra params and args are:@ %a\n%!"
         | [_, _, Inlinable] -> assert false  (* handled above *)
         | [] | [_, _, Non_inlinable]
         | (_, _, (Inlinable | Non_inlinable)) :: _ ->
-          handler_env, extra_params_and_args, false, is_single_use
+          denv, extra_params_and_args, false, is_single_use
     in
     let arg_types_by_use_id =
       List.fold_left (fun args use ->

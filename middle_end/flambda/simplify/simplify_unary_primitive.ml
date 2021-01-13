@@ -142,9 +142,10 @@ let simplify_unbox_number (boxable_number_kind : K.Boxable_number.t)
     Unary (Box_number boxable_number_kind,
       Simple.var (Var_in_binding_pos.var result_var))
   in
-  let env_extension =
-    TEE.add_cse env_extension ~prim:(P.Eligible_for_cse.create_exn box_prim)
-      ~bound_to:arg
+  let dacc =
+    DA.map_denv dacc ~f:(fun denv ->
+      DE.add_cse denv (P.Eligible_for_cse.create_exn box_prim)
+        ~bound_to:arg)
   in
   reachable, env_extension, dacc
 

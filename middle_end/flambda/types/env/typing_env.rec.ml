@@ -36,8 +36,6 @@ module Cached : sig
 
   val aliases : t -> Aliases.t
 
-  val cse : t -> Simple.t Flambda_primitive.Eligible_for_cse.Map.t
-
   val add_or_replace_binding
      : t
     -> Name.t
@@ -53,8 +51,6 @@ module Cached : sig
     -> Type_grammar.t
     -> new_aliases:Aliases.t
     -> t
-
-  val with_cse : t -> cse:Simple.t Flambda_primitive.Eligible_for_cse.Map.t -> t
 
   val add_symbol_projection : t -> Variable.t -> Symbol_projection.t -> t
 
@@ -72,7 +68,6 @@ end = struct
     names_to_types :
       (Type_grammar.t * Binding_time.t * Name_mode.t) Name.Map.t;
     aliases : Aliases.t;
-    cse : Simple.t Flambda_primitive.Eligible_for_cse.Map.t;
     symbol_projections : Symbol_projection.t Variable.Map.t;
   }
 
@@ -119,13 +114,11 @@ end = struct
   let empty =
     { names_to_types = Name.Map.empty;
       aliases = Aliases.empty;
-      cse = Flambda_primitive.Eligible_for_cse.Map.empty;
       symbol_projections = Variable.Map.empty;
     }
 
   let names_to_types t = t.names_to_types
   let aliases t = t.aliases
-  let cse t = t.cse
   let symbol_projections t = t.symbol_projections
 
   (* CR mshinwell: At least before the following two functions were split
@@ -138,7 +131,6 @@ end = struct
     in
     { names_to_types;
       aliases = new_aliases;
-      cse = t.cse;
       symbol_projections = t.symbol_projections;
     }
 
@@ -151,11 +143,8 @@ end = struct
     in
     { names_to_types;
       aliases = new_aliases;
-      cse = t.cse;
       symbol_projections = t.symbol_projections;
     }
-
-  let with_cse t ~cse = { t with cse; }
 
   let add_symbol_projection t var proj =
     let symbol_projections = Variable.Map.add var proj t.symbol_projections in
@@ -186,12 +175,11 @@ end = struct
                current_compilation_unit)
         names_to_types
     in
-    (* [t.cse] is not exported, so doesn't need cleaning. *)
     { t with
       names_to_types;
     }
 
-  let import import_map { names_to_types; aliases; cse; symbol_projections; } =
+  let import import_map { names_to_types; aliases; symbol_projections; } =
     let module Import = Ids_for_export.Import_map in
     let names_to_types =
       Name.Map.fold (fun name (ty, binding_time, mode) acc ->
@@ -202,19 +190,6 @@ end = struct
         Name.Map.empty
     in
     let aliases = Aliases.import import_map aliases in
-    let cse =
-      Flambda_primitive.Eligible_for_cse.Map.fold (fun prim rhs acc ->
-          let (), prim =
-            Flambda_primitive.Eligible_for_cse.fold_args prim
-              ~init:()
-              ~f:(fun () simple -> (), Import.simple import_map simple)
-          in
-          Flambda_primitive.Eligible_for_cse.Map.add prim
-            (Import.simple import_map rhs)
-            acc)
-        cse
-        Flambda_primitive.Eligible_for_cse.Map.empty
-    in
     let symbol_projections =
       Variable.Map.fold (fun var proj acc ->
           Variable.Map.add (Import.variable import_map var)
@@ -223,7 +198,7 @@ end = struct
         symbol_projections
         Variable.Map.empty
     in
-    { names_to_types; aliases; cse; symbol_projections; }
+    { names_to_types; aliases; symbol_projections; }
 
   let merge t1 t2 =
     let names_to_types =
@@ -233,33 +208,6 @@ end = struct
     in
     let aliases =
       Aliases.merge t1.aliases t2.aliases
-    in
-    let cse =
-      Flambda_primitive.Eligible_for_cse.Map.union
-        (fun prim simple1 simple2 ->
-           let cannot_merge _name =
-             if Name_occurrences.is_empty
-                  (Flambda_primitive.Eligible_for_cse.free_names prim)
-             then None
-             else
-               Misc.fatal_errorf
-                 "Cannot merge CSE equation %a from different environments"
-                 Flambda_primitive.Eligible_for_cse.print prim
-           in
-           Simple.pattern_match simple1
-             ~const:(fun const1 ->
-               Simple.pattern_match simple2
-                 ~const:(fun const2 ->
-                   if Reg_width_things.Const.equal const1 const2
-                   then Some simple1
-                   else
-                     Misc.fatal_errorf
-                       "Inconsistent values for CSE equation@ %a:@ %a@ <> %a"
-                       Flambda_primitive.Eligible_for_cse.print prim
-                       Simple.print simple1 Simple.print simple2)
-                 ~name:cannot_merge)
-             ~name:cannot_merge)
-        t1.cse t2.cse
     in
     let symbol_projections =
       Variable.Map.union (fun var proj1 proj2 ->
@@ -273,7 +221,7 @@ end = struct
         t1.symbol_projections
         t2.symbol_projections
     in
-    { names_to_types; aliases; cse; symbol_projections; }
+    { names_to_types; aliases; symbol_projections; }
 end
 
 module One_level = struct
@@ -424,17 +372,6 @@ module Serializable = struct
     let ids =
       Ids_for_export.union ids
         (Aliases.all_ids_for_export (Cached.aliases just_after_level))
-    in
-    let ids =
-      Flambda_primitive.Eligible_for_cse.Map.fold (fun prim simple ids ->
-          let ids =
-            Ids_for_export.union ids
-              (Flambda_primitive.all_ids_for_export
-                 (Flambda_primitive.Eligible_for_cse.to_primitive prim))
-          in
-          Ids_for_export.add_simple ids simple)
-        (Cached.cse just_after_level)
-        ids
     in
     let ids =
       Variable.Map.fold (fun var proj ids ->
@@ -932,22 +869,6 @@ let invariant_for_new_equation t name ty =
     end
   end
 
-let add_cse t prim ~bound_to =
-  let level =
-    Typing_env_level.add_cse (One_level.level t.current_level) prim ~bound_to
-  in
-  let cached = cached t in
-  let cse = Cached.cse cached in
-  match Flambda_primitive.Eligible_for_cse.Map.find prim cse with
-  | exception Not_found ->
-    let cse = Flambda_primitive.Eligible_for_cse.Map.add prim bound_to cse in
-    let just_after_level = Cached.with_cse cached ~cse in
-    let current_level =
-      One_level.create (current_scope t) level ~just_after_level
-    in
-    with_current_level t ~current_level
-  | _bound_to -> t
-
 let rec add_equation0 t aliases name ty =
   if !Clflags.Flambda.Debug.concrete_types_only_on_canonicals then begin
     let is_concrete =
@@ -1135,12 +1056,6 @@ and add_env_extension_from_level t level : t =
       (Typing_env_level.equations level)
       t
   in
-  let t =
-    Flambda_primitive.Eligible_for_cse.Map.fold (fun prim bound_to t ->
-        add_cse t prim ~bound_to)
-      (Typing_env_level.cse level)
-      t
-  in
   Variable.Map.fold (fun var proj t -> add_symbol_projection t var proj)
     (Typing_env_level.symbol_projections level)
     t
@@ -1204,12 +1119,6 @@ let meet_equations_on_params t ~params ~param_types =
     t
     params param_types
 
-let find_cse t prim =
-  let cse = Cached.cse (cached t) in
-  match Flambda_primitive.Eligible_for_cse.Map.find prim cse with
-  | exception Not_found -> None
-  | bound_to -> Some bound_to
-
 let add_to_code_age_relation t ~newer ~older =
   let code_age_relation =
     Code_age_relation.add t.code_age_relation ~newer ~older
@@ -1246,7 +1155,7 @@ let cut t ~unknown_if_defined_at_or_later_than:min_scope =
 
 let cut_and_n_way_join definition_typing_env ts_and_use_ids ~params
       ~unknown_if_defined_at_or_later_than
-      ~extra_lifted_consts_in_use_envs =
+      ~extra_lifted_consts_in_use_envs ~extra_allowed_names =
   (* CR mshinwell: Can't [unknown_if_defined_at_or_later_than] just be
      computed by this function? *)
   let after_cuts =
@@ -1255,12 +1164,11 @@ let cut_and_n_way_join definition_typing_env ts_and_use_ids ~params
         t, use_id, use_kind, level)
       ts_and_use_ids
   in
-  let level, extra_params_and_args =
+  let level =
     Typing_env_level.n_way_join ~env_at_fork:definition_typing_env
-      after_cuts ~params ~extra_lifted_consts_in_use_envs
+      after_cuts ~params ~extra_lifted_consts_in_use_envs ~extra_allowed_names
   in
-  let env_extension = Typing_env_extension.create level in
-  env_extension, extra_params_and_args
+  Typing_env_extension.create level
 
 let get_canonical_simple_with_kind_exn t ?min_name_mode simple =
   let kind = kind_of_simple t simple in
