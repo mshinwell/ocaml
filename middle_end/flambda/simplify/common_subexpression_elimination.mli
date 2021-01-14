@@ -32,13 +32,13 @@ val print : Format.formatter -> t -> unit
 
 val empty : t
 
-val add : t -> P.Eligible_for_cse.t -> bound_to:Simple.t -> t
+(** If the [t] already has an equation for the given primitive, then [add]
+    does nothing.  (Expected usage is that this will correspond to outermost
+    bindings taking precedence, but for simplicity, this function does not
+    enforce that.) *)
+val add : t -> P.Eligible_for_cse.t -> bound_to:Simple.t -> Scope.t -> t
 
 val find : t -> P.Eligible_for_cse.t -> Simple.t option
-
-val concat : t -> t -> t
-
-val meet : t -> t -> t
 
 module Join_result : sig
   type nonrec t = private
@@ -49,6 +49,8 @@ module Join_result : sig
     }
 end
 
+(** [join] adds CSE equations into [cse_at_fork] at the next scope level after
+    that given by the [typing_env_at_fork]. *)
 val join
    : typing_env_at_fork:TE.t
   -> cse_at_fork:t

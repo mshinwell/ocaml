@@ -18,6 +18,7 @@
 
 open! Flambda.Import
 
+module CSE = Common_subexpression_elimination
 module I = Simplify_envs_intf
 module K = Flambda_kind
 module KP = Kinded_parameter
@@ -47,7 +48,7 @@ end = struct
     unit_toplevel_exn_continuation : Continuation.t;
     symbols_currently_being_defined : Symbol.Set.t;
     variables_defined_at_toplevel : Variable.Set.t;
-    cse : Common_subexpression_elimination.t;
+    cse : CSE.t;
   }
 
   let print ppf { backend = _; round; typing_env; get_imported_code = _;
@@ -81,7 +82,7 @@ end = struct
       Continuation.print unit_toplevel_exn_continuation
       Symbol.Set.print symbols_currently_being_defined
       Variable.Set.print variables_defined_at_toplevel
-      Common_subexpression_elimination.print cse
+      CSE.print cse
       (Code_id.Map.print Code.print) code
 
   let invariant _t = ()
@@ -103,7 +104,7 @@ end = struct
       unit_toplevel_exn_continuation;
       symbols_currently_being_defined = Symbol.Set.empty;
       variables_defined_at_toplevel = Variable.Set.empty;
-      cse = Common_subexpression_elimination.empty;
+      cse = CSE.empty;
     }
 
   let resolver t = TE.resolver t.typing_env
@@ -195,7 +196,7 @@ end = struct
       unit_toplevel_exn_continuation;
       symbols_currently_being_defined;
       variables_defined_at_toplevel;
-      cse = Common_subexpression_elimination.empty;
+      cse = CSE.empty;
     }
 
   let define_variable t var kind =
@@ -581,16 +582,14 @@ end = struct
   let cse t = t.cse
 
   let add_cse t prim ~bound_to =
-    let cse = Common_subexpression_elimination.add t.cse prim ~bound_to in
+    let scope = get_continuation_scope_level t in
+    let cse = CSE.add t.cse prim ~bound_to scope in
     { t with cse; }
 
   let find_cse t prim =
-    Common_subexpression_elimination.find t.cse prim
+    CSE.find t.cse prim
 
   let with_cse t cse = { t with cse; }
-
-  let concat_cse t cse =
-    { t with cse = Common_subexpression_elimination.concat t.cse cse; }
 end and Upwards_env : sig
   include I.Upwards_env
     with type downwards_env := Downwards_env.t

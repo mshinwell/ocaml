@@ -30,50 +30,43 @@ module TE = Flambda_type.Typing_env
 
 module List = ListLabels
 
-(* For the moment we don't index by scope level, unlike for [Typing_env],
-   and use a diff operation to cut the CSE environment.  This is probably
-   fine as there should be many fewer CSE equations than type equations. *)
 type t = {
-  cse : Simple.t EP.Map.t;
+  by_scope : Simple.t EP.Map.t Scope.Map.t;
+  combined : Simple.t EP.Map.t;
 }
 
-let print ppf { cse; } =
-  Format.fprintf ppf "@[%a@]" (EP.Map.print Simple.print) cse
+let print ppf { by_scope; combined; } =
+  Format.fprintf ppf "@[<hov 1>(\
+      @[<hov 1>(by_scope@ %a)@]@ \
+      @[<hov 1>(combined@ %a)@]\
+      @]"
+    (Scope.Map.print (EP.Map.print Simple.print)) by_scope
+    (EP.Map.print Simple.print) combined
 
 let empty =
-  { cse = EP.Map.empty;
+  { by_scope = Scope.Map.empty;
+    combined = EP.Map.empty;
   }
 
-let add t prim ~bound_to =
-  match EP.Map.find prim t.cse with
+let add t prim ~bound_to scope =
+  match EP.Map.find prim t.combined with
   | exception Not_found ->
-    let cse = EP.Map.add prim bound_to t.cse in
-    { cse; }
+    let level =
+      match Scope.Map.find scope t.by_scope with
+      | exception Not_found -> EP.Map.singleton prim bound_to
+      | level -> EP.Map.add prim bound_to level
+    in
+    let by_scope = Scope.Map.add (* replace *) scope level t.by_scope in
+    let combined = EP.Map.add prim bound_to t.combined in
+    { by_scope;
+      combined;
+    }
   | _bound_to -> t
 
 let find t prim =
-  match EP.Map.find prim t.cse with
+  match EP.Map.find prim t.combined with
   | exception Not_found -> None
   | bound_to -> Some bound_to
-
-let concat { cse = cse1; } { cse = cse2; } =
-  let cse =
-    (* CR mshinwell: I think elsewhere we are preferring the earlier binding *)
-    EP.Map.union (fun _prim _t1 t2 -> Some t2) cse1 cse2
-  in
-  { cse; }
-
-let meet { cse = cse1; } { cse = cse2; } =
-  let cse =
-    EP.Map.merge (fun _ simple1 simple2 ->
-        match simple1, simple2 with
-        | None, None | None, Some _ | Some _, None -> None
-        | Some simple1, Some simple2 ->
-          if Simple.equal simple1 simple2 then Some simple1
-          else None)
-      cse1 cse2
-  in
-  { cse; }
 
 module Rhs_kind : sig
   type t =
@@ -126,7 +119,7 @@ let cse_with_eligible_lhs ~typing_env_at_fork ~cse_at_each_use ~params prev_cse
       (extra_bindings: EPA.t) extra_equations =
   let params = KP.List.simple_set params in
   List.fold_left cse_at_each_use ~init:EP.Map.empty
-    ~f:(fun eligible (env_at_use, id, t) ->
+    ~f:(fun eligible (env_at_use, id, cse) ->
       let find_new_name =
         if EPA.is_empty extra_bindings
         then (fun _arg -> None)
@@ -215,7 +208,7 @@ let cse_with_eligible_lhs ~typing_env_at_fork ~cse_at_each_use ~params prev_cse
               | from_prev_levels ->
                 let map = RI.Map.add id bound_to from_prev_levels in
                 EP.Map.add prim map eligible)
-      t.cse
+      cse
       eligible)
 
 let join_one_cse_equation ~cse_at_each_use prim bound_to_map
@@ -265,16 +258,14 @@ let join_one_cse_equation ~cse_at_each_use prim bound_to_map
       in
       cse, extra_bindings, extra_equations, allowed
 
-let cut_cse_environment { cse; } ~cse_at_fork =
-  let { cse = cse_at_fork; } = cse_at_fork in
-  let cse =
-    (* Remove all equations present at the fork from the use environment.
-       (See comment earlier in this file about speed.) *)
-    if cse == cse_at_fork then EP.Map.empty
-    else
-      EP.Map.fold (fun prim _simple t -> EP.Map.remove prim t) cse_at_fork cse
-  in
-  { cse; }
+let cut_cse_environment { by_scope; _ } ~scope_at_fork =
+  (* This extracts those CSE equations that arose between the fork point and
+     each use of the continuation in question. *)
+  let _, _, levels = Scope.Map.split scope_at_fork by_scope in
+  Scope.Map.fold (fun _scope equations result ->
+      EP.Map.disjoint_union equations result)
+    levels
+    EP.Map.empty
 
 module Join_result = struct
   type nonrec t =
@@ -288,12 +279,12 @@ module Join_result = struct
 end
 
 let join ~typing_env_at_fork ~cse_at_fork ~cse_at_each_use ~params =
+  let scope_at_fork = TE.current_scope typing_env_at_fork in
   let cse_at_each_use =
     List.map cse_at_each_use ~f:(fun (env_at_use, id, t) ->
-      let t = cut_cse_environment t ~cse_at_fork in
-      env_at_use, id, t)
+      let cse_between_fork_and_use = cut_cse_environment t ~scope_at_fork in
+      env_at_use, id, cse_between_fork_and_use)
   in
-  let compute_cse_one_round prev_cse extra_params extra_equations ~allowed =
   (* CSE equations have a left-hand side specifying a primitive and a
      right-hand side specifying a [Simple].  The left-hand side is matched
      against portions of terms.  As such, the [Simple]s therein must have
@@ -302,6 +293,7 @@ let join ~typing_env_at_fork ~cse_at_fork ~cse_at_each_use ~params =
      involves a name not defined at the fork point, having canonicalised such
      name, cannot be propagated.  This step also canonicalises the right-hand
      sides of the CSE equations. *)
+  let compute_cse_one_round prev_cse extra_params extra_equations ~allowed =
     let new_t =
       cse_with_eligible_lhs ~typing_env_at_fork ~cse_at_each_use ~params
         prev_cse extra_params extra_equations
@@ -345,18 +337,23 @@ let join ~typing_env_at_fork ~cse_at_fork ~cse_at_each_use ~params =
     in
     do_rounds 1 EP.Map.empty EPA.empty Name.Map.empty Name_occurrences.empty
   in
-  let cse =
+  let cse_at_join_point =
     (* Any CSE equation whose right-hand side identifies a name in the [allowed]
        set is propagated.  We don't need to check the left-hand sides because
        we know all of those names are in [typing_env_at_fork]. *)
-    EP.Map.filter (fun _prim bound_to ->
-        Simple.pattern_match bound_to
-          ~const:(fun _ -> true)
-          ~name:(fun name -> Name_occurrences.mem_name allowed name))
+    EP.Map.fold (fun prim bound_to cse ->
+        let propagate =
+          Simple.pattern_match bound_to
+            ~const:(fun _ -> true)
+            ~name:(fun name -> Name_occurrences.mem_name allowed name)
+        in
+        if propagate then add cse prim ~bound_to (Scope.next scope_at_fork)
+        else cse)
       cse
+      cse_at_fork
   in
   { Join_result.
-    cse_at_join_point = concat cse_at_fork { cse; };
+    cse_at_join_point;
     extra_params;
     extra_equations;
     extra_allowed_names = allowed;

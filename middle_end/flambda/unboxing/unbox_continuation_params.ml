@@ -18,8 +18,6 @@
 
 open! Simplify_import
 
-module CSE = Common_subexpression_elimination
-
 (* CR mshinwell: Add a command-line flag. *)
 let max_unboxing_depth = 1
 
@@ -62,7 +60,7 @@ module type Unboxing_spec = sig
     -> param_being_unboxed:KP.t
     -> new_params:KP.t Index.Map.t
     -> fields:T.t Index.Map.t
-    -> T.t * CSE.t * TEE.t
+    -> T.t * (DE.t -> DE.t) * TEE.t
 
   val extend_with_projection
      : Info.t
@@ -346,7 +344,7 @@ module Make (U : Unboxing_spec) = struct
         let block_type, cse, env_extension =
           U.make_boxed_value info ~param_being_unboxed ~new_params ~fields
         in
-        let denv = DE.concat_cse denv cse in
+        let denv = cse denv in
         let denv =
           DE.map_typing_env denv ~f:(fun typing_env ->
             let typing_env =
@@ -416,7 +414,7 @@ struct
   let make_boxed_value tag ~param_being_unboxed:_ ~new_params:_ ~fields =
     let fields = Index.Map.data fields in
     T.immutable_block ~is_unique:false tag ~field_kind:K.value ~fields,
-      CSE.empty,
+      Fun.id,
       TEE.empty ()
 
   let make_boxed_value_accommodating tag index ~index_var
@@ -662,8 +660,10 @@ struct
     let get_tag_prim =
       P.Eligible_for_cse.create_exn (Unary (Get_tag, param_being_unboxed))
     in
-    let cse = CSE.add CSE.empty is_int_prim ~bound_to:is_int in
-    let cse = CSE.add cse get_tag_prim ~bound_to:get_tag in
+    let cse denv =
+      let denv = DE.add_cse denv is_int_prim ~bound_to:is_int in
+      DE.add_cse denv get_tag_prim ~bound_to:get_tag
+    in
     let env_extension =
       TEE.one_equation is_int_name
         (T.is_int_for_scrutinee ~scrutinee:param_being_unboxed)
@@ -769,7 +769,7 @@ struct
   let make_boxed_value tag ~param_being_unboxed:_ ~new_params:_ ~fields =
     let fields = Index.Map.data fields in
     T.immutable_block ~is_unique:false tag ~field_kind:K.naked_float ~fields,
-      CSE.empty,
+      Fun.id,
       TEE.empty ()
 
   let make_boxed_value_accommodating tag index ~index_var
@@ -845,7 +845,7 @@ struct
         ~all_closures_in_set
         ~all_closure_vars_in_set:closure_vars
     in
-    ty, CSE.empty, TEE.empty ()
+    ty, Fun.id, TEE.empty ()
 
   let make_boxed_value_accommodating (info : Info.t) closure_var ~index_var
         ~untagged_index_var:_ =
@@ -909,7 +909,7 @@ end) = struct
     assert (Tag.equal tag N.tag);
     let fields = Index.Map.data fields in
     match fields with
-    | [field] -> N.box field, CSE.empty, TEE.empty ()
+    | [field] -> N.box field, Fun.id, TEE.empty ()
     | _ -> Misc.fatal_errorf "Boxed %ss only have one field" N.name
 
   let make_boxed_value_accommodating _tag index ~index_var

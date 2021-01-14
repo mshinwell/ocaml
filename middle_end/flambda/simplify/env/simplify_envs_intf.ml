@@ -215,8 +215,6 @@ module type Downwards_env = sig
   val cse : t -> Common_subexpression_elimination.t
 
   val with_cse : t -> Common_subexpression_elimination.t -> t
-
-  val concat_cse : t -> Common_subexpression_elimination.t -> t
 end
 
 module type Upwards_env = sig

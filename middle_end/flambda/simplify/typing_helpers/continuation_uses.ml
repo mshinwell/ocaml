@@ -209,6 +209,8 @@ Format.eprintf "Unknown at or later than %a\n%!"
             in
             let module CSE = Common_subexpression_elimination in
             let cse_join_result =
+              assert (Scope.equal definition_scope_level
+                (TE.current_scope typing_env));
               CSE.join ~typing_env_at_fork:typing_env
                 ~cse_at_fork:(DE.cse denv)
                 ~cse_at_each_use
@@ -219,6 +221,10 @@ Format.eprintf "Unknown at or later than %a\n%!"
               TE.cut_and_n_way_join typing_env
                 use_envs_with_ids'
                 ~params
+                (* CR mshinwell: If this didn't do Scope.next then TE could
+                   probably be slightly more efficient, as it wouldn't need
+                   to look at the middle of the three return values from
+                   Scope.Map.Split. *)
                 ~unknown_if_defined_at_or_later_than:
                   (Scope.next definition_scope_level)
                 ~extra_lifted_consts_in_use_envs
