@@ -303,6 +303,7 @@ MIDDLE_END_FLAMBDA_SIMPLIFY=\
   middle_end/flambda/simplify/basic/continuation_in_env.cmo \
   middle_end/flambda/simplify/basic/simplified_named.cmo \
   middle_end/flambda/simplify/static_const_with_free_names.cmo \
+  middle_end/flambda/simplify/common_subexpression_elimination.cmo \
   middle_end/flambda/simplify/env/simplify_envs_intf.cmo \
   middle_end/flambda/simplify/env/simplify_envs.cmo \
   middle_end/flambda/simplify/typing_helpers/one_continuation_use.cmo \
