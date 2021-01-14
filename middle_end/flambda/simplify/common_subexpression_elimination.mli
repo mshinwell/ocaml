@@ -54,6 +54,9 @@ end
 val join
    : typing_env_at_fork:TE.t
   -> cse_at_fork:t
-  -> cse_at_each_use:(TE.t * RI.t * t) list
+  -> use_info:'a list
+  -> get_typing_env:('a -> TE.t)
+  -> get_rewrite_id:('a -> RI.t)
+  -> get_cse:('a -> t)
   -> params:KP.t list
-  -> Join_result.t
+  -> Join_result.t option

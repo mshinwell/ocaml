@@ -278,13 +278,8 @@ module Join_result = struct
     }
 end
 
-let join ~typing_env_at_fork ~cse_at_fork ~cse_at_each_use ~params =
-  let scope_at_fork = TE.current_scope typing_env_at_fork in
-  let cse_at_each_use =
-    List.map cse_at_each_use ~f:(fun (env_at_use, id, t) ->
-      let cse_between_fork_and_use = cut_cse_environment t ~scope_at_fork in
-      env_at_use, id, cse_between_fork_and_use)
-  in
+let join0 ~typing_env_at_fork ~cse_at_fork ~cse_at_each_use ~params
+      ~scope_at_fork =
   (* CSE equations have a left-hand side specifying a primitive and a
      right-hand side specifying a [Simple].  The left-hand side is matched
      against portions of terms.  As such, the [Simple]s therein must have
@@ -294,7 +289,7 @@ let join ~typing_env_at_fork ~cse_at_fork ~cse_at_each_use ~params =
      name, cannot be propagated.  This step also canonicalises the right-hand
      sides of the CSE equations. *)
   let compute_cse_one_round prev_cse extra_params extra_equations ~allowed =
-    let new_t =
+    let new_cse =
       cse_with_eligible_lhs ~typing_env_at_fork ~cse_at_each_use ~params
         prev_cse extra_params extra_equations
     in
@@ -306,7 +301,7 @@ let join ~typing_env_at_fork ~cse_at_fork ~cse_at_each_use ~params =
      extra parameter to the continuation at the join point. *)
     let cse', extra_params', extra_equations', allowed =
       EP.Map.fold (join_one_cse_equation ~cse_at_each_use)
-        new_t (EP.Map.empty, EPA.empty, Name.Map.empty, allowed)
+        new_cse (EP.Map.empty, EPA.empty, Name.Map.empty, allowed)
     in
     let need_other_round =
       (* If we introduce new parameters, then CSE equations involving the
@@ -337,6 +332,7 @@ let join ~typing_env_at_fork ~cse_at_fork ~cse_at_each_use ~params =
     in
     do_rounds 1 EP.Map.empty EPA.empty Name.Map.empty Name_occurrences.empty
   in
+  let have_propagated_something = ref false in
   let cse_at_join_point =
     (* Any CSE equation whose right-hand side identifies a name in the [allowed]
        set is propagated.  We don't need to check the left-hand sides because
@@ -347,14 +343,37 @@ let join ~typing_env_at_fork ~cse_at_fork ~cse_at_each_use ~params =
             ~const:(fun _ -> true)
             ~name:(fun name -> Name_occurrences.mem_name allowed name)
         in
-        if propagate then add cse prim ~bound_to (Scope.next scope_at_fork)
-        else cse)
+        if not propagate then cse
+        else begin
+          have_propagated_something := true;
+          add cse prim ~bound_to (Scope.next scope_at_fork)
+        end)
       cse
       cse_at_fork
   in
-  { Join_result.
-    cse_at_join_point;
-    extra_params;
-    extra_equations;
-    extra_allowed_names = allowed;
-  }
+  if not !have_propagated_something then None
+  else
+    Some { Join_result.
+      cse_at_join_point;
+      extra_params;
+      extra_equations;
+      extra_allowed_names = allowed;
+    }
+
+let join ~typing_env_at_fork ~cse_at_fork ~use_info ~get_typing_env
+      ~get_rewrite_id ~get_cse ~params =
+  let scope_at_fork = TE.current_scope typing_env_at_fork in
+  let seen_equations = ref false in
+  let cse_at_each_use =
+    List.map use_info ~f:(fun use ->
+      let t = get_cse use in
+      let cse_between_fork_and_use = cut_cse_environment t ~scope_at_fork in
+      if not (EP.Map.is_empty cse_between_fork_and_use) then begin
+        seen_equations := true
+      end;
+      get_typing_env use, get_rewrite_id use, cse_between_fork_and_use)
+  in
+  if not !seen_equations then None
+  else
+    join0 ~typing_env_at_fork ~cse_at_fork ~cse_at_each_use ~params
+      ~scope_at_fork
