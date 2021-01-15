@@ -1888,6 +1888,28 @@ module Eligible_for_pdce = struct
   let free_names = free_names
   let apply_name_permutation = apply_name_permutation
 
+  let map_args t ~f =
+    match t with
+    | Unary (prim, arg) ->
+      let arg' = f arg in
+      if arg == arg' then t
+      else Unary (prim, arg')
+    | Binary (prim, arg1, arg2) ->
+      let arg1' = f arg1 in
+      let arg2' = f arg2 in
+      if arg1 == arg1' && arg2 == arg2' then t
+      else Binary (prim, arg1', arg2')
+    | Ternary (prim, arg1, arg2, arg3) ->
+      let arg1' = f arg1 in
+      let arg2' = f arg2 in
+      let arg3' = f arg3 in
+      if arg1 == arg1' && arg2 == arg2' && arg3 == arg3' then t
+      else Ternary (prim, arg1', arg2', arg3')
+    | Variadic (prim, args) ->
+      let args' = List.map f args in
+      if List.for_all2 (==) args args' then t
+      else Variadic (prim, args')
+
   include Identifiable.Make (struct
     type nonrec t = t
 

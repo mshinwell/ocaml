@@ -46,24 +46,142 @@ module For_downwards_env = struct
       combined = Variable.Map.empty;
     }
 
-  let consider_primitive t ~bound_to prim scope =
+  let consider_primitive t typing_env ~bound_to prim =
     match P.Eligible_for_pdce.create prim with
     | None -> t
     | Some prim ->
-      let level =
-        match Scope.Map.find scope t.by_scope with
-        | exception Not_found -> Variable.Map.singleton bound_to prim
-        | level -> Variable.Map.add bound_to prim level
-      in
-      let by_scope = Scope.Map.add (* replace *) scope level t.by_scope in
-      let combined = Variable.Map.add bound_to prim t.combined in
-      let lhs_with_aliases = Variable.Set.add bound_to t.lhs_with_aliases in
-      { equations;
-        lhs_with_aliases;
-      }
+      (* We canonicalise the arguments of the primitive to maximise the
+         chance, at a join point, of finding the variables involved in the
+         fork environment (see below).
+         If the primitive doesn't involve variables then it's not eligible
+         for PDCE; it should get lifted instead. *)
+      let free_names = P.Eligible_for_pdce.free_names prim in
+      if Name_occurrences.no_variables free_names then t
+      else
+        let prim =
+          P.Eligible_for_pdce.map_args prim ~f:(fun simple ->
+            if not (Simple.is_var simple) then simple
+            else
+              match
+                TE.get_canonical_simple_exn typing_env
+                  simple ~min_name_mode:NM.normal
+              with
+              | exception Not_found ->
+                Misc.fatal_errorf "Couldn't find canonical variable for %a \
+                    occurring in PDCE primitive %a = %a@ Typing env:@ %a"
+                  Simple.print simple
+                  Variable.print bound_to
+                  P.Eligible_for_pdce.print prim
+                  TE.print typing_env
+              | canonical -> canonical)
+        in
+        let scope = TE.current_scope typing_env in
+        let level =
+          match Scope.Map.find scope t.by_scope with
+          | exception Not_found -> Variable.Map.singleton bound_to prim
+          | level -> Variable.Map.add bound_to prim level
+        in
+        let by_scope = Scope.Map.add (* replace *) scope level t.by_scope in
+        let combined = Variable.Map.add bound_to prim t.combined in
+        (* XXX What about [lhs_with_aliases]?
+        let lhs_with_aliases = Variable.Set.add bound_to t.lhs_with_aliases in
+        *)
+        { by_scope;
+          combined;
+        }
 
-  let join ~typing_env_at_fork ~use_info ~get_pdce =
-    ...
+  let cut_pdce_environment { by_scope; _ } ~scope_at_fork =
+    (* This extracts those primitive bindings eligible for PDCE that arose
+       between the fork point and each use of the continuation in question. *)
+    let _, _, levels = Scope.Map.split scope_at_fork by_scope in
+    Scope.Map.fold (fun _scope equations result ->
+        Variable.Map.disjoint_union equations result)
+      levels
+      Variable.Map.empty
+
+  module Join_result = struct
+    type nonrec t =
+      { pdce_at_join_point : t;
+        extra_params : EPA.t;
+        extra_equations : T.t Name.Map.t;
+        extra_allowed_names : Name_occurrences.t;
+      }
+  end
+
+  let join0 ~typing_env_at_fork ~pdce_at_fork ~pdce_at_each_use ~scope_at_fork =
+    (* We assume that all of the equations seen thus far, which are available
+       at all uses of the continuation (call it [k]) currently being
+       considered, might be able to be sunk further down the control flow.
+       To allow this we force all variables required for computation of the
+       relevant primitives to be available in all successor continuations.
+       In practice, because we only propagate equations beyond a join point
+       if they are available on all incoming paths, this turns out to mean
+       forcing availability in all continuations that [k] dominates. *)
+    let equations =
+      List.fold_left pdce_at_each_use
+        ~init:Variable.Map.empty
+        ~f:(fun result (typing_env, _id, equations) ->
+          Variable.Map.inter (fun bound_to prim1 prim2 ->
+              if not (P.Eligible_for_pdce.equal prim1 prim2) then begin
+                Misc.fatal_errorf "PDCE equations across uses do not agree \
+                    (%a = %a versus %a = %a)"
+                  Variable.print bound_to
+                  P.Eligible_for_pdce.print prim1
+                  Variable.print bound_to
+                  P.Eligible_for_pdce.print prim2
+              end;
+              prim1)
+            result equations)
+    in
+    (* For every variable required for the propagated equations, determine
+       whether it is already in scope in the environment at the fork point,
+       and if not create a continuation parameter to pass it along. *)
+    (* XXX What happens if [bound_to] is passed as a parameter?  We need to
+       track that... *)
+    let renaming_map_to_params =
+      Variable.Map.fold (fun bound_to prim renaming_map_to_params ->
+          let names =
+            Name_occurrences.add_variable (P.Eligible_for_pdce.free_names prim)
+              bound_to NM.normal
+          in
+          Name_occurrences.fold_variables names ~init:renaming_map_to_params
+            ~f:(fun renaming_map_to_params var ->
+              let in_scope_at_fork =
+                TE.mem typing_env_at_fork (Name.var var)
+                  ~min_name_mode:NM.normal
+              in
+              if in_scope_at_fork then renaming_map_to_params
+              else
+                let param_var = Variable.rename var in
+                Variable.Map.add var param_var renaming_map_to_params))
+        equations
+        Variable.Map.empty
+    in
+    (* must apply the renaming map to [bound_to] vars, as they may be involved
+       on the RHS of an equation... *)
+    let pdce_at_fork =
+
+    in
+    (* what types will we give the new params?  Some of them could have
+       proper types, e.g. "boxed_float(f)". *)
+
+
+  let join ~typing_env_at_fork ~pdce_at_fork ~use_info ~get_pdce =
+    let scope_at_fork = TE.current_scope typing_env_at_fork in
+    let seen_equations = ref false in
+    let pdce_at_each_use =
+      List.map use_info ~f:(fun use ->
+        let t = get_pdce use in
+        let pdce_between_fork_and_use = cut_pdce_environment t ~scope_at_fork in
+        if not (Variable.Map.is_empty pdce_between_fork_and_use) then begin
+          seen_equations := true
+        end;
+        get_typing_env use, get_rewrite_id use, pdce_between_fork_and_use)
+    in
+    (* XXX even if no new equations, need to propagate & update acc *)
+    if not !seen_equations then None
+    else
+      join0 ~typing_env_at_fork ~pdce_at_fork ~pdce_at_each_use ~scope_at_fork
 end
 
 module For_downwards_acc = struct

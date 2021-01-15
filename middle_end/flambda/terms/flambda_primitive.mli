@@ -438,6 +438,8 @@ module Eligible_for_pdce : sig
 
   val create_exn : primitive_application -> t
 
+  val map_args : t -> f:(Simple.t -> Simple.t) -> t
+
   (** Total ordering, equality, printing, sets, maps etc. *)
   include Identifiable.S with type t := t
 end

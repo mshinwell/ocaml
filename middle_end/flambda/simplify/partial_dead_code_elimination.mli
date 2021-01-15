@@ -37,9 +37,9 @@ module For_downwards_env : sig
 
   val consider_primitive
      : t
+    -> TE.t
     -> bound_to:Variable.t
     -> Flambda_primitive.t
-    -> Scope.t
     -> t
 
   module Join_result : sig
@@ -51,14 +51,12 @@ module For_downwards_env : sig
       }
   end
 
+  (** [join] adds PDCE equations into [pdce_at_fork] at the next scope level
+      after that given by the [typing_env_at_fork]. *)
   val join
      : typing_env_at_fork:TE.t
-    -> pdce_at_fork:t
     -> use_info:'a list
-    -> get_typing_env:('a -> TE.t)
-    -> get_rewrite_id:('a -> RI.t)
-    -> get_cse:('a -> t)
-    -> params:KP.t list
+    -> get_pdce:('a -> t)
     -> Join_result.t option
 end
 
