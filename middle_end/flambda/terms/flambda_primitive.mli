@@ -424,6 +424,24 @@ module Eligible_for_cse : sig
   include Identifiable.S with type t := t
 end
 
+module Eligible_for_pdce : sig
+  (** Primitive applications that are eligible for partial dead code
+      elimination. *)
+  type t
+
+  include Contains_names.S with type t := t
+
+  val create
+     : ?map_arg:(Simple.t -> Simple.t)
+    -> primitive_application
+    -> t option
+
+  val create_exn : primitive_application -> t
+
+  (** Total ordering, equality, printing, sets, maps etc. *)
+  include Identifiable.S with type t := t
+end
+
 (** Total ordering, printing, sets, maps etc. *)
 include Identifiable.S with type t := t
 
