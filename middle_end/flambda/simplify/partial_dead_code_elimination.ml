@@ -46,6 +46,21 @@ module For_downwards_env = struct
       combined = Variable.Map.empty;
     }
 
+  let add t scope ~bound_to prim =
+    let level =
+      match Scope.Map.find scope t.by_scope with
+      | exception Not_found -> Variable.Map.singleton bound_to prim
+      | level -> Variable.Map.add bound_to prim level
+    in
+    let by_scope = Scope.Map.add (* replace *) scope level t.by_scope in
+    let combined = Variable.Map.add bound_to prim t.combined in
+    (* XXX What about [lhs_with_aliases]?
+    let lhs_with_aliases = Variable.Set.add bound_to t.lhs_with_aliases in
+    *)
+    { by_scope;
+      combined;
+    }
+
   let consider_primitive t typing_env ~bound_to prim =
     match P.Eligible_for_pdce.create prim with
     | None -> t
@@ -76,19 +91,7 @@ module For_downwards_env = struct
               | canonical -> canonical)
         in
         let scope = TE.current_scope typing_env in
-        let level =
-          match Scope.Map.find scope t.by_scope with
-          | exception Not_found -> Variable.Map.singleton bound_to prim
-          | level -> Variable.Map.add bound_to prim level
-        in
-        let by_scope = Scope.Map.add (* replace *) scope level t.by_scope in
-        let combined = Variable.Map.add bound_to prim t.combined in
-        (* XXX What about [lhs_with_aliases]?
-        let lhs_with_aliases = Variable.Set.add bound_to t.lhs_with_aliases in
-        *)
-        { by_scope;
-          combined;
-        }
+        add t scope ~bound_to prim
 
   let cut_pdce_environment { by_scope; _ } ~scope_at_fork =
     (* This extracts those primitive bindings eligible for PDCE that arose
@@ -135,36 +138,68 @@ module For_downwards_env = struct
     in
     (* For every variable required for the propagated equations, determine
        whether it is already in scope in the environment at the fork point,
-       and if not create a continuation parameter to pass it along. *)
+       and if not create a continuation parameter to pass it along.  The
+       map between the original variables and these fresh parameters forms
+       a name permutation. *)
+
     (* XXX What happens if [bound_to] is passed as a parameter?  We need to
-       track that... *)
-    let renaming_map_to_params =
-      Variable.Map.fold (fun bound_to prim renaming_map_to_params ->
+       track that...
+
+       We could try to check not only whether the variable is at the fork
+       point but also whether it's passed as an argument.  We would want to
+       canonicalise the arguments (Simple.t values) first before checking.
+       If it's passed as an argument, no need for a new parameter, but the
+       permutation still needs augmenting to swap over to the existing
+       parameter. *)
+
+    let perm =
+      Variable.Map.fold (fun bound_to prim perm ->
           let names =
             Name_occurrences.add_variable (P.Eligible_for_pdce.free_names prim)
               bound_to NM.normal
           in
-          Name_occurrences.fold_variables names ~init:renaming_map_to_params
-            ~f:(fun renaming_map_to_params var ->
+          Name_occurrences.fold_variables names ~init:perm
+            ~f:(fun perm var ->
               let in_scope_at_fork =
                 TE.mem typing_env_at_fork (Name.var var)
                   ~min_name_mode:NM.normal
               in
-              if in_scope_at_fork then renaming_map_to_params
+              if in_scope_at_fork then perm
               else
                 let param_var = Variable.rename var in
-                Variable.Map.add var param_var renaming_map_to_params))
+                Name_permutation.add_fresh_variable perm
+                  var ~guaranteed_fresh:param_var))
         equations
-        Variable.Map.empty
+        Name_permutation.empty
     in
-    (* must apply the renaming map to [bound_to] vars, as they may be involved
-       on the RHS of an equation... *)
-    let pdce_at_fork =
-
+    let pdce_at_join_point, extra_allowed_names =
+      Variable.Map.fold (fun bound_to prim (t, extra_allowed_names) ->
+          let bound_to = Name_permutation.apply_variable perm bound_to in
+          let prim = P.Eligible_for_pdce.apply_name_permutation prim perm in
+          let t = add t (Scope.next scope_at_fork) ~bound_to prim in
+          let extra_allowed_names =
+            Name_occurrences.union extra_allowed_names
+              (P.Eligible_for_pdce.free_names prim)
+          in
+          t, extra_allowed_names)
+        equations
+        (pdce_at_fork, Name_occurrences.empty)
     in
     (* what types will we give the new params?  Some of them could have
        proper types, e.g. "boxed_float(f)". *)
-
+    let extra_params =
+      (* need to form EPA.t *)
+      ()
+    in
+    let extra_equations =
+      ()
+    in
+    Some { Join_result.
+      pdce_at_join_point;
+      extra_params;
+      extra_equations;
+      extra_allowed_names;
+    }
 
   let join ~typing_env_at_fork ~pdce_at_fork ~use_info ~get_pdce =
     let scope_at_fork = TE.current_scope typing_env_at_fork in
