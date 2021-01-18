@@ -28,6 +28,32 @@ module TE = Flambda_type.Typing_env
 
 module List = ListLabels
 
+module For_downwards_acc = struct
+  type t = {
+    aliases : Variable.Set.t Variable.Map.t;
+    definitions : EP.t Variable.Map.t;
+  }
+
+  let print ppf { aliases; definitions; } =
+    Format.fprintf ppf "@[<hov 1>(\
+        @[<hov 1>(aliases@ %a)@]@ \
+        @[<hov 1>(definitions@ %a)@]\
+        @]"
+        (Variable.Map.print Variable.Set.print) aliases
+        (Variable.Map.print EP.print) definitions
+
+  let empty =
+    { aliases = Variable.Map.empty;
+      definitions = Variable.Map.empty;
+    }
+
+  let add_primitive t ~bound_to prim =
+    let definitions = Variable.Map.add bound_to prim t.definitions in
+    { aliases = t.aliases;
+      definitions;
+    }
+end
+
 module For_downwards_env = struct
   type t = {
     by_scope : EP.t Variable.Map.t Scope.Map.t;
@@ -54,44 +80,59 @@ module For_downwards_env = struct
     in
     let by_scope = Scope.Map.add (* replace *) scope level t.by_scope in
     let combined = Variable.Map.add bound_to prim t.combined in
-    (* XXX What about [lhs_with_aliases]?
-    let lhs_with_aliases = Variable.Set.add bound_to t.lhs_with_aliases in
-    *)
     { by_scope;
       combined;
     }
 
-  let consider_primitive t typing_env ~bound_to prim =
+  let rec remove t ~bound_to =
+    match Variable.Map.find bound_to t.combined with
+    | exception Not_found -> t
+    | prim ->
+      let by_scope =
+        Scope.Map.filter_map (fun _scope definitions ->
+            let definitions = Variable.Map.remove bound_to definitions in
+            if Variable.Map.is_empty definitions then None
+            else Some definitions)
+          t.by_scope
+      in
+      let combined = Variable.Map.remove bound_to t.combined in
+      let t =
+        { by_scope;
+          combined;
+        }
+      in
+      Name_occurrences.fold_variables (EP.free_names prim) ~init:t
+        ~f:(fun t var -> remove t ~bound_to:var)
+
+  let consider_simplified_var t var ~in_apply_cont =
+    if in_apply_cont then t  (* see comment below *)
+    else
+      match Variable.Map.find var t.combined with
+      | exception Not_found -> t
+      | _prim ->
+        (* We've seen a use of a variable bound to a primitive eligible for
+           PDCE.  This use will block the primitive (and any others that depend
+           on the variable in their definitions) from being sunk down any
+           further -- unless the use is in an [Apply_cont] (or [Switch] arm).
+           In these latter cases we track what's going on via [join]. *)
+        remove t ~bound_to:var
+
+  let consider_simplified_simple t simple ~in_apply_cont =
+    Simple.pattern_match' simple
+      ~const:(fun _ -> t)
+      ~symbol:(fun _ -> t)
+      ~var:(fun var -> consider_simplified_var t var ~in_apply_cont)
+
+  let consider_simplified_primitive t acc typing_env ~bound_to prim =
     match P.Eligible_for_pdce.create prim with
-    | None -> t
+    | None -> t, acc
     | Some prim ->
-      (* We canonicalise the arguments of the primitive to maximise the
-         chance, at a join point, of finding the variables involved in the
-         fork environment (see below).
-         If the primitive doesn't involve variables then it's not eligible
-         for PDCE; it should get lifted instead. *)
-      let free_names = P.Eligible_for_pdce.free_names prim in
-      if Name_occurrences.no_variables free_names then t
-      else
-        let prim =
-          P.Eligible_for_pdce.map_args prim ~f:(fun simple ->
-            if not (Simple.is_var simple) then simple
-            else
-              match
-                TE.get_canonical_simple_exn typing_env
-                  simple ~min_name_mode:NM.normal
-              with
-              | exception Not_found ->
-                Misc.fatal_errorf "Couldn't find canonical variable for %a \
-                    occurring in PDCE primitive %a = %a@ Typing env:@ %a"
-                  Simple.print simple
-                  Variable.print bound_to
-                  P.Eligible_for_pdce.print prim
-                  TE.print typing_env
-              | canonical -> canonical)
-        in
-        let scope = TE.current_scope typing_env in
-        add t scope ~bound_to prim
+      (* This function is intended to be called after the primitive has been
+         simplified, so its arguments will already have been canonicalised. *)
+      let scope = TE.current_scope typing_env in
+      let t = add t scope ~bound_to prim in
+      let acc = For_downwards_acc.add_primitive acc ~bound_to prim in
+      t, acc
 
   let cut_pdce_environment { by_scope; _ } ~scope_at_fork =
     (* This extracts those primitive bindings eligible for PDCE that arose
@@ -112,7 +153,7 @@ module For_downwards_env = struct
   end
 
   let join0 ~typing_env_at_fork ~pdce_at_fork ~pdce_at_each_use ~scope_at_fork =
-    (* We assume that all of the equations seen thus far, which are available
+    (* We assume all of the equations seen thus far, that are available
        at all uses of the continuation (call it [k]) currently being
        considered, might be able to be sunk further down the control flow.
        To allow this we force all variables required for computation of the
@@ -123,7 +164,7 @@ module For_downwards_env = struct
     let equations =
       List.fold_left pdce_at_each_use
         ~init:Variable.Map.empty
-        ~f:(fun result (typing_env, _id, equations) ->
+        ~f:(fun result (_typing_env, _id, equations) ->
           Variable.Map.inter (fun bound_to prim1 prim2 ->
               if not (P.Eligible_for_pdce.equal prim1 prim2) then begin
                 Misc.fatal_errorf "PDCE equations across uses do not agree \
@@ -136,11 +177,11 @@ module For_downwards_env = struct
               prim1)
             result equations)
     in
-    (* For every variable required for the propagated equations, determine
-       whether it is already in scope in the environment at the fork point,
-       and if not create a continuation parameter to pass it along.  The
-       map between the original variables and these fresh parameters forms
-       a name permutation. *)
+    (* For every variable required for (the right-hand sides of) the
+       propagated equations, determine whether it is already in scope in the
+       environment at the fork point, and if not create a continuation parameter
+       to pass it along. The map between the original variables and these fresh
+       parameters forms a name permutation. *)
 
     (* XXX What happens if [bound_to] is passed as a parameter?  We need to
        track that...
@@ -154,10 +195,17 @@ module For_downwards_env = struct
 
     let perm =
       Variable.Map.fold (fun bound_to prim perm ->
-          let names =
-            Name_occurrences.add_variable (P.Eligible_for_pdce.free_names prim)
-              bound_to NM.normal
-          in
+          (* [bound_to] should not be in scope at the join point, since it is
+             bound to an equation defined on some path between the fork point
+             and the join point. *)
+          if TE.mem typing_env_at_fork (Name.var bound_to) then begin
+            Misc.fatal_errorf "Didn't expect PDCE bound variable %a \
+                (bound to %a) to be in scope in fork environment:@ %a"
+              Variable.print bound_to
+              EP.print perm
+              TE.print typing_env_at_fork
+          end;
+          let names = P.Eligible_for_pdce.free_names prim in
           Name_occurrences.fold_variables names ~init:perm
             ~f:(fun perm var ->
               let in_scope_at_fork =
@@ -219,18 +267,7 @@ module For_downwards_env = struct
       join0 ~typing_env_at_fork ~pdce_at_fork ~pdce_at_each_use ~scope_at_fork
 end
 
-module For_downwards_acc = struct
-  type t = {
-    lhs_with_aliases : Variable.Set.t;
-  }
-
-  let print ppf { lhs_with_aliases; } =
-    Format.fprintf ppf "@[<hov 1>(\
-        @[<hov 1>(lhs_with_aliases@ %a)@]\
-        @]"
-      Variable.Set.print lhs_with_aliases
-end
-
+(*
 module For_upwards_acc = struct
   type t = {
     still_to_be_placed : EP.t Variable.Map.t;
@@ -243,3 +280,4 @@ module For_upwards_env = struct
     uses_of_lhs_or_aliases : Variable.Set.t Continuation.Map.t;
   }
 end
+*)

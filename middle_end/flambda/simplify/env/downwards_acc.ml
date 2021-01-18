@@ -19,6 +19,7 @@
 module CUE = Continuation_uses_env
 module DE = Simplify_envs.Downwards_env
 module LCS = Simplify_envs.Lifted_constant_state
+module PDCE = Partial_dead_code_elimination
 module TE = Flambda_type.Typing_env
 
 module Static_const = Flambda.Static_const
@@ -29,23 +30,26 @@ type t = {
   shareable_constants : Symbol.t Static_const.Map.t;
   used_closure_vars : Name_occurrences.t;
   lifted_constants : LCS.t;
+  pdce : PDCE.For_downwards_acc.t;
 }
 
 let print ppf
       { denv; continuation_uses_env; shareable_constants; used_closure_vars;
-        lifted_constants; } =
+        lifted_constants; pdce; } =
   Format.fprintf ppf "@[<hov 1>(\
       @[<hov 1>(denv@ %a)@]@ \
       @[<hov 1>(continuation_uses_env@ %a)@]@ \
       @[<hov 1>(shareable_constants@ %a)@]@ \
       @[<hov 1>(used_closure_vars@ %a)@]@ \
-      @[<hov 1>(lifted_constant_state@ %a)@]\
+      @[<hov 1>(lifted_constant_state@ %a)@]@ \
+      @[<hov 1>(pdce@ %a)@]@ \
       )@]"
     DE.print denv
     CUE.print continuation_uses_env
     (Static_const.Map.print Symbol.print) shareable_constants
     Name_occurrences.print used_closure_vars
     LCS.print lifted_constants
+    PDCE.For_downwards_acc.print pdce
 
 let create denv continuation_uses_env =
   { denv;
@@ -53,6 +57,7 @@ let create denv continuation_uses_env =
     shareable_constants = Static_const.Map.empty;
     used_closure_vars = Name_occurrences.empty;
     lifted_constants = LCS.empty;
+    pdce = PDCE.For_downwards_acc.empty;
   }
 
 let denv t = t.denv
@@ -184,3 +189,21 @@ let all_continuations_used t =
 
 let with_used_closure_vars t ~used_closure_vars =
   { t with used_closure_vars = used_closure_vars; }
+
+let map_pdce t ~f =
+  (* CR mshinwell: add phys-equal checks *)
+  { t with
+    denv = DE.map_pdce t.denv ~f;
+  }
+
+let map_pdce_with_acc t ~f =
+  let pdce, pdce_acc = f (DE.pdce t.denv) t.pdce in
+  { t with
+    denv = DE.with_pdce t.denv pdce;
+    pdce = pdce_acc;
+  }
+
+let with_pdce t pdce =
+  { t with
+    denv = DE.with_pdce t.denv pdce;
+  }

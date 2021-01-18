@@ -226,6 +226,23 @@ Format.eprintf "Unknown at or later than %a\n%!"
               | None -> Name_occurrences.empty
               | Some cse_join_result -> cse_join_result.extra_allowed_names
             in
+            let module PDCE = Partial_dead_code_elimination in
+            let pdce_join_result =
+              PDCE.join ~typing_env_at_fork:typing_env
+                ~pdce_at_fork:(DE.pdce denv)
+                ~use_info:use_envs_with_ids
+                ~get_pdce:(fun (use_env, _, _) -> DE.pdce use_env)
+            in
+            let extra_params_and_args =
+              match pdce_join_result with
+              | None -> Continuation_extra_params_and_args.empty
+              | Some pdce_join_result -> pdce_join_result.extra_params
+            in
+            let extra_allowed_names =
+              match pdce_join_result with
+              | None -> Name_occurrences.empty
+              | Some pdce_join_result -> pdce_join_result.extra_allowed_names
+            in
             let env_extension =
               TE.cut_and_n_way_join typing_env
                 use_envs_with_ids'
@@ -261,14 +278,29 @@ Format.eprintf "The extra params and args are:@ %a\n%!"
                   handler_env
             in
             let handler_env =
+              match pdce_join_result with
+              | None -> handler_env
+              | Some pdce_join_result ->
+                Name.Map.fold (fun name ty handler_env ->
+                    TE.add_equation handler_env name ty)
+                  pdce_join_result.extra_equations
+                  handler_env
+            in
+            let handler_env =
               TE.add_env_extension handler_env env_extension
             in
+            let denv = DE.with_typing_env denv handler_env in
             let denv =
-              let denv = DE.with_typing_env denv handler_env in
               match cse_join_result with
               | None -> denv
               | Some cse_join_result ->
                 DE.with_cse denv cse_join_result.cse_at_join_point
+            in
+            let denv =
+              match pdce_join_result with
+              | None -> denv
+              | Some pdce_join_result ->
+                DE.with_pdce denv pdce_join_result.pdce_at_join_point
             in
             denv, extra_params_and_args
         in

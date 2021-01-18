@@ -215,6 +215,16 @@ module type Downwards_env = sig
   val cse : t -> Common_subexpression_elimination.t
 
   val with_cse : t -> Common_subexpression_elimination.t -> t
+
+  val pdce : t -> Partial_dead_code_elimination.For_downwards_env.t
+
+  val map_pdce
+     : t
+    -> f:(Partial_dead_code_elimination.For_downwards_env.t
+      -> Partial_dead_code_elimination.For_downwards_env.t)
+    -> t
+
+  val with_pdce : t -> Partial_dead_code_elimination.For_downwards_env.t -> t
 end
 
 module type Upwards_env = sig

@@ -113,7 +113,10 @@ let rebuild_apply_cont apply_cont ~args ~rewrite_id uacc ~after_rebuild =
 
 let simplify_apply_cont dacc apply_cont ~down_to_up =
   let min_name_mode = Name_mode.normal in
-  match S.simplify_simples dacc (AC.args apply_cont) ~min_name_mode with
+  match
+    S.simplify_simples dacc (AC.args apply_cont) ~min_name_mode
+      ~in_apply_cont:true
+  with
   | _, Bottom ->
     down_to_up dacc ~rebuild:Simplify_common.rebuild_invalid
   | _changed, Ok args_with_types ->

@@ -213,6 +213,16 @@ let simplify_named0 dacc (bindable_let_bound : Bindable_let_bound.t)
       record_any_symbol_projection dacc defining_expr prim simplified_args
         bindable_let_bound ~bound_var named
     in
+    let dacc =
+      match term with
+      | Reachable { named = Prim (prim, _dbg); _ } ->
+        DA.map_pdce_with_acc dacc ~f:(fun pdce pdce_acc ->
+          Partial_dead_code_elimination.consider_simplified_primitive
+            pdce pdce_acc (DA.typing_env dacc)
+            ~bound_to:(VB.var bound_var) prim)
+      | Reachable { named = (Simple _ | Set_of_closures _); _ }
+      | Invalid _ -> dacc
+    in
     bindings_result [bindable_let_bound, defining_expr] dacc
   | Set_of_closures set_of_closures ->
     let bindings, dacc =

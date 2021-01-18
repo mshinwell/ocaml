@@ -110,3 +110,22 @@ val add_use_of_closure_var : t -> Var_within_closure.t -> t
 val used_closure_vars : t -> Name_occurrences.t
 
 val with_used_closure_vars : t -> used_closure_vars:Name_occurrences.t -> t
+
+val map_pdce
+   : t
+  -> f:(Partial_dead_code_elimination.For_downwards_env.t
+    -> Partial_dead_code_elimination.For_downwards_env.t)
+  -> t
+
+val map_pdce_with_acc
+   : t
+  -> f:(Partial_dead_code_elimination.For_downwards_env.t
+    -> Partial_dead_code_elimination.For_downwards_acc.t
+    -> Partial_dead_code_elimination.For_downwards_env.t
+       * Partial_dead_code_elimination.For_downwards_acc.t)
+  -> t
+
+val with_pdce
+   : t
+  -> Partial_dead_code_elimination.For_downwards_env.t
+  -> t

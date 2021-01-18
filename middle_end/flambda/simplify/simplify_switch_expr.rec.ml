@@ -269,7 +269,10 @@ let simplify_switch dacc switch ~down_to_up =
               arms, dacc
             | _::_ ->
               let min_name_mode = Name_mode.normal in
-              match S.simplify_simples dacc args ~min_name_mode with
+              match
+                S.simplify_simples dacc args ~min_name_mode
+                  ~in_apply_cont:true
+              with
               | _, Bottom -> arms, dacc
               | _changed, Ok args_with_types ->
                 let args, arg_types = List.split args_with_types in

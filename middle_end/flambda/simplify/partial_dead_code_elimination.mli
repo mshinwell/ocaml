@@ -25,7 +25,11 @@ module T = Flambda_type
 module TE = Flambda_type.Typing_env
 
 module For_downwards_acc : sig
+  type t
 
+  val print : Format.formatter -> t -> unit
+
+  val empty : t
 end
 
 module For_downwards_env : sig
@@ -35,12 +39,19 @@ module For_downwards_env : sig
 
   val empty : t
 
-  val consider_primitive
+  val consider_simplified_simple
      : t
+    -> Simple.t
+    -> in_apply_cont:bool
+    -> t * For_downwards_acc.t
+
+  val consider_simplified_primitive
+     : t
+    -> For_downwards_acc.t
     -> TE.t
     -> bound_to:Variable.t
     -> Flambda_primitive.t
-    -> t
+    -> t * For_downwards_acc.t
 
   module Join_result : sig
     type nonrec t = private
@@ -60,10 +71,20 @@ module For_downwards_env : sig
     -> Join_result.t option
 end
 
+(*
 module For_upwards_env : sig
+  type t
 
+  val print : Format.formatter -> t -> unit
+
+  val empty : t
 end
 
 module For_upwards_acc : sig
+  type t
 
+  val print : Format.formatter -> t -> unit
+
+  val empty : t
 end
+*)
