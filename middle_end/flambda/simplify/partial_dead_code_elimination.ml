@@ -18,6 +18,7 @@
 module EA = Continuation_extra_params_and_args.Extra_arg
 module EP = Flambda_primitive.Eligible_for_pdce
 module EPA = Continuation_extra_params_and_args
+module K = Flambda_kind
 module KP = Kinded_parameter
 module NM = Name_mode
 module P = Flambda_primitive
@@ -30,6 +31,7 @@ module List = ListLabels
 module For_downwards_acc = struct
   type t = {
     aliases : Variable.Set.t Variable.Map.t;
+    (* [aliases] is closed under reflexivity. *)
     definitions : EP.t Variable.Map.t;
   }
 
@@ -47,16 +49,20 @@ module For_downwards_acc = struct
     }
 
   let add_primitive t ~bound_to prim =
+    let aliases =
+      Variable.Map.add bound_to (Variable.Set.singleton bound_to) t.aliases
+    in
     let definitions = Variable.Map.add bound_to prim t.definitions in
-    { aliases = t.aliases;
+    { aliases;
       definitions;
     }
 
-  let add_aliases t ~bound_to new_aliases =
+  let add_aliases ?(ignore_if_not_present = false) t ~bound_to new_aliases =
     let aliases =
       match Variable.Map.find bound_to t.aliases with
       | exception Not_found ->
-        Variable.Map.add bound_to new_aliases t.aliases
+        if ignore_if_not_present then t.aliases
+        else Variable.Map.add bound_to new_aliases t.aliases
       | aliases ->
         Variable.Map.add bound_to (Variable.Set.union aliases new_aliases)
           t.aliases
@@ -193,8 +199,8 @@ module For_downwards_env = struct
        environment at the fork point, and if not create a continuation parameter
        to pass it along. The map between the original variables and these fresh
        parameters forms a name permutation. *)
-    let perm =
-      Variable.Map.fold (fun bound_to prim perm ->
+    let perm, extra_params =
+      Variable.Map.fold (fun bound_to prim (perm, extra_params) ->
           (* [bound_to] should not be in scope at the join point, since it is
              bound to an equation defined on some path between the fork point
              and the join point. *)
@@ -206,26 +212,60 @@ module For_downwards_env = struct
               TE.print typing_env_at_fork
           end;
           let names = P.Eligible_for_pdce.free_names prim in
-          Name_occurrences.fold_variables names ~init:perm
-            ~f:(fun perm var ->
+          Name_occurrences.fold_variables names ~init:(perm, extra_params)
+            ~f:(fun ((perm, extra_params) as acc) var ->
               let in_scope_at_fork =
                 TE.mem typing_env_at_fork (Name.var var)
                   ~min_name_mode:NM.normal
               in
-              if in_scope_at_fork then perm
+              if in_scope_at_fork then acc
               else
                 let param_var = Variable.rename var in
-                Name_permutation.add_fresh_variable perm
-                  var ~guaranteed_fresh:param_var))
+                let perm =
+                  Name_permutation.add_fresh_variable perm
+                    var ~guaranteed_fresh:param_var
+                in
+                (* CR mshinwell: This could be improved by a function that
+                   iterated through the free names of a primitive, providing
+                   the kind information with each one. *)
+                (* Reminder: all of the free names in the primitives will be
+                   in scope at all uses.  Moreover, there will be at least
+                   one use.  See [join], below. *)
+                let typing_env =
+                  match pdce_at_each_use with
+                  | (typing_env, _, _, _)::_ -> typing_env
+                  | [] -> assert false
+                in
+                let kind =
+                  TE.find typing_env (Name.var var) None
+                  |> T.kind
+                in
+                let extra_param =
+                  KP.create param_var
+                    (K.With_subkind.create kind K.With_subkind.Subkind.Anything)
+                in
+                let extra_args =
+                  List.map pdce_at_each_use
+                    ~f:(fun (_typing_env, id, _equations, _args) ->
+                      id, EPA.Extra_arg.Already_in_scope (Simple.var var))
+                  |> RI.Map.of_list
+                in
+                let extra_params =
+                  EPA.add extra_params ~extra_param ~extra_args
+                in
+                perm, extra_params))
         equations
-        Name_permutation.empty
+        (Name_permutation.empty, EPA.empty)
     in
     (* We look at the continuation's arguments (i.e. at the uses) to work out
-       whether the left-hand sides of the equations were propagated past the
+       whether the left-hand sides of any equations were propagated past the
        join point -- and, if so, what names now correspond to the original
        left-hand sides of the equations.  Any left-hand side that isn't
        propagated can have its corresponding PDCE equation dropped, since
-       there shouldn't be any further uses. *)
+       there shouldn't be any further uses.
+       Note that we need to look at _all_ PDCE equations in the accumulator,
+       not just the ones being dealt with via [join], since
+       previously-introduced equations might be gaining aliases. *)
     let aliases_via_args =
       let by_param =
         List.fold_left pdce_at_each_use
@@ -256,10 +296,36 @@ module For_downwards_env = struct
                           existing_alias
                         else None)))
       in
-      List.filter_map by_param ~f:Fun.id
-      |> Variable.Set.of_list
+      (* We take into account the fact that a [bound_to] variable might have
+         been passed to the continuation in more than one parameter, thus
+         inducing a set of aliases. *)
+      assert (List.compare_lengths by_param params = 0);
+      List.fold_left2 params by_param ~init:Variable.Map.empty
+        ~f:(fun aliases_via_args param alias ->
+          match alias with
+          | None -> aliases_via_args
+          | Some alias ->
+            let existing_aliases =
+              match Variable.Map.find alias aliases_via_args with
+              | exception Not_found -> Variable.Set.empty
+              | existing_aliases -> existing_aliases
+            in
+            Variable.Map.add param (Variable.Set.add alias existing_aliases)
+              aliases_via_args)
+    in
+    let pdce_acc =
+      (* Make sure the accumulator takes account of aliases gained by
+         previously-introduced equations. *)
+      Variable.Map.fold (fun bound_to aliases pdce_acc ->
+          For_downwards_acc.add_aliases ~ignore_if_not_present:true
+            pdce_acc ~bound_to aliases)
+        aliases_via_args
+        pdce_acc
     in
     let were_not_propagated, pdce_acc =
+      (* Update the accumulator with aliases from the newly-introduced
+         equations.  Also determine which PDCE equations won't be propagated
+         any further. *)
       Variable.Map.fold
         (fun bound_to _prim (were_not_propagated, pdce_acc) ->
           match Variable.Map.find bound_to aliases_via_args with
@@ -277,6 +343,8 @@ module For_downwards_env = struct
         (Variable.Set.empty, pdce_acc)
     in
     let t =
+      (* Apply the name permutation to freshen the new equations and
+         introduce them into the PDCE environment. *)
       Variable.Map.fold (fun bound_to prim t ->
           if Variable.Set.mem bound_to were_not_propagated then t
           else
@@ -285,10 +353,6 @@ module For_downwards_env = struct
             add t (Scope.next scope_at_fork) ~bound_to prim)
         equations
         pdce_at_fork
-    in
-    let extra_params =
-      (* need to form EPA.t -- take into account were_not_prop. *)
-      ()
     in
     (* We don't generate any new equations at present; this could be done in
        the future if worthwhile.  There also aren't any extra allowed names
