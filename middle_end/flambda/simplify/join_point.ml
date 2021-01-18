@@ -16,10 +16,8 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
-module DE = Simplify_envs.Downwards_env
-module LCS = Simplify_envs.Lifted_constant_state
-module T = Flambda_type
-module TE = Flambda_type.Typing_env
+open! Simplify_import
+
 module U = One_continuation_use
 
 let simple_join typing_env uses ~params =
@@ -49,7 +47,7 @@ let simple_join typing_env uses ~params =
       let name = Kinded_parameter.name param in
       TE.add_equation handler_env name joined_type)
 
-let compute_handler_env t dacc
+let compute_handler_env cont (cont_uses_env : CUE.t) dacc
       ~env_at_fork_plus_params_and_consts
       ~consts_lifted_during_body
       ~params
@@ -59,9 +57,12 @@ Format.eprintf "%d uses for %a\n%!"
   (List.length t.uses)
   Continuation.print t.continuation;
 *)
-  match t.uses with
-  | [] -> No_uses
+  (* CR mshinwell: improve interface for this in CUE *)
+  match Continuation.Map.find cont (CUE.get_uses cont_uses_env) with
+  | exception Not_found -> No_uses
+  | uses when Continuation_uses.get_uses uses = [] -> No_uses
   | uses ->
+    let uses = Continuation_uses.get_uses uses in
     let definition_scope_level =
       DE.get_continuation_scope_level env_at_fork_plus_params_and_consts
     in
@@ -93,7 +94,7 @@ Format.eprintf "%d uses for %a\n%!"
                 TE.add_equations_on_params typing_env
                   ~params ~param_types:(U.arg_types use))
           in
-          use_env, U.id use, U.use_kind use)
+          use_env, U.id use, U.use_kind use, U.arg_types use)
         uses
     in
 (*
@@ -103,8 +104,8 @@ Format.eprintf "Unknown at or later than %a\n%!"
     let handler_env, extra_params_and_args, is_single_inlinable_use,
         is_single_use, dacc =
       match use_envs_with_ids with
-      | [use_env, _, Inlinable]
-          when not (Continuation.is_exn t.continuation) ->
+      | [use_env, _, Inlinable, _]
+          when not (Continuation.is_exn cont) ->
         (* We need to make sure any lifted constants generated during the
            simplification of the body are in the environment.  Otherwise
            we might share a constant based on information in [DA] but then
@@ -115,8 +116,8 @@ Format.eprintf "Unknown at or later than %a\n%!"
             consts_lifted_during_body
         in
         use_env, Continuation_extra_params_and_args.empty, true, true, dacc
-      | [] | [_, _, (Inlinable | Non_inlinable)]
-      | (_, _, (Inlinable | Non_inlinable)) :: _ ->
+      | [] | [_, _, (Inlinable | Non_inlinable), _]
+      | (_, _, (Inlinable | Non_inlinable), _) :: _ ->
         (* The lifted constants are put into the fork environment now because
            it overall makes things easier; the join operation can just discard
            any equation about a lifted constant (any such equation could not be
@@ -148,9 +149,10 @@ Format.eprintf "Unknown at or later than %a\n%!"
               CSE.join ~typing_env_at_fork:typing_env
                 ~cse_at_fork:(DE.cse denv)
                 ~use_info:use_envs_with_ids
-                ~get_typing_env:(fun (use_env, _, _) -> DE.typing_env use_env)
-                ~get_rewrite_id:(fun (_, id, _) -> id)
-                ~get_cse:(fun (use_env, _, _) -> DE.cse use_env)
+                ~get_typing_env:(fun (use_env, _, _, _) ->
+                  DE.typing_env use_env)
+                ~get_rewrite_id:(fun (_, id, _, _) -> id)
+                ~get_cse:(fun (use_env, _, _, _) -> DE.cse use_env)
                 ~params
             in
             let extra_params_and_args =
@@ -170,9 +172,12 @@ Format.eprintf "Unknown at or later than %a\n%!"
               PDCE.For_downwards_env.join ~typing_env_at_fork:typing_env
                 ~pdce_at_fork
                 ~use_info:use_envs_with_ids
-                ~get_typing_env:(fun (use_env, _, _) -> DE.typing_env use_env)
-                ~get_rewrite_id:(fun (_, id, _) -> id)
-                ~get_pdce:(fun (use_env, _, _) -> DE.pdce use_env)
+                ~get_typing_env:(fun (use_env, _, _, _) ->
+                  DE.typing_env use_env)
+                ~get_rewrite_id:(fun (_, id, _, _) -> id)
+                ~get_arg_types:(fun (_, _, _, arg_types) -> arg_types)
+                ~get_pdce:(fun (use_env, _, _, _) -> DE.pdce use_env)
+                ~params
             in
             let extra_params_and_args =
               match pdce_join_result with

@@ -51,6 +51,19 @@ module For_downwards_acc = struct
     { aliases = t.aliases;
       definitions;
     }
+
+  let add_aliases t ~bound_to new_aliases =
+    let aliases =
+      match Variable.Map.find bound_to t.aliases with
+      | exception Not_found ->
+        Variable.Map.add bound_to new_aliases t.aliases
+      | aliases ->
+        Variable.Map.add bound_to (Variable.Set.union aliases new_aliases)
+          t.aliases
+    in
+    { aliases;
+      definitions = t.definitions;
+    }
 end
 
 module For_downwards_env = struct
@@ -58,6 +71,8 @@ module For_downwards_env = struct
     by_scope : EP.t Variable.Map.t Scope.Map.t;
     combined : EP.t Variable.Map.t;
   }
+
+  type for_downwards_env = t
 
   let print ppf { by_scope; combined; } =
     Format.fprintf ppf "@[<hov 1>(\
@@ -135,10 +150,8 @@ module For_downwards_env = struct
 
   module Join_result = struct
     type nonrec t =
-      { pdce_at_fork : t;
-        scope_at_fork : Scope.t;
-        perm : Name_permutation.t;
-        equations : EP.t Variable.Map.t;
+      { pdce : t;
+        pdce_acc : For_downwards_acc.t;
         extra_params : EPA.t;
         extra_allowed_names : Name_occurrences.t;
         extra_equations : T.t Name.Map.t;
@@ -149,7 +162,8 @@ module For_downwards_env = struct
     let extra_equations t = t.extra_equations
   end
 
-  let join0 ~typing_env_at_fork ~pdce_at_fork ~pdce_at_each_use ~scope_at_fork =
+  let join0 ~typing_env_at_fork ~pdce_at_fork pdce_acc ~pdce_at_each_use
+        ~scope_at_fork ~params =
     (* We assume all of the equations seen thus far, that are available
        at all uses of the continuation (call it [k]) currently being
        considered, might be able to be sunk further down the control flow.
@@ -161,7 +175,7 @@ module For_downwards_env = struct
     let equations =
       List.fold_left pdce_at_each_use
         ~init:Variable.Map.empty
-        ~f:(fun result (_typing_env, _id, equations) ->
+        ~f:(fun result (_typing_env, _id, equations, _args) ->
           Variable.Map.inter (fun bound_to prim1 prim2 ->
               if not (P.Eligible_for_pdce.equal prim1 prim2) then begin
                 Misc.fatal_errorf "PDCE equations across uses do not agree \
@@ -206,8 +220,74 @@ module For_downwards_env = struct
         equations
         Name_permutation.empty
     in
+    (* We look at the continuation's arguments (i.e. at the uses) to work out
+       whether the left-hand sides of the equations were propagated past the
+       join point -- and, if so, what names now correspond to the original
+       left-hand sides of the equations.  Any left-hand side that isn't
+       propagated can have its corresponding PDCE equation dropped, since
+       there shouldn't be any further uses. *)
+    let aliases_via_args =
+      let by_param =
+        List.fold_left pdce_at_each_use
+          ~init:(List.init ~len:(List.length params) ~f:(fun _ -> None))
+          ~f:(fun by_param (typing_env, _id, _equations, args) ->
+            assert (List.compare_lengths params args = 0);
+            (* We check that, up to canonicalisation of names, for every
+               parameter of the continuation the same argument was supplied
+               at all use sites. *)
+            List.map2 by_param args ~f:(fun existing_alias arg_ty ->
+              match T.get_alias_exn arg_ty with
+              | exception Not_found -> None
+              | alias ->
+                match
+                  TE.get_canonical_simple_exn typing_env alias
+                    ~min_name_mode:NM.normal
+                with
+                | exception Not_found -> None
+                | alias ->
+                  Simple.pattern_match' alias
+                    ~const:(fun _ -> None)
+                    ~symbol:(fun _ -> None)
+                    ~var:(fun var ->
+                      match existing_alias with
+                      | None -> Some var
+                      | Some existing_alias' ->
+                        if Variable.equal var existing_alias' then
+                          existing_alias
+                        else None)))
+      in
+      List.filter_map by_param ~f:Fun.id
+      |> Variable.Set.of_list
+    in
+    let were_not_propagated, pdce_acc =
+      Variable.Map.fold
+        (fun bound_to _prim (were_not_propagated, pdce_acc) ->
+          match Variable.Map.find bound_to aliases_via_args with
+          | exception Not_found ->
+            let were_not_propagated =
+              Variable.Set.add bound_to were_not_propagated
+            in
+            were_not_propagated, pdce_acc
+          | aliases ->
+            let pdce_acc =
+              For_downwards_acc.add_aliases pdce_acc ~bound_to aliases
+            in
+            were_not_propagated, pdce_acc)
+        equations
+        (Variable.Set.empty, pdce_acc)
+    in
+    let t =
+      Variable.Map.fold (fun bound_to prim t ->
+          if Variable.Set.mem bound_to were_not_propagated then t
+          else
+            let bound_to = Name_permutation.apply_variable perm bound_to in
+            let prim = P.Eligible_for_pdce.apply_name_permutation prim perm in
+            add t (Scope.next scope_at_fork) ~bound_to prim)
+        equations
+        pdce_at_fork
+    in
     let extra_params =
-      (* need to form EPA.t *)
+      (* need to form EPA.t -- take into account were_not_prop. *)
       ()
     in
     (* We don't generate any new equations at present; this could be done in
@@ -215,10 +295,8 @@ module For_downwards_env = struct
        for the typing environment join, since we haven't introduced any
        equations (involving names that might otherwise not be propagated). *)
     Some { Join_result.
-      pdce_at_fork;
-      scope_at_fork;
-      equations;
-      perm;
+      pdce = t;
+      pdce_acc;
       extra_params;
       extra_allowed_names = Name_occurrences.empty;
       extra_equations = Name.Map.empty;
@@ -233,8 +311,8 @@ module For_downwards_env = struct
       levels
       Variable.Map.empty
 
-  let join ~typing_env_at_fork ~pdce_at_fork ~use_info ~get_typing_env
-        ~get_rewrite_id ~get_pdce =
+  let join ~typing_env_at_fork ~pdce_at_fork pdce_acc ~use_info ~get_typing_env
+        ~get_rewrite_id ~get_arg_types ~get_pdce ~params =
     (* We need to split the PDCE computation around the typing environment
        join.  The latter needs the [extra_allowed_names] information, whereas
        our join computations below need the joined types of the continuation's
@@ -248,67 +326,13 @@ module For_downwards_env = struct
         if not (Variable.Map.is_empty pdce_between_fork_and_use) then begin
           seen_equations := true
         end;
-        get_typing_env use, get_rewrite_id use, pdce_between_fork_and_use)
+        get_typing_env use, get_rewrite_id use, pdce_between_fork_and_use,
+          get_arg_types use)
     in
     if not !seen_equations then None
     else
-      join0 ~typing_env_at_fork ~pdce_at_fork ~pdce_at_each_use ~scope_at_fork
-
-  let post_join ~pdce_at_fork for_downwards_acc (join_result : Join_result.t)
-        ~typing_env_at_join ~params =
-    (* We use the joined types of the continuation's parameters to work out
-       whether the left-hand sides of the equations were propagated past the
-       join point -- and, if so, what names now correspond to the original
-       left-hand sides of the equations.  Any left-hand side that isn't
-       propagated can have its corresponding PDCE equation dropped, since
-       there shouldn't be any further uses. *)
-    let aliases_via_types =
-      List.fold_left params ~init:Variable.Map.empty
-        ~f:(fun aliases_via_types param ->
-          match
-            TE.get_canonical_simple_exn typing_env_at_join (KP.simple param)
-              ~min_name_mode:NM.normal
-          with
-          | exception Not_found ->
-            Misc.fatal_errorf
-              "Couldn't find canonical simple for parameter %a in join \
-               environment:@ %a"
-              KP.print param
-              TE.print typing_env_at_join
-          | simple ->
-            Simple.pattern_match' simple
-              ~const:(fun _ -> aliases_via_types)
-              ~symbol:(fun _ -> aliases_via_types)
-              ~var:(fun var ->
-                (* It's possible that the left-hand side of an equation is
-                   propagated to a subsequent continuation in more than one
-                   parameter; we should track all such propagations. *)
-                match Variable.Map.find var aliases_via_types with
-                | exception Not_found ->
-                  Variable.Map.add var (Variable.Set.singleton param)
-                    aliases_via_types))
-
-    in
-    let were_not_propagated, for_downwards_acc =
-      Variable.Map.fold
-        (fun bound_to _prim (were_not_propagated, for_downwards_acc) ->
-          if Variable.Set.mem bound_to aliases_via_types then
-            For_downwards_acc.add_alias
-        equations
-        (Variable.Set.empty, for_downwards_acc)
-    in
-    let perm = join_result.perm in
-    let t =
-      Variable.Map.fold (fun bound_to prim t ->
-          if Variable.Set.mem bound_to were_not_propagated then t
-          else
-            let bound_to = Name_permutation.apply_variable perm bound_to in
-            let prim = P.Eligible_for_pdce.apply_name_permutation prim perm in
-            add t (Scope.next scope_at_fork) ~bound_to prim)
-        equations
-        pdce_at_fork
-    in
-    t, for_downwards_acc
+      join0 ~typing_env_at_fork ~pdce_at_fork pdce_acc ~pdce_at_each_use
+        ~scope_at_fork ~params
 end
 
 (*

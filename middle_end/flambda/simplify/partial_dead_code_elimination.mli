@@ -18,6 +18,7 @@
 [@@@ocaml.warning "+a-30-40-41-42"]
 
 module EPA = Continuation_extra_params_and_args
+module KP = Kinded_parameter
 module P = Flambda_primitive
 module RI = Apply_cont_rewrite_id
 module T = Flambda_type
@@ -56,6 +57,9 @@ module For_downwards_env : sig
   module Join_result : sig
     type t
 
+    val pdce : t -> for_downwards_env
+    val pdce_acc : t -> For_downwards_acc.t
+
     val extra_params : t -> EPA.t
     val extra_allowed_names : t -> Name_occurrences.t
     val extra_equations : t -> T.t Name.Map.t
@@ -69,7 +73,9 @@ module For_downwards_env : sig
     -> use_info:'a list
     -> get_typing_env:('a -> TE.t)
     -> get_rewrite_id:('a -> RI.t)
+    -> get_arg_types:('a -> T.t list)
     -> get_pdce:('a -> t)
+    -> params:KP.t list
     -> Join_result.t option
 
   val post_join
