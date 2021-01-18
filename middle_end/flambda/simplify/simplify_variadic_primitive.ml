@@ -122,10 +122,10 @@ let simplify_variadic_primitive dacc ~original_named ~original_prim
     match
       S.simplify_simples dacc args ~min_name_mode ~in_apply_cont:false
     with
-    | _, Bottom ->
+    | _, Bottom, _dacc ->
       let result_kind = P.result_kind_of_variadic_primitive' prim in
       invalid (T.bottom result_kind)
-    | args_changed, Ok args_with_tys ->
+    | args_changed, Ok args_with_tys, dacc ->
       match prim with
       | Make_block (Values (tag, shape), mutable_or_immutable) ->
         simplify_make_block_of_values dacc prim dbg tag ~shape

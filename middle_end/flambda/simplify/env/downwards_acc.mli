@@ -111,6 +111,8 @@ val used_closure_vars : t -> Name_occurrences.t
 
 val with_used_closure_vars : t -> used_closure_vars:Name_occurrences.t -> t
 
+val pdce : t -> Partial_dead_code_elimination.For_downwards_env.t
+
 val pdce_acc : t -> Partial_dead_code_elimination.For_downwards_acc.t
 
 val with_pdce_acc : t -> Partial_dead_code_elimination.For_downwards_acc.t -> t

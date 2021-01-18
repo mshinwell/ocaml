@@ -21,7 +21,9 @@
 [@@@ocaml.warning "+a-30-40-41-42"]
 
 val compute_handler_env
-   : Continuation_uses_env.t
+   : Continuation.t
+  -> arity:Flambda_arity.t
+  -> Continuation_uses_env.t
   -> Downwards_acc.t
   -> env_at_fork_plus_params_and_consts:Simplify_envs.Downwards_env.t
   -> consts_lifted_during_body:Simplify_envs.Lifted_constant_state.t

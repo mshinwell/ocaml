@@ -15,7 +15,6 @@
 [@@@ocaml.warning "+a-30-40-41-42"]
 
 (* [Simplify_import] cannot be used owing to a circular dependency. *)
-module EA = Continuation_extra_params_and_args.Extra_arg
 module EP = Flambda_primitive.Eligible_for_pdce
 module EPA = Continuation_extra_params_and_args
 module K = Flambda_kind
@@ -163,6 +162,8 @@ module For_downwards_env = struct
         extra_equations : T.t Name.Map.t;
       }
 
+    let pdce t = t.pdce
+    let pdce_acc t = t.pdce_acc
     let extra_params t = t.extra_params
     let extra_allowed_names t = t.extra_allowed_names
     let extra_equations t = t.extra_equations
@@ -310,7 +311,8 @@ module For_downwards_env = struct
               | exception Not_found -> Variable.Set.empty
               | existing_aliases -> existing_aliases
             in
-            Variable.Map.add param (Variable.Set.add alias existing_aliases)
+            Variable.Map.add (KP.var param)
+              (Variable.Set.add alias existing_aliases)
               aliases_via_args)
     in
     let pdce_acc =

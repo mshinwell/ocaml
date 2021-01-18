@@ -17,7 +17,7 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module DA = Downwards_acc
-module PDCE = Partial_dead_code_elimination
+module PDCE = Partial_dead_code_elimination.For_downwards_env
 module T = Flambda_type
 module TE = T.Typing_env
 
@@ -33,14 +33,14 @@ let type_for_simple simple kind : _ Or_bottom.t =
     | Bottom -> Bottom
     | Ok ty -> Ok (simple, ty)
 
-let type_for_simple' dacc simple kind : _ Or_bottom.t * _ * _ =
+let type_for_simple' simple kind : _ Or_bottom.t * _ =
   let ty = T.alias_type_of kind simple in
   match Simple.rec_info simple with
-  | None -> Ok simple, ty, dacc
+  | None -> Ok simple, ty
   | Some rec_info ->
     match T.apply_rec_info ty rec_info with
-    | Bottom -> Bottom, T.bottom (T.kind ty), dacc
-    | Ok ty -> Ok simple, ty, dacc
+    | Bottom -> Bottom, T.bottom (T.kind ty)
+    | Ok ty -> Ok simple, ty
 
 let simplify_simple dacc simple ~min_name_mode =
   let typing_env = DA.typing_env dacc in
@@ -53,7 +53,7 @@ let simplify_simple dacc simple ~min_name_mode =
       Simple.print simple
       Name_mode.print min_name_mode
       DA.print dacc
-  | simple, kind -> type_for_simple' dacc simple kind
+  | simple, kind -> type_for_simple' simple kind
 
 type changed =
   | Unchanged
@@ -75,9 +75,8 @@ let simplify_simples dacc simples ~min_name_mode ~in_apply_cont =
           end;
           accumulated_dacc :=
             DA.map_pdce !accumulated_dacc ~f:(fun pdce ->
-              PDCE.consider_simplified_simple pdce new_simple
-                ~in_apply_cont);
-          type_for_simple dacc new_simple kind
+              PDCE.consider_simplified_simple pdce new_simple ~in_apply_cont);
+          type_for_simple new_simple kind
         | exception Not_found ->
           Misc.fatal_errorf "No canonical [Simple] for %a exists at the@ \
               requested name mode (%a) or one greater.@ \
@@ -92,7 +91,6 @@ let simplify_simples dacc simples ~min_name_mode ~in_apply_cont =
 let simplify_simples' dacc simples ~min_name_mode =
   let typing_env = DA.typing_env dacc in
   let changed = ref Unchanged in
-  let accumulated_dacc = ref dacc in
   let result =
     Or_bottom.all (List.map (fun simple : _ Or_bottom.t ->
         match TE.get_canonical_simple_exn typing_env simple ~min_name_mode with
@@ -100,9 +98,6 @@ let simplify_simples' dacc simples ~min_name_mode =
           if new_simple != simple then begin
             changed := Changed;
           end;
-          accumulated_dacc :=
-            DA.map_pdce !accumulated_dacc ~f:(fun pdce ->
-              PDCE.consider_simplified_simple pdce new_simple);
           Ok new_simple
         | exception Not_found ->
           Misc.fatal_errorf "No canonical [Simple] for %a exists at the@ \
@@ -113,4 +108,4 @@ let simplify_simples' dacc simples ~min_name_mode =
             DA.print dacc)
       simples)
   in
-  !changed, result, !accumulated_dacc
+  !changed, result

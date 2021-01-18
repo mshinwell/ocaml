@@ -217,9 +217,10 @@ let simplify_named0 dacc (bindable_let_bound : Bindable_let_bound.t)
       match term with
       | Reachable { named = Prim (prim, _dbg); _ } ->
         DA.map_pdce_with_acc dacc ~f:(fun pdce pdce_acc ->
-          Partial_dead_code_elimination.consider_simplified_primitive
-            pdce pdce_acc (DA.typing_env dacc)
-            ~bound_to:(VB.var bound_var) prim)
+          Partial_dead_code_elimination.For_downwards_env.
+            consider_simplified_primitive
+              pdce pdce_acc (DA.typing_env dacc)
+              ~bound_to:(VB.var bound_var) prim)
       | Reachable { named = (Simple _ | Set_of_closures _); _ }
       | Invalid _ -> dacc
     in

@@ -170,7 +170,8 @@ let simplify_non_recursive_let_cont_handler ~denv_before_body ~dacc_after_body
   in
   let consts_lifted_during_body = DA.get_lifted_constants dacc_after_body in
   let uses, dacc =
-    Join_point.compute_handler_env cont_uses_env dacc_after_body cont ~params
+    Join_point.compute_handler_env cont ~arity:(KP.List.arity params)
+      cont_uses_env dacc_after_body ~params
       (* CR mshinwell: rename this parameter, the env does not
          have the constants in it now *)
       ~env_at_fork_plus_params_and_consts:denv_before_body

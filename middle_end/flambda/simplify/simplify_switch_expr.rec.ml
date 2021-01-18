@@ -273,8 +273,8 @@ let simplify_switch dacc switch ~down_to_up =
                 S.simplify_simples dacc args ~min_name_mode
                   ~in_apply_cont:true
               with
-              | _, Bottom -> arms, dacc
-              | _changed, Ok args_with_types ->
+              | _, Bottom, dacc -> arms, dacc
+              | _changed, Ok args_with_types, dacc ->
                 let args, arg_types = List.split args_with_types in
                 let dacc, rewrite_id =
                   DA.record_continuation_use dacc (AC.continuation action)

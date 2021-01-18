@@ -47,11 +47,11 @@ let simple_join typing_env uses ~params =
       let name = Kinded_parameter.name param in
       TE.add_equation handler_env name joined_type)
 
-let compute_handler_env cont (cont_uses_env : CUE.t) dacc
+let compute_handler_env cont ~arity (cont_uses_env : CUE.t) dacc
       ~env_at_fork_plus_params_and_consts
       ~consts_lifted_during_body
       ~params
-      ~code_age_relation_after_body : Continuation_env_and_param_types.t =
+      ~code_age_relation_after_body : Continuation_env_and_param_types.t * _ =
 (*
 Format.eprintf "%d uses for %a\n%!"
   (List.length t.uses)
@@ -59,8 +59,8 @@ Format.eprintf "%d uses for %a\n%!"
 *)
   (* CR mshinwell: improve interface for this in CUE *)
   match Continuation.Map.find cont (CUE.get_uses cont_uses_env) with
-  | exception Not_found -> No_uses
-  | uses when Continuation_uses.get_uses uses = [] -> No_uses
+  | exception Not_found -> No_uses, dacc
+  | uses when Continuation_uses.get_uses uses = [] -> No_uses, dacc
   | uses ->
     let uses = Continuation_uses.get_uses uses in
     let definition_scope_level =
@@ -131,7 +131,7 @@ Format.eprintf "Unknown at or later than %a\n%!"
         in
         let use_envs_with_ids' =
           (* CR mshinwell: Stop allocating this *)
-          List.map (fun (use_env, id, use_kind) ->
+          List.map (fun (use_env, id, use_kind, _) ->
               DE.typing_env use_env, id, use_kind)
             use_envs_with_ids
         in
@@ -171,6 +171,7 @@ Format.eprintf "Unknown at or later than %a\n%!"
             let pdce_join_result =
               PDCE.For_downwards_env.join ~typing_env_at_fork:typing_env
                 ~pdce_at_fork
+                (DA.pdce_acc dacc)
                 ~use_info:use_envs_with_ids
                 ~get_typing_env:(fun (use_env, _, _, _) ->
                   DE.typing_env use_env)
@@ -181,15 +182,18 @@ Format.eprintf "Unknown at or later than %a\n%!"
             in
             let extra_params_and_args =
               match pdce_join_result with
-              | None -> Continuation_extra_params_and_args.empty
+              | None -> extra_params_and_args
               | Some pdce_join_result ->
-                PDCE_join_result.extra_params pdce_join_result
+                Continuation_extra_params_and_args.concat
+                  extra_params_and_args
+                  (PDCE_join_result.extra_params pdce_join_result)
             in
             let extra_allowed_names =
               match pdce_join_result with
               | None -> Name_occurrences.empty
               | Some pdce_join_result ->
-                PDCE_join_result.extra_allowed_names pdce_join_result
+                Name_occurrences.union extra_allowed_names
+                  (PDCE_join_result.extra_allowed_names pdce_join_result)
             in
             let env_extension =
               TE.cut_and_n_way_join typing_env
@@ -248,11 +252,8 @@ Format.eprintf "The extra params and args are:@ %a\n%!"
               match pdce_join_result with
               | None -> denv, dacc
               | Some pdce_join_result ->
-                let pdce, pdce_acc =
-                  PDCE.For_downwards_env.post_join ~pdce_at_fork
-                    (DA.pdce_acc dacc) pdce_join_result
-                    ~typing_env_at_join:handler_env ~params
-                in
+                let pdce = PDCE_join_result.pdce pdce_join_result in
+                let pdce_acc = PDCE_join_result.pdce_acc pdce_join_result in
                 let denv = DE.with_pdce denv pdce in
                 let dacc = DA.with_pdce_acc dacc pdce_acc in
                 denv, dacc
@@ -270,9 +271,9 @@ Format.eprintf "The extra params and args are:@ %a\n%!"
           | [] | _::_::_ -> false
         in
         match use_envs_with_ids with
-        | [_, _, Inlinable] -> assert false  (* handled above *)
-        | [] | [_, _, Non_inlinable]
-        | (_, _, (Inlinable | Non_inlinable)) :: _ ->
+        | [_, _, Inlinable, _] -> assert false  (* handled above *)
+        | [] | [_, _, Non_inlinable, _]
+        | (_, _, (Inlinable | Non_inlinable), _) :: _ ->
           denv, extra_params_and_args, false, is_single_use, dacc
     in
     let arg_types_by_use_id =
@@ -283,16 +284,13 @@ Format.eprintf "The extra params and args are:@ %a\n%!"
                 arg_map)
             args
             (U.arg_types use))
-        (List.map (fun _ -> Apply_cont_rewrite_id.Map.empty) t.arity)
+        (List.map (fun _ -> Apply_cont_rewrite_id.Map.empty) arity)
         uses
     in
-    let result =
-      Uses {
-        handler_env;
-        arg_types_by_use_id;
-        extra_params_and_args;
-        is_single_inlinable_use;
-        is_single_use;
-      }
-    in
-    result, dacc
+    Uses {
+      handler_env;
+      arg_types_by_use_id;
+      extra_params_and_args;
+      is_single_inlinable_use;
+      is_single_use;
+    }, dacc

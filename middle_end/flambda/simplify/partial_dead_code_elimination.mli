@@ -40,11 +40,7 @@ module For_downwards_env : sig
 
   val empty : t
 
-  val consider_simplified_simple
-     : t
-    -> Simple.t
-    -> in_apply_cont:bool
-    -> t * For_downwards_acc.t
+  val consider_simplified_simple : t -> Simple.t -> in_apply_cont:bool -> t
 
   val consider_simplified_primitive
      : t
@@ -70,6 +66,7 @@ module For_downwards_env : sig
   val join
      : typing_env_at_fork:TE.t
     -> pdce_at_fork:t
+    -> For_downwards_acc.t
     -> use_info:'a list
     -> get_typing_env:('a -> TE.t)
     -> get_rewrite_id:('a -> RI.t)
@@ -77,13 +74,6 @@ module For_downwards_env : sig
     -> get_pdce:('a -> t)
     -> params:KP.t list
     -> Join_result.t option
-
-  val post_join
-     : pdce_at_fork:t
-    -> For_downwards_acc.t
-    -> Join_result.t
-    -> typing_env_at_join:TE.t
-    -> t * For_downwards_acc.t
 end
 
 (*

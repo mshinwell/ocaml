@@ -117,9 +117,9 @@ let simplify_apply_cont dacc apply_cont ~down_to_up =
     S.simplify_simples dacc (AC.args apply_cont) ~min_name_mode
       ~in_apply_cont:true
   with
-  | _, Bottom ->
+  | _, Bottom, _ ->
     down_to_up dacc ~rebuild:Simplify_common.rebuild_invalid
-  | _changed, Ok args_with_types ->
+  | _changed, Ok args_with_types, dacc ->
     let args, arg_types = List.split args_with_types in
     let use_kind : Continuation_use_kind.t =
       (* CR mshinwell: Is [Continuation.sort] reliable enough to detect

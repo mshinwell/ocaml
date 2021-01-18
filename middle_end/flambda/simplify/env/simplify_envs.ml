@@ -22,6 +22,7 @@ module CSE = Common_subexpression_elimination
 module I = Simplify_envs_intf
 module K = Flambda_kind
 module KP = Kinded_parameter
+module PDCE = Partial_dead_code_elimination.For_downwards_env
 module T = Flambda_type
 module TE = Flambda_type.Typing_env
 
@@ -49,6 +50,7 @@ end = struct
     symbols_currently_being_defined : Symbol.Set.t;
     variables_defined_at_toplevel : Variable.Set.t;
     cse : CSE.t;
+    pdce : PDCE.t;
   }
 
   let print ppf { backend = _; round; typing_env; get_imported_code = _;
@@ -56,7 +58,7 @@ end = struct
                   inlining_depth_increment; float_const_prop;
                   code; at_unit_toplevel; unit_toplevel_exn_continuation;
                   symbols_currently_being_defined;
-                  variables_defined_at_toplevel; cse;
+                  variables_defined_at_toplevel; cse; pdce;
                 } =
     Format.fprintf ppf "@[<hov 1>(\
         @[<hov 1>(round@ %d)@]@ \
@@ -70,6 +72,7 @@ end = struct
         @[<hov 1>(symbols_currently_being_defined@ %a)@]@ \
         @[<hov 1>(variables_defined_at_toplevel@ %a)@]@ \
         @[<hov 1>(cse@ @[<hov 1>%a@])@]@ \
+        @[<hov 1>(pdce@ @[<hov 1>%a@])@]@ \
         @[<hov 1>(code@ %a)@]\
         )@]"
       round
@@ -83,6 +86,7 @@ end = struct
       Symbol.Set.print symbols_currently_being_defined
       Variable.Set.print variables_defined_at_toplevel
       CSE.print cse
+      PDCE.print pdce
       (Code_id.Map.print Code.print) code
 
   let invariant _t = ()
@@ -105,6 +109,7 @@ end = struct
       symbols_currently_being_defined = Symbol.Set.empty;
       variables_defined_at_toplevel = Variable.Set.empty;
       cse = CSE.empty;
+      pdce = PDCE.empty;
     }
 
   let resolver t = TE.resolver t.typing_env
@@ -181,7 +186,7 @@ end = struct
                       float_const_prop; code; at_unit_toplevel = _;
                       unit_toplevel_exn_continuation;
                       symbols_currently_being_defined;
-                      variables_defined_at_toplevel; cse = _;
+                      variables_defined_at_toplevel; cse = _; pdce = _;
                     } =
     { backend;
       round;
@@ -197,6 +202,7 @@ end = struct
       symbols_currently_being_defined;
       variables_defined_at_toplevel;
       cse = CSE.empty;
+      pdce = PDCE.empty;
     }
 
   let define_variable t var kind =
@@ -590,6 +596,15 @@ end = struct
     CSE.find t.cse prim
 
   let with_cse t cse = { t with cse; }
+
+  let pdce t = t.pdce
+
+  let with_pdce t pdce = { t with pdce; }
+
+  let map_pdce t ~f =
+    let pdce = f t.pdce in
+    if pdce == t.pdce then t
+    else { t with pdce; }
 end and Upwards_env : sig
   include I.Upwards_env
     with type downwards_env := Downwards_env.t

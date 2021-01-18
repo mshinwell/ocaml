@@ -640,8 +640,8 @@ let simplify_apply_shared dacc apply : _ Or_bottom.t =
       S.simplify_simples dacc (Apply.args apply) ~min_name_mode
         ~in_apply_cont:false
     with
-    | _, Bottom -> Bottom
-    | _changed, Ok args_with_types ->
+    | _, Bottom, _dacc -> Bottom
+    | _changed, Ok args_with_types, dacc ->
       let args, arg_types = List.split args_with_types in
       let inlining_depth =
         DE.get_inlining_depth_increment (DA.denv dacc)
