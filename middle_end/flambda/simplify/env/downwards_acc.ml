@@ -207,3 +207,12 @@ let with_pdce t pdce =
   { t with
     denv = DE.with_pdce t.denv pdce;
   }
+
+let pdce t = DE.pdce t.denv
+
+let pdce_acc t = t.pdce
+
+let with_pdce_acc t pdce_acc =
+  { t with
+    pdce = pdce_acc;
+  }

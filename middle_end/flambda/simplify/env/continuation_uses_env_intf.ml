@@ -41,15 +41,6 @@ module type S = sig
 
   (* CR mshinwell: Add [record_exn_continuation_use]? *)
 
-  val compute_handler_env
-     : t
-    -> env_at_fork_plus_params_and_consts:Simplify_envs.Downwards_env.t
-    -> consts_lifted_during_body:Simplify_envs.Lifted_constant_state.t
-    -> Continuation.t
-    -> params:Kinded_parameter.t list
-    -> code_age_relation_after_body:Code_age_relation.t
-    -> Continuation_env_and_param_types.t
-
   val num_continuation_uses : t -> Continuation.t -> int
 
   val all_continuations_used : t -> Continuation.Set.t
