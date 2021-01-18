@@ -143,16 +143,52 @@ module For_downwards_env = struct
       levels
       Variable.Map.empty
 
+  module Pre_join_result = struct
+    type nonrec 'a t =
+      { typing_env_at_fork : TE.t;
+        use_info : 'a list;
+        get_typing_env : ('a -> TE.t);
+        get_rewrite_id : ('a -> RI.t);
+        get_pdce : ('a -> t);
+        extra_allowed_names : Name_occurrences.t;
+      }
+
+      let extra_allowed_names t = t.extra_allowed_names
+  end
+
+  let pre_join ~typing_env_at_fork ~typing_env_at_join ~pdce_at_fork ~use_info
+        ~get_typing_env ~get_rewrite_id ~get_pdce =
+    (* We need to split the PDCE computation around the typing environment
+       join.  The latter needs the [extra_allowed_names] information, whereas
+       our join computations below need the joined types of the continuation's
+       parameters. *)
+    let scope_at_fork = TE.current_scope typing_env_at_fork in
+    let seen_equations = ref false in
+    let pdce_at_each_use =
+      List.map use_info ~f:(fun use ->
+        let t = get_pdce use in
+        let pdce_between_fork_and_use = cut_pdce_environment t ~scope_at_fork in
+        if not (Variable.Map.is_empty pdce_between_fork_and_use) then begin
+          seen_equations := true
+        end;
+        get_typing_env use, get_rewrite_id use, pdce_between_fork_and_use)
+    in
+    (* XXX even if no new equations, need to propagate & update acc *)
+    if not !seen_equations then None
+    else
+      join0 ~typing_env_at_fork ~typing_env_at_join ~pdce_at_fork
+        ~pdce_at_each_use ~scope_at_fork
+
   module Join_result = struct
     type nonrec t =
       { pdce_at_join_point : t;
         extra_params : EPA.t;
         extra_equations : T.t Name.Map.t;
-        extra_allowed_names : Name_occurrences.t;
       }
   end
 
-  let join0 ~typing_env_at_fork ~pdce_at_fork ~pdce_at_each_use ~scope_at_fork =
+  let join0 ~typing_env_at_fork ~typing_env_at_join ~pdce_at_fork
+        ~pdce_at_each_use ~scope_at_fork =
     (* We assume all of the equations seen thus far, that are available
        at all uses of the continuation (call it [k]) currently being
        considered, might be able to be sunk further down the control flow.
@@ -202,7 +238,7 @@ module For_downwards_env = struct
             Misc.fatal_errorf "Didn't expect PDCE bound variable %a \
                 (bound to %a) to be in scope in fork environment:@ %a"
               Variable.print bound_to
-              EP.print perm
+              EP.print prim
               TE.print typing_env_at_fork
           end;
           let names = P.Eligible_for_pdce.free_names prim in
@@ -220,18 +256,27 @@ module For_downwards_env = struct
         equations
         Name_permutation.empty
     in
-    let pdce_at_join_point, extra_allowed_names =
-      Variable.Map.fold (fun bound_to prim (t, extra_allowed_names) ->
-          let bound_to = Name_permutation.apply_variable perm bound_to in
-          let prim = P.Eligible_for_pdce.apply_name_permutation prim perm in
-          let t = add t (Scope.next scope_at_fork) ~bound_to prim in
-          let extra_allowed_names =
-            Name_occurrences.union extra_allowed_names
-              (P.Eligible_for_pdce.free_names prim)
-          in
-          t, extra_allowed_names)
+    let extra_equations, were_not_propagated =
+      (* We use the joined types of the continuation's parameters to work out
+         whether the left-hand sides of the equations were propagated past the
+         join point.  Any left-hand side that isn't propagated can have its
+         corresponding PDCE equation dropped, since there shouldn't be any
+         further uses. *)
+      Variable.Map.fold
+        (fun bound_to _prim (extra_equations, were_not_propagated) ->
+
         equations
-        (pdce_at_fork, Name_occurrences.empty)
+        (Name.Map.empty, Variable.Set.empty)
+    in
+    let pdce_at_join_point =
+      Variable.Map.fold (fun bound_to prim t ->
+          if Variable.Set.mem bound_to were_not_propagated then t
+          else
+            let bound_to = Name_permutation.apply_variable perm bound_to in
+            let prim = P.Eligible_for_pdce.apply_name_permutation prim perm in
+            add t (Scope.next scope_at_fork) ~bound_to prim)
+        equations
+        pdce_at_fork
     in
     (* what types will we give the new params?  Some of them could have
        proper types, e.g. "boxed_float(f)". *)
@@ -239,32 +284,11 @@ module For_downwards_env = struct
       (* need to form EPA.t *)
       ()
     in
-    let extra_equations =
-      ()
-    in
     Some { Join_result.
       pdce_at_join_point;
       extra_params;
       extra_equations;
-      extra_allowed_names;
     }
-
-  let join ~typing_env_at_fork ~pdce_at_fork ~use_info ~get_pdce =
-    let scope_at_fork = TE.current_scope typing_env_at_fork in
-    let seen_equations = ref false in
-    let pdce_at_each_use =
-      List.map use_info ~f:(fun use ->
-        let t = get_pdce use in
-        let pdce_between_fork_and_use = cut_pdce_environment t ~scope_at_fork in
-        if not (Variable.Map.is_empty pdce_between_fork_and_use) then begin
-          seen_equations := true
-        end;
-        get_typing_env use, get_rewrite_id use, pdce_between_fork_and_use)
-    in
-    (* XXX even if no new equations, need to propagate & update acc *)
-    if not !seen_equations then None
-    else
-      join0 ~typing_env_at_fork ~pdce_at_fork ~pdce_at_each_use ~scope_at_fork
 end
 
 (*

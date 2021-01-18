@@ -18,11 +18,22 @@
 [@@@ocaml.warning "+a-30-40-41-42"]
 
 module EPA = Continuation_extra_params_and_args
-module KP = Kinded_parameter
 module P = Flambda_primitive
 module RI = Apply_cont_rewrite_id
 module T = Flambda_type
 module TE = Flambda_type.Typing_env
+
+type for_downwards_env
+
+module Join_result : sig
+  type t
+
+  val pdce_at_join_point : t -> for_downwards_env
+
+  val extra_params : t -> EPA.t
+  val extra_allowed_names : t -> Name_occurrences.t
+  val extra_equations : t -> T.t Name.Map.t
+end
 
 module For_downwards_acc : sig
   type t
@@ -30,10 +41,16 @@ module For_downwards_acc : sig
   val print : Format.formatter -> t -> unit
 
   val empty : t
+
+  val post_join
+     : t
+    -> typing_env_at_join:TE.t
+    -> Join_result.t
+    -> t
 end
 
 module For_downwards_env : sig
-  type t
+  type t = for_downwards_env
 
   val print : Format.formatter -> t -> unit
 
@@ -53,20 +70,15 @@ module For_downwards_env : sig
     -> Flambda_primitive.t
     -> t * For_downwards_acc.t
 
-  module Join_result : sig
-    type nonrec t = private
-      { pdce_at_join_point : t;
-        extra_params : EPA.t;
-        extra_equations : T.t Name.Map.t;
-        extra_allowed_names : Name_occurrences.t;
-      }
-  end
+  val extra_allowed_names_for_join
 
   (** [join] adds PDCE equations into [pdce_at_fork] at the next scope level
       after that given by the [typing_env_at_fork]. *)
   val join
      : typing_env_at_fork:TE.t
     -> use_info:'a list
+    -> get_typing_env:('a -> TE.t)
+    -> get_rewrite_id:('a -> RI.t)
     -> get_pdce:('a -> t)
     -> Join_result.t option
 end

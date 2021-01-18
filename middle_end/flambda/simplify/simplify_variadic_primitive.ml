@@ -119,7 +119,9 @@ let simplify_variadic_primitive dacc ~original_named ~original_prim
   | Invalid ty -> invalid ty
   | Applied result -> result
   | Not_applied dacc ->
-    match S.simplify_simples dacc args ~min_name_mode with
+    match
+      S.simplify_simples dacc args ~min_name_mode ~in_apply_cont:false
+    with
     | _, Bottom ->
       let result_kind = P.result_kind_of_variadic_primitive' prim in
       invalid (T.bottom result_kind)

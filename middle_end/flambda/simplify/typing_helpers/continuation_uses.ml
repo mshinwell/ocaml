@@ -231,17 +231,21 @@ Format.eprintf "Unknown at or later than %a\n%!"
               PDCE.join ~typing_env_at_fork:typing_env
                 ~pdce_at_fork:(DE.pdce denv)
                 ~use_info:use_envs_with_ids
+                ~get_typing_env:(fun (use_env, _, _) -> DE.typing_env use_env)
+                ~get_rewrite_id:(fun (_, id, _) -> id)
                 ~get_pdce:(fun (use_env, _, _) -> DE.pdce use_env)
             in
             let extra_params_and_args =
               match pdce_join_result with
               | None -> Continuation_extra_params_and_args.empty
-              | Some pdce_join_result -> pdce_join_result.extra_params
+              | Some pdce_join_result ->
+                PDCE.Join_result.extra_params pdce_join_result
             in
             let extra_allowed_names =
               match pdce_join_result with
               | None -> Name_occurrences.empty
-              | Some pdce_join_result -> pdce_join_result.extra_allowed_names
+              | Some pdce_join_result ->
+                PDCE.Join_result.extra_allowed_names pdce_join_result
             in
             let env_extension =
               TE.cut_and_n_way_join typing_env
@@ -283,7 +287,7 @@ Format.eprintf "The extra params and args are:@ %a\n%!"
               | Some pdce_join_result ->
                 Name.Map.fold (fun name ty handler_env ->
                     TE.add_equation handler_env name ty)
-                  pdce_join_result.extra_equations
+                  (PDCE.Join_result.extra_equations pdce_join_result)
                   handler_env
             in
             let handler_env =
@@ -300,7 +304,8 @@ Format.eprintf "The extra params and args are:@ %a\n%!"
               match pdce_join_result with
               | None -> denv
               | Some pdce_join_result ->
-                DE.with_pdce denv pdce_join_result.pdce_at_join_point
+                DE.with_pdce denv
+                  (PDCE.Join_result.pdce_at_join_point pdce_join_result)
             in
             denv, extra_params_and_args
         in

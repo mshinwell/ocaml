@@ -636,7 +636,10 @@ let simplify_apply_shared dacc apply : _ Or_bottom.t =
   match S.simplify_simple dacc (Apply.callee apply) ~min_name_mode with
   | Bottom, _ty -> Bottom
   | Ok callee, callee_ty ->
-    match S.simplify_simples dacc (Apply.args apply) ~min_name_mode with
+    match
+      S.simplify_simples dacc (Apply.args apply) ~min_name_mode
+        ~in_apply_cont:false
+    with
     | _, Bottom -> Bottom
     | _changed, Ok args_with_types ->
       let args, arg_types = List.split args_with_types in
