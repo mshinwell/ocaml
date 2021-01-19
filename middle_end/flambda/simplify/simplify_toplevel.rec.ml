@@ -22,6 +22,7 @@ let simplify_toplevel dacc expr ~return_continuation ~return_arity
       exn_continuation ~return_cont_scope ~exn_cont_scope =
   let expr, uacc =
     Simplify_expr.simplify_expr dacc expr ~down_to_up:(fun dacc ~rebuild ->
+      Format.eprintf "Final dacc:@ %a\n%!" DA.print dacc;
       let uenv =
         UE.add_continuation UE.empty return_continuation
           return_cont_scope return_arity

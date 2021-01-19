@@ -91,6 +91,8 @@ module For_downwards_env = struct
       combined = Variable.Map.empty;
     }
 
+  let is_empty t = Variable.Map.is_empty t.combined
+
   let add t scope ~bound_to prim =
     let level =
       match Scope.Map.find scope t.by_scope with
@@ -377,25 +379,30 @@ module For_downwards_env = struct
       levels
       Variable.Map.empty
 
+  (* CR mshinwell: Maybe we shouldn't use "at_fork" (ditto elsewhere) and
+     think of some wording that identifies more clearly what these points
+     are. *)
   let join ~typing_env_at_fork ~pdce_at_fork pdce_acc ~use_info ~get_typing_env
         ~get_rewrite_id ~get_arg_types ~get_pdce ~params =
-    (* We need to split the PDCE computation around the typing environment
-       join.  The latter needs the [extra_allowed_names] information, whereas
-       our join computations below need the joined types of the continuation's
-       parameters. *)
     let scope_at_fork = TE.current_scope typing_env_at_fork in
+    Format.eprintf "PDCE join scope %a.  PDCE at fork:@ %a\n%!"
+      Scope.print scope_at_fork
+      print pdce_at_fork;
     let seen_equations = ref false in
     let pdce_at_each_use =
       List.map use_info ~f:(fun use ->
         let t = get_pdce use in
         let pdce_between_fork_and_use = cut_pdce_environment t ~scope_at_fork in
+        Format.eprintf "One use: new PDCE:@ %a\n%!"
+          (Variable.Map.print P.Eligible_for_pdce.print)
+          pdce_between_fork_and_use;
         if not (Variable.Map.is_empty pdce_between_fork_and_use) then begin
           seen_equations := true
         end;
         get_typing_env use, get_rewrite_id use, pdce_between_fork_and_use,
           get_arg_types use)
     in
-    if not !seen_equations then None
+    if is_empty pdce_at_fork && not !seen_equations then None
     else
       join0 ~typing_env_at_fork ~pdce_at_fork pdce_acc ~pdce_at_each_use
         ~scope_at_fork ~params

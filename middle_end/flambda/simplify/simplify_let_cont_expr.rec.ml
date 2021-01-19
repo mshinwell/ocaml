@@ -40,7 +40,8 @@ let rebuild_one_continuation_handler cont ~at_unit_toplevel
         ~critical_deps_of_bindings:(KP.List.free_names params)
   in
   let free_names = UA.name_occurrences uacc in
-  let used_params =
+  let used_params = params
+  (*
     (* Removal of unused parameters of recursive continuations is not
        currently supported. *)
     match recursive with
@@ -65,13 +66,17 @@ let rebuild_one_continuation_handler cont ~at_unit_toplevel
               Name_occurrences.mem_var free_names (KP.var param)
             end)
           params
+          *)
   in
   let used_extra_params =
+    extra_params_and_args.extra_params
+    (*
     if is_single_inlinable_use then extra_params_and_args.extra_params
     else
       List.filter (fun extra_param ->
           Name_occurrences.mem_var free_names (KP.var extra_param))
         extra_params_and_args.extra_params
+        *)
   in
   let params' = used_params @ used_extra_params in
   let cont_handler =
