@@ -15,6 +15,8 @@
 
 (* No comments, OCaml stdlib internal use only. *)
 
+[@@@ocaml.warning "Ae"]
+
 open CamlinternalFormatBasics
 
 val is_in_char_set : char_set -> char -> bool

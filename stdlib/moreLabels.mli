@@ -23,6 +23,8 @@
    The contents of this module are subject to change.
 *)
 
+[@@@ocaml.nolabels]
+
 module Hashtbl : sig
   type ('a, 'b) t = ('a, 'b) Hashtbl.t
   val create : ?random:bool -> int -> ('a, 'b) t

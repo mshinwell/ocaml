@@ -13,6 +13,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
+[@@@ocaml.nopervasives]
+
 (* Padding position. *)
 type padty =
   | Left   (* Text is left justified ('-' option).               *)

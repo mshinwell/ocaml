@@ -26,6 +26,8 @@
        let first = Bytes.sub ~pos:0 ~len:1
     ]} *)
 
+[@@@ocaml.nolabels]
+
 external length : bytes -> int = "%bytes_length"
 (** Return the length (number of bytes) of the argument. *)
 

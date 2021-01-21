@@ -20,6 +20,8 @@
    The pretty-printing engine internal data structures.
 *)
 
+[@@@ocaml.warning "Ae"]
+
 let id x = x
 
 (* A devoted type for sizes to avoid confusion

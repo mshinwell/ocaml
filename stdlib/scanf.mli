@@ -15,6 +15,8 @@
 
 (** Formatted input functions. *)
 
+[@@@ocaml.warning "Ae"]
+
 (** {1 Introduction} *)
 
 (** {2 Functional input with format strings} *)

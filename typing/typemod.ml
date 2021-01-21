@@ -1475,10 +1475,10 @@ and transl_signature env sg =
               :: trem
             in
             typedtree, sg, final_env
-        | Psig_attribute x ->
-            Builtin_attributes.warning_attribute x;
+        | Psig_attribute attr ->
+            Builtin_attributes.parse_standard_interface_attributes attr;
             let (trem,rem, final_env) = transl_sig env srem in
-            mksig (Tsig_attribute x) env loc :: trem, rem, final_env
+            mksig (Tsig_attribute attr) env loc :: trem, rem, final_env
         | Psig_extension (ext, _attrs) ->
             raise (Error_forward (Builtin_attributes.error_of_extension ext))
   in
@@ -2428,9 +2428,9 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
         Tstr_include incl, sg, new_env
     | Pstr_extension (ext, _attrs) ->
         raise (Error_forward (Builtin_attributes.error_of_extension ext))
-    | Pstr_attribute x ->
-        Builtin_attributes.warning_attribute x;
-        Tstr_attribute x, [], env
+    | Pstr_attribute attr ->
+        Builtin_attributes.parse_standard_implementation_attributes attr;
+        Tstr_attribute attr, [], env
   in
   let rec type_struct env sstr =
     match sstr with
@@ -2632,6 +2632,13 @@ let gen_annot outputprefix sourcefile annots =
 
 let type_implementation sourcefile outputprefix modulename initial_env ast =
   Cmt_format.clear ();
+  List.iter (fun { pstr_desc; _ } ->
+      match pstr_desc with
+      | Pstr_attribute attr ->
+        Builtin_attributes.parse_early_implementation_attributes attr
+      | _ -> ())
+    ast;
+  let initial_env = initial_env () in
   Misc.try_finally (fun () ->
       Typecore.reset_delayed_checks ();
       Env.reset_required_globals ();
@@ -2714,7 +2721,13 @@ let save_signature modname tsg outputprefix source_file initial_env cmi =
     (Cmt_format.Interface tsg) (Some source_file) initial_env (Some cmi)
 
 let type_interface env ast =
-  transl_signature env ast
+  List.iter (fun { psig_desc; _ } ->
+      match psig_desc with
+      | Psig_attribute attr ->
+        Builtin_attributes.parse_early_interface_attributes attr
+      | _ -> ())
+    ast;
+  transl_signature (env ()) ast
 
 (* "Packaging" of several compilation units into one unit
    having them as sub-modules.  *)

@@ -14,6 +14,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
+[@@@ocaml.nolabels]
+
 external neg : float -> float = "%negfloat"
 external add : float -> float -> float = "%addfloat"
 external sub : float -> float -> float = "%subfloat"

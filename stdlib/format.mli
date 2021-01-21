@@ -41,6 +41,8 @@
 
 *)
 
+[@@@ocaml.warning "Ae"]
+
 (** {1 Introduction}
    For a gentle introduction to the basics of pretty-printing using
    [Format], read

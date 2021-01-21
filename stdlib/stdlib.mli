@@ -25,6 +25,9 @@
     {{!modules}standard library modules}.
 *)
 
+[@@@ocaml.nopervasives]
+[@@@ocaml.warning "-49"]
+
 (** {1 Exceptions} *)
 
 external raise : exn -> 'a = "%raise"

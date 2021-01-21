@@ -15,6 +15,8 @@
 
 (** Formatted output functions. *)
 
+[@@@ocaml.warning "Ae"]
+
 val fprintf : out_channel -> ('a, out_channel, unit) format -> 'a
 (** [fprintf outchan format arg1 ... argN] formats the arguments
    [arg1] to [argN] according to the format string [format], and

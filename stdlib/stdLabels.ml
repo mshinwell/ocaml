@@ -15,6 +15,8 @@
 
 (* Module [StdLabels]: meta-module for labelled libraries *)
 
+[@@@ocaml.nolabels]
+
 module Array = ArrayLabels
 
 module List = ListLabels

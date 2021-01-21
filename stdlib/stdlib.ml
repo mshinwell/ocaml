@@ -13,6 +13,9 @@
 (*                                                                        *)
 (**************************************************************************)
 
+[@@@ocaml.nopervasives]
+[@@@ocaml.warning "-49"]
+
 (* Exceptions *)
 
 external register_named_value : string -> 'a -> unit

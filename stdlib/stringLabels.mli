@@ -24,6 +24,8 @@
       let to_upper = String.map ~f:Char.uppercase_ascii
    ]} *)
 
+[@@@ocaml.nolabels]
+
 external length : string -> int = "%string_length"
 (** Return the length (number of characters) of the given string. *)
 

@@ -15,6 +15,8 @@
 
 (* Internals of forcing lazy values. *)
 
+[@@@ocaml.afl_inst_ratio 0]
+
 type 'a t = 'a lazy_t
 
 exception Undefined

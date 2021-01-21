@@ -15,4 +15,6 @@
 
 (* Module [BytesLabels]: labelled Bytes module *)
 
+[@@@ocaml.nolabels]
+
 include Bytes

@@ -25,6 +25,8 @@
       let everything = Array.create_matrix ~dimx:42 ~dimy:42 42
    ]} *)
 
+[@@@ocaml.nolabels]
+
 type 'a t = 'a array
 (** An alias for the type of arrays. *)
 

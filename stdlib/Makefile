@@ -24,7 +24,7 @@ COMPILER=$(ROOTDIR)/ocamlc
 CAMLC=$(CAMLRUN) $(COMPILER)
 COMPFLAGS=-strict-sequence -absname -w +a-4-9-41-42-44-45-48 \
           -g -warn-error A -bin-annot -nostdlib \
-          -safe-string -strict-formats
+          -safe-string -strict-formats -no-alias-deps
 ifeq "$(FLAMBDA)" "true"
 OPTCOMPFLAGS += -O3
 endif
@@ -203,26 +203,35 @@ clean::
 
 .SUFFIXES: .mli .ml .cmi .cmo .cmx
 
-export AWK
+stdlib.cmi: stdlib.mli
+	$(CAMLC) $(COMPFLAGS) \
+	  -pp "$(AWK) -f ./expand_module_aliases.awk" -c $<
+
+stdlib.cmo: stdlib.ml
+	$(CAMLC) $(COMPFLAGS) \
+	  -pp "$(AWK) -f ./expand_module_aliases.awk" -c $<
+
+stdlib.cmx: stdlib.ml
+	$(CAMLOPT) $(COMPFLAGS) $(OPTCOMPFLAGS) \
+          -pp "$(AWK) -f ./expand_module_aliases.awk" -c $<
 
 %.cmi: %.mli
-	$(CAMLC) $(COMPFLAGS) $(shell ./Compflags $@) -c $<
+	$(CAMLC) $(COMPFLAGS) -c $<
 
 stdlib__%.cmi: %.mli
-	$(CAMLC) $(COMPFLAGS) $(shell ./Compflags $@) -o $@ -c $<
+	$(CAMLC) $(COMPFLAGS) -o $@ -c $<
 
 %.cmo: %.ml
-	$(CAMLC) $(COMPFLAGS) $(shell ./Compflags $@) -c $<
+	$(CAMLC) $(COMPFLAGS) -c $<
 
 stdlib__%.cmo: %.ml
-	$(CAMLC) $(COMPFLAGS) $(shell ./Compflags $@) -o $@ -c $<
+	$(CAMLC) $(COMPFLAGS) -o $@ -c $<
 
 %.cmx: %.ml
-	$(CAMLOPT) $(COMPFLAGS) $(OPTCOMPFLAGS) $(shell ./Compflags $@) -c $<
+	$(CAMLOPT) $(COMPFLAGS) $(OPTCOMPFLAGS) -c $<
 
 stdlib__%.cmx: %.ml
-	$(CAMLOPT) $(COMPFLAGS) $(OPTCOMPFLAGS) $(shell ./Compflags $@) \
-	           -o $@ -c $<
+	$(CAMLOPT) $(COMPFLAGS) $(OPTCOMPFLAGS) -o $@ -c $<
 
 # Dependencies on the compiler
 COMPILER_DEPS=$(filter-out -use-prims $(CAMLRUN), $(CAMLC))

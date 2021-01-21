@@ -27,6 +27,10 @@
     - ocaml.immediate
     - ocaml.immediate64
     - ocaml.boxed / ocaml.unboxed
+    - ocaml.nopervasives
+    - ocaml.nolabels
+    - ocaml.inline
+    - ocaml.afl_inst_ratio
 
     {b Warning:} this module is unstable and part of
   {{!Compiler_libs}compiler-libs}.
@@ -82,3 +86,9 @@ val immediate64: Parsetree.attributes -> bool
 
 val has_unboxed: Parsetree.attributes -> bool
 val has_boxed: Parsetree.attributes -> bool
+
+val parse_early_interface_attributes : Parsetree.attribute -> unit
+val parse_standard_interface_attributes : Parsetree.attribute -> unit
+
+val parse_early_implementation_attributes : Parsetree.attribute -> unit
+val parse_standard_implementation_attributes : Parsetree.attribute -> unit

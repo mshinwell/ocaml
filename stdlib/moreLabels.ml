@@ -15,6 +15,8 @@
 
 (* Module [MoreLabels]: meta-module for compatibility labelled libraries *)
 
+[@@@ocaml.nolabels]
+
 module Hashtbl = Hashtbl
 
 module Map = Map

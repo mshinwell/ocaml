@@ -20,7 +20,6 @@ type info = {
   source_file : string;
   module_name : string;
   output_prefix : string;
-  env : Env.t;
   ppf_dump : Format.formatter;
   tool_name : string;
   native : bool;
@@ -35,13 +34,11 @@ let with_info ~native ~tool_name ~source_file ~output_prefix ~dump_ext k =
   Compmisc.init_path ();
   let module_name = module_of_filename source_file output_prefix in
   Env.set_unit_name module_name;
-  let env = Compmisc.initial_env() in
   let dump_file = String.concat "." [output_prefix; dump_ext] in
   Compmisc.with_ppf_dump ~file_prefix:dump_file @@ fun ppf_dump ->
   k {
     module_name;
     output_prefix;
-    env;
     source_file;
     ppf_dump;
     tool_name;
@@ -57,38 +54,44 @@ let parse_intf i =
 
 let typecheck_intf info ast =
   Profile.(record_call typing) @@ fun () ->
+  let env_ref = ref None in
   let tsg =
     ast
-    |> Typemod.type_interface info.env
+    |> Typemod.type_interface
+      (fun () ->
+        let env = Compmisc.initial_env () in
+        env_ref := Some env;
+        env)
     |> print_if info.ppf_dump Clflags.dump_typedtree Printtyped.interface
   in
   let sg = tsg.Typedtree.sig_type in
+  let env = Option.get !env_ref in
   if !Clflags.print_types then
-    Printtyp.wrap_printing_env ~error:false info.env (fun () ->
+    Printtyp.wrap_printing_env ~error:false env (fun () ->
         Format.(fprintf std_formatter) "%a@."
           (Printtyp.printed_signature info.source_file)
           sg);
-  ignore (Includemod.signatures info.env ~mark:Mark_both sg sg);
+  ignore (Includemod.signatures env ~mark:Mark_both sg sg);
   Typecore.force_delayed_checks ();
   Warnings.check_fatal ();
-  tsg
+  tsg, env
 
-let emit_signature info ast tsg =
+let emit_signature info ast tsg env =
   let sg =
     let alerts = Builtin_attributes.alerts_of_sig ast in
     Env.save_signature ~alerts tsg.Typedtree.sig_type
       info.module_name (info.output_prefix ^ ".cmi")
   in
   Typemod.save_signature info.module_name tsg
-    info.output_prefix info.source_file info.env sg
+    info.output_prefix info.source_file env sg
 
 let interface info =
   Profile.record_call info.source_file @@ fun () ->
   let ast = parse_intf info in
   if Clflags.(should_stop_after Compiler_pass.Parsing) then () else begin
-    let tsg = typecheck_intf info ast in
+    let tsg, env = typecheck_intf info ast in
     if not !Clflags.print_types then begin
-      emit_signature info ast tsg
+      emit_signature info ast tsg env
     end
   end
 
@@ -104,7 +107,8 @@ let typecheck_impl i parsetree =
   parsetree
   |> Profile.(record typing)
     (Typemod.type_implementation
-       i.source_file i.output_prefix i.module_name i.env)
+       i.source_file i.output_prefix i.module_name
+       (fun () -> Compmisc.initial_env ()))
   |> print_if i.ppf_dump Clflags.dump_typedtree
     Printtyped.implementation_with_coercion
 

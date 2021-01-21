@@ -23,6 +23,8 @@
    and [stringLabels.mli].
 *)
 
+[@@@ocaml.nolabels]
+
 module Array = ArrayLabels
 module Bytes = BytesLabels
 module List = ListLabels

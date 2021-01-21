@@ -15,6 +15,8 @@
 
 (* No comments, OCaml stdlib internal use only. *)
 
+[@@@ocaml.nopervasives]
+
 type padty = Left | Right | Zeros
 
 type int_conv =

@@ -21,6 +21,8 @@
    concatenated pairwise).
 *)
 
+[@@@ocaml.warning "A"]
+
 type t
 (** The abstract type of buffers. *)
 
