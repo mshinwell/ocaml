@@ -22,9 +22,9 @@ TARGET_BINDIR ?= $(BINDIR)
 
 COMPILER=$(ROOTDIR)/ocamlc
 CAMLC=$(CAMLRUN) $(COMPILER)
-COMPFLAGS=-strict-sequence -absname -w +a-4-9-41-42-44-45-48 \
+COMPFLAGS=-strict-sequence -absname -w +a-4-9-41-42-44-45-48-66 \
           -g -warn-error A -bin-annot -nostdlib \
-          -safe-string -strict-formats
+          -safe-string -strict-formats -nopervasives
 ifeq "$(FLAMBDA)" "true"
 OPTCOMPFLAGS += -O3
 endif
@@ -200,28 +200,62 @@ clean::
 
 .SUFFIXES: .mli .ml .cmi .cmo .cmx
 
-export AWK
+stdlib.cmi: stdlib.mli
+	$(CAMLC) $(COMPFLAGS) -no-alias-deps \
+	  -pp "$(AWK) -f ./expand_module_aliases.awk" -c $<
+
+stdlib.cmo: stdlib.ml
+	$(CAMLC) $(COMPFLAGS) -no-alias-deps \
+	  -pp "$(AWK) -f ./expand_module_aliases.awk" -c $<
+
+stdlib.cmx: stdlib.ml
+	$(CAMLOPT) $(COMPFLAGS) $(OPTCOMPFLAGS) -no-alias-deps \
+          -pp "$(AWK) -f ./expand_module_aliases.awk" -c $<
+
+# .ml source files for which -no-alias-deps should be used to compile
+# themselves and their interface files.
+NO_ALIAS_DEPS_MODULES := $(filter %Labels float, $(STDLIB_MODS))
+NO_ALIAS_DEPS_ARTIFACTS = $(NO_ALIAS_DEPS_MODULES:%=stdlib__%.cmi) \
+  $(NO_ALIAS_DEPS_MODULES:%=stdlib__%.cmx) \
+  $(NO_ALIAS_DEPS_MODULES:%=stdlib__%.cmo)
+
+$(NO_ALIAS_DEPS_ARTIFACTS): COMPFLAGS += -no-alias-deps
 
 %.cmi: %.mli
-	$(CAMLC) $(COMPFLAGS) $(shell ./Compflags $@) -c $<
+	$(CAMLC) $(COMPFLAGS) -c $<
 
+<<<<<<< HEAD
 stdlib__%.cmi:
 	$(CAMLC) $(COMPFLAGS) $(shell ./Compflags $@) \
 	         -o $@ -c $(filter %.mli, $^)
+=======
+stdlib__%.cmi: %.mli
+	$(CAMLC) $(COMPFLAGS) -o $@ -c $<
+>>>>>>> b8bd334a1e... Remove Compflags
 
 %.cmo: %.ml
-	$(CAMLC) $(COMPFLAGS) $(shell ./Compflags $@) -c $<
+	$(CAMLC) $(COMPFLAGS) -c $<
 
+<<<<<<< HEAD
 stdlib__%.cmo:
 	$(CAMLC) $(COMPFLAGS) $(shell ./Compflags $@) \
 	         -o $@ -c $(filter %.ml, $^)
+=======
+stdlib__%.cmo: %.ml
+	$(CAMLC) $(COMPFLAGS) -o $@ -c $<
+>>>>>>> b8bd334a1e... Remove Compflags
 
 %.cmx: %.ml
-	$(CAMLOPT) $(COMPFLAGS) $(OPTCOMPFLAGS) $(shell ./Compflags $@) -c $<
+	$(CAMLOPT) $(COMPFLAGS) $(OPTCOMPFLAGS) -c $<
 
+<<<<<<< HEAD
 stdlib__%.cmx:
 	$(CAMLOPT) $(COMPFLAGS) $(OPTCOMPFLAGS) $(shell ./Compflags $@) \
 	           -o $@ -c $(filter %.ml, $^)
+=======
+stdlib__%.cmx: %.ml
+	$(CAMLOPT) $(COMPFLAGS) $(OPTCOMPFLAGS) -o $@ -c $<
+>>>>>>> b8bd334a1e... Remove Compflags
 
 # Dependencies on the compiler
 COMPILER_DEPS=$(filter-out -use-prims $(CAMLRUN), $(CAMLC))
