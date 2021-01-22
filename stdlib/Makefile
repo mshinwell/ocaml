@@ -215,8 +215,16 @@ stdlib.cmx: stdlib.ml
 	$(CAMLOPT) $(COMPFLAGS) $(OPTCOMPFLAGS) -no-alias-deps \
           -pp "$(AWK) -f ./expand_module_aliases.awk" -c $<
 
-NO_ALIAS_FILES := $(wildcard *Labels) stdlib__Float
-$(NO_ALIAS_FILES): COMPFLAGS += -no-alias-deps
+# .ml source files for which -no-alias-deps should be used to compile
+# themselves and their interface files.
+NO_ALIAS_DEPS_FILES := $(wildcard *Labels*.ml) float.ml
+
+NO_ALIAS_DEPS_MODULES = $(NO_ALIAS_DEPS_FILES:%.ml=%)
+NO_ALIAS_DEPS_ARTIFACTS = $(NO_ALIAS_DEPS_MODULES:%=%.cmi) \
+  $(NO_ALIAS_DEPS_MODULES:%=%.cmx) \
+  $(NO_ALIAS_DEPS_MODULES:%=%.cmo)
+
+$(NO_ALIAS_DEPS_ARTIFACTS): COMPFLAGS += -no-alias-deps
 
 %.cmi: %.mli
 	$(CAMLC) $(COMPFLAGS) -c $<
