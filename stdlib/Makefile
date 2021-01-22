@@ -217,12 +217,10 @@ stdlib.cmx: stdlib.ml
 
 # .ml source files for which -no-alias-deps should be used to compile
 # themselves and their interface files.
-NO_ALIAS_DEPS_FILES := $(wildcard *Labels*.ml) float.ml
-
-NO_ALIAS_DEPS_MODULES = $(NO_ALIAS_DEPS_FILES:%.ml=%)
-NO_ALIAS_DEPS_ARTIFACTS = $(NO_ALIAS_DEPS_MODULES:%=%.cmi) \
-  $(NO_ALIAS_DEPS_MODULES:%=%.cmx) \
-  $(NO_ALIAS_DEPS_MODULES:%=%.cmo)
+NO_ALIAS_DEPS_MODULES := $(filter %Labels float, $(STDLIB_MODS))
+NO_ALIAS_DEPS_ARTIFACTS = $(NO_ALIAS_DEPS_MODULES:%=stdlib__%.cmi) \
+  $(NO_ALIAS_DEPS_MODULES:%=stdlib__%.cmx) \
+  $(NO_ALIAS_DEPS_MODULES:%=stdlib__%.cmo)
 
 $(NO_ALIAS_DEPS_ARTIFACTS): COMPFLAGS += -no-alias-deps
 

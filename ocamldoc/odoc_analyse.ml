@@ -75,7 +75,6 @@ let process_implementation_file sourcefile =
   let modulename = String.capitalize_ascii(Filename.basename prefixname) in
   Env.set_unit_name modulename;
   let inputfile = preprocess sourcefile in
-  let env = initial_env () in
   try
     let parsetree =
       Pparse.file ~tool_name inputfile
@@ -83,7 +82,7 @@ let process_implementation_file sourcefile =
     in
     let typedtree =
       Typemod.type_implementation
-        sourcefile prefixname modulename env parsetree
+        sourcefile prefixname modulename initial_env parsetree
     in
     (Some (parsetree, typedtree), inputfile)
   with
@@ -113,7 +112,7 @@ let process_interface_file sourcefile =
     Pparse.file ~tool_name inputfile
       (no_docstring Parse.interface) Pparse.Signature
   in
-  let sg = Typemod.type_interface (initial_env()) ast in
+  let sg = Typemod.type_interface initial_env ast in
   Warnings.check_fatal ();
   (ast, sg, inputfile)
 
