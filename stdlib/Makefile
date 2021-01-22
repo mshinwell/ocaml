@@ -214,48 +214,31 @@ stdlib.cmx: stdlib.ml
 
 # .ml source files for which -no-alias-deps should be used to compile
 # themselves and their interface files.
-NO_ALIAS_DEPS_MODULES := $(filter %Labels float, $(STDLIB_MODS))
-NO_ALIAS_DEPS_ARTIFACTS = $(NO_ALIAS_DEPS_MODULES:%=stdlib__%.cmi) \
-  $(NO_ALIAS_DEPS_MODULES:%=stdlib__%.cmx) \
-  $(NO_ALIAS_DEPS_MODULES:%=stdlib__%.cmo)
+NO_ALIAS_DEPS_MODULES := $(filter %Labels stdlib__Float, $(STDLIB_MODULES))
+NO_ALIAS_DEPS_ARTIFACTS = $(NO_ALIAS_DEPS_MODULES:%=%.cmi) \
+  $(NO_ALIAS_DEPS_MODULES:%=%.cmx) \
+  $(NO_ALIAS_DEPS_MODULES:%=%.cmo)
 
 $(NO_ALIAS_DEPS_ARTIFACTS): COMPFLAGS += -no-alias-deps
 
 %.cmi: %.mli
 	$(CAMLC) $(COMPFLAGS) -c $<
 
-<<<<<<< HEAD
 stdlib__%.cmi:
-	$(CAMLC) $(COMPFLAGS) $(shell ./Compflags $@) \
-	         -o $@ -c $(filter %.mli, $^)
-=======
-stdlib__%.cmi: %.mli
-	$(CAMLC) $(COMPFLAGS) -o $@ -c $<
->>>>>>> b8bd334a1e... Remove Compflags
+	$(CAMLC) $(COMPFLAGS) -o $@ -c $(filter %.mli, $^)
 
 %.cmo: %.ml
 	$(CAMLC) $(COMPFLAGS) -c $<
 
-<<<<<<< HEAD
 stdlib__%.cmo:
-	$(CAMLC) $(COMPFLAGS) $(shell ./Compflags $@) \
-	         -o $@ -c $(filter %.ml, $^)
-=======
-stdlib__%.cmo: %.ml
-	$(CAMLC) $(COMPFLAGS) -o $@ -c $<
->>>>>>> b8bd334a1e... Remove Compflags
+	$(CAMLC) $(COMPFLAGS) -o $@ -c $(filter %.ml, $^)
 
 %.cmx: %.ml
 	$(CAMLOPT) $(COMPFLAGS) $(OPTCOMPFLAGS) -c $<
 
-<<<<<<< HEAD
 stdlib__%.cmx:
-	$(CAMLOPT) $(COMPFLAGS) $(OPTCOMPFLAGS) $(shell ./Compflags $@) \
-	           -o $@ -c $(filter %.ml, $^)
-=======
-stdlib__%.cmx: %.ml
-	$(CAMLOPT) $(COMPFLAGS) $(OPTCOMPFLAGS) -o $@ -c $<
->>>>>>> b8bd334a1e... Remove Compflags
+	$(CAMLOPT) $(COMPFLAGS) $(OPTCOMPFLAGS) \
+          -o $@ -c $(filter %.ml, $^)
 
 # Dependencies on the compiler
 COMPILER_DEPS=$(filter-out -use-prims $(CAMLRUN), $(CAMLC))
