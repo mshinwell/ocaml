@@ -24,7 +24,7 @@ COMPILER=$(ROOTDIR)/ocamlc
 CAMLC=$(CAMLRUN) $(COMPILER)
 COMPFLAGS=-strict-sequence -absname -w +a-4-9-41-42-44-45-48 \
           -g -warn-error A -bin-annot -nostdlib \
-          -safe-string -strict-formats -no-alias-deps
+          -safe-string -strict-formats
 ifeq "$(FLAMBDA)" "true"
 OPTCOMPFLAGS += -O3
 endif
@@ -204,16 +204,19 @@ clean::
 .SUFFIXES: .mli .ml .cmi .cmo .cmx
 
 stdlib.cmi: stdlib.mli
-	$(CAMLC) $(COMPFLAGS) \
+	$(CAMLC) $(COMPFLAGS) -no-alias-deps \
 	  -pp "$(AWK) -f ./expand_module_aliases.awk" -c $<
 
 stdlib.cmo: stdlib.ml
-	$(CAMLC) $(COMPFLAGS) \
+	$(CAMLC) $(COMPFLAGS) -no-alias-deps \
 	  -pp "$(AWK) -f ./expand_module_aliases.awk" -c $<
 
 stdlib.cmx: stdlib.ml
-	$(CAMLOPT) $(COMPFLAGS) $(OPTCOMPFLAGS) \
+	$(CAMLOPT) $(COMPFLAGS) $(OPTCOMPFLAGS) -no-alias-deps \
           -pp "$(AWK) -f ./expand_module_aliases.awk" -c $<
+
+NO_ALIAS_FILES := $(wildcard *Labels) stdlib__Float
+$(NO_ALIAS_FILES): COMPFLAGS += -no-alias-deps
 
 %.cmi: %.mli
 	$(CAMLC) $(COMPFLAGS) -c $<
