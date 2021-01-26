@@ -40,6 +40,8 @@ module Scoped_location : sig
   val of_location : scopes:scopes -> Location.t -> t
   val to_location : t -> Location.t
   val string_of_scoped_location : t -> string
+
+  val map_location : (Location.t -> Location.t) -> t -> t
 end
 
 type item = private {
@@ -83,3 +85,7 @@ val compare : t -> t -> int
 val hash : t -> int
 
 val print_compact : Format.formatter -> t -> unit
+
+val rewrite_to_basenames : t -> t
+
+val rewrite_alloc_dbginfo_to_basenames : alloc_dbginfo -> alloc_dbginfo

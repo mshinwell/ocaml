@@ -82,6 +82,7 @@ module type Compiler_options = sig
   val _config_var : string -> unit
   val _for_pack : string -> unit
   val _g : unit -> unit
+  val _gbasenames : unit -> unit
   val _stop_after : string -> unit
   val _start_from : string -> unit
   val _i : unit -> unit

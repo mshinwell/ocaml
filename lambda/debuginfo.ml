@@ -105,6 +105,11 @@ module Scoped_location = struct
   let string_of_scoped_location = function
     | Loc_unknown -> "??"
     | Loc_known { loc = _; scopes } -> string_of_scopes scopes
+
+  let map_location f t =
+    match t with
+    | Loc_unknown -> Loc_unknown
+    | Loc_known { loc; scopes; } -> Loc_known { loc = f loc; scopes; }
 end
 
 type item = {
@@ -239,3 +244,19 @@ let rec print_compact ppf t =
     print_item item;
     Format.fprintf ppf ";";
     print_compact ppf t
+
+let rewrite_item_to_basenames item =
+  { item with
+    dinfo_file = Filename.basename item.dinfo_file;
+  }
+
+let rewrite_to_basenames t =
+  List.map rewrite_item_to_basenames t
+
+let rewrite_alloc_dbginfo_item_to_basenames item =
+  { item with
+    alloc_dbg = rewrite_to_basenames item.alloc_dbg;
+  }
+
+let rewrite_alloc_dbginfo_to_basenames alloc_dbginfo =
+  List.map rewrite_alloc_dbginfo_item_to_basenames alloc_dbginfo

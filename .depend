@@ -235,6 +235,7 @@ parsing/builtin_attributes.cmo : \
     utils/misc.cmi \
     parsing/longident.cmi \
     parsing/location.cmi \
+    utils/clflags.cmi \
     parsing/asttypes.cmi \
     parsing/builtin_attributes.cmi
 parsing/builtin_attributes.cmx : \
@@ -243,6 +244,7 @@ parsing/builtin_attributes.cmx : \
     utils/misc.cmx \
     parsing/longident.cmx \
     parsing/location.cmx \
+    utils/clflags.cmx \
     parsing/asttypes.cmi \
     parsing/builtin_attributes.cmi
 parsing/builtin_attributes.cmi : \
@@ -2248,6 +2250,7 @@ asmcomp/branch_relaxation_intf.cmx : \
     asmcomp/arch.cmx
 asmcomp/cmm.cmo : \
     utils/targetint.cmi \
+    utils/misc.cmi \
     lambda/lambda.cmi \
     lambda/debuginfo.cmi \
     middle_end/backend_var.cmi \
@@ -2255,6 +2258,7 @@ asmcomp/cmm.cmo : \
     asmcomp/cmm.cmi
 asmcomp/cmm.cmx : \
     utils/targetint.cmx \
+    utils/misc.cmx \
     lambda/lambda.cmx \
     lambda/debuginfo.cmx \
     middle_end/backend_var.cmx \
@@ -2431,14 +2435,12 @@ asmcomp/emit.cmo : \
     asmcomp/x86_gas.cmi \
     asmcomp/x86_dsl.cmi \
     asmcomp/x86_ast.cmi \
-    utils/warnings.cmi \
     asmcomp/reg.cmi \
     asmcomp/proc.cmi \
     asmcomp/printmach.cmi \
     utils/numbers.cmi \
     utils/misc.cmi \
     asmcomp/mach.cmi \
-    parsing/location.cmi \
     asmcomp/linear.cmi \
     lambda/lambda.cmi \
     asmcomp/emitaux.cmi \
@@ -2457,14 +2459,12 @@ asmcomp/emit.cmx : \
     asmcomp/x86_gas.cmx \
     asmcomp/x86_dsl.cmx \
     asmcomp/x86_ast.cmi \
-    utils/warnings.cmx \
     asmcomp/reg.cmx \
     asmcomp/proc.cmx \
     asmcomp/printmach.cmx \
     utils/numbers.cmx \
     utils/misc.cmx \
     asmcomp/mach.cmx \
-    parsing/location.cmx \
     asmcomp/linear.cmx \
     lambda/lambda.cmx \
     asmcomp/emitaux.cmx \

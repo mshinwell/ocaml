@@ -77,6 +77,7 @@ val print_types : bool ref
 val make_archive : bool ref
 val debug : bool ref
 val debug_full : bool ref
+val debug_basenames : bool ref
 val unsafe : bool ref
 val use_linscan : bool ref
 val link_everything : bool ref

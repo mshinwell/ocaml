@@ -119,6 +119,15 @@ type frame_descr =
 let frame_descriptors = ref([] : frame_descr list)
 
 let record_frame_descr ~label ~frame_size ~live_offset debuginfo =
+  let debuginfo =
+    if not !Clflags.debug_basenames then debuginfo
+    else
+      match debuginfo with
+      | Dbg_alloc alloc_dbginfo ->
+        Dbg_alloc (Debuginfo.rewrite_alloc_dbginfo_to_basenames alloc_dbginfo)
+      | Dbg_raise dbg -> Dbg_raise (Debuginfo.rewrite_to_basenames dbg)
+      | Dbg_other dbg -> Dbg_other (Debuginfo.rewrite_to_basenames dbg)
+  in
   frame_descriptors :=
     { fd_lbl = label;
       fd_frame_size = frame_size;

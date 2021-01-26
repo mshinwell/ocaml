@@ -93,6 +93,8 @@ val reset: unit -> unit
 
 (** {1 Printing locations} *)
 
+val rewrite_to_basenames : t -> t
+
 val rewrite_absolute_path: string -> string
     (** rewrite absolute path to honor the BUILD_PATH_PREFIX_MAP
         variable (https://reproducible-builds.org/specs/build-path-prefix-map/)

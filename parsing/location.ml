@@ -139,6 +139,16 @@ let setup_colors () =
 (******************************************************************************)
 (* Printing locations, e.g. 'File "foo.ml", line 3, characters 10-12' *)
 
+let rewrite_to_basenames { loc_start; loc_end; loc_ghost; } =
+  { loc_start = {
+      loc_start with pos_fname = Filename.basename loc_start.pos_fname; 
+    };
+    loc_end = {
+      loc_end with pos_fname = Filename.basename loc_end.pos_fname; 
+    };
+    loc_ghost;
+  }
+
 let rewrite_absolute_path path =
   match Misc.get_build_path_prefix_map () with
   | None -> path

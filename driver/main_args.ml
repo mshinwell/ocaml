@@ -160,6 +160,10 @@ let mk_g_opt f =
   "-g", Arg.Unit f, " Record debugging information for exception backtrace"
 ;;
 
+let mk_gbasenames f =
+  "-gbasenames", Arg.Unit f, " Use basenames of source files in debugging information"
+;;
+
 let mk_i f =
   "-i", Arg.Unit f, " Print inferred interface"
 ;;
@@ -993,6 +997,7 @@ module type Compiler_options = sig
   val _config_var : string -> unit
   val _for_pack : string -> unit
   val _g : unit -> unit
+  val _gbasenames : unit -> unit
   val _stop_after : string -> unit
   val _start_from : string -> unit
   val _i : unit -> unit
@@ -1197,6 +1202,7 @@ struct
     mk_dtypes F._annot;
     mk_for_pack_byt F._for_pack;
     mk_g_byt F._g;
+    mk_gbasenames F._gbasenames;
     mk_stop_after ~native:false F._stop_after;
     mk_start_from ~native:false F._start_from;
     mk_i F._i;
@@ -1376,6 +1382,7 @@ struct
     mk_dtypes F._annot;
     mk_for_pack_opt F._for_pack;
     mk_g_opt F._g;
+    mk_gbasenames F._gbasenames;
     mk_function_sections F._function_sections;
     mk_stop_after ~native:true F._stop_after;
     mk_save_ir_after ~native:true F._save_ir_after;
@@ -1882,6 +1889,7 @@ module Default = struct
     let _dump_into_file = set dump_into_file
     let _for_pack s = for_package := (Some s)
     let _g = set debug
+    let _gbasenames = set debug_basenames
     let _i = set print_types
     let _impl = impl
     let _intf = intf
