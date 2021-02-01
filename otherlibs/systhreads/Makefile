@@ -55,12 +55,12 @@ endif
 BYTECODE_C_OBJS=st_stubs_b.$(O)
 NATIVECODE_C_OBJS=st_stubs_n.$(O)
 
-THREADS_SOURCES = thread.ml mutex.ml condition.ml event.ml threadUnix.ml
+THREADS_SOURCES = thread.ml mutex.ml condition.ml event.ml
 
 THREADS_BCOBJS = $(THREADS_SOURCES:.ml=.cmo)
 THREADS_NCOBJS = $(THREADS_SOURCES:.ml=.cmx)
 
-MLIFILES=thread.mli mutex.mli condition.mli event.mli threadUnix.mli
+MLIFILES=thread.mli mutex.mli condition.mli event.mli
 CMIFILES=$(MLIFILES:.mli=.cmi)
 
 all: lib$(LIBNAME).$(A) $(LIBNAME).cma $(CMIFILES)
