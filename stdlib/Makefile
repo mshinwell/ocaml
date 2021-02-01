@@ -24,7 +24,7 @@ COMPILER=$(ROOTDIR)/ocamlc
 CAMLC=$(CAMLRUN) $(COMPILER)
 COMPFLAGS=-strict-sequence -absname -w +a-4-9-41-42-44-45-48-66 \
           -g -warn-error A -bin-annot -nostdlib \
-          -safe-string -strict-formats -nopervasives
+          -safe-string -strict-formats -nopervasives -no-alias-deps
 ifeq "$(FLAMBDA)" "true"
 OPTCOMPFLAGS += -O3
 endif
@@ -201,25 +201,16 @@ clean::
 .SUFFIXES: .mli .ml .cmi .cmo .cmx
 
 stdlib.cmi: stdlib.mli
-	$(CAMLC) $(COMPFLAGS) -no-alias-deps \
+	$(CAMLC) $(COMPFLAGS) \
 	  -pp "$(AWK) -f ./expand_module_aliases.awk" -c $<
 
 stdlib.cmo: stdlib.ml
-	$(CAMLC) $(COMPFLAGS) -no-alias-deps \
+	$(CAMLC) $(COMPFLAGS) \
 	  -pp "$(AWK) -f ./expand_module_aliases.awk" -c $<
 
 stdlib.cmx: stdlib.ml
-	$(CAMLOPT) $(COMPFLAGS) $(OPTCOMPFLAGS) -no-alias-deps \
+	$(CAMLOPT) $(COMPFLAGS) $(OPTCOMPFLAGS) \
           -pp "$(AWK) -f ./expand_module_aliases.awk" -c $<
-
-# .ml source files for which -no-alias-deps should be used to compile
-# themselves and their interface files.
-NO_ALIAS_DEPS_MODULES := $(filter-out %Labels stdlib__Float, $(STDLIB_MODULES))
-NO_ALIAS_DEPS_ARTIFACTS = $(NO_ALIAS_DEPS_MODULES:%=%.cmi) \
-  $(NO_ALIAS_DEPS_MODULES:%=%.cmx) \
-  $(NO_ALIAS_DEPS_MODULES:%=%.cmo)
-
-$(NO_ALIAS_DEPS_ARTIFACTS): COMPFLAGS += -no-alias-deps
 
 %.cmi: %.mli
 	$(CAMLC) $(COMPFLAGS) -c $<
