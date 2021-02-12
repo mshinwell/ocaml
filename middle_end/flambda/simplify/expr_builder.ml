@@ -24,6 +24,8 @@ module P = Flambda_primitive
 module UA = Upwards_acc
 module VB = Var_in_binding_pos
 
+type expr = Expr.t
+
 (* The constructed values of this type aren't currently used, but will be
    needed when we import the Flambda 1 inliner. *)
 (* CR mshinwell: This should turn into a full "benefit" type *)
