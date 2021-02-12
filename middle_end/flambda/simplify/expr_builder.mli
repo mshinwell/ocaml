@@ -23,4 +23,4 @@
 
 open! Flambda.Import
 
-include Expr_builder_intf.S with type expr = Expr.t
+include Expr_builder_intf.S with module Expr = Expr

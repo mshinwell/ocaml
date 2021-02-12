@@ -39,7 +39,7 @@ let inline_linearly_used_continuation uacc ~create_apply_cont ~params ~handler
         KP.List.print params
         Simple.List.print args
         Apply_cont.print apply_cont
-        Expr.print handler
+        EB.Expr.print handler
     end;
     let bindings_outermost_first =
       ListLabels.map2 params args
@@ -54,8 +54,7 @@ let inline_linearly_used_continuation uacc ~create_apply_cont ~params ~handler
       let uacc =
         UA.with_name_occurrences uacc ~name_occurrences:free_names_of_handler
       in
-      Expr_builder.make_new_let_bindings uacc ~bindings_outermost_first
-        ~body:handler
+      EB.make_new_let_bindings uacc ~bindings_outermost_first ~body:handler
     in
     expr, UA.name_occurrences uacc)
 
@@ -106,16 +105,16 @@ let rebuild_apply_cont apply_cont ~args ~rewrite_id uacc ~after_rebuild =
     (* We allow this transformation even if there is a trap action, on the
        basis that there wouldn't be any opportunity to collect any backtrace,
        even if the [Apply_cont] were compiled as "raise". *)
-    after_rebuild (Expr.create_invalid ()) uacc
+    after_rebuild (EB.create_invalid ()) uacc
   | Other { arity = _; handler = _; } ->
     create_apply_cont ~apply_cont_to_expr:(fun apply_cont ->
-      Expr.create_apply_cont apply_cont, Apply_cont.free_names apply_cont)
+      EB.create_apply_cont apply_cont, Apply_cont.free_names apply_cont)
 
 let simplify_apply_cont dacc apply_cont ~down_to_up =
   let min_name_mode = Name_mode.normal in
   match S.simplify_simples dacc (AC.args apply_cont) ~min_name_mode with
   | _, Bottom ->
-    down_to_up dacc ~rebuild:Simplify_common.rebuild_invalid
+    down_to_up dacc ~rebuild:EB.rebuild_invalid
   | _changed, Ok args_with_types ->
     let args, arg_types = List.split args_with_types in
     let use_kind : Continuation_use_kind.t =

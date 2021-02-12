@@ -263,7 +263,7 @@ module type Upwards_env = sig
     -> Scope.t
     -> Flambda_arity.With_subkinds.t  (* CR mshinwell: redundant *)
     -> params:Kinded_parameter.t list
-    -> handler:Flambda.Expr.t
+    -> handler:EB.Expr.t
     -> free_names_of_handler:Name_occurrences.t
     -> t
 
@@ -273,7 +273,7 @@ module type Upwards_env = sig
     -> Scope.t
     -> t
 
-  val find_continuation : t -> Continuation.t -> Continuation_in_env.t
+  val find_continuation : t -> Continuation.t -> EB.Expr.t Continuation_in_env.t
 
   val mem_continuation : t -> Continuation.t -> bool
 

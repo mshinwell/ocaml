@@ -16,11 +16,11 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-type t =
+type 'expr t =
   | Linearly_used_and_inlinable of {
       arity : Flambda_arity.With_subkinds.t;
       params : Kinded_parameter.t list;
-      handler : Flambda.Expr.t;
+      handler : 'expr;
       free_names_of_handler : Name_occurrences.t;
     }
   | Other of {

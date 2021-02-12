@@ -20,7 +20,47 @@
 
 open! Simplify_import
 
+module rec Make_simplify : functor
+  (EB : Expr_builder_intf.S) -> sig
+    module Simplify_toplevel : sig
+      val simplify_toplevel
+        : Downwards_acc.t
+        -> Flambda.Expr.t
+        -> return_continuation:Continuation.t
+        -> return_arity:Flambda_arity.With_subkinds.t
+        -> Exn_continuation.t
+        -> return_cont_scope:Scope.t
+        -> exn_cont_scope:Scope.t
+        -> Flambda.Expr.t * Upwards_acc.t
+    end
+  end
+= functor (EB : Expr_builder_intf.S) -> struct
+  type 'a after_rebuild =
+      EB.Expr.t
+    -> Upwards_acc.t
+    -> 'a
+
+  type 'a rebuild =
+      Upwards_acc.t
+    -> after_rebuild:'a after_rebuild
+    -> 'a
+
+  type ('a, 'b) down_to_up =
+      Downwards_acc.t
+    -> rebuild:'a rebuild
+    -> 'b
+
+  type 'a expr_simplifier =
+      Downwards_acc.t
+    -> 'a
+    -> down_to_up:(EB.Expr.t * Upwards_acc.t,
+        EB.Expr.t * Upwards_acc.t) down_to_up
+    -> EB.Expr.t * Upwards_acc.t
+
 (* -- module rec binding here -- *)
+end
+
+include Make_simplify (Expr_builder)
 
 type simplify_result = {
   cmx : Flambda_cmx_format.t option;

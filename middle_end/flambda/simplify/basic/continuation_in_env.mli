@@ -16,14 +16,14 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-type t =
+type 'expr t =
   | Linearly_used_and_inlinable of {
       arity : Flambda_arity.With_subkinds.t;
       (** To avoid re-opening name abstractions, we store the opened
           parameters and handler here.  This is only correct because the
           inlining we perform is linear. *)
       params : Kinded_parameter.t list;
-      handler : Flambda.Expr.t;
+      handler : 'expr;
       (** [free_names_of_handler] includes entries for any occurrences of the
           [params] in the [handler]. *)
       free_names_of_handler : Name_occurrences.t;
@@ -34,6 +34,6 @@ type t =
     }
   | Unreachable of { arity : Flambda_arity.With_subkinds.t; }
 
-val print : Format.formatter -> t -> unit
+val print : Format.formatter -> _ t -> unit
 
-val arity : t -> Flambda_arity.With_subkinds.t
+val arity : _ t -> Flambda_arity.With_subkinds.t
