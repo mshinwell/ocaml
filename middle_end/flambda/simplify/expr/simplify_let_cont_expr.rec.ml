@@ -169,13 +169,16 @@ let simplify_non_recursive_let_cont_handler ~denv_before_body ~dacc_after_body
     TE.code_age_relation (DA.typing_env dacc_after_body)
   in
   let consts_lifted_during_body = DA.get_lifted_constants dacc_after_body in
-  let uses =
-    CUE.compute_handler_env cont_uses_env cont ~params
-      (* CR mshinwell: rename this parameter, the env does not
-         have the constants in it now *)
-      ~env_at_fork_plus_params_and_consts:denv_before_body
-      ~consts_lifted_during_body
-      ~code_age_relation_after_body
+  let uses : Continuation_env_and_param_types.t =
+    match CUE.get_uses_for_cont cont_uses_env cont with
+    | None -> No_uses
+    | Some uses ->
+      Join_points.compute_handler_env uses ~params
+        (* CR mshinwell: rename this parameter, the env does not
+          have the constants in it now *)
+        ~env_at_fork_plus_params_and_consts:denv_before_body
+        ~consts_lifted_during_body
+        ~code_age_relation_after_body
   in
   let dacc =
     (* CR mshinwell: Improve function names to clarify that this

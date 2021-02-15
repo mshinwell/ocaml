@@ -19,7 +19,7 @@
 open! Simplify_import
 
 let try_cse denv prim arg1 arg2 arg3 ~min_name_mode ~result_var
-      : Simplify_common.cse =
+      : Simplify_primitive_common.cse =
   let result_kind = P.result_kind_of_ternary_primitive' prim in
   if Name_mode.is_phantom min_name_mode then
     Not_applied denv
@@ -36,7 +36,7 @@ let try_cse denv prim arg1 arg2 arg3 ~min_name_mode ~result_var
           let original_prim : P.t =
             Ternary (prim, arg1, arg2, arg3)
           in
-          Simplify_common.try_cse denv ~original_prim ~result_kind
+          Simplify_primitive_common.try_cse denv ~original_prim ~result_kind
             ~args:[arg1; arg2; arg3] ~min_name_mode ~result_var
 
 let simplify_ternary_primitive denv (prim : P.ternary_primitive)

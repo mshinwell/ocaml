@@ -72,7 +72,7 @@ let simplify_make_block_of_values denv _prim dbg tag ~shape
   end
 
 let try_cse denv ~original_prim prim args ~min_name_mode ~result_var
-      : Simplify_common.cse =
+      : Simplify_primitive_common.cse =
   let result_kind = P.result_kind_of_variadic_primitive' prim in
   if Name_mode.is_phantom min_name_mode then
     Not_applied denv
@@ -85,7 +85,7 @@ let try_cse denv ~original_prim prim args ~min_name_mode ~result_var
         | Changed -> Variadic (prim, args)
         | Unchanged -> original_prim
       in
-      Simplify_common.try_cse denv ~original_prim ~result_kind
+      Simplify_primitive_common.try_cse denv ~original_prim ~result_kind
         ~min_name_mode ~args ~result_var
 
   (* if Name_mode.is_phantom min_name_mode then
@@ -101,7 +101,7 @@ let try_cse denv ~original_prim prim args ~min_name_mode ~result_var
    *   | Ok args_with_tys ->
    *     let args, _tys = List.split args_with_tys in
    *     let original_prim : P.t = Variadic (prim, args) in
-   *     Simplify_common.try_cse denv ~original_prim ~result_kind
+   *     Simplify_primitive_common.try_cse denv ~original_prim ~result_kind
    *       ~min_name_mode ~result_var *)
 
 let simplify_variadic_primitive denv ~original_named ~original_prim

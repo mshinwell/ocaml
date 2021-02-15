@@ -22,69 +22,6 @@ module T = Flambda_type
 module TE = Flambda_type.Typing_env
 module U = One_continuation_use
 
-type t = {
-  continuation : Continuation.t;
-  arity : Flambda_arity.t;
-  uses : U.t list;
-}
-
-let create continuation arity =
-  { continuation;
-    arity;
-    uses = [];
-  }
-
-let print ppf { continuation; arity; uses; } =
-  Format.fprintf ppf "@[<hov 1>(\
-      @[<hov 1>(continuation@ %a)@]@ \
-      @[<hov 1>(arity@ %a)@]@ \
-      @[<hov 1>(uses@ %a)@]\
-      )@]"
-    Continuation.print continuation
-    Flambda_arity.print arity
-    (Format.pp_print_list ~pp_sep:Format.pp_print_space U.print) uses
-
-let add_use t kind ~env_at_use id ~arg_types =
-  try
-    let arity = T.arity_of_list arg_types in
-    if not (Flambda_arity.equal arity t.arity) then begin
-      Misc.fatal_errorf "Arity of use (%a) doesn't match continuation's \
-          arity (%a)"
-        Flambda_arity.print arity
-        Flambda_arity.print t.arity
-    end;
-    let use = U.create kind ~env_at_use id ~arg_types in
-    { t with
-      uses = use :: t.uses;
-    }
-  with Misc.Fatal_error -> begin
-    if !Clflags.flambda_context_on_error then begin
-      Format.eprintf "\n%sContext is:%s adding use of %a with \
-            arg types@ (%a);@ existing uses:@ %a; environment:@ %a"
-        (Flambda_colours.error ())
-        (Flambda_colours.normal ())
-        Continuation.print t.continuation
-        (Format.pp_print_list ~pp_sep:Format.pp_print_space T.print) arg_types
-        print t
-        DE.print env_at_use
-    end;
-    raise Misc.Fatal_error
-  end
-
-let union t1 t2 =
-  assert (Continuation.equal t1.continuation t2.continuation);
-  assert (Flambda_arity.equal t1.arity t2.arity);
-  { continuation = t1.continuation;
-    arity = t1.arity;
-    uses = t1.uses @ t2.uses;
-  }
-
-let number_of_uses t = List.length t.uses
-
-let arity t = t.arity
-
-let get_uses t = t.uses
-
 let simple_join typing_env uses ~params =
   (* This join is intended to be sufficient to match Closure + Cmmgen
      on unboxing, but not really anything more. *)
@@ -112,17 +49,12 @@ let simple_join typing_env uses ~params =
       let name = Kinded_parameter.name param in
       TE.add_equation handler_env name joined_type)
 
-let compute_handler_env t
+let compute_handler_env cont_uses
       ~env_at_fork_plus_params_and_consts
       ~consts_lifted_during_body
       ~params
       ~code_age_relation_after_body : Continuation_env_and_param_types.t =
-(*
-Format.eprintf "%d uses for %a\n%!"
-  (List.length t.uses)
-  Continuation.print t.continuation;
-*)
-  match t.uses with
+  match Continuation_uses.uses uses with
   | [] -> No_uses
   | uses ->
     let definition_scope_level =
@@ -141,12 +73,6 @@ Format.eprintf "%d uses for %a\n%!"
     in
     let use_envs_with_ids =
       List.map (fun use ->
-      (*
-          Format.eprintf "Use: parameters: %a,@ arg types: %a,@ env:@ %a\n%!"
-            Kinded_parameter.List.print params
-            (Format.pp_print_list ~pp_sep:Format.pp_print_space T.print)
-            (U.arg_types use) DE.print (U.env_at_use use);
-        *)
           let use_env =
             DE.map_typing_env (U.env_at_use use) ~f:(fun typing_env ->
               if need_to_meet_param_types then
@@ -159,15 +85,11 @@ Format.eprintf "%d uses for %a\n%!"
           use_env, U.id use, U.use_kind use)
         uses
     in
-(*
-Format.eprintf "Unknown at or later than %a\n%!"
-  Scope.print (Scope.next definition_scope_level);
-*)
     let handler_env, extra_params_and_args, is_single_inlinable_use,
         is_single_use =
       match use_envs_with_ids with
       | [use_env, _, Inlinable]
-          when not (Continuation.is_exn t.continuation) ->
+          when not (Continuation.is_exn (Continuation_uses.continuation uses) ->
         (* We need to make sure any lifted constants generated during the
            simplification of the body are in the environment.  Otherwise
            we might share a constant based on information in [DA] but then
@@ -239,13 +161,6 @@ Format.eprintf "Unknown at or later than %a\n%!"
                 ~extra_lifted_consts_in_use_envs
                 ~extra_allowed_names
             in
-(*
-Format.eprintf "handler env extension for %a is:@ %a\n%!"
-  Continuation.print t.continuation
-  T.Typing_env_extension.print env_extension;
-Format.eprintf "The extra params and args are:@ %a\n%!"
-  Continuation_extra_params_and_args.print extra_params_and_args;
-*)
             let handler_env =
               env
               |> TE.add_definitions_of_params
@@ -303,11 +218,3 @@ Format.eprintf "The extra params and args are:@ %a\n%!"
       is_single_inlinable_use;
       is_single_use;
     }
-
-let get_typing_env_no_more_than_one_use t =
-  match t.uses with
-  | [] -> None
-  | [use] -> Some (DE.typing_env (U.env_at_use use))
-  | _::_ ->
-    Misc.fatal_errorf "Only zero or one continuation use(s) expected:@ %a"
-      print t

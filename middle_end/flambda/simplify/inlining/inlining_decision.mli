@@ -33,7 +33,7 @@ module Function_declaration_decision : sig
 end
 
 val make_decision_for_function_declaration
-   : Simplify_envs.Downwards_env.t
+   : Downwards_env.t
   -> ?params_and_body:Function_params_and_body.t
   -> Function_declaration.t
   -> Function_declaration_decision.t
@@ -66,7 +66,7 @@ module Call_site_decision : sig
 end
 
 val make_decision_for_call_site
-   : Simplify_envs.Downwards_env.t
+   : Downwards_env.t
   -> function_decl_rec_info:Rec_info.t
   -> apply_inlining_state:Inlining_state.t
   -> Inline_attribute.t

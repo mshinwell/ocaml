@@ -947,7 +947,7 @@ let simplify_immutable_block_load (access_kind : P.Block_access_kind.t)
               Known Tag.double_array_tag
           | Unknown -> Unknown
       in
-      Simplify_common.simplify_projection
+      Simplify_primitive_common.simplify_projection
         denv ~original_term ~deconstructing:block_ty
         ~shape:(T.immutable_block_with_size_at_least ~tag ~n
           ~field_kind:result_kind ~field_n_minus_one:result_var')
@@ -1050,7 +1050,7 @@ let simplify_phys_equal (op : P.equality_comparison)
    name mode for CSE primitive arguments. *)
 
 let try_cse denv prim arg1 arg2 ~min_name_mode ~result_var
-      : Simplify_common.cse =
+      : Simplify_primitive_common.cse =
   let result_kind = P.result_kind_of_binary_primitive' prim in
   if Name_mode.is_phantom min_name_mode then
     Not_applied denv
@@ -1062,7 +1062,7 @@ let try_cse denv prim arg1 arg2 ~min_name_mode ~result_var
       | Bottom, _arg2_ty -> Invalid (T.bottom result_kind)
       | Ok arg2, _arg2_ty ->
         let original_prim : P.t = Binary (prim, arg1, arg2) in
-        Simplify_common.try_cse denv ~original_prim ~result_kind
+        Simplify_primitive_common.try_cse denv ~original_prim ~result_kind
           ~args:[arg1; arg2] ~min_name_mode ~result_var
 
 let simplify_binary_primitive denv (prim : P.binary_primitive)

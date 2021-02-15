@@ -18,7 +18,7 @@
 
 open! Flambda.Import
 
-module DE = Simplify_envs.Downwards_env
+module DE = Downwards_env
 
 (* CR mshinwell: We need to emit [Warnings.Inlining_impossible] as
    required.

@@ -76,3 +76,9 @@ val add_to_denv
 val add_singleton_to_denv : DE.t -> Lifted_constant.t -> DE.t
 
 val add_list_to_denv : DE.t -> Lifted_constant.t list -> DE.t
+
+(** Sort a group of lifted constants into an order suitable for binding by
+    one or more [Let_symbol] bindings.  This includes grouping together sets
+    of closures with recursion between them (c.f. the
+    [Let_symbol_expr.Bound_symbol.Sets_of_closures] constructor). *)
+val sort : t -> t

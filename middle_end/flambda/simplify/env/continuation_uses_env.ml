@@ -60,16 +60,10 @@ let get_typing_env_no_more_than_one_use t k =
   | cont_uses ->
     Continuation_uses.get_typing_env_no_more_than_one_use cont_uses
 
-let compute_handler_env t ~env_at_fork_plus_params_and_consts
-      ~consts_lifted_during_body cont
-      ~params
-      ~code_age_relation_after_body : Continuation_env_and_param_types.t =
+let get_uses_for_cont t cont =
   match Continuation.Map.find cont t.continuation_uses with
-  | exception Not_found -> No_uses
-  | uses ->
-    Continuation_uses.compute_handler_env uses ~params
-      ~env_at_fork_plus_params_and_consts ~consts_lifted_during_body
-      ~code_age_relation_after_body
+  | exception Not_found -> None
+  | uses -> Some uses
 
 let num_continuation_uses t cont =
   match Continuation.Map.find cont t.continuation_uses with

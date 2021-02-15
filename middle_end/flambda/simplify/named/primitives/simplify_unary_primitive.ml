@@ -67,7 +67,7 @@ let simplify_select_closure ~move_from ~move_to
     |> Closure_id.Map.add move_from closure
     |> Closure_id.Map.add move_to result
   in
-  Simplify_common.simplify_projection
+  Simplify_primitive_common.simplify_projection
     denv ~original_term ~deconstructing:closure_ty
     ~shape:(T.at_least_the_closures_with_ids ~this_closure:move_from closures)
     ~result_var ~result_kind:K.value
@@ -75,7 +75,7 @@ let simplify_select_closure ~move_from ~move_to
 let simplify_project_var closure_id closure_element ~min_name_mode denv
       ~original_term ~arg:_closure ~arg_ty:closure_ty ~result_var =
   let reachable, env_extension, denv =
-    Simplify_common.simplify_projection
+    Simplify_primitive_common.simplify_projection
       denv ~original_term ~deconstructing:closure_ty
       ~shape:(T.closure_with_at_least_this_closure_var
                 ~this_closure:closure_id
@@ -134,7 +134,7 @@ let simplify_unbox_number (boxable_number_kind : K.Boxable_number.t)
         K.naked_immediate
   in
   let reachable, env_extension, denv =
-    Simplify_common.simplify_projection
+    Simplify_primitive_common.simplify_projection
       denv ~original_term ~deconstructing:boxed_number_ty
       ~shape ~result_var ~result_kind
   in
@@ -143,9 +143,7 @@ let simplify_unbox_number (boxable_number_kind : K.Boxable_number.t)
       Simple.var (Var_in_binding_pos.var result_var))
   in
   let denv =
-    DE.map_denv denv ~f:(fun denv ->
-      DE.add_cse denv (P.Eligible_for_cse.create_exn box_prim)
-        ~bound_to:arg)
+    DE.add_cse denv (P.Eligible_for_cse.create_exn box_prim) ~bound_to:arg
   in
   reachable, env_extension, denv
 
@@ -185,7 +183,7 @@ let simplify_get_tag denv ~original_term ~arg:scrutinee ~arg_ty:scrutinee_ty
 let simplify_array_length denv ~original_term ~arg:_ ~arg_ty:array_ty
       ~result_var =
   let result = Simple.var (Var_in_binding_pos.var result_var) in
-  Simplify_common.simplify_projection
+  Simplify_primitive_common.simplify_projection
     denv ~original_term ~deconstructing:array_ty
     ~shape:(T.array_of_length ~length:(T.alias_type_of K.value result))
     ~result_var ~result_kind:K.value
@@ -222,7 +220,6 @@ module Unary_int_arith (I : A.Int_number_kind) = struct
   let simplify (op : P.unary_int_arith_op) denv ~original_term ~arg:_
         ~arg_ty ~result_var =
     let result = Name.var (Var_in_binding_pos.var result_var) in
-    let denv = DE.denv denv in
     let typing_env = DE.typing_env denv in
     let proof = I.unboxed_prover typing_env arg_ty in
     let result_unknown () =
@@ -272,7 +269,6 @@ module Make_simplify_int_conv (N : A.Number_kind) = struct
   let simplify ~(dst : K.Standard_int_or_float.t) denv ~original_term
         ~arg:_ ~arg_ty ~result_var =
     let result = Name.var (Var_in_binding_pos.var result_var) in
-    let denv = DE.denv denv in
     let typing_env = DE.typing_env denv in
     if K.Standard_int_or_float.equal N.kind dst then
       let env_extension = TEE.one_equation result arg_ty in
@@ -364,7 +360,6 @@ module Simplify_int_conv_naked_nativeint =
 
 let simplify_boolean_not denv ~original_term ~arg:_ ~arg_ty ~result_var =
   let result = Name.var (Var_in_binding_pos.var result_var) in
-  let denv = DE.denv denv in
   let typing_env = DE.typing_env denv in
   let proof = T.prove_equals_tagged_immediates typing_env arg_ty in
   let result_unknown () =
@@ -410,7 +405,6 @@ let simplify_float_arith_op (op : P.unary_float_arith_op) denv ~original_term
       ~arg:_ ~arg_ty ~result_var =
   let module F = Numbers.Float_by_bit_pattern in
   let result = Name.var (Var_in_binding_pos.var result_var) in
-  let denv = DE.denv denv in
   let typing_env = DE.typing_env denv in
   let proof = T.prove_naked_floats typing_env arg_ty in
   let result_unknown () =
@@ -440,7 +434,7 @@ let simplify_float_arith_op (op : P.unary_float_arith_op) denv ~original_term
   | Proved _ | Unknown -> result_unknown ()
   | Invalid -> result_invalid ()
 
-let try_cse denv prim arg ~min_name_mode ~result_var : Simplify_common.cse =
+let try_cse denv prim arg ~min_name_mode ~result_var : Simplify_primitive_common.cse =
   let result_kind = P.result_kind_of_unary_primitive' prim in
   if Name_mode.is_phantom min_name_mode then
     Not_applied denv
@@ -449,7 +443,7 @@ let try_cse denv prim arg ~min_name_mode ~result_var : Simplify_common.cse =
     | Bottom, _arg_ty -> Invalid (T.bottom result_kind)
     | Ok arg, _arg_ty ->
       let original_prim : P.t = Unary (prim, arg) in
-      Simplify_common.try_cse denv ~original_prim ~result_kind
+      Simplify_primitive_common.try_cse denv ~original_prim ~result_kind
         ~args:[arg] ~min_name_mode ~result_var
 
 let simplify_unary_primitive denv (prim : P.unary_primitive)
