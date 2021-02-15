@@ -300,7 +300,7 @@ let simplify_direct_partial_application dacc apply ~callee's_code_id
       Var_within_closure.Map.of_list applied_args_with_closure_vars
     in
     let defining_expr =
-      Lifted_constant.create_code code_id
+      LC.create_code code_id
         (Static_const_with_free_names.create (Code code) ~free_names:Unknown)
     in
     let dummy_defining_expr =
@@ -311,7 +311,7 @@ let simplify_direct_partial_application dacc apply ~callee's_code_id
          reason the constant makes it to Cmm stage, that code size is not
          increased unnecessarily. *)
       let code = Code.make_deleted code in
-      Lifted_constant.create_code code_id
+      LC.create_code code_id
         (Static_const_with_free_names.create (Code code) ~free_names:Unknown)
     in
     let dacc =

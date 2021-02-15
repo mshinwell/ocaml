@@ -77,21 +77,21 @@ val add_lifted_constants_from_list
 
 val add_lifted_constants
    : t
-  -> Simplify_envs.Lifted_constant_state.t -> t
+  -> Lifted_constant_state.t -> t
 
 val get_lifted_constants
    : t
-  -> Simplify_envs.Lifted_constant_state.t
+  -> Lifted_constant_state.t
 
 val get_and_clear_lifted_constants
    : t
-  -> t * Simplify_envs.Lifted_constant_state.t
+  -> t * Lifted_constant_state.t
 
 val clear_lifted_constants : t -> t
 
 val set_lifted_constants
    : t
-  -> Simplify_envs.Lifted_constant_state.t
+  -> Lifted_constant_state.t
   -> t
 
 val find_shareable_constant : t -> Flambda.Static_const.t -> Symbol.t option

@@ -60,8 +60,8 @@ val create_let_symbols
 val place_lifted_constants
    : Upwards_acc.t
   -> Symbol_scoping_rule.t
-  -> lifted_constants_from_defining_expr:Simplify_envs.Lifted_constant_state.t
-  -> lifted_constants_from_body:Simplify_envs.Lifted_constant_state.t
+  -> lifted_constants_from_defining_expr:Lifted_constant_state.t
+  -> lifted_constants_from_body:Lifted_constant_state.t
   -> put_bindings_around_body:
        (Upwards_acc.t -> body:Expr.t -> Expr.t * Upwards_acc.t)
   -> body:Expr.t

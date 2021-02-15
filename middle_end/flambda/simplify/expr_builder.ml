@@ -19,7 +19,7 @@
 open! Flambda.Import
 
 module LC = Simplify_envs.Lifted_constant
-module LCS = Simplify_envs.Lifted_constant_state
+module LCS = Lifted_constant_state
 module P = Flambda_primitive
 module UA = Upwards_acc
 module VB = Var_in_binding_pos

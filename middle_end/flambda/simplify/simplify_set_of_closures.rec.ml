@@ -684,7 +684,7 @@ let simplify_and_lift_set_of_closures dacc ~closure_bound_vars_inverse
           LCS.add_singleton_to_denv denv lifted_constant))
   in
   let set_of_closures_lifted_constant =
-    Lifted_constant.create_set_of_closures
+    LC.create_set_of_closures
       denv
       ~closure_symbols_with_types
       ~symbol_projections

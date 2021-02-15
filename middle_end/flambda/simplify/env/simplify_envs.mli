@@ -23,5 +23,3 @@
 
 module rec Upwards_env : Simplify_envs_intf.Upwards_env
 and Lifted_constant : Simplify_envs_intf.Lifted_constant
-and Lifted_constant_state : (Simplify_envs_intf.Lifted_constant_state
-  with type lifted_constant := Lifted_constant.t)

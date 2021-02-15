@@ -18,7 +18,7 @@
 
 module CUE = Continuation_uses_env
 module DE = Downwards_env
-module LCS = Simplify_envs.Lifted_constant_state
+module LCS = Lifted_constant_state
 module TE = Flambda_type.Typing_env
 
 module Static_const = Flambda.Static_const

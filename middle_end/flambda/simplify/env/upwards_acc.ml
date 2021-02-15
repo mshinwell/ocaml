@@ -17,7 +17,7 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module DA = Downwards_acc
-module LCS = Simplify_envs.Lifted_constant_state
+module LCS = Lifted_constant_state
 module TE = Flambda_type.Typing_env
 module UE = Simplify_envs.Upwards_env
 

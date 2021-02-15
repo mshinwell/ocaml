@@ -32,13 +32,13 @@ val code_age_relation : t -> Code_age_relation.t
 
 (** Return the lifted constants that still need to be placed (i.e. have
     [Let]-expressions made for them) on the upwards traversal. *)
-val lifted_constants : t -> Simplify_envs.Lifted_constant_state.t
+val lifted_constants : t -> Lifted_constant_state.t
 
 val add_outermost_lifted_constant : t -> Simplify_envs.Lifted_constant.t -> t
 
 (** Replace the accumulator of lifted constants returned by
     [lifted_constants]. *)
-val with_lifted_constants : t -> Simplify_envs.Lifted_constant_state.t -> t
+val with_lifted_constants : t -> Lifted_constant_state.t -> t
 
 val no_lifted_constants : t -> bool
 
