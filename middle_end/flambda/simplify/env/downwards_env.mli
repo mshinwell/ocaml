@@ -201,3 +201,10 @@ val find_cse : t -> Flambda_primitive.Eligible_for_cse.t -> Simple.t option
 val cse : t -> Common_subexpression_elimination.t
 
 val with_cse : t -> Common_subexpression_elimination.t -> t
+
+(* The following are only used for getting use information out of
+   [Simplify_unary_primitive.simplify_project_var], to avoid that file
+   depending on [DA].  The main closure var use accumulator is in [DA]. *)
+val add_use_of_closure_var : t -> Var_within_closure.t -> t
+
+val closure_var_uses : t -> Var_within_closure.Set.t

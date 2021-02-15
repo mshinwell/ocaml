@@ -69,7 +69,7 @@ end
 module Binary_arith_like (N : Binary_arith_like_sig) : sig
   val simplify
      : N.op
-    -> DA.t
+    -> DE.t
     -> original_term:Named.t
     -> Debuginfo.t
     -> arg1:Simple.t
@@ -77,7 +77,7 @@ module Binary_arith_like (N : Binary_arith_like_sig) : sig
     -> arg2:Simple.t
     -> arg2_ty:Flambda_type.t
     -> result_var:Var_in_binding_pos.t
-    -> Simplified_named.t * TEE.t * DA.t
+    -> Simplified_named.t * TEE.t * DE.t
 end = struct
   module Possible_result = struct
     type t =
@@ -110,22 +110,21 @@ end = struct
   (* CR-someday mshinwell: Add command-line flag to control this *)
   let max_num_possible_results = 10
 
-  let simplify op dacc ~original_term dbg ~arg1 ~arg1_ty ~arg2 ~arg2_ty
+  let simplify op denv ~original_term dbg ~arg1 ~arg1_ty ~arg2 ~arg2_ty
         ~result_var =
     let module PR = Possible_result in
     let result = Name.var (Var_in_binding_pos.var result_var) in
-    let denv = DA.denv dacc in
     let typing_env = DE.typing_env denv in
     let proof1 = N.prover_lhs typing_env arg1_ty in
     let proof2 = N.prover_rhs typing_env arg2_ty in
     let kind = N.result_kind in
     let result_unknown () =
       let env_extension = TEE.one_equation result (N.unknown op) in
-      Simplified_named.reachable original_term, env_extension, dacc
+      Simplified_named.reachable original_term, env_extension, denv
     in
     let result_invalid () =
       let env_extension = TEE.one_equation result (T.bottom kind) in
-      Simplified_named.invalid (), env_extension, dacc
+      Simplified_named.invalid (), env_extension, denv
     in
     let check_possible_results ~possible_results =
       if PR.Set.is_empty possible_results then
@@ -157,7 +156,7 @@ end = struct
             | None -> N.unknown op
         in
         let env_extension = TEE.one_equation result ty in
-        Simplified_named.reachable named, env_extension, dacc
+        Simplified_named.reachable named, env_extension, denv
     in
     let only_one_side_known op nums ~folder ~other_side =
       let possible_results =
@@ -878,7 +877,7 @@ module Binary_int_eq_comp_nativeint =
   Binary_arith_like (Int_ops_for_binary_eq_comp_nativeint)
 
 let simplify_immutable_block_load (access_kind : P.Block_access_kind.t)
-      dacc ~original_term _dbg
+      denv ~original_term _dbg
       ~arg1:_ ~arg1_ty:block_ty ~arg2:_ ~arg2_ty:index_ty ~result_var =
   let result_kind =
     match access_kind with
@@ -889,21 +888,21 @@ let simplify_immutable_block_load (access_kind : P.Block_access_kind.t)
   let unchanged () =
     let ty = T.unknown result_kind in
     let env_extension = TEE.one_equation (Name.var result_var') ty in
-    Simplified_named.reachable original_term, env_extension, dacc
+    Simplified_named.reachable original_term, env_extension, denv
   in
   let invalid () =
     let ty = T.bottom result_kind in
     let env_extension = TEE.one_equation (Name.var result_var') ty in
-    Simplified_named.invalid (), env_extension, dacc
+    Simplified_named.invalid (), env_extension, denv
   in
   let exactly simple =
     let env_extension =
       TEE.one_equation (Name.var result_var')
         (T.alias_type_of result_kind simple)
     in
-    Simplified_named.reachable original_term, env_extension, dacc
+    Simplified_named.reachable original_term, env_extension, denv
   in
-  let typing_env = DA.typing_env dacc in
+  let typing_env = DE.typing_env denv in
   match T.prove_equals_single_tagged_immediate typing_env index_ty with
   | Invalid -> invalid ()
   | Unknown -> unchanged ()
@@ -949,13 +948,13 @@ let simplify_immutable_block_load (access_kind : P.Block_access_kind.t)
           | Unknown -> Unknown
       in
       Simplify_common.simplify_projection
-        dacc ~original_term ~deconstructing:block_ty
+        denv ~original_term ~deconstructing:block_ty
         ~shape:(T.immutable_block_with_size_at_least ~tag ~n
           ~field_kind:result_kind ~field_n_minus_one:result_var')
         ~result_var ~result_kind
 
 let simplify_phys_equal (op : P.equality_comparison)
-      (kind : K.t) dacc ~original_term dbg
+      (kind : K.t) denv ~original_term dbg
       ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var =
   let result = Name.var (Var_in_binding_pos.var result_var) in
   let const bool =
@@ -964,7 +963,7 @@ let simplify_phys_equal (op : P.equality_comparison)
         (T.this_naked_immediate (Target_imm.bool bool))
     in
     Simplified_named.reachable (Named.create_simple (Simple.const_bool bool)),
-      env_extension, dacc
+      env_extension, denv
   in
   if Simple.equal arg1 arg2 then
     match op with
@@ -973,12 +972,12 @@ let simplify_phys_equal (op : P.equality_comparison)
   else
     begin match kind with
     | Value ->
-      let typing_env = DA.typing_env dacc in
+      let typing_env = DE.typing_env denv in
       let proof1 = T.prove_equals_tagged_immediates typing_env arg1_ty in
       let proof2 = T.prove_equals_tagged_immediates typing_env arg2_ty in
       begin match proof1, proof2 with
       | Proved _, Proved _ ->
-        Binary_int_eq_comp_tagged_immediate.simplify op dacc ~original_term dbg
+        Binary_int_eq_comp_tagged_immediate.simplify op denv ~original_term dbg
           ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
       | _, _ ->
         let physically_equal =
@@ -1007,23 +1006,23 @@ let simplify_phys_equal (op : P.equality_comparison)
             TEE.one_equation result
               (T.these_naked_immediates Target_imm.all_bools)
           in
-          Simplified_named.reachable original_term, env_extension, dacc
+          Simplified_named.reachable original_term, env_extension, denv
         end
       end
     | Naked_number Naked_immediate ->
-      let typing_env = DA.typing_env dacc in
+      let typing_env = DE.typing_env denv in
       let proof1 = T.prove_naked_immediates typing_env arg1_ty in
       let proof2 = T.prove_naked_immediates typing_env arg2_ty in
       begin match proof1, proof2 with
       | Proved _, Proved _ ->
-        Binary_int_eq_comp_naked_immediate.simplify op dacc ~original_term dbg
+        Binary_int_eq_comp_naked_immediate.simplify op denv ~original_term dbg
           ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
       | _, _ ->
         let env_extension =
           TEE.one_equation result
             (T.these_naked_immediates Target_imm.all_bools)
         in
-        Simplified_named.reachable original_term, env_extension, dacc
+        Simplified_named.reachable original_term, env_extension, denv
       end
     | Naked_number Naked_float ->
       (* CR mshinwell: Should this case be statically disallowed in the type,
@@ -1033,16 +1032,16 @@ let simplify_phys_equal (op : P.equality_comparison)
         | Eq -> Eq
         | Neq -> Neq
       in
-      Binary_float_comp.simplify (Yielding_bool op) dacc ~original_term dbg
+      Binary_float_comp.simplify (Yielding_bool op) denv ~original_term dbg
         ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
     | Naked_number Naked_int32 ->
-      Binary_int_eq_comp_int32.simplify op dacc ~original_term dbg
+      Binary_int_eq_comp_int32.simplify op denv ~original_term dbg
         ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
     | Naked_number Naked_int64 ->
-      Binary_int_eq_comp_int64.simplify op dacc ~original_term dbg
+      Binary_int_eq_comp_int64.simplify op denv ~original_term dbg
         ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
     | Naked_number Naked_nativeint ->
-      Binary_int_eq_comp_nativeint.simplify op dacc ~original_term dbg
+      Binary_int_eq_comp_nativeint.simplify op denv ~original_term dbg
         ~arg1 ~arg1_ty ~arg2 ~arg2_ty ~result_var
     | Fabricated -> Misc.fatal_error "Fabricated kind not expected here"
     end
@@ -1050,41 +1049,41 @@ let simplify_phys_equal (op : P.equality_comparison)
 (* CR mshinwell: Find example that suggested we needed to allow In_types
    name mode for CSE primitive arguments. *)
 
-let try_cse dacc prim arg1 arg2 ~min_name_mode ~result_var
+let try_cse denv prim arg1 arg2 ~min_name_mode ~result_var
       : Simplify_common.cse =
   let result_kind = P.result_kind_of_binary_primitive' prim in
   if Name_mode.is_phantom min_name_mode then
-    Not_applied dacc
+    Not_applied denv
   else
-    match S.simplify_simple dacc arg1 ~min_name_mode with
+    match S.simplify_simple denv arg1 ~min_name_mode with
     | Bottom, _arg1_ty -> Invalid (T.bottom result_kind)
     | Ok arg1, _arg1_ty ->
-      match S.simplify_simple dacc arg2 ~min_name_mode with
+      match S.simplify_simple denv arg2 ~min_name_mode with
       | Bottom, _arg2_ty -> Invalid (T.bottom result_kind)
       | Ok arg2, _arg2_ty ->
         let original_prim : P.t = Binary (prim, arg1, arg2) in
-        Simplify_common.try_cse dacc ~original_prim ~result_kind
+        Simplify_common.try_cse denv ~original_prim ~result_kind
           ~args:[arg1; arg2] ~min_name_mode ~result_var
 
-let simplify_binary_primitive dacc (prim : P.binary_primitive)
+let simplify_binary_primitive denv (prim : P.binary_primitive)
       arg1 arg2 dbg ~result_var =
   let min_name_mode = Var_in_binding_pos.name_mode result_var in
   let result_var' = Var_in_binding_pos.var result_var in
   let invalid ty =
     let env_extension = TEE.one_equation (Name.var result_var') ty in
-    Simplified_named.invalid (), env_extension, [arg1; arg2], dacc
+    Simplified_named.invalid (), env_extension, [arg1; arg2], denv
   in
   match
-    try_cse dacc prim arg1 arg2 ~min_name_mode ~result_var:result_var'
+    try_cse denv prim arg1 arg2 ~min_name_mode ~result_var:result_var'
   with
   | Invalid ty -> invalid ty
   | Applied result -> result
-  | Not_applied dacc ->
+  | Not_applied denv ->
     let result_kind = P.result_kind_of_binary_primitive' prim in
-    match S.simplify_simple dacc arg1 ~min_name_mode with
+    match S.simplify_simple denv arg1 ~min_name_mode with
     | Bottom, _arg1_ty -> invalid (T.bottom result_kind)
     | Ok arg1, arg1_ty ->
-      match S.simplify_simple dacc arg2 ~min_name_mode with
+      match S.simplify_simple denv arg2 ~min_name_mode with
       | Bottom, _arg2_ty -> invalid (T.bottom result_kind)
       | Ok arg2, arg2_ty ->
         let original_prim : P.t = Binary (prim, arg1, arg2) in
@@ -1134,15 +1133,15 @@ let simplify_binary_primitive dacc (prim : P.binary_primitive)
           | Array_load _
           | String_or_bigstring_load _
           | Bigarray_load _ ->
-            fun dacc ~original_term:_ dbg ~arg1 ~arg1_ty:_ ~arg2 ~arg2_ty:_
+            fun denv ~original_term:_ dbg ~arg1 ~arg1_ty:_ ~arg2 ~arg2_ty:_
                 ~result_var:_ ->
               let named = Named.create_prim (Binary (prim, arg1, arg2)) dbg in
               let ty = T.unknown result_kind in
               let env_extension = TEE.one_equation (Name.var result_var') ty in
-              Simplified_named.reachable named, env_extension, dacc
+              Simplified_named.reachable named, env_extension, denv
         in
-        let reachable, env_extension, dacc =
-          simplifier dacc ~original_term dbg ~arg1 ~arg1_ty ~arg2 ~arg2_ty
+        let reachable, env_extension, denv =
+          simplifier denv ~original_term dbg ~arg1 ~arg1_ty ~arg2 ~arg2_ty
             ~result_var
         in
-        reachable, env_extension, [arg1; arg2], dacc
+        reachable, env_extension, [arg1; arg2], denv

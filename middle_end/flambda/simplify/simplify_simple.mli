@@ -19,7 +19,7 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 val simplify_simple
-   : Downwards_acc.t
+   : Downwards_env.t
   -> Simple.t
   -> min_name_mode:Name_mode.t
   -> Simple.t Or_bottom.t * Flambda_type.t
@@ -29,13 +29,13 @@ type changed =
   | Changed
 
 val simplify_simples
-   : Downwards_acc.t
+   : Downwards_env.t
   -> Simple.t list
   -> min_name_mode:Name_mode.t
   -> changed * ((Simple.t * Flambda_type.t) list Or_bottom.t)
 
 val simplify_simples'
-   : Downwards_acc.t
+   : Downwards_env.t
   -> Simple.t list
   -> min_name_mode:Name_mode.t
   -> changed * (Simple.t list Or_bottom.t)

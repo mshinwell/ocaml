@@ -16,7 +16,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module DA = Downwards_acc
+module DE = Downwards_env
 module T = Flambda_type
 module TE = T.Typing_env
 
@@ -41,25 +41,25 @@ let type_for_simple' simple kind : _ Or_bottom.t * _ =
     | Bottom -> Bottom, T.bottom (T.kind ty)
     | Ok ty -> Ok simple, ty
 
-let simplify_simple dacc simple ~min_name_mode : _ Or_bottom.t * _ =
-  let typing_env = DA.typing_env dacc in
+let simplify_simple denv simple ~min_name_mode : _ Or_bottom.t * _ =
+  let typing_env = DE.typing_env denv in
   match
     TE.get_canonical_simple_with_kind_exn typing_env simple ~min_name_mode
   with
   | exception Not_found ->
     Misc.fatal_errorf "No canonical [Simple] for %a exists at the@ \
-        requested name mode (%a) or one greater.@ Downwards accumulator:@ %a"
+        requested name mode (%a) or one greater.@ Downwards env:@ %a"
       Simple.print simple
       Name_mode.print min_name_mode
-      DA.print dacc
+      DE.print denv
   | simple, kind -> type_for_simple' simple kind
 
 type changed =
   | Unchanged
   | Changed
 
-let simplify_simples dacc simples ~min_name_mode =
-  let typing_env = DA.typing_env dacc in
+let simplify_simples denv simples ~min_name_mode =
+  let typing_env = DE.typing_env denv in
   let changed = ref Unchanged in
   let result =
     Or_bottom.all (List.map (fun simple : _ Or_bottom.t ->
@@ -75,16 +75,16 @@ let simplify_simples dacc simples ~min_name_mode =
         | exception Not_found ->
           Misc.fatal_errorf "No canonical [Simple] for %a exists at the@ \
               requested name mode (%a) or one greater.@ \
-              Downwards accumulator:@ %a"
+              Downwards env:@ %a"
             Simple.print simple
             Name_mode.print min_name_mode
-            DA.print dacc)
+            DE.print denv)
       simples)
   in
   !changed, result
 
-let simplify_simples' dacc simples ~min_name_mode =
-  let typing_env = DA.typing_env dacc in
+let simplify_simples' denv simples ~min_name_mode =
+  let typing_env = DE.typing_env denv in
   let changed = ref Unchanged in
   let result =
     Or_bottom.all (List.map (fun simple : _ Or_bottom.t ->
@@ -97,10 +97,10 @@ let simplify_simples' dacc simples ~min_name_mode =
         | exception Not_found ->
           Misc.fatal_errorf "No canonical [Simple] for %a exists at the@ \
               requested name mode (%a) or one greater.@ \
-              Downwards accumulator:@ %a"
+              Downwards env:@ %a"
             Simple.print simple
             Name_mode.print min_name_mode
-            DA.print dacc)
+            DE.print denv)
       simples)
   in
   !changed, result

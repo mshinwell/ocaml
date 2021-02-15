@@ -43,6 +43,7 @@ type t = {
   symbols_currently_being_defined : Symbol.Set.t;
   variables_defined_at_toplevel : Variable.Set.t;
   cse : CSE.t;
+  closure_var_uses : Var_within_closure.Set.t;
 }
 
 let print ppf { backend = _; round; typing_env; get_imported_code = _;
@@ -51,6 +52,7 @@ let print ppf { backend = _; round; typing_env; get_imported_code = _;
                 code; at_unit_toplevel; unit_toplevel_exn_continuation;
                 symbols_currently_being_defined;
                 variables_defined_at_toplevel; cse;
+                closure_var_uses;
               } =
   Format.fprintf ppf "@[<hov 1>(\
       @[<hov 1>(round@ %d)@]@ \
@@ -64,6 +66,7 @@ let print ppf { backend = _; round; typing_env; get_imported_code = _;
       @[<hov 1>(symbols_currently_being_defined@ %a)@]@ \
       @[<hov 1>(variables_defined_at_toplevel@ %a)@]@ \
       @[<hov 1>(cse@ @[<hov 1>%a@])@]@ \
+      @[<hov 1>(closure_var_uses@ @[<hov 1>%a@])@]@ \
       @[<hov 1>(code@ %a)@]\
       )@]"
     round
@@ -77,6 +80,7 @@ let print ppf { backend = _; round; typing_env; get_imported_code = _;
     Symbol.Set.print symbols_currently_being_defined
     Variable.Set.print variables_defined_at_toplevel
     CSE.print cse
+    Var_within_closure.Set.print closure_var_uses
     (Code_id.Map.print Code.print) code
 
 let invariant _t = ()
@@ -99,6 +103,7 @@ let create ~round ~backend ~(resolver : resolver)
     symbols_currently_being_defined = Symbol.Set.empty;
     variables_defined_at_toplevel = Variable.Set.empty;
     cse = CSE.empty;
+    closure_var_uses = Var_within_closure.Set.empty;
   }
 
 let resolver t = TE.resolver t.typing_env
@@ -176,6 +181,7 @@ let enter_closure { backend; round; typing_env; get_imported_code;
                     unit_toplevel_exn_continuation;
                     symbols_currently_being_defined;
                     variables_defined_at_toplevel; cse = _;
+                    closure_var_uses = _;
                   } =
   { backend;
     round;
@@ -191,6 +197,7 @@ let enter_closure { backend; round; typing_env; get_imported_code;
     symbols_currently_being_defined;
     variables_defined_at_toplevel;
     cse = CSE.empty;
+    closure_var_uses = Var_within_closure.Set.empty;
   }
 
 let define_variable t var kind =
@@ -522,3 +529,11 @@ let find_cse t prim =
   CSE.find t.cse prim
 
 let with_cse t cse = { t with cse; }
+
+let add_use_of_closure_var t closure_var =
+  { t with
+    closure_var_uses =
+      Var_within_closure.Set.add closure_var t.closure_var_uses;
+  }
+
+let closure_var_uses t = t.closure_var_uses

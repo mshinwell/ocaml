@@ -18,15 +18,14 @@
 
 open! Simplify_import
 
-let simplify_make_block_of_values dacc _prim dbg tag ~shape
+let simplify_make_block_of_values denv _prim dbg tag ~shape
       ~(mutable_or_immutable : Mutability.t)
       args_with_tys ~result_var =
-  let denv = DA.denv dacc in
   let args, _arg_tys = List.split args_with_tys in
   let invalid () =
     let ty = T.bottom K.value in
     let env_extension = TEE.one_equation (Name.var result_var) ty in
-    Simplified_named.invalid (), env_extension, args, dacc
+    Simplified_named.invalid (), env_extension, args, denv
   in
   if List.compare_lengths shape args <> 0 then begin
     (* CR mshinwell: improve message *)
@@ -69,16 +68,16 @@ let simplify_make_block_of_values dacc _prim dbg tag ~shape
       | Mutable -> T.any_value ()
     in
     let env_extension = TEE.one_equation (Name.var result_var) ty in
-    Simplified_named.reachable term, env_extension, args, dacc
+    Simplified_named.reachable term, env_extension, args, denv
   end
 
-let try_cse dacc ~original_prim prim args ~min_name_mode ~result_var
+let try_cse denv ~original_prim prim args ~min_name_mode ~result_var
       : Simplify_common.cse =
   let result_kind = P.result_kind_of_variadic_primitive' prim in
   if Name_mode.is_phantom min_name_mode then
-    Not_applied dacc
+    Not_applied denv
   else
-    match S.simplify_simples' dacc args ~min_name_mode with
+    match S.simplify_simples' denv args ~min_name_mode with
     | _, Bottom -> Invalid (T.bottom result_kind)
     | changed, Ok args ->
       let original_prim : P.t =
@@ -86,7 +85,7 @@ let try_cse dacc ~original_prim prim args ~min_name_mode ~result_var
         | Changed -> Variadic (prim, args)
         | Unchanged -> original_prim
       in
-      Simplify_common.try_cse dacc ~original_prim ~result_kind
+      Simplify_common.try_cse denv ~original_prim ~result_kind
         ~min_name_mode ~args ~result_var
 
   (* if Name_mode.is_phantom min_name_mode then
@@ -95,38 +94,38 @@ let try_cse dacc ~original_prim prim args ~min_name_mode ~result_var
    *      Also the mode Name_mode.min_in_types is not larger than phantom,
    *      so it would cause troubles because there might be no non-phantom
    *      binding for the arguments *\)
-   *   Not_applied dacc
+   *   Not_applied denv
    * else
-   *   match S.simplify_simples dacc args ~min_name_mode:Name_mode.min_in_types with
+   *   match S.simplify_simples denv args ~min_name_mode:Name_mode.min_in_types with
    *   | Bottom -> Invalid (T.bottom result_kind)
    *   | Ok args_with_tys ->
    *     let args, _tys = List.split args_with_tys in
    *     let original_prim : P.t = Variadic (prim, args) in
-   *     Simplify_common.try_cse dacc ~original_prim ~result_kind
+   *     Simplify_common.try_cse denv ~original_prim ~result_kind
    *       ~min_name_mode ~result_var *)
 
-let simplify_variadic_primitive dacc ~original_named ~original_prim
+let simplify_variadic_primitive denv ~original_named ~original_prim
       (prim : P.variadic_primitive) args dbg ~result_var =
   let min_name_mode = Var_in_binding_pos.name_mode result_var in
   let result_var' = Var_in_binding_pos.var result_var in
   let invalid ty =
     let env_extension = TEE.one_equation (Name.var result_var') ty in
-    Simplified_named.invalid (), env_extension, args, dacc
+    Simplified_named.invalid (), env_extension, args, denv
   in
   match
-    try_cse dacc ~original_prim prim args ~min_name_mode ~result_var:result_var'
+    try_cse denv ~original_prim prim args ~min_name_mode ~result_var:result_var'
   with
   | Invalid ty -> invalid ty
   | Applied result -> result
-  | Not_applied dacc ->
-    match S.simplify_simples dacc args ~min_name_mode with
+  | Not_applied denv ->
+    match S.simplify_simples denv args ~min_name_mode with
     | _, Bottom ->
       let result_kind = P.result_kind_of_variadic_primitive' prim in
       invalid (T.bottom result_kind)
     | args_changed, Ok args_with_tys ->
       match prim with
       | Make_block (Values (tag, shape), mutable_or_immutable) ->
-        simplify_make_block_of_values dacc prim dbg tag ~shape
+        simplify_make_block_of_values denv prim dbg tag ~shape
           ~mutable_or_immutable
           args_with_tys ~result_var:result_var'
       | Make_block (Naked_floats, _) | Make_array _ ->
@@ -152,4 +151,4 @@ let simplify_variadic_primitive dacc ~original_named ~original_prim
             T.array_of_length ~length
         in
         let env_extension = TEE.one_equation (Name.var result_var') ty in
-        Simplified_named.reachable named, env_extension, args, dacc
+        Simplified_named.reachable named, env_extension, args, denv
