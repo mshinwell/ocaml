@@ -21,12 +21,12 @@ type t
 (** Print a upwards accumulator to a formatter. *)
 val print : Format.formatter -> t -> unit
 
-val create : Simplify_envs.Upwards_env.t -> Downwards_acc.t -> t
+val create : Upwards_env.t -> Downwards_acc.t -> t
 
 val creation_dacc : t -> Downwards_acc.t
 
 (** Extract the environment component of the given upwards accumulator. *)
-val uenv : t -> Simplify_envs.Upwards_env.t
+val uenv : t -> Upwards_env.t
 
 val code_age_relation : t -> Code_age_relation.t
 
@@ -34,7 +34,7 @@ val code_age_relation : t -> Code_age_relation.t
     [Let]-expressions made for them) on the upwards traversal. *)
 val lifted_constants : t -> Lifted_constant_state.t
 
-val add_outermost_lifted_constant : t -> Simplify_envs.Lifted_constant.t -> t
+val add_outermost_lifted_constant : t -> Lifted_constant.t -> t
 
 (** Replace the accumulator of lifted constants returned by
     [lifted_constants]. *)
@@ -45,12 +45,12 @@ val no_lifted_constants : t -> bool
 (** Map the environment component of the given upwards accumulator. *)
 val map_uenv
    : t
-  -> f:(Simplify_envs.Upwards_env.t
-    -> Simplify_envs.Upwards_env.t)
+  -> f:(Upwards_env.t
+    -> Upwards_env.t)
   -> t
 
 (** Replace the environment component of the given upwards accumulator. *)
-val with_uenv : t -> Simplify_envs.Upwards_env.t -> t
+val with_uenv : t -> Upwards_env.t -> t
 
 val remember_code_for_cmx : t -> Flambda.Code.t Code_id.Map.t -> t
 

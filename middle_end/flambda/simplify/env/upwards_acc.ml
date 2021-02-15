@@ -19,7 +19,7 @@
 module DA = Downwards_acc
 module LCS = Lifted_constant_state
 module TE = Flambda_type.Typing_env
-module UE = Simplify_envs.Upwards_env
+module UE = Upwards_env
 
 module Static_const = Flambda.Static_const
 

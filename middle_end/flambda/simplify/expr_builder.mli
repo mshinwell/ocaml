@@ -48,7 +48,7 @@ val create_let_symbols
    : Upwards_acc.t
   -> Symbol_scoping_rule.t
   -> Code_age_relation.t
-  -> Simplify_envs.Lifted_constant.t
+  -> Lifted_constant.t
   -> body:Expr.t
   -> Expr.t * Upwards_acc.t
 

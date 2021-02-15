@@ -17,7 +17,7 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module DE = Downwards_env
-module LC = Simplify_envs.Lifted_constant
+module LC = Lifted_constant
 
 type t
 

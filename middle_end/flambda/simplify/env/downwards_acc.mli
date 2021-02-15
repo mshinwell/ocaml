@@ -62,17 +62,17 @@ val no_lifted_constants : t -> bool
 
 val add_lifted_constant
    : t
-  -> Simplify_envs.Lifted_constant.t
+  -> Lifted_constant.t
   -> t
 
 val add_lifted_constant_also_to_env
    : t
-  -> Simplify_envs.Lifted_constant.t
+  -> Lifted_constant.t
   -> t
 
 val add_lifted_constants_from_list
    : t
-  -> Simplify_envs.Lifted_constant.t list
+  -> Lifted_constant.t list
   -> t
 
 val add_lifted_constants
