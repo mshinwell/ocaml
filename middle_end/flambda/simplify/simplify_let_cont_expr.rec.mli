@@ -16,4 +16,4 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
-val simplify_let_cont : Flambda.Let_cont.t Simplify_common.expr_simplifier
+val simplify_let_cont : Flambda.Let_cont.t expr_simplifier

@@ -67,3 +67,8 @@ val place_lifted_constants
   -> body:Expr.t
   -> critical_deps_of_bindings:Name_occurrences.t
   -> Expr.t * Upwards_acc.t
+
+val rebuild_invalid
+   : Upwards_acc.t
+  -> after_rebuild:(Expr.t -> Upwards_acc.t -> Expr.t * Upwards_acc.t)
+  -> Expr.t * Upwards_acc.t

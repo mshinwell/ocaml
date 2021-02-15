@@ -18,4 +18,4 @@
 
 open! Simplify_import
 
-val simplify_let : Let.t Simplify_common.expr_simplifier
+val simplify_let : Let.t expr_simplifier

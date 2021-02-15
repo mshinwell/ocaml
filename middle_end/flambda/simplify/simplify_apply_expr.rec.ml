@@ -379,7 +379,7 @@ let simplify_direct_function_call dacc apply ~callee's_code_id_from_type
   in
   match callee's_code_id with
   | Bottom ->
-    down_to_up dacc ~rebuild:Simplify_common.rebuild_invalid
+    down_to_up dacc ~rebuild:Expr_builder.rebuild_invalid
   | Ok callee's_code_id ->
     let call_kind =
       Call_kind.direct_function_call callee's_code_id callee's_closure_id
@@ -625,12 +625,12 @@ let simplify_function_call dacc apply ~callee_ty
         None
         ~down_to_up
     | Bottom ->
-      down_to_up dacc ~rebuild:Simplify_common.rebuild_invalid
+      down_to_up dacc ~rebuild:Expr_builder.rebuild_invalid
     | Unknown -> type_unavailable ()
     end
   | Unknown -> type_unavailable ()
   | Invalid ->
-    down_to_up dacc ~rebuild:Simplify_common.rebuild_invalid
+    down_to_up dacc ~rebuild:Expr_builder.rebuild_invalid
 
 let simplify_apply_shared dacc apply : _ Or_bottom.t =
   let min_name_mode = Name_mode.normal in
@@ -783,7 +783,7 @@ let simplify_c_call dacc apply ~callee_ty ~param_arity ~return_arity
 
 let simplify_apply dacc apply ~down_to_up =
   match simplify_apply_shared dacc apply with
-  | Bottom -> down_to_up dacc ~rebuild:Simplify_common.rebuild_invalid
+  | Bottom -> down_to_up dacc ~rebuild:Expr_builder.rebuild_invalid
   | Ok (callee_ty, apply, arg_types) ->
     match Apply.call_kind apply with
     | Function call ->

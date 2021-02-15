@@ -242,7 +242,7 @@ let simplify_switch dacc switch ~down_to_up =
   let scrutinee = Switch.scrutinee switch in
   match S.simplify_simple dacc scrutinee ~min_name_mode with
   | Bottom, _ty ->
-    down_to_up dacc ~rebuild:Simplify_common.rebuild_invalid
+    down_to_up dacc ~rebuild:Expr_builder.rebuild_invalid
   | Ok scrutinee, scrutinee_ty ->
     let arms, dacc =
       let typing_env_at_use = DA.typing_env dacc in

@@ -503,3 +503,6 @@ let place_lifted_constants uacc (scoping_rule : Symbol_scoping_rule.t)
   in
   let body, uacc = put_bindings_around_body uacc ~body in
   place_constants uacc ~around:body to_place_around_defining_expr
+
+let rebuild_invalid uacc ~after_rebuild =
+  after_rebuild (Expr.create_invalid ()) uacc
