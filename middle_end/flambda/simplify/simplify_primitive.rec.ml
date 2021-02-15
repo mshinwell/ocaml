@@ -14,19 +14,23 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Environments and result structures used during simplification. *)
-
-(* CR mshinwell: This module is a nuisance -- we should split it across
-   files. *)
-
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module rec Downwards_env : (Simplify_envs_intf.Downwards_env
-  with type lifted_constant := Lifted_constant.t
-  with type lifted_constant_state := Lifted_constant_state.t)
-and Upwards_env : (Simplify_envs_intf.Upwards_env
-  with type downwards_env := Downwards_env.t)
-and Lifted_constant : (Simplify_envs_intf.Lifted_constant
-  with type downwards_env := Downwards_env.t)
-and Lifted_constant_state : (Simplify_envs_intf.Lifted_constant_state
-  with type lifted_constant := Lifted_constant.t)
+open! Simplify_import
+
+let simplify_primitive denv ~original_named (prim : P.t) dbg ~result_var =
+(*Format.eprintf "Simplifying primitive:@ %a\n%!" P.print prim;*)
+  match prim with
+  | Unary (prim, arg) ->
+    Simplify_unary_primitive.simplify_unary_primitive denv
+      prim arg dbg ~result_var
+  | Binary (prim, arg1, arg2) ->
+    Simplify_binary_primitive.simplify_binary_primitive denv
+      prim arg1 arg2 dbg ~result_var
+  | Ternary (prim, arg1, arg2, arg3) ->
+    Simplify_ternary_primitive.simplify_ternary_primitive denv
+      prim arg1 arg2 arg3 dbg ~result_var
+  | Variadic (variadic_prim, args) ->
+    Simplify_variadic_primitive.simplify_variadic_primitive denv
+      ~original_named ~original_prim:prim variadic_prim
+      args dbg ~result_var

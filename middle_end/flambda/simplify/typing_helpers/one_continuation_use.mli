@@ -16,7 +16,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module DE = Simplify_envs.Downwards_env
+module DE = Downwards_env
 module T = Flambda_type
 
 type t

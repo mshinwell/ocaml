@@ -3,6 +3,11 @@
   (deps
     rec_modules
     template/simplify.templ.ml
+    env/downwards_acc.rec.ml
+    env/lifted_constant.rec.ml
+    env/lifted_constant_state.rec.ml
+    env/upwards_acc.rec.ml
+    env/upwards_env.rec.ml
     simplify_apply_expr.rec.ml
     simplify_apply_cont_expr.rec.ml
     simplify_expr.rec.ml
@@ -13,6 +18,11 @@
     simplify_static_const.rec.ml
     simplify_switch_expr.rec.ml
     simplify_toplevel.rec.ml
+    env/downwards_acc.rec.mli
+    env/lifted_constant.rec.mli
+    env/lifted_constant_state.rec.mli
+    env/upwards_acc.rec.mli
+    env/upwards_env.rec.mli
     simplify_apply_expr.rec.mli
     simplify_apply_cont_expr.rec.mli
     simplify_expr.rec.mli

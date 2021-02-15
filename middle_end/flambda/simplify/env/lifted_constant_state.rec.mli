@@ -16,21 +16,63 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-open! Simplify_import
+open! Flambda.Import
 
-let simplify_primitive dacc ~original_named (prim : P.t) dbg ~result_var =
-(*Format.eprintf "Simplifying primitive:@ %a\n%!" P.print prim;*)
-  match prim with
-  | Unary (prim, arg) ->
-    Simplify_unary_primitive.simplify_unary_primitive dacc
-      prim arg dbg ~result_var
-  | Binary (prim, arg1, arg2) ->
-    Simplify_binary_primitive.simplify_binary_primitive dacc
-      prim arg1 arg2 dbg ~result_var
-  | Ternary (prim, arg1, arg2, arg3) ->
-    Simplify_ternary_primitive.simplify_ternary_primitive dacc
-      prim arg1 arg2 arg3 dbg ~result_var
-  | Variadic (variadic_prim, args) ->
-    Simplify_variadic_primitive.simplify_variadic_primitive dacc
-      ~original_named ~original_prim:prim variadic_prim
-      args dbg ~result_var
+module DE = Downwards_env
+
+type t
+
+val empty : t
+
+val is_empty : t -> bool
+
+val print : Format.formatter -> t -> unit
+
+val singleton : Lifted_constant.t -> t
+
+(* Use if the order of constants doesn't matter. *)
+val add : t -> Lifted_constant.t -> t
+
+val add_innermost : t -> Lifted_constant.t -> t
+
+val add_outermost : t -> Lifted_constant.t -> t
+
+val singleton_sorted_array_of_constants
+   : innermost_first:Lifted_constant.t array
+   -> t
+
+(* Use if the order of constants doesn't matter. *)
+val union : t -> t -> t
+
+val union_ordered : innermost:t -> outermost:t -> t
+
+(* Use if the order of constants doesn't matter. *)
+val fold
+   : t
+  -> init:'a
+  -> f:('a -> Lifted_constant.t -> 'a)
+  -> 'a
+
+val fold_outermost_first
+   : t
+  -> init:'a
+  -> f:('a -> Lifted_constant.t -> 'a)
+  -> 'a
+
+val fold_innermost_first
+   : t
+  -> init:'a
+  -> f:('a -> Lifted_constant.t -> 'a)
+  -> 'a
+
+val all_defined_symbols : t -> Symbol.Set.t
+
+val add_to_denv
+   : ?maybe_already_defined:unit
+  -> DE.t
+  -> t
+  -> DE.t
+
+val add_singleton_to_denv : DE.t -> Lifted_constant.t -> DE.t
+
+val add_list_to_denv : DE.t -> Lifted_constant.t list -> DE.t

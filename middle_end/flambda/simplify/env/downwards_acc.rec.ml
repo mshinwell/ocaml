@@ -17,8 +17,8 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module CUE = Continuation_uses_env
-module DE = Simplify_envs.Downwards_env
-module LCS = Simplify_envs.Lifted_constant_state
+module DE = Downwards_env
+module LCS = Lifted_constant_state
 module TE = Flambda_type.Typing_env
 
 module Static_const = Flambda.Static_const

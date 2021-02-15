@@ -19,7 +19,7 @@
 type t =
   | No_uses
   | Uses of {
-      handler_env : Simplify_envs.Downwards_env.t;
+      handler_env : Downwards_env.t;
       arg_types_by_use_id :
         (Flambda_type.Typing_env.t * Flambda_type.t)
           Apply_cont_rewrite_id.Map.t list;

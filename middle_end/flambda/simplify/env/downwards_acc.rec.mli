@@ -23,22 +23,22 @@ val print : Format.formatter -> t -> unit
 
 (** Create a downwards accumulator. *)
 val create
-   : Simplify_envs.Downwards_env.t
+   : Downwards_env.t
   -> Continuation_uses_env.t
   -> t
 
 (** Extract the environment component of the given downwards accumulator. *)
-val denv : t -> Simplify_envs.Downwards_env.t
+val denv : t -> Downwards_env.t
 
 (** Map the environment component of the given downwards accumulator. *)
 val map_denv
    : t
-  -> f:(Simplify_envs.Downwards_env.t
-    -> Simplify_envs.Downwards_env.t)
+  -> f:(Downwards_env.t
+    -> Downwards_env.t)
   -> t
 
 (** Replace the environment component of the given downwards accumulator. *)
-val with_denv : t -> Simplify_envs.Downwards_env.t -> t
+val with_denv : t -> Downwards_env.t -> t
 
 (* CR mshinwell: Why do these take scope arguments when [DE] knows the
    current scope level? *)
@@ -62,36 +62,36 @@ val no_lifted_constants : t -> bool
 
 val add_lifted_constant
    : t
-  -> Simplify_envs.Lifted_constant.t
+  -> Lifted_constant.t
   -> t
 
 val add_lifted_constant_also_to_env
    : t
-  -> Simplify_envs.Lifted_constant.t
+  -> Lifted_constant.t
   -> t
 
 val add_lifted_constants_from_list
    : t
-  -> Simplify_envs.Lifted_constant.t list
+  -> Lifted_constant.t list
   -> t
 
 val add_lifted_constants
    : t
-  -> Simplify_envs.Lifted_constant_state.t -> t
+  -> Lifted_constant_state.t -> t
 
 val get_lifted_constants
    : t
-  -> Simplify_envs.Lifted_constant_state.t
+  -> Lifted_constant_state.t
 
 val get_and_clear_lifted_constants
    : t
-  -> t * Simplify_envs.Lifted_constant_state.t
+  -> t * Lifted_constant_state.t
 
 val clear_lifted_constants : t -> t
 
 val set_lifted_constants
    : t
-  -> Simplify_envs.Lifted_constant_state.t
+  -> Lifted_constant_state.t
   -> t
 
 val find_shareable_constant : t -> Flambda.Static_const.t -> Symbol.t option
