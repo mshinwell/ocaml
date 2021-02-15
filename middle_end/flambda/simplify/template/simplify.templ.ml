@@ -20,6 +20,28 @@
 
 open! Simplify_import
 
+type 'a after_rebuild =
+     Flambda.Expr.t
+  -> Upwards_acc.t
+  -> 'a
+
+type 'a rebuild =
+     Upwards_acc.t
+  -> after_rebuild:'a after_rebuild
+  -> 'a
+
+type ('a, 'b) down_to_up =
+     Downwards_acc.t
+  -> rebuild:'a rebuild
+  -> 'b
+
+type 'a expr_simplifier =
+     Downwards_acc.t
+  -> 'a
+  -> down_to_up:(Flambda.Expr.t * Upwards_acc.t,
+       Flambda.Expr.t * Upwards_acc.t) down_to_up
+  -> Flambda.Expr.t * Upwards_acc.t
+
 (* -- module rec binding here -- *)
 
 type simplify_result = {

@@ -115,7 +115,7 @@ let simplify_apply_cont dacc apply_cont ~down_to_up =
   let min_name_mode = Name_mode.normal in
   match S.simplify_simples dacc (AC.args apply_cont) ~min_name_mode with
   | _, Bottom ->
-    down_to_up dacc ~rebuild:Simplify_common.rebuild_invalid
+    down_to_up dacc ~rebuild:Expr_builder.rebuild_invalid
   | _changed, Ok args_with_types ->
     let args, arg_types = List.split args_with_types in
     let use_kind : Continuation_use_kind.t =
