@@ -18,583 +18,12 @@
 
 open! Flambda.Import
 
-module CSE = Common_subexpression_elimination
+module DE = Downwards_env
 module I = Simplify_envs_intf
-module K = Flambda_kind
-module KP = Kinded_parameter
 module T = Flambda_type
 module TE = Flambda_type.Typing_env
 
-type resolver = Compilation_unit.t -> Flambda_type.Typing_env.t option
-type get_imported_names = unit -> Name.Set.t
-type get_imported_code = unit -> Exported_code.t
-
-module rec Downwards_env : sig
-  include I.Downwards_env
-    with type lifted_constant := Lifted_constant.t
-    with type lifted_constant_state := Lifted_constant_state.t
-end = struct
-  type t = {
-    backend : (module Flambda_backend_intf.S);
-    round : int;
-    typing_env : TE.t;
-    get_imported_code : (unit -> Exported_code.t);
-    inlined_debuginfo : Debuginfo.t;
-    can_inline : bool;
-    inlining_state : Inlining_state.t;
-    float_const_prop : bool;
-    code : Code.t Code_id.Map.t;
-    at_unit_toplevel : bool;
-    unit_toplevel_exn_continuation : Continuation.t;
-    symbols_currently_being_defined : Symbol.Set.t;
-    variables_defined_at_toplevel : Variable.Set.t;
-    cse : CSE.t;
-  }
-
-  let print ppf { backend = _; round; typing_env; get_imported_code = _;
-                  inlined_debuginfo; can_inline;
-                  inlining_state; float_const_prop;
-                  code; at_unit_toplevel; unit_toplevel_exn_continuation;
-                  symbols_currently_being_defined;
-                  variables_defined_at_toplevel; cse;
-                } =
-    Format.fprintf ppf "@[<hov 1>(\
-        @[<hov 1>(round@ %d)@]@ \
-        @[<hov 1>(typing_env@ %a)@]@ \
-        @[<hov 1>(inlined_debuginfo@ %a)@]@ \
-        @[<hov 1>(can_inline@ %b)@]@ \
-        @[<hov 1>(inlining_state@ %a)@]@ \
-        @[<hov 1>(float_const_prop@ %b)@]@ \
-        @[<hov 1>(at_unit_toplevel@ %b)@]@ \
-        @[<hov 1>(unit_toplevel_exn_continuation@ %a)@]@ \
-        @[<hov 1>(symbols_currently_being_defined@ %a)@]@ \
-        @[<hov 1>(variables_defined_at_toplevel@ %a)@]@ \
-        @[<hov 1>(cse@ @[<hov 1>%a@])@]@ \
-        @[<hov 1>(code@ %a)@]\
-        )@]"
-      round
-      TE.print typing_env
-      Debuginfo.print inlined_debuginfo
-      can_inline
-      Inlining_state.print inlining_state
-      float_const_prop
-      at_unit_toplevel
-      Continuation.print unit_toplevel_exn_continuation
-      Symbol.Set.print symbols_currently_being_defined
-      Variable.Set.print variables_defined_at_toplevel
-      CSE.print cse
-      (Code_id.Map.print Code.print) code
-
-  let invariant _t = ()
-
-  let create ~round ~backend ~(resolver : resolver)
-        ~(get_imported_names : get_imported_names)
-        ~(get_imported_code : get_imported_code)
-        ~float_const_prop ~unit_toplevel_exn_continuation =
-    { backend;
-      round;
-      typing_env = TE.create ~resolver ~get_imported_names;
-      get_imported_code;
-      inlined_debuginfo = Debuginfo.none;
-      can_inline = true;
-      inlining_state = Inlining_state.default;
-      float_const_prop;
-      code = Code_id.Map.empty;
-      at_unit_toplevel = true;
-      unit_toplevel_exn_continuation;
-      symbols_currently_being_defined = Symbol.Set.empty;
-      variables_defined_at_toplevel = Variable.Set.empty;
-      cse = CSE.empty;
-    }
-
-  let resolver t = TE.resolver t.typing_env
-  let backend t = t.backend
-  let typing_env t = t.typing_env
-  let round t = t.round
-  let get_continuation_scope_level t = TE.current_scope t.typing_env
-  let can_inline t = t.can_inline
-  let float_const_prop t = t.float_const_prop
-
-  let unit_toplevel_exn_continuation t = t.unit_toplevel_exn_continuation
-
-  let at_unit_toplevel t = t.at_unit_toplevel
-
-  let set_not_at_unit_toplevel t =
-    { t with at_unit_toplevel = false; }
-
-  let set_at_unit_toplevel_state t at_unit_toplevel =
-    { t with at_unit_toplevel; }
-
-  let is_defined_at_toplevel t var =
-    Variable.Set.mem var t.variables_defined_at_toplevel
-
-  let get_inlining_state t = t.inlining_state
-
-  let set_inlining_state t inlining_state =
-    { t with inlining_state; }
-
-  (* CR mshinwell: remove "_level" *)
-  let increment_continuation_scope_level t =
-    { t with
-      typing_env = TE.increment_scope t.typing_env;
-    }
-
-  let increment_continuation_scope_level_twice t =
-    increment_continuation_scope_level
-      (increment_continuation_scope_level t)
-
-  let now_defining_symbol t symbol =
-    if Symbol.Set.mem symbol t.symbols_currently_being_defined then begin
-      Misc.fatal_errorf "Already defining symbol %a:@ %a"
-        Symbol.print symbol
-        print t
-    end;
-    let symbols_currently_being_defined =
-      Symbol.Set.add symbol t.symbols_currently_being_defined
-    in
-    { t with
-      symbols_currently_being_defined;
-    }
-
-  let no_longer_defining_symbol t symbol =
-    if not (Symbol.Set.mem symbol t.symbols_currently_being_defined) then begin
-      Misc.fatal_errorf "Not currently defining symbol %a:@ %a"
-        Symbol.print symbol
-        print t
-    end;
-    let symbols_currently_being_defined =
-      Symbol.Set.remove symbol t.symbols_currently_being_defined
-    in
-    { t with
-      symbols_currently_being_defined;
-    }
-
-  let symbol_is_currently_being_defined t symbol =
-    Symbol.Set.mem symbol t.symbols_currently_being_defined
-
-  let symbols_currently_being_defined t =
-    t.symbols_currently_being_defined
-
-  let enter_closure { backend; round; typing_env; get_imported_code;
-                      inlined_debuginfo = _; can_inline;
-                      inlining_state;
-                      float_const_prop; code; at_unit_toplevel = _;
-                      unit_toplevel_exn_continuation;
-                      symbols_currently_being_defined;
-                      variables_defined_at_toplevel; cse = _;
-                    } =
-    { backend;
-      round;
-      typing_env = TE.closure_env typing_env;
-      get_imported_code;
-      inlined_debuginfo = Debuginfo.none;
-      can_inline;
-      inlining_state;
-      float_const_prop;
-      code;
-      at_unit_toplevel = false;
-      unit_toplevel_exn_continuation;
-      symbols_currently_being_defined;
-      variables_defined_at_toplevel;
-      cse = CSE.empty;
-    }
-
-  let define_variable t var kind =
-    let typing_env =
-      let var = Name_in_binding_pos.var var in
-      TE.add_definition t.typing_env var kind
-    in
-    let variables_defined_at_toplevel =
-      if t.at_unit_toplevel then
-        Variable.Set.add (Var_in_binding_pos.var var)
-          t.variables_defined_at_toplevel
-      else
-        t.variables_defined_at_toplevel
-    in
-    { t with
-      typing_env;
-      variables_defined_at_toplevel;
-    }
-
-  let add_name t name ty =
-    let typing_env =
-      TE.add_equation
-        (TE.add_definition t.typing_env name (T.kind ty))
-        (Name_in_binding_pos.name name) ty
-    in
-    let variables_defined_at_toplevel =
-      Name.pattern_match (Name_in_binding_pos.name name)
-        ~var:(fun var ->
-          if t.at_unit_toplevel then
-            Variable.Set.add var t.variables_defined_at_toplevel
-          else
-            t.variables_defined_at_toplevel)
-        ~symbol:(fun _ -> t.variables_defined_at_toplevel)
-    in
-    { t with
-      typing_env;
-      variables_defined_at_toplevel;
-    }
-
-  let add_variable0 t var ty ~at_unit_toplevel =
-    let typing_env =
-      let var' = Name_in_binding_pos.var var in
-      TE.add_equation
-        (TE.add_definition t.typing_env var' (T.kind ty))
-        (Name.var (Var_in_binding_pos.var var)) ty
-    in
-    let variables_defined_at_toplevel =
-      if at_unit_toplevel then
-        Variable.Set.add (Var_in_binding_pos.var var)
-          t.variables_defined_at_toplevel
-      else
-        t.variables_defined_at_toplevel
-    in
-    { t with
-      typing_env;
-      variables_defined_at_toplevel;
-    }
-
-  let add_variable t var ty =
-    add_variable0 t var ty ~at_unit_toplevel:t.at_unit_toplevel
-
-  let add_equation_on_variable t var ty =
-    let typing_env = TE.add_equation t.typing_env (Name.var var) ty in
-    { t with typing_env; }
-
-  let mem_name t name = TE.mem t.typing_env name
-
-  let find_name t name =
-    match TE.find t.typing_env name None with
-    | exception Not_found ->
-      Misc.fatal_errorf "Unbound name %a in environment:@ %a"
-        Name.print name
-        print t
-    | ty -> ty
-
-  let find_variable t var = find_name t (Name.var var)
-
-  let mem_variable t var = TE.mem t.typing_env (Name.var var)
-
-  let define_symbol t sym kind =
-    let typing_env =
-      let sym =
-        Name_in_binding_pos.create (Name.symbol sym)
-          Name_mode.normal
-      in
-      TE.add_definition t.typing_env sym kind
-    in
-    { t with typing_env; }
-
-  let define_symbol_if_undefined t sym kind =
-    if TE.mem t.typing_env (Name.symbol sym) then t
-    else define_symbol t sym kind
-
-  let add_symbol t sym ty =
-    let typing_env =
-      let sym = Name.symbol sym in
-      let sym' = Name_in_binding_pos.create sym Name_mode.normal in
-      TE.add_equation
-        (TE.add_definition t.typing_env sym' (T.kind ty))
-        sym ty
-    in
-    { t with typing_env; }
-
-  let add_equation_on_symbol t sym ty =
-    let typing_env =
-      let sym = Name.symbol sym in
-      TE.add_equation t.typing_env sym ty
-    in
-    { t with typing_env; }
-
-  let mem_symbol t sym = mem_name t (Name.symbol sym)
-
-  let find_symbol t sym = find_name t (Name.symbol sym)
-
-  let add_symbol_projection t var proj =
-    { t with
-      typing_env = TE.add_symbol_projection t.typing_env var proj;
-    }
-
-  let find_symbol_projection t var =
-    TE.find_symbol_projection t.typing_env var
-
-  let define_name t name kind =
-    let typing_env =
-      TE.add_definition t.typing_env name kind
-    in
-    let variables_defined_at_toplevel =
-      Name.pattern_match (Name_in_binding_pos.name name)
-        ~var:(fun var ->
-          if t.at_unit_toplevel then
-            Variable.Set.add var t.variables_defined_at_toplevel
-          else
-            t.variables_defined_at_toplevel)
-        ~symbol:(fun _ -> t.variables_defined_at_toplevel)
-    in
-    { t with
-      typing_env;
-      variables_defined_at_toplevel;
-    }
-
-  let define_name_if_undefined t name kind =
-    if TE.mem t.typing_env (Name_in_binding_pos.to_name name) then t
-    else define_name t name kind
-
-  let add_equation_on_name t name ty =
-    let typing_env = TE.add_equation t.typing_env name ty in
-    { t with typing_env; }
-
-(*
-  let add_symbol_if_not_defined t sym ty =
-    let name = Name.symbol sym in
-    if TE.mem t.typing_env name then t
-    else add_symbol t sym ty
-*)
-
-  let define_parameters t ~params =
-    List.fold_left (fun t param ->
-        let var =
-          Var_in_binding_pos.create (KP.var param) Name_mode.normal
-        in
-        define_variable t var (K.With_subkind.kind (KP.kind param)))
-      t
-      params
-
-  let define_parameters_as_bottom t ~params =
-    List.fold_left (fun t param ->
-        let var =
-          Var_in_binding_pos.create (KP.var param) Name_mode.normal
-        in
-        let kind = K.With_subkind.kind (KP.kind param) in
-        let t = define_variable t var kind in
-        add_equation_on_variable t (KP.var param) (T.bottom kind))
-      t
-      params
-
-  let add_parameters ?at_unit_toplevel t params ~param_types =
-    if List.compare_lengths params param_types <> 0 then begin
-      Misc.fatal_errorf "Mismatch between number of [params] and \
-          [param_types]:@ (%a)@ and@ %a"
-        Kinded_parameter.List.print params
-        (Format.pp_print_list ~pp_sep:Format.pp_print_space T.print) param_types
-    end;
-    let at_unit_toplevel =
-      Option.value at_unit_toplevel ~default:t.at_unit_toplevel
-    in
-    List.fold_left2 (fun t param param_type ->
-        let var =
-          Var_in_binding_pos.create (KP.var param) Name_mode.normal
-        in
-        add_variable0 t var param_type ~at_unit_toplevel)
-      t
-      params param_types
-
-  let add_parameters_with_unknown_types' ?at_unit_toplevel t params =
-    let param_types =
-      ListLabels.map params ~f:(fun param ->
-        T.unknown_with_subkind (KP.kind param))
-    in
-    add_parameters ?at_unit_toplevel t params ~param_types, param_types
-
-  let add_parameters_with_unknown_types ?at_unit_toplevel t params =
-    fst (add_parameters_with_unknown_types' ?at_unit_toplevel t params)
-
-  let mark_parameters_as_toplevel t params =
-    let variables_defined_at_toplevel =
-      Variable.Set.union t.variables_defined_at_toplevel
-        (KP.List.var_set params)
-    in
-    { t with variables_defined_at_toplevel; }
-
-  let extend_typing_environment t env_extension =
-    let typing_env = TE.add_env_extension t.typing_env env_extension in
-    { t with
-      typing_env;
-    }
-
-  let with_typing_env t typing_env =
-    { t with
-      typing_env;
-    }
-
-  let map_typing_env t ~f = with_typing_env t (f t.typing_env)
-
-  let check_variable_is_bound t var =
-    if not (TE.mem t.typing_env (Name.var var)) then begin
-      Misc.fatal_errorf "Unbound variable %a in environment:@ %a"
-        Variable.print var
-        print t
-    end
-
-  let check_symbol_is_bound t sym =
-    if not (TE.mem t.typing_env (Name.symbol sym)) then begin
-      Misc.fatal_errorf "Unbound symbol %a in environment:@ %a"
-        Symbol.print sym
-        print t
-    end
-
-  let check_name_is_bound t name =
-    if not (TE.mem t.typing_env name) then begin
-      Misc.fatal_errorf "Unbound name %a in environment:@ %a"
-        Name.print name
-        print t
-    end
-
-  let check_simple_is_bound t (simple : Simple.t) =
-    Simple.pattern_match simple
-      ~name:(fun name -> check_name_is_bound t name)
-      ~const:(fun _ -> ())
-
-  let mem_code t code_id =
-    Code_id.Map.mem code_id t.code
-      || Exported_code.mem code_id (t.get_imported_code ())
-
-  let check_code_id_is_bound t code_id =
-    if (not (Code_id.Map.mem code_id t.code))
-      && (not (Exported_code.mem code_id (t.get_imported_code ())))
-    then begin
-      Misc.fatal_errorf "Unbound code ID %a in environment:@ %a"
-        Code_id.print code_id
-        print t
-    end
-
-  let define_code t ~code_id ~code =
-    if not (Code_id.in_compilation_unit code_id
-      (Compilation_unit.get_current_exn ()))
-    then begin
-      Misc.fatal_errorf "Cannot define code ID %a as it is from another unit:\
-          @ %a"
-        Code_id.print code_id
-        Code.print code
-    end;
-    if Code_id.Map.mem code_id t.code then begin
-      Misc.fatal_errorf "Code ID %a is already defined, cannot redefine to@ %a"
-        Code_id.print code_id
-        Code.print code
-    end;
-    if not (Code_id.equal code_id (Code.code_id code)) then begin
-      Misc.fatal_errorf "Code ID %a does not match code ID in@ %a"
-        Code_id.print code_id
-        Code.print code
-    end;
-    let typing_env =
-      match Code.newer_version_of code with
-      | None -> t.typing_env
-      | Some older ->
-        TE.add_to_code_age_relation t.typing_env ~newer:code_id ~older
-    in
-    { t with
-      typing_env;
-      code = Code_id.Map.add code_id code t.code;
-    }
-
-  let find_code t id =
-    match Code_id.Map.find id t.code with
-    | exception Not_found -> Exported_code.find_code (t.get_imported_code ()) id
-    | code -> code
-
-  let with_code ~from t =
-    { t with
-      code = from.code;
-    }
-
-  let add_lifted_constants ?maybe_already_defined t lifted =
-    let module LC = Lifted_constant in
-    let module LCS = Lifted_constant_state in
-    let maybe_already_defined =
-      match maybe_already_defined with
-      | None -> false
-      | Some () -> true
-    in
-    let t =
-      LCS.fold lifted ~init:t ~f:(fun t lifted_constant ->
-        let types_of_symbols = LC.types_of_symbols lifted_constant in
-        Symbol.Map.fold (fun sym (_denv, typ) t ->
-            if maybe_already_defined && mem_symbol t sym then t
-            else define_symbol t sym (T.kind typ))
-          types_of_symbols
-          t)
-    in
-    let typing_env =
-      LCS.fold lifted ~init:t.typing_env ~f:(fun typing_env lifted_constant ->
-        let types_of_symbols = LC.types_of_symbols lifted_constant in
-        Symbol.Map.fold (fun sym (denv_at_definition, typ) typing_env ->
-            if maybe_already_defined && mem_symbol t sym then typing_env
-            else
-              let sym = Name.symbol sym in
-              let env_extension =
-                (* CR mshinwell: Sometimes we might already have the types
-                  "made suitable" in the [closure_env] field of the typing
-                  environment, perhaps?  For example when lifted constants'
-                  types are coming out of a closure into the enclosing
-                  scope. *)
-                T.make_suitable_for_environment typ
-                  denv_at_definition.typing_env
-                  ~suitable_for:typing_env
-                  ~bind_to:sym
-              in
-              TE.add_env_extension_with_extra_variables typing_env
-                env_extension)
-          types_of_symbols
-          typing_env)
-    in
-    LCS.fold lifted ~init:(with_typing_env t typing_env)
-      ~f:(fun t lifted_constant ->
-        let pieces_of_code =
-          LC.defining_exprs lifted_constant
-          |> Static_const_with_free_names.Group.pieces_of_code
-        in
-        Code_id.Map.fold (fun code_id code t ->
-            match Code.params_and_body code with
-            | Present _ ->
-              if maybe_already_defined && mem_code t code_id then t
-              else define_code t ~code_id ~code
-            | Deleted -> t)
-          pieces_of_code
-          t)
-
-  let add_lifted_constant t const =
-    add_lifted_constants t (Lifted_constant_state.singleton const)
-
-  let add_lifted_constants_from_list t consts =
-    ListLabels.fold_left consts ~init:t ~f:add_lifted_constant
-
-  let set_inlined_debuginfo t dbg =
-    { t with inlined_debuginfo = dbg; }
-
-  let get_inlined_debuginfo t = t.inlined_debuginfo
-
-  let add_inlined_debuginfo' t dbg =
-    Debuginfo.inline t.inlined_debuginfo dbg
-
-  let add_inlined_debuginfo t dbg =
-    if List.length dbg > 100 || List.length t.inlined_debuginfo > 100 then
-      Misc.fatal_errorf "STOP@ %a\n%!" print t;
-    { t with
-      inlined_debuginfo = add_inlined_debuginfo' t dbg
-    }
-
-  let disable_function_inlining t =
-    { t with
-      can_inline = false;
-    }
-
-  let cse t = t.cse
-
-  let add_cse t prim ~bound_to =
-    let scope = get_continuation_scope_level t in
-    let cse = CSE.add t.cse prim ~bound_to scope in
-    { t with cse; }
-
-  let find_cse t prim =
-    CSE.find t.cse prim
-
-  let with_cse t cse = { t with cse; }
-end and Upwards_env : sig
-  include I.Upwards_env
-    with type downwards_env := Downwards_env.t
-end = struct
+module rec Upwards_env : I.Upwards_env = struct
   type t = {
     continuations : (Scope.t * Continuation_in_env.t) Continuation.Map.t;
     exn_continuations : Scope.t Exn_continuation.Map.t;
@@ -783,10 +212,7 @@ end = struct
     match find_continuation t cont with
     | Other _ | Unreachable _ -> false
     | Linearly_used_and_inlinable _ -> true
-end and Lifted_constant : sig
-  include I.Lifted_constant
-    with type downwards_env := Downwards_env.t
-end = struct
+end and Lifted_constant : I.Lifted_constant = struct
   module Definition = struct
     type descr =
       | Code of Code_id.t
@@ -1222,4 +648,68 @@ end = struct
     fold t ~init:Symbol.Set.empty ~f:(fun symbols const ->
       Lifted_constant.all_defined_symbols const
       |> Symbol.Set.union symbols)
+
+  let add_to_denv ?maybe_already_defined denv lifted =
+    let maybe_already_defined =
+      match maybe_already_defined with
+      | None -> false
+      | Some () -> true
+    in
+    let denv =
+      fold lifted ~init:denv ~f:(fun denv lifted_constant ->
+        let types_of_symbols =
+          Lifted_constant.types_of_symbols lifted_constant
+        in
+        Symbol.Map.fold (fun sym (_denv, typ) denv ->
+            if maybe_already_defined && DE.mem_symbol denv sym then denv
+            else DE.define_symbol denv sym (T.kind typ))
+          types_of_symbols
+          denv)
+    in
+    let typing_env =
+      let typing_env = DE.typing_env denv in
+      fold lifted ~init:typing_env ~f:(fun typing_env lifted_constant ->
+        let types_of_symbols =
+          Lifted_constant.types_of_symbols lifted_constant
+        in
+        Symbol.Map.fold (fun sym (denv_at_definition, typ) typing_env ->
+            if maybe_already_defined && DE.mem_symbol denv sym then typing_env
+            else
+              let sym = Name.symbol sym in
+              let env_extension =
+                (* CR mshinwell: Sometimes we might already have the types
+                   "made suitable" in the [closure_env] field of the typing
+                   environment, perhaps?  For example when lifted constants'
+                   types are coming out of a closure into the enclosing
+                   scope. *)
+                T.make_suitable_for_environment typ
+                  (DE.typing_env denv_at_definition)
+                  ~suitable_for:typing_env
+                  ~bind_to:sym
+              in
+              TE.add_env_extension_with_extra_variables typing_env
+                env_extension)
+          types_of_symbols
+          typing_env)
+    in
+    fold lifted ~init:(DE.with_typing_env denv typing_env)
+      ~f:(fun denv lifted_constant ->
+        let pieces_of_code =
+          Lifted_constant.defining_exprs lifted_constant
+          |> Static_const_with_free_names.Group.pieces_of_code
+        in
+        Code_id.Map.fold (fun code_id code denv ->
+            match Code.params_and_body code with
+            | Present _ ->
+              if maybe_already_defined && DE.mem_code denv code_id then denv
+              else DE.define_code denv ~code_id ~code
+            | Deleted -> denv)
+          pieces_of_code
+          denv)
+
+  let add_singleton_to_denv t const =
+    add_to_denv t (singleton const)
+
+  let add_list_to_denv t consts =
+    ListLabels.fold_left consts ~init:t ~f:add_singleton_to_denv
 end

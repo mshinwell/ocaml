@@ -373,7 +373,7 @@ let simplify_function context ~used_closure_vars ~shareable_constants
               |> fun denv ->
                 (* Lifted constants from previous functions in the set get
                    put into the environment for subsequent functions. *)
-                DE.add_lifted_constants denv lifted_consts_prev_functions)
+                LCS.add_to_denv denv lifted_consts_prev_functions)
           in
           assert (not (DE.at_unit_toplevel (DA.denv dacc)));
           (* CR mshinwell: DE.no_longer_defining_symbol is redundant now? *)
@@ -581,7 +581,7 @@ let simplify_set_of_closures0 dacc context set_of_closures
       |> Closure_id.Map.fold (fun _closure_id bound_name denv ->
              DE.define_name_if_undefined denv bound_name K.value)
            closure_bound_names
-      |> fun denv -> DE.add_lifted_constants denv lifted_consts
+      |> fun denv -> LCS.add_to_denv denv lifted_consts
       |> Name_in_binding_pos.Map.fold (fun bound_name closure_type denv ->
              let bound_name = Name_in_binding_pos.to_name bound_name in
              DE.add_equation_on_name denv bound_name closure_type)
@@ -681,7 +681,7 @@ let simplify_and_lift_set_of_closures dacc ~closure_bound_vars_inverse
         in
         DA.add_lifted_constant dacc lifted_constant
         |> DA.map_denv ~f:(fun denv ->
-          DE.add_lifted_constant denv lifted_constant))
+          LCS.add_singleton_to_denv denv lifted_constant))
   in
   let set_of_closures_lifted_constant =
     Lifted_constant.create_set_of_closures
@@ -695,7 +695,7 @@ let simplify_and_lift_set_of_closures dacc ~closure_bound_vars_inverse
     DA.add_lifted_constant dacc set_of_closures_lifted_constant
   in
   let denv =
-    DE.add_lifted_constant (DA.denv dacc) set_of_closures_lifted_constant
+    LCS.add_singleton_to_denv (DA.denv dacc) set_of_closures_lifted_constant
   in
   let denv, bindings =
     Closure_id.Map.fold (fun closure_id bound_var (denv, bindings) ->
@@ -764,7 +764,7 @@ let simplify_non_lifted_set_of_closures0 dacc bound_vars ~closure_bound_vars
   let dacc =
     DA.add_lifted_constants_from_list dacc lifted_constants
     |> DA.map_denv ~f:(fun denv ->
-      DE.add_lifted_constants_from_list denv lifted_constants)
+      LCS.add_list_to_denv denv lifted_constants)
   in
   Simplify_named_result.have_simplified_to_single_term dacc
     bound_vars defining_expr

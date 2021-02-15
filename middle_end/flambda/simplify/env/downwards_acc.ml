@@ -17,7 +17,7 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module CUE = Continuation_uses_env
-module DE = Simplify_envs.Downwards_env
+module DE = Downwards_env
 module LCS = Simplify_envs.Lifted_constant_state
 module TE = Flambda_type.Typing_env
 
@@ -125,7 +125,7 @@ let add_lifted_constant t const =
 let add_lifted_constant_also_to_env t const =
   { t with
     lifted_constants = LCS.add t.lifted_constants const;
-    denv = DE.add_lifted_constant t.denv const;
+    denv = LCS.add_singleton_to_denv t.denv const;
   }
 
 let add_lifted_constants_from_list t consts =

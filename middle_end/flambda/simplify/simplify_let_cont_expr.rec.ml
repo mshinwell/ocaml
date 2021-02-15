@@ -475,7 +475,7 @@ let simplify_recursive_let_cont_handlers ~denv_before_body ~dacc_after_body
   in
   let denv =
     DA.get_lifted_constants dacc_after_body
-    |> DE.add_lifted_constants denv
+    |> LCS.add_to_denv denv
   in
   let typing_env =
     TE.with_code_age_relation (DE.typing_env denv)

@@ -23,22 +23,22 @@ val print : Format.formatter -> t -> unit
 
 (** Create a downwards accumulator. *)
 val create
-   : Simplify_envs.Downwards_env.t
+   : Downwards_env.t
   -> Continuation_uses_env.t
   -> t
 
 (** Extract the environment component of the given downwards accumulator. *)
-val denv : t -> Simplify_envs.Downwards_env.t
+val denv : t -> Downwards_env.t
 
 (** Map the environment component of the given downwards accumulator. *)
 val map_denv
    : t
-  -> f:(Simplify_envs.Downwards_env.t
-    -> Simplify_envs.Downwards_env.t)
+  -> f:(Downwards_env.t
+    -> Downwards_env.t)
   -> t
 
 (** Replace the environment component of the given downwards accumulator. *)
-val with_denv : t -> Simplify_envs.Downwards_env.t -> t
+val with_denv : t -> Downwards_env.t -> t
 
 (* CR mshinwell: Why do these take scope arguments when [DE] knows the
    current scope level? *)

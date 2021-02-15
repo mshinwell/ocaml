@@ -316,7 +316,8 @@ let simplify_direct_partial_application dacc apply ~callee's_code_id
     in
     let dacc =
       DA.add_lifted_constant dacc dummy_defining_expr
-      |> DA.map_denv ~f:(fun denv -> DE.add_lifted_constant denv defining_expr)
+      |> DA.map_denv ~f:(fun denv ->
+           LCS.add_singleton_to_denv denv defining_expr)
     in
     Set_of_closures.create function_decls ~closure_elements,
     dacc,

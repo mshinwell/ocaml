@@ -36,7 +36,7 @@ val print : Format.formatter -> t -> unit
 val add_use
    : t
   -> Continuation_use_kind.t
-  -> env_at_use:Simplify_envs.Downwards_env.t
+  -> env_at_use:Downwards_env.t
   -> Apply_cont_rewrite_id.t
   -> arg_types:Flambda_type.t list
   -> t
@@ -45,7 +45,7 @@ val get_uses : t -> One_continuation_use.t list
 
 val compute_handler_env
    : t
-  -> env_at_fork_plus_params_and_consts:Simplify_envs.Downwards_env.t
+  -> env_at_fork_plus_params_and_consts:Downwards_env.t
   -> consts_lifted_during_body:Simplify_envs.Lifted_constant_state.t
   -> params:Kinded_parameter.t list
   -> code_age_relation_after_body:Code_age_relation.t

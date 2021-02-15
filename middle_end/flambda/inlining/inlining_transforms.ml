@@ -19,7 +19,7 @@
 open! Simplify_import
 
 module DA = Downwards_acc
-module DE = Simplify_envs.Downwards_env
+module DE = Downwards_env
 module I = Flambda_type.Function_declaration_type.Inlinable
 module VB = Var_in_binding_pos
 

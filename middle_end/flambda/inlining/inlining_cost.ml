@@ -18,7 +18,7 @@
 
 open! Flambda.Import
 
-module DE = Simplify_envs.Downwards_env
+module DE = Downwards_env
 
 let arch32 = Targetint.size = 32 (* are we compiling for a 32-bit arch *)
 let arch64 = Targetint.size = 64 (* are we compiling for a 64-bit arch *)

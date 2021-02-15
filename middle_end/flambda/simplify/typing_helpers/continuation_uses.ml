@@ -16,7 +16,7 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
-module DE = Simplify_envs.Downwards_env
+module DE = Downwards_env
 module LCS = Simplify_envs.Lifted_constant_state
 module T = Flambda_type
 module TE = Flambda_type.Typing_env
@@ -174,7 +174,7 @@ Format.eprintf "Unknown at or later than %a\n%!"
            find the definition of the corresponding constant isn't in [DE].
            Note that some of the constants may already be defined. *)
         let use_env =
-          DE.add_lifted_constants ~maybe_already_defined:() use_env
+          LCS.add_to_denv ~maybe_already_defined:() use_env
             consts_lifted_during_body
         in
         use_env, Continuation_extra_params_and_args.empty, true, true
@@ -185,7 +185,7 @@ Format.eprintf "Unknown at or later than %a\n%!"
            any equation about a lifted constant (any such equation could not be
            materially more precise anyway). *)
         let denv =
-          DE.add_lifted_constants env_at_fork_plus_params_and_consts
+          LCS.add_to_denv env_at_fork_plus_params_and_consts
             consts_lifted_during_body
         in
         let extra_lifted_consts_in_use_envs =
