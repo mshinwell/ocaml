@@ -537,3 +537,8 @@ let add_use_of_closure_var t closure_var =
   }
 
 let closure_var_uses t = t.closure_var_uses
+
+let without_closure_var_uses t =
+  { t with
+    closure_var_uses = Var_within_closure.Set.empty;
+  }

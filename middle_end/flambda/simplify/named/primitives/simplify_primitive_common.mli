@@ -26,21 +26,3 @@ val simplify_projection
   -> Simplified_named.t
      * Flambda_type.Typing_env_extension.t
      * Downwards_env.t
-
-type cse =
-  | Invalid of Flambda_type.t
-  (* CR mshinwell: Use a record type for the following and all of the
-     simplify_*primitive.mli files *)
-  | Applied of
-      (Simplified_named.t * Flambda_type.Typing_env_extension.t
-        * Simple.t list * Downwards_env.t)
-  | Not_applied of Downwards_env.t
-
-val try_cse
-   : Downwards_env.t
-  -> original_prim:Flambda_primitive.t
-  -> result_kind:Flambda_kind.t
-  -> min_name_mode:Name_mode.t
-  -> args:Simple.t list
-  -> result_var:Variable.t
-  -> cse

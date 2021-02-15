@@ -13,7 +13,9 @@ lifting/lifted_constant.rec.ml
 lifting/lifted_constant_state.rec.ml
 lifting/reification.rec.ml
 named/simplify_named.rec.ml
+named/simplify_named_result.rec.ml
 named/simplify_set_of_closures.rec.ml
 named/simplify_static_const.rec.ml
 simplify_common.rec.ml
+simplify_import.rec.ml
 simplify_toplevel.rec.ml

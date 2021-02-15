@@ -16,62 +16,18 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
-open! Simplify_import
-
-let try_cse denv prim arg1 arg2 arg3 ~min_name_mode ~result_var
-      : Simplify_primitive_common.cse =
-  let result_kind = P.result_kind_of_ternary_primitive' prim in
-  if Name_mode.is_phantom min_name_mode then
-    Not_applied denv
-  else
-    match S.simplify_simple denv arg1 ~min_name_mode with
-    | Bottom, _arg1_ty -> Invalid (T.bottom result_kind)
-    | Ok arg1, _arg1_ty ->
-      match S.simplify_simple denv arg2 ~min_name_mode with
-      | Bottom, _arg2_ty -> Invalid (T.bottom result_kind)
-      | Ok arg2, _arg2_ty ->
-        match S.simplify_simple denv arg3 ~min_name_mode with
-        | Bottom, _arg3_ty -> Invalid (T.bottom result_kind)
-        | Ok arg3, _arg3_ty ->
-          let original_prim : P.t =
-            Ternary (prim, arg1, arg2, arg3)
-          in
-          Simplify_primitive_common.try_cse denv ~original_prim ~result_kind
-            ~args:[arg1; arg2; arg3] ~min_name_mode ~result_var
+open! Simplify_import_nonrec
 
 let simplify_ternary_primitive denv (prim : P.ternary_primitive)
-      arg1 arg2 arg3 dbg ~result_var =
-  let min_name_mode = Var_in_binding_pos.name_mode result_var in
+      ~arg1 ~arg1_ty:_ ~arg2 ~arg2_ty:_ ~arg3 ~arg3_ty:_ dbg ~result_var =
   let result_var' = Var_in_binding_pos.var result_var in
-  let invalid ty =
+  match prim with
+  | Block_set _
+  | Array_set _
+  | Bytes_or_bigstring_set _
+  | Bigarray_set _ ->
+    let prim : P.t = Ternary (prim, arg1, arg2, arg3) in
+    let named = Named.create_prim prim dbg in
+    let ty = T.unknown (P.result_kind' prim) in
     let env_extension = TEE.one_equation (Name.var result_var') ty in
-    Simplified_named.invalid (), env_extension, [arg1; arg2; arg3], denv
-  in
-  match
-    try_cse denv prim arg1 arg2 arg3 ~min_name_mode
-      ~result_var:result_var'
-  with
-  | Invalid ty -> invalid ty
-  | Applied result -> result
-  | Not_applied denv ->
-    let result_kind = P.result_kind_of_ternary_primitive' prim in
-    match S.simplify_simple denv arg1 ~min_name_mode with
-    | Bottom, _arg1_ty -> invalid (T.bottom result_kind)
-    | Ok arg1, _arg1_ty ->
-      match S.simplify_simple denv arg2 ~min_name_mode with
-      | Bottom, _arg2_ty -> invalid (T.bottom result_kind)
-      | Ok arg2, _arg2_ty ->
-        match S.simplify_simple denv arg3 ~min_name_mode with
-        | Bottom, _arg3_ty -> invalid (T.bottom result_kind)
-        | Ok arg3, _arg3_ty ->
-          match prim with
-          | Block_set _
-          | Array_set _
-          | Bytes_or_bigstring_set _
-          | Bigarray_set _ ->
-            let named =
-              Named.create_prim (Ternary (prim, arg1, arg2, arg3)) dbg
-            in
-            let ty = T.unknown result_kind in
-            let env_extension = TEE.one_equation (Name.var result_var') ty in
-            Simplified_named.reachable named, env_extension, [arg1; arg2; arg3], denv
+    Simplified_named.reachable named, env_extension, [arg1; arg2; arg3], denv

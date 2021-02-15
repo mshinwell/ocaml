@@ -164,21 +164,14 @@ let simplify_named0 dacc (bindable_let_bound : Bindable_let_bound.t)
     end
   | Prim (prim, dbg) ->
     let bound_var = Bindable_let_bound.must_be_singleton bindable_let_bound in
-    let term, env_extension, simplified_args, denv =
+    let term, env_extension, simplified_args, dacc =
       (* [simplified_args] has to be returned from [simplify_primitive] because
          in at least one case (for [Project_var]), the simplifier may return
          something other than a [Prim] as the [term].  However we need the
          simplified arguments of the actual primitive for the symbol
          projection check below. *)
-      Simplify_primitive.simplify_primitive (DA.denv dacc) ~original_named:named
+      Simplify_primitive.simplify_primitive dacc ~original_named:named
         prim dbg ~result_var:bound_var
-    in
-    let dacc = DA.with_denv dacc denv in
-    let dacc =
-      Var_within_closure.Set.fold (fun closure_var dacc ->
-          DA.add_use_of_closure_var dacc closure_var)
-        (DE.closure_var_uses denv)
-        dacc
     in
     let kind = P.result_kind' prim in
     let dacc =

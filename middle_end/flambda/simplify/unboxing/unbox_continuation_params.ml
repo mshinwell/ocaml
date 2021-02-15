@@ -16,7 +16,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-open! Simplify_import
+open! Simplify_import_nonrec
 
 (* CR mshinwell: Add a command-line flag. *)
 let max_unboxing_depth = 1

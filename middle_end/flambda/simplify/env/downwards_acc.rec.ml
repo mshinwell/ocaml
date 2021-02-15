@@ -170,11 +170,14 @@ let with_shareable_constants t ~shareable_constants =
 
 let shareable_constants t = t.shareable_constants
 
-let add_use_of_closure_var t closure_var =
+let add_uses_of_closure_vars t ~closure_vars =
   { t with
     used_closure_vars =
-      Name_occurrences.add_closure_var t.used_closure_vars closure_var
-        Name_mode.normal;
+      Var_within_closure.Set.fold (fun closure_var used_closure_vars ->
+          Name_occurrences.add_closure_var used_closure_vars closure_var
+            Name_mode.normal)
+        closure_vars
+        t.used_closure_vars;
   }
 
 let used_closure_vars t = t.used_closure_vars

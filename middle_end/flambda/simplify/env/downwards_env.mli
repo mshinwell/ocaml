@@ -208,3 +208,5 @@ val with_cse : t -> Common_subexpression_elimination.t -> t
 val add_use_of_closure_var : t -> Var_within_closure.t -> t
 
 val closure_var_uses : t -> Var_within_closure.Set.t
+
+val without_closure_var_uses : t -> t

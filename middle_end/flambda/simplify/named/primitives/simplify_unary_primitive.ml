@@ -16,7 +16,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-open! Simplify_import
+open! Simplify_import_nonrec
 
 module A = Number_adjuncts
 module Float = Numbers.Float_by_bit_pattern
@@ -434,83 +434,60 @@ let simplify_float_arith_op (op : P.unary_float_arith_op) denv ~original_term
   | Proved _ | Unknown -> result_unknown ()
   | Invalid -> result_invalid ()
 
-let try_cse denv prim arg ~min_name_mode ~result_var : Simplify_primitive_common.cse =
-  let result_kind = P.result_kind_of_unary_primitive' prim in
-  if Name_mode.is_phantom min_name_mode then
-    Not_applied denv
-  else
-    match S.simplify_simple denv arg ~min_name_mode with
-    | Bottom, _arg_ty -> Invalid (T.bottom result_kind)
-    | Ok arg, _arg_ty ->
-      let original_prim : P.t = Unary (prim, arg) in
-      Simplify_primitive_common.try_cse denv ~original_prim ~result_kind
-        ~args:[arg] ~min_name_mode ~result_var
-
 let simplify_unary_primitive denv (prim : P.unary_primitive)
-      arg dbg ~result_var =
+      ~arg ~arg_ty dbg ~result_var =
   let min_name_mode = Var_in_binding_pos.name_mode result_var in
   let result_var' = Var_in_binding_pos.var result_var in
-  let invalid ty =
-    let env_extension = TEE.one_equation (Name.var result_var') ty in
-    Simplified_named.invalid (), env_extension, [arg], denv
+  let original_prim : P.t = Unary (prim, arg) in
+  let original_term = Named.create_prim original_prim dbg in
+  let simplifier =
+    match prim with
+    | Project_var { project_from; var; } ->
+      simplify_project_var project_from var ~min_name_mode
+    | Select_closure { move_from; move_to; } ->
+      simplify_select_closure ~move_from ~move_to
+    | Unbox_number boxable_number_kind ->
+      simplify_unbox_number boxable_number_kind
+    | Box_number boxable_number_kind ->
+      simplify_box_number boxable_number_kind
+    | Is_int -> simplify_is_int
+    | Get_tag -> simplify_get_tag
+    | Array_length _ -> simplify_array_length
+    | String_length _ -> simplify_string_length
+    | Int_arith (kind, op) ->
+      begin match kind with
+      | Tagged_immediate -> Unary_int_arith_tagged_immediate.simplify op
+      | Naked_immediate -> Unary_int_arith_naked_immediate.simplify op
+      | Naked_int32 -> Unary_int_arith_naked_int32.simplify op
+      | Naked_int64 -> Unary_int_arith_naked_int64.simplify op
+      | Naked_nativeint -> Unary_int_arith_naked_nativeint.simplify op
+      end
+    | Float_arith op -> simplify_float_arith_op op
+    | Num_conv { src; dst; } ->
+      begin match src with
+      | Tagged_immediate -> Simplify_int_conv_tagged_immediate.simplify ~dst
+      | Naked_immediate -> Simplify_int_conv_naked_immediate.simplify ~dst
+      | Naked_float -> Simplify_int_conv_naked_float.simplify ~dst
+      | Naked_int32 -> Simplify_int_conv_naked_int32.simplify ~dst
+      | Naked_int64 -> Simplify_int_conv_naked_int64.simplify ~dst
+      | Naked_nativeint -> Simplify_int_conv_naked_nativeint.simplify ~dst
+      end
+    | Boolean_not -> simplify_boolean_not
+    | Int_as_pointer
+    | Bigarray_length _
+    | Duplicate_array _
+    | Duplicate_block _
+    | Opaque_identity ->
+      (* CR mshinwell: In these cases, the type of the argument should
+         still be checked.  Same for binary/ternary/etc. *)
+      fun denv ~original_term:_ ~arg ~arg_ty:_ ~result_var:_ ->
+        let prim : P.t = Unary (prim, arg) in
+        let named = Named.create_prim prim dbg in
+        let ty = T.unknown (P.result_kind' prim) in
+        let env_extension = TEE.one_equation (Name.var result_var') ty in
+        Simplified_named.reachable named, env_extension, denv
   in
-  match try_cse denv prim arg ~min_name_mode ~result_var:result_var' with
-  | Invalid ty -> invalid ty
-  | Applied result -> result
-  | Not_applied denv ->
-    let result_kind = P.result_kind_of_unary_primitive' prim in
-    match S.simplify_simple denv arg ~min_name_mode with
-    | Bottom, _arg_ty -> invalid (T.bottom result_kind)
-    | Ok arg, arg_ty ->
-      let original_prim : P.t = Unary (prim, arg) in
-      let original_term = Named.create_prim original_prim dbg in
-      let simplifier =
-        match prim with
-        | Project_var { project_from; var; } ->
-          simplify_project_var project_from var ~min_name_mode
-        | Select_closure { move_from; move_to; } ->
-          simplify_select_closure ~move_from ~move_to
-        | Unbox_number boxable_number_kind ->
-          simplify_unbox_number boxable_number_kind
-        | Box_number boxable_number_kind ->
-          simplify_box_number boxable_number_kind
-        | Is_int -> simplify_is_int
-        | Get_tag -> simplify_get_tag
-        | Array_length _ -> simplify_array_length
-        | String_length _ -> simplify_string_length
-        | Int_arith (kind, op) ->
-          begin match kind with
-          | Tagged_immediate -> Unary_int_arith_tagged_immediate.simplify op
-          | Naked_immediate -> Unary_int_arith_naked_immediate.simplify op
-          | Naked_int32 -> Unary_int_arith_naked_int32.simplify op
-          | Naked_int64 -> Unary_int_arith_naked_int64.simplify op
-          | Naked_nativeint -> Unary_int_arith_naked_nativeint.simplify op
-          end
-        | Float_arith op -> simplify_float_arith_op op
-        | Num_conv { src; dst; } ->
-          begin match src with
-          | Tagged_immediate -> Simplify_int_conv_tagged_immediate.simplify ~dst
-          | Naked_immediate -> Simplify_int_conv_naked_immediate.simplify ~dst
-          | Naked_float -> Simplify_int_conv_naked_float.simplify ~dst
-          | Naked_int32 -> Simplify_int_conv_naked_int32.simplify ~dst
-          | Naked_int64 -> Simplify_int_conv_naked_int64.simplify ~dst
-          | Naked_nativeint -> Simplify_int_conv_naked_nativeint.simplify ~dst
-          end
-        | Boolean_not -> simplify_boolean_not
-        | Int_as_pointer
-        | Bigarray_length _
-        | Duplicate_array _
-        | Duplicate_block _
-        | Opaque_identity ->
-          (* CR mshinwell: In these cases, the type of the argument should
-             still be checked.  Same for binary/ternary/etc. *)
-          fun denv ~original_term:_ ~arg ~arg_ty:_ ~result_var:_ ->
-            let named = Named.create_prim (Unary (prim, arg)) dbg in
-            let ty = T.unknown result_kind in
-            let env_extension = TEE.one_equation (Name.var result_var') ty in
-            Simplified_named.reachable named, env_extension, denv
-      in
-      let reachable, env_extension, denv =
-        simplifier denv ~original_term ~arg ~arg_ty ~result_var
-      in
-      reachable, env_extension, [arg], denv
+  let reachable, env_extension, denv =
+    simplifier denv ~original_term ~arg ~arg_ty ~result_var
+  in
+  reachable, env_extension, [arg], denv

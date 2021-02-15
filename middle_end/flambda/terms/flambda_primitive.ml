@@ -1780,6 +1780,13 @@ module Eligible_for_cse = struct
     compare t1 t2 = 0
 end
 
+let args t =
+  match t with
+  | Unary (_, arg) -> [arg]
+  | Binary (_, arg0, arg1) -> [arg0; arg1]
+  | Ternary (_, arg0, arg1, arg2) -> [arg0; arg1; arg2]
+  | Variadic (_, args) -> args
+
 module Without_args = struct
   type t =
     | Unary of unary_primitive

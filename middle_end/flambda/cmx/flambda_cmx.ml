@@ -16,7 +16,10 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-open! Simplify_import
+open! Flambda.Import
+
+module T = Flambda_type
+module TE = T.Typing_env
 
 let rec load_cmx_file_contents backend comp_unit ~imported_units ~imported_names
       ~imported_code =
