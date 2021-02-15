@@ -19,7 +19,7 @@
 (** Simplification of primitives taking three arguments. *)
 
 val simplify_ternary_primitive
-   : Downwards_acc.t
+   : Downwards_env.t
   -> Flambda_primitive.ternary_primitive
   -> Simple.t
   -> Simple.t
@@ -27,4 +27,4 @@ val simplify_ternary_primitive
   -> Debuginfo.t
   -> result_var:Var_in_binding_pos.t
   -> Simplified_named.t * Flambda_type.Typing_env_extension.t
-       * Simple.t list * Downwards_acc.t
+       * Simple.t list * Downwards_env.t

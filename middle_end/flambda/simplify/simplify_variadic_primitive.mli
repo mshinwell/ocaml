@@ -19,7 +19,7 @@
 (** Simplification of primitives taking variable numbers of arguments. *)
 
 val simplify_variadic_primitive
-   : Downwards_acc.t
+   : Downwards_env.t
   -> original_named:Flambda.Named.t
   -> original_prim:Flambda_primitive.t
   -> Flambda_primitive.variadic_primitive
@@ -27,4 +27,4 @@ val simplify_variadic_primitive
   -> Debuginfo.t
   -> result_var:Var_in_binding_pos.t
   -> Simplified_named.t * Flambda_type.Typing_env_extension.t
-       * Simple.t list * Downwards_acc.t
+       * Simple.t list * Downwards_env.t

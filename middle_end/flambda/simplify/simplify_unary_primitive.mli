@@ -19,10 +19,10 @@
 (** Simplification of primitives taking one argument. *)
 
 val simplify_unary_primitive
-   : Downwards_acc.t
+   : Downwards_env.t
   -> Flambda_primitive.unary_primitive
   -> Simple.t
   -> Debuginfo.t
   -> result_var:Var_in_binding_pos.t
   -> Simplified_named.t * Flambda_type.Typing_env_extension.t
-       * Simple.t list * Downwards_acc.t
+       * Simple.t list * Downwards_env.t
