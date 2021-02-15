@@ -18,6 +18,8 @@
 
 open! Simplify_import
 
+module UA = Upwards_acc
+
 let rebuild_let symbol_scoping_rule simplify_named_result
       ~lifted_constants_from_defining_expr ~at_unit_toplevel ~body uacc
       ~after_rebuild =
@@ -112,7 +114,7 @@ let simplify_let dacc let_expr ~down_to_up =
        [Set_of_closures] binding, since "let symbol" is disallowed under a
        lambda.) *)
     let lifted_constants_from_defining_expr =
-      Sort_lifted_constants.sort (DA.get_lifted_constants dacc)
+      LCS.sort (DA.get_lifted_constants dacc)
     in
     let dacc = DA.add_lifted_constants dacc prior_lifted_constants in
     let at_unit_toplevel = DE.at_unit_toplevel (DA.denv dacc) in

@@ -16,7 +16,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-open! Simplify_import_nonrec
+open! Simplify_import
 
 module A = Number_adjuncts
 module Float = Numbers.Float_by_bit_pattern

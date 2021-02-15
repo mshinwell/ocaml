@@ -14,22 +14,20 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-open! Simplify_import
-
 type t
 
-val have_simplified_to_zero_terms : DA.t -> t
+val have_simplified_to_zero_terms : Downwards_acc.t -> t
 
 (** Note that even though there is one term, the binding might contain
     multiple bound variables, in the case of a set of closures. *)
 val have_simplified_to_single_term
-   : DA.t
+   : Downwards_acc.t
   -> Bindable_let_bound.t
   -> Simplified_named.t
   -> t
 
 val have_lifted_set_of_closures
-   : DA.t
+   : Downwards_acc.t
   -> Symbol.t Var_in_binding_pos.Map.t
   -> t
 
@@ -40,7 +38,7 @@ type descr = private
 
 val descr : t -> descr
 
-val dacc : t -> DA.t
+val dacc : t -> Downwards_acc.t
 
 val bindings_to_place_in_any_order
    : t

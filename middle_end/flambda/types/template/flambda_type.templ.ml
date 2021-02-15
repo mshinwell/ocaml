@@ -29,7 +29,7 @@ module Int64 = Numbers.Int64
 
 module K = Flambda_kind
 
-(* -- module rec binding here -- *)
+(* -- Typing module rec binding here -- *)
 
 include Type_grammar
 

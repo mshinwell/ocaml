@@ -26,7 +26,7 @@
     static_const.rec.ml
     static_const.rec.mli
   )
-  (action (run ../scripts/assemble_rec_modules.sh
+  (action (run ../scripts/assemble_rec_modules.sh Terms
                template/flambda.templ.ml
                rec_modules
                flambda.ml))

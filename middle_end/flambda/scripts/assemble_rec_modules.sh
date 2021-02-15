@@ -2,16 +2,17 @@
 
 set -eu -o pipefail
 
-if [ "$#" != "3" ]; then
-    echo "syntax: $0 TEMPLATE_FILE REC_MODULES_FILE OUTPUT_FILE"
+if [ "$#" != "4" ]; then
+    echo "syntax: $0 NAME TEMPLATE_FILE REC_MODULES_FILE OUTPUT_FILE"
     exit 1
 fi
 
-TEMPLATE=$1
-REC_MODULES_FILE=$2
-OUTPUT=$3
+NAME=$1
+TEMPLATE=$2
+REC_MODULES_FILE=$3
+OUTPUT=$4
 
-DELIMITER="-- module rec binding here --"
+DELIMITER="-- $NAME module rec binding here --"
 # CR mshinwell: Fix this to use something else -- we should be able to
 # delete the warning stanzas on .rec.ml files -- they are overridden by the
 # one in the .templ.ml file.

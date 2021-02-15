@@ -28,7 +28,7 @@ module Switch = Switch_expr
 
 let fprintf = Format.fprintf
 
-(* -- module rec binding here -- *)
+(* -- Terms module rec binding here -- *)
 
 (* CR mshinwell: Consider counting numbers of names in Name_occurrences *)
 (* CR mshinwell: Check that apply_cont is well-formed when there is a

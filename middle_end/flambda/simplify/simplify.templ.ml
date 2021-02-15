@@ -20,7 +20,16 @@
 
 open! Simplify_import
 
-(* -- module rec binding here -- *)
+(* -- Env module rec binding here -- *)
+
+module DA = Downwards_acc
+module EB = Expr_builder
+module LC = Lifted_constant
+module LCS = Lifted_constant_state
+module UA = Upwards_acc
+module UE = Upwards_env
+
+(* -- Simplifier module rec binding here -- *)
 
 type simplify_result = {
   cmx : Flambda_cmx_format.t option;

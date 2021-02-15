@@ -16,7 +16,7 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
-open! Simplify_import_nonrec
+open! Simplify_import
 
 let simplify_projection denv ~original_term ~deconstructing ~shape ~result_var
       ~result_kind =

@@ -18,8 +18,6 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-open! Simplify_import
-
 (** Simplify a single, non-lifted set of closures, as may occur on the
     right-hand side of a [Let] binding. *)
 val simplify_non_lifted_set_of_closures

@@ -41,6 +41,8 @@ val add_use
   -> arg_types:Flambda_type.t list
   -> t
 
+val continuation : t -> Continuation.t
+
 val uses : t -> One_continuation_use.t list
 
 val number_of_uses : t -> int

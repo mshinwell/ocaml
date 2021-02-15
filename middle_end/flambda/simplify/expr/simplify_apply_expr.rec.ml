@@ -316,7 +316,8 @@ let simplify_direct_partial_application dacc apply ~callee's_code_id
     in
     let dacc =
       DA.add_lifted_constant dacc dummy_defining_expr
-      |> DA.map_denv ~f:(fun denv -> DE.add_lifted_constant denv defining_expr)
+      |> DA.map_denv ~f:(fun denv ->
+           Lifted_constant_state.add_singleton_to_denv denv defining_expr)
     in
     Set_of_closures.create function_decls ~closure_elements,
     dacc,
@@ -633,15 +634,17 @@ let simplify_function_call dacc apply ~callee_ty
 
 let simplify_apply_shared dacc apply : _ Or_bottom.t =
   let min_name_mode = Name_mode.normal in
-  match S.simplify_simple dacc (Apply.callee apply) ~min_name_mode with
+  let denv = DA.denv dacc in
+  let module S = Simplify_simple in
+  match S.simplify_simple denv (Apply.callee apply) ~min_name_mode with
   | Bottom, _ty -> Bottom
   | Ok callee, callee_ty ->
-    match S.simplify_simples dacc (Apply.args apply) ~min_name_mode with
+    match S.simplify_simples denv (Apply.args apply) ~min_name_mode with
     | _, Bottom -> Bottom
     | _changed, Ok args_with_types ->
       let args, arg_types = List.split args_with_types in
       let inlining_state =
-        Inlining_state.merge (DE.get_inlining_state (DA.denv dacc))
+        Inlining_state.merge (DE.get_inlining_state denv)
           (Apply.inlining_state apply)
       in
       let apply =
@@ -650,7 +653,7 @@ let simplify_apply_shared dacc apply : _ Or_bottom.t =
           (Apply.exn_continuation apply)
           ~args
           ~call_kind:(Apply.call_kind apply)
-          (DE.add_inlined_debuginfo' (DA.denv dacc) (Apply.dbg apply))
+          (DE.add_inlined_debuginfo' denv (Apply.dbg apply))
           ~inline:(Apply.inline apply)
           ~inlining_state
       in

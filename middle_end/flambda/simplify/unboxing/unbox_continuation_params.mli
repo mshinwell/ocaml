@@ -16,7 +16,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-open! Simplify_import_nonrec
+open! Simplify_import
 
 val make_unboxing_decisions
    : DE.t

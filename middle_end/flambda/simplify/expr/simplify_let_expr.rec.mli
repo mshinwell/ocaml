@@ -16,6 +16,4 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
-open! Simplify_import
-
 val simplify_let : Let.t Simplify_common.expr_simplifier

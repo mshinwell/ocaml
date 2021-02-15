@@ -113,7 +113,16 @@ module Definition = struct
         Misc.fatal_errorf "Mismatched code ids: %a vs.@ %a"
           Code_id.print code_id
           Code_id.print (Code.code_id code)
-    | _ ->
+    | Set_of_closures _
+    | Block _
+    | Boxed_float _
+    | Boxed_int32 _
+    | Boxed_int64 _
+    | Boxed_nativeint _
+    | Immutable_float_block _
+    | Immutable_float_array _
+    | Mutable_string _
+    | Immutable_string _ ->
       Misc.fatal_errorf "Not a code definition: %a"
         Static_const_with_free_names.print defining_expr
 

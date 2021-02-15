@@ -1,17 +1,35 @@
 (rule
-  (targets simplify.ml)
+  (targets simplify.tmp.ml)
   (deps
-    rec_modules
+    rec_modules_env
     simplify.templ.ml
 
     env/downwards_acc.rec.ml
     env/upwards_acc.rec.ml
     env/upwards_env.rec.ml
-    inlining/inlining_transforms.rec.ml
     lifting/lifted_constant.rec.ml
     lifting/lifted_constant_state.rec.ml
-    lifting/reification.rec.ml
     expr/expr_builder.rec.ml
+
+    env/downwards_acc.rec.mli
+    env/upwards_acc.rec.mli
+    env/upwards_env.rec.mli
+    lifting/lifted_constant.rec.mli
+    lifting/lifted_constant_state.rec.mli
+    expr/expr_builder.rec.mli
+  )
+  (action (run ../scripts/assemble_rec_modules.sh Env
+               simplify.templ.ml
+               rec_modules_env
+               simplify.tmp.ml))
+)
+
+(rule
+  (targets simplify.ml)
+  (deps
+    rec_modules_simplifier
+    simplify.tmp.ml
+
     expr/simplify_apply_expr.rec.ml
     expr/simplify_apply_cont_expr.rec.ml
     expr/simplify_expr.rec.ml
@@ -23,17 +41,10 @@
     named/simplify_set_of_closures.rec.ml
     named/simplify_static_const.rec.ml
     simplify_common.rec.ml
-    simplify_import.rec.ml
     simplify_toplevel.rec.ml
+    inlining/inlining_transforms.rec.ml
+    lifting/reification.rec.ml
 
-    env/downwards_acc.rec.mli
-    env/upwards_acc.rec.mli
-    env/upwards_env.rec.mli
-    inlining/inlining_transforms.rec.mli
-    lifting/lifted_constant.rec.mli
-    lifting/lifted_constant_state.rec.mli
-    lifting/reification.rec.mli
-    expr/expr_builder.rec.mli
     expr/simplify_apply_expr.rec.mli
     expr/simplify_apply_cont_expr.rec.mli
     expr/simplify_expr.rec.mli
@@ -45,11 +56,12 @@
     named/simplify_set_of_closures.rec.mli
     named/simplify_static_const.rec.mli
     simplify_common.rec.mli
-    simplify_import.rec.mli
     simplify_toplevel.rec.mli
+    inlining/inlining_transforms.rec.mli
+    lifting/reification.rec.mli
   )
-  (action (run ../scripts/assemble_rec_modules.sh
-               simplify.templ.ml
-               rec_modules
+  (action (run ../scripts/assemble_rec_modules.sh Simplifier
+               simplify.tmp.ml
+               rec_modules_simplifier
                simplify.ml))
 )

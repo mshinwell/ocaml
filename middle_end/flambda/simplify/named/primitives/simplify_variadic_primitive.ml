@@ -16,7 +16,7 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
-open! Simplify_import_nonrec
+open! Simplify_import
 
 let simplify_make_block_of_values denv _prim dbg tag ~shape
       ~(mutable_or_immutable : Mutability.t)

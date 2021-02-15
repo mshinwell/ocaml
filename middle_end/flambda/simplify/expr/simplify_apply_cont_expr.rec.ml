@@ -113,7 +113,9 @@ let rebuild_apply_cont apply_cont ~args ~rewrite_id uacc ~after_rebuild =
 
 let simplify_apply_cont dacc apply_cont ~down_to_up =
   let min_name_mode = Name_mode.normal in
-  match S.simplify_simples dacc (AC.args apply_cont) ~min_name_mode with
+  let module S = Simplify_simple in
+  let denv = DA.denv dacc in
+  match S.simplify_simples denv (AC.args apply_cont) ~min_name_mode with
   | _, Bottom ->
     down_to_up dacc ~rebuild:Simplify_common.rebuild_invalid
   | _changed, Ok args_with_types ->
@@ -135,6 +137,6 @@ let simplify_apply_cont dacc apply_cont ~down_to_up =
     in
     let dacc, rewrite_id =
       DA.record_continuation_use dacc (AC.continuation apply_cont)
-        use_kind ~env_at_use:(DA.denv dacc) ~arg_types
+        use_kind ~env_at_use:denv ~arg_types
     in
     down_to_up dacc ~rebuild:(rebuild_apply_cont apply_cont ~args ~rewrite_id)

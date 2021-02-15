@@ -16,7 +16,7 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
-open! Simplify_import_nonrec
+open! Simplify_import
 
 let simplify_ternary_primitive denv (prim : P.ternary_primitive)
       ~arg1 ~arg1_ty:_ ~arg2 ~arg2_ty:_ ~arg3 ~arg3_ty:_ dbg ~result_var =
