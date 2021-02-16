@@ -324,7 +324,6 @@ MIDDLE_END_FLAMBDA_SIMPLIFY=\
   middle_end/flambda/unboxing/unbox_continuation_params.cmo \
   middle_end/flambda/lifting/sort_lifted_constants.cmo \
   middle_end/flambda/lifting/reification.cmo \
-  middle_end/flambda/lifting/lift_inconstants.cmo \
   middle_end/flambda/simplify/simplify_common.cmo \
   middle_end/flambda/simplify/simplify_variadic_primitive.cmo \
   middle_end/flambda/simplify/typing_helpers/number_adjuncts.cmo \

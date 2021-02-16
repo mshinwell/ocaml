@@ -5304,32 +5304,6 @@ middle_end/flambda/inlining/inlining_transforms.cmi : \
     middle_end/flambda/basic/exn_continuation.cmi \
     middle_end/flambda/simplify/env/downwards_acc.cmi \
     lambda/debuginfo.cmi
-middle_end/flambda/lifting/lift_inconstants.cmo : \
-    middle_end/flambda/compilenv_deps/variable.cmi \
-    middle_end/flambda/naming/var_in_binding_pos.cmi \
-    middle_end/flambda/compilenv_deps/symbol.cmi \
-    middle_end/flambda/simplify/simplify_import.cmi \
-    middle_end/flambda/lifting/reification.cmi \
-    middle_end/flambda/compilenv_deps/linkage_name.cmi \
-    middle_end/flambda/terms/flambda.cmi \
-    middle_end/flambda/compilenv_deps/compilation_unit.cmi \
-    middle_end/flambda/lifting/lift_inconstants.cmi
-middle_end/flambda/lifting/lift_inconstants.cmx : \
-    middle_end/flambda/compilenv_deps/variable.cmx \
-    middle_end/flambda/naming/var_in_binding_pos.cmx \
-    middle_end/flambda/compilenv_deps/symbol.cmx \
-    middle_end/flambda/simplify/simplify_import.cmx \
-    middle_end/flambda/lifting/reification.cmx \
-    middle_end/flambda/compilenv_deps/linkage_name.cmx \
-    middle_end/flambda/terms/flambda.cmx \
-    middle_end/flambda/compilenv_deps/compilation_unit.cmx \
-    middle_end/flambda/lifting/lift_inconstants.cmi
-middle_end/flambda/lifting/lift_inconstants.cmi : \
-    middle_end/flambda/naming/var_in_binding_pos.cmi \
-    middle_end/flambda/compilenv_deps/symbol.cmi \
-    middle_end/flambda/types/flambda_type.cmi \
-    middle_end/flambda/terms/flambda.cmi \
-    middle_end/flambda/simplify/env/downwards_acc.cmi
 middle_end/flambda/lifting/lifted_constant.cmo : \
     middle_end/flambda/compilenv_deps/variable.cmi \
     middle_end/flambda/basic/var_within_closure.cmi \
