@@ -53,24 +53,6 @@ val simplify_projection
      * Flambda_type.Typing_env_extension.t
      * Downwards_acc.t
 
-type cse =
-  | Invalid of Flambda_type.t
-  (* CR mshinwell: Use a record type for the following and all of the
-     simplify_*primitive.mli files *)
-  | Applied of
-      (Simplified_named.t * Flambda_type.Typing_env_extension.t
-        * Simple.t list * Downwards_acc.t)
-  | Not_applied of Downwards_acc.t
-
-val try_cse
-   : Downwards_acc.t
-  -> original_prim:Flambda_primitive.t
-  -> result_kind:Flambda_kind.t
-  -> min_name_mode:Name_mode.t
-  -> args:Simple.t list
-  -> result_var:Variable.t
-  -> cse
-
 type add_wrapper_for_switch_arm_result = private
   | Apply_cont of Flambda.Apply_cont.t
   | New_wrapper of Continuation.t * Flambda.Continuation_handler.t

@@ -21,9 +21,12 @@
 val simplify_ternary_primitive
    : Downwards_acc.t
   -> Flambda_primitive.ternary_primitive
-  -> Simple.t
-  -> Simple.t
-  -> Simple.t
+  -> arg1:Simple.t
+  -> arg1_ty:Flambda_type.t
+  -> arg2:Simple.t
+  -> arg2_ty:Flambda_type.t
+  -> arg3:Simple.t
+  -> arg3_ty:Flambda_type.t
   -> Debuginfo.t
   -> result_var:Var_in_binding_pos.t
   -> Simplified_named.t * Flambda_type.Typing_env_extension.t

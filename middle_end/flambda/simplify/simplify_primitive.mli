@@ -20,7 +20,6 @@
 
 val simplify_primitive
    : Downwards_acc.t
-  -> original_named:Flambda.Named.t
   -> Flambda_primitive.t
   -> Debuginfo.t
   -> result_var:Var_in_binding_pos.t

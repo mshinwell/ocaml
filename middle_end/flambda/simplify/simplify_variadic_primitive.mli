@@ -20,10 +20,8 @@
 
 val simplify_variadic_primitive
    : Downwards_acc.t
-  -> original_named:Flambda.Named.t
-  -> original_prim:Flambda_primitive.t
   -> Flambda_primitive.variadic_primitive
-  -> Simple.t list
+  -> args_with_tys:(Simple.t * Flambda_type.t) list
   -> Debuginfo.t
   -> result_var:Var_in_binding_pos.t
   -> Simplified_named.t * Flambda_type.Typing_env_extension.t

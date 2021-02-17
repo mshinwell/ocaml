@@ -51,44 +51,6 @@ let simplify_projection dacc ~original_term ~deconstructing ~shape ~result_var
   | Ok env_extension ->
     Simplified_named.reachable original_term, env_extension, dacc
 
-type cse =
-  | Invalid of T.t
-  | Applied of (Simplified_named.t * TEE.t * Simple.t list * DA.t)
-  | Not_applied of DA.t
-
-let apply_cse dacc ~original_prim =
-  match P.Eligible_for_cse.create original_prim with
-  | None -> None
-  | Some with_fixed_value ->
-    match DE.find_cse (DA.denv dacc) with_fixed_value with
-    | None -> None
-    | Some simple ->
-      match TE.get_canonical_simple_exn (DA.typing_env dacc) simple with
-      | exception Not_found -> None
-      | simple -> Some simple
-
-let try_cse dacc ~original_prim ~result_kind ~min_name_mode ~args
-      ~result_var : cse =
-  (* CR mshinwell: Use [meet] and [reify] for CSE?  (discuss with lwhite) *)
-  if not (Name_mode.equal min_name_mode Name_mode.normal) then Not_applied dacc
-  else
-    match apply_cse dacc ~original_prim with
-    | Some replace_with ->
-      let named = Named.create_simple replace_with in
-      let ty = T.alias_type_of result_kind replace_with in
-      let env_extension = TEE.one_equation (Name.var result_var) ty in
-      Applied (Simplified_named.reachable named, env_extension, args, dacc)
-    | None ->
-      let dacc =
-        match P.Eligible_for_cse.create original_prim with
-        | None -> dacc
-        | Some eligible_prim ->
-          let bound_to = Simple.var result_var in
-          DA.map_denv dacc ~f:(fun denv ->
-            DE.add_cse denv eligible_prim ~bound_to)
-      in
-      Not_applied dacc
-
 type add_wrapper_for_fixed_arity_continuation0_result =
   | This_continuation of Continuation.t
   | Apply_cont of Flambda.Apply_cont.t

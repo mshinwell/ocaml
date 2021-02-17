@@ -170,8 +170,7 @@ let simplify_named0 dacc (bindable_let_bound : Bindable_let_bound.t)
          something other than a [Prim] as the [term].  However we need the
          simplified arguments of the actual primitive for the symbol
          projection check below. *)
-      Simplify_primitive.simplify_primitive dacc ~original_named:named
-        prim dbg ~result_var:bound_var
+      Simplify_primitive.simplify_primitive dacc prim dbg ~result_var:bound_var
     in
     let kind = P.result_kind' prim in
     let dacc =
