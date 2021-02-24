@@ -322,6 +322,7 @@ let unary_prim_size prim =
   | Float_arith _ -> 2
   | Num_conv { src; dst; } -> arith_conversion_size src dst
   | Boolean_not -> 1
+  | Reinterpret_int64_as_float -> 0
   | Unbox_number k -> unbox_number k
   | Box_number k -> box_number k
   | Select_closure _ -> 1 (* caddv *)
@@ -404,7 +405,7 @@ let set_of_closures ~find_cost_metrics set_of_closures =
 let increase_due_to_let_expr ~is_phantom ~cost_metrics_of_defining_expr =
   if is_phantom then zero else cost_metrics_of_defining_expr
 
-let apply apply = 
+let apply apply =
   match Apply.call_kind apply with
   | Function Direct _ -> direct_call_size
   (* CR mshinwell: Check / fix these numbers *)

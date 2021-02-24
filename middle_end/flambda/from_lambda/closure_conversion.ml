@@ -207,17 +207,60 @@ let close_c_call t ~let_bound_var (prim : Primitive.description)
   in
   t.imported_symbols <- Symbol.Set.add call_symbol t.imported_symbols;
   let call args =
-    let apply =
-      Apply.create ~callee:(use_of_symbol_as_simple t call_symbol)
-        ~continuation:(Return return_continuation)
-        exn_continuation
-        ~args
-        ~call_kind
-        dbg
-        ~inline:Default_inline
-        ~inlining_state:(Inlining_state.default)
-    in
-    Expr.create_apply apply
+    (* Some C primitives have implementations within Flambda itself. *)
+    match prim.prim_native_name with
+    | "caml_int64_float_of_bits_unboxed"
+      (* There is only one case where this operation is not the identity:
+         on 32-bit pre-EABI ARM platforms.  It is very unlikely anyone would
+         still be using one of those, but just in case, we only optimise this
+         primitive on 64-bit systems.  (There is no easy way here of
+         detecting just the specific ARM case in question.) *)
+      when
+        begin match Targetint.num_bits with
+        | Thirty_two -> false
+        | Sixty_four -> true
+        end
+      ->
+      if prim.prim_arity <> 1 then
+        Misc.fatal_errorf "Expected arity one for %s" prim.prim_native_name
+      else
+        begin match prim.prim_native_repr_args, prim.prim_native_repr_res with
+        | [Unboxed_integer Pint64], Unboxed_float ->
+          begin match args with
+          | [arg] ->
+            let result = Variable.create "reinterpreted_int64" in
+            let result' = Var_in_binding_pos.create result Name_mode.normal in
+            let bindable = Bindable_let_bound.singleton result' in
+            let prim = P.Unary (Reinterpret_int64_as_float, arg) in
+            let return_result =
+              Apply_cont.create return_continuation
+                ~args:[Simple.var result]
+                ~dbg
+              |> Expr.create_apply_cont
+            in
+            Let_expr.create bindable (Named.create_prim prim dbg)
+              ~body:return_result
+              ~free_names_of_body:(Known (Expr.free_names return_result))
+            |> Expr.create_let
+          | [] | _::_ ->
+            Misc.fatal_errorf "Expected one arg for %s" prim.prim_native_name
+          end
+        | _, _ ->
+          Misc.fatal_errorf "Wrong argument and/or result kind(s) for %s"
+            prim.prim_native_name
+        end
+    | _ ->
+      let apply =
+        Apply.create ~callee:(use_of_symbol_as_simple t call_symbol)
+          ~continuation:(Return return_continuation)
+          exn_continuation
+          ~args
+          ~call_kind
+          dbg
+          ~inline:Default_inline
+          ~inlining_state:(Inlining_state.default)
+      in
+      Expr.create_apply apply
   in
   let call : Expr.t =
     List.fold_left2 (fun (call : Simple.t list -> Expr.t)

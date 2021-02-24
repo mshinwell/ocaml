@@ -393,6 +393,29 @@ let simplify_boolean_not dacc ~original_term ~arg:_ ~arg_ty ~result_var =
     Simplified_named.reachable original_term, env_extension, dacc
   | Invalid -> result_invalid ()
 
+let simplify_reinterpret_int64_as_float dacc ~original_term ~arg:_ ~arg_ty
+    ~result_var =
+  let result = Name.var (Var_in_binding_pos.var result_var) in
+  let typing_env = DE.typing_env (DA.denv dacc) in
+  let proof = T.prove_naked_int64s typing_env arg_ty in
+  match proof with
+  | Proved int64s ->
+    let floats =
+      Int64.Set.fold (fun int64 floats ->
+          Float.Set.add (Float.of_bits int64) floats)
+        int64s
+        Float.Set.empty
+    in
+    let ty = T.these_naked_floats floats in
+    let env_extension = TEE.one_equation result ty in
+    Simplified_named.reachable original_term, env_extension, dacc
+  | Unknown ->
+    let env_extension = TEE.one_equation result (T.any_naked_float ()) in
+    Simplified_named.reachable original_term, env_extension, dacc
+  | Invalid ->
+    let env_extension = TEE.one_equation result (T.bottom K.naked_float) in
+    Simplified_named.invalid (), env_extension, dacc
+
 let simplify_float_arith_op (op : P.unary_float_arith_op) dacc ~original_term
       ~arg:_ ~arg_ty ~result_var =
   let module F = Numbers.Float_by_bit_pattern in
@@ -466,6 +489,7 @@ let simplify_unary_primitive dacc (prim : P.unary_primitive)
       | Naked_nativeint -> Simplify_int_conv_naked_nativeint.simplify ~dst
       end
     | Boolean_not -> simplify_boolean_not
+    | Reinterpret_int64_as_float -> simplify_reinterpret_int64_as_float
     | Int_as_pointer
     | Bigarray_length _
     | Duplicate_array _

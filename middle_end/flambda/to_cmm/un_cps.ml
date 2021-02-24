@@ -440,6 +440,15 @@ let unary_primitive env dbg f arg =
     arithmetic_conversion dbg src dst arg
   | Boolean_not ->
     None, C.mk_not dbg arg
+  | Reinterpret_int64_as_float ->
+    (* CR-someday mshinwell: We should add support for this operation in
+       the backend.  It isn't the identity as there may need to be a move
+       between different register kinds (e.g. integer to XMM registers
+       on x86-64). *)
+    None, C.extcall ~alloc:false ~returns:true
+      "caml_int64_float_of_bits_unboxed"
+      typ_float
+      [arg]
   | Unbox_number kind ->
     let extra =
       match kind with

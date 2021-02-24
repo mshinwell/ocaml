@@ -105,6 +105,7 @@ let record_any_symbol_projection dacc (defining_expr : Simplified_named.t)
       | Float_arith _
       | Num_conv _
       | Boolean_not
+      | Reinterpret_int64_as_float
       | Unbox_number _
       | Box_number _
       | Select_closure _

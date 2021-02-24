@@ -587,6 +587,7 @@ type unary_primitive =
       dst : Flambda_kind.Standard_int_or_float.t;
     }
   | Boolean_not
+  | Reinterpret_int64_as_float
   | Unbox_number of Flambda_kind.Boxable_number.t
   | Box_number of Flambda_kind.Boxable_number.t
   | Select_closure of {
@@ -624,7 +625,8 @@ let unary_primitive_eligible_for_cse p ~arg =
     (* CR mshinwell: See CR below about [Clflags]. *)
   | Float_arith _ -> !Clflags.float_const_prop
   | Num_conv _
-  | Boolean_not -> true
+  | Boolean_not
+  | Reinterpret_int64_as_float -> true
   | Unbox_number _ -> false
   | Box_number _ ->
     (* Boxing of constants will yield values that can be lifted and if needs
@@ -650,10 +652,11 @@ let compare_unary_primitive p1 p2 =
     | Float_arith _ -> 10
     | Num_conv _ -> 11
     | Boolean_not -> 12
-    | Unbox_number _ -> 13
-    | Box_number _ -> 14
-    | Select_closure _ -> 15
-    | Project_var _ -> 16
+    | Reinterpret_int64_as_float -> 13
+    | Unbox_number _ -> 14
+    | Box_number _ -> 15
+    | Select_closure _ -> 16
+    | Project_var _ -> 17
   in
   match p1, p2 with
   | Duplicate_array { kind = kind1;
@@ -734,6 +737,7 @@ let compare_unary_primitive p1 p2 =
     | Int_arith _
     | Num_conv _
     | Boolean_not
+    | Reinterpret_int64_as_float
     | Float_arith _
     | Array_length _
     | Bigarray_length _
@@ -770,6 +774,7 @@ let print_unary_primitive ppf p =
       Flambda_kind.Standard_int_or_float.print_lowercase src
       Flambda_kind.Standard_int_or_float.print_lowercase dst
   | Boolean_not -> fprintf ppf "Boolean_not"
+  | Reinterpret_int64_as_float -> fprintf ppf "Reinterpret_int64_as_float"
   | Float_arith o -> print_unary_float_arith_op ppf o
   | Array_length kind ->
     fprintf ppf "@[<hov 1>(Array_length@ %a)@]"
@@ -806,6 +811,7 @@ let arg_kind_of_unary_primitive p =
   | Int_arith (kind, _) -> K.Standard_int.to_kind kind
   | Num_conv { src; dst = _; } -> K.Standard_int_or_float.to_kind src
   | Boolean_not -> K.value
+  | Reinterpret_int64_as_float -> K.naked_int64
   | Float_arith _ -> K.naked_float
   | Array_length _
   | Bigarray_length _ -> K.value
@@ -831,6 +837,7 @@ let result_kind_of_unary_primitive p : result_kind =
   | Num_conv { src = _; dst; } ->
     Singleton (K.Standard_int_or_float.to_kind dst)
   | Boolean_not -> Singleton K.value
+  | Reinterpret_int64_as_float -> Singleton K.naked_float
   | Float_arith _ -> Singleton K.naked_float
   | Array_length _ -> Singleton K.value
   | Bigarray_length _ -> Singleton K.naked_immediate
@@ -875,6 +882,7 @@ let effects_and_coeffects_of_unary_primitive p =
   | Int_arith (_, (Neg | Swap_byte_endianness))
   | Num_conv _
   | Boolean_not
+  | Reinterpret_int64_as_float
   | Float_arith (Abs | Neg) -> Effects.No_effects, Coeffects.No_coeffects
   (* Since Obj.truncate has been deprecated, array_length should have no observable effect *)
   | Array_length _ ->
@@ -906,6 +914,7 @@ let unary_classify_for_printing p =
   | Int_arith _
   | Num_conv _
   | Boolean_not
+  | Reinterpret_int64_as_float
   | Float_arith _ -> Neither
   | Array_length _
   | Bigarray_length _
@@ -1391,6 +1400,7 @@ let invariant env t =
     | Float_arith _, _
     | Num_conv _, _
     | Boolean_not, _
+    | Reinterpret_int64_as_float, _
     | Unbox_number _, _
     | Box_number _, _ -> ()  (* None of these contain names. *)
     end

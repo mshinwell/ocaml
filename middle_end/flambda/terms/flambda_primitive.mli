@@ -254,6 +254,7 @@ type unary_primitive =
      use a %-primitive instead of directly calling C stubs for conversions;
      then we could have a single primitive here taking two
      [Flambda_kind.Of_naked_number.t] arguments (one input, one output). *)
+  | Reinterpret_int64_as_float
   | Unbox_number of Flambda_kind.Boxable_number.t
   | Box_number of Flambda_kind.Boxable_number.t
   | Select_closure of {
