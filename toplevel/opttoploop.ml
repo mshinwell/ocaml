@@ -27,7 +27,7 @@ open Ast_helper
 type res = Ok of Obj.t | Err of string
 type evaluation_outcome = Result of Obj.t | Exception of exn
 
-let _dummy = (Ok (Obj.magic 0), Err "")
+let _dummy = (Ok (Obj.repr 0), Err "")
 
 external ndl_run_toplevel: string -> string -> res
   = "caml_natdynlink_run_toplevel"
@@ -43,12 +43,12 @@ let need_symbol sym =
   Option.is_none (Dynlink.unsafe_get_global_value ~bytecode_or_asm_symbol:sym)
 
 let dll_run dll entry =
-  match (try Result (Obj.magic (ndl_run_toplevel dll entry))
+  match (try Result (Obj.repr (ndl_run_toplevel dll entry))
          with exn -> Exception exn)
   with
     | Exception _ as r -> r
     | Result r ->
-        match Obj.magic r with
+        match Obj.obj r with
           | Ok x -> Result x
           | Err s -> fatal_error ("Opttoploop.dll_run " ^ s)
 
@@ -100,7 +100,7 @@ let toplevel_value id =
   let glob, pos =
     if Config.flambda then toplevel_value id else Translmod.nat_toplevel_name id
   in
-  (Obj.magic (global_symbol glob)).(pos)
+  Obj.field (global_symbol glob) pos
 
 (* Return the value referred to by a path *)
 
