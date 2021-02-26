@@ -165,12 +165,12 @@ module Variable_data = struct
     else
       let { compilation_unit = compilation_unit1;
             previous_compilation_units = previous_compilation_units1;
-            name = _; name_stamp = name_stamp1; user_visible = _; 
+            name = _; name_stamp = name_stamp1; user_visible = _;
           } = t1
       in
       let { compilation_unit = compilation_unit2;
             previous_compilation_units = previous_compilation_units2;
-            name = _; name_stamp = name_stamp2; user_visible = _; 
+            name = _; name_stamp = name_stamp2; user_visible = _;
           } = t2
       in
       let rec previous_compilation_units_match l1 l2 =
@@ -516,6 +516,9 @@ module Simple = struct
 
   let find_data t = Table.find !grand_table_of_simples t
 
+  let has_rec_info t =
+    Id.flags t = simple_flags
+
   let name n = n
   let var v = v
   let vars vars = vars
@@ -602,11 +605,20 @@ module Simple = struct
   let export t = find_data t
 
   let import map (data : exported) =
-    let simple = map data.simple in
-    let data : Simple_data.t =
-      { simple; rec_info = data.rec_info; }
-    in
-    Table.add !grand_table_of_simples data
+    (* The grand table of [Simple]s only holds those with [Rec_info]. *)
+    let old_simple = data.simple in
+    (* [old_simple] never has [Rec_info].  See [Simple_data], above. *)
+    assert (Id.flags old_simple <> simple_flags);
+    let t = map old_simple in
+    let rec_info = data.rec_info in
+    if Rec_info.is_initial rec_info then begin
+      assert (Id.flags t <> simple_flags);
+      t
+    end else begin
+      assert (Id.flags t = simple_flags);
+      let data : Simple_data.t = { simple = t; rec_info; } in
+      Table.add !grand_table_of_simples data
+    end
 
   let map_compilation_unit _f data =
     (* The compilation unit is not associated with the simple directly,

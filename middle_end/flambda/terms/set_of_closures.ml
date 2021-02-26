@@ -22,7 +22,7 @@ type t = {
 }
 
 let print_with_cache ~cache ppf
-      { function_decls; 
+      { function_decls;
         closure_elements;
       } =
   Format.fprintf ppf "@[<hov 1>(%sset_of_closures%s@ \
@@ -89,7 +89,7 @@ let environment_doesn't_mention_variables t =
     t.closure_elements
 
 let print_with_cache ~cache ppf
-      { function_decls; 
+      { function_decls;
         closure_elements;
       } =
   if Var_within_closure.Map.is_empty closure_elements then
@@ -120,16 +120,18 @@ let free_names
     Simple.List.free_names (Var_within_closure.Map.data closure_elements);
   ]
 
-let apply_name_permutation
-      ({ function_decls; 
+let apply_renaming
+      ({ function_decls;
          closure_elements;
-       } as t) perm =
+       } as t) renaming =
   let function_decls' =
-    Function_declarations.apply_name_permutation function_decls perm
+    Function_declarations.apply_renaming function_decls renaming
   in
   let closure_elements' =
-    Var_within_closure.Map.map_sharing (fun simple ->
-        Simple.apply_name_permutation simple perm)
+    Var_within_closure.Map.filter_map (fun var simple ->
+        if Renaming.closure_var_is_used renaming var
+        then Some (Simple.apply_renaming simple renaming)
+        else None)
       closure_elements
   in
   if function_decls == function_decls'
@@ -151,19 +153,6 @@ let all_ids_for_export
       Ids_for_export.add_simple ids simple)
     closure_elements
     function_decls_ids
-
-let import import_map { function_decls; closure_elements; } =
-  let function_decls =
-    Function_declarations.import import_map function_decls
-  in
-  let closure_elements =
-    Var_within_closure.Map.filter_map (fun var simple ->
-        if Ids_for_export.Import_map.closure_var_is_used import_map var
-        then Some (Ids_for_export.Import_map.simple import_map simple)
-        else None)
-      closure_elements
-  in
-  { function_decls; closure_elements; }
 
 let filter_function_declarations t ~f =
   let function_decls =

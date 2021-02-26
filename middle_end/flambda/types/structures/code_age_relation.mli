@@ -73,4 +73,4 @@ val union : t -> t -> t
 
 val all_code_ids_for_export : t -> Code_id.Set.t
 
-val import : Ids_for_export.Import_map.t -> t -> t
+val apply_renaming : t -> Renaming.t -> t

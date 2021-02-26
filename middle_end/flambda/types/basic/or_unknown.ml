@@ -69,9 +69,9 @@ let all_ids_for_export all_ids_for_export_contents t =
   | Known contents -> all_ids_for_export_contents contents
   | Unknown -> Ids_for_export.empty
 
-let import import_contents import_map t =
+let apply_renaming t renaming rename_contents =
   match t with
-  | Known contents -> Known (import_contents import_map contents)
+  | Known contents -> Known (rename_contents contents renaming)
   | Unknown -> Unknown
 
 module Lift (I : Identifiable.S) = struct

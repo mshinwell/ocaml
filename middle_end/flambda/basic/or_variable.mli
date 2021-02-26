@@ -16,6 +16,8 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
+(** Values of type ['a] must not contain names! *)
+
 type 'a t =
   | Const of 'a
   | Var of Variable.t
@@ -28,4 +30,4 @@ val value_map : 'a t -> default:'b -> f:('a -> 'b) -> 'b
 
 val free_names : _ t -> Name_occurrences.t
 
-val apply_name_permutation : 'a t -> Name_permutation.t -> 'a t
+val apply_renaming : 'a t -> Renaming.t -> 'a t

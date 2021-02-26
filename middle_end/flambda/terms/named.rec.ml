@@ -75,22 +75,22 @@ let free_names t =
   | Set_of_closures set -> Set_of_closures.free_names set
   | Static_consts consts -> Static_const.Group.free_names consts
 
-let apply_name_permutation t perm =
+let apply_renaming t perm =
   match t with
   | Simple simple ->
-    let simple' = Simple.apply_name_permutation simple perm in
+    let simple' = Simple.apply_renaming simple perm in
     if simple == simple' then t
     else Simple simple'
   | Prim (prim, dbg) ->
-    let prim' = Flambda_primitive.apply_name_permutation prim perm in
+    let prim' = Flambda_primitive.apply_renaming prim perm in
     if prim == prim' then t
     else Prim (prim', dbg)
   | Set_of_closures set ->
-    let set' = Set_of_closures.apply_name_permutation set perm in
+    let set' = Set_of_closures.apply_renaming set perm in
     if set == set' then t
     else Set_of_closures set'
   | Static_consts consts ->
-    let consts' = Static_const.Group.apply_name_permutation consts perm in
+    let consts' = Static_const.Group.apply_renaming consts perm in
     if consts == consts' then t
     else Static_consts consts'
 
@@ -100,21 +100,6 @@ let all_ids_for_export t =
   | Prim (prim, _dbg) -> Flambda_primitive.all_ids_for_export prim
   | Set_of_closures set -> Set_of_closures.all_ids_for_export set
   | Static_consts consts -> Static_const.Group.all_ids_for_export consts
-
-let import import_map t =
-  match t with
-  | Simple simple ->
-    let simple = Ids_for_export.Import_map.simple import_map simple in
-    Simple simple
-  | Prim (prim, dbg) ->
-    let prim = Flambda_primitive.import import_map prim in
-    Prim (prim, dbg)
-  | Set_of_closures set ->
-    let set = Set_of_closures.import import_map set in
-    Set_of_closures set
-  | Static_consts consts ->
-    let consts = Static_const.Group.import import_map consts in
-    Static_consts consts
 
 let box_value name (kind : Flambda_kind.t) dbg : t * Flambda_kind.t =
   let simple = Simple.name name in

@@ -60,7 +60,7 @@ module Cached : sig
 
   val clean_for_export : t -> reachable_names:Name_occurrences.t -> t
 
-  val import : Ids_for_export.Import_map.t -> t -> t
+  val apply_renaming : t -> Renaming.t -> t
 
   val merge : t -> t -> t
 end = struct
@@ -181,21 +181,20 @@ end = struct
       aliases;
     }
 
-  let import import_map { names_to_types; aliases; symbol_projections; } =
-    let module Import = Ids_for_export.Import_map in
+  let apply_renaming { names_to_types; aliases; symbol_projections; } renaming =
     let names_to_types =
       Name.Map.fold (fun name (ty, binding_time, mode) acc ->
-          Name.Map.add (Import.name import_map name)
-            (Type_grammar.import import_map ty, binding_time, mode)
+          Name.Map.add (Renaming.apply_name renaming name)
+            (Type_grammar.apply_renaming ty renaming, binding_time, mode)
             acc)
         names_to_types
         Name.Map.empty
     in
-    let aliases = Aliases.import import_map aliases in
+    let aliases = Aliases.apply_renaming aliases renaming in
     let symbol_projections =
       Variable.Map.fold (fun var proj acc ->
-          Variable.Map.add (Import.variable import_map var)
-            (Symbol_projection.import import_map proj)
+          Variable.Map.add (Renaming.apply_variable renaming var)
+            (Symbol_projection.apply_renaming proj renaming)
             acc)
         symbol_projections
         Variable.Map.empty
@@ -290,7 +289,26 @@ type t = {
   closure_env : t option;
 }
 
-module Serializable = struct
+module Serializable : sig
+  type typing_env = t
+  type t
+
+  val create : typing_env -> t
+
+  val print : Format.formatter -> t -> unit
+
+  val to_typing_env
+     : t
+    -> resolver:(Compilation_unit.t -> typing_env option)
+    -> get_imported_names:(unit -> Name.Set.t)
+    -> typing_env
+
+  val all_ids_for_export : t -> Ids_for_export.t
+
+  val apply_renaming : t -> Renaming.t -> t
+
+  val merge : t -> t -> t
+end = struct
   type typing_env = t
 
   type t = {
@@ -387,20 +405,19 @@ module Serializable = struct
     in
     ids
 
-  let import import_map { defined_symbols;
-                          code_age_relation;
-                          just_after_level; } =
+  let apply_renaming { defined_symbols; code_age_relation; just_after_level; }
+        renaming =
     let defined_symbols =
       Symbol.Set.fold (fun sym symbols ->
-          Symbol.Set.add (Ids_for_export.Import_map.symbol import_map sym)
+          Symbol.Set.add (Renaming.apply_symbol renaming sym)
             symbols)
         defined_symbols
         Symbol.Set.empty
     in
     let code_age_relation =
-      Code_age_relation.import import_map code_age_relation
+      Code_age_relation.apply_renaming code_age_relation renaming
     in
-    let just_after_level = Cached.import import_map just_after_level in
+    let just_after_level = Cached.apply_renaming just_after_level renaming in
     { defined_symbols; code_age_relation; just_after_level; }
 
   let merge t1 t2 =

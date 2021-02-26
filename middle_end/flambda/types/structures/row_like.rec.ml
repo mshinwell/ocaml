@@ -28,7 +28,7 @@ module Make
      val subset : t -> t -> bool
      (** [subset a b] is true if [a] is a subset of [b] *)
 
-     val import : Ids_for_export.Import_map.t -> t -> t
+     val apply_renaming : t -> Renaming.t -> t
      (** [Index.t] values do not contain ids (so far), but they can contain
          closure vars that may need removing on import *)
   end)
@@ -360,28 +360,6 @@ struct
           (Maps_to.all_ids_for_export maps_to)
           from_known_tags
 
-    let import import_map { known_tags; other_tags; } =
-      let import_index = function
-        | Known index -> Known (Index.import import_map index)
-        | At_least index -> At_least (Index.import import_map index)
-      in
-      let known_tags =
-        Tag.Map.map (fun { maps_to; index; } ->
-            let maps_to = Maps_to.import import_map maps_to in
-            let index = import_index index in
-            { maps_to; index; })
-          known_tags
-      in
-      let other_tags : _ Or_bottom.t =
-        match other_tags with
-        | Bottom -> Bottom
-        | Ok { maps_to; index; } ->
-          let maps_to = Maps_to.import import_map maps_to in
-          let index = import_index index in
-          Ok { maps_to; index; }
-      in
-      { known_tags; other_tags; }
-
     let map_maps_to { known_tags; other_tags; }
           ~(f : Maps_to.t -> Maps_to.t Or_bottom.t)
           : _ Or_bottom.t =
@@ -407,17 +385,25 @@ struct
       if is_bottom result then Bottom
       else Ok result
 
-    let apply_name_permutation ({ known_tags; other_tags; } as t) perm =
+    let apply_renaming ({ known_tags; other_tags; } as t) renaming =
+      let rename_index = function
+        | Known index -> Known (Index.apply_renaming index renaming)
+        | At_least index -> At_least (Index.apply_renaming index renaming)
+      in
       let known_tags' =
         Tag.Map.map_sharing (fun { index; maps_to } ->
-            { index; maps_to = Maps_to.apply_name_permutation maps_to perm })
+            { index = rename_index index;
+              maps_to = Maps_to.apply_renaming maps_to renaming;
+            })
           known_tags
       in
       let other_tags' : _ Or_bottom.t =
         match other_tags with
         | Bottom -> Bottom
         | Ok { index; maps_to } ->
-          Ok { index; maps_to = Maps_to.apply_name_permutation maps_to perm }
+          Ok { index = rename_index index;
+               maps_to = Maps_to.apply_renaming maps_to renaming;
+             }
       in
       if known_tags == known_tags' && other_tags == other_tags' then t
       else
@@ -434,7 +420,7 @@ struct
       a smaller number is included in a bigger *)
     let union t1 t2 = Targetint.OCaml.max t1 t2
     let inter t1 t2 = Targetint.OCaml.min t1 t2
-    let import _ t = t
+    let apply_renaming t _ = t
   end
 
   module For_blocks = struct

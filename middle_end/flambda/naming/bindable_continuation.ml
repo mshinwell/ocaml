@@ -20,19 +20,16 @@ include Continuation
 
 let free_names t = Name_occurrences.singleton_continuation t
 
-let apply_name_permutation t perm = Name_permutation.apply_continuation perm t
+let apply_renaming t perm = Renaming.apply_continuation perm t
 
 let all_ids_for_export t =
   Ids_for_export.add_continuation Ids_for_export.empty t
 
-let import import_map t =
-  Ids_for_export.Import_map.continuation import_map t
-
 let add_to_name_permutation t ~guaranteed_fresh perm =
-  Name_permutation.add_fresh_continuation perm t ~guaranteed_fresh
+  Renaming.add_fresh_continuation perm t ~guaranteed_fresh
 
 let name_permutation t ~guaranteed_fresh =
-  add_to_name_permutation t ~guaranteed_fresh Name_permutation.empty
+  add_to_name_permutation t ~guaranteed_fresh Renaming.empty
 
 let singleton_occurrence_in_terms t = Name_occurrences.singleton_continuation t
 

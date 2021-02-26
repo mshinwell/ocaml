@@ -113,16 +113,8 @@ let free_names_in_types t =
     ~name:(fun name -> Name_occurrences.singleton_name name Name_mode.in_types)
     ~const:(fun _ -> Name_occurrences.empty)
 
-let apply_name_permutation t perm =
-  let [@inline always] name old_name =
-    let new_name = Name_permutation.apply_name perm old_name in
-    if old_name == new_name then t
-    else
-      match rec_info t with
-      | None -> name new_name
-      | Some rec_info -> with_rec_info (name new_name) rec_info
-  in
-  pattern_match t ~const:(fun _ -> t) ~name
+let apply_renaming t perm =
+  Renaming.apply_simple perm t
 
 module List = struct
   type nonrec t = t list
@@ -151,11 +143,11 @@ module List = struct
       (Name_occurrences.empty)
       t
 
-  let apply_name_permutation t perm =
+  let apply_renaming t perm =
     let changed = ref false in
     let result =
       List.map (fun simple ->
-          let simple' = apply_name_permutation simple perm in
+          let simple' = apply_renaming simple perm in
           if not (simple == simple') then begin
             changed := true
           end;
@@ -201,8 +193,8 @@ module With_kind = struct
 
   let free_names (simple, _kind) = free_names simple
 
-  let apply_name_permutation ((simple, kind) as t) perm =
-    let simple' = apply_name_permutation simple perm in
+  let apply_renaming ((simple, kind) as t) perm =
+    let simple' = apply_renaming simple perm in
     if simple == simple' then t
     else simple', kind
 end

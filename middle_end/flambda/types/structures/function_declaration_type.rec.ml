@@ -52,9 +52,9 @@ module Inlinable = struct
   let rec_info t = t.rec_info
   let is_tupled t = t.is_tupled
 
-  let apply_name_permutation
-        ({ code_id; dbg = _; rec_info = _; is_tupled = _; } as t) perm =
-    let code_id' = Name_permutation.apply_code_id perm code_id in
+  let apply_renaming
+        ({ code_id; dbg = _; rec_info = _; is_tupled = _; } as t) renaming =
+    let code_id' = Renaming.apply_code_id renaming code_id in
     if code_id == code_id' then t
     else { t with code_id = code_id'; }
 
@@ -83,8 +83,8 @@ module Non_inlinable = struct
   let code_id t = t.code_id
   let is_tupled t = t.is_tupled
 
-  let apply_name_permutation ({ code_id; is_tupled = _; } as t) perm =
-    let code_id' = Name_permutation.apply_code_id perm code_id in
+  let apply_renaming ({ code_id; is_tupled = _; } as t) renaming =
+    let code_id' = Renaming.apply_code_id renaming code_id in
     if code_id == code_id' then t
     else { t with code_id = code_id'; }
 end
@@ -121,23 +121,13 @@ let all_ids_for_export (t : t) =
   | Ok (Non_inlinable { code_id; is_tupled = _; }) ->
     Ids_for_export.add_code_id Ids_for_export.empty code_id
 
-let import import_map (t : t) : t =
-  match t with
-  | Bottom | Unknown -> t
-  | Ok (Inlinable { code_id; dbg; rec_info; is_tupled; }) ->
-    let code_id = Ids_for_export.Import_map.code_id import_map code_id in
-    Ok (Inlinable { code_id; dbg; rec_info; is_tupled; })
-  | Ok (Non_inlinable { code_id; is_tupled; }) ->
-    let code_id = Ids_for_export.Import_map.code_id import_map code_id in
-    Ok (Non_inlinable { code_id; is_tupled; })
-
-let apply_name_permutation (t : t) perm : t =
+let apply_renaming (t : t) renaming : t =
   match t with
   | Bottom | Unknown -> t
   | Ok (Inlinable inlinable) ->
-    Ok (Inlinable (Inlinable.apply_name_permutation inlinable perm))
+    Ok (Inlinable (Inlinable.apply_renaming inlinable renaming))
   | Ok (Non_inlinable non_inlinable) ->
-    Ok (Non_inlinable (Non_inlinable.apply_name_permutation non_inlinable perm))
+    Ok (Non_inlinable (Non_inlinable.apply_renaming non_inlinable renaming))
 
 let meet (env : Meet_env.t) (t1 : t) (t2 : t)
       : (t * TEE.t) Or_bottom.t =

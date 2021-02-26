@@ -39,15 +39,15 @@ let print_with_cache ~cache ppf t =
 
 let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
-let apply_name_permutation t perm =
+let apply_renaming t renaming =
   match t with
   | Naked_immediates _ -> t
   | Is_int ty ->
-    let ty' = T.apply_name_permutation ty perm in
+    let ty' = T.apply_renaming ty renaming in
     if ty == ty' then t
     else Is_int ty'
   | Get_tag ty ->
-    let ty' = T.apply_name_permutation ty perm in
+    let ty' = T.apply_renaming ty renaming in
     if ty == ty' then t
     else Get_tag ty'
 
@@ -60,12 +60,6 @@ let all_ids_for_export t =
   match t with
   | Naked_immediates _ -> Ids_for_export.empty
   | Is_int ty | Get_tag ty -> T.all_ids_for_export ty
-
-let import import_map t =
-  match t with
-  | Naked_immediates _ -> t
-  | Is_int ty -> Is_int (T.import import_map ty)
-  | Get_tag ty -> Get_tag (T.import import_map ty)
 
 let apply_rec_info t rec_info : _ Or_bottom.t =
   if Rec_info.is_initial rec_info then Ok t

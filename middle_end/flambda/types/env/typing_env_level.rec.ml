@@ -89,14 +89,14 @@ let fold_on_defined_vars f t init =
     t.binding_times
     init
 
-let apply_name_permutation
+let apply_renaming
       ({ defined_vars; binding_times; equations; symbol_projections; }
         as t)
       perm =
   let defined_vars_changed = ref false in
   let defined_vars' =
     Variable.Map.fold (fun var kind defined_vars ->
-        let var' = Name_permutation.apply_variable perm var in
+        let var' = Renaming.apply_variable perm var in
         if not (var == var') then begin
           defined_vars_changed := true
         end;
@@ -109,7 +109,7 @@ let apply_name_permutation
       Binding_time.Map.fold (fun binding_time vars binding_times ->
           let vars' =
             Variable.Set.map (fun var ->
-              Name_permutation.apply_variable perm var)
+              Renaming.apply_variable perm var)
               vars
           in
           Binding_time.Map.add binding_time vars' binding_times)
@@ -121,8 +121,8 @@ let apply_name_permutation
   let equations_changed = ref false in
   let equations' =
     Name.Map.fold (fun name typ equations ->
-        let name' = Name_permutation.apply_name perm name in
-        let typ' = Type_grammar.apply_name_permutation typ perm in
+        let name' = Renaming.apply_name perm name in
+        let typ' = Type_grammar.apply_renaming typ perm in
         if not (name == name' && typ == typ') then begin
           equations_changed := true
         end;
@@ -133,9 +133,9 @@ let apply_name_permutation
   let symbol_projections_changed = ref false in
   let symbol_projections' =
     Variable.Map.fold (fun var projection symbol_projections ->
-        let var' = Name_permutation.apply_variable perm var in
+        let var' = Renaming.apply_variable perm var in
         let projection' =
-          Symbol_projection.apply_name_permutation projection perm
+          Symbol_projection.apply_renaming projection perm
         in
         if not (var == var') ||
            not (projection == projection') then begin
@@ -599,6 +599,3 @@ let all_ids_for_export t =
     Ids_for_export.add_variable ids var
   in
   Variable.Map.fold symbol_projection t.symbol_projections ids
-
-let import _import_map _t =
-  Misc.fatal_error "Import not implemented on Typing_env_level"

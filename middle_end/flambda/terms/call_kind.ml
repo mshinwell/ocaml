@@ -165,17 +165,17 @@ let free_names t =
         Name_occurrences.singleton_name obj Name_mode.normal)
       ~const:(fun _ -> Name_occurrences.empty)
 
-let apply_name_permutation t perm =
+let apply_renaming t perm =
   match t with
   | Function (Direct { code_id; closure_id; return_arity; }) ->
-    let code_id' = Name_permutation.apply_code_id perm code_id in
+    let code_id' = Renaming.apply_code_id perm code_id in
     if code_id == code_id' then t
     else Function (Direct { code_id = code_id'; closure_id; return_arity; })
   | Function Indirect_unknown_arity
   | Function (Indirect_known_arity { param_arity = _; return_arity = _; })
   | C_call { alloc = _; param_arity = _; return_arity = _; } -> t
   | Method { kind; obj; } ->
-    let obj' = Simple.apply_name_permutation obj perm in
+    let obj' = Simple.apply_renaming obj perm in
     if obj == obj' then t
     else
       Method {
@@ -193,14 +193,3 @@ let all_ids_for_export t =
     Ids_for_export.empty
   | Method { kind = _; obj; } ->
     Ids_for_export.from_simple obj
-
-let import import_map t = match t with
-  | Function (Direct { code_id; closure_id; return_arity; }) ->
-    let code_id = Ids_for_export.Import_map.code_id import_map code_id in
-    Function (Direct { code_id; closure_id; return_arity; })
-  | Function Indirect_unknown_arity
-  | Function (Indirect_known_arity { param_arity = _; return_arity = _; })
-  | C_call { alloc = _; param_arity = _; return_arity = _; } -> t
-  | Method { kind; obj; } ->
-    let obj = Ids_for_export.Import_map.simple import_map obj in
-    Method { kind; obj; }

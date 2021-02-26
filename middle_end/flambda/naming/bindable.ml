@@ -31,13 +31,13 @@ module type S = sig
 
   val rename : t -> t
 
-  val name_permutation : t -> guaranteed_fresh:t -> Name_permutation.t
+  val name_permutation : t -> guaranteed_fresh:t -> Renaming.t
 
   val add_to_name_permutation
      : t
     -> guaranteed_fresh:t
-    -> Name_permutation.t
-    -> Name_permutation.t
+    -> Renaming.t
+    -> Renaming.t
 
   (* CR mshinwell: Check why this and [free_names] are here *)
   val singleton_occurrence_in_terms : t -> Name_occurrences.t

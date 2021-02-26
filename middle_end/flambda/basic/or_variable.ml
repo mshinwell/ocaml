@@ -37,11 +37,11 @@ let free_names t =
   | Const _ -> Name_occurrences.empty
   | Var var -> Name_occurrences.singleton_variable var Name_mode.normal
 
-let apply_name_permutation t perm =
+let apply_renaming t perm =
   match t with
   | Const _ -> t
   | Var var ->
-    let var' = Name_permutation.apply_variable perm var in
+    let var' = Renaming.apply_variable perm var in
     if var == var' then t
     else Var var'
 

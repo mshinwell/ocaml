@@ -14,6 +14,7 @@
 (**************************************************************************)
 
 module Const = Reg_width_things.Const
+module Simple = Reg_width_things.Simple
 
 type t = {
   symbols : Symbol.Set.t;
@@ -89,6 +90,7 @@ let add_code_id t code_id =
 let add_continuation t continuation =
   { t with continuations = Continuation.Set.add continuation t.continuations }
 
+
 let from_simple simple =
   let simples =
     match Simple.rec_info simple with
@@ -148,6 +150,29 @@ module Import_map = struct
        are really missing at this point). *)
   }
 
+  let has_no_action
+        { symbols; variables; simples; consts; code_ids; continuations;
+          used_closure_vars = _;
+        } =
+    Symbol.Map.is_empty symbols
+    && Variable.Map.is_empty variables
+    && Simple.Map.is_empty simples
+    && Const.Map.is_empty consts
+    && Code_id.Map.is_empty code_ids
+    && Continuation.Map.is_empty continuations
+
+  let is_empty
+        { symbols; variables; simples; consts; code_ids; continuations;
+          used_closure_vars;
+        } =
+    Symbol.Map.is_empty symbols
+    && Variable.Map.is_empty variables
+    && Simple.Map.is_empty simples
+    && Const.Map.is_empty consts
+    && Code_id.Map.is_empty code_ids
+    && Continuation.Map.is_empty continuations
+    && Var_within_closure.Set.is_empty used_closure_vars
+
   let create
       ~symbols
       ~variables
@@ -163,6 +188,40 @@ module Import_map = struct
       code_ids;
       continuations;
       used_closure_vars;
+    }
+
+  let union
+        { symbols = symbols1;
+          variables = variables1;
+          simples = simples1;
+          consts = consts1;
+          code_ids = code_ids1;
+          continuations = continuations1;
+          used_closure_vars = used_closure_vars1;
+        }
+        { symbols = symbols2;
+          variables = variables2;
+          simples = simples2;
+          consts = consts2;
+          code_ids = code_ids2;
+          continuations = continuations2;
+          used_closure_vars = used_closure_vars2;
+        } =
+    { symbols =
+        Symbol.Map.disjoint_union ~eq:Symbol.equal symbols1 symbols2;
+      variables =
+        Variable.Map.disjoint_union ~eq:Variable.equal variables1 variables2;
+      simples =
+        Simple.Map.disjoint_union ~eq:Simple.equal simples1 simples2;
+      consts =
+        Const.Map.disjoint_union ~eq:Const.equal consts1 consts2;
+      code_ids =
+        Code_id.Map.disjoint_union ~eq:Code_id.equal code_ids1 code_ids2;
+      continuations =
+        Continuation.Map.disjoint_union ~eq:Continuation.equal
+          continuations1 continuations2;
+      used_closure_vars =
+        Var_within_closure.Set.union used_closure_vars1 used_closure_vars2;
     }
 
   let symbol t orig =
@@ -196,16 +255,19 @@ module Import_map = struct
       ~symbol:(fun sym -> Name.symbol (symbol t sym))
 
   let simple t simple =
+    (* [t.simples] only holds those [Simple]s with [Rec_info] (analogously
+       to the grand table of [Simple]s, see reg_width_things.ml). *)
     match Simple.Map.find simple t.simples with
     | simple -> simple
     | exception Not_found ->
-      begin match Simple.rec_info simple with
-      | None ->
-        Simple.pattern_match simple
-          ~name:(fun n -> Simple.name (name t n))
-          ~const:(fun c -> Simple.const (const t c))
-      | Some _rec_info -> simple
-      end
+      (* In this case, either the [Simple] has no [Rec_info]; or it does
+         have [Rec_info] and its hash did not collide upon import. *)
+      Simple.pattern_match simple
+        ~const:(fun c -> Simple.const (const t c))
+        ~name:(fun n ->
+          match Simple.rec_info simple with
+          | None -> Simple.name (name t n)
+          | Some _ -> simple)
 
   let closure_var_is_used t var =
     Var_within_closure.Set.mem var t.used_closure_vars

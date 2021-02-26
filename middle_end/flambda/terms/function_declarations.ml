@@ -59,12 +59,12 @@ let free_names { funs; _ } =
 
 (* Note: the call to {create} at the end already takes into account the
    permutation applied to the function_declarations in {in_order}, so
-   there is no need to apply_name_permutation the func_decls in the {funs}
+   there is no need to apply_renaming the func_decls in the {funs}
    field. *)
-let apply_name_permutation ({ in_order; _ } as t) perm =
+let apply_renaming ({ in_order; _ } as t) perm =
   let in_order' =
     Closure_id.Lmap.map_sharing (fun func_decl ->
-        Function_declaration.apply_name_permutation func_decl perm)
+        Function_declaration.apply_renaming func_decl perm)
       in_order
   in
   if in_order == in_order' then t
@@ -77,12 +77,6 @@ let all_ids_for_export { funs; _ } =
         (Function_declaration.all_ids_for_export func_decl))
     funs
     Ids_for_export.empty
-
-let import import_map { in_order; _ } =
-  let in_order =
-    Closure_id.Lmap.map (Function_declaration.import import_map) in_order
-  in
-  create in_order
 
 let compare { funs = funs1; _ } { funs = funs2; _ } =
   Closure_id.Map.compare Function_declaration.compare funs1 funs2

@@ -26,16 +26,16 @@ module VB = Var_in_binding_pos
 let make_inlined_body ~callee ~unroll_to ~params ~args ~my_closure ~body
       ~exn_continuation ~return_continuation ~apply_exn_continuation
       ~apply_return_continuation =
-  let perm = Name_permutation.empty in
+  let perm = Renaming.empty in
   let perm =
     match (apply_return_continuation : Apply.Result_continuation.t) with
     | Return k ->
-       Name_permutation.add_continuation perm
+       Renaming.add_continuation perm
          return_continuation k
     | Never_returns -> perm
   in
   let perm =
-    Name_permutation.add_continuation perm
+    Renaming.add_continuation perm
       (Exn_continuation.exn_handler exn_continuation)
       apply_exn_continuation
   in
@@ -44,7 +44,7 @@ let make_inlined_body ~callee ~unroll_to ~params ~args ~my_closure ~body
       ~newer_rec_info:(Some (Rec_info.create ~depth:1 ~unroll_to))
     |> Option.get  (* CR mshinwell: improve *)
   in
-  Expr.apply_name_permutation
+  Expr.apply_renaming
     (Expr.bind_parameters_to_args_no_simplification
        ~params ~args
        ~body:(Let.create

@@ -158,6 +158,9 @@ module Simple : sig
 
   val with_rec_info : t -> Rec_info.t -> t
 
+  (* This does not consult the grand table of [Simple]s. *)
+  val has_rec_info : t -> bool
+
   val pattern_match
      : t
     -> name:(Name.t -> 'a)

@@ -137,14 +137,14 @@ let join env
     closure_var_types;
   }
 
-let apply_name_permutation
+let apply_renaming
       { function_decls; closure_types; closure_var_types; } perm =
   { function_decls =
       Closure_id.Map.map_sharing (fun function_decl ->
-          FDT.apply_name_permutation function_decl perm)
+          FDT.apply_renaming function_decl perm)
         function_decls;
-    closure_types = PC.apply_name_permutation closure_types perm;
-    closure_var_types = PV.apply_name_permutation closure_var_types perm;
+    closure_types = PC.apply_renaming closure_types perm;
+    closure_var_types = PV.apply_renaming closure_var_types perm;
   }
 
 let free_names { function_decls; closure_types; closure_var_types; } =
@@ -168,20 +168,6 @@ let all_ids_for_export { function_decls; closure_types; closure_var_types; } =
   Ids_for_export.union function_decls_ids
     (Ids_for_export.union (PC.all_ids_for_export closure_types)
       (PV.all_ids_for_export closure_var_types))
-
-let import import_map { function_decls; closure_types; closure_var_types; } =
-  let function_decls =
-    Closure_id.Map.map (fun function_decl ->
-        FDT.import import_map function_decl)
-      function_decls
-  in
-  let closure_types =
-    PC.import import_map closure_types
-  in
-  let closure_var_types =
-    PV.import import_map closure_var_types
-  in
-  { function_decls; closure_types; closure_var_types; }
 
 let function_decl_types t = t.function_decls
 let closure_types t = PC.to_map t.closure_types

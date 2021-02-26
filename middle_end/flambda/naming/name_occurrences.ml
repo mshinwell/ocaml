@@ -22,7 +22,7 @@ module Kind = Name_mode
 
 module For_one_variety_of_names (N : sig
   include Identifiable.S
-  val apply_name_permutation : t -> Name_permutation.t -> t
+  val apply_renaming : t -> Renaming.t -> t
 end) : sig
   type t
 
@@ -38,7 +38,7 @@ end) : sig
 
   val add : t -> N.t -> Kind.t -> t
 
-  val apply_name_permutation : t -> Name_permutation.t -> t
+  val apply_renaming : t -> Renaming.t -> t
 
   val diff : t -> t -> t
 
@@ -69,8 +69,6 @@ end) : sig
   val for_all : t -> f:(N.t -> bool) -> bool
 
   val filter : t -> f:(N.t -> bool) -> t
-
-  val import : t -> import_name:(N.t -> N.t) -> t
 end = struct
   module For_one_name : sig
     type t
@@ -332,17 +330,17 @@ end = struct
       in
       Potentially_many map
 
-  let apply_name_permutation t perm =
+  let apply_renaming t perm =
     match t with
     | Empty -> Empty
     | One (name, kind) ->
-      let name' = N.apply_name_permutation name perm in
+      let name' = N.apply_renaming name perm in
       if name == name' then t
       else One (name', kind)
     | Potentially_many map ->
       let map =
         N.Map.fold (fun name for_one_name result ->
-            let name = N.apply_name_permutation name perm in
+            let name = N.apply_renaming name perm in
             N.Map.add name for_one_name result)
           map
           N.Map.empty
@@ -583,44 +581,28 @@ end = struct
       let map = N.Map.filter (fun name _ -> f name) map in
       if N.Map.is_empty map then Empty
       else Potentially_many map
-
-  let import t ~import_name =
-    match t with
-    | Empty -> Empty
-    | One (name, kind) ->
-      let name = import_name name in
-      One (name, kind)
-    | Potentially_many map ->
-      let map =
-        N.Map.fold (fun name for_one_name result ->
-            let name = import_name name in
-            N.Map.add name for_one_name result)
-          map
-          N.Map.empty
-      in
-      Potentially_many map
 end [@@@inlined always]
 
 module For_names = For_one_variety_of_names (struct
   include Name
-  let apply_name_permutation t perm = Name_permutation.apply_name perm t
+  let apply_renaming t perm = Renaming.apply_name perm t
 end)
 
 module For_continuations = For_one_variety_of_names (struct
   include Continuation
-  let apply_name_permutation t perm = Name_permutation.apply_continuation perm t
+  let apply_renaming t perm = Renaming.apply_continuation perm t
 end)
 
 module For_closure_vars = For_one_variety_of_names (struct
   include Var_within_closure
   (* We never bind [Var_within_closure]s using [Name_abstraction]. *)
-  let apply_name_permutation t _perm = t
+  let apply_renaming t _perm = t
 end)
 
 module For_code_ids = For_one_variety_of_names (struct
   include Code_id
   (* We never bind [Code_id]s using [Name_abstraction]. *)
-  let apply_name_permutation t perm = Name_permutation.apply_code_id perm t
+  let apply_renaming t perm = Renaming.apply_code_id perm t
 end)
 
 type t = {
@@ -791,38 +773,6 @@ let create_closure_vars clos_vars =
       For_closure_vars.empty
   in
   { empty with closure_vars; }
-
-let apply_name_permutation
-      ({ names; continuations; continuations_with_traps;
-         continuations_in_trap_actions; closure_vars;
-         code_ids; newer_version_of_code_ids; } as t)
-      perm =
-  if Name_permutation.is_empty perm then t
-  else
-    let names =
-      For_names.apply_name_permutation names perm
-    in
-    let continuations =
-      For_continuations.apply_name_permutation continuations perm
-    in
-    let continuations_with_traps =
-      For_continuations.apply_name_permutation continuations_with_traps
-        perm
-    in
-    let continuations_in_trap_actions =
-      For_continuations.apply_name_permutation continuations_in_trap_actions
-        perm
-    in
-    (* [Symbol]s, [Var_within_closure]s and [Code_id]s are never bound using
-       [Name_abstraction]. *)
-    { names;
-      continuations;
-      continuations_with_traps;
-      continuations_in_trap_actions;
-      closure_vars;
-      code_ids;
-      newer_version_of_code_ids;
-    }
 
 let binary_conjunction ~for_names ~for_continuations
       ~for_closure_vars ~for_code_ids
@@ -1204,35 +1154,36 @@ let filter_names t ~f =
 let fold_code_ids t ~init ~f =
   For_code_ids.fold t.code_ids ~init ~f
 
-let import
-      { names; continuations; continuations_with_traps;
-        continuations_in_trap_actions;
-        closure_vars; code_ids; newer_version_of_code_ids; }
-      ~import_name ~import_continuation ~import_code_id =
-  let names = For_names.import names ~import_name in
-  let continuations =
-    For_continuations.import continuations ~import_name:import_continuation
-  in
-  let continuations_with_traps =
-    For_continuations.import continuations_with_traps
-      ~import_name:import_continuation
-  in
-  let continuations_in_trap_actions =
-    For_continuations.import continuations_in_trap_actions
-      ~import_name:import_continuation
-  in
-  let code_ids = For_code_ids.import code_ids ~import_name:import_code_id in
-  let newer_version_of_code_ids =
-    For_code_ids.import newer_version_of_code_ids ~import_name:import_code_id
-  in
-  { names;
-    continuations;
-    continuations_with_traps;
-    continuations_in_trap_actions;
-    closure_vars;
-    code_ids;
-    newer_version_of_code_ids;
-  }
+let apply_renaming
+      ({ names; continuations; continuations_with_traps;
+         continuations_in_trap_actions;
+         closure_vars; code_ids; newer_version_of_code_ids; } as t)
+      renaming =
+  if Renaming.has_no_action renaming then t
+  else
+    let names = For_names.apply_renaming names renaming in
+    let continuations =
+      For_continuations.apply_renaming continuations renaming
+    in
+    let continuations_with_traps =
+      For_continuations.apply_renaming continuations_with_traps renaming
+    in
+    let continuations_in_trap_actions =
+      For_continuations.apply_renaming continuations_in_trap_actions renaming
+    in
+    let closure_vars = For_closure_vars.apply_renaming closure_vars renaming in
+    let code_ids = For_code_ids.apply_renaming code_ids renaming in
+    let newer_version_of_code_ids =
+      For_code_ids.apply_renaming newer_version_of_code_ids renaming
+    in
+    { names;
+      continuations;
+      continuations_with_traps;
+      continuations_in_trap_actions;
+      closure_vars;
+      code_ids;
+      newer_version_of_code_ids;
+    }
 
 let restrict_to_closure_vars
       { names = _; continuations = _; continuations_with_traps = _;

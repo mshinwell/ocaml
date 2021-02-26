@@ -31,39 +31,39 @@ module Make (Descr : sig
 end) = struct
   type t = {
     mutable descr : Descr.t;
-    mutable delayed_permutation : Name_permutation.t;
+    mutable delayed_permutation : Renaming.t;
     mutable free_names : Name_occurrences.t option;
   }
 
   let create descr =
     { descr;
-      delayed_permutation = Name_permutation.empty;
+      delayed_permutation = Renaming.empty;
       free_names = None;
     }
 
   let peek_descr t = t.descr
 
   let descr t =
-    if Name_permutation.is_empty t.delayed_permutation then begin
+    if Renaming.has_no_action t.delayed_permutation then begin
       t.descr
     end else begin
-      let descr = Descr.apply_name_permutation t.descr t.delayed_permutation in
+      let descr = Descr.apply_renaming t.descr t.delayed_permutation in
       t.descr <- descr;
       let free_names =
         match t.free_names with
         | None -> Descr.free_names descr
         | Some free_names ->
-          Name_occurrences.apply_name_permutation free_names
+          Name_occurrences.apply_renaming free_names
             t.delayed_permutation
       in
-      t.delayed_permutation <- Name_permutation.empty;
+      t.delayed_permutation <- Renaming.empty;
       t.free_names <- Some free_names;
       descr
     end
 
-  let apply_name_permutation t perm =
+  let apply_renaming t perm =
     let delayed_permutation =
-      Name_permutation.compose ~second:perm ~first:t.delayed_permutation
+      Renaming.compose ~second:perm ~first:t.delayed_permutation
     in
     { t with
       delayed_permutation;

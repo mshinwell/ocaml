@@ -35,11 +35,11 @@ let free_names t =
     t
     (Name_occurrences.empty)
 
-let apply_name_permutation t perm =
+let apply_renaming t perm =
   Continuation.Map.fold (fun k handler result ->
-      let k = Name_permutation.apply_continuation perm k in
+      let k = Renaming.apply_continuation perm k in
       let handler =
-        Continuation_handler.apply_name_permutation handler perm
+        Continuation_handler.apply_renaming handler perm
       in
       Continuation.Map.add k handler result)
     t
@@ -53,14 +53,6 @@ let all_ids_for_export t =
           k))
     t
     Ids_for_export.empty
-
-let import import_map t =
-  Continuation.Map.fold (fun k handler t ->
-      let k = Ids_for_export.Import_map.continuation import_map k in
-      let handler = Continuation_handler.import import_map handler in
-      Continuation.Map.add k handler t)
-    t 
-    Continuation.Map.empty
 
 let domain t = Continuation.Map.keys t
 

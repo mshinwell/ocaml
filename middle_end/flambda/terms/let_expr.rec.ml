@@ -37,13 +37,13 @@ module T0 = struct
   let free_names { body; num_normal_occurrences_of_bound_vars = _; } =
     Expr.free_names body
 
-  let apply_name_permutation
+  let apply_renaming
         ({ body; num_normal_occurrences_of_bound_vars; } as t) perm =
-    let body' = Expr.apply_name_permutation body perm in
+    let body' = Expr.apply_renaming body perm in
     let changed = ref (body != body') in
     let num_normal_occurrences_of_bound_vars =
       Variable.Map.fold (fun var num result ->
-          let var' = Name_permutation.apply_variable perm var in
+          let var' = Renaming.apply_variable perm var in
           changed := !changed || (var != var');
           Variable.Map.add var' num result)
         num_normal_occurrences_of_bound_vars
@@ -54,10 +54,6 @@ module T0 = struct
 
   let all_ids_for_export { body; num_normal_occurrences_of_bound_vars = _; } =
     Expr.all_ids_for_export body
-
-  let import import_map { body; num_normal_occurrences_of_bound_vars; } =
-    let body = Expr.import import_map body in
-    { body; num_normal_occurrences_of_bound_vars; }
 end
 
 module A = Name_abstraction.Make (Bindable_let_bound) (T0)
@@ -432,9 +428,9 @@ let free_names
       (Name_occurrences.union from_defining_expr from_body)
       from_bindable)
 
-let apply_name_permutation ({ name_abstraction; defining_expr; } as t) perm =
-  let name_abstraction' = A.apply_name_permutation name_abstraction perm in
-  let defining_expr' = Named.apply_name_permutation defining_expr perm in
+let apply_renaming ({ name_abstraction; defining_expr; } as t) perm =
+  let name_abstraction' = A.apply_renaming name_abstraction perm in
+  let defining_expr' = Named.apply_renaming defining_expr perm in
   if name_abstraction == name_abstraction' && defining_expr == defining_expr'
   then t
   else
@@ -446,8 +442,3 @@ let all_ids_for_export { name_abstraction; defining_expr; } =
   let defining_expr_ids = Named.all_ids_for_export defining_expr in
   let name_abstraction_ids = A.all_ids_for_export name_abstraction in
   Ids_for_export.union defining_expr_ids name_abstraction_ids
-
-let import import_map { name_abstraction; defining_expr; } =
-  let defining_expr = Named.import import_map defining_expr in
-  let name_abstraction = A.import import_map name_abstraction in
-  { name_abstraction; defining_expr; }

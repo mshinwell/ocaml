@@ -69,26 +69,22 @@ let equal_kinds t1 t2 =
 let free_names ({ param = _; kind = _; } as t) =
   Name_occurrences.singleton_variable (var t) Name_mode.normal
 
-let apply_name_permutation ({ param = _; kind; } as t) perm =
-  Name.pattern_match (Name_permutation.apply_name perm (name t))
+let apply_renaming ({ param = _; kind; } as t) perm =
+  Name.pattern_match (Renaming.apply_name perm (name t))
     ~var:(fun var -> create var kind)
     ~symbol:(fun _ ->
       Misc.fatal_errorf "Illegal name permutation on [Kinded_parameter]: %a"
-        Name_permutation.print perm)
+        Renaming.print perm)
 
 let all_ids_for_export { param; kind = _; } =
   Ids_for_export.add_variable Ids_for_export.empty param
 
-let import import_map { param; kind; } =
-  let param = Ids_for_export.Import_map.variable import_map param in
-  { param; kind; }
-
 let add_to_name_permutation t ~guaranteed_fresh perm =
-  Name_permutation.add_fresh_variable perm (var t)
+  Renaming.add_fresh_variable perm (var t)
     ~guaranteed_fresh:(var guaranteed_fresh)
 
 let name_permutation t ~guaranteed_fresh =
-  add_to_name_permutation t ~guaranteed_fresh Name_permutation.empty
+  add_to_name_permutation t ~guaranteed_fresh Renaming.empty
 
 let singleton_occurrence_in_terms t =
   Name_occurrences.singleton_variable (var t) Name_mode.normal
@@ -137,6 +133,6 @@ module List = struct
       (Name_occurrences.empty)
       t
 
-  let apply_name_permutation t perm =
-    List.map (fun param -> apply_name_permutation param perm) t
+  let apply_renaming t perm =
+    List.map (fun param -> apply_renaming param perm) t
 end

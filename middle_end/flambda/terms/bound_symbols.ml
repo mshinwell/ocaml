@@ -36,14 +36,14 @@ module Pattern = struct
     | Block_like symbol ->
       Format.fprintf ppf "@[<hov 1>(Block_like@ %a)@]" Symbol.print symbol
 
-  let apply_name_permutation t perm =
+  let apply_renaming t perm =
     match t with
     | Code code_id ->
-      Code (Name_permutation.apply_code_id perm code_id)
+      Code (Renaming.apply_code_id perm code_id)
     | Set_of_closures map ->
-      Set_of_closures (Closure_id.Lmap.map (Name_permutation.apply_symbol perm) map)
+      Set_of_closures (Closure_id.Lmap.map (Renaming.apply_symbol perm) map)
     | Block_like symbol ->
-      Block_like (Name_permutation.apply_symbol perm symbol)
+      Block_like (Renaming.apply_symbol perm symbol)
 
   let free_names t =
     match t with
@@ -115,17 +115,6 @@ module Pattern = struct
       in
       Ids_for_export.create ~symbols ()
     | Block_like symbol -> Ids_for_export.singleton_symbol symbol
-
-  let import import_map t =
-    let module IM = Ids_for_export.Import_map in
-    match t with
-    | Code code_id -> Code (IM.code_id import_map code_id)
-    | Set_of_closures closure_symbols ->
-      let closure_symbols =
-        Closure_id.Lmap.map (IM.symbol import_map) closure_symbols
-      in
-      Set_of_closures closure_symbols
-    | Block_like symbol -> Block_like (IM.symbol import_map symbol)
 end
 
 type t = Pattern.t list
@@ -179,8 +168,8 @@ let for_all_everything_being_defined t ~f =
     t
     f
 
-let apply_name_permutation t perm =
-  List.map (fun pattern -> Pattern.apply_name_permutation pattern perm) t
+let apply_renaming t perm =
+  List.map (fun pattern -> Pattern.apply_renaming pattern perm) t
 
 let free_names t =
   List.map Pattern.free_names t
@@ -189,8 +178,5 @@ let free_names t =
 let all_ids_for_export t =
   List.map Pattern.all_ids_for_export t
   |> Ids_for_export.union_list
-
-let import import_map t =
-  List.map (Pattern.import import_map) t
 
 let concat t1 t2 = t1 @ t2

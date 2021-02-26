@@ -35,8 +35,8 @@ let with_name_mode t name_mode = { t with name_mode; }
 
 let rename t = with_var t (Variable.rename t.var)
 
-let apply_name_permutation t perm =
-  with_var t (Name_permutation.apply_variable perm t.var)
+let apply_renaming t perm =
+  with_var t (Renaming.apply_variable perm t.var)
 
 let free_names t =
   Name_occurrences.singleton_variable t.var t.name_mode

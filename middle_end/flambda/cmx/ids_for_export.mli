@@ -13,7 +13,9 @@
 (*                                                                        *)
 (**************************************************************************)
 
-type t = {
+module Simple = Reg_width_things.Simple
+
+type t = private {
   symbols : Symbol.Set.t;
   variables : Variable.Set.t;
   simples : Simple.Set.t;
@@ -41,8 +43,6 @@ val singleton_continuation : Continuation.t -> t
 val singleton_symbol : Symbol.t -> t
 
 val from_simple : Simple.t -> t
-
-val add_const : t -> Reg_width_things.Const.t -> t
 
 val add_variable : t -> Variable.t -> t
 
@@ -73,6 +73,10 @@ module Import_map : sig
     -> used_closure_vars : Var_within_closure.Set.t
     -> t
 
+  val is_empty : t -> bool
+
+  val has_no_action : t -> bool
+
   val const : t -> Reg_width_things.Const.t -> Reg_width_things.Const.t
   val variable : t -> Variable.t -> Variable.t
   val symbol : t -> Symbol.t -> Symbol.t
@@ -81,5 +85,7 @@ module Import_map : sig
   val code_id : t -> Code_id.t -> Code_id.t
   val continuation : t -> Continuation.t -> Continuation.t
   val closure_var_is_used : t -> Var_within_closure.t -> bool
+
+  val union : t -> t -> t
 end
 

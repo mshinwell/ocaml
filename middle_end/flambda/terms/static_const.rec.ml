@@ -63,15 +63,15 @@ module Field_of_block = struct
       print (Format.formatter_of_out_channel chan) t
   end)
 
-  let apply_name_permutation t perm =
+  let apply_renaming t renaming =
     match t with
     | Tagged_immediate _ -> t
     | Symbol symbol ->
-      let symbol' = Name_permutation.apply_symbol perm symbol in
+      let symbol' = Renaming.apply_symbol renaming symbol in
       if symbol == symbol' then t
       else Symbol symbol'
     | Dynamically_computed var ->
-      let var' = Name_permutation.apply_variable perm var in
+      let var' = Renaming.apply_variable renaming var in
       if var == var' then t
       else Dynamically_computed var'
 
@@ -90,26 +90,6 @@ module Field_of_block = struct
     | Symbol sym ->
       Ids_for_export.add_symbol Ids_for_export.empty sym
     | Tagged_immediate _ -> Ids_for_export.empty
-
-  let import import_map t =
-    match t with
-    | Dynamically_computed var ->
-      let var = Ids_for_export.Import_map.variable import_map var in
-      Dynamically_computed var
-    | Symbol sym ->
-      let sym = Ids_for_export.Import_map.symbol import_map sym in
-      Symbol sym
-    | Tagged_immediate _ -> t
-
-(*
-  let invariant env t =
-    let module E = Invariant_env in
-    match t with
-    | Symbol sym -> E.check_symbol_is_bound env sym
-    | Tagged_immediate _ -> ()
-    | Dynamically_computed var ->
-      E.check_variable_is_bound_and_of_kind env var K.value
-*)
 end
 
 type t =
@@ -286,23 +266,23 @@ let free_names t =
       (Name_occurrences.empty)
       fields
 
-let apply_name_permutation t perm =
-  if Name_permutation.is_empty perm then t
+let apply_renaming t renaming =
+  if Renaming.has_no_action renaming then t
   else
     match t with
     | Code code ->
-      let code' = Code.apply_name_permutation code perm in
+      let code' = Code.apply_renaming code renaming in
       if code == code' then t
       else Code code'
     | Set_of_closures set ->
-      let set' = Set_of_closures.apply_name_permutation set perm in
+      let set' = Set_of_closures.apply_renaming set renaming in
       if set == set' then t
       else Set_of_closures set'
     | Block (tag, mut, fields) ->
       let changed = ref false in
       let fields =
         List.map (fun field ->
-            let field' = Field_of_block.apply_name_permutation field perm in
+            let field' = Field_of_block.apply_renaming field renaming in
             if not (field == field') then begin
               changed := true
             end;
@@ -312,19 +292,19 @@ let apply_name_permutation t perm =
       if not !changed then t
       else Block (tag, mut, fields)
     | Boxed_float or_var ->
-      let or_var' = Or_variable.apply_name_permutation or_var perm in
+      let or_var' = Or_variable.apply_renaming or_var renaming in
       if or_var == or_var' then t
       else Boxed_float or_var'
     | Boxed_int32 or_var ->
-      let or_var' = Or_variable.apply_name_permutation or_var perm in
+      let or_var' = Or_variable.apply_renaming or_var renaming in
       if or_var == or_var' then t
       else Boxed_int32 or_var'
     | Boxed_int64 or_var ->
-      let or_var' = Or_variable.apply_name_permutation or_var perm in
+      let or_var' = Or_variable.apply_renaming or_var renaming in
       if or_var == or_var' then t
       else Boxed_int64 or_var'
     | Boxed_nativeint or_var ->
-      let or_var' = Or_variable.apply_name_permutation or_var perm in
+      let or_var' = Or_variable.apply_renaming or_var renaming in
       if or_var == or_var' then t
       else Boxed_nativeint or_var'
     | Mutable_string { initial_value = _; }
@@ -335,7 +315,7 @@ let apply_name_permutation t perm =
         List.map (fun (field : _ Or_variable.t) ->
             let field' : _ Or_variable.t =
               match field with
-              | Var v -> Var (Name_permutation.apply_variable perm v)
+              | Var v -> Var (Renaming.apply_variable renaming v)
               | Const _ -> field
             in
             if not (field == field') then begin
@@ -352,7 +332,7 @@ let apply_name_permutation t perm =
         List.map (fun (field : _ Or_variable.t) ->
             let field' : _ Or_variable.t =
               match field with
-              | Var v -> Var (Name_permutation.apply_variable perm v)
+              | Var v -> Var (Renaming.apply_variable renaming v)
               | Const _ -> field
             in
             if not (field == field') then begin
@@ -400,51 +380,6 @@ let all_ids_for_export t =
         | Const _ -> ids)
       Ids_for_export.empty
       fields
-
-let import import_map t =
-  match t with
-  | Code code -> Code (Code.import import_map code)
-  | Set_of_closures set ->
-    Set_of_closures (Set_of_closures.import import_map set)
-  | Block (tag, mut, fields) ->
-    let fields = List.map (Field_of_block.import import_map) fields in
-    Block (tag, mut, fields)
-  | Boxed_float (Var var) ->
-    let var = Ids_for_export.Import_map.variable import_map var in
-    Boxed_float (Var var)
-  | Boxed_int32 (Var var) ->
-    let var = Ids_for_export.Import_map.variable import_map var in
-    Boxed_int32 (Var var)
-  | Boxed_int64 (Var var) ->
-    let var = Ids_for_export.Import_map.variable import_map var in
-    Boxed_int64 (Var var)
-  | Boxed_nativeint (Var var) ->
-    let var = Ids_for_export.Import_map.variable import_map var in
-    Boxed_nativeint (Var var)
-  | Boxed_float (Const _)
-  | Boxed_int32 (Const _)
-  | Boxed_int64 (Const _)
-  | Boxed_nativeint (Const _)
-  | Mutable_string { initial_value = _; }
-  | Immutable_string _ -> t
-  | Immutable_float_block fields ->
-    let fields =
-      List.map (fun (field : _ Or_variable.t) : _ Or_variable.t ->
-          match field with
-          | Const _ -> field
-          | Var v -> Var (Ids_for_export.Import_map.variable import_map v))
-        fields
-    in
-    Immutable_float_block fields
-  | Immutable_float_array fields ->
-    let fields =
-      List.map (fun (field : _ Or_variable.t) : _ Or_variable.t ->
-          match field with
-          | Const _ -> field
-          | Var v -> Var (Ids_for_export.Import_map.variable import_map v))
-        fields
-    in
-    Immutable_float_array fields
 
 let is_fully_static t =
   free_names t
@@ -561,15 +496,12 @@ module Group = struct
     List.map free_names t
     |> Name_occurrences.union_list
 
-  let apply_name_permutation t perm =
-    List.map (fun static_const -> apply_name_permutation static_const perm) t
+  let apply_renaming t renaming =
+    List.map (fun static_const -> apply_renaming static_const renaming) t
 
   let all_ids_for_export t =
     List.map all_ids_for_export t
     |> Ids_for_export.union_list
-
-  let import import_map t =
-    List.map (import import_map) t
 
   let match_against_bound_symbols t bound_symbols ~init ~code:code_callback
         ~set_of_closures:set_of_closures_callback

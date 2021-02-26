@@ -28,6 +28,6 @@ include Identifiable.Make (struct
 end)
 
 let free_names _ = Name_occurrences.empty
-let apply_name_permutation () _ = ()
+let apply_renaming () _ = ()
 
 let subset () () = true

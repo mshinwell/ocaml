@@ -126,19 +126,19 @@ let free_names t =
   | Recursive handlers ->
     Recursive_let_cont_handlers.free_names handlers
 
-let apply_name_permutation t perm =
+let apply_renaming t perm =
   match t with
   | Non_recursive { handler; num_free_occurrences;
                     is_applied_with_traps; } ->
     let handler' =
-      Non_recursive_let_cont_handler.apply_name_permutation handler perm
+      Non_recursive_let_cont_handler.apply_renaming handler perm
     in
     if handler == handler' then t
     else Non_recursive { handler = handler'; num_free_occurrences;
                          is_applied_with_traps; }
   | Recursive handlers ->
     let handlers' =
-      Recursive_let_cont_handlers.apply_name_permutation handlers perm
+      Recursive_let_cont_handlers.apply_renaming handlers perm
     in
     if handlers == handlers' then t
     else Recursive handlers'
@@ -150,15 +150,3 @@ let all_ids_for_export t =
     Non_recursive_let_cont_handler.all_ids_for_export handler
   | Recursive handlers ->
     Recursive_let_cont_handlers.all_ids_for_export handlers
-
-let import import_map t =
-  match t with
-  | Non_recursive { handler; num_free_occurrences;
-                    is_applied_with_traps; } ->
-    let handler =
-      Non_recursive_let_cont_handler.import import_map handler
-    in
-    Non_recursive { handler; num_free_occurrences; is_applied_with_traps; }
-  | Recursive handlers ->
-    Recursive (Recursive_let_cont_handlers.import import_map handlers)
-

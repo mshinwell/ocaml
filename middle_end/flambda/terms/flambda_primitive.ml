@@ -1573,16 +1573,16 @@ let free_names t =
     ]
   | Variadic (_prim, xs) -> Simple.List.free_names xs
 
-let apply_name_permutation t perm =
+let apply_renaming t perm =
   (* CR mshinwell: add phys-equal checks *)
-  let apply simple = Simple.apply_name_permutation simple perm in
+  let apply simple = Simple.apply_renaming simple perm in
   match t with
   | Nullary _ -> t
   | Unary (prim, x0) -> Unary (prim, apply x0)
   | Binary (prim, x0, x1) -> Binary (prim, apply x0, apply x1)
   | Ternary (prim, x0, x1, x2) -> Ternary (prim, apply x0, apply x1, apply x2)
   | Variadic (prim, xs) ->
-    Variadic (prim, Simple.List.apply_name_permutation xs perm)
+    Variadic (prim, Simple.List.apply_renaming xs perm)
 
 let all_ids_for_export t =
   match t with
@@ -1596,27 +1596,6 @@ let all_ids_for_export t =
       x2
   | Variadic (_prim, xs) ->
     List.fold_left Ids_for_export.add_simple Ids_for_export.empty xs
-
-let import import_map t =
-  match t with
-  | Nullary _ -> t
-  | Unary (prim, x0) ->
-    let x0 = Ids_for_export.Import_map.simple import_map x0 in
-    Unary (prim, x0)
-  | Binary (prim, x0, x1) ->
-    let x0 = Ids_for_export.Import_map.simple import_map x0 in
-    let x1 = Ids_for_export.Import_map.simple import_map x1 in
-    Binary (prim, x0, x1)
-  | Ternary (prim, x0, x1, x2) ->
-    let x0 = Ids_for_export.Import_map.simple import_map x0 in
-    let x1 = Ids_for_export.Import_map.simple import_map x1 in
-    let x2 = Ids_for_export.Import_map.simple import_map x2 in
-    Ternary (prim, x0, x1, x2)
-  | Variadic (prim, xs) ->
-    let xs =
-      List.map (Ids_for_export.Import_map.simple import_map) xs
-    in
-    Variadic (prim, xs)
 
 let args t =
   match t with
@@ -1836,7 +1815,7 @@ module Eligible_for_cse = struct
       else None
 
   let free_names = free_names
-  let apply_name_permutation = apply_name_permutation
+  let apply_renaming = apply_renaming
 
   include Identifiable.Make (struct
     type nonrec t = t

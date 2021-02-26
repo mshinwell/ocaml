@@ -55,12 +55,12 @@ let free_names { continuation_and_body; handler; } =
     (Continuation_and_body.free_names continuation_and_body)
     (Continuation_handler.free_names handler)
 
-let apply_name_permutation { continuation_and_body; handler; } perm =
+let apply_renaming { continuation_and_body; handler; } perm =
   let continuation_and_body' =
-    Continuation_and_body.apply_name_permutation continuation_and_body perm
+    Continuation_and_body.apply_renaming continuation_and_body perm
   in
   let handler' =
-    Continuation_handler.apply_name_permutation handler perm
+    Continuation_handler.apply_renaming handler perm
   in
   { handler = handler';
     continuation_and_body = continuation_and_body';
@@ -72,10 +72,3 @@ let all_ids_for_export { continuation_and_body; handler; } =
     Continuation_and_body.all_ids_for_export continuation_and_body
   in
   Ids_for_export.union handler_ids continuation_and_body_ids
-
-let import import_map { continuation_and_body; handler; } =
-  let handler = Continuation_handler.import import_map handler in
-  let continuation_and_body =
-    Continuation_and_body.import import_map continuation_and_body
-  in
-  { handler; continuation_and_body; }

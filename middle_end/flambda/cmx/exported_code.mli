@@ -25,6 +25,12 @@ type t
 
 include Contains_ids.S with type t := t
 
+val apply_renaming
+   : Code_id.t Code_id.Map.t
+  -> Renaming.t
+  -> t
+  -> t
+
 val print : Format.formatter -> t -> unit
 
 val empty : t

@@ -97,11 +97,11 @@ let free_names { exn_handler; extra_args; } =
     (Name_occurrences.singleton_continuation exn_handler)
     (Simple.List.free_names extra_args)
 
-let apply_name_permutation ({ exn_handler; extra_args; } as t) perm =
-  let exn_handler' = Name_permutation.apply_continuation perm exn_handler in
+let apply_renaming ({ exn_handler; extra_args; } as t) perm =
+  let exn_handler' = Renaming.apply_continuation perm exn_handler in
   let extra_args' =
     List.map (fun ((simple, kind) as extra_arg) ->
-        let simple' = Simple.apply_name_permutation simple perm in
+        let simple' = Simple.apply_renaming simple perm in
         if simple == simple' then extra_arg
         else simple', kind)
       extra_args
@@ -127,15 +127,3 @@ let all_ids_for_export { exn_handler; extra_args; } =
       Ids_for_export.add_simple ids arg)
     (Ids_for_export.add_continuation Ids_for_export.empty exn_handler)
     extra_args
-
-let import import_map { exn_handler; extra_args; } =
-  let exn_handler =
-    Ids_for_export.Import_map.continuation import_map exn_handler
-  in
-  let extra_args =
-    List.map (fun (arg, kind) ->
-        let arg = Ids_for_export.Import_map.simple import_map arg in
-        (arg, kind))
-      extra_args
-  in
-  { exn_handler; extra_args; }

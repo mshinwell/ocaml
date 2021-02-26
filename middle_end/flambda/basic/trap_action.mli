@@ -50,11 +50,11 @@ module Option : sig
 
   val all_ids_for_export : t -> Ids_for_export.t
 
-  val import : Ids_for_export.Import_map.t -> t -> t
+  val apply_renaming : t -> Renaming.t -> t
 end
 
 val compare : t -> t -> int
 
 val all_ids_for_export : t -> Ids_for_export.t
 
-val import : Ids_for_export.Import_map.t -> t -> t
+val apply_renaming : t -> Renaming.t -> t

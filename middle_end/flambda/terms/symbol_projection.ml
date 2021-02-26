@@ -92,8 +92,8 @@ let equal t1 t2 =
 let hash { symbol; projection; } =
   Hashtbl.hash (Symbol.hash symbol, Projection.hash projection)
 
-let apply_name_permutation ({ symbol; projection = _; } as t) perm =
-  let symbol' = Name_permutation.apply_symbol perm symbol in
+let apply_renaming ({ symbol; projection = _; } as t) renaming =
+  let symbol' = Renaming.apply_symbol renaming symbol in
   if symbol == symbol' then t
   else { t with symbol = symbol'; }
 
@@ -102,9 +102,3 @@ let free_names { symbol; projection = _; } =
 
 let all_ids_for_export { symbol; projection = _; } =
   Ids_for_export.singleton_symbol symbol
-
-let import import_map { symbol; projection; } =
-  let symbol = Ids_for_export.Import_map.symbol import_map symbol in
-  { symbol;
-    projection;
-  }

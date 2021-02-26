@@ -35,7 +35,7 @@ val print : Format.formatter -> t -> unit
 
 val equal : t -> t -> bool
 
-val apply_name_permutation : t -> Name_permutation.t -> t
+val apply_renaming : t -> Renaming.t -> t
 
 val singleton_continuation : Continuation.t -> t
 
@@ -197,12 +197,3 @@ val fold_code_ids
   -> init:'a
   -> f:('a -> Code_id.t -> 'a)
   -> 'a
-
-(** [import] cannot use [Ids_for_export] due to a circular dependency through
-    [Simple]. *)
-val import
-   : t
-  -> import_name:(Name.t -> Name.t)
-  -> import_continuation:(Continuation.t -> Continuation.t)
-  -> import_code_id:(Code_id.t -> Code_id.t)
-  -> t

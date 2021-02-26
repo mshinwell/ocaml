@@ -113,30 +113,30 @@ let force_to_kind_naked_nativeint t =
       "Type has wrong kind (expected [Naked_number Nativeint]):@ %a"
       print t
 
-let apply_name_permutation t perm =
+let apply_renaming t renaming =
   match t with
   | Value ty ->
-    let ty' = T_V.apply_name_permutation ty perm in
+    let ty' = T_V.apply_renaming ty renaming in
     if ty == ty' then t
     else Value ty'
   | Naked_immediate ty ->
-    let ty' = T_NI.apply_name_permutation ty perm in
+    let ty' = T_NI.apply_renaming ty renaming in
     if ty == ty' then t
     else Naked_immediate ty'
   | Naked_float ty ->
-    let ty' = T_Nf.apply_name_permutation ty perm in
+    let ty' = T_Nf.apply_renaming ty renaming in
     if ty == ty' then t
     else Naked_float ty'
   | Naked_int32 ty ->
-    let ty' = T_N32.apply_name_permutation ty perm in
+    let ty' = T_N32.apply_renaming ty renaming in
     if ty == ty' then t
     else Naked_int32 ty'
   | Naked_int64 ty ->
-    let ty' = T_N64.apply_name_permutation ty perm in
+    let ty' = T_N64.apply_renaming ty renaming in
     if ty == ty' then t
     else Naked_int64 ty'
   | Naked_nativeint ty ->
-    let ty' = T_NN.apply_name_permutation ty perm in
+    let ty' = T_NN.apply_renaming ty renaming in
     if ty == ty' then t
     else Naked_nativeint ty'
 
@@ -157,15 +157,6 @@ let all_ids_for_export t =
   | Naked_int32 ty -> T_N32.all_ids_for_export ty
   | Naked_int64 ty -> T_N64.all_ids_for_export ty
   | Naked_nativeint ty -> T_NN.all_ids_for_export ty
-
-let import import_map t =
-  match t with
-  | Value ty -> Value (T_V.import import_map ty)
-  | Naked_immediate ty -> Naked_immediate (T_NI.import import_map ty)
-  | Naked_float ty -> Naked_float (T_Nf.import import_map ty)
-  | Naked_int32 ty -> Naked_int32 (T_N32.import import_map ty)
-  | Naked_int64 ty -> Naked_int64 (T_N64.import import_map ty)
-  | Naked_nativeint ty -> Naked_nativeint (T_NN.import import_map ty)
 
 let apply_rec_info t rec_info : _ Or_bottom.t =
   match t with
@@ -813,13 +804,13 @@ let rec make_suitable_for_environment0_core t env ~depth ~suitable_for level =
     if Name_occurrences.is_empty to_erase then level, t
     else if depth > 1 then level, unknown (kind t)
     else
-      let level, perm =
+      let level, renaming =
         (* To avoid writing an erasure operation, we define irrelevant fresh
            variables in the returned [Typing_env_level], and swap them with
            the variables that we wish to erase throughout the type. *)
         Name_occurrences.fold_names to_erase
-          ~init:(level, Name_permutation.empty)
-          ~f:(fun ((level, perm) as acc) to_erase_name ->
+          ~init:(level, Renaming.empty)
+          ~f:(fun ((level, renaming) as acc) to_erase_name ->
             Name.pattern_match to_erase_name
               ~symbol:(fun _ -> acc)
               ~var:(fun to_erase ->
@@ -845,12 +836,12 @@ let rec make_suitable_for_environment0_core t env ~depth ~suitable_for level =
                   in
                   TEEV.add_definition level fresh_var kind ty
                 in
-                let perm =
-                  Name_permutation.add_variable perm to_erase fresh_var
+                let renaming =
+                  Renaming.add_variable renaming to_erase fresh_var
                 in
-                level, perm))
+                level, renaming))
       in
-      level, apply_name_permutation t perm
+      level, apply_renaming t renaming
 
 let make_suitable_for_environment0 t env ~suitable_for level =
   make_suitable_for_environment0_core t env ~depth:0 ~suitable_for level

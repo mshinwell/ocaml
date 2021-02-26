@@ -25,12 +25,12 @@ module Behaviour = struct
       }
     | Unknown of { arity : Flambda_arity.With_subkinds.t; }
 
-  let apply_name_permutation t perm =
+  let apply_renaming t perm =
     match t with
     | Unreachable { arity = _; }
     | Unknown { arity = _; } -> t
     | Alias_for { arity; alias_for; } ->
-      let alias_for' = Name_permutation.apply_continuation perm alias_for in
+      let alias_for' = Renaming.apply_continuation perm alias_for in
       if alias_for == alias_for' then t
       else Alias_for { arity; alias_for = alias_for'; }
 
@@ -46,16 +46,6 @@ module Behaviour = struct
     | Unknown { arity = _; } -> Ids_for_export.empty
     | Alias_for { arity = _; alias_for; } ->
       Ids_for_export.singleton_continuation alias_for
-
-  let import import_map t =
-    match t with
-    | Unreachable { arity = _; }
-    | Unknown { arity = _; } -> t
-    | Alias_for { arity; alias_for; } ->
-      let alias_for =
-        Ids_for_export.Import_map.continuation import_map alias_for
-      in
-      Alias_for { arity; alias_for; }
 end
 
 module T0 = struct
@@ -76,20 +66,16 @@ module T0 = struct
   let free_names { handler; num_normal_occurrences_of_params = _; } =
     Expr.free_names handler
 
-  let apply_name_permutation
+  let apply_renaming
         ({ handler; num_normal_occurrences_of_params; } as t) perm =
     let handler' =
-      Expr.apply_name_permutation handler perm
+      Expr.apply_renaming handler perm
     in
     if handler == handler' then t
     else { handler = handler'; num_normal_occurrences_of_params; }
 
   let all_ids_for_export { handler; num_normal_occurrences_of_params = _; } =
     Expr.all_ids_for_export handler
-
-  let import import_map { handler; num_normal_occurrences_of_params; } =
-    let handler = Expr.import import_map handler in
-    { handler; num_normal_occurrences_of_params; }
 end
 
 module A = Name_abstraction.Make_list (Kinded_parameter) (T0)
@@ -231,20 +217,15 @@ let behaviour t = t.behaviour
 
 let free_names t = A.free_names t.abst
 
-let apply_name_permutation ({ abst; behaviour; is_exn_handler; } as t) perm =
-  let abst' = A.apply_name_permutation abst perm in
-  let behaviour' = Behaviour.apply_name_permutation behaviour perm in
+let apply_renaming ({ abst; behaviour; is_exn_handler; } as t) perm =
+  let abst' = A.apply_renaming abst perm in
+  let behaviour' = Behaviour.apply_renaming behaviour perm in
   if abst == abst' && behaviour == behaviour' then t
   else
     { abst = abst';
       behaviour = behaviour';
       is_exn_handler;
     }
-
-let import import_map { abst; behaviour; is_exn_handler; } =
-  let abst = A.import import_map abst in
-  let behaviour = Behaviour.import import_map behaviour in
-  { abst; behaviour; is_exn_handler; }
 
 let all_ids_for_export { abst; behaviour; is_exn_handler = _; } =
   Ids_for_export.union (A.all_ids_for_export abst)

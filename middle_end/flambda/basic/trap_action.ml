@@ -86,14 +86,14 @@ let free_names = function
   | Pop { exn_handler; raise_kind = _; } ->
     Name_occurrences.singleton_continuation_in_trap_action exn_handler
 
-let apply_name_permutation t perm =
+let apply_renaming t perm =
   match t with
   | Push { exn_handler; } ->
-    let exn_handler' = Name_permutation.apply_continuation perm exn_handler in
+    let exn_handler' = Renaming.apply_continuation perm exn_handler in
     if exn_handler == exn_handler' then t
     else Push { exn_handler = exn_handler'; }
   | Pop { exn_handler; raise_kind; } ->
-    let exn_handler' = Name_permutation.apply_continuation perm exn_handler in
+    let exn_handler' = Renaming.apply_continuation perm exn_handler in
     if exn_handler == exn_handler' then t
     else Pop { exn_handler = exn_handler'; raise_kind; }
 
@@ -104,14 +104,6 @@ let exn_handler t =
 
 let all_ids_for_export t =
   Ids_for_export.add_continuation Ids_for_export.empty (exn_handler t)
-
-let import import_map t =
-  let exn_handler =
-    Ids_for_export.Import_map.continuation import_map (exn_handler t)
-  in
-  match t with
-  | Push { exn_handler = _; } -> Push { exn_handler }
-  | Pop { exn_handler = _; raise_kind; } -> Pop { exn_handler; raise_kind; }
 
 module Option = struct
   type nonrec t = t option
@@ -124,20 +116,11 @@ module Option = struct
     | None -> Ids_for_export.empty
     | Some trap_action -> all_ids_for_export trap_action
 
-  let import import_map = function
-    | None -> None
-    | Some trap_action -> Some (import import_map trap_action)
-(*
-  let free_names = function
-    | None -> Name_occurrences.empty
-    | Some trap_action -> free_names trap_action
-
-  let apply_name_permutation t perm =
+  let apply_renaming t renaming =
     match t with
     | None -> None
     | Some trap_action ->
-      let trap_action' = apply_name_permutation trap_action perm in
+      let trap_action' = apply_renaming trap_action renaming in
       if trap_action == trap_action' then t
       else Some trap_action'
-*)
 end

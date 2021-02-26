@@ -38,7 +38,7 @@ module Aliases_of_canonical_element : sig
   val union : t -> t -> t
   val inter : t -> t -> t
 
-  val import : (Simple.t -> Simple.t) -> t -> t
+  val rename : (Simple.t -> Simple.t) -> t -> t
 
   val merge : t -> t -> t
 
@@ -135,12 +135,12 @@ end = struct
     invariant t;
     t
 
-  let import import_simple { aliases; all } =
+  let rename rename_simple { aliases; all } =
     let aliases =
-      Name_mode.Map.map (fun elts -> Simple.Set.map import_simple elts)
+      Name_mode.Map.map (fun elts -> Simple.Set.map rename_simple elts)
         aliases
     in
-    let all = Simple.Set.map import_simple all in
+    let all = Simple.Set.map rename_simple all in
     { aliases; all }
 
   let merge t1 t2 =
@@ -536,27 +536,29 @@ let all_ids_for_export { canonical_elements = _;
     binding_times_and_modes
     Ids_for_export.empty
 
-let import import_map { canonical_elements;
-                        aliases_of_canonical_elements;
-                        binding_times_and_modes; } =
-  let import_simple = Ids_for_export.Import_map.simple import_map in
+let apply_renaming
+      { canonical_elements;
+        aliases_of_canonical_elements;
+        binding_times_and_modes; }
+      renaming =
+  let rename_simple = Renaming.apply_simple renaming in
   let canonical_elements =
     Simple.Map.fold (fun elt canonical acc ->
-        Simple.Map.add (import_simple elt) (import_simple canonical) acc)
+        Simple.Map.add (rename_simple elt) (rename_simple canonical) acc)
       canonical_elements
       Simple.Map.empty
   in
   let aliases_of_canonical_elements =
     Simple.Map.fold (fun canonical aliases acc ->
-        Simple.Map.add (import_simple canonical)
-          (Aliases_of_canonical_element.import import_simple aliases)
+        Simple.Map.add (rename_simple canonical)
+          (Aliases_of_canonical_element.rename rename_simple aliases)
           acc)
       aliases_of_canonical_elements
       Simple.Map.empty
   in
   let binding_times_and_modes =
     Simple.Map.fold (fun simple binding_time_and_mode acc ->
-        Simple.Map.add (import_simple simple) binding_time_and_mode acc)
+        Simple.Map.add (rename_simple simple) binding_time_and_mode acc)
       binding_times_and_modes
       Simple.Map.empty
   in

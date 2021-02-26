@@ -19,8 +19,4 @@ module type S = sig
 
   (** Gather all table identifiers to export them. *)
   val all_ids_for_export : t -> Ids_for_export.t
-
-  (** Imported identifiers may have been given a different id.
-      This rewrites the element with the new ids. *)
-  val import : Ids_for_export.Import_map.t -> t -> t
 end

@@ -111,14 +111,15 @@ module Make (Index : Product_intf.Index) = struct
     in
     { components_by_index; kind = kind1; }
 
-  let apply_name_permutation ({ components_by_index; kind; } as t) perm =
-    let components_by_index' =
-      Index.Map.map_sharing (fun typ ->
-          Type_grammar.apply_name_permutation typ perm)
+  let apply_renaming { components_by_index; kind; } renaming =
+    let components_by_index =
+      (* CR-someday mshinwell: some loss of sharing here, potentially *)
+      Index.Map.filter_map (fun index ty ->
+          if Index.remove_on_import index renaming then None
+          else Some (Type_grammar.apply_renaming ty renaming))
         components_by_index
     in
-    if components_by_index == components_by_index' then t
-    else { components_by_index = components_by_index'; kind = kind; }
+    { kind; components_by_index; }
 
   let free_names { components_by_index; kind = _; } =
     Index.Map.fold (fun _index ty free_names ->
@@ -131,15 +132,6 @@ module Make (Index : Product_intf.Index) = struct
         Ids_for_export.union (Type_grammar.all_ids_for_export ty) ids)
       components_by_index
       Ids_for_export.empty
-
-  let import import_map { components_by_index; kind; } =
-    let components_by_index =
-      Index.Map.filter_map (fun index ty ->
-          if Index.remove_on_import index import_map then None
-          else Some (Type_grammar.import import_map ty))
-        components_by_index
-    in
-    { components_by_index; kind; }
 
   let map_types ({ components_by_index; kind } as t)
         ~(f : Type_grammar.t -> Type_grammar.t Or_bottom.t)
@@ -172,8 +164,8 @@ module Closure_id_indexed = Make (Closure_id_index)
 module Var_within_closure_index = struct
   include Var_within_closure
 
-  let remove_on_import var import_map =
-    not (Ids_for_export.Import_map.closure_var_is_used import_map var)
+  let remove_on_import var renaming =
+    not (Renaming.closure_var_is_used renaming var)
 end
 
 module Var_within_closure_indexed = Make (Var_within_closure_index)
@@ -292,12 +284,12 @@ module Int_indexed = struct
     in
     { kind = t1.kind; fields }
 
-  let apply_name_permutation t perm =
-    let fields = Array.copy t.fields in
+  let apply_renaming { kind; fields; } perm =
+    let fields = Array.copy fields in
     for i = 0 to Array.length fields - 1 do
-      fields.(i) <- Type_grammar.apply_name_permutation fields.(i) perm
+      fields.(i) <- Type_grammar.apply_renaming fields.(i) perm
     done;
-    { t with fields }
+    { kind; fields; }
 
   let free_names t =
     Array.fold_left (fun free_names ty ->
@@ -310,12 +302,6 @@ module Int_indexed = struct
         Ids_for_export.union (Type_grammar.all_ids_for_export ty) ids)
       Ids_for_export.empty
       t.fields
-
-  let import import_map { kind; fields; } =
-    let fields =
-      Array.map (fun ty -> Type_grammar.import import_map ty) fields
-    in
-    { kind; fields; }
 
   let map_types t ~(f : Type_grammar.t -> Type_grammar.t Or_bottom.t)
         : _ Or_bottom.t =

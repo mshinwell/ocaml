@@ -85,8 +85,6 @@ val print : Format.formatter -> t -> unit
 
 val all_ids_for_export : t -> Ids_for_export.t
 
-val import : Ids_for_export.Import_map.t -> t -> t
-
 val compare : t -> t -> int
 
 (* CR mshinwell: Somewhere there should be an invariant check that

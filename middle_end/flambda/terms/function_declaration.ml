@@ -62,8 +62,8 @@ let free_names
       } =
   Name_occurrences.add_code_id Name_occurrences.empty code_id Name_mode.normal
 
-let apply_name_permutation ({ code_id; dbg = _; is_tupled = _; } as t) perm =
-  let code_id' = Name_permutation.apply_code_id perm code_id in
+let apply_renaming ({ code_id; dbg = _; is_tupled = _; } as t) perm =
+  let code_id' = Renaming.apply_code_id perm code_id in
   if code_id == code_id' then t
   else { t with code_id = code_id'; }
 
@@ -73,18 +73,6 @@ let all_ids_for_export
         is_tupled = _;
       } =
   Ids_for_export.add_code_id Ids_for_export.empty code_id
-
-let import import_map
-      { code_id;
-        dbg;
-        is_tupled;
-      } =
-  let code_id = Ids_for_export.Import_map.code_id import_map code_id in
-  { code_id;
-    dbg;
-    is_tupled;
-  }
-
 
 let update_code_id t code_id = { t with code_id; }
 

@@ -206,13 +206,13 @@ MIDDLE_END_FLAMBDA_BASIC=\
   middle_end/flambda/basic/mutability.cmo \
   middle_end/flambda/naming/name_mode.cmo \
   middle_end/flambda/naming/permutation.cmo \
-  middle_end/flambda/naming/name_permutation.cmo \
+  middle_end/flambda/cmx/ids_for_export.cmo \
+  middle_end/flambda/naming/renaming.cmo \
   middle_end/flambda/naming/num_occurrences.cmo \
   middle_end/flambda/naming/name_occurrences.cmo \
   middle_end/flambda/basic/or_variable.cmo \
   middle_end/flambda/basic/simple.cmo \
   middle_end/flambda/basic/closure_id.cmo \
-  middle_end/flambda/cmx/ids_for_export.cmo \
   middle_end/flambda/cmx/contains_ids.cmo \
   middle_end/flambda/basic/kinded_parameter.cmo \
   middle_end/flambda/basic/invariant_env.cmo \

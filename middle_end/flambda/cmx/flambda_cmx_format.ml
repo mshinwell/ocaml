@@ -139,13 +139,22 @@ let import_typing_env_and_code0 t =
       ~continuations
       ~used_closure_vars
   in
-  let map_simple = Ids_for_export.Import_map.simple import_map in
+  let import_simple_without_rec_info simple =
+    (* [simple] will never have [Rec_info]; see [Reg_width_things.Simple]. *)
+    assert (not (Simple.has_rec_info simple));
+    Simple.pattern_match simple
+      ~const:(fun c ->
+        Simple.const (Ids_for_export.Import_map.const import_map c))
+      ~name:(fun n ->
+        Simple.name (Ids_for_export.Import_map.name import_map n))
+  in
   (* Then convert the simples *)
   let simples =
-    Simple.Map.filter_map (filter (Simple.import map_simple))
+    Simple.Map.filter_map
+      (filter (Simple.import import_simple_without_rec_info))
       t.table_data.simples
   in
-  let import_map =
+  let renaming =
     Ids_for_export.Import_map.create
       ~symbols
       ~variables
@@ -154,11 +163,13 @@ let import_typing_env_and_code0 t =
       ~code_ids
       ~continuations
       ~used_closure_vars
+    |> Renaming.of_import_map
   in
   let typing_env =
-    Flambda_type.Typing_env.Serializable.import import_map t.final_typing_env
+    Flambda_type.Typing_env.Serializable.apply_renaming t.final_typing_env
+      renaming
   in
-  let all_code = Exported_code.import import_map t.all_code in
+  let all_code = Exported_code.apply_renaming code_ids renaming t.all_code in
   typing_env, all_code
 
 let import_typing_env_and_code t =

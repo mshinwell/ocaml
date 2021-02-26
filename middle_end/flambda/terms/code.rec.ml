@@ -223,7 +223,7 @@ let free_names t =
   in
   Name_occurrences.union from_newer_version_of t.free_names_of_params_and_body
 
-let apply_name_permutation
+let apply_renaming
       ({ code_id; params_and_body; newer_version_of; params_arity = _;
          result_arity = _; stub = _; inline = _; is_a_functor = _;
          recursive = _; cost_metrics = _; free_names_of_params_and_body; } as t)
@@ -233,18 +233,18 @@ let apply_name_permutation
     match newer_version_of with
     | None -> newer_version_of
     | Some code_id ->
-      let code_id' = Name_permutation.apply_code_id perm code_id in
+      let code_id' = Renaming.apply_code_id perm code_id in
       if code_id == code_id'
       then newer_version_of
       else Some code_id'
   in
-  let code_id' = Name_permutation.apply_code_id perm code_id in
+  let code_id' = Renaming.apply_code_id perm code_id in
   let params_and_body' : Function_params_and_body.t Or_deleted.t =
     match params_and_body with
     | Deleted -> Deleted
     | Present params_and_body_inner ->
       let params_and_body_inner' =
-        Function_params_and_body.apply_name_permutation
+        Function_params_and_body.apply_renaming
           params_and_body_inner perm
       in
       if params_and_body_inner == params_and_body_inner' then
@@ -257,7 +257,7 @@ let apply_name_permutation
      newer_version_of == newer_version_of' then t
   else begin
     let free_names_of_params_and_body' =
-      Name_occurrences.apply_name_permutation free_names_of_params_and_body perm
+      Name_occurrences.apply_renaming free_names_of_params_and_body perm
     in
     { t with code_id = code_id';
              params_and_body = params_and_body';
@@ -286,17 +286,18 @@ let all_ids_for_export { code_id; params_and_body; newer_version_of;
     (Ids_for_export.union newer_version_of_ids params_and_body_ids)
     code_id
 
-let import import_map
+let import
       ({ code_id; params_and_body; newer_version_of; params_arity = _;
          result_arity = _; stub = _; inline = _; is_a_functor = _;
-         cost_metrics = _; recursive = _; free_names_of_params_and_body; } as t) =
-  let code_id = Ids_for_export.Import_map.code_id import_map code_id in
+         cost_metrics = _; recursive = _; free_names_of_params_and_body; } as t)
+      renaming =
+  let code_id = Renaming.apply_code_id renaming code_id in
   let params_and_body : Function_params_and_body.t Or_deleted.t =
     match params_and_body with
     | Deleted -> Deleted
     | Present params_and_body ->
       let params_and_body =
-        Function_params_and_body.import import_map params_and_body
+        Function_params_and_body.apply_renaming params_and_body renaming
       in
       Present params_and_body
   in
@@ -304,28 +305,21 @@ let import import_map
     match newer_version_of with
     | None -> None
     | Some older ->
-      let older = Ids_for_export.Import_map.code_id import_map older in
+      let older = Renaming.apply_code_id renaming older in
       Some older
   in
   let free_names_of_params_and_body =
-    Name_occurrences.import free_names_of_params_and_body
-      ~import_name:(fun name ->
-        Name.pattern_match name
-          ~symbol:(fun symbol ->
-            Ids_for_export.Import_map.symbol import_map symbol
-            |> Name.symbol)
-          ~var:(fun var ->
-            Misc.fatal_errorf "Unexpected free variable %a in \
-                imported code:@ %a"
-              Variable.print var
-              print t))
-      ~import_code_id:(Ids_for_export.Import_map.code_id import_map)
-      ~import_continuation:(fun cont ->
-        Misc.fatal_errorf "Unexpected free continuation %a in \
-            imported code:@ %a"
-          Continuation.print cont
-          print t)
+    Name_occurrences.apply_renaming free_names_of_params_and_body renaming
   in
+  if not (
+    Name_occurrences.no_variables free_names_of_params_and_body
+    && Name_occurrences.no_continuations free_names_of_params_and_body)
+  then begin
+    Misc.fatal_errorf "Unexpected free variable(s) and/or continuation(s) \
+        in imported [Code]:@ %a@ code:@ %a"
+      Name_occurrences.print free_names_of_params_and_body
+      print t
+  end;
   { t with
     code_id;
     params_and_body;

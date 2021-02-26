@@ -57,5 +57,5 @@ end
 module type Index = sig
   include Identifiable.S
 
-  val remove_on_import : t -> Ids_for_export.Import_map.t -> bool
+  val remove_on_import : t -> Renaming.t -> bool
 end

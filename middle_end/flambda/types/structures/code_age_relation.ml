@@ -139,9 +139,9 @@ let all_code_ids_for_export t =
     t
     Code_id.Set.empty
 
-let import import_map t =
-  let import_code_id = Ids_for_export.Import_map.code_id import_map in
+let apply_renaming t renaming =
+  let rename_code_id = Renaming.apply_code_id renaming in
   Code_id.Map.fold (fun key v acc ->
-      Code_id.Map.add (import_code_id key) (import_code_id v) acc)
+      Code_id.Map.add (rename_code_id key) (rename_code_id v) acc)
     t
     Code_id.Map.empty

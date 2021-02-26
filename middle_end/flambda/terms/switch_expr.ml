@@ -131,11 +131,11 @@ let free_names { scrutinee; arms; } =
   in
   Name_occurrences.union (Simple.free_names scrutinee) free_names_in_arms
 
-let apply_name_permutation ({ scrutinee; arms; } as t) perm =
-  let scrutinee' = Simple.apply_name_permutation scrutinee perm in
+let apply_renaming ({ scrutinee; arms; } as t) perm =
+  let scrutinee' = Simple.apply_renaming scrutinee perm in
   let arms' =
     Target_imm.Map.map_sharing (fun action ->
-        Apply_cont_expr.apply_name_permutation action perm)
+        Apply_cont_expr.apply_renaming action perm)
       arms
   in
   if scrutinee == scrutinee' && arms == arms' then t
@@ -147,10 +147,3 @@ let all_ids_for_export { scrutinee; arms; } =
       Ids_for_export.union ids (Apply_cont_expr.all_ids_for_export action))
     arms
     scrutinee_ids
-
-let import import_map { scrutinee; arms; } =
-  let scrutinee = Ids_for_export.Import_map.simple import_map scrutinee in
-  let arms =
-    Target_imm.Map.map (Apply_cont_expr.import import_map) arms
-  in
-  { scrutinee; arms; }

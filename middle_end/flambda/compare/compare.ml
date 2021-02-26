@@ -1314,20 +1314,20 @@ let flambda_units u1 u2 =
   let ret_cont = Continuation.create ~sort:Toplevel_return () in
   let exn_cont = Continuation.create ~sort:Exn () in
   let mk_perm u =
-    let perm = Name_permutation.empty in
+    let perm = Renaming.empty in
     let perm =
-      Name_permutation.add_fresh_continuation perm
+      Renaming.add_fresh_continuation perm
         (Flambda_unit.return_continuation u) ~guaranteed_fresh:ret_cont
     in
     let perm =
-      Name_permutation.add_fresh_continuation perm
+      Renaming.add_fresh_continuation perm
         (Flambda_unit.exn_continuation u) ~guaranteed_fresh:exn_cont
     in
     perm
   in
   let env = Env.create () in
-  let body1 = Expr.apply_name_permutation (Flambda_unit.body u1) (mk_perm u1) in
-  let body2 = Expr.apply_name_permutation (Flambda_unit.body u2) (mk_perm u2) in
+  let body1 = Expr.apply_renaming (Flambda_unit.body u1) (mk_perm u1) in
+  let body2 = Expr.apply_renaming (Flambda_unit.body u2) (mk_perm u2) in
   exprs env body1 body2
   |> Comparison.map ~f:(fun body ->
        let module_symbol = Flambda_unit.module_symbol u1 in

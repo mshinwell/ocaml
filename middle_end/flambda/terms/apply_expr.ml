@@ -51,21 +51,15 @@ module Result_continuation = struct
     | Return k -> Name_occurrences.singleton_continuation k
     | Never_returns -> Name_occurrences.empty
 
-  let apply_name_permutation t perm =
+  let apply_renaming t perm =
     match t with
-    | Return k -> Return (Name_permutation.apply_continuation perm k)
+    | Return k -> Return (Renaming.apply_continuation perm k)
     | Never_returns -> Never_returns
 
   let all_ids_for_export t =
     match t with
     | Return k -> Ids_for_export.singleton_continuation k
     | Never_returns -> Ids_for_export.empty
-
-  let import import_map t =
-    match t with
-    | Return k ->
-      Return (Ids_for_export.Import_map.continuation import_map k)
-    | Never_returns -> Never_returns
 end
 
 type t = {
@@ -259,7 +253,7 @@ let free_names
     Call_kind.free_names call_kind;
   ]
 
-let apply_name_permutation
+let apply_renaming
       ({ callee;
          continuation;
          exn_continuation;
@@ -271,14 +265,14 @@ let apply_name_permutation
       } as t)
       perm =
   let continuation' =
-    Result_continuation.apply_name_permutation continuation perm
+    Result_continuation.apply_renaming continuation perm
   in
   let exn_continuation' =
-    Exn_continuation.apply_name_permutation exn_continuation perm
+    Exn_continuation.apply_renaming exn_continuation perm
   in
-  let callee' = Simple.apply_name_permutation callee perm in
-  let args' = Simple.List.apply_name_permutation args perm in
-  let call_kind' = Call_kind.apply_name_permutation call_kind perm in
+  let callee' = Simple.apply_renaming callee perm in
+  let args' = Simple.List.apply_renaming args perm in
+  let call_kind' = Call_kind.apply_renaming call_kind perm in
   if continuation == continuation'
     && exn_continuation == exn_continuation'
     && callee == callee'
@@ -324,31 +318,6 @@ let all_ids_for_export
   Ids_for_export.union
     (Ids_for_export.union callee_and_args_ids call_kind_ids)
     (Ids_for_export.union result_continuation_ids exn_continuation_ids)
-
-let import import_map
-      { callee;
-        continuation;
-        exn_continuation;
-        args;
-        call_kind;
-        dbg;
-        inline;
-        inlining_state;
-      } =
-  let callee = Ids_for_export.Import_map.simple import_map callee in
-  let args = List.map (Ids_for_export.Import_map.simple import_map) args in
-  let call_kind = Call_kind.import import_map call_kind in
-  let continuation = Result_continuation.import import_map continuation in
-  let exn_continuation = Exn_continuation.import import_map exn_continuation in
-  { callee;
-    continuation;
-    exn_continuation;
-    args;
-    call_kind;
-    dbg;
-    inline;
-    inlining_state;
-  }
 
 let with_continuation t continuation =
   { t with continuation; }

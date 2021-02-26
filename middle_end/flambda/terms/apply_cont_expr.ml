@@ -231,19 +231,10 @@ let free_names { k; args; trap_action; dbg=_; } =
       k
       ~has_traps:true
 
-let apply_name_permutation ({ k; args; trap_action; dbg; } as t) perm =
-  let k' = Name_permutation.apply_continuation perm k in
-  let args' = Simple.List.apply_name_permutation args perm in
-  let trap_action' =
-    match trap_action with
-    | None -> None
-    | Some trap_action' ->
-      let new_trap_action' =
-        Trap_action.apply_name_permutation trap_action' perm
-      in
-      if new_trap_action' == trap_action' then trap_action
-      else Some new_trap_action'
-  in
+let apply_renaming ({ k; args; trap_action; dbg; } as t) perm =
+  let k' = Renaming.apply_continuation perm k in
+  let args' = Simple.List.apply_renaming args perm in
+  let trap_action' = Trap_action.Option.apply_renaming trap_action perm in
   if k == k' && args == args' && trap_action == trap_action' then t
   else { k = k'; args = args'; trap_action = trap_action'; dbg; }
 
@@ -253,12 +244,6 @@ let all_ids_for_export { k; args; trap_action; dbg = _; } =
       (Trap_action.Option.all_ids_for_export trap_action)
       k)
     args
-
-let import import_map { k; args; trap_action; dbg; } =
-  let k = Ids_for_export.Import_map.continuation import_map k in
-  let args = List.map (Ids_for_export.Import_map.simple import_map) args in
-  let trap_action = Trap_action.Option.import import_map trap_action in
-  { k; args; trap_action; dbg; }
 
 let update_continuation t continuation =
   { t with k = continuation; }

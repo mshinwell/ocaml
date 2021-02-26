@@ -97,9 +97,9 @@ let print ppf t =
 
 let params_arity t = t.params_arity
 
-let apply_name_permutation
+let apply_renaming
       ({ abst; dbg; params_arity; is_my_closure_used; } as t) perm =
-  let abst' = A.apply_name_permutation abst perm in
+  let abst' = A.apply_renaming abst perm in
   if abst == abst' then t
   else { abst = abst'; dbg; params_arity; is_my_closure_used; }
 
@@ -111,7 +111,3 @@ let debuginfo { dbg; _ } = dbg
 let all_ids_for_export
       { abst; params_arity = _; dbg = _; is_my_closure_used = _; } =
   A.all_ids_for_export abst
-
-let import import_map { abst; params_arity; dbg; is_my_closure_used; } =
-  let abst = A.import import_map abst in
-  { abst; params_arity; dbg; is_my_closure_used; }

@@ -34,26 +34,26 @@ module Descr = struct
     | Switch switch -> Switch.free_names switch
     | Invalid _ -> Name_occurrences.empty
 
-  let apply_name_permutation t perm =
+  let apply_renaming t perm =
     match t with
     | Let let_expr ->
-      let let_expr' = Let_expr.apply_name_permutation let_expr perm in
+      let let_expr' = Let_expr.apply_renaming let_expr perm in
       if let_expr == let_expr' then t
       else Let let_expr'
     | Let_cont let_cont ->
-      let let_cont' = Let_cont_expr.apply_name_permutation let_cont perm in
+      let let_cont' = Let_cont_expr.apply_renaming let_cont perm in
       if let_cont == let_cont' then t
       else Let_cont let_cont'
     | Apply apply ->
-      let apply' = Apply.apply_name_permutation apply perm in
+      let apply' = Apply.apply_renaming apply perm in
       if apply == apply' then t
       else Apply apply'
     | Apply_cont apply_cont ->
-      let apply_cont' = Apply_cont.apply_name_permutation apply_cont perm in
+      let apply_cont' = Apply_cont.apply_renaming apply_cont perm in
       if apply_cont == apply_cont' then t
       else Apply_cont apply_cont'
     | Switch switch ->
-      let switch' = Switch.apply_name_permutation switch perm in
+      let switch' = Switch.apply_renaming switch perm in
       if switch == switch' then t
       else Switch switch'
     | Invalid _ -> t
@@ -65,7 +65,7 @@ end
 
 type t = {
   mutable descr : Descr.t;
-  mutable delayed_permutation : Name_permutation.t;
+  mutable delayed_permutation : Renaming.t;
 }
 
 type descr = Descr.t =
@@ -78,24 +78,24 @@ type descr = Descr.t =
 
 let create descr =
   { descr;
-    delayed_permutation = Name_permutation.empty;
+    delayed_permutation = Renaming.empty;
   }
 
 let peek_descr t = t.descr
 
 let descr t =
-  if Name_permutation.is_empty t.delayed_permutation then begin
+  if Renaming.has_no_action t.delayed_permutation then begin
     t.descr
   end else begin
-    let descr = Descr.apply_name_permutation t.descr t.delayed_permutation in
+    let descr = Descr.apply_renaming t.descr t.delayed_permutation in
     t.descr <- descr;
-    t.delayed_permutation <- Name_permutation.empty;
+    t.delayed_permutation <- Renaming.empty;
     descr
   end
 
-let apply_name_permutation t perm =
+let apply_renaming t perm =
   let delayed_permutation =
-    Name_permutation.compose ~second:perm ~first:t.delayed_permutation
+    Renaming.compose ~second:perm ~first:t.delayed_permutation
   in
   { t with
     delayed_permutation;
@@ -111,19 +111,6 @@ let all_ids_for_export t =
   | Apply_cont apply_cont -> Apply_cont.all_ids_for_export apply_cont
   | Switch switch -> Switch.all_ids_for_export switch
   | Invalid _ -> Ids_for_export.empty
-
-let import import_map t =
-  let descr =
-    match descr t with
-    | Let let_expr -> Let (Let_expr.import import_map let_expr)
-    | Let_cont let_cont -> Let_cont (Let_cont_expr.import import_map let_cont)
-    | Apply apply -> Apply (Apply.import import_map apply)
-    | Apply_cont apply_cont ->
-      Apply_cont (Apply_cont.import import_map apply_cont)
-    | Switch switch -> Switch (Switch.import import_map switch)
-    | Invalid sem -> Invalid sem
-  in
-  create descr
 
 let invariant env t =
   match descr t with

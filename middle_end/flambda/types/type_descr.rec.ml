@@ -58,17 +58,17 @@ module Make (Head : Type_head_intf.S
     let print ppf t =
       print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
-    let apply_name_permutation t perm =
-      if Name_permutation.is_empty perm then t
+    let apply_renaming t renaming =
+      if Renaming.has_no_action renaming then t
       else
         match t with
         | No_alias Bottom | No_alias Unknown -> t
         | No_alias (Ok head) ->
-          let head' = Head.apply_name_permutation head perm in
+          let head' = Head.apply_renaming head renaming in
           if head == head' then t
           else No_alias (Ok head')
         | Equals simple ->
-          let simple' = Simple.apply_name_permutation simple perm in
+          let simple' = Simple.apply_renaming simple renaming in
           if simple == simple' then t
           else Equals simple'
 
@@ -89,16 +89,6 @@ module Make (Head : Type_head_intf.S
     | No_alias Bottom | No_alias Unknown -> Ids_for_export.empty
     | No_alias (Ok head) -> Head.all_ids_for_export head
     | Equals simple -> Ids_for_export.from_simple simple
-
-  let import import_map t =
-    let descr : Descr.t =
-      match descr t with
-      | (No_alias Unknown | No_alias Bottom) as descr -> descr
-      | No_alias (Ok head) -> No_alias (Ok (Head.import import_map head))
-      | Equals simple ->
-        Equals (Ids_for_export.Import_map.simple import_map simple)
-    in
-    create descr
 
   let print_with_cache ~cache ppf t =
     Descr.print_with_cache ~cache ppf (descr t)

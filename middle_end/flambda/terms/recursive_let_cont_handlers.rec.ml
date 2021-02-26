@@ -39,12 +39,12 @@ module T0 = struct
     Name_occurrences.union (Continuation_handlers.free_names handlers)
       (Expr.free_names body)
 
-  let apply_name_permutation { handlers; body; } perm =
+  let apply_renaming { handlers; body; } perm =
     let handlers' =
-      Continuation_handlers.apply_name_permutation handlers perm
+      Continuation_handlers.apply_renaming handlers perm
     in
     let body' =
-      Expr.apply_name_permutation body perm
+      Expr.apply_renaming body perm
     in
     { handlers = handlers';
       body = body';
@@ -54,11 +54,6 @@ module T0 = struct
     let body_ids = Expr.all_ids_for_export body in
     let handlers_ids = Continuation_handlers.all_ids_for_export handlers in
     Ids_for_export.union body_ids handlers_ids
-
-  let import import_map { handlers; body; } =
-    let body = Expr.import import_map body in
-    let handlers = Continuation_handlers.import import_map handlers in
-    { handlers; body; }
 end
 
 include Name_abstraction.Make_list (Bindable_continuation) (T0)

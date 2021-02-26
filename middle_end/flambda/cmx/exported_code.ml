@@ -191,22 +191,28 @@ let all_ids_for_export t =
     t
     Ids_for_export.empty
 
-let import import_map t =
-  Code_id.Map.fold (fun code_id code_data all_code ->
-      let code_id = Ids_for_export.Import_map.code_id import_map code_id in
-      let code_data =
-        match code_data with
-        | Present { calling_convention; code; } ->
-          let code =
-            Flambda.Code.import import_map code
-          in
-          Present { calling_convention; code; }
-        | Imported { calling_convention; } ->
-          Imported { calling_convention; }
-      in
-      Code_id.Map.add code_id code_data all_code)
-    t
-    Code_id.Map.empty
+let apply_renaming code_id_map renaming t =
+  if Renaming.has_no_action renaming
+    && Code_id.Map.is_empty code_id_map
+  then t
+  else
+    Code_id.Map.fold (fun code_id code_data all_code ->
+        let code_id =
+          match Code_id.Map.find code_id code_id_map with
+          | exception Not_found -> code_id
+          | code_id -> code_id
+        in
+        let code_data =
+          match code_data with
+          | Present { calling_convention; code; } ->
+            let code = C.apply_renaming code renaming in
+            Present { calling_convention; code; }
+          | Imported { calling_convention; } ->
+            Imported { calling_convention; }
+        in
+        Code_id.Map.add code_id code_data all_code)
+      t
+      Code_id.Map.empty
 
 let iter t f =
   Code_id.Map.iter (fun id -> function | Present {code; _} -> f id code | _ -> ()) t

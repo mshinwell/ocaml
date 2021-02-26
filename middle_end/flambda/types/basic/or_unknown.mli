@@ -38,9 +38,11 @@ val free_names : ('a -> Name_occurrences.t) -> 'a t -> Name_occurrences.t
 
 val all_ids_for_export : ('a -> Ids_for_export.t) -> 'a t -> Ids_for_export.t
 
-val import
-   : (Ids_for_export.Import_map.t -> 'a -> 'a)
-  -> Ids_for_export.Import_map.t -> 'a t -> 'a t
+val apply_renaming
+   : 'a t
+  -> Renaming.t
+  -> ('a -> Renaming.t -> 'a)
+  -> 'a t
 
 module Lift (I : Identifiable.S) : sig
   type nonrec t = I.t t
