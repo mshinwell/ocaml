@@ -193,6 +193,14 @@ let name_mode t =
   | Set_of_closures { name_mode; _ } -> name_mode
   | Symbols _ -> Name_mode.normal
 
+let with_name_mode t name_mode =
+  match t with
+  | Singleton var ->
+    Singleton (Var_in_binding_pos.with_name_mode var name_mode)
+  | Set_of_closures { name_mode = _; closure_vars; } ->
+    Set_of_closures { name_mode; closure_vars; }
+  | Symbols _ -> t
+
 let must_be_singleton t =
   match t with
   | Singleton var -> var
@@ -215,6 +223,19 @@ let must_be_symbols t =
   | Symbols symbols -> symbols
   | Singleton _ | Set_of_closures _ ->
     Misc.fatal_errorf "Bound name is not a [Set_of_closures]:@ %a" print t
+
+let exists_all_bound_vars t ~f =
+  match t with
+  | Singleton var -> f var
+  | Set_of_closures { closure_vars; _ } -> ListLabels.exists closure_vars ~f
+  | Symbols _ -> false
+
+let fold_all_bound_vars t ~init ~f =
+  match t with
+  | Singleton var -> f init var
+  | Set_of_closures { closure_vars; _ } ->
+    ListLabels.fold_left closure_vars ~init ~f
+  | Symbols _ -> init
 
 let all_bound_vars t =
   match t with

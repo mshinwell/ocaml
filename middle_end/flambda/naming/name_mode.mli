@@ -42,6 +42,8 @@ val top : t
 
 val can_be_in_terms : t -> bool
 
+val max_in_terms : t -> t -> t
+
 include Identifiable.S with type t := t
 
 val compare_total_order : t -> t -> int
