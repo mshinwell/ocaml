@@ -179,8 +179,9 @@ let simplify_named0 dacc (bindable_let_bound : Bindable_let_bound.t)
       (* CR mshinwell: It's a bit weird that the env_extension is added to
          the typing env here; couldn't it just have been returned already
          added to [dacc]? *)
-      let dacc = DA.add_variable dacc bound_var (T.unknown kind) in
-      DA.extend_typing_environment dacc env_extension
+      DA.map_denv dacc ~f:(fun denv ->
+        DE.add_variable_and_extend_typing_environment denv
+          bound_var (T.unknown kind) env_extension)
     in
     (* CR mshinwell: Add check along the lines of: types are unknown
        whenever [not (P.With_fixed_value.eligible prim)] holds. *)
