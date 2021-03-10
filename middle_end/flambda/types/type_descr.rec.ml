@@ -82,6 +82,8 @@ module Make (Head : Type_head_intf.S
           Name_mode.in_types
   end
 
+  (* CR mshinwell: Flambda 2 compilation is causing calls to e.g. [descr]
+     to be indirect. *)
   include With_delayed_permutation.Make (Descr)
 
   let all_ids_for_export t =
