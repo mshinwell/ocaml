@@ -9248,14 +9248,18 @@ middle_end/flambda/types/env/aliases.cmi : \
     middle_end/flambda/cmx/contains_ids.cmo \
     middle_end/flambda/types/env/binding_time.cmi
 middle_end/flambda/types/env/binding_time.cmo : \
+    middle_end/flambda/compilenv_deps/patricia_tree.cmi \
     utils/numbers.cmi \
     middle_end/flambda/naming/name_mode.cmi \
     utils/misc.cmi \
+    utils/identifiable.cmi \
     middle_end/flambda/types/env/binding_time.cmi
 middle_end/flambda/types/env/binding_time.cmx : \
+    middle_end/flambda/compilenv_deps/patricia_tree.cmx \
     utils/numbers.cmx \
     middle_end/flambda/naming/name_mode.cmx \
     utils/misc.cmx \
+    utils/identifiable.cmx \
     middle_end/flambda/types/env/binding_time.cmi
 middle_end/flambda/types/env/binding_time.cmi : \
     middle_end/flambda/naming/name_mode.cmi \
