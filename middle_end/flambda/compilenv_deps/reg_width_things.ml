@@ -530,15 +530,15 @@ module Simple = struct
 
   let [@inline always] pattern_match t ~name ~const =
     let flags = Id.flags t in
-    if flags = var_flags then name (Name.var t)
-    else if flags = symbol_flags then name (Name.symbol t)
-    else if flags = const_flags then const t
+    if flags = var_flags then (name [@inlined hint]) (Name.var t)
+    else if flags = symbol_flags then (name [@inlined hint]) (Name.symbol t)
+    else if flags = const_flags then (const [@inlined hint]) t
     else if flags = simple_flags then
       let t = (find_data t).simple in
       let flags = Id.flags t in
-      if flags = var_flags then name (Name.var t)
-      else if flags = symbol_flags then name (Name.symbol t)
-      else if flags = const_flags then const t
+      if flags = var_flags then (name [@inlined hint]) (Name.var t)
+      else if flags = symbol_flags then (name [@inlined hint]) (Name.symbol t)
+      else if flags = const_flags then (const [@inlined hint]) t
       else assert false
     else assert false
 
