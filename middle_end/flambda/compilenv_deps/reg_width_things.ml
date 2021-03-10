@@ -155,10 +155,13 @@ module Variable_data = struct
 
   let hash { compilation_unit; previous_compilation_units;
              name = _; name_stamp; user_visible = _; } =
-    (* The [name_stamp] uniquely determines [name] and [user_visible]. *)
-    Hashtbl.hash (List.map Compilation_unit.hash
-                    (compilation_unit :: previous_compilation_units),
-                  name_stamp)
+    let compilation_unit_hashes =
+      List.fold_left (fun hash compilation_unit ->
+          Misc.hash2 hash (Compilation_unit.hash compilation_unit))
+        (Compilation_unit.hash compilation_unit)
+        previous_compilation_units
+    in
+    Misc.hash2 compilation_unit_hashes (Hashtbl.hash name_stamp)
 
   let equal t1 t2 =
     if t1 == t2 then true
