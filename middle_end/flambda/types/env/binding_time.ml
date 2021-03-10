@@ -14,8 +14,21 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-include Numbers.Int
+module T = struct
+  include Int
+
+  let print = Numbers.Int.print
+  let output = Numbers.Int.output
+  let hash = Hashtbl.hash
+end
+
+include T
+
 type binding_time = t
+
+module Set = Patricia_tree.Make_set (T)
+module Map = Patricia_tree.Make_map (T) (Set)
+module Tbl = Identifiable.Make_tbl (T) (Map)
 
 let strictly_earlier (t : t) ~than =
   t < than
