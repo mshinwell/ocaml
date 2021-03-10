@@ -795,11 +795,10 @@ let rec make_suitable_for_environment0_core t env ~depth ~suitable_for level =
   else if missing_kind env free_names then level, unknown (kind t)
   else
     let to_erase =
+      let var free_var = not (TE.mem suitable_for (Name.var free_var)) in
       Name_occurrences.filter_names free_names
         ~f:(fun free_name ->
-          Name.pattern_match free_name
-            ~var:(fun _ -> not (TE.mem suitable_for free_name))
-            ~symbol:(fun _ -> true))
+          Name.pattern_match free_name ~var ~symbol:(fun _ -> true))
     in
     if Name_occurrences.is_empty to_erase then level, t
     else if depth > 1 then level, unknown (kind t)
