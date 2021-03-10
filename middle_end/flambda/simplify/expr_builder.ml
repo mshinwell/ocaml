@@ -18,6 +18,7 @@
 
 open! Flambda.Import
 
+module BLB = Bindable_let_bound
 module LC = Lifted_constant
 module LCS = Lifted_constant_state
 module P = Flambda_primitive
@@ -31,7 +32,7 @@ type let_creation_result =
   | Have_deleted of Named.t
   | Nothing_deleted
 
-let create_singleton_let uacc (bound_var : VB.t) defining_expr
+let create_let uacc (bound_vars : BLB.t) defining_expr
       ~free_names_of_defining_expr ~body ~cost_metrics_of_defining_expr =
   (* The name occurrences component of [uacc] is expected to be in the state
      described in the comment at the top of [Simplify_let.rebuild_let]. *)
@@ -39,12 +40,29 @@ let create_singleton_let uacc (bound_var : VB.t) defining_expr
     !Clflags.debug && !Clflags.Flambda.Expert.phantom_lets
   in
   let free_names_of_body = UA.name_occurrences uacc in
-  let bound_var, keep_binding, let_creation_result =
+  let bound_vars, keep_binding, let_creation_result =
     let greatest_name_mode =
-      Name_occurrences.greatest_name_mode_var free_names_of_body
-        (VB.var bound_var)
+      match bound_vars with
+      | Singleton bound_var ->
+        (* We avoid the closure allocation (below) in this case. *)
+        Name_occurrences.greatest_name_mode_var free_names_of_body
+          (VB.var bound_var)
+      | Set_of_closures _ | Symbols _ ->
+        BLB.fold_all_bound_vars bound_vars ~init:Name_mode.Or_absent.absent
+          ~f:(fun (greatest_name_mode : Name_mode.Or_absent.t) bound_var ->
+            let name_mode =
+              Name_occurrences.greatest_name_mode_var free_names_of_body
+                (VB.var bound_var)
+            in
+            match name_mode, greatest_name_mode with
+            | Absent, Absent -> Name_mode.Or_absent.absent
+            | Absent, Present _ -> greatest_name_mode
+            | Present _, Absent -> name_mode
+            | Present name_mode, Present greatest_name_mode ->
+              Name_mode.max_in_terms name_mode greatest_name_mode
+              |> Name_mode.Or_absent.present)
     in
-    let declared_name_mode = VB.name_mode bound_var in
+    let declared_name_mode = BLB.name_mode bound_vars in
     begin match
       Name_mode.Or_absent.compare_partial_order
          greatest_name_mode
@@ -54,10 +72,10 @@ let create_singleton_let uacc (bound_var : VB.t) defining_expr
     | Some c ->
       if c <= 0 then ()
       else
-        Misc.fatal_errorf "[Let]-binding declares variable %a (mode %a) to \
-            be bound to@ %a,@ but this variable has occurrences at a higher \
-            mode@ (>= %a)@ in the body (free names %a):@ %a"
-          VB.print bound_var
+        Misc.fatal_errorf "[Let]-binding declares variable(s) %a (mode %a) to \
+            be bound to@ %a,@ but there exist occurrences for such variable(s) \
+            at a higher mode@ (>= %a)@ in the body (free names %a):@ %a"
+          BLB.print bound_vars
           Name_mode.print declared_name_mode
           Named.print defining_expr
           Name_mode.Or_absent.print greatest_name_mode
@@ -67,15 +85,18 @@ let create_singleton_let uacc (bound_var : VB.t) defining_expr
     if not (Named.at_most_generative_effects defining_expr) then begin
       if not (Name_mode.is_normal declared_name_mode)
       then begin
-        Misc.fatal_errorf "Cannot [Let]-bind non-normal variable to \
-            a primitive that has more than generative effects:@ %a@ =@ %a"
-          VB.print bound_var
+        Misc.fatal_errorf "Cannot [Let]-bind non-normal variable(s) to \
+            a [Named] that has more than generative effects:@ %a@ =@ %a"
+          BLB.print bound_vars
           Named.print defining_expr
       end;
-      bound_var, true, Nothing_deleted
+      bound_vars, Some Name_mode.normal, Nothing_deleted
     end else begin
       let has_uses = Name_mode.Or_absent.is_present greatest_name_mode in
-      let user_visible = Variable.user_visible (VB.var bound_var) in
+      let user_visible =
+        BLB.exists_all_bound_vars bound_vars ~f:(fun bound_var ->
+          Variable.user_visible (VB.var bound_var))
+      in
       let will_delete_binding =
         (* CR mshinwell: This should detect whether there is any
            provenance info associated with the variable.  If there isn't, the
@@ -84,7 +105,7 @@ let create_singleton_let uacc (bound_var : VB.t) defining_expr
         not (has_uses || (generate_phantom_lets && user_visible))
       in
       if will_delete_binding then begin
-        bound_var, false, Have_deleted defining_expr
+        bound_vars, None, Have_deleted defining_expr
       end else
         let name_mode =
           match greatest_name_mode with
@@ -92,9 +113,11 @@ let create_singleton_let uacc (bound_var : VB.t) defining_expr
           | Present name_mode -> name_mode
         in
         assert (Name_mode.can_be_in_terms name_mode);
-        let bound_var = VB.with_name_mode bound_var name_mode in
-        if Name_mode.is_normal name_mode then bound_var, true, Nothing_deleted
-        else bound_var, true, Have_deleted defining_expr
+        let bound_vars = BLB.with_name_mode bound_vars name_mode in
+        if Name_mode.is_normal name_mode then
+          bound_vars, Some name_mode, Nothing_deleted
+        else
+          bound_vars, Some name_mode, Have_deleted defining_expr
     end
   in
   (* CR mshinwell: When leaving behind phantom lets, maybe we should turn
@@ -103,59 +126,32 @@ let create_singleton_let uacc (bound_var : VB.t) defining_expr
      into a variable.  This defining expression usually never exists as
      the types propagate the information forward.
      mshinwell: this might be done now in Simplify_named, check. *)
-  if not keep_binding then body, uacc, let_creation_result
-  else
+  match keep_binding with
+  | None -> body, uacc, let_creation_result
+  | Some name_mode ->
     let free_names_of_body = UA.name_occurrences uacc in
     let free_names_of_defining_expr =
       if not generate_phantom_lets then (* CR mshinwell: refine condition *)
         free_names_of_defining_expr
       else
         Name_occurrences.downgrade_occurrences_at_strictly_greater_kind
-          free_names_of_defining_expr (VB.name_mode bound_var)
+          free_names_of_defining_expr name_mode
     in
     let free_names_of_let =
-      Name_occurrences.remove_var free_names_of_body (VB.var bound_var)
-      |> Name_occurrences.union free_names_of_defining_expr
+      let without_bound_vars =
+        BLB.fold_all_bound_vars bound_vars ~init:free_names_of_body
+          ~f:(fun free_names bound_var ->
+            Name_occurrences.remove_var free_names (VB.var bound_var))
+      in
+      Name_occurrences.union without_bound_vars free_names_of_defining_expr
     in
+    let is_phantom = Name_mode.is_phantom name_mode in
     let uacc =
+      (* CR mshinwell: This is reallocating UA twice on every [Let] *)
       UA.with_name_occurrences uacc ~name_occurrences:free_names_of_let
       |> UA.cost_metrics_add
            ~added:(Cost_metrics.increase_due_to_let_expr
-              ~is_phantom:(Name_mode.is_phantom (VB.name_mode bound_var))
-              ~cost_metrics_of_defining_expr)
-    in
-    let let_expr =
-      Let.create (Bindable_let_bound.singleton bound_var)
-        defining_expr ~body
-        ~free_names_of_body:(Known free_names_of_body)
-    in
-    Expr.create_let let_expr, uacc, Nothing_deleted
-
-let create_set_of_closures_let uacc bound_vars defining_expr
-      ~free_names_of_defining_expr ~cost_metrics_of_defining_expr ~body ~bound_closure_vars =
-  (* The name occurrences component of [uacc] is expected to be in the state
-     described in the comment at the top of [Simplify_let.rebuild_let]. *)
-  (* CR-someday mshinwell: Think about how to phantomise these [Let]s. *)
-  let free_names_of_body = UA.name_occurrences uacc in
-  let all_bound_vars_unused =
-    ListLabels.for_all bound_closure_vars ~f:(fun closure_var ->
-      not (Name_occurrences.mem_var free_names_of_body (VB.var closure_var)))
-  in
-  if all_bound_vars_unused then body, uacc, Have_deleted defining_expr
-  else
-    let free_names_of_body = UA.name_occurrences uacc in
-    let free_names_of_let =
-      ListLabels.fold_left bound_closure_vars ~init:free_names_of_body
-        ~f:(fun free_names closure_var ->
-          Name_occurrences.remove_var free_names (VB.var closure_var))
-      |> Name_occurrences.union free_names_of_defining_expr
-    in
-    let uacc =
-      UA.with_name_occurrences uacc ~name_occurrences:free_names_of_let
-      |> UA.cost_metrics_add
-           ~added:(Cost_metrics.increase_due_to_let_expr
-              ~is_phantom:false
-              ~cost_metrics_of_defining_expr)
+              ~is_phantom ~cost_metrics_of_defining_expr)
     in
     let let_expr =
       Let.create bound_vars defining_expr ~body
@@ -182,17 +178,10 @@ let make_new_let_bindings uacc ~bindings_outermost_first ~body =
         } ->
         let defining_expr = Simplified_named.to_named defining_expr in
         match (bound : Bindable_let_bound.t) with
-        | Singleton var ->
+        | Singleton _ | Set_of_closures _ ->
           let expr, uacc, _ =
-            create_singleton_let uacc var defining_expr
+            create_let uacc bound defining_expr
               ~free_names_of_defining_expr ~body:expr
-              ~cost_metrics_of_defining_expr
-          in
-          expr, uacc
-        | Set_of_closures { closure_vars = bound_closure_vars; _ } ->
-          let expr, uacc, _ =
-            create_set_of_closures_let uacc bound defining_expr
-              ~free_names_of_defining_expr ~body ~bound_closure_vars
               ~cost_metrics_of_defining_expr
           in
           expr, uacc
@@ -442,7 +431,7 @@ let create_let_symbols uacc (scoping_rule : Symbol_scoping_rule.t)
       let defining_expr, cost_metrics_of_defining_expr = apply_projection proj in
       let free_names_of_defining_expr = Named.free_names defining_expr in
       let expr, uacc, _ =
-        create_singleton_let uacc (VB.create var Name_mode.normal)
+        create_let uacc (BLB.singleton (VB.create var Name_mode.normal))
           defining_expr ~free_names_of_defining_expr ~body:expr
           ~cost_metrics_of_defining_expr
       in

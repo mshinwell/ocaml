@@ -29,6 +29,13 @@ type t =
     In_types   Phantom
 *)
 
+let max_in_terms t1 t2 =
+  match t1, t2 with
+  | Normal, Normal | Phantom, Phantom -> t1
+  | Normal, Phantom | Phantom, Normal -> Normal
+  | In_types, _ | _, In_types ->
+    Misc.fatal_error "Cannot use [max_in_terms] with [In_types] mode"
+
 type kind = t
 
 let normal = Normal

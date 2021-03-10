@@ -55,6 +55,19 @@ val must_be_symbols : t -> symbols
 
 val name_mode : t -> Name_mode.t
 
+val with_name_mode : t -> Name_mode.t -> t
+
+val exists_all_bound_vars
+   : t
+  -> f:(Var_in_binding_pos.t -> bool)
+  -> bool
+
+val fold_all_bound_vars
+   : t
+  -> init:'a
+  -> f:('a -> Var_in_binding_pos.t -> 'a)
+  -> 'a
+
 val all_bound_vars : t -> Var_in_binding_pos.Set.t
 
 val all_bound_vars' : t -> Variable.Set.t
