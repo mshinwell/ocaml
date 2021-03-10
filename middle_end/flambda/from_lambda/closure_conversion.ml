@@ -845,6 +845,10 @@ and close_one_function t ~external_env ~by_closure_id decl
   in
   let my_closure' = Simple.var my_closure in
   let body =
+    (* CR mshinwell: These Select_closure operations should maybe be inserted
+       at the point of use rather than at the top of the function.  We should
+       also check the behaviour of the backend w.r.t. CSE of projections from
+       closures. *)
     Variable.Map.fold (fun var closure_id body ->
         let move : Flambda_primitive.unary_primitive =
           Select_closure {
