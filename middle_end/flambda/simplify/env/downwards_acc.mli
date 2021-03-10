@@ -56,8 +56,6 @@ val typing_env : t -> Flambda_type.Typing_env.t
 
 val add_variable : t -> Var_in_binding_pos.t -> Flambda_type.t -> t
 
-val extend_typing_environment : t -> Flambda_type.Typing_env_extension.t -> t
-
 val no_lifted_constants : t -> bool
 
 val add_lifted_constant
