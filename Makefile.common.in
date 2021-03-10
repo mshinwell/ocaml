@@ -66,7 +66,7 @@ else
   ocamlopt_cmd = $(FLEXLINK_ENV) $(ocamlopt)
 endif
 
-OPTCOMPFLAGS=-O2 -flambda-expert-max-inlining-depth 3
+OPTCOMPFLAGS=-flambda-expert-max-inlining-depth 3
 ifeq "$(FUNCTION_SECTIONS)" "true"
 OPTCOMPFLAGS += -function-sections
 endif
