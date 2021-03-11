@@ -98,21 +98,25 @@ val add_env_extension_with_extra_variables
   -> Typing_env_extension.With_extra_variables.t
   -> t
 
+val type_simple_in_term_exn
+   : t
+  -> ?min_name_mode:Name_mode.t
+  -> Simple.t
+  -> Type_grammar.t
+
+(** [name_mode_of_existing_simple] can be provided to improve performance
+    of this function. *)
 val get_canonical_simple_exn
    : t
   -> ?min_name_mode:Name_mode.t
+  -> ?name_mode_of_existing_simple:Name_mode.t
   -> Simple.t
   -> Simple.t
-
-val get_canonical_simple_with_kind_exn
-   : t
-  -> ?min_name_mode:Name_mode.t
-  -> Simple.t
-  -> Simple.t * Flambda_kind.t
 
 val get_alias_then_canonical_simple_exn
    : t
   -> ?min_name_mode:Name_mode.t
+  -> ?name_mode_of_existing_simple:Name_mode.t
   -> Type_grammar.t
   -> Simple.t
 

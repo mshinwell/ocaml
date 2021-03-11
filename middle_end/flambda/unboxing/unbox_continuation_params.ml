@@ -128,9 +128,9 @@ module Make (U : Unboxing_spec) = struct
             | exception Not_found -> None
             | block ->
               match
-                TE.get_canonical_simple_exn typing_env_at_use
+                TE.get_canonical_simple_exn typing_env_at_use block
                   ~min_name_mode:Name_mode.normal
-                  block
+                  ~name_mode_of_existing_simple:NM.normal
               with
               | exception Not_found -> None
               | block -> Some block
@@ -225,9 +225,9 @@ module Make (U : Unboxing_spec) = struct
                 Continue (extra_args, field_types_by_id)
               in
               match
-                TE.get_canonical_simple_exn typing_env_at_use
-                  ~min_name_mode:Name_mode.normal
-                  field
+                TE.get_canonical_simple_exn typing_env_at_use field
+                  ~min_name_mode:NM.normal
+                  ~name_mode_of_existing_simple:NM.normal
               with
               | exception Not_found ->
                 begin match untag with
@@ -241,8 +241,9 @@ module Make (U : Unboxing_spec) = struct
                   let untagged_field = Simple.var untagged_field_var in
                   match
                     TE.get_canonical_simple_exn typing_env_at_use
-                      ~min_name_mode:Name_mode.normal
-                    untagged_field
+                      untagged_field
+                      ~min_name_mode:NM.normal
+                      ~name_mode_of_existing_simple:NM.normal
                   with
                   | exception Not_found -> fail ()
                   | untagged_simple ->

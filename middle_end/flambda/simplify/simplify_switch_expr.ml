@@ -262,17 +262,19 @@ let rebuild_switch ~simplify_let dacc ~arms ~scrutinee ~scrutinee_ty uacc
 
 let simplify_switch ~simplify_let dacc switch ~down_to_up =
   let module AC = Apply_cont in
-  let min_name_mode = Name_mode.normal in
   let scrutinee = Switch.scrutinee switch in
-  match S.simplify_simple dacc scrutinee ~min_name_mode with
-  | Bottom, _ty ->
+  let scrutinee_ty =
+    S.simplify_simple dacc scrutinee ~min_name_mode:NM.normal
+  in
+  if T.is_obviously_bottom scrutinee_ty then
     down_to_up dacc ~rebuild:(fun uacc ~after_rebuild ->
       let uacc =
         UA.notify_removed ~operation:Removed_operations.branch uacc
       in
       EB.rebuild_invalid uacc ~after_rebuild
     )
-  | Ok scrutinee, scrutinee_ty ->
+  else
+    let scrutinee = T.get_alias_exn scrutinee_ty in
     let arms, dacc =
       let typing_env_at_use = DA.typing_env dacc in
       Target_imm.Map.fold (fun arm action (arms, dacc) ->
@@ -297,11 +299,11 @@ let simplify_switch ~simplify_let dacc switch ~down_to_up =
               let arms = Target_imm.Map.add arm (action, rewrite_id, []) arms in
               arms, dacc
             | _::_ ->
-              let min_name_mode = Name_mode.normal in
-              match S.simplify_simples dacc args ~min_name_mode with
-              | _, Bottom -> arms, dacc
-              | _changed, Ok args_with_types ->
-                let args, arg_types = List.split args_with_types in
+              let { S. seen_bottom; simples = args; simple_tys = arg_types; } =
+                S.simplify_simples dacc args
+              in
+              if seen_bottom then arms, dacc
+              else
                 let dacc, rewrite_id =
                   DA.record_continuation_use dacc (AC.continuation action)
                     Non_inlinable ~env_at_use ~arg_types

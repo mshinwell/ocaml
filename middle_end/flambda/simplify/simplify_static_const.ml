@@ -28,12 +28,13 @@ let simplify_field_of_block dacc (field : Field_of_block.t) =
   | Tagged_immediate i -> field, T.this_tagged_immediate i
   | Dynamically_computed var ->
     let min_name_mode = Name_mode.normal in
-    match S.simplify_simple dacc (Simple.var var) ~min_name_mode with
-    | Bottom, ty ->
+    let ty = S.simplify_simple dacc (Simple.var var) ~min_name_mode in
+    if T.is_obviously_bottom ty then begin
       assert (K.equal (T.kind ty) K.value);
       (* CR mshinwell: This should be "invalid" and propagate up *)
       field, T.bottom K.value
-    | Ok simple, ty ->
+    end else begin
+      let simple = T.get_alias_exn ty in
       Simple.pattern_match simple
         ~name:(fun name ->
           Name.pattern_match name
@@ -46,6 +47,7 @@ let simplify_field_of_block dacc (field : Field_of_block.t) =
               | Naked_int64 _ | Naked_nativeint _ ->
             (* CR mshinwell: This should be "invalid" and propagate up *)
             field, ty)
+    end
 
 let simplify_or_variable dacc type_for_const
       (or_variable : _ Or_variable.t) =

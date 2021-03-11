@@ -140,19 +140,22 @@ module Typing_env : sig
     -> Typing_env_extension.With_extra_variables.t
     -> t
 
-  (** Raises [Not_found] if no canonical [Simple] was found. *)
+  (** Raises [Not_found] if no canonical [Simple] was found.
+      [name_mode_of_existing_simple] can be provided to improve performance
+      of this function. *)
   val get_canonical_simple_exn
      : t
     -> ?min_name_mode:Name_mode.t
+    -> ?name_mode_of_existing_simple:Name_mode.t
     -> Simple.t
     -> Simple.t
 
   (** Raises [Not_found] if no canonical [Simple] was found. *)
-  val get_canonical_simple_with_kind_exn
+  val type_simple_in_term_exn
      : t
     -> ?min_name_mode:Name_mode.t
     -> Simple.t
-    -> Simple.t * Flambda_kind.t
+    -> flambda_type
 
   val add_to_code_age_relation : t -> newer:Code_id.t -> older:Code_id.t -> t
 
@@ -454,6 +457,8 @@ val bottom_types_from_arity : Flambda_arity.t -> t list
 (** Whether the given type says that a term of that type can never be
     constructed (in other words, it is [Invalid]). *)
 val is_bottom : (t -> bool) type_accessor
+
+val is_obviously_bottom : t -> bool
 
 val type_for_const : Reg_width_const.t -> t
 val kind_for_const : Reg_width_const.t -> Flambda_kind.t

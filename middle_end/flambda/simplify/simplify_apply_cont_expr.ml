@@ -140,17 +140,17 @@ let rebuild_apply_cont apply_cont ~args ~rewrite_id uacc ~after_rebuild =
       Apply_cont.free_names apply_cont)
 
 let simplify_apply_cont dacc apply_cont ~down_to_up =
-  let min_name_mode = Name_mode.normal in
-  match S.simplify_simples dacc (AC.args apply_cont) ~min_name_mode with
-  | _, Bottom ->
+  let { S. seen_bottom; simples = args; simple_tys = arg_types; } =
+    S.simplify_simples dacc (AC.args apply_cont)
+  in
+  if seen_bottom then
     down_to_up dacc ~rebuild:(fun uacc ~after_rebuild ->
       let uacc =
         UA.notify_removed ~operation:Removed_operations.branch uacc
       in
       EB.rebuild_invalid uacc ~after_rebuild
     )
-  | _changed, Ok args_with_types ->
-    let args, arg_types = List.split args_with_types in
+  else
     let use_kind : Continuation_use_kind.t =
       (* CR mshinwell: Is [Continuation.sort] reliable enough to detect
          the toplevel continuation?  Probably not -- we should store it in

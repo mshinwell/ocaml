@@ -153,6 +153,7 @@ let cse_with_eligible_lhs ~typing_env_at_fork ~cse_at_each_use ~params prev_cse
             match
               TE.get_canonical_simple_exn env_at_use arg
                 ~min_name_mode:NM.normal
+                ~name_mode_of_existing_simple:NM.normal
             with
             | exception Not_found -> None
             | arg ->
@@ -173,6 +174,7 @@ let cse_with_eligible_lhs ~typing_env_at_fork ~cse_at_each_use ~params prev_cse
           match
             TE.get_canonical_simple_exn env_at_use bound_to
               ~min_name_mode:NM.normal
+              ~name_mode_of_existing_simple:NM.normal
           with
           | exception Not_found -> eligible
           | bound_to ->

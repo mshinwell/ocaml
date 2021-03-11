@@ -841,19 +841,6 @@ let add_symbol_projection t var proj =
 let find_symbol_projection t var =
   Cached.find_symbol_projection (cached t) var
 
-let kind_of_simple t simple =
-  let [@inline always] const const =
-    Type_grammar.kind (Type_grammar.type_for_const const)
-  in
-  let [@inline always] name name =
-    (* [kind_of_simple] is only currently called when processing variables
-       in terms, whose kinds should always be inferrable, so we pass
-       [None] here. *)
-    let ty = find t name None in
-    Type_grammar.kind ty
-  in
-  Simple.pattern_match simple ~const ~name
-
 let add_definition t (name : Name_in_binding_pos.t) kind =
   let name_mode = Name_in_binding_pos.name_mode name in
   Name.pattern_match (Name_in_binding_pos.name name)
@@ -1203,8 +1190,24 @@ let cut_and_n_way_join definition_typing_env ts_and_use_ids ~params
   in
   add_env_extension_from_level definition_typing_env level
 
-let get_canonical_simple_with_kind_exn t ?min_name_mode simple =
-  let kind = kind_of_simple t simple in
+let type_simple_in_term_exn t ?min_name_mode simple =
+  (* If [simple] is a variable then it should not come from a missing .cmx
+     file, since this function is only used for typing variables in terms,
+     and even imported code is closed with respect to variables.  This also
+     means that the kind of such variables should always be inferrable, so
+     we pass [None] to [find] below. *)
+  let ty, _binding_time, name_mode_simple =
+    let [@inline always] const const =
+      Type_grammar.type_for_const const,
+        Binding_time.consts_and_discriminants,
+        Name_mode.normal
+    in
+    let [@inline always] name name =
+      find_with_binding_time_and_mode t name None
+    in
+    Simple.pattern_match simple ~const ~name
+  in
+  let kind = Type_grammar.kind ty in
   let newer_rec_info =
     let newer_rec_info = Simple.rec_info simple in
     match newer_rec_info with
@@ -1212,8 +1215,8 @@ let get_canonical_simple_with_kind_exn t ?min_name_mode simple =
     | Some newer_rec_info ->
       Simple.pattern_match simple
         ~const:(fun _ -> Some newer_rec_info)
-        ~name:(fun name ->
-          match Type_grammar.get_alias_exn (find t name (Some kind)) with
+        ~name:(fun _ ->
+          match Type_grammar.get_alias_exn ty with
           | exception Not_found -> Some newer_rec_info
           | simple ->
             match Simple.rec_info simple with
@@ -1244,10 +1247,6 @@ let get_canonical_simple_with_kind_exn t ?min_name_mode simple =
             (* Symbols can't alias, so lookup in the current aliases is fine *)
             aliases t))
   in
-  let name_mode_simple =
-    Binding_time.With_name_mode.name_mode
-      (binding_time_and_mode_of_simple t simple)
-  in
   let min_name_mode =
     match min_name_mode with
     | None -> name_mode_simple
@@ -1267,14 +1266,14 @@ let get_canonical_simple_with_kind_exn t ?min_name_mode simple =
     raise Misc.Fatal_error
   | alias ->
     match newer_rec_info with
-    | None -> alias, kind
+    | None -> Type_grammar.alias_type_of kind alias
     | Some _ ->
       match Simple.merge_rec_info alias ~newer_rec_info with
       | None -> raise Not_found
-      | Some simple -> simple, kind
+      | Some simple -> Type_grammar.alias_type_of kind simple
 
-let get_canonical_simple_exn t ?min_name_mode simple =
-  (* Duplicated from above to eliminate the allocation of the returned pair. *)
+let get_canonical_simple_exn t ?min_name_mode ?name_mode_of_existing_simple
+      simple =
   let newer_rec_info =
     let newer_rec_info = Simple.rec_info simple in
     match newer_rec_info with
@@ -1348,8 +1347,11 @@ let get_canonical_simple_exn t ?min_name_mode simple =
     in
     if in_types then Name_mode.in_types
     else
-      Binding_time.With_name_mode.name_mode
-        (binding_time_and_mode_of_simple t simple)
+      match name_mode_of_existing_simple with
+      | Some name_mode -> name_mode
+      | None ->
+        Binding_time.With_name_mode.name_mode
+          (binding_time_and_mode_of_simple t simple)
   in
   let min_name_mode =
     match min_name_mode with
@@ -1376,9 +1378,11 @@ let get_canonical_simple_exn t ?min_name_mode simple =
       | None -> raise Not_found
       | Some simple -> simple
 
-let get_alias_then_canonical_simple_exn t ?min_name_mode typ =
-  Type_grammar.get_alias_exn typ
-  |> get_canonical_simple_exn t ?min_name_mode
+let get_alias_then_canonical_simple_exn t ?min_name_mode
+      ?name_mode_of_existing_simple typ =
+  let simple = Type_grammar.get_alias_exn typ in
+  get_canonical_simple_exn t ?min_name_mode ?name_mode_of_existing_simple
+    simple
 
 let aliases_of_simple t ~min_name_mode simple =
   let aliases =

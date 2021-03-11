@@ -29,8 +29,12 @@ let apply_cse dacc ~original_prim =
     match DE.find_cse (DA.denv dacc) with_fixed_value with
     | None -> None
     | Some simple ->
-      (* CR mshinwell: Is this missing a [min_name_mode] constraint? *)
-      match TE.get_canonical_simple_exn (DA.typing_env dacc) simple with
+      let canonical =
+        TE.get_canonical_simple_exn (DA.typing_env dacc) simple
+          ~min_name_mode:NM.normal
+          ~name_mode_of_existing_simple:NM.normal
+      in
+      match canonical with
       | exception Not_found -> None
       | simple -> Some simple
 
@@ -77,9 +81,12 @@ let simplify_primitive dacc (prim : P.t) dbg ~result_var =
     ListLabels.fold_left (P.args prim)
       ~init:([], false)
       ~f:(fun (args_rev, found_invalid) arg ->
-        match S.simplify_simple dacc arg ~min_name_mode with
-        | Bottom, arg_ty -> (arg, arg_ty) :: args_rev, true
-        | Ok arg, arg_ty -> (arg, arg_ty) :: args_rev, found_invalid)
+        let arg_ty = S.simplify_simple dacc arg ~min_name_mode in
+        if T.is_obviously_bottom arg_ty then
+          (arg, arg_ty) :: args_rev, true
+        else
+          let arg = T.get_alias_exn arg_ty in
+          (arg, arg_ty) :: args_rev, found_invalid)
   in
   let args = List.rev args_rev in
   if found_invalid then

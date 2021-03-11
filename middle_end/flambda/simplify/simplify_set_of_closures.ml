@@ -794,11 +794,12 @@ let type_closure_elements_and_make_lifting_decision_for_one_set dacc
       (fun closure_var env_entry
            (closure_elements, closure_element_types, symbol_projections) ->
         let env_entry, ty, symbol_projections =
-          match S.simplify_simple dacc env_entry ~min_name_mode with
-          | Bottom, ty ->
+          let ty = S.simplify_simple dacc env_entry ~min_name_mode in
+          if T.is_obviously_bottom ty then begin
             assert (K.equal (T.kind ty) K.value);
             env_entry, ty, symbol_projections
-          | Ok simple, ty ->
+          end else begin
+            let simple = T.get_alias_exn ty in
             (* Note down separately if [simple] remains a variable and is known
                to be equal to a projection from a symbol. *)
             let symbol_projections =
@@ -814,6 +815,7 @@ let type_closure_elements_and_make_lifting_decision_for_one_set dacc
                     Variable.Map.add var proj symbol_projections)
             in
             simple, ty, symbol_projections
+          end
         in
         let closure_elements =
           Var_within_closure.Map.add closure_var env_entry closure_elements

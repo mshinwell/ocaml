@@ -698,20 +698,22 @@ let simplify_function_call ~simplify_expr dacc apply ~callee_ty
     )
 
 let simplify_apply_shared dacc apply : _ Or_bottom.t =
-  let min_name_mode = Name_mode.normal in
-  match S.simplify_simple dacc (Apply.callee apply) ~min_name_mode with
-  | Bottom, _ty -> Bottom
-  | Ok callee, callee_ty ->
-    match S.simplify_simples dacc (Apply.args apply) ~min_name_mode with
-    | _, Bottom -> Bottom
-    | _changed, Ok args_with_types ->
-      let args, arg_types = List.split args_with_types in
+  let callee_ty =
+    S.simplify_simple dacc (Apply.callee apply) ~min_name_mode:NM.normal
+  in
+  if T.is_obviously_bottom callee_ty then Bottom
+  else
+    let { S. seen_bottom; simples = args; simple_tys = arg_types; } =
+      S.simplify_simples dacc (Apply.args apply)
+    in
+    if seen_bottom then Bottom
+    else
       let inlining_state =
         Inlining_state.merge (DE.get_inlining_state (DA.denv dacc))
           (Apply.inlining_state apply)
       in
       let apply =
-        Apply.create ~callee
+        Apply.create ~callee:(T.get_alias_exn callee_ty)
           ~continuation:(Apply.continuation apply)
           (Apply.exn_continuation apply)
           ~args
