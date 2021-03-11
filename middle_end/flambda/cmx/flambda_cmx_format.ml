@@ -140,7 +140,8 @@ let import_typing_env_and_code0 t =
       ~used_closure_vars
   in
   let import_simple_without_rec_info simple =
-    (* [simple] will never have [Rec_info]; see [Reg_width_things.Simple]. *)
+    (* [simple] will never have [Rec_info] since it is the [Simple] component
+       of a [Simple_data.t].  See [Reg_width_things.Simple_data]. *)
     assert (not (Simple.has_rec_info simple));
     Simple.pattern_match simple
       ~const:(fun c ->

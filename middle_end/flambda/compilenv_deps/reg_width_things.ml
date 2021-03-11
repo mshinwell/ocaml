@@ -610,12 +610,11 @@ module Simple = struct
     (* [old_simple] never has [Rec_info].  See [Simple_data], above. *)
     assert (Id.flags old_simple <> simple_flags);
     let t = map old_simple in
+    (* The import converter should never affect the flags. *)
+    assert (Id.flags t <> simple_flags);
     let rec_info = data.rec_info in
-    if Rec_info.is_initial rec_info then begin
-      assert (Id.flags t <> simple_flags);
-      t
-    end else begin
-      assert (Id.flags t = simple_flags);
+    if Rec_info.is_initial rec_info then t
+    else begin
       let data : Simple_data.t = { simple = t; rec_info; } in
       Table.add !grand_table_of_simples data
     end
