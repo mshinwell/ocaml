@@ -180,8 +180,8 @@ let simplify_named0 dacc (bindable_let_bound : Bindable_let_bound.t)
          the typing env here; couldn't it just have been returned already
          added to [dacc]? *)
       DA.map_denv dacc ~f:(fun denv ->
-        DE.add_variable_and_extend_typing_environment denv
-          bound_var (T.unknown kind) env_extension)
+        DE.define_variable_and_extend_typing_environment denv
+          bound_var kind env_extension)
     in
     (* CR mshinwell: Add check along the lines of: types are unknown
        whenever [not (P.With_fixed_value.eligible prim)] holds. *)

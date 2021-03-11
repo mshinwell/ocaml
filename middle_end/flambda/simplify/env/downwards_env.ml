@@ -408,13 +408,11 @@ let mark_parameters_as_toplevel t params =
   in
   { t with variables_defined_at_toplevel; }
 
-let add_variable_and_extend_typing_environment t var ty env_extension =
+let define_variable_and_extend_typing_environment t var kind env_extension =
   (* This is a combined operation to reduce allocation. *)
   let typing_env =
     let var' = Name_in_binding_pos.var var in
-    TE.add_equation
-      (TE.add_definition t.typing_env var' (T.kind ty))
-      (Name.var (Var_in_binding_pos.var var)) ty
+    TE.add_definition t.typing_env var' kind
   in
   let variables_defined_at_toplevel =
     if t.at_unit_toplevel then

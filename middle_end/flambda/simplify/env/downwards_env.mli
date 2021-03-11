@@ -141,10 +141,10 @@ val add_parameters_with_unknown_types'
 
 val mark_parameters_as_toplevel : t -> Kinded_parameter.t list -> t
 
-val add_variable_and_extend_typing_environment
+val define_variable_and_extend_typing_environment
    : t
   -> Var_in_binding_pos.t
-  -> Flambda_type.t
+  -> Flambda_kind.t
   -> Flambda_type.Typing_env_extension.t
   -> t
 
