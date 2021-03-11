@@ -325,6 +325,7 @@ MIDDLE_END_FLAMBDA_SIMPLIFY=\
   middle_end/flambda/lifting/sort_lifted_constants.cmo \
   middle_end/flambda/lifting/reification.cmo \
   middle_end/flambda/simplify/simplify_common.cmo \
+  middle_end/flambda/simplify/simplify_apply_cont_expr.cmo \
   middle_end/flambda/simplify/simplify_variadic_primitive.cmo \
   middle_end/flambda/simplify/typing_helpers/number_adjuncts.cmo \
   middle_end/flambda/simplify/simplify_nullary_primitive.cmo \
