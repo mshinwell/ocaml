@@ -340,6 +340,7 @@ MIDDLE_END_FLAMBDA_SIMPLIFY=\
   middle_end/flambda/simplify/simplify_named.cmo \
   middle_end/flambda/simplify/simplify_let_expr.cmo \
   middle_end/flambda/simplify/simplify_let_cont_expr.cmo \
+  middle_end/flambda/simplify/simplify_switch_expr.cmo \
   middle_end/flambda/simplify/simplify_expr.cmo \
   middle_end/flambda/simplify/simplify.cmo
 
