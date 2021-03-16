@@ -52,6 +52,7 @@ module LC = Lifted_constant
 module LCS = Lifted_constant_state
 module NM = Name_mode
 module P = Flambda_primitive
+module RE = Rebuilt_expr
 module RI = Apply_cont_rewrite_id
 module S = Simplify_simple
 module SC = Static_const

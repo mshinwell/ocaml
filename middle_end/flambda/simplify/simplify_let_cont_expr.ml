@@ -81,7 +81,7 @@ let rebuild_one_continuation_handler cont ~at_unit_toplevel
         used_as_normal, new_phantom_params
   in
   let handler, uacc =
-    Expr_builder.make_new_let_bindings uacc ~body:handler
+    EB.make_new_let_bindings uacc ~body:handler
       ~bindings_outermost_first:(List.map (fun param ->
         let v = KP.var param in
         let k = K.With_subkind.kind (KP.kind param) in
@@ -104,7 +104,9 @@ let rebuild_one_continuation_handler cont ~at_unit_toplevel
   in
   let params' = used_params @ used_extra_params in
   let cont_handler =
-    CH.create params' ~handler ~free_names_of_handler:(Known free_names)
+    RE.Continuation_handler.create (UA.are_rebuilding_terms uacc)
+      params' ~handler
+      ~free_names_of_handler:free_names
       ~is_exn_handler:(CH.is_exn_handler cont_handler)
   in
   let rewrite =
@@ -144,7 +146,8 @@ type behaviour =
 let rebuild_non_recursive_let_cont_handler cont
       (uses : Continuation_env_and_param_types.t) ~params ~handler
       ~free_names_of_handler ~is_single_inlinable_use scope ~is_exn_handler
-      (extra_params_and_args : EPA.t) cont_handler uacc ~after_rebuild =
+      (extra_params_and_args : EPA.t)
+      (cont_handler : RE.Continuation_handler.t) uacc ~after_rebuild =
   let uenv = UA.uenv uacc in
   let uenv =
     (* CR mshinwell: Change types so that [free_names_of_handler] only
@@ -160,20 +163,20 @@ let rebuild_non_recursive_let_cont_handler cont
       if is_single_inlinable_use then begin
         (* Note that [Continuation_uses] won't set [is_single_inlinable_use]
            if [cont] is an exception handler. *)
-        assert (not (CH.is_exn_handler cont_handler));
+        assert (not is_exn_handler);
         (* We pass the parameters and the handler expression, rather than
            the [CH.t], to avoid re-opening the name abstraction. *)
         UE.add_linearly_used_inlinable_continuation uenv cont scope
-          ~params ~handler ~free_names_of_handler ~cost_metrics_of_handler:(UA.cost_metrics uacc)
+          ~params ~handler ~free_names_of_handler
+          ~cost_metrics_of_handler:(UA.cost_metrics uacc)
       end else begin
         let behaviour =
           (* CR-someday mshinwell: This could be replaced by a more sophisticated
             analysis, but for the moment we just use a simple syntactic check. *)
-          if is_exn_handler then
-            Unknown
+          if is_exn_handler then Unknown
           else
-            match Expr.descr handler with
-            | Apply_cont apply_cont ->
+            match RE.to_apply_cont handler (UA.are_rebuilding_terms uacc) with
+            | Some apply_cont ->
               begin match Apply_cont.trap_action apply_cont with
               | Some _ -> Unknown
               | None ->
@@ -184,9 +187,10 @@ let rebuild_non_recursive_let_cont_handler cont
                 else
                   Unknown
               end
-            | Invalid Treat_as_unreachable -> Unreachable
-            | Invalid Halt_and_catch_fire | Let _ | Let_cont _
-            | Apply _ | Switch _ -> Unknown
+            | None ->
+              if RE.is_unreachable handler (UA.are_rebuilding_terms uacc)
+              then Unreachable
+              else Unknown
         in
         match behaviour with
         | Unreachable ->
@@ -215,8 +219,8 @@ let rebuild_non_recursive_let_cont_handler cont
   after_rebuild cont_handler ~handler_expr:handler (UA.with_uenv uacc uenv)
 
 let simplify_non_recursive_let_cont_handler ~simplify_expr
-      ~denv_before_body ~dacc_after_body
-      cont params ~(handler : Expr.t) cont_handler ~prior_lifted_constants
+      ~denv_before_body ~dacc_after_body cont params
+      ~(handler : Expr.t) (cont_handler : CH.t) ~prior_lifted_constants
       ~inlining_state_at_let_cont ~inlined_debuginfo_at_let_cont
       ~scope ~is_exn_handler ~denv_for_toplevel_check ~unit_toplevel_exn_cont
       ~prior_cont_uses_env ~down_to_up =
@@ -252,9 +256,16 @@ let simplify_non_recursive_let_cont_handler ~simplify_expr
     down_to_up dacc
       ~continuation_has_zero_uses:true
       ~rebuild:(fun uacc ~after_rebuild ->
-        (* Even though the handler is discarded we removing an operation
+        (* The code will never be used, so we can swap it out for [Invalid]. *)
+        let handler = RE.create_invalid () in
+        let cont_handler =
+          RE.Continuation_handler.create (UA.are_rebuilding_terms uacc)
+            params ~handler ~free_names_of_handler:Name_occurrences.empty
+            ~is_exn_handler
+        in
+        (* Even though the handler is discarded, marking an operation as removed
            is unnecessary: the handler would have been left untouched during
-           execution.*)
+           execution. *)
         rebuild_non_recursive_let_cont_handler cont uses ~params
           ~handler ~free_names_of_handler:Name_occurrences.empty
           ~is_single_inlinable_use:false scope ~is_exn_handler
@@ -291,7 +302,7 @@ let simplify_non_recursive_let_cont_handler ~simplify_expr
          handler for the environment can remain marked as toplevel (and suitable
          for "let symbol" bindings); otherwise, it cannot. *)
       DE.at_unit_toplevel denv_for_toplevel_check
-        && (not (CH.is_exn_handler cont_handler))
+        && (not is_exn_handler)
         && Continuation.Set.subset
           (CUE.all_continuations_used cont_uses_env)
           (Continuation.Set.of_list [cont; unit_toplevel_exn_cont])
@@ -475,13 +486,15 @@ let simplify_non_recursive_let_cont ~simplify_expr dacc non_rec ~down_to_up =
                           |> UA.notify_removed
                                ~operation:Removed_operations.alloc
                         in
-                        (* The cost_metrics stored in uacc is the cost_metrics of the body at
-                           this point *)
+                        (* The cost_metrics stored in uacc is the cost_metrics
+                           of the body at this point *)
                         body, uacc
                       else
                         let remove_let_cont_leaving_handler =
-                          match Expr.descr body with
-                          | Apply_cont apply_cont ->
+                          match
+                            RE.to_apply_cont body (UA.are_rebuilding_terms uacc)
+                          with
+                          | Some apply_cont ->
                             if not (Continuation.equal cont
                               (Apply_cont.continuation apply_cont))
                             then false
@@ -492,8 +505,7 @@ let simplify_non_recursive_let_cont ~simplify_expr dacc non_rec ~down_to_up =
                                   (Apply_cont.trap_action apply_cont)
                               | _::_ -> false
                               end
-                          | Let _ | Apply _ | Switch _ | Invalid _
-                          | Let_cont _ -> false
+                          | None -> false
                         in
                         if remove_let_cont_leaving_handler then
                           let uacc =
@@ -502,9 +514,10 @@ let simplify_non_recursive_let_cont ~simplify_expr dacc non_rec ~down_to_up =
                                 name_occurrences_subsequent_exprs
                             in
                             UA.with_name_occurrences uacc ~name_occurrences
-                            (* The body was discarded -- the cost_metrics in uacc should
-                               be set to the cost_metrics of handler.*)
-                            |>  UA.with_cost_metrics cost_metrics_of_handler
+                            (* The body was discarded -- the cost_metrics in
+                               uacc should be set to the cost_metrics of
+                               handler. *)
+                            |> UA.with_cost_metrics cost_metrics_of_handler
                           in
                           handler_expr, uacc
                         else
@@ -517,9 +530,10 @@ let simplify_non_recursive_let_cont ~simplify_expr dacc non_rec ~down_to_up =
                             UA.with_name_occurrences uacc ~name_occurrences
                           in
                           let expr =
-                            Let_cont.create_non_recursive' ~cont handler ~body
-                              ~num_free_occurrences_of_cont_in_body:
-                                (Known num_free_occurrences_of_cont_in_body)
+                            RE.create_non_recursive_let_cont'
+                              (UA.are_rebuilding_terms uacc)
+                              cont handler ~body
+                              ~num_free_occurrences_of_cont_in_body
                               ~is_applied_with_traps
                           in
                           let uacc =
@@ -615,9 +629,11 @@ let simplify_recursive_let_cont_handlers ~simplify_expr
             ~after_rebuild)))
 
 let rebuild_recursive_let_cont ~body handlers ~cost_metrics_of_handlers
-      ~uenv_without_cont uacc ~after_rebuild : Expr.t * UA.t =
+      ~uenv_without_cont uacc ~after_rebuild =
   let uacc = UA.with_uenv uacc uenv_without_cont in
-  let expr = Flambda.Let_cont.create_recursive handlers ~body in
+  let expr =
+    RE.create_recursive_let_cont (UA.are_rebuilding_terms uacc) handlers ~body
+  in
   let uacc =
     UA.add_cost_metrics
       (Cost_metrics.increase_due_to_let_cont_recursive
@@ -628,8 +644,7 @@ let rebuild_recursive_let_cont ~body handlers ~cost_metrics_of_handlers
 
 (* CR mshinwell: We should not simplify recursive continuations with no
    entry point -- could loop forever.  (Need to think about this again.) *)
-let simplify_recursive_let_cont ~simplify_expr dacc recs ~down_to_up
-      : Expr.t * UA.t =
+let simplify_recursive_let_cont ~simplify_expr dacc recs ~down_to_up =
   let module CH = Continuation_handler in
   Recursive_let_cont_handlers.pattern_match recs ~f:(fun ~body rec_handlers ->
     assert (not (Continuation_handlers.contains_exn_handler rec_handlers));
@@ -682,8 +697,7 @@ let simplify_recursive_let_cont ~simplify_expr dacc recs ~down_to_up
                       ~uenv_without_cont uacc ~cost_metrics_of_handlers
                       ~after_rebuild)))))))
 
-let simplify_let_cont ~simplify_expr dacc (let_cont : Let_cont.t) ~down_to_up
-      : Expr.t * UA.t =
+let simplify_let_cont ~simplify_expr dacc (let_cont : Let_cont.t) ~down_to_up =
   match let_cont with
   | Non_recursive { handler; _ } ->
     simplify_non_recursive_let_cont ~simplify_expr dacc handler ~down_to_up

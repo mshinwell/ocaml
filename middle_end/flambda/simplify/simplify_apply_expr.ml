@@ -90,7 +90,7 @@ let rebuild_non_inlined_direct_full_application apply ~use_id ~exn_cont_use_id
         UA.add_free_names uacc (Apply.free_names apply)
         |> UA.notify_added ~code_size:(Code_size.apply apply)
       in
-      Expr.create_apply apply, uacc
+      RE.create_apply (UA.are_rebuilding_terms uacc) apply, uacc
     | Some use_id ->
       EB.add_wrapper_for_fixed_arity_apply uacc ~use_id result_arity apply
   in
@@ -103,13 +103,18 @@ let simplify_direct_full_application ~simplify_expr dacc apply function_decl_opt
   let inlined =
     match function_decl_opt with
     | None ->
-      Inlining_report.record_decision
-        (At_call_site (Non_inlinable_function
-                         { code_id = Code_id.export callee's_code_id; }))
-        ~dbg:(DE.add_inlined_debuginfo' (DA.denv dacc) (Apply.dbg apply));
-      warn_not_inlined_if_needed apply
-        "[@inlined] attribute was not used on this function application \
-         (the optimizer decided not to inline the function given its definition)";
+      (* CR mshinwell: Make sure no other warnings or inlining report decisions
+         get emitted when not rebuilding terms. *)
+      if not (DA.do_not_rebuild_terms dacc) then begin
+        Inlining_report.record_decision
+          (At_call_site (Non_inlinable_function
+                          { code_id = Code_id.export callee's_code_id; }))
+          ~dbg:(DE.add_inlined_debuginfo' (DA.denv dacc) (Apply.dbg apply));
+        warn_not_inlined_if_needed apply
+          "[@inlined] attribute was not used on this function application \
+          (the optimizer decided not to inline the function given its \
+          definition)"
+      end;
       None
     | Some (function_decl, function_decl_rec_info) ->
       let apply_inlining_state = Apply.inlining_state apply in
@@ -129,9 +134,11 @@ let simplify_direct_full_application ~simplify_expr dacc apply function_decl_opt
            if it does, then that means that
            {Inlining_decision.make_decision_for_call_site}
            did not honour the attributes on the call site *)
-        warn_not_inlined_if_needed apply
-          "[@inlined] attribute was not used on this function application\
-           {Do_not_inline}";
+        if not (DA.do_not_rebuild_terms dacc) then begin
+          warn_not_inlined_if_needed apply
+            "[@inlined] attribute was not used on this function application\
+            {Do_not_inline}"
+        end;
         None
       | Inline { unroll_to; } ->
         let dacc, inlined =
@@ -606,9 +613,11 @@ let simplify_function_call ~simplify_expr dacc apply ~callee_ty
     | Indirect_unknown_arity -> is_function_decl_tupled
   in
   let type_unavailable () =
-    warn_not_inlined_if_needed apply
-      "[@inlined] attribute was not used on this function application \
-       (the optimizer did not know what function was being applied)";
+    if not (DA.do_not_rebuild_terms dacc) then begin
+      warn_not_inlined_if_needed apply
+        "[@inlined] attribute was not used on this function application \
+        (the optimizer did not know what function was being applied)"
+    end;
     simplify_function_call_where_callee's_type_unavailable dacc apply call
       ~args ~arg_types ~down_to_up
   in
@@ -792,7 +801,7 @@ let rebuild_c_call apply ~use_id ~exn_cont_use_id ~return_arity uacc
         UA.add_free_names uacc (Apply.free_names apply)
         |> UA.notify_added ~code_size:(Code_size.apply apply)
       in
-      Expr.create_apply apply, uacc
+      RE.create_apply (UA.are_rebuilding_terms uacc) apply, uacc
   in
   after_rebuild expr uacc
 

@@ -17,7 +17,11 @@
 (** Functions for rebuilding expressions that are used during
     simplification.  Unlike the basic creation functions in [Expr] these
     functions do things such as keeping track of free names and
-    avoiding generation of unused bindings. *)
+    avoiding generation of unused bindings.  They also elide construction of
+    the terms themselves if required, e.g. during speculative inlining.
+
+    Some expressions are rebuilt directly using the functions in [Rebuilt_expr]
+    rather than using this module. *)
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
@@ -32,8 +36,8 @@ open! Flambda.Import
 val make_new_let_bindings
    : Upwards_acc.t
   -> bindings_outermost_first:Simplify_named_result.binding_to_place list
-  -> body:Expr.t
-  -> Expr.t * Upwards_acc.t
+  -> body:Rebuilt_expr.t
+  -> Rebuilt_expr.t * Upwards_acc.t
 
 (** Create the "let symbol" binding(s) around a given body necessary to define
     the given lifted constant.  Two optimisations are performed:
@@ -49,8 +53,8 @@ val create_let_symbols
   -> Symbol_scoping_rule.t
   -> Code_age_relation.t
   -> Lifted_constant.t
-  -> body:Expr.t
-  -> Expr.t * Upwards_acc.t
+  -> body:Rebuilt_expr.t
+  -> Rebuilt_expr.t * Upwards_acc.t
 
 (** Place lifted constants whose defining expressions involve [Name]s (for
     example those bound by a [Let] or a [Let_cont]) that are about to go out
@@ -63,27 +67,31 @@ val place_lifted_constants
   -> lifted_constants_from_defining_expr:Lifted_constant_state.t
   -> lifted_constants_from_body:Lifted_constant_state.t
   -> put_bindings_around_body:
-       (Upwards_acc.t -> body:Expr.t -> Expr.t * Upwards_acc.t)
-  -> body:Expr.t
+       (Upwards_acc.t
+         -> body:Rebuilt_expr.t
+         -> Rebuilt_expr.t * Upwards_acc.t)
+  -> body:Rebuilt_expr.t
   -> critical_deps_of_bindings:Name_occurrences.t
-  -> Expr.t * Upwards_acc.t
+  -> Rebuilt_expr.t * Upwards_acc.t
 
 (** Create a [Switch] expression, save that zero-arm switches are converted
     to [Invalid], and one-arm switches to [Apply_cont]. *)
 val create_switch
-  : Upwards_acc.t
-      -> scrutinee:Simple.t
-      -> arms:Apply_cont_expr.t Target_imm.Map.t
-      -> Expr.t * Upwards_acc.t
+   : Upwards_acc.t
+  -> scrutinee:Simple.t
+  -> arms:Apply_cont.t Target_imm.Map.t
+  -> Rebuilt_expr.t * Upwards_acc.t
 
 val rebuild_invalid
    : Upwards_acc.t
-  -> after_rebuild:(Expr.t -> Upwards_acc.t -> (Expr.t * Upwards_acc.t))
-  -> Expr.t * Upwards_acc.t
+  -> after_rebuild:(Rebuilt_expr.t
+       -> Upwards_acc.t
+       -> (Rebuilt_expr.t * Upwards_acc.t))
+  -> Rebuilt_expr.t * Upwards_acc.t
 
 type add_wrapper_for_switch_arm_result = private
   | Apply_cont of Apply_cont.t
-  | New_wrapper of Continuation.t * Continuation_handler.t
+  | New_wrapper of Continuation.t * Rebuilt_expr.Continuation_handler.t
       * Name_occurrences.t * Cost_metrics.t
 
 val add_wrapper_for_switch_arm
@@ -97,20 +105,21 @@ val add_wrapper_for_fixed_arity_apply
    : Upwards_acc.t
   -> use_id:Apply_cont_rewrite_id.t
   -> Flambda_arity.With_subkinds.t
-  -> Apply_expr.t
-  -> Expr.t * Upwards_acc.t
+  -> Apply.t
+  -> Rebuilt_expr.t * Upwards_acc.t
 
 type rewrite_use_result = private
   | Apply_cont of Apply_cont.t
   | Expr of (
        apply_cont_to_expr:(Apply_cont.t
-         -> (Expr.t * Cost_metrics.t * Name_occurrences.t))
-    -> Expr.t * Cost_metrics.t * Name_occurrences.t)
+         -> (Rebuilt_expr.t * Cost_metrics.t * Name_occurrences.t))
+    -> Rebuilt_expr.t * Cost_metrics.t * Name_occurrences.t)
 
 val no_rewrite : Apply_cont.t -> rewrite_use_result
 
 val rewrite_use
-   : Apply_cont_rewrite.t
+   : Upwards_acc.t
+  -> Apply_cont_rewrite.t
   -> Apply_cont_rewrite_id.t
   -> Apply_cont.t
   -> rewrite_use_result

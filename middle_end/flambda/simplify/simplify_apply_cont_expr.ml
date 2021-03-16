@@ -39,7 +39,7 @@ let inline_linearly_used_continuation uacc ~create_apply_cont ~params ~handler
         KP.List.print params
         Simple.List.print args
         Apply_cont.print apply_cont
-        Expr.print handler
+        (RE.print (UA.are_rebuilding_terms uacc)) handler
     end;
     let bindings_outermost_first =
       ListLabels.map2 params args
@@ -58,8 +58,7 @@ let inline_linearly_used_continuation uacc ~create_apply_cont ~params ~handler
         UA.with_name_occurrences uacc ~name_occurrences:free_names_of_handler
         |> UA.add_cost_metrics cost_metrics_of_handler
       in
-      Expr_builder.make_new_let_bindings uacc ~bindings_outermost_first
-        ~body:handler
+      EB.make_new_let_bindings uacc ~bindings_outermost_first ~body:handler
     in
     expr, UA.cost_metrics uacc, UA.name_occurrences uacc)
 
@@ -86,7 +85,7 @@ let rebuild_apply_cont apply_cont ~args ~rewrite_id uacc ~after_rebuild =
       in
       match rewrite with
       | None -> EB.no_rewrite apply_cont
-      | Some rewrite -> EB.rewrite_use rewrite rewrite_id apply_cont
+      | Some rewrite -> EB.rewrite_use uacc rewrite rewrite_id apply_cont
     in
     match rewrite_use_result with
     | Apply_cont apply_cont ->
@@ -131,11 +130,11 @@ let rebuild_apply_cont apply_cont ~args ~rewrite_id uacc ~after_rebuild =
     (* We allow this transformation even if there is a trap action, on the
        basis that there wouldn't be any opportunity to collect any backtrace,
        even if the [Apply_cont] were compiled as "raise". *)
-    after_rebuild (Expr.create_invalid ()) uacc
+    after_rebuild (RE.create_invalid ()) uacc
   | Non_inlinable_zero_arity _ | Non_inlinable_non_zero_arity _
   | Toplevel_or_function_return_or_exn_continuation _ ->
     create_apply_cont ~apply_cont_to_expr:(fun apply_cont ->
-      Expr.create_apply_cont apply_cont,
+      RE.create_apply_cont (UA.are_rebuilding_terms uacc) apply_cont,
       Cost_metrics.from_size (Code_size.apply_cont apply_cont),
       Apply_cont.free_names apply_cont)
 

@@ -19,12 +19,12 @@
 type t =
   | Linearly_used_and_inlinable of {
       params : Kinded_parameter.t list;
-      handler : Flambda.Expr.t;
+      handler : Rebuilt_expr.t;
       free_names_of_handler : Name_occurrences.t;
       cost_metrics_of_handler : Flambda.Cost_metrics.t;
     }
   | Non_inlinable_zero_arity of {
-      handler : Flambda.Expr.t Or_unknown.t;
+      handler : Rebuilt_expr.t Or_unknown.t;
     }
   | Non_inlinable_non_zero_arity of {
       arity : Flambda_arity.With_subkinds.t;

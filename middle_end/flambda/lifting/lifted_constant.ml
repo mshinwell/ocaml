@@ -16,8 +16,6 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-open! Flambda.Import
-
 module DE = Downwards_env
 module T = Flambda_type
 
@@ -95,19 +93,9 @@ module Definition = struct
     | Block_like { symbol_projections; _ } -> symbol_projections
 
   let code code_id defining_expr =
-    match Rebuilt_static_const.const defining_expr with
-    | Code code ->
-      if Code_id.equal code_id (Code.code_id code) then
-        { descr = Code code_id;
-          defining_expr;
-        }
-      else
-        Misc.fatal_errorf "Mismatched code ids: %a vs.@ %a"
-          Code_id.print code_id
-          Code_id.print (Code.code_id code)
-    | _ ->
-      Misc.fatal_errorf "Not a code definition: %a"
-        Rebuilt_static_const.print defining_expr
+    { descr = Code code_id;
+      defining_expr;
+    }
 
   let set_of_closures denv ~closure_symbols_with_types
         ~symbol_projections defining_expr =

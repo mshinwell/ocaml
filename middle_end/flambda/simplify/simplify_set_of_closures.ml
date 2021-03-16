@@ -397,8 +397,7 @@ let simplify_function context ~used_closure_vars ~shareable_constants
             (* CR mshinwell: Should probably look at [cont_uses]? *)
             let free_names_of_body = UA.name_occurrences uacc in
             let params_and_body =
-              Function_params_and_body.create
-                ~free_names_of_body:(Known free_names_of_body)
+              RE.Function_params_and_body.create ~free_names_of_body
                 ~return_continuation exn_continuation params ~dbg ~body
                 ~my_closure
             in
@@ -430,7 +429,7 @@ let simplify_function context ~used_closure_vars ~shareable_constants
                 Function_declaration.print function_decl
                 KP.List.print params
                 Variable.print my_closure
-                Expr.print body
+                (RE.print (UA.are_rebuilding_terms uacc)) body
             end;
             params_and_body, dacc_after_body, free_names_of_code, uacc
           | exception Misc.Fatal_error ->
@@ -457,25 +456,36 @@ let simplify_function context ~used_closure_vars ~shareable_constants
       Code_id.Map.find old_code_id (C.old_to_new_code_ids_all_sets context)
     in
     let code =
-      code
-      |> Code.with_code_id new_code_id
-      |> Code.with_newer_version_of (Some old_code_id)
-      |> Code.with_params_and_body
-           ~cost_metrics
-           (Present (params_and_body, free_names_of_code))
-    in
-    let code =
-      Rebuilt_static_const.create (Code code) ~free_names:Unknown
+      Rebuilt_static_const.create_code
+        (DA.are_rebuilding_terms dacc_after_body)
+        new_code_id
+        ~params_and_body:(Present (params_and_body, free_names_of_code))
+        ~newer_version_of:(Some old_code_id)
+        ~params_arity:(Code.params_arity code)
+        ~result_arity:(Code.result_arity code)
+        ~stub:(Code.stub code)
+        ~inline:(Code.inline code)
+        ~is_a_functor:(Code.is_a_functor code)
+        ~recursive:(Code.recursive code)
+        ~cost_metrics
     in
     let function_decl = FD.update_code_id function_decl new_code_id in
     let function_type =
-      (* We need to manually specify the cost metrics to use to ensure that
-         they are the one of the body after simplification. *)
-      function_decl_type
-        ~pass:Inlining_report.After_simplify
-        ~cost_metrics_source:(Metrics cost_metrics)
-        (DA.denv dacc_after_body) function_decl
-        Rec_info.initial
+      (* When not rebuilding terms we cannot infer function types.  However
+         this shouldn't matter too much since inlining will typically be
+         disabled during such traversals. *)
+      if Are_rebuilding_terms.do_not_rebuild_terms
+           (DA.are_rebuilding_terms dacc_after_body)
+      then
+        Or_unknown_or_bottom.Unknown
+      else
+        (* We need to manually specify the cost metrics to use to ensure that
+           they are the one of the body after simplification. *)
+        function_decl_type
+          ~pass:Inlining_report.After_simplify
+          ~cost_metrics_source:(Metrics cost_metrics)
+          (DA.denv dacc_after_body) function_decl
+          Rec_info.initial
     in
     { function_decl;
       new_code_id;
@@ -698,8 +708,8 @@ let simplify_and_lift_set_of_closures dacc ~closure_bound_vars_inverse
       denv
       ~closure_symbols_with_types
       ~symbol_projections
-      (Rebuilt_static_const.create (Set_of_closures set_of_closures)
-        ~free_names:(Known (Set_of_closures.free_names set_of_closures)))
+      (Rebuilt_static_const.create_set_of_closures
+        (DE.are_rebuilding_terms denv) set_of_closures)
   in
   let dacc =
     DA.add_lifted_constant dacc set_of_closures_lifted_constant
@@ -933,8 +943,8 @@ let simplify_lifted_set_of_closures0 context ~closure_symbols
   in
   let code_static_consts = Code_id.Lmap.data code in
   let set_of_closures_static_const =
-    Rebuilt_static_const.create (Set_of_closures set_of_closures)
-       ~free_names:(Known (Set_of_closures.free_names set_of_closures))
+    Rebuilt_static_const.create_set_of_closures
+      (DA.are_rebuilding_terms dacc) set_of_closures
   in
   let static_consts =
     set_of_closures_static_const :: code_static_consts
@@ -988,9 +998,8 @@ let simplify_lifted_sets_of_closures dacc ~all_sets_of_closures_and_symbols
           in
           let static_consts =
             Rebuilt_static_const.Group.create
-              [Rebuilt_static_const.create (Set_of_closures set_of_closures)
-                ~free_names:(Known (
-                  Set_of_closures.free_names set_of_closures))]
+              [Rebuilt_static_const.create_set_of_closures
+                (DA.are_rebuilding_terms dacc) set_of_closures]
           in
           bound_symbols, static_consts, dacc
         end else begin

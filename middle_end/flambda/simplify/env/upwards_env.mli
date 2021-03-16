@@ -14,6 +14,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
+(** Upwards environments used during simplification. *)
+
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 open! Flambda.Import
@@ -31,7 +33,7 @@ val add_non_inlinable_continuation
   -> Continuation.t
   -> Scope.t
   -> params:Kinded_parameter.t list
-  -> handler:Flambda.Expr.t Or_unknown.t
+  -> handler:Rebuilt_expr.t Or_unknown.t
   -> t
 
 val add_unreachable_continuation
@@ -53,7 +55,7 @@ val add_linearly_used_inlinable_continuation
   -> Continuation.t
   -> Scope.t
   -> params:Kinded_parameter.t list
-  -> handler:Flambda.Expr.t
+  -> handler:Rebuilt_expr.t
   -> free_names_of_handler:Name_occurrences.t
   -> cost_metrics_of_handler:Cost_metrics.t
   -> t
@@ -82,26 +84,14 @@ val resolve_exn_continuation_aliases
   -> Exn_continuation.t
   -> Exn_continuation.t
 
-val continuation_arity : t -> Continuation.t -> Flambda_arity.With_subkinds.t
-
 val check_continuation_is_bound : t -> Continuation.t -> unit
 
 val check_exn_continuation_is_bound : t -> Exn_continuation.t -> unit
 
-val add_apply_cont_rewrite
-   : t
-  -> Continuation.t
-  -> Apply_cont_rewrite.t
-  -> t
+val add_apply_cont_rewrite : t -> Continuation.t -> Apply_cont_rewrite.t -> t
 
-val find_apply_cont_rewrite
-   : t
-  -> Continuation.t
-  -> Apply_cont_rewrite.t option
+val find_apply_cont_rewrite : t -> Continuation.t -> Apply_cont_rewrite.t option
 
-val delete_apply_cont_rewrite
-   : t
-  -> Continuation.t
-  -> t
+val delete_apply_cont_rewrite : t -> Continuation.t -> t
 
 val will_inline_continuation : t -> Continuation.t -> bool

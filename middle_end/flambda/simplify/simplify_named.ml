@@ -252,38 +252,41 @@ let simplify_named0 dacc (bindable_let_bound : Bindable_let_bound.t)
           raise Misc.Fatal_error
       end
     in
-    let dacc =
-      DA.map_denv dacc ~f:(fun denv ->
-        Symbol.Set.fold (fun symbol denv ->
-            DE.no_longer_defining_symbol denv symbol)
-          non_closure_symbols_being_defined
-          denv)
-    in
-    let dacc =
-      Rebuilt_static_const.Group.match_against_bound_symbols
-        static_consts bound_symbols
-        ~init:dacc
-        ~code:(fun dacc _ _ -> dacc)
-        ~set_of_closures:(fun dacc ~closure_symbols:_ _ -> dacc)
-        ~block_like:(fun dacc symbol static_const ->
-          DA.consider_constant_for_sharing dacc symbol static_const)
-    in
-    let lifted_constants =
-      ListLabels.map2
+    let dacc, lifted_constants =
+      ListLabels.fold_left2
         (Bound_symbols.to_list bound_symbols)
         (Rebuilt_static_const.Group.to_list static_consts)
-        ~f:(fun (pat : Bound_symbols.Pattern.t) static_const ->
+        ~init:(dacc, [])
+        ~f:(fun (dacc, lifted_constants)
+                (pat : Bound_symbols.Pattern.t) static_const ->
           match pat with
           | Block_like symbol ->
             let typ =
+              (* CR mshinwell: Maybe the types should be returned from
+                 [Simplify_static_const] to avoid this lookup. *)
               TE.find (DA.typing_env dacc) (Name.symbol symbol) (Some K.value)
             in
             (* The [symbol_projections] map is empty because we only introduce
                symbol projections when lifting -- and [static_const] has
                already been lifted. *)
-            LC.create_block_like symbol static_const (DA.denv dacc)
-              ~symbol_projections:Variable.Map.empty typ
-          | Code code_id -> LC.create_code code_id static_const
+            let lifted_constant =
+              LC.create_block_like symbol static_const (DA.denv dacc)
+                ~symbol_projections:Variable.Map.empty typ
+            in
+            let dacc =
+              match Rebuilt_static_const.to_const static_const with
+              | None -> dacc
+              | Some static_const ->
+                DA.consider_constant_for_sharing dacc symbol static_const
+            in
+            let dacc =
+              DA.map_denv dacc ~f:(fun denv ->
+                DE.no_longer_defining_symbol denv symbol)
+            in
+            dacc, lifted_constant :: lifted_constants
+          | Code code_id ->
+            let lifted_constant = LC.create_code code_id static_const in
+            dacc, lifted_constant :: lifted_constants
           | Set_of_closures closure_symbols ->
             let closure_symbols_with_types =
               Closure_id.Lmap.map (fun symbol ->
@@ -294,11 +297,14 @@ let simplify_named0 dacc (bindable_let_bound : Bindable_let_bound.t)
                   symbol, typ)
                 closure_symbols
             in
-            LC.create_set_of_closures (DA.denv dacc)
-              ~closure_symbols_with_types
-              (* Same comment as above re. [symbol_projections]. *)
-              ~symbol_projections:Variable.Map.empty
-              static_const)
+            let lifted_constant =
+              LC.create_set_of_closures (DA.denv dacc)
+                ~closure_symbols_with_types
+                (* Same comment as above re. [symbol_projections]. *)
+                ~symbol_projections:Variable.Map.empty
+                static_const
+            in
+            dacc, lifted_constant :: lifted_constants)
     in
     let dacc = DA.add_lifted_constant dacc (LC.concat lifted_constants) in
     (* We don't need to return any bindings; [Simplify_expr.simplify_let]

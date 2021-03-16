@@ -33,15 +33,20 @@ let rebuild_switch ~simplify_let dacc ~arms ~scrutinee ~scrutinee_ty uacc
             (* First try to absorb any [Apply_cont] expression that forms the
                entirety of the arm's action (via an intermediate zero-arity
                continuation without trap action) into the [Switch] expression
-               itself. *)
+               itself.
+               Note that these optimisations do not currently apply when not
+               rebuilding terms, since the expression that is potentially an
+               [Apply_cont] is not available under such circumstances. *)
             if not (Apply_cont.is_goto action) then Some action
             else
               let cont = Apply_cont.continuation action in
               let check_handler ~handler ~action =
-                match Expr.descr handler with
-                | Apply_cont action -> Some action
-                | Let _ | Let_cont _ | Apply _
-                | Switch _ | Invalid _ -> Some action
+                match
+                  Rebuilt_expr.to_apply_cont handler
+                    (DA.are_rebuilding_terms dacc)
+                with
+                | Some action -> Some action
+                | None -> Some action
               in
               match UE.find_continuation (UA.uenv uacc) cont with
               | Linearly_used_and_inlinable { handler;
@@ -181,7 +186,7 @@ let rebuild_switch ~simplify_let dacc ~arms ~scrutinee ~scrutinee_ty uacc
       let uacc =
         UA.notify_removed ~operation:Removed_operations.branch uacc
       in
-      Expr.create_invalid (), uacc
+      RE.create_invalid (), uacc
     else
       let dbg = Debuginfo.none in
       match switch_is_identity with
@@ -230,7 +235,7 @@ let rebuild_switch ~simplify_let dacc ~arms ~scrutinee ~scrutinee_ty uacc
             Misc.fatal_errorf "[Switch] with constant scrutinee (type: %a) \
                 should have been simplified away:@ %a"
               T.print scrutinee_ty
-              Expr.print expr
+              (RE.print (UA.are_rebuilding_terms uacc)) expr
           end;
           expr, uacc
   in
@@ -241,9 +246,8 @@ let rebuild_switch ~simplify_let dacc ~arms ~scrutinee ~scrutinee_ty uacc
                cost_metrics_of_handler) ->
         let free_names_of_body = UA.name_occurrences uacc in
         let expr =
-          Let_cont.create_non_recursive
-            new_cont new_handler ~body
-            ~free_names_of_body:(Known free_names_of_body)
+          RE.create_non_recursive_let_cont (UA.are_rebuilding_terms uacc)
+            new_cont new_handler ~body ~free_names_of_body
         in
         let name_occurrences =
           Name_occurrences.remove_continuation

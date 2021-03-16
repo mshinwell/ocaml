@@ -18,30 +18,44 @@
 
 open! Simplify_import
 
-let create_static_const (to_lift : T.to_lift) : Static_const.t =
+let create_static_const dacc (to_lift : T.to_lift) : Rebuilt_static_const.t =
   match to_lift with
   | Immutable_block { tag; is_unique; fields; } ->
-    let of_kind_values =
-      List.map (fun (field : T.var_or_symbol_or_tagged_immediate)
+    let fields  =
+      ListLabels.map fields
+        ~f:(fun (field : T.var_or_symbol_or_tagged_immediate)
               : Static_const.Field_of_block.t ->
           match field with
           | Var var -> Dynamically_computed var
           | Symbol sym -> Symbol sym
           | Tagged_immediate imm -> Tagged_immediate imm)
-        fields
     in
     let mut : Mutability.t =
       if is_unique then Immutable_unique else Immutable
     in
-    Block (tag, mut, of_kind_values)
-  | Boxed_float f -> Boxed_float (Const f)
-  | Boxed_int32 i -> Boxed_int32 (Const i)
-  | Boxed_int64 i -> Boxed_int64 (Const i)
-  | Boxed_nativeint i -> Boxed_nativeint (Const i)
+    Rebuilt_static_const.create_block (DA.are_rebuilding_terms dacc)
+      tag mut ~fields
+  | Boxed_float f ->
+    Rebuilt_static_const.create_boxed_float (DA.are_rebuilding_terms dacc)
+      (Const f)
+  | Boxed_int32 i ->
+    Rebuilt_static_const.create_boxed_int32 (DA.are_rebuilding_terms dacc)
+      (Const i)
+  | Boxed_int64 i ->
+    Rebuilt_static_const.create_boxed_int64 (DA.are_rebuilding_terms dacc)
+      (Const i)
+  | Boxed_nativeint i ->
+    Rebuilt_static_const.create_boxed_nativeint (DA.are_rebuilding_terms dacc)
+      (Const i)
 
 let lift dacc ty ~bound_to static_const =
   let dacc, symbol =
-    match DA.find_shareable_constant dacc static_const with
+    let existing_symbol =
+      match Rebuilt_static_const.to_const static_const with
+      | None -> None
+      | Some const -> DA.find_shareable_constant dacc const
+    in
+    match existing_symbol with
     | Some symbol ->
       if !Clflags.flambda_invariant_checks
         && not (DE.mem_symbol (DA.denv dacc) symbol)
@@ -61,7 +75,7 @@ let lift dacc ty ~bound_to static_const =
         Misc.fatal_errorf "Cannot lift non-[Value] variable: %a"
           Variable.print bound_to
       end;
-      let free_names = Static_const.free_names static_const in
+      let free_names = Rebuilt_static_const.free_names static_const in
       let symbol_projections =
         Name_occurrences.fold_variables free_names
           ~init:Variable.Map.empty
@@ -72,17 +86,17 @@ let lift dacc ty ~bound_to static_const =
       in
       let dacc =
         let denv = DA.denv dacc in
-        LC.create_block_like symbol
-          (Rebuilt_static_const.create static_const
-            ~free_names:(Known free_names))
-          denv
-          ~symbol_projections
-          ty
+        LC.create_block_like symbol static_const denv ~symbol_projections ty
         |> DA.add_lifted_constant dacc
       in
       let dacc =
-        DA.consider_constant_for_sharing dacc symbol static_const
-        |> DA.map_denv ~f:(fun denv -> DE.add_symbol denv symbol ty)
+        match Rebuilt_static_const.to_const static_const with
+        | None -> dacc
+        | Some static_const ->
+          DA.consider_constant_for_sharing dacc symbol static_const
+      in
+      let dacc =
+        DA.map_denv dacc ~f:(fun denv -> DE.add_symbol denv symbol ty)
       in
       dacc, symbol
   in
@@ -118,7 +132,7 @@ let try_to_reify dacc (term : Simplified_named.t) ~bound_to ~allow_lifting =
     match reify_result with
     | Lift to_lift ->
       if Name_mode.is_normal occ_kind && allow_lifting then
-        let static_const = create_static_const to_lift in
+        let static_const = create_static_const dacc to_lift in
         lift dacc ty ~bound_to static_const
       else
         term, dacc, ty

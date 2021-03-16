@@ -21,7 +21,7 @@
 open! Flambda
 
 type 'a after_rebuild =
-     Expr.t
+     Rebuilt_expr.t
   -> Upwards_acc.t
   -> 'a
 
@@ -38,8 +38,9 @@ type ('a, 'b) down_to_up =
 type 'a expr_simplifier =
      Downwards_acc.t
   -> 'a
-  -> down_to_up:(Expr.t * Upwards_acc.t, Expr.t * Upwards_acc.t) down_to_up
-  -> Expr.t * Upwards_acc.t
+  -> down_to_up:(Rebuilt_expr.t * Upwards_acc.t,
+       Rebuilt_expr.t * Upwards_acc.t) down_to_up
+  -> Rebuilt_expr.t * Upwards_acc.t
 
 type simplify_toplevel =
      Downwards_acc.t
@@ -49,7 +50,7 @@ type simplify_toplevel =
   -> Exn_continuation.t
   -> return_cont_scope:Scope.t
   -> exn_cont_scope:Scope.t
-  -> Expr.t * Upwards_acc.t
+  -> Rebuilt_expr.t * Upwards_acc.t
 
 val simplify_projection
    : Downwards_acc.t

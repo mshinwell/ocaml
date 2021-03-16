@@ -43,8 +43,8 @@ let rec simplify_expr dacc expr ~down_to_up =
        it were [Halt_and_catch_fire]. *)
     down_to_up dacc ~rebuild:EB.rebuild_invalid
 
-and simplify_toplevel dacc expr ~return_continuation ~return_arity
-      exn_continuation ~return_cont_scope ~exn_cont_scope =
+and simplify_toplevel dacc expr ~return_continuation
+      ~return_arity exn_continuation ~return_cont_scope ~exn_cont_scope =
   let expr, uacc =
     simplify_expr dacc expr ~down_to_up:(fun dacc ~rebuild ->
       let uenv =
@@ -75,7 +75,7 @@ and simplify_toplevel dacc expr ~return_continuation ~return_arity
             toplevel expression after simplification (return \
             continuation %a, exn continuation %a):@ %a"
           Continuation.print cont
-          Expr.print expr
+          (RE.print (UA.are_rebuilding_terms uacc)) expr
           Continuation.print return_continuation
           Continuation.print exn_continuation
       end);

@@ -45,11 +45,7 @@ val with_lifted_constants : t -> Lifted_constant_state.t -> t
 val no_lifted_constants : t -> bool
 
 (** Map the environment component of the given upwards accumulator. *)
-val map_uenv
-   : t
-  -> f:(Upwards_env.t
-    -> Upwards_env.t)
-  -> t
+val map_uenv : t -> f:(Upwards_env.t -> Upwards_env.t) -> t
 
 (** Replace the environment component of the given upwards accumulator. *)
 val with_uenv : t -> Upwards_env.t -> t
@@ -62,7 +58,10 @@ val shareable_constants : t -> Symbol.t Flambda.Static_const.Map.t
 
 val name_occurrences : t -> Name_occurrences.t
 
-val with_name_occurrences : t -> name_occurrences:Name_occurrences.t -> t
+val with_name_occurrences
+   : t
+  -> name_occurrences:Name_occurrences.t
+  -> t
 
 val clear_name_occurrences : t -> t
 
@@ -70,7 +69,10 @@ val add_free_names : t -> Name_occurrences.t -> t
 
 val used_closure_vars : t -> Name_occurrences.t
 
-val remove_all_occurrences_of_free_names : t -> Name_occurrences.t -> t
+val remove_all_occurrences_of_free_names
+   : t
+  -> Name_occurrences.t
+  -> t
 
 val clear_cost_metrics : t -> t
 
@@ -82,3 +84,8 @@ val notify_added: code_size:Code_size.t -> t -> t
 
 val notify_removed: operation:Removed_operations.t -> t -> t
 
+val cost_metrics_add : added:Flambda.Cost_metrics.t -> t -> t
+
+val generate_phantom_lets : t -> bool
+
+val are_rebuilding_terms : t -> Are_rebuilding_terms.t

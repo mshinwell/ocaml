@@ -60,13 +60,6 @@ val create_switch : Switch_expr.t -> t
 (** Create an expression indicating type-incorrect or unreachable code. *)
 val create_invalid : ?semantics:Invalid_term_semantics.t -> unit -> t
 
-val bind_no_simplification
-   : bindings:(Var_in_binding_pos.t * Code_size.t * Named.t) list
-  -> body:Expr.t
-  -> cost_metrics_of_body:Cost_metrics.t
-  -> free_names_of_body:Name_occurrences.t
-  -> Expr.t * Cost_metrics.t * Name_occurrences.t
-
 val bind_parameters_to_args_no_simplification
    : params:Kinded_parameter.t list
   -> args:Simple.t list

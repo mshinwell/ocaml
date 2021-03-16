@@ -16,10 +16,19 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-open! Simplify_import
+open! Flambda
+
+module DA = Downwards_acc
+module K = Flambda_kind
+module KP = Kinded_parameter
+module P = Flambda_primitive
+module T = Flambda_type
+module TEE = T.Typing_env_extension
+module UA = Upwards_acc
+module UE = Upwards_env
 
 type 'a after_rebuild =
-     Expr.t
+     Rebuilt_expr.t
   -> Upwards_acc.t
   -> 'a
 
@@ -36,9 +45,9 @@ type ('a, 'b) down_to_up =
 type 'a expr_simplifier =
      Downwards_acc.t
   -> 'a
-  -> down_to_up:(Expr.t * Upwards_acc.t,
-       Expr.t * Upwards_acc.t) down_to_up
-  -> Expr.t * Upwards_acc.t
+  -> down_to_up:(Rebuilt_expr.t * Upwards_acc.t,
+       Rebuilt_expr.t * Upwards_acc.t) down_to_up
+  -> Rebuilt_expr.t * Upwards_acc.t
 
 type simplify_toplevel =
      Downwards_acc.t
@@ -48,7 +57,7 @@ type simplify_toplevel =
   -> Exn_continuation.t
   -> return_cont_scope:Scope.t
   -> exn_cont_scope:Scope.t
-  -> Expr.t * Upwards_acc.t
+  -> Rebuilt_expr.t * Upwards_acc.t
 
 let simplify_projection dacc ~original_term ~deconstructing ~shape ~result_var
       ~result_kind =
@@ -67,7 +76,7 @@ let update_exn_continuation_extra_args uacc ~exn_cont_use_id apply =
   | None -> apply
   | Some rewrite ->
     Apply.with_exn_continuation apply
-      (EB.rewrite_exn_continuation rewrite exn_cont_use_id
+      (Expr_builder.rewrite_exn_continuation rewrite exn_cont_use_id
         (Apply.exn_continuation apply))
 
 (* generate the projection of the i-th field of a n-tuple *)

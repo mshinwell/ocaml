@@ -58,9 +58,9 @@ let simplify_or_variable dacc type_for_const
     (* CR mshinwell: This should be calling [simplify_simple] *)
     or_variable, DE.find_variable denv var
 
-let simplify_static_const_of_kind_value0 dacc
+let simplify_static_const_of_kind_value dacc
       (static_const : Static_const.t) ~result_sym
-      : Static_const.t * DA.t =
+      : Rebuilt_static_const.t * DA.t =
   let bind_result_sym typ =
     DA.map_denv dacc ~f:(fun denv ->
       let denv = DE.define_symbol denv result_sym K.value in
@@ -84,32 +84,42 @@ let simplify_static_const_of_kind_value0 dacc
       | Mutable -> T.any_value ()
     in
     let dacc = bind_result_sym ty in
-    Block (tag, is_mutable, fields), dacc
+    Rebuilt_static_const.create_block (DA.are_rebuilding_terms dacc)
+      tag is_mutable ~fields,
+    dacc
   (* CR mshinwell: Need to reify to change Equals types into new terms *)
   | Boxed_float or_var ->
     let or_var, ty =
       simplify_or_variable dacc (fun f -> T.this_boxed_float f) or_var
     in
     let dacc = bind_result_sym ty in
-    Boxed_float or_var, dacc
+    Rebuilt_static_const.create_boxed_float (DA.are_rebuilding_terms dacc)
+      or_var,
+    dacc
   | Boxed_int32 or_var ->
     let or_var, ty =
       simplify_or_variable dacc (fun f -> T.this_boxed_int32 f) or_var
     in
     let dacc = bind_result_sym ty in
-    Boxed_int32 or_var, dacc
+    Rebuilt_static_const.create_boxed_int32 (DA.are_rebuilding_terms dacc)
+      or_var,
+    dacc
   | Boxed_int64 or_var ->
     let or_var, ty =
       simplify_or_variable dacc (fun f -> T.this_boxed_int64 f) or_var
     in
     let dacc = bind_result_sym ty in
-    Boxed_int64 or_var, dacc
+    Rebuilt_static_const.create_boxed_int64 (DA.are_rebuilding_terms dacc)
+      or_var,
+    dacc
   | Boxed_nativeint or_var ->
     let or_var, ty =
       simplify_or_variable dacc (fun f -> T.this_boxed_nativeint f) or_var
     in
     let dacc = bind_result_sym ty in
-    Boxed_nativeint or_var, dacc
+    Rebuilt_static_const.create_boxed_nativeint (DA.are_rebuilding_terms dacc)
+      or_var,
+    dacc
   | Immutable_float_block fields ->
     let fields_with_tys =
       List.map (fun field ->
@@ -118,7 +128,9 @@ let simplify_static_const_of_kind_value0 dacc
     in
     let fields, _field_tys = List.split fields_with_tys in
     let dacc = bind_result_sym (T.any_value ()) in
-    Immutable_float_block fields, dacc
+    Rebuilt_static_const.create_immutable_float_block
+      (DA.are_rebuilding_terms dacc) fields,
+    dacc
   | Immutable_float_array fields ->
     let fields_with_tys =
       List.map (fun field ->
@@ -127,32 +139,25 @@ let simplify_static_const_of_kind_value0 dacc
     in
     let fields, _field_tys = List.split fields_with_tys in
     let dacc = bind_result_sym (T.any_value ()) in
-    Immutable_float_array fields, dacc
+    Rebuilt_static_const.create_immutable_float_array
+      (DA.are_rebuilding_terms dacc) fields,
+    dacc
   | Mutable_string { initial_value; } ->
     let str_ty = T.mutable_string ~size:(String.length initial_value) in
-    let static_const : Static_const.t =
-      Mutable_string {
-        initial_value;
-      }
-    in
     let dacc = bind_result_sym str_ty in
-    static_const, dacc
+    Rebuilt_static_const.create_mutable_string (DA.are_rebuilding_terms dacc)
+      ~initial_value,
+    dacc
   | Immutable_string str ->
     let ty = T.this_immutable_string str in
     let dacc = bind_result_sym ty in
-    Immutable_string str, dacc
+    Rebuilt_static_const.create_immutable_string (DA.are_rebuilding_terms dacc)
+      str,
+    dacc
   | Code _ | Set_of_closures _ ->
     Misc.fatal_errorf "[Code] and [Set_of_closures] cannot be bound by a \
         [Block_like] binding:@ %a"
       SC.print static_const
-
-let simplify_static_const_of_kind_value dacc static_const ~result_sym =
-  let static_const, dacc =
-    simplify_static_const_of_kind_value0 dacc static_const ~result_sym
-  in
-  let free_names = Static_const.free_names static_const in
-  Rebuilt_static_const.create static_const
-    ~free_names:(Known free_names), dacc
 
 let simplify_static_consts dacc (bound_symbols : Bound_symbols.t)
       static_consts ~simplify_toplevel =
@@ -195,9 +200,7 @@ let simplify_static_consts dacc (bound_symbols : Bound_symbols.t)
           | Present _ ->
             DA.map_denv dacc ~f:(fun denv -> DE.define_code denv ~code_id ~code)
         in
-        let static_const =
-          Rebuilt_static_const.create (Code code) ~free_names:Unknown
-        in
+        let static_const = Rebuilt_static_const.create_code' code in
         (Bound_symbols.Pattern.code code_id) :: bound_symbols,
           static_const :: static_consts,
           dacc)

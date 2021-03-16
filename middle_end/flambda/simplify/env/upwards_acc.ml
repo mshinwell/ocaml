@@ -17,6 +17,7 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module DA = Downwards_acc
+module DE = Downwards_env
 module LCS = Lifted_constant_state
 module TE = Flambda_type.Typing_env
 module UE = Upwards_env
@@ -32,21 +33,26 @@ type t = {
   name_occurrences : Name_occurrences.t;
   used_closure_vars : Name_occurrences.t;
   shareable_constants : Symbol.t Static_const.Map.t;
-  cost_metrics: Flambda.Cost_metrics.t;
+  cost_metrics : Flambda.Cost_metrics.t;
+  are_rebuilding_terms : Are_rebuilding_terms.t;
+  generate_phantom_lets : bool;
 }
 
 let print ppf
       { uenv; creation_dacc = _; code_age_relation; lifted_constants;
         name_occurrences; used_closure_vars; all_code = _;
-        shareable_constants; cost_metrics; } =
+        shareable_constants; cost_metrics; are_rebuilding_terms;
+        generate_phantom_lets; } =
   Format.fprintf ppf "@[<hov 1>(\
       @[<hov 1>(uenv@ %a)@]@ \
       @[<hov 1>(code_age_relation@ %a)@]@ \
       @[<hov 1>(lifted_constants@ %a)@]@ \
       @[<hov 1>(name_occurrences@ %a)@]@ \
       @[<hov 1>(used_closure_vars@ %a)@]@ \
-      @[<hov 1>(shareable_constants@ %a)@]\
-      @[<hov 1>(cost_metrics %a)@]\
+      @[<hov 1>(shareable_constants@ %a)@]@ \
+      @[<hov 1>(cost_metrics@ %a)@]@ \
+      @[<hov 1>(are_rebuilding_terms@ %a)@]@ \
+      @[<hov 1>(generate_phantom_lets@ %b)@]\
       )@]"
     UE.print uenv
     Code_age_relation.print code_age_relation
@@ -55,8 +61,17 @@ let print ppf
     Name_occurrences.print used_closure_vars
     (Static_const.Map.print Symbol.print) shareable_constants
     Flambda.Cost_metrics.print cost_metrics
+    Are_rebuilding_terms.print are_rebuilding_terms
+    generate_phantom_lets
 
 let create uenv dacc =
+  let are_rebuilding_terms = DE.are_rebuilding_terms (DA.denv dacc) in
+  let generate_phantom_lets =
+    !Clflags.debug && !Clflags.Flambda.Expert.phantom_lets
+      (* It would be a waste of time generating phantom lets when not
+         rebuilding terms, since they have no effect on cost metrics. *)
+      && not (Are_rebuilding_terms.do_not_rebuild_terms are_rebuilding_terms)
+  in
   { uenv;
     creation_dacc = dacc;
     code_age_relation = TE.code_age_relation (DA.typing_env dacc);
@@ -70,6 +85,8 @@ let create uenv dacc =
     used_closure_vars = DA.used_closure_vars dacc;
     shareable_constants = DA.shareable_constants dacc;
     cost_metrics = Flambda.Cost_metrics.zero;
+    are_rebuilding_terms;
+    generate_phantom_lets;
   }
 
 let creation_dacc t = t.creation_dacc
@@ -77,8 +94,9 @@ let uenv t = t.uenv
 let code_age_relation t = t.code_age_relation
 let lifted_constants t = t.lifted_constants
 let cost_metrics t = t.cost_metrics
+let are_rebuilding_terms t = t.are_rebuilding_terms
 
-(* Don't add empty LCS to the list *)
+(* CR mshinwell: (?) Don't add empty LCS to the list *)
 
 let add_outermost_lifted_constant t const =
   { t with
@@ -103,8 +121,10 @@ let with_uenv t uenv =
   }
 
 let remember_code_for_cmx t code =
-  let all_code = Exported_code.add_code code t.all_code in
-  { t with all_code; }
+  if Are_rebuilding_terms.do_not_rebuild_terms t.are_rebuilding_terms then t
+  else
+    let all_code = Exported_code.add_code code t.all_code in
+    { t with all_code; }
 
 let all_code t = t.all_code
 
@@ -145,3 +165,7 @@ let notify_removed ~operation t =
 
 let add_cost_metrics cost_metrics t =
   { t with cost_metrics = Flambda.Cost_metrics.(+) t.cost_metrics cost_metrics }
+let cost_metrics_add ~added t =
+  { t with cost_metrics = Flambda.Cost_metrics.(+) added t.cost_metrics }
+
+let generate_phantom_lets t = t.generate_phantom_lets
