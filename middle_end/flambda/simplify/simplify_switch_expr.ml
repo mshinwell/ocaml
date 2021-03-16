@@ -18,7 +18,7 @@
 
 open! Simplify_import
 
-let rebuild_switch dacc ~arms ~scrutinee ~scrutinee_ty uacc
+let rebuild_switch ~simplify_let dacc ~arms ~scrutinee ~scrutinee_ty uacc
       ~after_rebuild =
   let new_let_conts, arms, identity_arms, not_arms =
     Target_imm.Map.fold
@@ -165,7 +165,7 @@ let rebuild_switch dacc ~arms ~scrutinee ~scrutinee_ty uacc
            [free_names] upon it. *)
         ~free_names_of_body:(Known (Expr.free_names body))
     in
-    Simplify_let_expr.simplify_let dacc let_expr
+    simplify_let dacc let_expr
       ~down_to_up:(fun _dacc ~rebuild ->
         (* We don't need to transfer any name occurrence info out of [dacc]
            since we re-compute it below, prior to adding it to [uacc]. *)
@@ -245,7 +245,7 @@ let rebuild_switch dacc ~arms ~scrutinee ~scrutinee_ty uacc
   in
   after_rebuild expr uacc
 
-let simplify_switch dacc switch ~down_to_up =
+let simplify_switch ~simplify_let dacc switch ~down_to_up =
   let module AC = Apply_cont in
   let min_name_mode = Name_mode.normal in
   let scrutinee = Switch.scrutinee switch in
@@ -296,4 +296,5 @@ let simplify_switch dacc switch ~down_to_up =
         (Target_imm.Map.empty, dacc)
     in
     down_to_up dacc
-      ~rebuild:(rebuild_switch dacc ~arms ~scrutinee ~scrutinee_ty)
+      ~rebuild:(rebuild_switch ~simplify_let dacc ~arms ~scrutinee
+        ~scrutinee_ty)

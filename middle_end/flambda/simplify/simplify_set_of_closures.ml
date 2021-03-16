@@ -56,6 +56,7 @@ module Context_for_multiple_sets_of_closures : sig
 
   val create
      : dacc_prior_to_sets:DA.t
+    -> simplify_toplevel:Simplify_common.simplify_toplevel
     -> all_sets_of_closures:Set_of_closures.t list
     -> closure_bound_names_all_sets:Name_in_binding_pos.t Closure_id.Map.t list
     -> closure_element_types_all_sets:T.t Var_within_closure.Map.t list
@@ -70,14 +71,19 @@ module Context_for_multiple_sets_of_closures : sig
   val closure_bound_names_inside_functions_all_sets
      : t
     -> Name_in_binding_pos.t Closure_id.Map.t list
+
+  val simplify_toplevel : t -> Simplify_common.simplify_toplevel
 end = struct
   type t = {
     dacc_prior_to_sets : DA.t;
+    simplify_toplevel : Simplify_common.simplify_toplevel;
     dacc_inside_functions : DA.t;
     closure_bound_names_inside_functions_all_sets
       : Name_in_binding_pos.t Closure_id.Map.t list;
     old_to_new_code_ids_all_sets : Code_id.t Code_id.Map.t;
   }
+
+  let simplify_toplevel t = t.simplify_toplevel
 
   let dacc_prior_to_sets t = t.dacc_prior_to_sets
   let dacc_inside_functions t = t.dacc_inside_functions
@@ -240,7 +246,7 @@ end = struct
       old_to_new_code_ids_all_sets
       denv
 
-  let create ~dacc_prior_to_sets ~all_sets_of_closures
+  let create ~dacc_prior_to_sets ~simplify_toplevel ~all_sets_of_closures
         ~closure_bound_names_all_sets ~closure_element_types_all_sets =
     let denv = DA.denv dacc_prior_to_sets in
     let denv_inside_functions =
@@ -291,6 +297,7 @@ end = struct
       dacc_inside_functions;
       closure_bound_names_inside_functions_all_sets;
       old_to_new_code_ids_all_sets;
+      simplify_toplevel;
     }
 end
 
@@ -379,7 +386,7 @@ let simplify_function context ~used_closure_vars ~shareable_constants
           assert (not (DE.at_unit_toplevel (DA.denv dacc)));
           (* CR mshinwell: DE.no_longer_defining_symbol is redundant now? *)
           match
-            Simplify_toplevel.simplify_toplevel dacc body
+            C.simplify_toplevel context dacc body
               ~return_continuation
               ~return_arity:(Code.result_arity code)
               exn_continuation
@@ -601,7 +608,7 @@ let simplify_set_of_closures0 dacc context set_of_closures
 
 let simplify_and_lift_set_of_closures dacc ~closure_bound_vars_inverse
       ~closure_bound_vars set_of_closures ~closure_elements
-      ~symbol_projections =
+      ~symbol_projections ~simplify_toplevel =
   let function_decls = Set_of_closures.function_decls set_of_closures in
   let closure_symbols =
     Closure_id.Lmap.mapi (fun closure_id _func_decl ->
@@ -641,6 +648,7 @@ let simplify_and_lift_set_of_closures dacc ~closure_bound_vars_inverse
   in
   let context =
     C.create ~dacc_prior_to_sets:dacc
+      ~simplify_toplevel
       ~all_sets_of_closures:[set_of_closures]
       ~closure_bound_names_all_sets:[closure_bound_names]
       ~closure_element_types_all_sets:[closure_element_types]
@@ -723,12 +731,14 @@ let simplify_and_lift_set_of_closures dacc ~closure_bound_vars_inverse
     bindings
 
 let simplify_non_lifted_set_of_closures0 dacc bound_vars ~closure_bound_vars
-      set_of_closures ~closure_elements ~closure_element_types =
+      set_of_closures ~closure_elements ~closure_element_types
+      ~simplify_toplevel =
   let closure_bound_names =
     Closure_id.Map.map Name_in_binding_pos.var closure_bound_vars
   in
   let context =
     C.create ~dacc_prior_to_sets:dacc
+      ~simplify_toplevel
       ~all_sets_of_closures:[set_of_closures]
       ~closure_bound_names_all_sets:[closure_bound_names]
       ~closure_element_types_all_sets:[closure_element_types]
@@ -958,7 +968,7 @@ let simplify_lifted_set_of_closures0 context ~closure_symbols
   bound_symbols, static_consts, dacc
 
 let simplify_lifted_sets_of_closures dacc ~all_sets_of_closures_and_symbols
-      ~closure_bound_names_all_sets =
+      ~closure_bound_names_all_sets ~simplify_toplevel =
   let all_sets_of_closures =
     List.map snd all_sets_of_closures_and_symbols
   in
@@ -980,8 +990,8 @@ let simplify_lifted_sets_of_closures dacc ~all_sets_of_closures_and_symbols
     List.map snd closure_elements_and_types_all_sets
   in
   let context =
-    C.create
-      ~dacc_prior_to_sets:dacc
+    C.create ~dacc_prior_to_sets:dacc
+      ~simplify_toplevel
       ~all_sets_of_closures
       ~closure_bound_names_all_sets
       ~closure_element_types_all_sets

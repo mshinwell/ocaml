@@ -82,7 +82,7 @@ let rebuild_let symbol_scoping_rule simplify_named_result
     in
     after_rebuild body uacc
 
-let simplify_let dacc let_expr ~down_to_up =
+let simplify_let ~simplify_expr ~simplify_toplevel dacc let_expr ~down_to_up =
   let module L = Flambda.Let in
   L.pattern_match let_expr ~f:(fun bindable_let_bound ~body ->
     let symbol_scoping_rule =
@@ -96,6 +96,7 @@ let simplify_let dacc let_expr ~down_to_up =
     let simplify_named_result =
       Simplify_named.simplify_named dacc bindable_let_bound
         (L.defining_expr let_expr)
+        ~simplify_toplevel
     in
     let dacc = Simplify_named_result.dacc simplify_named_result in
     (* First remember any lifted constants that were generated during the
@@ -120,7 +121,7 @@ let simplify_let dacc let_expr ~down_to_up =
        around the simplified body.  [Simplify_named] will already have
        prepared [dacc] with the necessary bindings for the simplification of
        the body. *)
-    Simplify_expr.simplify_expr dacc body
+    simplify_expr dacc body
       ~down_to_up:(fun dacc ~rebuild:rebuild_body ->
         down_to_up dacc ~rebuild:(fun uacc ~after_rebuild ->
           rebuild_body uacc ~after_rebuild:(fun body uacc ->

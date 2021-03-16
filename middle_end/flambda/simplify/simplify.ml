@@ -85,7 +85,7 @@ let run ~backend ~round unit =
     let exn_continuation =
       Exn_continuation.create ~exn_handler:exn_continuation ~extra_args:[]
     in
-    Simplify_toplevel.simplify_toplevel dacc (FU.body unit) ~return_continuation
+    Simplify_expr.simplify_toplevel dacc (FU.body unit) ~return_continuation
       ~return_arity:[K.With_subkind.any_value] exn_continuation
       ~return_cont_scope ~exn_cont_scope
   in

@@ -19,7 +19,7 @@
 open! Simplify_import
 
 type 'a after_rebuild =
-     Flambda.Expr.t
+     Expr.t
   -> Upwards_acc.t
   -> 'a
 
@@ -36,9 +36,19 @@ type ('a, 'b) down_to_up =
 type 'a expr_simplifier =
      Downwards_acc.t
   -> 'a
-  -> down_to_up:(Flambda.Expr.t * Upwards_acc.t,
-       Flambda.Expr.t * Upwards_acc.t) down_to_up
-  -> Flambda.Expr.t * Upwards_acc.t
+  -> down_to_up:(Expr.t * Upwards_acc.t,
+       Expr.t * Upwards_acc.t) down_to_up
+  -> Expr.t * Upwards_acc.t
+
+type simplify_toplevel =
+     Downwards_acc.t
+  -> Expr.t
+  -> return_continuation:Continuation.t
+  -> return_arity:Flambda_arity.With_subkinds.t
+  -> Exn_continuation.t
+  -> return_cont_scope:Scope.t
+  -> exn_cont_scope:Scope.t
+  -> Expr.t * Upwards_acc.t
 
 let rebuild_invalid uacc ~after_rebuild =
   after_rebuild (Expr.create_invalid ()) uacc
@@ -53,8 +63,8 @@ let simplify_projection dacc ~original_term ~deconstructing ~shape ~result_var
 
 type add_wrapper_for_fixed_arity_continuation0_result =
   | This_continuation of Continuation.t
-  | Apply_cont of Flambda.Apply_cont.t
-  | New_wrapper of Continuation.t * Flambda.Continuation_handler.t * Cost_metrics.t
+  | Apply_cont of Apply_cont.t
+  | New_wrapper of Continuation.t * Continuation_handler.t * Cost_metrics.t
 
 type cont_or_apply_cont =
   | Continuation of Continuation.t
@@ -137,8 +147,8 @@ let add_wrapper_for_fixed_arity_continuation0 uacc cont_or_apply_cont
         new_wrapper expr ~free_names:(Known free_names) ~cost_metrics
 
 type add_wrapper_for_switch_arm_result =
-  | Apply_cont of Flambda.Apply_cont.t
-  | New_wrapper of Continuation.t * Flambda.Continuation_handler.t * Cost_metrics.t
+  | Apply_cont of Apply_cont.t
+  | New_wrapper of Continuation.t * Continuation_handler.t * Cost_metrics.t
 
 let add_wrapper_for_switch_arm uacc apply_cont ~use_id arity
       : add_wrapper_for_switch_arm_result =

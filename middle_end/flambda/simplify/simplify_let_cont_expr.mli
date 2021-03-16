@@ -14,12 +14,10 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Simplification of the right-hand sides of [Let] bindings. *)
+[@@@ocaml.warning "+a-30-40-41-42"]
 
-[@@@ocaml.warning "+a-4-30-40-41-42"]
+open! Flambda
 
-val simplify_named
-   : Downwards_acc.t
-  -> Bindable_let_bound.t
-  -> Flambda.Named.t
-  -> Simplify_named_result.t
+val simplify_let_cont
+   : simplify_expr:Expr.t Simplify_common.expr_simplifier
+  -> Let_cont.t Simplify_common.expr_simplifier

@@ -974,25 +974,13 @@ middle_end/flambda/terms/flambda.ml: \
 	  ../scripts/assemble_rec_modules.sh template/flambda.templ.ml \
 	    rec_modules flambda.ml
 
-SIMPLIFY_DEPS=$(shell sed -e "s|^\(.*\)|middle_end/flambda/simplify/\1 middle_end/flambda/simplify/\1i|g" \
-  middle_end/flambda/simplify/rec_modules | tr '\n' ' ')
-middle_end/flambda/simplify/simplify.ml: \
-  middle_end/flambda/simplify/template/simplify.templ.ml \
-  middle_end/flambda/simplify/rec_modules \
-  $(SIMPLIFY_DEPS)
-	cd middle_end/flambda/simplify && \
-	  ../scripts/assemble_rec_modules.sh template/simplify.templ.ml \
-	    rec_modules simplify.ml
-
 beforedepend:: \
   middle_end/flambda/types/flambda_type.ml \
-  middle_end/flambda/terms/flambda.ml \
-  middle_end/flambda/simplify/simplify.ml
+  middle_end/flambda/terms/flambda.ml
 
 clean::
 	rm -f middle_end/flambda/types/flambda_type.ml;
-	rm -f middle_end/flambda/terms/flambda.ml;
-	rm -f middle_end/flambda/simplify/simplify.ml
+	rm -f middle_end/flambda/terms/flambda.ml
 
 
 # Documentation

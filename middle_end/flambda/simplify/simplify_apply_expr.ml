@@ -25,7 +25,8 @@ let warn_not_inlined_if_needed apply reason =
     Location.prerr_warning (Debuginfo.to_location (Apply.dbg apply))
       (Warnings.Inlining_impossible reason)
 
-let simplify_direct_tuple_application dacc apply code_id ~down_to_up =
+let simplify_direct_tuple_application ~simplify_expr dacc apply code_id
+      ~down_to_up =
   let dbg = Apply.dbg apply in
   let callee's_code = DE.find_code (DA.denv dacc) code_id in
   let param_arity = Code.params_arity callee's_code in
@@ -66,7 +67,7 @@ let simplify_direct_tuple_application dacc apply code_id ~down_to_up =
         |> Expr.create_let)
       vars_and_fields apply_expr
   in
-  Simplify_expr.simplify_expr dacc expr ~down_to_up
+  simplify_expr dacc expr ~down_to_up
 
 let rebuild_non_inlined_direct_full_application apply ~use_id ~exn_cont_use_id
       ~result_arity uacc ~after_rebuild =
@@ -86,7 +87,7 @@ let rebuild_non_inlined_direct_full_application apply ~use_id ~exn_cont_use_id
   let uacc = UA.add_free_names uacc (Expr.free_names expr) in
   after_rebuild expr uacc
 
-let simplify_direct_full_application dacc apply function_decl_opt
+let simplify_direct_full_application ~simplify_expr dacc apply function_decl_opt
       ~callee's_code_id ~result_arity ~down_to_up =
   let callee = Apply.callee apply in
   let args = Apply.args apply in
@@ -136,7 +137,7 @@ let simplify_direct_full_application dacc apply function_decl_opt
   in
   match inlined with
   | Some (dacc, inlined) ->
-    Simplify_expr.simplify_expr dacc inlined ~down_to_up
+    simplify_expr dacc inlined ~down_to_up
   | None ->
     let dacc, use_id =
       match Apply.continuation apply with
@@ -161,9 +162,9 @@ let simplify_direct_full_application dacc apply function_decl_opt
       ~rebuild:(rebuild_non_inlined_direct_full_application apply ~use_id
         ~exn_cont_use_id ~result_arity)
 
-let simplify_direct_partial_application dacc apply ~callee's_code_id
-      ~callee's_closure_id ~param_arity ~result_arity ~recursive
-      ~down_to_up =
+let simplify_direct_partial_application ~simplify_expr dacc apply
+      ~callee's_code_id ~callee's_closure_id ~param_arity ~result_arity
+      ~recursive ~down_to_up =
   (* For simplicity, we disallow [@inline] attributes on partial
      applications.  The user may always write an explicit wrapper instead
      with such an attribute. *)
@@ -341,7 +342,7 @@ let simplify_direct_partial_application dacc apply ~callee's_code_id
       ~free_names_of_body:Unknown
     |> Expr.create_let
   in
-  Simplify_expr.simplify_expr dacc expr
+  simplify_expr dacc expr
     ~down_to_up:(fun dacc ~rebuild ->
       down_to_up dacc ~rebuild:(fun uacc ~after_rebuild ->
         let uacc = UA.add_outermost_lifted_constant uacc dummy_code in
@@ -351,15 +352,15 @@ let simplify_direct_partial_application dacc apply ~callee's_code_id
    of a symbol after [Simplify]? This shouldn't usually happen, but I'm not 100%
    sure it cannot in every case. *)
 
-let simplify_direct_over_application dacc apply ~param_arity ~result_arity:_
-      ~down_to_up =
+let simplify_direct_over_application ~simplify_expr dacc apply ~param_arity
+      ~result_arity:_ ~down_to_up =
   let expr = Simplify_common.split_direct_over_application apply ~param_arity in
-  Simplify_expr.simplify_expr dacc expr ~down_to_up
+  simplify_expr dacc expr ~down_to_up
 
-let simplify_direct_function_call dacc apply ~callee's_code_id_from_type
-      ~callee's_code_id_from_call_kind ~callee's_closure_id ~result_arity
-      ~recursive ~arg_types:_ ~must_be_detupled function_decl_opt
-      ~down_to_up =
+let simplify_direct_function_call ~simplify_expr dacc apply
+      ~callee's_code_id_from_type ~callee's_code_id_from_call_kind
+      ~callee's_closure_id ~result_arity ~recursive ~arg_types:_
+      ~must_be_detupled function_decl_opt ~down_to_up =
   let result_arity_of_application =
     Call_kind.return_arity (Apply.call_kind apply)
   in
@@ -391,8 +392,8 @@ let simplify_direct_function_call dacc apply ~callee's_code_id_from_type
     in
     let apply = Apply.with_call_kind apply call_kind in
     if must_be_detupled then
-      simplify_direct_tuple_application dacc apply callee's_code_id
-        ~down_to_up
+      simplify_direct_tuple_application ~simplify_expr dacc apply
+        callee's_code_id ~down_to_up
     else begin
       let args = Apply.args apply in
       let provided_num_args = List.length args in
@@ -406,15 +407,15 @@ let simplify_direct_function_call dacc apply ~callee's_code_id_from_type
       let param_arity = Code.params_arity callee's_code in
       let num_params = List.length param_arity in
       if provided_num_args = num_params then
-        simplify_direct_full_application dacc apply function_decl_opt
-          ~callee's_code_id ~result_arity ~down_to_up
+        simplify_direct_full_application ~simplify_expr dacc apply
+          function_decl_opt ~callee's_code_id ~result_arity ~down_to_up
       else if provided_num_args > num_params then
-        simplify_direct_over_application dacc apply ~param_arity ~result_arity
-          ~down_to_up
+        simplify_direct_over_application ~simplify_expr dacc apply ~param_arity
+          ~result_arity ~down_to_up
       else if provided_num_args > 0 && provided_num_args < num_params then
-        simplify_direct_partial_application dacc apply ~callee's_code_id
-          ~callee's_closure_id ~param_arity ~result_arity ~recursive
-          ~down_to_up
+        simplify_direct_partial_application ~simplify_expr dacc apply
+          ~callee's_code_id ~callee's_closure_id ~param_arity ~result_arity
+          ~recursive ~down_to_up
       else
         Misc.fatal_errorf "Function with %d params when simplifying \
                            direct OCaml function call with %d arguments: %a"
@@ -526,7 +527,7 @@ let simplify_function_call_where_callee's_type_unavailable dacc apply
    [Indirect_unknown_arity] has been generated with no warning, despite having
    [@inlined always]. *)
 
-let simplify_function_call dacc apply ~callee_ty
+let simplify_function_call ~simplify_expr dacc apply ~callee_ty
       (call : Call_kind.Function_call.t) ~arg_types ~down_to_up =
   let args = Apply.args apply in
   (* Function declarations and params and body might not have the same
@@ -598,7 +599,8 @@ let simplify_function_call dacc apply ~callee_ty
       let callee's_code_id_from_type = I.code_id inlinable in
       let callee's_code = DE.find_code denv callee's_code_id_from_type in
       let must_be_detupled = call_must_be_detupled (I.is_tupled inlinable) in
-      simplify_direct_function_call dacc apply ~callee's_code_id_from_type
+      simplify_direct_function_call ~simplify_expr dacc apply
+        ~callee's_code_id_from_type
         ~callee's_code_id_from_call_kind ~callee's_closure_id ~arg_types
         ~result_arity:(Code.result_arity callee's_code)
         ~recursive:(Code.recursive callee's_code)
@@ -620,7 +622,8 @@ let simplify_function_call dacc apply ~callee_ty
       let callee's_code_from_type =
         DE.find_code denv callee's_code_id_from_type
       in
-      simplify_direct_function_call dacc apply ~callee's_code_id_from_type
+      simplify_direct_function_call ~simplify_expr dacc apply
+        ~callee's_code_id_from_type
         ~callee's_code_id_from_call_kind
         ~callee's_closure_id ~arg_types
         ~result_arity:(Code.result_arity callee's_code_from_type)
@@ -786,13 +789,14 @@ let simplify_c_call dacc apply ~callee_ty ~param_arity ~return_arity
   down_to_up dacc
     ~rebuild:(rebuild_c_call apply ~use_id ~exn_cont_use_id ~return_arity)
 
-let simplify_apply dacc apply ~down_to_up =
+let simplify_apply ~simplify_expr dacc apply ~down_to_up =
   match simplify_apply_shared dacc apply with
   | Bottom -> down_to_up dacc ~rebuild:Simplify_common.rebuild_invalid
   | Ok (callee_ty, apply, arg_types) ->
     match Apply.call_kind apply with
     | Function call ->
-      simplify_function_call dacc apply ~callee_ty call ~arg_types ~down_to_up
+      simplify_function_call ~simplify_expr dacc apply ~callee_ty call
+         ~arg_types ~down_to_up
     | Method { kind; obj; } ->
       simplify_method_call dacc apply ~callee_ty ~kind ~obj ~arg_types
         ~down_to_up

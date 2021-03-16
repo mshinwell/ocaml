@@ -26,6 +26,7 @@ val simplify_non_lifted_set_of_closures
    : Downwards_acc.t
   -> Bindable_let_bound.t
   -> Set_of_closures.t
+  -> simplify_toplevel:Simplify_common.simplify_toplevel
   -> Simplify_named_result.t
 
 (** Simplify a group of possibly-recursive sets of closures, as may occur on
@@ -35,4 +36,5 @@ val simplify_lifted_sets_of_closures
   -> all_sets_of_closures_and_symbols:
     (Symbol.t Closure_id.Lmap.t * Set_of_closures.t) list
   -> closure_bound_names_all_sets:Name_in_binding_pos.t Closure_id.Map.t list
+  -> simplify_toplevel:Simplify_common.simplify_toplevel
   -> Bound_symbols.t * Static_const_with_free_names.Group.t * Downwards_acc.t

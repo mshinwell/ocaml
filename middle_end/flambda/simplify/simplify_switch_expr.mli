@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2013--2018 OCamlPro SAS                                    *)
-(*   Copyright 2014--2018 Jane Street Group LLC                           *)
+(*   Copyright 2013--2019 OCamlPro SAS                                    *)
+(*   Copyright 2014--2019 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -14,14 +14,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-30-40-41-42"]
+[@@@ocaml.warning "+a-30-40-41-42"]
 
-val simplify_toplevel
-   : Downwards_acc.t
-  -> Flambda.Expr.t
-  -> return_continuation:Continuation.t
-  -> return_arity:Flambda_arity.With_subkinds.t
-  -> Exn_continuation.t
-  -> return_cont_scope:Scope.t
-  -> exn_cont_scope:Scope.t
-  -> Flambda.Expr.t * Upwards_acc.t
+val simplify_switch
+   : simplify_let:Flambda.Let.t Simplify_common.expr_simplifier
+  -> Flambda.Switch.t Simplify_common.expr_simplifier

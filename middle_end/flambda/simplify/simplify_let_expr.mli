@@ -14,12 +14,11 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Simplification of statically-allocated constants bound to symbols. *)
+[@@@ocaml.warning "+a-30-40-41-42"]
 
-[@@@ocaml.warning "+a-4-30-40-41-42"]
+open! Simplify_import
 
-val simplify_static_consts
-   : Downwards_acc.t
-  -> Bound_symbols.t
-  -> Static_const.Group.t
-  -> Bound_symbols.t * Static_const_with_free_names.Group.t * Downwards_acc.t
+val simplify_let
+   : simplify_expr:Expr.t Simplify_common.expr_simplifier
+  -> simplify_toplevel:Simplify_common.simplify_toplevel
+  -> Let.t Simplify_common.expr_simplifier

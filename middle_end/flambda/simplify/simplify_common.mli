@@ -18,8 +18,10 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+open! Flambda
+
 type 'a after_rebuild =
-     Flambda.Expr.t
+     Expr.t
   -> Upwards_acc.t
   -> 'a
 
@@ -36,15 +38,24 @@ type ('a, 'b) down_to_up =
 type 'a expr_simplifier =
      Downwards_acc.t
   -> 'a
-  -> down_to_up:(Flambda.Expr.t * Upwards_acc.t,
-       Flambda.Expr.t * Upwards_acc.t) down_to_up
-  -> Flambda.Expr.t * Upwards_acc.t
+  -> down_to_up:(Expr.t * Upwards_acc.t, Expr.t * Upwards_acc.t) down_to_up
+  -> Expr.t * Upwards_acc.t
 
-val rebuild_invalid : (Flambda.Expr.t * Upwards_acc.t) rebuild
+type simplify_toplevel =
+     Downwards_acc.t
+  -> Expr.t
+  -> return_continuation:Continuation.t
+  -> return_arity:Flambda_arity.With_subkinds.t
+  -> Exn_continuation.t
+  -> return_cont_scope:Scope.t
+  -> exn_cont_scope:Scope.t
+  -> Expr.t * Upwards_acc.t
+
+val rebuild_invalid : (Expr.t * Upwards_acc.t) rebuild
 
 val simplify_projection
    : Downwards_acc.t
-  -> original_term:Flambda.Named.t
+  -> original_term:Named.t
   -> deconstructing:Flambda_type.t
   -> shape:Flambda_type.t
   -> result_var:Var_in_binding_pos.t
@@ -54,12 +65,12 @@ val simplify_projection
      * Downwards_acc.t
 
 type add_wrapper_for_switch_arm_result = private
-  | Apply_cont of Flambda.Apply_cont.t
-  | New_wrapper of Continuation.t * Flambda.Continuation_handler.t * Flambda.Cost_metrics.t
+  | Apply_cont of Apply_cont.t
+  | New_wrapper of Continuation.t * Continuation_handler.t * Cost_metrics.t
 
 val add_wrapper_for_switch_arm
    : Upwards_acc.t
-  -> Flambda.Apply_cont.t
+  -> Apply_cont.t
   -> use_id:Apply_cont_rewrite_id.t
   -> Flambda_arity.With_subkinds.t
   -> add_wrapper_for_switch_arm_result
@@ -69,7 +80,7 @@ val add_wrapper_for_fixed_arity_apply
   -> use_id:Apply_cont_rewrite_id.t
   -> Flambda_arity.With_subkinds.t
   -> Apply_expr.t
-  -> Flambda.Expr.t * Upwards_acc.t
+  -> Expr.t * Upwards_acc.t
 
 val update_exn_continuation_extra_args
    : Upwards_acc.t
@@ -84,11 +95,11 @@ val project_tuple
   -> size:int
   -> field:int
   -> Simple.t
-  -> Flambda.Named.t
+  -> Named.t
 
 (** Split a direct over-application into a full application followed by
     the application of the leftover arguments. *)
 val split_direct_over_application
   : Apply_expr.t
  -> param_arity:Flambda_arity.With_subkinds.t
- -> Flambda.Expr.t
+ -> Expr.t
