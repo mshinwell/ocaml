@@ -66,6 +66,8 @@ else
   ocamlopt_cmd = $(FLEXLINK_ENV) $(ocamlopt)
 endif
 
+# CR mshinwell: We should be able to remove this inlining depth setting
+# once the new inliner has been merged.
 OPTCOMPFLAGS=-flambda-expert-max-inlining-depth 3
 ifeq "$(FUNCTION_SECTIONS)" "true"
 OPTCOMPFLAGS += -function-sections

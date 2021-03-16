@@ -535,6 +535,8 @@ let hash_seed =
   let seed = Random.bits () in
   if seed mod 2 = 0 then seed + 1 else seed
 
+(* Fast integer hashing algorithm for sdolan.  With the stdlib Hashtbl
+   implementation it's ok that this returns > 30 bits. *)
 let hash2 a b =
   let a = Hashtbl.hash a in
   let b = Hashtbl.hash b in
