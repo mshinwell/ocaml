@@ -370,20 +370,6 @@ end and Continuation_handler : sig
       simultaneously-defined continuations when one or more of them is an
       exception handler.) *)
   val is_exn_handler : t -> bool
-
-  module Behaviour : sig
-    type t = private
-      | Unreachable of { arity : Flambda_arity.With_subkinds.t; }
-      | Alias_for of {
-          arity : Flambda_arity.With_subkinds.t;
-          alias_for : Continuation.t;
-        }
-      | Unknown of { arity : Flambda_arity.With_subkinds.t; }
-  end
-
-  val arity : t -> Flambda_arity.With_subkinds.t
-
-  val behaviour : t -> Behaviour.t
 end and Recursive_let_cont_handlers : sig
   (** The representation of the alpha-equivalence class of a group of possibly
       (mutually-) recursive continuation handlers that are bound both over a

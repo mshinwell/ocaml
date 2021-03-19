@@ -18,11 +18,10 @@
 
 type t =
   | Linearly_used_and_inlinable of {
-      arity : Flambda_arity.With_subkinds.t;
+      params : Kinded_parameter.t list;
       (** To avoid re-opening name abstractions, we store the opened
           parameters and handler here.  This is only correct because the
           inlining we perform is linear. *)
-      params : Kinded_parameter.t list;
       handler : Flambda.Expr.t;
       (** [free_names_of_handler] includes entries for any occurrences of the
           [params] in the [handler]. *)
@@ -30,12 +29,13 @@ type t =
       (** [cost_metrics_of_handler] is the size of the handler. *)
       cost_metrics_of_handler : Flambda.Cost_metrics.t;
     }
-  | Other of {
-      arity : Flambda_arity.With_subkinds.t;
-      handler : Flambda.Continuation_handler.t option;
+  | Non_inlinable of {
+      (* The opened parameters and handler are only here for a special
+         check in [Simplify_switch_expr]. *)
+      params : Kinded_parameter.t list;
+      handler : Flambda.Expr.t;
     }
-  | Unreachable of { arity : Flambda_arity.With_subkinds.t; }
+  | Unreachable
+  | Other
 
 val print : Format.formatter -> t -> unit
-
-val arity : t -> Flambda_arity.With_subkinds.t

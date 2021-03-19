@@ -79,22 +79,6 @@ val pattern_match_pair
     -> 'a)
   -> ('a, Pattern_match_pair_error.t) Result.t
 
-module Behaviour : sig
-  type t = private
-    | Unreachable of { arity : Flambda_arity.With_subkinds.t; }
-    | Alias_for of {
-        arity : Flambda_arity.With_subkinds.t;
-        alias_for : Continuation.t;
-      }
-    | Unknown of { arity : Flambda_arity.With_subkinds.t; }
-
-  include Contains_ids.S with type t := t
-end
-
-val behaviour : t -> Behaviour.t
-
-val arity : t -> Flambda_arity.With_subkinds.t
-
 (** Whether the continuation is an exception handler.
 
     Continuations used as exception handlers are always [Non_recursive]. To

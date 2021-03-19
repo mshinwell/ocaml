@@ -18,32 +18,26 @@
 
 type t =
   | Linearly_used_and_inlinable of {
-      arity : Flambda_arity.With_subkinds.t;
       params : Kinded_parameter.t list;
       handler : Flambda.Expr.t;
       free_names_of_handler : Name_occurrences.t;
       cost_metrics_of_handler : Flambda.Cost_metrics.t;
     }
-  | Other of {
-      arity : Flambda_arity.With_subkinds.t;
-      handler : Flambda.Continuation_handler.t option;
+  | Non_inlinable of {
+      params : Kinded_parameter.t list;
+      handler : Flambda.Expr.t;
     }
-  | Unreachable of { arity : Flambda_arity.With_subkinds.t; }
+  | Unreachable
+  (* CR mshinwell: improve "Other" naming now we have [Non_inlinable] *)
+  | Other
 
 (* CR mshinwell: Write a proper printer *)
 let print ppf t =
   match t with
-  | Linearly_used_and_inlinable { arity = _; params = _; handler = _;
+  | Linearly_used_and_inlinable { params = _; handler = _;
       free_names_of_handler = _; cost_metrics_of_handler = _ } ->
     Format.pp_print_string ppf "Linearly_used_and_inlinable _"
-  | Other { arity = _; handler = _; } ->
-    Format.pp_print_string ppf "Other"
-  | Unreachable { arity = _; } -> Format.pp_print_string ppf "Unreachable"
-
-let arity t =
-  match t with
-  | Linearly_used_and_inlinable { arity; params = _; handler = _;
-      free_names_of_handler = _; cost_metrics_of_handler = _ }
-  | Other { arity; handler = _; }
-  | Unreachable { arity; } ->
-    arity
+  | Non_inlinable { params = _; handler = _; } ->
+    Format.pp_print_string ppf "Non_inlinable _"
+  | Other -> Format.pp_print_string ppf "Other"
+  | Unreachable -> Format.pp_print_string ppf "Unreachable"

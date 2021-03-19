@@ -43,13 +43,14 @@ let rec simplify_expr dacc expr ~down_to_up =
        it were [Halt_and_catch_fire]. *)
     down_to_up dacc ~rebuild:Simplify_common.rebuild_invalid
 
-and simplify_toplevel dacc expr ~return_continuation ~return_arity
+and simplify_toplevel dacc expr ~return_continuation ~return_arity:_
       exn_continuation ~return_cont_scope ~exn_cont_scope =
   let expr, uacc =
     simplify_expr dacc expr ~down_to_up:(fun dacc ~rebuild ->
+      (* CR mshinwell: We need to work out how to check [return_arity] *)
       let uenv =
         UE.add_continuation UE.empty return_continuation
-          return_cont_scope return_arity
+          return_cont_scope
       in
       let uenv =
         UE.add_exn_continuation uenv exn_continuation exn_cont_scope
