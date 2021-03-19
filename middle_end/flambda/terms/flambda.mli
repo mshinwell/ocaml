@@ -688,7 +688,6 @@ end and Cost_metrics : sig
   val prim : Flambda_primitive.t -> t
   val simple : Simple.t -> t
   val set_of_closures : find_cost_metrics:(Code_id.t -> t Or_unknown.t) -> Set_of_closures.t -> t
-  val static_consts : Static_const.Group.t -> t
   val apply : Apply.t -> t
   val apply_cont : Apply_cont.t -> t
   val switch : Switch.t -> t
