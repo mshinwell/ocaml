@@ -64,24 +64,6 @@ val simplify_projection
      * Flambda_type.Typing_env_extension.t
      * Downwards_acc.t
 
-type add_wrapper_for_switch_arm_result = private
-  | Apply_cont of Apply_cont.t
-  | New_wrapper of Continuation.t * Continuation_handler.t * Cost_metrics.t
-
-val add_wrapper_for_switch_arm
-   : Upwards_acc.t
-  -> Apply_cont.t
-  -> use_id:Apply_cont_rewrite_id.t
-  -> Flambda_arity.With_subkinds.t
-  -> add_wrapper_for_switch_arm_result
-
-val add_wrapper_for_fixed_arity_apply
-   : Upwards_acc.t
-  -> use_id:Apply_cont_rewrite_id.t
-  -> Flambda_arity.With_subkinds.t
-  -> Apply_expr.t
-  -> Expr.t * Upwards_acc.t
-
 val update_exn_continuation_extra_args
    : Upwards_acc.t
   -> exn_cont_use_id:Apply_cont_rewrite_id.t

@@ -25,7 +25,7 @@ let rebuild_switch ~simplify_let dacc ~arms ~scrutinee ~scrutinee_ty uacc
       (fun arm (action, use_id, arity)
            (new_let_conts, arms, identity_arms, not_arms) ->
         match
-          Simplify_common.add_wrapper_for_switch_arm uacc action
+          EB.add_wrapper_for_switch_arm uacc action
             ~use_id (Flambda_arity.With_subkinds.of_arity arity)
         with
         | Apply_cont action ->

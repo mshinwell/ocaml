@@ -19,10 +19,12 @@
 open! Flambda.Import
 
 module BLB = Bindable_let_bound
+module KP = Kinded_parameter
 module LC = Lifted_constant
 module LCS = Lifted_constant_state
 module P = Flambda_primitive
 module UA = Upwards_acc
+module UE = Upwards_env
 module VB = Var_in_binding_pos
 
 (* The constructed values of this type aren't currently used, but will be
@@ -537,3 +539,137 @@ let create_switch uacc ~scrutinee ~arms =
         Expr.create_switch switch,
         UA.cost_metrics_add ~added:(Cost_metrics.switch switch) uacc
 
+type add_wrapper_for_fixed_arity_continuation0_result =
+  | This_continuation of Continuation.t
+  | Apply_cont of Apply_cont.t
+  | New_wrapper of Continuation.t * Continuation_handler.t * Cost_metrics.t
+
+type cont_or_apply_cont =
+  | Continuation of Continuation.t
+  | Apply_cont of Apply_cont.t
+
+let add_wrapper_for_fixed_arity_continuation0 uacc cont_or_apply_cont
+      ~use_id arity : add_wrapper_for_fixed_arity_continuation0_result =
+  let uenv = UA.uenv uacc in
+  let cont =
+    match cont_or_apply_cont with
+    | Continuation cont -> cont
+    | Apply_cont apply_cont -> Apply_cont.continuation apply_cont
+  in
+  let original_cont = cont in
+  let cont = UE.resolve_continuation_aliases uenv cont in
+  match UE.find_apply_cont_rewrite uenv original_cont with
+  | None -> This_continuation cont
+  | Some rewrite when Apply_cont_rewrite.does_nothing rewrite ->
+    (* CR mshinwell: think more about this check w.r.t. subkinds *)
+    let arity = Flambda_arity.With_subkinds.to_arity arity in
+    let arity_in_rewrite =
+      Apply_cont_rewrite.original_params_arity rewrite
+      |> Flambda_arity.With_subkinds.to_arity
+    in
+    if not (Flambda_arity.equal arity arity_in_rewrite) then begin
+      Misc.fatal_errorf "Arity %a provided to fixed-arity-wrapper \
+          addition function does not match arity %a in rewrite:@ %a"
+        Flambda_arity.print arity
+        Flambda_arity.print arity_in_rewrite
+        Apply_cont_rewrite.print rewrite
+    end;
+    This_continuation cont
+  | Some rewrite ->
+    (* CR-someday mshinwell: This area should be improved and hence
+       simplified.  Allowing [Apply] to take extra arguments is probably the
+       way forward.  Although unboxing of variants requires untagging
+       expressions to be inserted, so wrappers cannot always be avoided. *)
+    let params = List.map (fun _kind -> Variable.create "param") arity in
+    let kinded_params = List.map2 KP.create params arity in
+    let new_wrapper expr ~free_names ~cost_metrics =
+      let new_cont = Continuation.create () in
+      let new_handler =
+        Continuation_handler.create kinded_params ~handler:expr
+          ~free_names_of_handler:free_names
+          ~is_exn_handler:false
+      in
+      New_wrapper (new_cont, new_handler, cost_metrics)
+    in
+    match cont_or_apply_cont with
+    | Continuation cont ->
+      (* In this case, any generated [Apply_cont] will sit inside a wrapper
+         that binds [kinded_params]. *)
+      let args = List.map KP.simple kinded_params in
+      let apply_cont = Apply_cont.create cont ~args ~dbg:Debuginfo.none in
+      begin match Apply_cont_rewrite.rewrite_use rewrite use_id apply_cont with
+      | Apply_cont apply_cont ->
+        new_wrapper (Expr.create_apply_cont apply_cont)
+          ~free_names:(Known (Apply_cont.free_names apply_cont))
+          ~cost_metrics:(Cost_metrics.apply_cont apply_cont)
+      | Expr build_expr ->
+        let expr, cost_metrics, free_names =
+          build_expr ~apply_cont_to_expr:(fun apply_cont ->
+            Expr.create_apply_cont apply_cont,
+            Cost_metrics.apply_cont apply_cont,
+            Apply_cont.free_names apply_cont)
+        in
+        new_wrapper expr ~free_names:(Known free_names) ~cost_metrics
+      end
+    | Apply_cont apply_cont ->
+      let apply_cont = Apply_cont.update_continuation apply_cont cont in
+      match Apply_cont_rewrite.rewrite_use rewrite use_id apply_cont with
+      | Apply_cont apply_cont -> Apply_cont apply_cont
+      | Expr build_expr ->
+        let expr, cost_metrics, free_names =
+          build_expr ~apply_cont_to_expr:(fun apply_cont ->
+            Expr.create_apply_cont apply_cont,
+            Cost_metrics.apply_cont apply_cont,
+            Apply_cont.free_names apply_cont)
+        in
+        new_wrapper expr ~free_names:(Known free_names) ~cost_metrics
+
+type add_wrapper_for_switch_arm_result =
+  | Apply_cont of Apply_cont.t
+  | New_wrapper of Continuation.t * Continuation_handler.t * Cost_metrics.t
+
+let add_wrapper_for_switch_arm uacc apply_cont ~use_id arity
+      : add_wrapper_for_switch_arm_result =
+  match
+    add_wrapper_for_fixed_arity_continuation0 uacc (Apply_cont apply_cont)
+      ~use_id arity
+  with
+  | This_continuation cont ->
+    Apply_cont (Apply_cont.update_continuation apply_cont cont)
+  | Apply_cont apply_cont -> Apply_cont apply_cont
+  | New_wrapper (cont, wrapper, cost_metrics) -> New_wrapper (cont, wrapper, cost_metrics)
+
+let add_wrapper_for_fixed_arity_continuation uacc cont ~use_id arity ~around =
+  match
+    add_wrapper_for_fixed_arity_continuation0 uacc (Continuation cont)
+      ~use_id arity
+  with
+  | This_continuation cont -> around uacc cont
+  | Apply_cont _ -> assert false
+  | New_wrapper (new_cont, new_handler, cost_metrics_of_handler) ->
+    let body, uacc = around uacc new_cont in
+    let added =
+      Cost_metrics.increase_due_to_let_cont_non_recursive ~cost_metrics_of_handler
+    in
+    Let_cont.create_non_recursive new_cont new_handler ~body
+      ~free_names_of_body:(Known (Expr.free_names body)),
+    UA.cost_metrics_add ~added uacc
+
+let add_wrapper_for_fixed_arity_apply uacc ~use_id arity apply =
+  match Apply.continuation apply with
+  | Never_returns ->
+     Expr.create_apply apply,
+     UA.cost_metrics_add ~added:(Cost_metrics.apply apply) uacc
+  | Return cont ->
+    add_wrapper_for_fixed_arity_continuation uacc cont
+      ~use_id arity
+      ~around:(fun uacc return_cont ->
+        let exn_cont =
+          UE.resolve_exn_continuation_aliases (UA.uenv uacc)
+            (Apply.exn_continuation apply)
+        in
+        let apply =
+          Apply.with_continuations apply (Return return_cont) exn_cont
+        in
+        Expr.create_apply apply,
+        UA.cost_metrics_add ~added:(Cost_metrics.apply apply) uacc)
