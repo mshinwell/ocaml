@@ -78,6 +78,12 @@ let resolve_exn_continuation_aliases t exn_cont =
   | exception Not_found -> exn_cont
   | alias_for -> Exn_continuation.with_exn_handler exn_cont alias_for
 
+let continuation_arity t cont =
+  match find_continuation t cont with
+  | Other { arity; handler = _; }
+  | Unreachable { arity; }
+  | Linearly_used_and_inlinable { arity; _ } -> arity
+
 let add_continuation0 t cont scope cont_in_env =
   let continuations =
     Continuation.Map.add cont (scope, cont_in_env) t.continuations
@@ -86,13 +92,47 @@ let add_continuation0 t cont scope cont_in_env =
     continuations;
   }
 
-let add_continuation t cont scope =
-  add_continuation0 t cont scope Other
+let add_continuation t cont scope arity =
+  add_continuation0 t cont scope (Other { arity; handler = None; })
 
-let add_unreachable_continuation t cont scope =
-  add_continuation0 t cont scope Unreachable
+let add_continuation_with_handler t cont scope arity handler =
+  add_continuation0 t cont scope (Other { arity; handler = Some handler; })
 
-let add_continuation_alias t cont ~alias_for =
+let add_unreachable_continuation t cont scope arity =
+  add_continuation0 t cont scope (Unreachable { arity; })
+
+let add_continuation_alias t cont arity ~alias_for =
+  let arity = Flambda_arity.With_subkinds.to_arity arity in
+  let alias_for = resolve_continuation_aliases t alias_for in
+  let alias_for_arity =
+    continuation_arity t alias_for
+    |> Flambda_arity.With_subkinds.to_arity
+  in
+  if not (Flambda_arity.equal arity alias_for_arity) then begin
+    Misc.fatal_errorf "%a (arity %a) cannot be an alias for %a (arity %a) \
+        since the two continuations differ in arity"
+      Continuation.print cont
+      Flambda_arity.print arity
+      Continuation.print alias_for
+      Flambda_arity.print alias_for_arity
+  end;
+  if Continuation.Map.mem cont t.continuation_aliases then begin
+    Misc.fatal_errorf "Cannot add continuation alias %a (as alias for %a); \
+        the continuation is already deemed to be an alias"
+      Continuation.print cont
+      Continuation.print alias_for
+  end;
+(* CR mshinwell: This should check that they are either both exn handlers
+ or both non-exn handlers
+  if Continuation.is_exn cont || Continuation.is_exn alias_for then begin
+    Misc.fatal_errorf "Cannot alias exception handlers: %a (exn handler? %b) \
+        as alias for %a (exn handler? %b)"
+      Continuation.print cont
+      (Continuation.is_exn cont)
+      Continuation.print alias_for
+      (Continuation.is_exn alias_for)
+  end;
+*)
   let alias_for = resolve_continuation_aliases t alias_for in
   let continuation_aliases =
     Continuation.Map.add cont alias_for t.continuation_aliases
@@ -107,14 +147,14 @@ let add_linearly_used_inlinable_continuation t cont scope ~params
     (Linearly_used_and_inlinable { handler; free_names_of_handler;
       params; cost_metrics_of_handler })
 
-let add_non_inlinable_continuation t cont scope ~params ~handler =
-  add_continuation0 t cont scope (Non_inlinable { params; handler; })
-
 let add_exn_continuation t exn_cont scope =
   (* CR mshinwell: Think more about keeping these in both maps *)
   let continuations =
     let cont = Exn_continuation.exn_handler exn_cont in
-    Continuation.Map.add cont (scope, Continuation_in_env.Other) t.continuations
+    let cont_in_env : Continuation_in_env.t =
+      Other { arity = Exn_continuation.arity exn_cont; handler = None; }
+    in
+    Continuation.Map.add cont (scope, cont_in_env) t.continuations
   in
   let exn_continuations =
     Exn_continuation.Map.add exn_cont scope t.exn_continuations
@@ -162,5 +202,5 @@ let delete_apply_cont_rewrite t cont =
 
 let will_inline_continuation t cont =
   match find_continuation t cont with
-  | Other | Unreachable | Non_inlinable _ -> false
+  | Other _ | Unreachable _ -> false
   | Linearly_used_and_inlinable _ -> true
