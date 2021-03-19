@@ -157,7 +157,7 @@ let simplify_static_const_of_kind_value dacc static_const ~result_sym =
     simplify_static_const_of_kind_value0 dacc static_const ~result_sym
   in
   let free_names = Static_const.free_names static_const in
-  Static_const_with_free_names.create static_const
+  Rebuilt_static_const.create static_const
     ~free_names:(Known free_names), dacc
 
 let simplify_static_consts dacc (bound_symbols : Bound_symbols.t)
@@ -202,7 +202,7 @@ let simplify_static_consts dacc (bound_symbols : Bound_symbols.t)
             DA.map_denv dacc ~f:(fun denv -> DE.define_code denv ~code_id ~code)
         in
         let static_const =
-          Static_const_with_free_names.create (Code code) ~free_names:Unknown
+          Rebuilt_static_const.create (Code code) ~free_names:Unknown
         in
         (Bound_symbols.Pattern.code code_id) :: bound_symbols,
           static_const :: static_consts,
@@ -219,11 +219,11 @@ let simplify_static_consts dacc (bound_symbols : Bound_symbols.t)
             dacc)
   in
   let bound_symbols = Bound_symbols.create bound_symbols in
-  let static_consts = Static_const_with_free_names.Group.create static_consts in
+  let static_consts = Rebuilt_static_const.Group.create static_consts in
   (* We now collect together all of the closures, from all of the sets
      being defined, and simplify them together. *)
   let closure_bound_names_all_sets, all_sets_of_closures_and_symbols =
-    Static_const_with_free_names.Group.match_against_bound_symbols
+    Rebuilt_static_const.Group.match_against_bound_symbols
       static_consts bound_symbols
       ~init:([], [])
       ~code:(fun acc _ _ -> acc)
@@ -252,5 +252,5 @@ let simplify_static_consts dacc (bound_symbols : Bound_symbols.t)
   (* The ordering of these lists doesn't matter as they will go through
      [Sort_lifted_constants] before the terms are constructed. *)
   Bound_symbols.concat bound_symbols bound_symbols',
-    Static_const_with_free_names.Group.concat static_consts static_consts',
+    Rebuilt_static_const.Group.concat static_consts static_consts',
     dacc

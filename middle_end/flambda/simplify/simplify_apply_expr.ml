@@ -306,7 +306,7 @@ let simplify_direct_partial_application ~simplify_expr dacc apply
     in
     let defining_expr =
       LC.create_code code_id
-        (Static_const_with_free_names.create (Code code) ~free_names:Unknown)
+        (Rebuilt_static_const.create (Code code) ~free_names:Unknown)
     in
     let dummy_defining_expr =
       (* We should not add the real piece of code in the lifted constant.
@@ -317,7 +317,7 @@ let simplify_direct_partial_application ~simplify_expr dacc apply
          increased unnecessarily. *)
       let code = Code.make_deleted code in
       LC.create_code code_id
-        (Static_const_with_free_names.create (Code code) ~free_names:Unknown)
+        (Rebuilt_static_const.create (Code code) ~free_names:Unknown)
     in
     let dacc =
       DA.add_lifted_constant dacc dummy_defining_expr

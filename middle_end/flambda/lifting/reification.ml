@@ -73,7 +73,7 @@ let lift dacc ty ~bound_to static_const =
       let dacc =
         let denv = DA.denv dacc in
         LC.create_block_like symbol
-          (Static_const_with_free_names.create static_const
+          (Rebuilt_static_const.create static_const
             ~free_names:(Known free_names))
           denv
           ~symbol_projections

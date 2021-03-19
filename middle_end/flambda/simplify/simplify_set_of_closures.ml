@@ -687,7 +687,7 @@ let simplify_and_lift_set_of_closures dacc ~closure_bound_vars_inverse
       ~f:(fun dacc (code_id, code) ->
         let lifted_constant =
           LC.create_code code_id
-            (Static_const_with_free_names.create (Code code)
+            (Rebuilt_static_const.create (Code code)
               ~free_names:Unknown)
         in
         DA.add_lifted_constant dacc lifted_constant
@@ -699,7 +699,7 @@ let simplify_and_lift_set_of_closures dacc ~closure_bound_vars_inverse
       denv
       ~closure_symbols_with_types
       ~symbol_projections
-      (Static_const_with_free_names.create (Set_of_closures set_of_closures)
+      (Rebuilt_static_const.create (Set_of_closures set_of_closures)
         ~free_names:(Known (Set_of_closures.free_names set_of_closures)))
   in
   let dacc =
@@ -761,7 +761,7 @@ let simplify_non_lifted_set_of_closures0 dacc bound_vars ~closure_bound_vars
     Code_id.Lmap.fold (fun code_id code lifted_constants ->
         let lifted_constant =
           LC.create_code code_id
-            (Static_const_with_free_names.create (Code code)
+            (Rebuilt_static_const.create (Code code)
               ~free_names:Unknown)
         in
         lifted_constant :: lifted_constants)
@@ -955,15 +955,15 @@ let simplify_lifted_set_of_closures0 context ~closure_symbols
   let code_static_consts =
     ListLabels.map (Code_id.Lmap.bindings code)
       ~f:(fun (_code_id, code) ->
-        Static_const_with_free_names.create (Code code) ~free_names:Unknown)
+        Rebuilt_static_const.create (Code code) ~free_names:Unknown)
   in
   let set_of_closures_static_const =
-    Static_const_with_free_names.create (Set_of_closures set_of_closures)
+    Rebuilt_static_const.create (Set_of_closures set_of_closures)
       ~free_names:(Known (Set_of_closures.free_names set_of_closures))
   in
   let static_consts =
     set_of_closures_static_const :: code_static_consts
-    |> Static_const_with_free_names.Group.create
+    |> Rebuilt_static_const.Group.create
   in
   bound_symbols, static_consts, dacc
 
@@ -1012,8 +1012,8 @@ let simplify_lifted_sets_of_closures dacc ~all_sets_of_closures_and_symbols
               [Bound_symbols.Pattern.set_of_closures closure_symbols]
           in
           let static_consts =
-            Static_const_with_free_names.Group.create
-              [Static_const_with_free_names.create
+            Rebuilt_static_const.Group.create
+              [Rebuilt_static_const.create
                 (Set_of_closures set_of_closures)
                 ~free_names:
                   (Known (Set_of_closures.free_names set_of_closures))]
@@ -1028,11 +1028,11 @@ let simplify_lifted_sets_of_closures dacc ~all_sets_of_closures_and_symbols
       (* The order doesn't matter here -- see comment in
          [Simplify_static_const] where this function is called from. *)
       let static_const_group =
-        Static_const_with_free_names.Group.concat
+        Rebuilt_static_const.Group.concat
           static_consts static_consts_acc
       in
       Bound_symbols.concat patterns patterns_acc, static_const_group, dacc)
-    (Bound_symbols.empty, Static_const_with_free_names.Group.empty, dacc)
+    (Bound_symbols.empty, Rebuilt_static_const.Group.empty, dacc)
     all_sets_of_closures_and_symbols
     closure_bound_names_inside_all_sets
     closure_elements_and_types_all_sets

@@ -198,10 +198,10 @@ let create_raw_let_symbol uacc bound_symbols scoping_rule static_consts ~body =
      indicate the free names of [body]. *)
   let bindable = Bindable_let_bound.symbols bound_symbols scoping_rule in
   let free_names_of_static_consts =
-    Static_const_with_free_names.Group.free_names static_consts
+    Rebuilt_static_const.Group.free_names static_consts
   in
   let defining_expr, cost_metrics_of_defining_expr =
-    let static_consts = Static_const_with_free_names.Group.consts static_consts in
+    let static_consts = Rebuilt_static_const.Group.consts static_consts in
     Named.create_static_consts static_consts, Cost_metrics.static_consts static_consts
   in
   let free_names_of_body = UA.name_occurrences uacc in
@@ -229,7 +229,7 @@ let create_raw_let_symbol uacc bound_symbols scoping_rule static_consts ~body =
   Expr.create_let let_expr, uacc
 
 let create_let_symbol0 uacc code_age_relation (bound_symbols : Bound_symbols.t)
-      (static_consts : Static_const_with_free_names.Group.t) ~body =
+      (static_consts : Rebuilt_static_const.Group.t) ~body =
   (* Upon entry to this function, [UA.name_occurrences uacc] must precisely
      indicate the free names of [body]. *)
   let free_names_after = UA.name_occurrences uacc in
@@ -258,10 +258,10 @@ let create_let_symbol0 uacc code_age_relation (bound_symbols : Bound_symbols.t)
            probably require a proper analysis. *)
         let code_ids_static_consts =
           ListLabels.fold_left
-            (Static_const_with_free_names.Group.to_list static_consts)
+            (Rebuilt_static_const.Group.to_list static_consts)
             ~init:Code_id.Set.empty
             ~f:(fun code_ids static_const ->
-              Static_const_with_free_names.free_names static_const
+              Rebuilt_static_const.free_names static_const
               |> Name_occurrences.code_ids
               |> Code_id.Set.union code_ids)
         in
@@ -298,10 +298,10 @@ let create_let_symbol0 uacc code_age_relation (bound_symbols : Bound_symbols.t)
     let static_consts =
       if not will_bind_code then static_consts
       else
-        Static_const_with_free_names.Group.map static_consts
+        Rebuilt_static_const.Group.map static_consts
           ~f:(fun static_const ->
             match
-              Static_const_with_free_names.const static_const
+              Rebuilt_static_const.const static_const
               |> Static_const.to_code
             with
             | Some code
@@ -310,7 +310,7 @@ let create_let_symbol0 uacc code_age_relation (bound_symbols : Bound_symbols.t)
               let static_const : Static_const.t =
                 Code (Code.make_deleted code)
               in
-              Static_const_with_free_names.create static_const
+              Rebuilt_static_const.create static_const
                 ~free_names:Unknown
             | Some _ | None -> static_const)
     in
@@ -320,13 +320,13 @@ let create_let_symbol0 uacc code_age_relation (bound_symbols : Bound_symbols.t)
     let uacc =
       if not will_bind_code then uacc
       else
-        Static_const_with_free_names.Group.pieces_of_code static_consts
+        Rebuilt_static_const.Group.pieces_of_code static_consts
         |> UA.remember_code_for_cmx uacc
     in
     expr, uacc
 
 let remove_unused_closure_vars uacc static_const =
-  match Static_const_with_free_names.const static_const with
+  match Rebuilt_static_const.const static_const with
   | Set_of_closures set_of_closures ->
     let name_occurrences = UA.used_closure_vars uacc in
     let closure_vars = Set_of_closures.closure_elements set_of_closures in
@@ -339,7 +339,7 @@ let remove_unused_closure_vars uacc static_const =
       Set_of_closures.create (Set_of_closures.function_decls set_of_closures)
         ~closure_elements
     in
-    Static_const_with_free_names.create (Set_of_closures set_of_closures)
+    Rebuilt_static_const.create (Set_of_closures set_of_closures)
       ~free_names:(Known (Set_of_closures.free_names set_of_closures))
   | Code _
   | Block _
@@ -357,7 +357,7 @@ let create_let_symbols uacc (scoping_rule : Symbol_scoping_rule.t)
   let bound_symbols = LC.bound_symbols lifted_constant in
   let symbol_projections = LC.symbol_projections lifted_constant in
   let static_consts =
-    Static_const_with_free_names.Group.map (LC.defining_exprs lifted_constant)
+    Rebuilt_static_const.Group.map (LC.defining_exprs lifted_constant)
       ~f:(remove_unused_closure_vars uacc)
   in
   let expr, uacc =
@@ -372,7 +372,7 @@ let create_let_symbols uacc (scoping_rule : Symbol_scoping_rule.t)
       in
       let uacc =
         (LC.defining_exprs lifted_constant)
-        |> Static_const_with_free_names.Group.pieces_of_code
+        |> Rebuilt_static_const.Group.pieces_of_code
         |> UA.remember_code_for_cmx uacc
       in
       expr, uacc

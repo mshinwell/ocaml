@@ -41,18 +41,18 @@ module Definition : sig
 
   val descr : t -> descr
 
-  val defining_expr : t -> Static_const_with_free_names.t
+  val defining_expr : t -> Rebuilt_static_const.t
 
   val denv : t -> Downwards_env.t option
 
-  val code : Code_id.t -> Static_const_with_free_names.t -> t
+  val code : Code_id.t -> Rebuilt_static_const.t -> t
 
   val set_of_closures
      : Downwards_env.t
     -> closure_symbols_with_types
          : (Symbol.t * Flambda_type.t) Closure_id.Lmap.t
     -> symbol_projections:Symbol_projection.t Variable.Map.t
-    -> Static_const_with_free_names.t
+    -> Rebuilt_static_const.t
     -> t
 
   val block_like
@@ -60,7 +60,7 @@ module Definition : sig
     -> Symbol.t
     -> Flambda_type.t
     -> symbol_projections:Symbol_projection.t Variable.Map.t
-    -> Static_const_with_free_names.t
+    -> Rebuilt_static_const.t
     -> t
 
   val bound_symbols : t -> Bound_symbols.t
@@ -79,7 +79,7 @@ val print : Format.formatter -> t -> unit
 val create_block_like
    : Symbol.t
   -> symbol_projections:Symbol_projection.t Variable.Map.t
-  -> Static_const_with_free_names.t
+  -> Rebuilt_static_const.t
   -> Downwards_env.t
   -> Flambda_type.t
   -> t
@@ -88,17 +88,17 @@ val create_set_of_closures
    : Downwards_env.t
   -> closure_symbols_with_types:(Symbol.t * Flambda_type.t) Closure_id.Lmap.t
   -> symbol_projections:Symbol_projection.t Variable.Map.t
-  -> Static_const_with_free_names.t
+  -> Rebuilt_static_const.t
   -> t
 
 val create_code
    : Code_id.t
-  -> Static_const_with_free_names.t
+  -> Rebuilt_static_const.t
   -> t
 
 val definitions : t -> Definition.t list
 val bound_symbols : t -> Bound_symbols.t
-val defining_exprs : t -> Static_const_with_free_names.Group.t
+val defining_exprs : t -> Rebuilt_static_const.Group.t
 val types_of_symbols : t -> (Downwards_env.t * Flambda_type.t) Symbol.Map.t
 val symbol_projections : t -> Symbol_projection.t Variable.Map.t
 

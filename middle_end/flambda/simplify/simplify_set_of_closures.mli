@@ -37,4 +37,4 @@ val simplify_lifted_sets_of_closures
     (Symbol.t Closure_id.Lmap.t * Set_of_closures.t) list
   -> closure_bound_names_all_sets:Name_in_binding_pos.t Closure_id.Map.t list
   -> simplify_toplevel:Simplify_common.simplify_toplevel
-  -> Bound_symbols.t * Static_const_with_free_names.Group.t * Downwards_acc.t
+  -> Bound_symbols.t * Rebuilt_static_const.Group.t * Downwards_acc.t

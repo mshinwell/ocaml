@@ -155,7 +155,7 @@ let add_to_denv ?maybe_already_defined denv lifted =
     ~f:(fun denv lifted_constant ->
       let pieces_of_code =
         LC.defining_exprs lifted_constant
-        |> Static_const_with_free_names.Group.pieces_of_code
+        |> Rebuilt_static_const.Group.pieces_of_code
       in
       Code_id.Map.fold (fun code_id code denv ->
           match Code.params_and_body code with

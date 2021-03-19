@@ -5307,7 +5307,7 @@ middle_end/flambda/lifting/lifted_constant.cmo : \
     lambda/tag.cmi \
     middle_end/flambda/terms/symbol_projection.cmi \
     middle_end/flambda/compilenv_deps/symbol.cmi \
-    middle_end/flambda/simplify/static_const_with_free_names.cmi \
+    middle_end/flambda/simplify/rebuilt_static_const.cmi \
     middle_end/flambda/basic/simple.cmi \
     middle_end/flambda/terms/set_of_closures.cmi \
     middle_end/flambda/naming/name_occurrences.cmi \
@@ -5330,7 +5330,7 @@ middle_end/flambda/lifting/lifted_constant.cmx : \
     lambda/tag.cmx \
     middle_end/flambda/terms/symbol_projection.cmx \
     middle_end/flambda/compilenv_deps/symbol.cmx \
-    middle_end/flambda/simplify/static_const_with_free_names.cmx \
+    middle_end/flambda/simplify/rebuilt_static_const.cmx \
     middle_end/flambda/basic/simple.cmx \
     middle_end/flambda/terms/set_of_closures.cmx \
     middle_end/flambda/naming/name_occurrences.cmx \
@@ -5349,7 +5349,7 @@ middle_end/flambda/lifting/lifted_constant.cmi : \
     middle_end/flambda/compilenv_deps/variable.cmi \
     middle_end/flambda/terms/symbol_projection.cmi \
     middle_end/flambda/compilenv_deps/symbol.cmi \
-    middle_end/flambda/simplify/static_const_with_free_names.cmi \
+    middle_end/flambda/simplify/rebuilt_static_const.cmi \
     middle_end/flambda/basic/simple.cmi \
     middle_end/flambda/naming/name_occurrences.cmi \
     middle_end/flambda/types/flambda_type.cmi \
@@ -5359,7 +5359,7 @@ middle_end/flambda/lifting/lifted_constant.cmi : \
     middle_end/flambda/terms/bound_symbols.cmi
 middle_end/flambda/lifting/lifted_constant_state.cmo : \
     middle_end/flambda/compilenv_deps/symbol.cmi \
-    middle_end/flambda/simplify/static_const_with_free_names.cmi \
+    middle_end/flambda/simplify/rebuilt_static_const.cmi \
     middle_end/flambda/basic/name.cmi \
     middle_end/flambda/lifting/lifted_constant.cmi \
     middle_end/flambda/types/flambda_type.cmi \
@@ -5369,7 +5369,7 @@ middle_end/flambda/lifting/lifted_constant_state.cmo : \
     middle_end/flambda/lifting/lifted_constant_state.cmi
 middle_end/flambda/lifting/lifted_constant_state.cmx : \
     middle_end/flambda/compilenv_deps/symbol.cmx \
-    middle_end/flambda/simplify/static_const_with_free_names.cmx \
+    middle_end/flambda/simplify/rebuilt_static_const.cmx \
     middle_end/flambda/basic/name.cmx \
     middle_end/flambda/lifting/lifted_constant.cmx \
     middle_end/flambda/types/flambda_type.cmx \
@@ -5385,7 +5385,7 @@ middle_end/flambda/lifting/reification.cmo : \
     middle_end/flambda/compilenv_deps/variable.cmi \
     middle_end/flambda/naming/var_in_binding_pos.cmi \
     middle_end/flambda/compilenv_deps/symbol.cmi \
-    middle_end/flambda/simplify/static_const_with_free_names.cmi \
+    middle_end/flambda/simplify/rebuilt_static_const.cmi \
     middle_end/flambda/simplify/simplify_import.cmi \
     middle_end/flambda/simplify/basic/simplified_named.cmi \
     middle_end/flambda/basic/simple.cmi \
@@ -5401,7 +5401,7 @@ middle_end/flambda/lifting/reification.cmx : \
     middle_end/flambda/compilenv_deps/variable.cmx \
     middle_end/flambda/naming/var_in_binding_pos.cmx \
     middle_end/flambda/compilenv_deps/symbol.cmx \
-    middle_end/flambda/simplify/static_const_with_free_names.cmx \
+    middle_end/flambda/simplify/rebuilt_static_const.cmx \
     middle_end/flambda/simplify/simplify_import.cmx \
     middle_end/flambda/simplify/basic/simplified_named.cmx \
     middle_end/flambda/basic/simple.cmx \
@@ -6044,7 +6044,7 @@ middle_end/flambda/simplify/expr_builder.cmo : \
     middle_end/flambda/basic/symbol_scoping_rule.cmi \
     middle_end/flambda/terms/symbol_projection.cmi \
     lambda/switch.cmi \
-    middle_end/flambda/simplify/static_const_with_free_names.cmi \
+    middle_end/flambda/simplify/rebuilt_static_const.cmi \
     middle_end/flambda/simplify/basic/simplified_named.cmi \
     middle_end/flambda/basic/simple.cmi \
     middle_end/flambda/terms/set_of_closures.cmi \
@@ -6074,7 +6074,7 @@ middle_end/flambda/simplify/expr_builder.cmx : \
     middle_end/flambda/basic/symbol_scoping_rule.cmx \
     middle_end/flambda/terms/symbol_projection.cmx \
     lambda/switch.cmx \
-    middle_end/flambda/simplify/static_const_with_free_names.cmx \
+    middle_end/flambda/simplify/rebuilt_static_const.cmx \
     middle_end/flambda/simplify/basic/simplified_named.cmx \
     middle_end/flambda/basic/simple.cmx \
     middle_end/flambda/terms/set_of_closures.cmx \
@@ -6186,7 +6186,7 @@ middle_end/flambda/simplify/simplify_apply_expr.cmo : \
     middle_end/flambda/compilenv_deps/variable.cmi \
     middle_end/flambda/basic/var_within_closure.cmi \
     middle_end/flambda/naming/var_in_binding_pos.cmi \
-    middle_end/flambda/simplify/static_const_with_free_names.cmi \
+    middle_end/flambda/simplify/rebuilt_static_const.cmi \
     middle_end/flambda/simplify/simplify_import.cmi \
     middle_end/flambda/simplify/simplify_common.cmi \
     middle_end/flambda/basic/simple.cmi \
@@ -6219,7 +6219,7 @@ middle_end/flambda/simplify/simplify_apply_expr.cmx : \
     middle_end/flambda/compilenv_deps/variable.cmx \
     middle_end/flambda/basic/var_within_closure.cmx \
     middle_end/flambda/naming/var_in_binding_pos.cmx \
-    middle_end/flambda/simplify/static_const_with_free_names.cmx \
+    middle_end/flambda/simplify/rebuilt_static_const.cmx \
     middle_end/flambda/simplify/simplify_import.cmx \
     middle_end/flambda/simplify/simplify_common.cmx \
     middle_end/flambda/basic/simple.cmx \
@@ -6544,7 +6544,7 @@ middle_end/flambda/simplify/simplify_named.cmo : \
     middle_end/flambda/compilenv_deps/target_imm.cmi \
     middle_end/flambda/terms/symbol_projection.cmi \
     middle_end/flambda/compilenv_deps/symbol.cmi \
-    middle_end/flambda/simplify/static_const_with_free_names.cmi \
+    middle_end/flambda/simplify/rebuilt_static_const.cmi \
     middle_end/flambda/simplify/simplify_static_const.cmi \
     middle_end/flambda/simplify/simplify_set_of_closures.cmi \
     middle_end/flambda/simplify/simplify_primitive.cmi \
@@ -6569,7 +6569,7 @@ middle_end/flambda/simplify/simplify_named.cmx : \
     middle_end/flambda/compilenv_deps/target_imm.cmx \
     middle_end/flambda/terms/symbol_projection.cmx \
     middle_end/flambda/compilenv_deps/symbol.cmx \
-    middle_end/flambda/simplify/static_const_with_free_names.cmx \
+    middle_end/flambda/simplify/rebuilt_static_const.cmx \
     middle_end/flambda/simplify/simplify_static_const.cmx \
     middle_end/flambda/simplify/simplify_set_of_closures.cmx \
     middle_end/flambda/simplify/simplify_primitive.cmx \
@@ -6660,7 +6660,7 @@ middle_end/flambda/simplify/simplify_set_of_closures.cmo : \
     middle_end/flambda/naming/var_in_binding_pos.cmi \
     middle_end/flambda/terms/symbol_projection.cmi \
     middle_end/flambda/compilenv_deps/symbol.cmi \
-    middle_end/flambda/simplify/static_const_with_free_names.cmi \
+    middle_end/flambda/simplify/rebuilt_static_const.cmi \
     middle_end/flambda/simplify/basic/simplify_named_result.cmi \
     middle_end/flambda/simplify/simplify_import.cmi \
     middle_end/flambda/simplify/simplify_common.cmi \
@@ -6701,7 +6701,7 @@ middle_end/flambda/simplify/simplify_set_of_closures.cmx : \
     middle_end/flambda/naming/var_in_binding_pos.cmx \
     middle_end/flambda/terms/symbol_projection.cmx \
     middle_end/flambda/compilenv_deps/symbol.cmx \
-    middle_end/flambda/simplify/static_const_with_free_names.cmx \
+    middle_end/flambda/simplify/rebuilt_static_const.cmx \
     middle_end/flambda/simplify/basic/simplify_named_result.cmx \
     middle_end/flambda/simplify/simplify_import.cmx \
     middle_end/flambda/simplify/simplify_common.cmx \
@@ -6738,7 +6738,7 @@ middle_end/flambda/simplify/simplify_set_of_closures.cmx : \
     middle_end/flambda/simplify/simplify_set_of_closures.cmi
 middle_end/flambda/simplify/simplify_set_of_closures.cmi : \
     middle_end/flambda/compilenv_deps/symbol.cmi \
-    middle_end/flambda/simplify/static_const_with_free_names.cmi \
+    middle_end/flambda/simplify/rebuilt_static_const.cmi \
     middle_end/flambda/simplify/basic/simplify_named_result.cmi \
     middle_end/flambda/simplify/simplify_import.cmi \
     middle_end/flambda/simplify/simplify_common.cmi \
@@ -6772,7 +6772,7 @@ middle_end/flambda/simplify/simplify_simple.cmi : \
     middle_end/flambda/simplify/env/downwards_acc.cmi
 middle_end/flambda/simplify/simplify_static_const.cmo : \
     lambda/tag.cmi \
-    middle_end/flambda/simplify/static_const_with_free_names.cmi \
+    middle_end/flambda/simplify/rebuilt_static_const.cmi \
     middle_end/flambda/simplify/simplify_set_of_closures.cmi \
     middle_end/flambda/simplify/simplify_import.cmi \
     middle_end/flambda/basic/simple.cmi \
@@ -6787,7 +6787,7 @@ middle_end/flambda/simplify/simplify_static_const.cmo : \
     middle_end/flambda/simplify/simplify_static_const.cmi
 middle_end/flambda/simplify/simplify_static_const.cmx : \
     lambda/tag.cmx \
-    middle_end/flambda/simplify/static_const_with_free_names.cmx \
+    middle_end/flambda/simplify/rebuilt_static_const.cmx \
     middle_end/flambda/simplify/simplify_set_of_closures.cmx \
     middle_end/flambda/simplify/simplify_import.cmx \
     middle_end/flambda/basic/simple.cmx \
@@ -6801,7 +6801,7 @@ middle_end/flambda/simplify/simplify_static_const.cmx : \
     middle_end/flambda/terms/bound_symbols.cmx \
     middle_end/flambda/simplify/simplify_static_const.cmi
 middle_end/flambda/simplify/simplify_static_const.cmi : \
-    middle_end/flambda/simplify/static_const_with_free_names.cmi \
+    middle_end/flambda/simplify/rebuilt_static_const.cmi \
     middle_end/flambda/simplify/simplify_common.cmi \
     middle_end/flambda/terms/flambda.cmi \
     middle_end/flambda/simplify/env/downwards_acc.cmi \
@@ -6933,21 +6933,21 @@ middle_end/flambda/simplify/simplify_variadic_primitive.cmi : \
     middle_end/flambda/terms/flambda_primitive.cmi \
     middle_end/flambda/simplify/env/downwards_acc.cmi \
     lambda/debuginfo.cmi
-middle_end/flambda/simplify/static_const_with_free_names.cmo : \
+middle_end/flambda/simplify/rebuilt_static_const.cmo : \
     middle_end/flambda/types/basic/or_unknown.cmi \
     middle_end/flambda/naming/name_occurrences.cmi \
     utils/misc.cmi \
     middle_end/flambda/terms/flambda.cmi \
     middle_end/flambda/basic/code_id.cmi \
-    middle_end/flambda/simplify/static_const_with_free_names.cmi
-middle_end/flambda/simplify/static_const_with_free_names.cmx : \
+    middle_end/flambda/simplify/rebuilt_static_const.cmi
+middle_end/flambda/simplify/rebuilt_static_const.cmx : \
     middle_end/flambda/types/basic/or_unknown.cmx \
     middle_end/flambda/naming/name_occurrences.cmx \
     utils/misc.cmx \
     middle_end/flambda/terms/flambda.cmx \
     middle_end/flambda/basic/code_id.cmx \
-    middle_end/flambda/simplify/static_const_with_free_names.cmi
-middle_end/flambda/simplify/static_const_with_free_names.cmi : \
+    middle_end/flambda/simplify/rebuilt_static_const.cmi
+middle_end/flambda/simplify/rebuilt_static_const.cmi : \
     middle_end/flambda/compilenv_deps/symbol.cmi \
     middle_end/flambda/terms/set_of_closures.cmi \
     middle_end/flambda/types/basic/or_unknown.cmi \
