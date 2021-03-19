@@ -218,7 +218,8 @@ let simplify_named0 dacc (bindable_let_bound : Bindable_let_bound.t)
     let { Bindable_let_bound. bound_symbols; scoping_rule = _; } =
       Bindable_let_bound.must_be_symbols bindable_let_bound
     in
-    if not (DE.at_unit_toplevel (DA.denv dacc)) then begin
+    let binds_symbols = Bound_symbols.binds_symbols bound_symbols in
+    if binds_symbols && not (DE.at_unit_toplevel (DA.denv dacc)) then begin
       Misc.fatal_errorf "[Let] binding symbols is only allowed at the toplevel \
           of compilation units (not even at the toplevel of function \
           bodies):@ %a@ =@ %a"

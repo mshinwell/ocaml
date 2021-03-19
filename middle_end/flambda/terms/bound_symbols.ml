@@ -76,6 +76,11 @@ module Pattern = struct
     | Code _ -> true
     | Set_of_closures _ | Block_like _ -> false
 
+  let binds_symbols t =
+    match t with
+    | Code _ -> false
+    | Set_of_closures _ | Block_like _ -> true
+
   let closure_symbols_being_defined t =
     match t with
     | Code _ | Block_like _ -> Symbol.Set.empty
@@ -157,6 +162,9 @@ let code_being_defined t =
 
 let binds_code t =
   List.exists Pattern.binds_code t
+
+let binds_symbols t =
+  List.exists Pattern.binds_symbols t
 
 let everything_being_defined t =
   List.map Pattern.everything_being_defined t

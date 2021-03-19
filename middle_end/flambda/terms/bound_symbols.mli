@@ -47,6 +47,8 @@ val code_being_defined : t -> Code_id.Set.t
 
 val binds_code : t -> bool
 
+val binds_symbols : t -> bool
+
 val non_closure_symbols_being_defined : t -> Symbol.Set.t
 
 val closure_symbols_being_defined : t -> Symbol.Set.t
