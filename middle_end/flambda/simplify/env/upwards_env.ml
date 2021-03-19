@@ -80,9 +80,11 @@ let resolve_exn_continuation_aliases t exn_cont =
 
 let continuation_arity t cont =
   match find_continuation t cont with
-  | Other { arity; handler = _; }
-  | Unreachable { arity; }
-  | Linearly_used_and_inlinable { arity; _ } -> arity
+  | Linearly_used_and_inlinable { params; _ }
+  | Non_inlinable { params; _ } ->
+    Kinded_parameter.List.arity_with_subkinds params
+  | Toplevel_or_function_return_or_exn_continuation { arity; }
+  | Unreachable { arity; } -> arity
 
 let add_continuation0 t cont scope cont_in_env =
   let continuations =
@@ -92,11 +94,8 @@ let add_continuation0 t cont scope cont_in_env =
     continuations;
   }
 
-let add_continuation t cont scope arity =
-  add_continuation0 t cont scope (Other { arity; handler = None; })
-
-let add_continuation_with_handler t cont scope arity handler =
-  add_continuation0 t cont scope (Other { arity; handler = Some handler; })
+let add_non_inlinable_continuation t cont scope ~params ~handler =
+  add_continuation0 t cont scope (Non_inlinable { params; handler; })
 
 let add_unreachable_continuation t cont scope arity =
   add_continuation0 t cont scope (Unreachable { arity; })
@@ -141,18 +140,24 @@ let add_continuation_alias t cont arity ~alias_for =
     continuation_aliases;
   }
 
-let add_linearly_used_inlinable_continuation t cont scope arity ~params
+let add_linearly_used_inlinable_continuation t cont scope ~params
       ~handler ~free_names_of_handler ~cost_metrics_of_handler =
   add_continuation0 t cont scope
-    (Linearly_used_and_inlinable { arity; handler; free_names_of_handler;
+    (Linearly_used_and_inlinable { handler; free_names_of_handler;
       params; cost_metrics_of_handler })
+
+let add_return_continuation t cont scope arity =
+  add_continuation0 t cont scope
+    (Toplevel_or_function_return_or_exn_continuation { arity; })
 
 let add_exn_continuation t exn_cont scope =
   (* CR mshinwell: Think more about keeping these in both maps *)
   let continuations =
     let cont = Exn_continuation.exn_handler exn_cont in
     let cont_in_env : Continuation_in_env.t =
-      Other { arity = Exn_continuation.arity exn_cont; handler = None; }
+      Toplevel_or_function_return_or_exn_continuation {
+        arity = Exn_continuation.arity exn_cont;
+      }
     in
     Continuation.Map.add cont (scope, cont_in_env) t.continuations
   in
@@ -202,5 +207,6 @@ let delete_apply_cont_rewrite t cont =
 
 let will_inline_continuation t cont =
   match find_continuation t cont with
-  | Other _ | Unreachable _ -> false
   | Linearly_used_and_inlinable _ -> true
+  | Non_inlinable _ | Toplevel_or_function_return_or_exn_continuation _
+  | Unreachable _ -> false

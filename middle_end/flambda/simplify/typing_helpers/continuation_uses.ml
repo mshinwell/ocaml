@@ -163,8 +163,7 @@ Format.eprintf "%d uses for %a\n%!"
 Format.eprintf "Unknown at or later than %a\n%!"
   Scope.print (Scope.next definition_scope_level);
 *)
-    let handler_env, extra_params_and_args, is_single_inlinable_use,
-        is_single_use =
+    let handler_env, extra_params_and_args, is_single_inlinable_use =
       match use_envs_with_ids with
       | [use_env, _, Inlinable]
           when not (Continuation.is_exn t.continuation) ->
@@ -177,7 +176,7 @@ Format.eprintf "Unknown at or later than %a\n%!"
           LCS.add_to_denv ~maybe_already_defined:() use_env
             consts_lifted_during_body
         in
-        use_env, Continuation_extra_params_and_args.empty, true, true
+        use_env, Continuation_extra_params_and_args.empty, true
       | [] | [_, _, (Inlinable | Non_inlinable)]
       | (_, _, (Inlinable | Non_inlinable)) :: _ ->
         (* The lifted constants are put into the fork environment now because
@@ -274,16 +273,11 @@ Format.eprintf "The extra params and args are:@ %a\n%!"
             TE.with_code_age_relation handler_env
               code_age_relation_after_body)
         in
-        let is_single_use =
-          match uses with
-          | [_] -> true
-          | [] | _::_::_ -> false
-        in
         match use_envs_with_ids with
         | [_, _, Inlinable] -> assert false  (* handled above *)
         | [] | [_, _, Non_inlinable]
         | (_, _, (Inlinable | Non_inlinable)) :: _ ->
-          denv, extra_params_and_args, false, is_single_use
+          denv, extra_params_and_args, false
     in
     let arg_types_by_use_id =
       List.fold_left (fun args use ->
@@ -301,7 +295,6 @@ Format.eprintf "The extra params and args are:@ %a\n%!"
       arg_types_by_use_id;
       extra_params_and_args;
       is_single_inlinable_use;
-      is_single_use;
     }
 
 let get_typing_env_no_more_than_one_use t =

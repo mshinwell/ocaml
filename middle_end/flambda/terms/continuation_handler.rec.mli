@@ -81,19 +81,14 @@ val pattern_match_pair
 
 module Behaviour : sig
   type t = private
-    | Unreachable of { arity : Flambda_arity.With_subkinds.t; }
-    | Alias_for of {
-        arity : Flambda_arity.With_subkinds.t;
-        alias_for : Continuation.t;
-      }
-    | Unknown of { arity : Flambda_arity.With_subkinds.t; }
+    | Unreachable
+    | Alias_for of Continuation.t
+    | Unknown
 
   include Contains_ids.S with type t := t
 end
 
 val behaviour : t -> Behaviour.t
-
-val arity : t -> Flambda_arity.With_subkinds.t
 
 (** Whether the continuation is an exception handler.
 

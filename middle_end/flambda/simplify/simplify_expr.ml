@@ -48,7 +48,7 @@ and simplify_toplevel dacc expr ~return_continuation ~return_arity
   let expr, uacc =
     simplify_expr dacc expr ~down_to_up:(fun dacc ~rebuild ->
       let uenv =
-        UE.add_continuation UE.empty return_continuation
+        UE.add_return_continuation UE.empty return_continuation
           return_cont_scope return_arity
       in
       let uenv =

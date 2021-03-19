@@ -18,34 +18,22 @@
 
 module Behaviour = struct
   type t =
-    | Unreachable of { arity : Flambda_arity.With_subkinds.t; }
-    | Alias_for of {
-        arity : Flambda_arity.With_subkinds.t;
-        alias_for : Continuation.t;
-      }
-    | Unknown of { arity : Flambda_arity.With_subkinds.t; }
+    | Unreachable
+    | Alias_for of Continuation.t
+    | Unknown
 
   let apply_renaming t perm =
     match t with
-    | Unreachable { arity = _; }
-    | Unknown { arity = _; } -> t
-    | Alias_for { arity; alias_for; } ->
+    | Unreachable | Unknown -> t
+    | Alias_for alias_for ->
       let alias_for' = Renaming.apply_continuation perm alias_for in
       if alias_for == alias_for' then t
-      else Alias_for { arity; alias_for = alias_for'; }
-
-  let arity t =
-    match t with
-    | Unreachable { arity; }
-    | Unknown { arity; }
-    | Alias_for { arity; alias_for = _; } -> arity
+      else Alias_for alias_for'
 
   let all_ids_for_export t =
     match t with
-    | Unreachable { arity = _; }
-    | Unknown { arity = _; } -> Ids_for_export.empty
-    | Alias_for { arity = _; alias_for; } ->
-      Ids_for_export.singleton_continuation alias_for
+    | Unreachable | Unknown -> Ids_for_export.empty
+    | Alias_for alias_for -> Ids_for_export.singleton_continuation alias_for
 end
 
 module T0 = struct
@@ -107,27 +95,23 @@ let create params ~handler ~(free_names_of_handler : _ Or_unknown.t)
   let behaviour : Behaviour.t =
     (* CR-someday mshinwell: This could be replaced by a more sophisticated
        analysis, but for the moment we just use a simple syntactic check. *)
-    let arity = Kinded_parameter.List.arity_with_subkinds params in
     if is_exn_handler then
-      Unknown { arity; }
+      Unknown
     else
       match Expr.descr handler with
       | Apply_cont apply_cont ->
         begin match Apply_cont.trap_action apply_cont with
-        | Some _ -> Unknown { arity; }
+        | Some _ -> Unknown
         | None ->
           let args = Apply_cont.args apply_cont in
           let params = List.map KP.simple params in
           if Misc.Stdlib.List.compare Simple.compare args params = 0 then
-            Alias_for {
-              arity;
-              alias_for = Apply_cont.continuation apply_cont;
-            }
+            Alias_for (Apply_cont.continuation apply_cont)
           else
-            Unknown { arity; }
+            Unknown
         end
-      | Invalid Treat_as_unreachable -> Unreachable { arity; }
-      | _ -> Unknown { arity; }
+      | Invalid Treat_as_unreachable -> Unreachable
+      | _ -> Unknown
   in
   let t0 : T0.t =
     { num_normal_occurrences_of_params;
@@ -210,8 +194,6 @@ let print ppf t =
   print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
 let is_exn_handler t = t.is_exn_handler
-
-let arity t = Behaviour.arity t.behaviour
 
 let behaviour t = t.behaviour
 

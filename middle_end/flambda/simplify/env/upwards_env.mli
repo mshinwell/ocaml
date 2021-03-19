@@ -26,19 +26,12 @@ val invariant : t -> unit
 
 val print : Format.formatter -> t -> unit
 
-val add_continuation
+val add_non_inlinable_continuation
    : t
   -> Continuation.t
   -> Scope.t
-  -> Flambda_arity.With_subkinds.t
-  -> t
-
-val add_continuation_with_handler
-   : t
-  -> Continuation.t
-  -> Scope.t
-  -> Flambda_arity.With_subkinds.t
-  -> Continuation_handler.t
+  -> params:Kinded_parameter.t list
+  -> handler:Flambda.Expr.t Or_unknown.t
   -> t
 
 val add_unreachable_continuation
@@ -59,11 +52,17 @@ val add_linearly_used_inlinable_continuation
    : t
   -> Continuation.t
   -> Scope.t
-  -> Flambda_arity.With_subkinds.t  (* CR mshinwell: redundant *)
   -> params:Kinded_parameter.t list
   -> handler:Flambda.Expr.t
   -> free_names_of_handler:Name_occurrences.t
   -> cost_metrics_of_handler:Cost_metrics.t
+  -> t
+
+val add_return_continuation
+   : t
+  -> Continuation.t
+  -> Scope.t
+  -> Flambda_arity.With_subkinds.t
   -> t
 
 val add_exn_continuation

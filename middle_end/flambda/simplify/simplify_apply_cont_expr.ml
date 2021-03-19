@@ -102,7 +102,7 @@ let rebuild_apply_cont apply_cont ~args ~rewrite_id uacc ~after_rebuild =
       after_rebuild expr uacc
   in
   match UE.find_continuation uenv cont with
-  | Linearly_used_and_inlinable { arity = _; params; handler;
+  | Linearly_used_and_inlinable { params; handler;
       free_names_of_handler; cost_metrics_of_handler } ->
     (* We must not fail to inline here, since we've already decided that the
        relevant [Let_cont] is no longer needed. *)
@@ -113,7 +113,8 @@ let rebuild_apply_cont apply_cont ~args ~rewrite_id uacc ~after_rebuild =
        basis that there wouldn't be any opportunity to collect any backtrace,
        even if the [Apply_cont] were compiled as "raise". *)
     after_rebuild (Expr.create_invalid ()) uacc
-  | Other { arity = _; handler = _; } ->
+  | Non_inlinable _
+  | Toplevel_or_function_return_or_exn_continuation _ ->
     create_apply_cont ~apply_cont_to_expr:(fun apply_cont ->
       Expr.create_apply_cont apply_cont,
       Cost_metrics.apply_cont apply_cont,

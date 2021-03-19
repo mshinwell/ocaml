@@ -136,7 +136,7 @@ let simplify_one_continuation_handler ~simplify_expr dacc cont
 
 let rebuild_non_recursive_let_cont_handler cont
       (uses : Continuation_env_and_param_types.t) ~params ~handler
-      ~free_names_of_handler ~is_single_inlinable_use ~is_single_use scope
+      ~free_names_of_handler ~is_single_inlinable_use scope
       (extra_params_and_args : EPA.t) cont_handler uacc ~after_rebuild =
   let uenv = UA.uenv uacc in
   let uenv =
@@ -154,22 +154,21 @@ let rebuild_non_recursive_let_cont_handler cont
         (* Note that [Continuation_uses] won't set [is_single_inlinable_use]
            if [cont] is an exception handler. *)
         assert (not (CH.is_exn_handler cont_handler));
-        let arity = CH.arity cont_handler in
         (* We pass the parameters and the handler expression, rather than
            the [CH.t], to avoid re-opening the name abstraction. *)
-        UE.add_linearly_used_inlinable_continuation uenv cont scope arity
+        UE.add_linearly_used_inlinable_continuation uenv cont scope
           ~params ~handler ~free_names_of_handler ~cost_metrics_of_handler:(UA.cost_metrics uacc)
       end else begin
         match CH.behaviour cont_handler with
-        | Unreachable { arity; } ->
+        | Unreachable ->
+          let arity = KP.List.arity_with_subkinds params in
           UE.add_unreachable_continuation uenv cont scope arity
-        | Alias_for { arity; alias_for; } ->
+        | Alias_for alias_for ->
+          let arity = KP.List.arity_with_subkinds params in
           UE.add_continuation_alias uenv cont arity ~alias_for
-        | Unknown { arity; } ->
-          if is_single_use then
-            UE.add_continuation_with_handler uenv cont scope arity cont_handler
-          else
-            UE.add_continuation uenv cont scope arity
+        | Unknown ->
+          UE.add_non_inlinable_continuation uenv cont scope ~params
+            ~handler:(Known handler)
       end
   in
   (* The parameters are removed from the free name information as they are no
@@ -226,10 +225,10 @@ let simplify_non_recursive_let_cont_handler ~simplify_expr
       ~rebuild:(fun uacc ~after_rebuild ->
         rebuild_non_recursive_let_cont_handler cont uses ~params
           ~handler ~free_names_of_handler:Name_occurrences.empty
-          ~is_single_inlinable_use:false ~is_single_use:false scope
+          ~is_single_inlinable_use:false scope
           EPA.empty cont_handler uacc ~after_rebuild)
   | Uses { handler_env; arg_types_by_use_id; extra_params_and_args;
-           is_single_inlinable_use; is_single_use; } ->
+           is_single_inlinable_use; } ->
     let handler_env, extra_params_and_args =
       (* Unbox the parameters of the continuation if possible.
          Any such unboxing will induce a rewrite (or wrapper) on
@@ -302,7 +301,7 @@ let simplify_non_recursive_let_cont_handler ~simplify_expr
             rebuild uacc ~after_rebuild:(fun cont_handler ~params
                   ~handler ~free_names_of_handler uacc ->
               rebuild_non_recursive_let_cont_handler cont uses ~params ~handler
-                ~free_names_of_handler ~is_single_inlinable_use ~is_single_use
+                ~free_names_of_handler ~is_single_inlinable_use
                 scope extra_params_and_args cont_handler uacc ~after_rebuild)))
 
 let simplify_non_recursive_let_cont ~simplify_expr dacc non_rec ~down_to_up =
@@ -507,21 +506,21 @@ let simplify_non_recursive_let_cont ~simplify_expr dacc non_rec ~down_to_up =
                     in
                     after_rebuild expr uacc)))))))
 
-let rebuild_recursive_let_cont_handlers cont arity ~original_cont_scope_level
-      handler uacc ~after_rebuild =
+let rebuild_recursive_let_cont_handlers cont ~params ~original_cont_scope_level
+      cont_handler ~handler uacc ~after_rebuild =
   let uacc =
     UA.map_uenv uacc ~f:(fun uenv ->
-      UE.add_continuation_with_handler uenv cont original_cont_scope_level
-        arity handler)
+      UE.add_non_inlinable_continuation uenv cont original_cont_scope_level
+        ~params ~handler:(Known handler))
   in
-  let handlers = Continuation.Map.singleton cont handler in
+  let handlers = Continuation.Map.singleton cont cont_handler in
   after_rebuild handlers uacc
 
 (* This only takes one handler at present since we don't yet support
    simplification of multiple recursive handlers. *)
 let simplify_recursive_let_cont_handlers ~simplify_expr
       ~denv_before_body ~dacc_after_body
-      cont params ~handler cont_handler ~prior_lifted_constants arity
+      cont params ~handler cont_handler ~prior_lifted_constants
       ~original_cont_scope_level ~down_to_up =
   let denv, _arg_types =
     (* XXX These don't have the same scope level as the
@@ -555,14 +554,15 @@ let simplify_recursive_let_cont_handlers ~simplify_expr
       down_to_up dacc ~rebuild:(fun uacc ~after_rebuild ->
         let uacc =
           UA.map_uenv uacc ~f:(fun uenv ->
-            UE.add_continuation uenv cont original_cont_scope_level arity)
+            UE.add_non_inlinable_continuation uenv cont
+              original_cont_scope_level ~params ~handler:Unknown)
         in
         let name_occurrences_subsequent_exprs =
           UA.name_occurrences uacc
         in
         let uacc = UA.clear_name_occurrences uacc in
         rebuild_handler uacc ~after_rebuild:(fun cont_handler ~params
-              ~handler:_ ~free_names_of_handler:_ uacc ->
+              ~handler ~free_names_of_handler:_ uacc ->
           let uacc = UA.add_free_names uacc name_occurrences_subsequent_exprs in
           (* The parameters are removed from the free name information as they
              are no longer in scope. *)
@@ -576,8 +576,9 @@ let simplify_recursive_let_cont_handlers ~simplify_expr
             in
             UA.with_name_occurrences uacc ~name_occurrences
           in
-          rebuild_recursive_let_cont_handlers cont arity
-            ~original_cont_scope_level cont_handler uacc ~after_rebuild)))
+          rebuild_recursive_let_cont_handlers cont ~params
+            ~original_cont_scope_level cont_handler ~handler uacc
+            ~after_rebuild)))
 
 let rebuild_recursive_let_cont ~body handlers ~cost_metrics_of_handlers
       ~uenv_without_cont uacc ~after_rebuild : Expr.t * UA.t =
@@ -611,7 +612,6 @@ let simplify_recursive_let_cont ~simplify_expr dacc recs ~down_to_up
       | [c] -> c
     in
     CH.pattern_match cont_handler ~f:(fun params ~handler ->
-      let arity = KP.List.arity_with_subkinds params in
       let dacc =
         DA.map_denv dacc ~f:DE.increment_continuation_scope_level
       in
@@ -626,7 +626,7 @@ let simplify_recursive_let_cont ~simplify_expr dacc recs ~down_to_up
         ~down_to_up:(fun dacc_after_body ~rebuild:rebuild_body ->
           simplify_recursive_let_cont_handlers ~simplify_expr ~denv_before_body
             ~dacc_after_body cont params ~handler cont_handler
-            ~prior_lifted_constants arity ~original_cont_scope_level
+            ~prior_lifted_constants ~original_cont_scope_level
             ~down_to_up:(fun dacc ~rebuild:rebuild_handlers ->
               down_to_up dacc ~rebuild:(fun uacc ~after_rebuild ->
                 let uenv_without_cont = UA.uenv uacc in

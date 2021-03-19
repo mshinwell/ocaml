@@ -373,15 +373,10 @@ end and Continuation_handler : sig
 
   module Behaviour : sig
     type t = private
-      | Unreachable of { arity : Flambda_arity.With_subkinds.t; }
-      | Alias_for of {
-          arity : Flambda_arity.With_subkinds.t;
-          alias_for : Continuation.t;
-        }
-      | Unknown of { arity : Flambda_arity.With_subkinds.t; }
+      | Unreachable
+      | Alias_for of Continuation.t
+      | Unknown
   end
-
-  val arity : t -> Flambda_arity.With_subkinds.t
 
   val behaviour : t -> Behaviour.t
 end and Recursive_let_cont_handlers : sig

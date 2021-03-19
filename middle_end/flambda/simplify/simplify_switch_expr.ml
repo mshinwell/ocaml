@@ -38,23 +38,24 @@ let rebuild_switch ~simplify_let dacc ~arms ~scrutinee ~scrutinee_ty uacc
             else
               let cont = Apply_cont.continuation action in
               match UE.find_continuation (UA.uenv uacc) cont with
-              | Linearly_used_and_inlinable { arity = _; handler;
-                  free_names_of_handler = _; params; cost_metrics_of_handler = _ } ->
+              | Linearly_used_and_inlinable { handler;
+                  free_names_of_handler = _; params;
+                  cost_metrics_of_handler = _ } ->
                 assert (List.length params = 0);
                 begin match Expr.descr handler with
                 | Apply_cont action -> Some action
                 | Let _ | Let_cont _ | Apply _
                 | Switch _ | Invalid _ -> Some action
                 end
-              | Other { arity = _; handler = Some handler; } ->
-                Continuation_handler.pattern_match handler
-                  ~f:(fun params ~handler ->
-                    assert (List.length params = 0);
-                    match Expr.descr handler with
-                    | Apply_cont action -> Some action
-                    | Let _ | Let_cont _ | Apply _
-                    | Switch _ | Invalid _ -> Some action)
-              | Other _ -> Some action
+              | Non_inlinable { params; handler = Known handler; } ->
+                assert (List.length params = 0);
+                begin match Expr.descr handler with
+                | Apply_cont action -> Some action
+                | Let _ | Let_cont _ | Apply _
+                | Switch _ | Invalid _ -> Some action
+                end
+              | Non_inlinable { params = _; handler = Unknown; }
+              | Toplevel_or_function_return_or_exn_continuation _
               | Unreachable _ -> None
           in
           begin match action with
