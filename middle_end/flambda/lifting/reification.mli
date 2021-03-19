@@ -18,8 +18,6 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-val create_static_const : Flambda_type.to_lift -> Flambda.Static_const.t
-
 val try_to_reify
    : Downwards_acc.t
   -> Simplified_named.t
