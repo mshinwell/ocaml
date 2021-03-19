@@ -302,6 +302,7 @@ MIDDLE_END_FLAMBDA_SIMPLIFY=\
   middle_end/flambda/simplify/env/continuation_env_and_param_types.cmo \
   middle_end/flambda/simplify/basic/continuation_in_env.cmo \
   middle_end/flambda/simplify/basic/simplified_named.cmo \
+  middle_end/flambda/simplify/non_constructed_code.cmo \
   middle_end/flambda/simplify/rebuilt_static_const.cmo \
   middle_end/flambda/simplify/common_subexpression_elimination.cmo \
   middle_end/flambda/simplify/env/downwards_env.cmo \
