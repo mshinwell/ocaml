@@ -265,11 +265,7 @@ let add_inline_cont env k vars ~handler_params_occurrences e =
   let conts = Continuation.Map.add k info env.conts in
   { env with conts }
 
-let add_exn_handler env k h =
-  let arity =
-    Flambda.Continuation_handler.arity h
-    |> Flambda_arity.With_subkinds.to_arity
-  in
+let add_exn_handler env k arity =
   match arity with
   | [] -> Misc.fatal_error "Exception handler with no arguments"
   | [_] -> env, []

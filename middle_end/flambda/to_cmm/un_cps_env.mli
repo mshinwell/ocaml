@@ -151,7 +151,7 @@ val add_inline_cont :
     a catch handler is needed, and the environment. *)
 
 val add_exn_handler :
-  t -> Continuation.t -> Flambda.Continuation_handler.t
+  t -> Continuation.t -> Flambda_arity.t
   -> t * (Backend_var.t * Flambda_kind.t) list
 (** Setup the extra mutable variables needed if the handler has extra arguments *)
 

@@ -844,10 +844,10 @@ and let_cont_inline env res k h body =
    within each expression. *)
 and let_cont_jump env res k h body =
   let wrap, env = Env.flush_delayed_lets env in
-  let vars, handle, res = continuation_handler env res h in
+  let vars, arity, handle, res = continuation_handler env res h in
   let id, env = Env.add_jump_cont env (List.map snd vars) k in
   if Continuation_handler.is_exn_handler h then begin
-    let body, res = let_cont_exn env res k h body vars handle id in
+    let body, res = let_cont_exn env res k body vars handle id arity in
     wrap body, res
   end else begin
     let body, res = expr env res body in
@@ -862,9 +862,9 @@ and let_cont_jump env res k h body =
    are passed through the trywith using mutable cmm variables. Thus the
    exn handler must first read the contents of thos extra args (eagerly
    in order to minmize the lifetime of the mutable variables) *)
-and let_cont_exn env res k h body vars handle id =
+and let_cont_exn env res k body vars handle id arity =
   let exn_var, extra_params = split_exn_cont_args k vars in
-  let env_body, extra_vars = Env.add_exn_handler env k h in
+  let env_body, extra_vars = Env.add_exn_handler env k arity in
   let handler = exn_handler handle extra_vars extra_params in
   let body, res = expr env_body res body in
   let trywith =
@@ -900,7 +900,7 @@ and let_cont_rec env res conts body =
   ) map env in
   (* Translate each continuation handler *)
   let map, res = Continuation.Map.fold (fun k h (map, res) ->
-    let vars, handler, res = continuation_handler env res h in
+    let vars, _arity, handler, res = continuation_handler env res h in
     Continuation.Map.add k (vars, handler) map, res
   ) map (Continuation.Map.empty, res) in
   (* Setup the cmm handlers for the static catch *)
@@ -922,9 +922,10 @@ and continuation_arg_tys h =
 
 and continuation_handler env res h =
   let args, _, handler = continuation_handler_split h in
+  let arity = Kinded_parameter.List.arity args in
   let env, vars = var_list env args in
   let e, res = expr env res handler in
-  vars, e, res
+  vars, arity, e, res
 
 (* Function calls: besides the function calls, there are a few things to do:
    - setup the mutable variables for the exn cont extra args if needed
