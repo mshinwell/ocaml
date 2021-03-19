@@ -283,6 +283,8 @@ MIDDLE_END_FLAMBDA_TERMS=\
   middle_end/flambda/terms/call_kind.cmo \
   middle_end/flambda/terms/apply_expr.cmo \
   middle_end/flambda/terms/switch_expr.cmo \
+  middle_end/flambda/terms/code0.cmo \
+  middle_end/flambda/terms/code_intf.cmo \
   middle_end/flambda/terms/function_declaration.cmo \
   middle_end/flambda/terms/function_declarations.cmo \
   middle_end/flambda/terms/set_of_closures.cmo \
