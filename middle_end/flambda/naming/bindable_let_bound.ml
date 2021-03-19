@@ -26,6 +26,8 @@ type t =
       closure_vars : Var_in_binding_pos.t list;
     }
   | Symbols of symbols
+  (* CR mshinwell: Add a case here for let-code and move it out of
+     Symbols *)
 
 include Identifiable.Make (struct
   type nonrec t = t
