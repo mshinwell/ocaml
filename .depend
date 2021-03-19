@@ -8555,7 +8555,6 @@ middle_end/flambda/to_cmm/un_cps_env.cmo : \
     middle_end/flambda/basic/kinded_parameter.cmi \
     middle_end/flambda/terms/function_declaration.cmi \
     middle_end/flambda/compilenv_deps/flambda_features.cmi \
-    middle_end/flambda/types/kinds/flambda_arity.cmi \
     middle_end/flambda/terms/flambda.cmi \
     middle_end/flambda/cmx/exported_offsets.cmi \
     middle_end/flambda/cmx/exported_code.cmi \
@@ -8579,7 +8578,6 @@ middle_end/flambda/to_cmm/un_cps_env.cmx : \
     middle_end/flambda/basic/kinded_parameter.cmx \
     middle_end/flambda/terms/function_declaration.cmx \
     middle_end/flambda/compilenv_deps/flambda_features.cmx \
-    middle_end/flambda/types/kinds/flambda_arity.cmx \
     middle_end/flambda/terms/flambda.cmx \
     middle_end/flambda/cmx/exported_offsets.cmx \
     middle_end/flambda/cmx/exported_code.cmx \
@@ -8600,6 +8598,7 @@ middle_end/flambda/to_cmm/un_cps_env.cmi : \
     middle_end/flambda/basic/kinded_parameter.cmi \
     middle_end/flambda/terms/function_declaration.cmi \
     middle_end/flambda/types/kinds/flambda_kind.cmi \
+    middle_end/flambda/types/kinds/flambda_arity.cmi \
     middle_end/flambda/terms/flambda.cmi \
     middle_end/flambda/cmx/exported_offsets.cmi \
     middle_end/flambda/cmx/exported_code.cmi \

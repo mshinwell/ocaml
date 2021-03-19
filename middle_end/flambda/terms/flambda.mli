@@ -520,6 +520,8 @@ end and Static_const : sig
 
     (** Printing, total ordering, etc. *)
     include Identifiable.S with type t := t
+
+    include Contains_names.S with type t := t
   end
 
   (* CR mshinwell: Somewhere there should be an invariant check that

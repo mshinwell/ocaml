@@ -30,6 +30,8 @@ module Field_of_block : sig
 
   (** Printing, total ordering, etc. *)
   include Identifiable.S with type t := t
+
+  include Contains_names.S with type t := t
 end
 
 (** The static structure of a symbol, possibly with holes, ready to be filled
