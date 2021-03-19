@@ -296,8 +296,8 @@ let apply_projection t proj =
       else
         None)
   in
-  if List.compare_length_with matching_defining_exprs 1 <> 0 then None
-  else
+  match matching_defining_exprs with
+  | [_] ->
     let denv, ty = Symbol.Map.find symbol (types_of_symbols t) in
     let typing_env = DE.typing_env denv in
     let proof =
@@ -310,12 +310,29 @@ let apply_projection t proj =
         T.prove_project_var_simple typing_env
           ~min_name_mode:Name_mode.normal ty var
     in
-    match proof with
+    begin match proof with
     | Proved simple -> Some simple
-    | Unknown -> None
-    | Invalid ->
-      Misc.fatal_errorf "Symbol projection@ %a@ produced [Invalid]:@ \
+    | Unknown ->
+      (* [Simplify_named], which calls this function, requires [Some] to be
+         returned iff the projection is from a symbol defined in the same
+         recursive group (see the comment in that module).  As such, if the
+         projection via the types fails, we currently stop.  It seems very
+         unlikely that this will happen; we can reconsider in the future if
+         necessary. *)
+      Misc.fatal_errorf "Symbol projection@ %a@ produced [Unknown]:@ \
           type is@ %a@ in env:@ %a"
         Symbol_projection.print proj
         T.print ty
         T.Typing_env.print typing_env
+    | Invalid ->
+      Misc.fatal_errorf "Symbol projection@ %a@ produced [Invalid],@ \
+          environment is:@ %a"
+        Symbol_projection.print proj
+        T.Typing_env.print typing_env
+    end
+  | [] -> None
+  | _::_::_ ->
+    Misc.fatal_errorf "Symbol projection@ %a@ matches more than one \
+        constant in:@ %a"
+      Symbol_projection.print proj
+      print t
