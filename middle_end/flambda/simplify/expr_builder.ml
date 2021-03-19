@@ -204,7 +204,7 @@ let create_raw_let_symbol uacc bound_symbols scoping_rule static_consts ~body =
   in
   let defining_expr, cost_metrics_of_defining_expr =
     let static_consts = Rebuilt_static_const.Group.consts static_consts in
-    Named.create_static_consts static_consts, Cost_metrics.static_consts static_consts
+    Named.create_static_consts static_consts, Cost_metrics.zero
   in
   let free_names_of_body = UA.name_occurrences uacc in
   let free_names_of_let =

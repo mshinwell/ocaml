@@ -383,8 +383,6 @@ let simple simple = Simple.pattern_match simple ~const:(fun _ -> 1) ~name:(fun _
 
 let prim = prim_size
 
-let static_consts _ = 0
-
 (* The size of a set of closures is roughly the sum of the size of the
    functions it refers to. This is mainly due to the fact that if we do inline
    a function f where a set of closure is defined then we will copy the body of
