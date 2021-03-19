@@ -70,7 +70,7 @@ let update_exn_continuation_extra_args uacc ~exn_cont_use_id apply =
   | None -> apply
   | Some rewrite ->
     Apply.with_exn_continuation apply
-      (Apply_cont_rewrite.rewrite_exn_continuation rewrite exn_cont_use_id
+      (EB.rewrite_exn_continuation rewrite exn_cont_use_id
         (Apply.exn_continuation apply))
 
 (* generate the projection of the i-th field of a n-tuple *)

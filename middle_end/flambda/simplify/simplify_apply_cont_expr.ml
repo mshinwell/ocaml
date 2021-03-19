@@ -82,9 +82,8 @@ let rebuild_apply_cont apply_cont ~args ~rewrite_id uacc ~after_rebuild =
           else AC.clear_trap_action apply_cont
       in
       match rewrite with
-      | None -> Apply_cont_rewrite.no_rewrite apply_cont
-      | Some rewrite ->
-        Apply_cont_rewrite.rewrite_use rewrite rewrite_id apply_cont
+      | None -> EB.no_rewrite apply_cont
+      | Some rewrite -> EB.rewrite_use rewrite rewrite_id apply_cont
     in
     match rewrite_use_result with
     | Apply_cont apply_cont ->

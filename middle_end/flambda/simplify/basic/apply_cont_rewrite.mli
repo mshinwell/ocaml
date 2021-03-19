@@ -16,11 +16,10 @@
 
 (** Rewrites applied to [Apply_cont] expressions in order to reflect
     changes in continuation arities consequential to addition or removal of
-    parameters. *)
+    parameters.
+    The rewrites are actually applied via [Expr_builder]. *)
 
-[@@@ocaml.warning "+a-4-30-40-41-42"]
-
-open! Flambda
+[@@@ocaml.warning "+a-30-40-41-42"]
 
 type t
 
@@ -35,32 +34,16 @@ val create
   -> used_extra_params:Kinded_parameter.Set.t
   -> t
 
-val extra_params : t -> Kinded_parameter.t list
+val original_params : t -> Kinded_parameter.t list
+
+val used_params : t -> Kinded_parameter.Set.t
+
+val used_extra_params : t -> Kinded_parameter.t list
 
 val extra_args
    : t
   -> Apply_cont_rewrite_id.t
   -> Continuation_extra_params_and_args.Extra_arg.t list
-
-type rewrite_use_result = private
-  | Apply_cont of Apply_cont.t
-  | Expr of (
-       apply_cont_to_expr:(Apply_cont.t -> (Expr.t * Cost_metrics.t * Name_occurrences.t))
-    -> Expr.t * Cost_metrics.t * Name_occurrences.t)
-
-val no_rewrite : Apply_cont.t -> rewrite_use_result
-
-val rewrite_use
-   : t
-  -> Apply_cont_rewrite_id.t
-  -> Apply_cont.t
-  -> rewrite_use_result
-
-val rewrite_exn_continuation
-   : t
-  -> Apply_cont_rewrite_id.t
-  -> Exn_continuation.t
-  -> Exn_continuation.t
 
 val original_params_arity : t -> Flambda_arity.With_subkinds.t
 

@@ -539,6 +539,111 @@ let create_switch uacc ~scrutinee ~arms =
         Expr.create_switch switch,
         UA.cost_metrics_add ~added:(Cost_metrics.switch switch) uacc
 
+type rewrite_use_result =
+  | Apply_cont of Apply_cont.t
+  | Expr of (
+       apply_cont_to_expr:(Apply_cont.t
+         -> (Expr.t * Cost_metrics.t * Name_occurrences.t))
+    -> Expr.t * Cost_metrics.t * Name_occurrences.t)
+
+let no_rewrite apply_cont = Apply_cont apply_cont
+
+let rewrite_use rewrite id apply_cont : rewrite_use_result =
+  let args = Apply_cont.args apply_cont in
+  let original_params = Apply_cont_rewrite.original_params rewrite in
+  if List.compare_lengths args original_params <> 0 then begin
+    Misc.fatal_errorf "Arguments to this [Apply_cont]@ (%a)@ do not match@ \
+        [original_params] (%a):@ %a"
+      Apply_cont.print apply_cont
+      KP.List.print original_params
+      Simple.List.print args
+  end;
+  let original_params_with_args = List.combine original_params args in
+  let args =
+    let used_params = Apply_cont_rewrite.used_params rewrite in
+    List.filter_map (fun (original_param, arg) ->
+        if KP.Set.mem original_param used_params then Some arg
+        else None)
+      original_params_with_args
+  in
+  let extra_args_list = Apply_cont_rewrite.extra_args rewrite id in
+  let extra_args_rev, extra_lets =
+    List.fold_left
+      (fun (extra_args_rev, extra_lets)
+           (arg : Continuation_extra_params_and_args.Extra_arg.t) ->
+        match arg with
+        | Already_in_scope simple -> simple :: extra_args_rev, extra_lets
+        | New_let_binding (temp, prim) ->
+          let extra_args_rev = Simple.var temp :: extra_args_rev in
+          let extra_lets =
+            (Var_in_binding_pos.create temp Name_mode.normal,
+             Cost_metrics.prim prim,
+             Named.create_prim prim Debuginfo.none)
+              :: extra_lets
+          in
+          extra_args_rev, extra_lets)
+      ([], [])
+      extra_args_list
+  in
+  let args = args @ List.rev extra_args_rev in
+  let apply_cont =
+    Apply_cont.update_args apply_cont ~args
+  in
+  match extra_lets with
+  | [] -> Apply_cont apply_cont
+  | _::_ ->
+    let build_expr ~apply_cont_to_expr =
+      let body, cost_metrics_of_body, free_names_of_body =
+        apply_cont_to_expr apply_cont
+      in
+      Expr.bind_no_simplification ~bindings:extra_lets ~body
+        ~cost_metrics_of_body ~free_names_of_body
+    in
+    Expr build_expr
+
+(* CR mshinwell: tidy up.
+   Also remove confusion between "extra args" as added by e.g. unboxing and
+   "extra args" as in [Exn_continuation]. *)
+let rewrite_exn_continuation rewrite id exn_cont =
+  let exn_cont_arity = Exn_continuation.arity exn_cont in
+  let original_params = Apply_cont_rewrite.original_params rewrite in
+  let original_params_arity = KP.List.arity_with_subkinds original_params in
+  if not (Flambda_arity.With_subkinds.equal exn_cont_arity
+    original_params_arity)
+  then begin
+    Misc.fatal_errorf "Arity of exception continuation %a does not \
+        match@ [original_params] (%a)"
+      Exn_continuation.print exn_cont
+      KP.List.print original_params
+  end;
+  assert (List.length exn_cont_arity >= 1);
+  let pre_existing_extra_params_with_args =
+    List.combine (List.tl original_params)
+      (Exn_continuation.extra_args exn_cont)
+  in
+  let extra_args0 =
+    let used_params = Apply_cont_rewrite.used_params rewrite in
+    List.filter_map (fun (pre_existing_extra_param, arg) ->
+        if KP.Set.mem pre_existing_extra_param used_params then Some arg
+        else None)
+      pre_existing_extra_params_with_args
+  in
+  let extra_args1 =
+    let extra_args_list = Apply_cont_rewrite.extra_args rewrite id in
+    let used_extra_params = Apply_cont_rewrite.used_extra_params rewrite in
+    assert (List.compare_lengths used_extra_params extra_args_list = 0);
+    List.map2
+      (fun param (arg : Continuation_extra_params_and_args.Extra_arg.t) ->
+        match arg with
+        | Already_in_scope simple -> simple, KP.kind param
+        | New_let_binding _ ->
+          Misc.fatal_error "[New_let_binding] not expected here")
+      used_extra_params extra_args_list
+  in
+  let extra_args = extra_args0 @ extra_args1 in
+  Exn_continuation.create ~exn_handler:(Exn_continuation.exn_handler exn_cont)
+    ~extra_args
+
 type add_wrapper_for_fixed_arity_continuation0_result =
   | This_continuation of Continuation.t
   | Apply_cont of Apply_cont.t
@@ -597,7 +702,7 @@ let add_wrapper_for_fixed_arity_continuation0 uacc cont_or_apply_cont
          that binds [kinded_params]. *)
       let args = List.map KP.simple kinded_params in
       let apply_cont = Apply_cont.create cont ~args ~dbg:Debuginfo.none in
-      begin match Apply_cont_rewrite.rewrite_use rewrite use_id apply_cont with
+      begin match rewrite_use rewrite use_id apply_cont with
       | Apply_cont apply_cont ->
         new_wrapper (Expr.create_apply_cont apply_cont)
           ~free_names:(Known (Apply_cont.free_names apply_cont))
@@ -613,7 +718,7 @@ let add_wrapper_for_fixed_arity_continuation0 uacc cont_or_apply_cont
       end
     | Apply_cont apply_cont ->
       let apply_cont = Apply_cont.update_continuation apply_cont cont in
-      match Apply_cont_rewrite.rewrite_use rewrite use_id apply_cont with
+      match rewrite_use rewrite use_id apply_cont with
       | Apply_cont apply_cont -> Apply_cont apply_cont
       | Expr build_expr ->
         let expr, cost_metrics, free_names =
