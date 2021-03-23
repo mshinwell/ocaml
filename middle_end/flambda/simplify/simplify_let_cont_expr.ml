@@ -134,9 +134,14 @@ let simplify_one_continuation_handler ~simplify_expr dacc cont
             cont_handler ~params ~extra_params_and_args
             ~is_single_inlinable_use handler uacc ~after_rebuild)))
 
+type behaviour =
+  | Unreachable
+  | Alias_for of Continuation.t
+  | Unknown
+
 let rebuild_non_recursive_let_cont_handler cont
       (uses : Continuation_env_and_param_types.t) ~params ~handler
-      ~free_names_of_handler ~is_single_inlinable_use scope
+      ~free_names_of_handler ~is_single_inlinable_use scope ~is_exn_handler
       (extra_params_and_args : EPA.t) cont_handler uacc ~after_rebuild =
   let uenv = UA.uenv uacc in
   let uenv =
@@ -159,7 +164,29 @@ let rebuild_non_recursive_let_cont_handler cont
         UE.add_linearly_used_inlinable_continuation uenv cont scope
           ~params ~handler ~free_names_of_handler ~cost_metrics_of_handler:(UA.cost_metrics uacc)
       end else begin
-        match CH.behaviour cont_handler with
+        let behaviour =
+          (* CR-someday mshinwell: This could be replaced by a more sophisticated
+            analysis, but for the moment we just use a simple syntactic check. *)
+          if is_exn_handler then
+            Unknown
+          else
+            match Expr.descr handler with
+            | Apply_cont apply_cont ->
+              begin match Apply_cont.trap_action apply_cont with
+              | Some _ -> Unknown
+              | None ->
+                let args = Apply_cont.args apply_cont in
+                let params = List.map KP.simple params in
+                if Misc.Stdlib.List.compare Simple.compare args params = 0 then
+                  Alias_for (Apply_cont.continuation apply_cont)
+                else
+                  Unknown
+              end
+            | Invalid Treat_as_unreachable -> Unreachable
+            | Invalid Halt_and_catch_fire | Let _ | Let_cont _
+            | Apply _ | Switch _ -> Unknown
+        in
+        match behaviour with
         | Unreachable ->
           let arity = KP.List.arity_with_subkinds params in
           UE.add_unreachable_continuation uenv cont scope arity
@@ -225,7 +252,7 @@ let simplify_non_recursive_let_cont_handler ~simplify_expr
       ~rebuild:(fun uacc ~after_rebuild ->
         rebuild_non_recursive_let_cont_handler cont uses ~params
           ~handler ~free_names_of_handler:Name_occurrences.empty
-          ~is_single_inlinable_use:false scope
+          ~is_single_inlinable_use:false scope ~is_exn_handler
           EPA.empty cont_handler uacc ~after_rebuild)
   | Uses { handler_env; arg_types_by_use_id; extra_params_and_args;
            is_single_inlinable_use; } ->
@@ -302,7 +329,8 @@ let simplify_non_recursive_let_cont_handler ~simplify_expr
                   ~handler ~free_names_of_handler uacc ->
               rebuild_non_recursive_let_cont_handler cont uses ~params ~handler
                 ~free_names_of_handler ~is_single_inlinable_use
-                scope extra_params_and_args cont_handler uacc ~after_rebuild)))
+                scope ~is_exn_handler extra_params_and_args cont_handler uacc
+                ~after_rebuild)))
 
 let simplify_non_recursive_let_cont ~simplify_expr dacc non_rec ~down_to_up =
   let cont_handler = Non_recursive_let_cont_handler.handler non_rec in

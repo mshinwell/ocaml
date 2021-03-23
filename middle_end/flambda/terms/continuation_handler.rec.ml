@@ -16,26 +16,6 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Behaviour = struct
-  type t =
-    | Unreachable
-    | Alias_for of Continuation.t
-    | Unknown
-
-  let apply_renaming t perm =
-    match t with
-    | Unreachable | Unknown -> t
-    | Alias_for alias_for ->
-      let alias_for' = Renaming.apply_continuation perm alias_for in
-      if alias_for == alias_for' then t
-      else Alias_for alias_for'
-
-  let all_ids_for_export t =
-    match t with
-    | Unreachable | Unknown -> Ids_for_export.empty
-    | Alias_for alias_for -> Ids_for_export.singleton_continuation alias_for
-end
-
 module T0 = struct
   type t = {
     num_normal_occurrences_of_params : Num_occurrences.t Variable.Map.t;
@@ -70,7 +50,6 @@ module A = Name_abstraction.Make_list (Kinded_parameter) (T0)
 
 type t = {
   abst : A.t;
-  behaviour : Behaviour.t;
   is_exn_handler : bool;
 }
 
@@ -92,27 +71,6 @@ let create params ~handler ~(free_names_of_handler : _ Or_unknown.t)
           in
           Variable.Map.add var num num_occurrences)
   in
-  let behaviour : Behaviour.t =
-    (* CR-someday mshinwell: This could be replaced by a more sophisticated
-       analysis, but for the moment we just use a simple syntactic check. *)
-    if is_exn_handler then
-      Unknown
-    else
-      match Expr.descr handler with
-      | Apply_cont apply_cont ->
-        begin match Apply_cont.trap_action apply_cont with
-        | Some _ -> Unknown
-        | None ->
-          let args = Apply_cont.args apply_cont in
-          let params = List.map KP.simple params in
-          if Misc.Stdlib.List.compare Simple.compare args params = 0 then
-            Alias_for (Apply_cont.continuation apply_cont)
-          else
-            Unknown
-        end
-      | Invalid Treat_as_unreachable -> Unreachable
-      | _ -> Unknown
-  in
   let t0 : T0.t =
     { num_normal_occurrences_of_params;
       handler;
@@ -120,7 +78,6 @@ let create params ~handler ~(free_names_of_handler : _ Or_unknown.t)
   in
   let abst = A.create params t0 in
   { abst;
-    behaviour;
     is_exn_handler;
   }
 
@@ -155,7 +112,7 @@ let pattern_match_pair t1 t2 ~f =
         Error Pattern_match_pair_error.Parameter_lists_have_different_lengths))
 
 let print_using_where_with_cache (recursive : Recursive.t) ~cache ppf k
-      ({ abst = _; behaviour = _; is_exn_handler; } as t) ~first =
+      ({ abst = _; is_exn_handler; } as t) ~first =
   let fprintf = Format.fprintf in
   if not first then begin
     fprintf ppf "@ "
@@ -182,7 +139,7 @@ let print_using_where_with_cache (recursive : Recursive.t) ~cache ppf k
       (Expr.print_with_cache ~cache) handler;
     fprintf ppf "@]")
 
-let print_with_cache ~cache ppf { abst; behaviour = _; is_exn_handler; } =
+let print_with_cache ~cache ppf { abst; is_exn_handler; } =
   Format.fprintf ppf "@[<hov 1>\
       @[<hov 1>(params_and_handler@ %a)@]@ \
       @[<hov 1>(is_exn_handler@ %b)@]\
@@ -195,20 +152,15 @@ let print ppf t =
 
 let is_exn_handler t = t.is_exn_handler
 
-let behaviour t = t.behaviour
-
 let free_names t = A.free_names t.abst
 
-let apply_renaming ({ abst; behaviour; is_exn_handler; } as t) perm =
+let apply_renaming ({ abst; is_exn_handler; } as t) perm =
   let abst' = A.apply_renaming abst perm in
-  let behaviour' = Behaviour.apply_renaming behaviour perm in
-  if abst == abst' && behaviour == behaviour' then t
+  if abst == abst' then t
   else
     { abst = abst';
-      behaviour = behaviour';
       is_exn_handler;
     }
 
-let all_ids_for_export { abst; behaviour; is_exn_handler = _; } =
-  Ids_for_export.union (A.all_ids_for_export abst)
-    (Behaviour.all_ids_for_export behaviour)
+let all_ids_for_export { abst; is_exn_handler = _; } =
+  A.all_ids_for_export abst

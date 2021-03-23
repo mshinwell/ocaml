@@ -79,17 +79,6 @@ val pattern_match_pair
     -> 'a)
   -> ('a, Pattern_match_pair_error.t) Result.t
 
-module Behaviour : sig
-  type t = private
-    | Unreachable
-    | Alias_for of Continuation.t
-    | Unknown
-
-  include Contains_ids.S with type t := t
-end
-
-val behaviour : t -> Behaviour.t
-
 (** Whether the continuation is an exception handler.
 
     Continuations used as exception handlers are always [Non_recursive]. To
