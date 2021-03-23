@@ -211,7 +211,7 @@ let simplify_direct_partial_application ~simplify_expr dacc apply
   let wrapper_closure_id =
     Closure_id.wrap compilation_unit (Variable.create "partial_app_closure")
   in
-  let wrapper_taking_remaining_args, dacc, dummy_code =
+  let wrapper_taking_remaining_args, dacc, code_id, code =
     let return_continuation = Continuation.create () in
     let remaining_params =
       List.map (fun kind ->
@@ -281,17 +281,19 @@ let simplify_direct_partial_application ~simplify_expr dacc apply
     in
     let code =
       let free_names = Function_params_and_body.free_names params_and_body in
-      Code.create
-        code_id
-        ~params_and_body:(Present (params_and_body, free_names))
-        ~newer_version_of:None
-        ~params_arity:(KP.List.arity_with_subkinds remaining_params)
-        ~result_arity
-        ~stub:true
-        ~inline:Default_inline
-        ~is_a_functor:false
-        ~recursive
-        ~cost_metrics:Unknown
+      let code =
+        Code.create code_id
+          ~params_and_body:(Present (params_and_body, free_names))
+          ~newer_version_of:None
+          ~params_arity:(KP.List.arity_with_subkinds remaining_params)
+          ~result_arity
+          ~stub:true
+          ~inline:Default_inline
+          ~is_a_functor:false
+          ~recursive
+          ~cost_metrics:Unknown
+      in
+      Static_const.Code code
     in
     let function_decl =
       Function_declaration.create ~code_id ~is_tupled:false ~dbg
@@ -303,49 +305,35 @@ let simplify_direct_partial_application ~simplify_expr dacc apply
     let closure_elements =
       Var_within_closure.Map.of_list applied_args_with_closure_vars
     in
-    let defining_expr =
-      LC.create_code code_id
-        (Rebuilt_static_const.create (Code code) ~free_names:Unknown)
-    in
-    let dummy_defining_expr =
-      (* We should not add the real piece of code in the lifted constant.
-         A new piece of code will always be generated when the [Let] we
-         generate below is simplified.  As such we can simply add a lifted
-         constant identifying deleted code.  This will ensure, if for some
-         reason the constant makes it to Cmm stage, that code size is not
-         increased unnecessarily. *)
-      let code = Code.make_deleted code in
-      LC.create_code code_id
-        (Rebuilt_static_const.create (Code code) ~free_names:Unknown)
-    in
-    let dacc =
-      DA.add_lifted_constant dacc dummy_defining_expr
-      |> DA.map_denv ~f:(fun denv ->
-           LCS.add_singleton_to_denv denv defining_expr)
-    in
-    Set_of_closures.create function_decls ~closure_elements,
-    dacc,
-    dummy_defining_expr
+    Set_of_closures.create function_decls ~closure_elements, dacc, code_id, code
   in
   let apply_cont =
-    Apply_cont.create apply_continuation
-      ~args:[Simple.var wrapper_var] ~dbg
+    Apply_cont.create apply_continuation ~args:[Simple.var wrapper_var] ~dbg
   in
   let expr =
     let wrapper_var = VB.create wrapper_var Name_mode.normal in
     let closure_vars = [wrapper_var] in
     let bound = Bindable_let_bound.set_of_closures ~closure_vars in
-    Let.create bound
-      (Named.create_set_of_closures wrapper_taking_remaining_args)
-      ~body:(Expr.create_apply_cont apply_cont)
+    let body =
+      Let.create bound
+        (Named.create_set_of_closures wrapper_taking_remaining_args)
+        ~body:(Expr.create_apply_cont apply_cont)
+        ~free_names_of_body:Unknown
+      |> Expr.create_let
+    in
+    let bound_symbols =
+      Bound_symbols.singleton (Bound_symbols.Pattern.code code_id)
+    in
+    let static_consts = Static_const.Group.create [code] in
+    (* Since we are only generating a "let code" binding and not a "let symbol",
+       it doesn't matter if we are not at toplevel. *)
+    Let.create (Bindable_let_bound.symbols bound_symbols Dominator)
+      (Named.create_static_consts static_consts)
+      ~body
       ~free_names_of_body:Unknown
     |> Expr.create_let
   in
-  simplify_expr dacc expr
-    ~down_to_up:(fun dacc ~rebuild ->
-      down_to_up dacc ~rebuild:(fun uacc ~after_rebuild ->
-        let uacc = UA.add_outermost_lifted_constant uacc dummy_code in
-        rebuild uacc ~after_rebuild))
+  simplify_expr dacc expr ~down_to_up
 
 (* CR mshinwell: Should it be an error to encounter a non-direct application
    of a symbol after [Simplify]? This shouldn't usually happen, but I'm not 100%
