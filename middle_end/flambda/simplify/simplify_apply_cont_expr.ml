@@ -113,7 +113,7 @@ let rebuild_apply_cont apply_cont ~args ~rewrite_id uacc ~after_rebuild =
        basis that there wouldn't be any opportunity to collect any backtrace,
        even if the [Apply_cont] were compiled as "raise". *)
     after_rebuild (Expr.create_invalid ()) uacc
-  | Non_inlinable _
+  | Non_inlinable_zero_arity _ | Non_inlinable_non_zero_arity _
   | Toplevel_or_function_return_or_exn_continuation _ ->
     create_apply_cont ~apply_cont_to_expr:(fun apply_cont ->
       Expr.create_apply_cont apply_cont,

@@ -79,12 +79,8 @@ let resolve_exn_continuation_aliases t exn_cont =
   | alias_for -> Exn_continuation.with_exn_handler exn_cont alias_for
 
 let continuation_arity t cont =
-  match find_continuation t cont with
-  | Linearly_used_and_inlinable { params; _ }
-  | Non_inlinable { params; _ } ->
-    Kinded_parameter.List.arity_with_subkinds params
-  | Toplevel_or_function_return_or_exn_continuation { arity; }
-  | Unreachable { arity; } -> arity
+  find_continuation t cont
+  |> Continuation_in_env.arity
 
 let add_continuation0 t cont scope cont_in_env =
   let continuations =
@@ -95,7 +91,12 @@ let add_continuation0 t cont scope cont_in_env =
   }
 
 let add_non_inlinable_continuation t cont scope ~params ~handler =
-  add_continuation0 t cont scope (Non_inlinable { params; handler; })
+  match params with
+  | [] ->
+    add_continuation0 t cont scope (Non_inlinable_zero_arity { handler; })
+  | _::_ ->
+    let arity = Kinded_parameter.List.arity_with_subkinds params in
+    add_continuation0 t cont scope (Non_inlinable_non_zero_arity { arity; })
 
 let add_unreachable_continuation t cont scope arity =
   add_continuation0 t cont scope (Unreachable { arity; })
@@ -208,5 +209,5 @@ let delete_apply_cont_rewrite t cont =
 let will_inline_continuation t cont =
   match find_continuation t cont with
   | Linearly_used_and_inlinable _ -> true
-  | Non_inlinable _ | Toplevel_or_function_return_or_exn_continuation _
-  | Unreachable _ -> false
+  | Non_inlinable_zero_arity _ | Non_inlinable_non_zero_arity _
+  | Toplevel_or_function_return_or_exn_continuation _ | Unreachable _ -> false

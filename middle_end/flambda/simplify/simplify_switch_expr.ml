@@ -37,26 +37,29 @@ let rebuild_switch ~simplify_let dacc ~arms ~scrutinee ~scrutinee_ty uacc
             if not (Apply_cont.is_goto action) then Some action
             else
               let cont = Apply_cont.continuation action in
+              let check_handler ~handler ~action =
+                match Expr.descr handler with
+                | Apply_cont action -> Some action
+                | Let _ | Let_cont _ | Apply _
+                | Switch _ | Invalid _ -> Some action
+              in
               match UE.find_continuation (UA.uenv uacc) cont with
               | Linearly_used_and_inlinable { handler;
                   free_names_of_handler = _; params;
                   cost_metrics_of_handler = _ } ->
                 assert (List.length params = 0);
-                begin match Expr.descr handler with
-                | Apply_cont action -> Some action
-                | Let _ | Let_cont _ | Apply _
-                | Switch _ | Invalid _ -> Some action
-                end
-              | Non_inlinable { params; handler = Known handler; } ->
-                assert (List.length params = 0);
-                begin match Expr.descr handler with
-                | Apply_cont action -> Some action
-                | Let _ | Let_cont _ | Apply _
-                | Switch _ | Invalid _ -> Some action
-                end
-              | Non_inlinable { params = _; handler = Unknown; }
-              | Toplevel_or_function_return_or_exn_continuation _
+                check_handler ~handler ~action
+              | Non_inlinable_zero_arity { handler = Known handler; } ->
+                check_handler ~handler ~action
+              | Non_inlinable_zero_arity { handler = Unknown; }
               | Unreachable _ -> None
+              | Non_inlinable_non_zero_arity _
+              | Toplevel_or_function_return_or_exn_continuation _ ->
+                Misc.fatal_errorf "Inconsistency for %a between \
+                    [Apply_cont.is_goto] and continuation environment \
+                    in [UA]:@ %a"
+                  Continuation.print cont
+                  UA.print uacc
           in
           begin match action with
           | None ->

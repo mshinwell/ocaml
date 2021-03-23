@@ -20,8 +20,12 @@ type t =
   | Linearly_used_and_inlinable of {
       params : Kinded_parameter.t list;
       (** To avoid re-opening name abstractions, we store the opened
-          parameters and handler here.  This is only correct because the
-          inlining we perform is linear. *)
+          parameters and handler here.  Note that the properties of
+          [Name_abstraction] mean that this is safe even if the expression
+          were to be substituted in multiple places, with corresponding
+          bindings of the [params].  There is no requirement for binders to
+          use fresh names when name abstractions are being constructed; they
+          just have to match the ones in the terms being closed over. *)
       handler : Flambda.Expr.t;
       (** [free_names_of_handler] includes entries for any occurrences of the
           [params] in the [handler]. *)
@@ -29,9 +33,12 @@ type t =
       (** [cost_metrics_of_handler] is the size of the handler. *)
       cost_metrics_of_handler : Flambda.Cost_metrics.t;
     }
-  | Non_inlinable of {
-      params : Kinded_parameter.t list;
+  | Non_inlinable_zero_arity of {
       handler : Flambda.Expr.t Or_unknown.t;
+      (** The handler, if available, is stored for [Simplify_switch_expr]. *)
+    }
+  | Non_inlinable_non_zero_arity of {
+      arity : Flambda_arity.With_subkinds.t;
     }
   | Toplevel_or_function_return_or_exn_continuation of {
       arity : Flambda_arity.With_subkinds.t;
