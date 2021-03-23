@@ -17,10 +17,7 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module T0 = struct
-  type t = {
-    num_normal_occurrences_of_params : Num_occurrences.t Variable.Map.t;
-    handler : Expr.t;
-  }
+  type t = Expr.continuation_handlers'
 
   let print_with_cache ~cache ppf
         { handler; num_normal_occurrences_of_params = _; } =
@@ -31,27 +28,14 @@ module T0 = struct
 
   let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
-  let free_names { handler; num_normal_occurrences_of_params = _; } =
-    Expr.free_names handler
-
-  let apply_renaming
-        ({ handler; num_normal_occurrences_of_params; } as t) perm =
-    let handler' =
-      Expr.apply_renaming handler perm
-    in
-    if handler == handler' then t
-    else { handler = handler'; num_normal_occurrences_of_params; }
-
-  let all_ids_for_export { handler; num_normal_occurrences_of_params = _; } =
-    Expr.all_ids_for_export handler
+  let free_names = Expr.free_names_continuation_handlers'
+  let apply_renaming = Expr.apply_renaming_continuation_handlers'
+  let all_ids_for_export = Expr.all_ids_for_export_continuation_handlers'
 end
 
 module A = Name_abstraction.Make_list (Kinded_parameter) (T0)
 
-type t = {
-  abst : A.t;
-  is_exn_handler : bool;
-}
+type t = Expr.continuation_handlers
 
 let invariant _env _t = ()
 

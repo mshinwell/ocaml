@@ -49,7 +49,7 @@ module Make (Bindable : Bindable.S) (Term : Term) : sig
   include Contains_ids.S with type t := t
   include Common with type t := t
 
-  val create : Bindable.t -> Term.t -> t
+  val create : Bindable.t -> Term.t -> (Bindable.t, Term.t) t
 
   (** Concretion of an abstraction at a fresh name. *)
   val pattern_match : t -> f:(Bindable.t -> Term.t -> 'a) -> 'a

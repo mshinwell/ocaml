@@ -39,17 +39,6 @@ module T0 = struct
     Name_occurrences.union (Continuation_handlers.free_names handlers)
       (Expr.free_names body)
 
-  let apply_renaming { handlers; body; } perm =
-    let handlers' =
-      Continuation_handlers.apply_renaming handlers perm
-    in
-    let body' =
-      Expr.apply_renaming body perm
-    in
-    { handlers = handlers';
-      body = body';
-    }
-
   let all_ids_for_export { handlers; body; } =
     let body_ids = Expr.all_ids_for_export body in
     let handlers_ids = Continuation_handlers.all_ids_for_export handlers in

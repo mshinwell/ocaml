@@ -964,23 +964,11 @@ middle_end/flambda/types/flambda_type.ml: \
 	  ../scripts/assemble_rec_modules.sh template/flambda_type.templ.ml \
 	    rec_modules flambda_type.ml
 
-FLAMBDA_DEPS=$(shell sed -e "s|^\(.*\)|middle_end/flambda/terms/\1 middle_end/flambda/terms/\1i|g" \
-  middle_end/flambda/terms/rec_modules | tr '\n' ' ')
-middle_end/flambda/terms/flambda.ml: \
-  middle_end/flambda/terms/template/flambda.templ.ml \
-  middle_end/flambda/terms/rec_modules \
-  $(FLAMBDA_DEPS)
-	cd middle_end/flambda/terms && \
-	  ../scripts/assemble_rec_modules.sh template/flambda.templ.ml \
-	    rec_modules flambda.ml
-
 beforedepend:: \
-  middle_end/flambda/types/flambda_type.ml \
-  middle_end/flambda/terms/flambda.ml
+  middle_end/flambda/types/flambda_type.ml
 
 clean::
-	rm -f middle_end/flambda/types/flambda_type.ml;
-	rm -f middle_end/flambda/terms/flambda.ml
+	rm -f middle_end/flambda/types/flambda_type.ml
 
 
 # Documentation

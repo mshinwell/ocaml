@@ -18,7 +18,7 @@
 
 (** The result of pattern matching on [Recursive_let_cont_handlers]
     (see above). *)
-type t
+type t = Expr.continuation_handlers
 
 (** Obtain the mapping from continuation to handler. *)
 val to_map : t -> Continuation_handler.t Continuation.Map.t
