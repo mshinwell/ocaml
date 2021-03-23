@@ -51,7 +51,7 @@ let rebuild_switch ~simplify_let dacc ~arms ~scrutinee ~scrutinee_ty uacc
                 check_handler ~handler ~action
               | Non_inlinable_zero_arity { handler = Known handler; } ->
                 check_handler ~handler ~action
-              | Non_inlinable_zero_arity { handler = Unknown; }
+              | Non_inlinable_zero_arity { handler = Unknown; } -> Some action
               | Unreachable _ -> None
               | Non_inlinable_non_zero_arity _
               | Toplevel_or_function_return_or_exn_continuation _ ->
