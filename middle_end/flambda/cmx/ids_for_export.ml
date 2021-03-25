@@ -190,36 +190,64 @@ module Import_map = struct
       used_closure_vars;
     }
 
-  let union
-        { symbols = symbols1;
-          variables = variables1;
-          simples = simples1;
-          consts = consts1;
-          code_ids = code_ids1;
-          continuations = continuations1;
-          used_closure_vars = used_closure_vars1;
-        }
-        { symbols = symbols2;
+  module Make_composition (T : Identifiable.S) = struct
+    let compose ~second ~first =
+      let mapped_by_first_and_maybe_by_second =
+        T.Map.map (fun after_first_subst ->
+            match T.Map.find after_first_subst second with
+            | exception Not_found -> after_first_subst
+            | after_both_substs -> after_both_substs)
+          first
+      in
+      let image_of_first = T.Set.of_list (T.Map.data first) in
+      let mapped_by_second_but_not_in_image_of_first =
+        T.Map.filter (fun key _ -> not (T.Set.mem key image_of_first))
+          second
+      in
+      T.Map.disjoint_union ~eq:(fun _ _ -> assert false)
+        mapped_by_second_but_not_in_image_of_first
+          mapped_by_first_and_maybe_by_second
+  end
+
+  module Symbol_composition = Make_composition (Symbol)
+  module Variable_composition = Make_composition (Variable)
+  module Simple_composition = Make_composition (Simple)
+  module Const_composition = Make_composition (Const)
+  module Code_id_composition = Make_composition (Code_id)
+  module Continuation_composition = Make_composition (Continuation)
+
+  let compose
+        ~second:{
+          symbols = symbols2;
           variables = variables2;
           simples = simples2;
           consts = consts2;
           code_ids = code_ids2;
           continuations = continuations2;
           used_closure_vars = used_closure_vars2;
+        }
+        ~first:{
+          symbols = symbols1;
+          variables = variables1;
+          simples = simples1;
+          consts = consts1;
+          code_ids = code_ids1;
+          continuations = continuations1;
+          used_closure_vars = used_closure_vars1;
         } =
     { symbols =
-        Symbol.Map.disjoint_union ~eq:Symbol.equal symbols1 symbols2;
+        Symbol_composition.compose ~second:symbols2 ~first:symbols1;
       variables =
-        Variable.Map.disjoint_union ~eq:Variable.equal variables1 variables2;
+        Variable_composition.compose ~second:variables2 ~first:variables1;
       simples =
-        Simple.Map.disjoint_union ~eq:Simple.equal simples1 simples2;
+        Simple_composition.compose ~second:simples2 ~first:simples1;
       consts =
-        Const.Map.disjoint_union ~eq:Const.equal consts1 consts2;
+        Const_composition.compose ~second:consts2 ~first:consts1;
       code_ids =
-        Code_id.Map.disjoint_union ~eq:Code_id.equal code_ids1 code_ids2;
+        Code_id_composition.compose ~second:code_ids2 ~first:code_ids1;
       continuations =
-        Continuation.Map.disjoint_union ~eq:Continuation.equal
-          continuations1 continuations2;
+        Continuation_composition.compose ~second:continuations2
+          ~first:continuations1;
       used_closure_vars =
         Var_within_closure.Set.union used_closure_vars1 used_closure_vars2;
     }
@@ -271,4 +299,66 @@ module Import_map = struct
 
   let closure_var_is_used t var =
     Var_within_closure.Set.mem var t.used_closure_vars
+
+  let apply_renaming
+        { symbols;
+          variables;
+          simples;
+          consts;
+          code_ids;
+          continuations;
+          used_closure_vars;
+        }
+        ~rename_symbol ~rename_variable ~rename_simple
+        ~rename_const ~rename_code_id ~rename_continuation =
+    let symbols =
+      Symbol.Map.fold (fun src target symbols ->
+          Symbol.Map.add (rename_symbol src) (rename_symbol target)
+            symbols)
+        Symbol.Map.empty
+        symbols
+    in
+    let variables =
+      Variable.Map.fold (fun src target variables ->
+          Variable.Map.add (rename_variable src) (rename_variable target)
+            variables)
+        Variable.Map.empty
+        variables
+    in
+    let simples =
+      Simple.Map.fold (fun src target simples ->
+          Simple.Map.add (rename_simple src) (rename_simple target)
+            simples)
+        Simple.Map.empty
+        simples
+    in
+    let consts =
+      Const.Map.fold (fun src target consts ->
+          Const.Map.add (rename_const src) (rename_const target)
+            consts)
+        Const.Map.empty
+        consts
+    in
+    let code_ids =
+      Code_id.Map.fold (fun src target code_ids ->
+          Code_id.Map.add (rename_code_id src) (rename_code_id target)
+            code_ids)
+        Code_id.Map.empty
+        code_ids
+    in
+    let continuations =
+      Continuation.Map.fold (fun src target continuations ->
+          Continuation.Map.add (rename_continuation src)
+            (rename_continuation target) continuations)
+        Continuation.Map.empty
+        continuations
+    in
+    { symbols;
+      variables;
+      simples;
+      consts;
+      code_ids;
+      continuations;
+      used_closure_vars;
+    }
 end

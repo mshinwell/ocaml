@@ -538,10 +538,12 @@ let hash_seed =
 (* Fast integer hashing algorithm for sdolan.  With the stdlib Hashtbl
    implementation it's ok that this returns > 30 bits. *)
 let hash2 a b =
+let x =
   let a = Hashtbl.hash a in
   let b = Hashtbl.hash b in
   let r = a * hash_seed + b in
   r lxor (r lsr 17)
+in x mod 256
 
 (* File copy *)
 

@@ -80,42 +80,6 @@ let is_empty
      | None -> true
      | Some import_map -> Import_map.is_empty import_map
 
-let compose0
-      ~second:
-        { continuations = continuations2;
-          variables = variables2;
-          code_ids = code_ids2;
-          symbols = symbols2;
-          import_map = import_map2;
-        }
-      ~first:
-        { continuations = continuations1;
-          variables = variables1;
-          code_ids = code_ids1;
-          symbols = symbols1;
-          import_map = import_map1;
-        } =
-  { continuations =
-      Continuations.compose ~second:continuations2 ~first:continuations1;
-    variables = Variables.compose ~second:variables2 ~first:variables1;
-    code_ids = Code_ids.compose ~second:code_ids2 ~first:code_ids1;
-    symbols = Symbols.compose ~second:symbols2 ~first:symbols1;
-    (* The import map substitution is always to fresh names, so this doesn't
-       need a "proper" substitution composition operation. *)
-    import_map =
-      match import_map1, import_map2 with
-      | None, None -> None
-      | Some import_map, None | None, Some import_map ->
-        Some import_map
-      | Some import_map1, Some import_map2 ->
-        Some (Import_map.union import_map1 import_map2);
-  }
-
-let compose ~second ~first =
-  if is_empty second then first
-  else if is_empty first then second
-  else compose0 ~second ~first
-
 let add_variable t var1 var2 =
   { t with
     variables = Variables.compose_one ~first:t.variables var1 var2;
@@ -230,3 +194,63 @@ let closure_var_is_used t closure_var =
   match t.import_map with
   | None -> true  (* N.B. not false! *)
   | Some import_map -> Import_map.closure_var_is_used import_map closure_var
+
+let inverse_permutation
+        { continuations;
+          variables;
+          code_ids;
+          symbols;
+          import_map = _;
+        } =
+  { continuations = Continuations.inverse continuations;
+    variables = Variables.inverse variables;
+    code_ids = Code_ids.inverse code_ids;
+    symbols = Symbols.inverse symbols;
+    import_map = None;
+  }
+
+let compose0
+      ~second:
+        { continuations = continuations2;
+          variables = variables2;
+          code_ids = code_ids2;
+          symbols = symbols2;
+          import_map = import_map2;
+        }
+      ~first:
+        ({ continuations = continuations1;
+          variables = variables1;
+          code_ids = code_ids1;
+          symbols = symbols1;
+          import_map = import_map1;
+        } as first) =
+  let first_inverse = inverse_permutation first in
+  let import_map2 =
+    Option.map (fun import_map2 ->
+        Import_map.apply_renaming import_map2
+          ~rename_symbol:(apply_symbol first_inverse)
+          ~rename_variable:(apply_variable first_inverse)
+          ~rename_simple:(apply_simple first_inverse)
+          ~rename_const:Fun.id
+          ~rename_code_id:(apply_code_id first_inverse)
+          ~rename_continuation:(apply_continuation first_inverse))
+      import_map2
+  in
+  { continuations =
+      Continuations.compose ~second:continuations2 ~first:continuations1;
+    variables = Variables.compose ~second:variables2 ~first:variables1;
+    code_ids = Code_ids.compose ~second:code_ids2 ~first:code_ids1;
+    symbols = Symbols.compose ~second:symbols2 ~first:symbols1;
+    import_map =
+      match import_map1, import_map2 with
+      | None, None -> None
+      | Some import_map, None | None, Some import_map ->
+        Some import_map
+      | Some import_map1, Some import_map2 ->
+        Some (Import_map.compose ~second:import_map2 ~first:import_map1);
+  }
+
+let compose ~second ~first =
+  if is_empty second then first
+  else if is_empty first then second
+  else compose0 ~second ~first

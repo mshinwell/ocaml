@@ -71,7 +71,11 @@ val n_way_join
   -> extra_allowed_names:Name_occurrences.t
   -> t
 
+  (*
 include Contains_names.S with type t := t
+
+val free_names : t -> Name_occurrences.t
+*)
 
 (* CR vlaviron: this is only needed because Typing_env_extension creates a
    Name_abstraction over it. These functions should not be called, as levels

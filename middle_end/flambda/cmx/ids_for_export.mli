@@ -86,6 +86,16 @@ module Import_map : sig
   val continuation : t -> Continuation.t -> Continuation.t
   val closure_var_is_used : t -> Var_within_closure.t -> bool
 
-  val union : t -> t -> t
+  val compose : second:t -> first:t -> t
+
+  val apply_renaming
+     : t
+    -> rename_symbol:(Symbol.t -> Symbol.t)
+    -> rename_variable:(Variable.t -> Variable.t)
+    -> rename_simple:(Simple.t -> Simple.t)
+    -> rename_const:(Reg_width_things.Const.t -> Reg_width_things.Const.t)
+    -> rename_code_id:(Code_id.t -> Code_id.t)
+    -> rename_continuation:(Continuation.t -> Continuation.t)
+    -> t
 end
 

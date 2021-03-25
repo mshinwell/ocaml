@@ -36,4 +36,6 @@ module Make (N : Identifiable.S) : sig
   val compose_one_fresh : t -> N.t -> fresh:N.t -> t
 
   val compose : second:t -> first:t -> t
+
+  val inverse : t -> t
 end

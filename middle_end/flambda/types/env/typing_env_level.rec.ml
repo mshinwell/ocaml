@@ -89,6 +89,7 @@ let fold_on_defined_vars f t init =
     t.binding_times
     init
 
+    (*
 let apply_renaming
       ({ defined_vars; binding_times; equations; symbol_projections; }
         as t)
@@ -177,6 +178,7 @@ let free_names
         (Symbol_projection.free_names proj))
     symbol_projections
     free_names
+*)
 
 let empty () =
   { defined_vars = Variable.Map.empty;

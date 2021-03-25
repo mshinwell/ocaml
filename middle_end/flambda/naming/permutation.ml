@@ -106,4 +106,9 @@ module Make (N : Identifiable.S) = struct
     let t = { forwards; backwards; } in
     invariant t;
     t
+
+  let inverse { forwards; backwards; } =
+    { forwards = backwards;
+      backwards = forwards;
+    }
 end
