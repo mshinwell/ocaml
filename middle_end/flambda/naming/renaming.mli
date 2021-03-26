@@ -28,7 +28,7 @@ val empty : t
 
 val print : Format.formatter -> t -> unit
 
-val has_no_action : t -> bool
+val is_empty : t -> bool
 
 val of_import_map : Ids_for_export.Import_map.t -> t
 

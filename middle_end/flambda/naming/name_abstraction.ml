@@ -111,7 +111,7 @@ module Make (Bindable : Bindable.S) (Term : Term) = struct
     f fresh_name fresh_term0 fresh_term1
 
   let apply_renaming ((name, term) as t) perm =
-    if Renaming.has_no_action perm then t
+    if Renaming.is_empty perm then t
     else
       let name = Bindable.apply_renaming name perm in
       let term = Term.apply_renaming term perm in

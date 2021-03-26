@@ -1159,7 +1159,7 @@ let apply_renaming
          continuations_in_trap_actions;
          closure_vars; code_ids; newer_version_of_code_ids; } as t)
       renaming =
-  if Renaming.has_no_action renaming then t
+  if Renaming.is_empty renaming then t
   else
     let names = For_names.apply_renaming names renaming in
     let continuations =

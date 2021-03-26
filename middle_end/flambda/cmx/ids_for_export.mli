@@ -75,8 +75,6 @@ module Import_map : sig
 
   val is_empty : t -> bool
 
-  val has_no_action : t -> bool
-
   val const : t -> Reg_width_things.Const.t -> Reg_width_things.Const.t
   val variable : t -> Variable.t -> Variable.t
   val symbol : t -> Symbol.t -> Symbol.t

@@ -59,7 +59,7 @@ module Make (Head : Type_head_intf.S
       print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
     let apply_renaming t renaming =
-      if Renaming.has_no_action renaming then t
+      if Renaming.is_empty renaming then t
       else
         match t with
         | No_alias Bottom | No_alias Unknown -> t

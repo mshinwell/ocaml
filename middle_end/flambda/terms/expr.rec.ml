@@ -84,7 +84,7 @@ let create descr =
 let peek_descr t = t.descr
 
 let descr t =
-  if Renaming.has_no_action t.delayed_permutation then begin
+  if Renaming.is_empty t.delayed_permutation then begin
     t.descr
   end else begin
     let descr = Descr.apply_renaming t.descr t.delayed_permutation in

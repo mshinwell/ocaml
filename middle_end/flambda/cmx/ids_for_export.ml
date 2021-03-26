@@ -150,17 +150,6 @@ module Import_map = struct
        are really missing at this point). *)
   }
 
-  let has_no_action
-        { symbols; variables; simples; consts; code_ids; continuations;
-          used_closure_vars = _;
-        } =
-    Symbol.Map.is_empty symbols
-    && Variable.Map.is_empty variables
-    && Simple.Map.is_empty simples
-    && Const.Map.is_empty consts
-    && Code_id.Map.is_empty code_ids
-    && Continuation.Map.is_empty continuations
-
   let is_empty
         { symbols; variables; simples; consts; code_ids; continuations;
           used_closure_vars;

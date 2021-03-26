@@ -60,16 +60,6 @@ let print ppf
     Code_ids.print code_ids
     Symbols.print symbols
 
-let has_no_action
-      { continuations; variables; code_ids; symbols; import_map; } =
-  Continuations.is_empty continuations
-  && Variables.is_empty variables
-  && Code_ids.is_empty code_ids
-  && Symbols.is_empty symbols
-  && match import_map with
-     | None -> true
-     | Some import_map -> Import_map.has_no_action import_map
-
 let is_empty
       { continuations; variables; code_ids; symbols; import_map; } =
   Continuations.is_empty continuations

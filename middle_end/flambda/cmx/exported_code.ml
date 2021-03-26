@@ -192,7 +192,7 @@ let all_ids_for_export t =
     Ids_for_export.empty
 
 let apply_renaming code_id_map renaming t =
-  if Renaming.has_no_action renaming
+  if Renaming.is_empty renaming
     && Code_id.Map.is_empty code_id_map
   then t
   else

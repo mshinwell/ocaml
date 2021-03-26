@@ -267,7 +267,7 @@ let free_names t =
       fields
 
 let apply_renaming t renaming =
-  if Renaming.has_no_action renaming then t
+  if Renaming.is_empty renaming then t
   else
     match t with
     | Code code ->
