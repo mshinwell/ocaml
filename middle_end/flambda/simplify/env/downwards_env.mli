@@ -215,3 +215,12 @@ val add_use_of_closure_var : t -> Var_within_closure.t -> t
 val closure_var_uses : t -> Var_within_closure.Set.t
 
 val without_closure_var_uses : t -> t
+
+(** This both disables rebuilding of terms and disables inlining. *)
+val set_do_not_rebuild_terms : t -> t
+
+type are_rebuilding_terms
+
+val are_rebuilding_terms : t -> are_rebuilding_terms
+
+val are_rebuilding_terms_to_bool : are_rebuilding_terms -> bool

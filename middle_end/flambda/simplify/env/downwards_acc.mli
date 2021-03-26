@@ -108,3 +108,10 @@ val add_use_of_closure_var : t -> Var_within_closure.t -> t
 val used_closure_vars : t -> Name_occurrences.t
 
 val with_used_closure_vars : t -> used_closure_vars:Name_occurrences.t -> t
+
+(** This both disables rebuilding of terms and disables inlining. *)
+val set_do_not_rebuild_terms : t -> t
+
+val are_rebuilding_terms : t -> Are_rebuilding_terms.t
+
+val do_not_rebuild_terms : t -> bool

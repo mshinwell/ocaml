@@ -44,6 +44,7 @@ type t = {
   variables_defined_at_toplevel : Variable.Set.t;
   cse : CSE.t;
   closure_var_uses : Var_within_closure.Set.t;
+  do_not_rebuild_terms : bool;
 }
 
 let print ppf { backend = _; round; typing_env; get_imported_code = _;
@@ -52,7 +53,7 @@ let print ppf { backend = _; round; typing_env; get_imported_code = _;
                 code; at_unit_toplevel; unit_toplevel_exn_continuation;
                 symbols_currently_being_defined;
                 variables_defined_at_toplevel; cse;
-                closure_var_uses;
+                closure_var_uses; do_not_rebuild_terms;
               } =
   Format.fprintf ppf "@[<hov 1>(\
       @[<hov 1>(round@ %d)@]@ \
@@ -67,6 +68,7 @@ let print ppf { backend = _; round; typing_env; get_imported_code = _;
       @[<hov 1>(variables_defined_at_toplevel@ %a)@]@ \
       @[<hov 1>(cse@ @[<hov 1>%a@])@]@ \
       @[<hov 1>(closure_var_uses@ @[<hov 1>%a@])@]@ \
+      @[<hov 1>(do_not_rebuild_terms@ %b)@]@ \
       @[<hov 1>(code@ %a)@]\
       )@]"
     round
@@ -81,6 +83,7 @@ let print ppf { backend = _; round; typing_env; get_imported_code = _;
     Variable.Set.print variables_defined_at_toplevel
     CSE.print cse
     Var_within_closure.Set.print closure_var_uses
+    do_not_rebuild_terms
     (Code_id.Map.print Code.print) code
 
 let invariant _t = ()
@@ -104,6 +107,7 @@ let create ~round ~backend ~(resolver : resolver)
     variables_defined_at_toplevel = Variable.Set.empty;
     cse = CSE.empty;
     closure_var_uses = Var_within_closure.Set.empty;
+    do_not_rebuild_terms = false;
   }
 
 let resolver t = TE.resolver t.typing_env
@@ -181,7 +185,7 @@ let enter_closure { backend; round; typing_env; get_imported_code;
                     unit_toplevel_exn_continuation;
                     symbols_currently_being_defined;
                     variables_defined_at_toplevel; cse = _;
-                    closure_var_uses = _;
+                    closure_var_uses = _; do_not_rebuild_terms;
                   } =
   { backend;
     round;
@@ -198,6 +202,7 @@ let enter_closure { backend; round; typing_env; get_imported_code;
     variables_defined_at_toplevel;
     cse = CSE.empty;
     closure_var_uses = Var_within_closure.Set.empty;
+    do_not_rebuild_terms;
   }
 
 let define_variable t var kind =
@@ -557,3 +562,15 @@ let without_closure_var_uses t =
   { t with
     closure_var_uses = Var_within_closure.Set.empty;
   }
+
+let set_do_not_rebuild_terms t =
+  { t with
+    do_not_rebuild_terms = true;
+    can_inline = false;
+  }
+
+type are_rebuilding_terms = bool
+
+let are_rebuilding_terms t = not t.do_not_rebuild_terms
+
+let are_rebuilding_terms_to_bool are_rebuilding = are_rebuilding
