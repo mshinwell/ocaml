@@ -59,31 +59,3 @@ val add_continuation : t -> Continuation.t -> t
 val union : t -> t -> t
 
 val union_list : t list -> t
-
-module Import_map : sig
-  type t
-
-  val create
-     : symbols : Symbol.t Symbol.Map.t
-    -> variables : Variable.t Variable.Map.t
-    -> simples : Simple.t Simple.Map.t
-    -> consts : Reg_width_things.Const.t Reg_width_things.Const.Map.t
-    -> code_ids : Code_id.t Code_id.Map.t
-    -> continuations : Continuation.t Continuation.Map.t
-    -> used_closure_vars : Var_within_closure.Set.t
-    -> t
-
-  val is_empty : t -> bool
-
-  val const : t -> Reg_width_things.Const.t -> Reg_width_things.Const.t
-  val variable : t -> Variable.t -> Variable.t
-  val symbol : t -> Symbol.t -> Symbol.t
-  val name : t -> Name.t -> Name.t
-  val simple : t -> Simple.t -> Simple.t
-  val code_id : t -> Code_id.t -> Code_id.t
-  val continuation : t -> Continuation.t -> Continuation.t
-  val closure_var_is_used : t -> Var_within_closure.t -> bool
-
-  val union : t -> t -> t
-end
-
