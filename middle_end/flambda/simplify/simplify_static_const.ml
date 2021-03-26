@@ -191,7 +191,7 @@ let simplify_static_consts dacc (bound_symbols : Bound_symbols.t)
      environment.  We can do that here because we're not simplifying the code
      (which may contain recursive references to symbols and/or code IDs
      being defined). *)
-  let bound_symbols, static_consts, dacc =
+  let bound_symbols', static_consts', dacc =
     Static_const.Group.match_against_bound_symbols static_consts bound_symbols
       ~init:([], [], dacc)
       ~code:(fun (bound_symbols, static_consts, dacc) code_id code ->
@@ -218,13 +218,12 @@ let simplify_static_consts dacc (bound_symbols : Bound_symbols.t)
             static_const :: static_consts,
             dacc)
   in
-  let bound_symbols = Bound_symbols.create bound_symbols in
-  let static_consts = Rebuilt_static_const.Group.create static_consts in
+  let bound_symbols' = Bound_symbols.create bound_symbols' in
+  let static_consts' = Rebuilt_static_const.Group.create static_consts' in
   (* We now collect together all of the closures, from all of the sets
      being defined, and simplify them together. *)
   let closure_bound_names_all_sets, all_sets_of_closures_and_symbols =
-    Rebuilt_static_const.Group.match_against_bound_symbols
-      static_consts bound_symbols
+    Static_const.Group.match_against_bound_symbols static_consts bound_symbols
       ~init:([], [])
       ~code:(fun acc _ _ -> acc)
       ~block_like:(fun acc _ _ -> acc)
@@ -243,7 +242,7 @@ let simplify_static_consts dacc (bound_symbols : Bound_symbols.t)
           closure_bound_names :: closure_bound_names_all_sets,
             (closure_symbols, set_of_closures) :: sets_of_closures)
   in
-  let bound_symbols', static_consts', dacc =
+  let bound_symbols'', static_consts'', dacc =
     Simplify_set_of_closures.simplify_lifted_sets_of_closures dacc
       ~all_sets_of_closures_and_symbols
       ~closure_bound_names_all_sets
@@ -251,6 +250,6 @@ let simplify_static_consts dacc (bound_symbols : Bound_symbols.t)
   in
   (* The ordering of these lists doesn't matter as they will go through
      [Sort_lifted_constants] before the terms are constructed. *)
-  Bound_symbols.concat bound_symbols bound_symbols',
-    Rebuilt_static_const.Group.concat static_consts static_consts',
+  Bound_symbols.concat bound_symbols' bound_symbols'',
+    Rebuilt_static_const.Group.concat static_consts' static_consts'',
     dacc
