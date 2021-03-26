@@ -188,7 +188,12 @@ let apply_simple t simple =
       | Some rec_info -> Simple.with_rec_info (Simple.name new_name) rec_info
   in
   (* Constants are never permuted, only freshened upon import. *)
-  Simple.pattern_match simple ~const:(fun _ -> simple) ~name
+  Simple.pattern_match simple
+    ~name
+    ~const:(fun cst ->
+      match t.import_map with
+      | None -> simple
+      | Some import_map -> Simple.const (Import_map.const import_map cst))
 
 let closure_var_is_used t closure_var =
   match t.import_map with
@@ -219,10 +224,10 @@ let compose0
         }
       ~first:
         ({ continuations = continuations1;
-          variables = variables1;
-          code_ids = code_ids1;
-          symbols = symbols1;
-          import_map = import_map1;
+           variables = variables1;
+           code_ids = code_ids1;
+           symbols = symbols1;
+           import_map = import_map1;
         } as first) =
   let first_inverse = inverse_permutation first in
   let import_map2 =

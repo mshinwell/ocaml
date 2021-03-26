@@ -543,7 +543,7 @@ let x =
   let b = Hashtbl.hash b in
   let r = a * hash_seed + b in
   r lxor (r lsr 17)
-in x mod 256
+in x mod 32
 
 (* File copy *)
 
