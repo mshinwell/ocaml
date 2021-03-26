@@ -86,12 +86,14 @@ let rebuild_non_inlined_direct_full_application apply ~use_id ~exn_cont_use_id
   let expr, uacc =
     match use_id with
     | None ->
-      Expr.create_apply apply,
-      UA.notify_added ~code_size:(Code_size.apply apply) uacc
+      let uacc =
+        UA.add_free_names uacc (Apply.free_names apply)
+        |> UA.notify_added ~code_size:(Code_size.apply apply)
+      in
+      Expr.create_apply apply, uacc
     | Some use_id ->
       EB.add_wrapper_for_fixed_arity_apply uacc ~use_id result_arity apply
   in
-  let uacc = UA.add_free_names uacc (Expr.free_names expr) in
   after_rebuild expr uacc
 
 let simplify_direct_full_application ~simplify_expr dacc apply function_decl_opt
@@ -287,7 +289,6 @@ let simplify_direct_partial_application ~simplify_expr dacc apply
         (Expr.create_apply full_application, cost_metrics)
         (List.rev applied_args_with_closure_vars)
     in
-    let free_names_of_body = Expr.free_names body in
     let params_and_body =
       Function_params_and_body.create ~return_continuation
         exn_continuation
@@ -295,7 +296,7 @@ let simplify_direct_partial_application ~simplify_expr dacc apply
         ~body
         ~dbg
         ~my_closure
-        ~free_names_of_body:(Known free_names_of_body)
+        ~free_names_of_body:Unknown
     in
     let code_id =
       Code_id.create
@@ -482,7 +483,6 @@ let rebuild_function_call_where_callee's_type_unavailable apply call_kind
     EB.add_wrapper_for_fixed_arity_apply uacc ~use_id
       (Call_kind.return_arity call_kind) apply
   in
-  let uacc = UA.add_free_names uacc (Expr.free_names expr) in
   after_rebuild expr uacc
 
 let simplify_function_call_where_callee's_type_unavailable dacc apply
@@ -731,7 +731,6 @@ let rebuild_method_call apply ~use_id ~exn_cont_use_id uacc ~after_rebuild =
     EB.add_wrapper_for_fixed_arity_apply uacc ~use_id
       (Flambda_arity.With_subkinds.create [K.With_subkind.any_value]) apply
   in
-  let uacc = UA.add_free_names uacc (Expr.free_names expr) in
   after_rebuild expr uacc
 
 let simplify_method_call dacc apply ~callee_ty ~kind:_ ~obj ~arg_types
@@ -789,10 +788,12 @@ let rebuild_c_call apply ~use_id ~exn_cont_use_id ~return_arity uacc
       EB.add_wrapper_for_fixed_arity_apply uacc ~use_id
         (Flambda_arity.With_subkinds.of_arity return_arity) apply
     | None ->
-      Expr.create_apply apply,
-      UA.notify_added ~code_size:(Code_size.apply apply) uacc
+      let uacc =
+        UA.add_free_names uacc (Apply.free_names apply)
+        |> UA.notify_added ~code_size:(Code_size.apply apply)
+      in
+      Expr.create_apply apply, uacc
   in
-  let uacc = UA.add_free_names uacc (Expr.free_names expr) in
   after_rebuild expr uacc
 
 let simplify_c_call dacc apply ~callee_ty ~param_arity ~return_arity

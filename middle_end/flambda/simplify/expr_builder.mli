@@ -83,7 +83,8 @@ val rebuild_invalid
 
 type add_wrapper_for_switch_arm_result = private
   | Apply_cont of Apply_cont.t
-  | New_wrapper of Continuation.t * Continuation_handler.t * Cost_metrics.t
+  | New_wrapper of Continuation.t * Continuation_handler.t
+      * Name_occurrences.t * Cost_metrics.t
 
 val add_wrapper_for_switch_arm
    : Upwards_acc.t

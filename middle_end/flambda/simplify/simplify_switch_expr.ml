@@ -106,8 +106,11 @@ let rebuild_switch ~simplify_let dacc ~arms ~scrutinee ~scrutinee_ty uacc
               Simple.pattern_match arg ~const
                 ~name:(fun _ -> normal_case ~identity_arms ~not_arms)
           end
-        | New_wrapper (new_cont, new_handler, cost_metrics_handler) ->
-          let new_let_cont = new_cont, new_handler, cost_metrics_handler in
+        | New_wrapper (new_cont, new_handler, free_names_of_handler,
+            cost_metrics_handler) ->
+          let new_let_cont =
+            new_cont, new_handler, free_names_of_handler, cost_metrics_handler
+          in
           let new_let_conts = new_let_cont :: new_let_conts in
           let action = Apply_cont.goto new_cont in
           let arms = Target_imm.Map.add arm action arms in
@@ -165,21 +168,14 @@ let rebuild_switch ~simplify_let dacc ~arms ~scrutinee ~scrutinee_ty uacc
       Let.create (Bindable_let_bound.singleton bound_to)
         defining_expr
         ~body
-        (* [body] is a (very) small expression, so it is fine to call
-           [free_names] upon it. *)
-        ~free_names_of_body:(Known (Expr.free_names body))
+        ~free_names_of_body:Unknown
     in
     simplify_let dacc let_expr
       ~down_to_up:(fun _dacc ~rebuild ->
-        (* We don't need to transfer any name occurrence info out of [dacc]
-           since we re-compute it below, prior to adding it to [uacc]. *)
         rebuild uacc ~after_rebuild:(fun expr uacc -> expr, uacc))
   in
-  (* In some cases below the free name information will be changed in
-     [uacc] and in some cases it won't be.  To make things easier we save
-     the existing free name information here and then unilaterally update it
-     (see below) after we have constructed the necessary expressions. *)
-  let free_names_after = UA.name_occurrences uacc in
+  (* CR mshinwell: Here and elsewhere [UA.name_occurrences] should be empty
+     (maybe except for closure vars? -- check).  We should add asserts. *)
   let body, uacc =
     if Target_imm.Map.cardinal arms < 1 then
       let uacc =
@@ -219,15 +215,14 @@ let rebuild_switch ~simplify_let dacc ~arms ~scrutinee ~scrutinee_ty uacc
               Apply_cont.create dest ~args:[not_scrutinee'] ~dbg
               |> Expr.create_apply_cont
             in
-            Let.create bound do_tagging ~body
-              ~free_names_of_body:(Known (Expr.free_names body))
+            Let.create bound do_tagging ~body ~free_names_of_body:Unknown
             |> Expr.create_let)
         | None ->
           (* In that case, even though some branches were removed by simplify we
              should not count them in the number of removed operations: these
              branches wouldn't have been taken during execution anyway.
           *)
-           let expr, uacc = EB.create_switch uacc ~scrutinee ~arms in
+          let expr, uacc = EB.create_switch uacc ~scrutinee ~arms in
           if !Clflags.flambda_invariant_checks
             && Simple.is_const scrutinee
             && Target_imm.Map.cardinal arms > 1
@@ -239,26 +234,29 @@ let rebuild_switch ~simplify_let dacc ~arms ~scrutinee ~scrutinee_ty uacc
           end;
           expr, uacc
   in
-  (* The calls to [Expr.free_names] here are only on (very) small expressions,
-     so shouldn't be a performance hit. *)
   let uacc, expr =
-    List.fold_left (fun (uacc, body) (new_cont, new_handler, cost_metrics_of_handler) ->
+    ListLabels.fold_left new_let_conts ~init:(uacc, body)
+      ~f:(fun (uacc, body)
+              (new_cont, new_handler, free_names_of_handler,
+               cost_metrics_of_handler) ->
+        let free_names_of_body = UA.name_occurrences uacc in
+        let expr =
+          Let_cont.create_non_recursive
+            new_cont new_handler ~body
+            ~free_names_of_body:(Known free_names_of_body)
+        in
+        let name_occurrences =
+          Name_occurrences.remove_continuation
+            (Name_occurrences.union free_names_of_body free_names_of_handler)
+            new_cont
+        in
         let uacc =
-          UA.add_cost_metrics
+          UA.with_name_occurrences uacc ~name_occurrences
+          |> UA.add_cost_metrics
             (Cost_metrics.increase_due_to_let_cont_non_recursive
                ~cost_metrics_of_handler)
-            uacc
         in
-        uacc,
-        Let_cont.create_non_recursive new_cont new_handler ~body
-          ~free_names_of_body:(Known (Expr.free_names body)))
-      (uacc, body)
-      new_let_conts
-  in
-  let uacc =
-    UA.with_name_occurrences uacc
-      ~name_occurrences:
-        (Name_occurrences.union free_names_after (Expr.free_names expr))
+        uacc, expr)
   in
   after_rebuild expr uacc
 
