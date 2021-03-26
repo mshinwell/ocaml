@@ -565,6 +565,9 @@ let create_switch uacc ~scrutinee ~arms =
         Expr.create_switch switch,
         UA.notify_added ~code_size:(Code_size.switch switch) uacc
 
+let rebuild_invalid uacc ~after_rebuild =
+  after_rebuild (Expr.create_invalid ()) uacc
+
 type rewrite_use_result =
   | Apply_cont of Apply_cont.t
   | Expr of (

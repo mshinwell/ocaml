@@ -41,7 +41,7 @@ let rec simplify_expr dacc expr ~down_to_up =
     (* CR mshinwell: Make sure that a program can be simplified to just
        [Invalid].  [Un_cps] should translate any [Invalid] that it sees as if
        it were [Halt_and_catch_fire]. *)
-    down_to_up dacc ~rebuild:Simplify_common.rebuild_invalid
+    down_to_up dacc ~rebuild:EB.rebuild_invalid
 
 and simplify_toplevel dacc expr ~return_continuation ~return_arity
       exn_continuation ~return_cont_scope ~exn_cont_scope =

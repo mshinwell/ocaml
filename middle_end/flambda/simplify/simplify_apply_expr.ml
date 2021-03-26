@@ -415,7 +415,7 @@ let simplify_direct_function_call ~simplify_expr dacc apply
       let uacc =
         UA.notify_removed ~operation:Removed_operations.call uacc
       in
-      Simplify_common.rebuild_invalid uacc ~after_rebuild
+      EB.rebuild_invalid uacc ~after_rebuild
     )
   | Ok callee's_code_id ->
     let call_kind =
@@ -669,7 +669,7 @@ let simplify_function_call ~simplify_expr dacc apply ~callee_ty
         let uacc =
           UA.notify_removed ~operation:Removed_operations.call uacc
         in
-        Simplify_common.rebuild_invalid uacc ~after_rebuild
+        EB.rebuild_invalid uacc ~after_rebuild
       )
     | Unknown -> type_unavailable ()
     end
@@ -679,7 +679,7 @@ let simplify_function_call ~simplify_expr dacc apply ~callee_ty
       let uacc =
         UA.notify_removed ~operation:Removed_operations.call uacc
       in
-      Simplify_common.rebuild_invalid uacc ~after_rebuild
+      EB.rebuild_invalid uacc ~after_rebuild
     )
 
 let simplify_apply_shared dacc apply : _ Or_bottom.t =
@@ -839,7 +839,7 @@ let simplify_apply ~simplify_expr dacc apply ~down_to_up =
       let uacc =
         UA.notify_removed ~operation:Removed_operations.call uacc
       in
-      Simplify_common.rebuild_invalid uacc ~after_rebuild
+      EB.rebuild_invalid uacc ~after_rebuild
     )
   | Ok (callee_ty, apply, arg_types) ->
     match Apply.call_kind apply with

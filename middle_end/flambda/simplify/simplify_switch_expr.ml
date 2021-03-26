@@ -272,7 +272,7 @@ let simplify_switch ~simplify_let dacc switch ~down_to_up =
       let uacc =
         UA.notify_removed ~operation:Removed_operations.branch uacc
       in
-      Simplify_common.rebuild_invalid uacc ~after_rebuild
+      EB.rebuild_invalid uacc ~after_rebuild
     )
   | Ok scrutinee, scrutinee_ty ->
     let arms, dacc =

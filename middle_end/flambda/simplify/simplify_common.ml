@@ -50,9 +50,6 @@ type simplify_toplevel =
   -> exn_cont_scope:Scope.t
   -> Expr.t * Upwards_acc.t
 
-let rebuild_invalid uacc ~after_rebuild =
-  after_rebuild (Expr.create_invalid ()) uacc
-
 let simplify_projection dacc ~original_term ~deconstructing ~shape ~result_var
       ~result_kind =
   let env = DA.typing_env dacc in

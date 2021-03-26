@@ -147,7 +147,7 @@ let simplify_apply_cont dacc apply_cont ~down_to_up =
       let uacc =
         UA.notify_removed ~operation:Removed_operations.branch uacc
       in
-      Simplify_common.rebuild_invalid uacc ~after_rebuild
+      EB.rebuild_invalid uacc ~after_rebuild
     )
   | _changed, Ok args_with_types ->
     let args, arg_types = List.split args_with_types in

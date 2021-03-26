@@ -76,6 +76,11 @@ val create_switch
       -> arms:Apply_cont_expr.t Target_imm.Map.t
       -> Expr.t * Upwards_acc.t
 
+val rebuild_invalid
+   : Upwards_acc.t
+  -> after_rebuild:(Expr.t -> Upwards_acc.t -> (Expr.t * Upwards_acc.t))
+  -> Expr.t * Upwards_acc.t
+
 type add_wrapper_for_switch_arm_result = private
   | Apply_cont of Apply_cont.t
   | New_wrapper of Continuation.t * Continuation_handler.t * Cost_metrics.t

@@ -51,8 +51,6 @@ type simplify_toplevel =
   -> exn_cont_scope:Scope.t
   -> Expr.t * Upwards_acc.t
 
-val rebuild_invalid : (Expr.t * Upwards_acc.t) rebuild
-
 val simplify_projection
    : Downwards_acc.t
   -> original_term:Named.t
