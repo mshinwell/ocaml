@@ -72,33 +72,36 @@ let is_empty
 
 let compose0
       ~second:
-        { continuations = continuations2;
-          variables = variables2;
-          code_ids = code_ids2;
-          symbols = symbols2;
-          import_map = import_map2;
-        }
+        ({ continuations = continuations2;
+           variables = variables2;
+           code_ids = code_ids2;
+           symbols = symbols2;
+           import_map = import_map2;
+         } as second)
       ~first:
-        { continuations = continuations1;
-          variables = variables1;
-          code_ids = code_ids1;
-          symbols = symbols1;
-          import_map = import_map1;
-        } =
+        ({ continuations = continuations1;
+           variables = variables1;
+           code_ids = code_ids1;
+           symbols = symbols1;
+           import_map = import_map1;
+         } as first) =
   { continuations =
       Continuations.compose ~second:continuations2 ~first:continuations1;
     variables = Variables.compose ~second:variables2 ~first:variables1;
     code_ids = Code_ids.compose ~second:code_ids2 ~first:code_ids1;
     symbols = Symbols.compose ~second:symbols2 ~first:symbols1;
-    (* The import map substitution is always to fresh names, so this doesn't
-       need a "proper" substitution composition operation. *)
+    (* The process of simplification of terms together with the collection of
+       [Ids_for_export] from types, prior to writing of .cmx files, should
+       ensure that only [first] (and not [second]) has an import map. *)
     import_map =
       match import_map1, import_map2 with
       | None, None -> None
-      | Some import_map, None | None, Some import_map ->
-        Some import_map
-      | Some import_map1, Some import_map2 ->
-        Some (Import_map.union import_map1 import_map2);
+      | Some _, None -> import_map1
+      | (None | Some _), Some _ ->
+        Misc.fatal_errorf "Cannot compose renamings; only the [first] renaming \
+            may have an import map.  first:@ %a@ second:@ %a"
+          print first
+          print second
   }
 
 let compose ~second ~first =
