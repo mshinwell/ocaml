@@ -259,15 +259,7 @@ module Import_map = struct
        to the grand table of [Simple]s, see reg_width_things.ml). *)
     match Simple.Map.find simple t.simples with
     | simple -> simple
-    | exception Not_found ->
-      (* In this case, either the [Simple] has no [Rec_info]; or it does
-         have [Rec_info] and its hash did not collide upon import. *)
-      Simple.pattern_match simple
-        ~const:(fun c -> Simple.const (const t c))
-        ~name:(fun n ->
-          match Simple.rec_info simple with
-          | None -> Simple.name (name t n)
-          | Some _ -> simple)
+    | exception Not_found -> simple
 
   let closure_var_is_used t var =
     Var_within_closure.Set.mem var t.used_closure_vars

@@ -224,7 +224,12 @@ let apply_simple t simple =
       | Some rec_info -> Simple.with_rec_info (Simple.name new_name) rec_info
   in
   (* Constants are never permuted, only freshened upon import. *)
-  Simple.pattern_match simple ~const:(fun _ -> simple) ~name
+  Simple.pattern_match simple
+    ~name
+    ~const:(fun cst ->
+      match t.import_map with
+      | None -> simple
+      | Some import_map -> Simple.const (Import_map.const import_map cst))
 
 let closure_var_is_used t closure_var =
   match t.import_map with
