@@ -212,7 +212,7 @@ let rebuild_non_recursive_let_cont_handler cont
     in
     UA.with_name_occurrences uacc ~name_occurrences
   in
-  after_rebuild cont_handler (UA.with_uenv uacc uenv)
+  after_rebuild cont_handler ~handler_expr:handler (UA.with_uenv uacc uenv)
 
 let simplify_non_recursive_let_cont_handler ~simplify_expr
       ~denv_before_body ~dacc_after_body
@@ -415,7 +415,7 @@ let simplify_non_recursive_let_cont ~simplify_expr dacc non_rec ~down_to_up =
                   |> UA.clear_name_occurrences
                   |> UA.clear_cost_metrics
                 in
-                rebuild_handler uacc ~after_rebuild:(fun handler uacc ->
+                rebuild_handler uacc ~after_rebuild:(fun handler ~handler_expr uacc ->
                   let name_occurrences_handler =
                     if continuation_has_zero_uses then Name_occurrences.empty
                     else UA.name_occurrences uacc
@@ -496,10 +496,6 @@ let simplify_non_recursive_let_cont ~simplify_expr dacc non_rec ~down_to_up =
                           | Let_cont _ -> false
                         in
                         if remove_let_cont_leaving_handler then
-                          let handler =
-                            CH.pattern_match handler ~f:(fun _params ~handler ->
-                              handler)
-                          in
                           let uacc =
                             let name_occurrences =
                               Name_occurrences.union name_occurrences_handler
@@ -510,7 +506,7 @@ let simplify_non_recursive_let_cont ~simplify_expr dacc non_rec ~down_to_up =
                                be set to the cost_metrics of handler.*)
                             |>  UA.with_cost_metrics cost_metrics_of_handler
                           in
-                          handler, uacc
+                          handler_expr, uacc
                         else
                           let uacc =
                             let name_occurrences =
@@ -527,7 +523,7 @@ let simplify_non_recursive_let_cont ~simplify_expr dacc non_rec ~down_to_up =
                               ~is_applied_with_traps
                           in
                           let uacc =
-                            UA.add_cost_metrics 
+                            UA.add_cost_metrics
                               (Cost_metrics.increase_due_to_let_cont_non_recursive
                                  ~cost_metrics_of_handler)
                               uacc
