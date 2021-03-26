@@ -242,7 +242,7 @@ let simplify_named0 dacc (bindable_let_bound : Bindable_let_bound.t)
           static_consts ~simplify_toplevel
       with Misc.Fatal_error -> begin
         if !Clflags.flambda_context_on_error then begin
-          Format.eprintf "\n%sContext is:%s simplifying [Let_symbol] binding \
+          Format.eprintf "\n%sContext is:%s simplifying 'let symbol' binding \
                             of@ %a@ with downwards accumulator:@ %a\n"
             (Flambda_colours.error ())
             (Flambda_colours.normal ())
@@ -252,15 +252,6 @@ let simplify_named0 dacc (bindable_let_bound : Bindable_let_bound.t)
           raise Misc.Fatal_error
       end
     in
-    (* CR mshinwell: Change to be run only when invariants are on, and use
-      [Name_occurrences.iter] (to be written).
-    Symbol.Set.iter (fun sym ->
-        DE.check_symbol_is_bound (DA.denv dacc) sym)
-      (Name_occurrences.symbols bound_symbols_free_names);
-    Code_id.Set.iter (fun code_id ->
-        DE.check_code_id_is_bound (DA.denv dacc) code_id)
-      (Name_occurrences.code_ids bound_symbols_free_names);
-    *)
     let dacc =
       DA.map_denv dacc ~f:(fun denv ->
         Symbol.Set.fold (fun symbol denv ->

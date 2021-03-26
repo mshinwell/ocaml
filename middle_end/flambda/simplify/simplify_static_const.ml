@@ -63,13 +63,7 @@ let simplify_static_const_of_kind_value0 dacc
       : Static_const.t * DA.t =
   let bind_result_sym typ =
     DA.map_denv dacc ~f:(fun denv ->
-      let denv =
-        (* [result_sym] will already be defined when we are lifting
-           reified continuation parameters. *)
-        (* CR mshinwell: This is kind of nasty---try to rearrange things
-           so this doesn't happen. *)
-        DE.define_symbol_if_undefined denv result_sym K.value
-      in
+      let denv = DE.define_symbol denv result_sym K.value in
       DE.add_equation_on_symbol denv result_sym typ)
   in
   match static_const with

@@ -119,21 +119,7 @@ let try_to_reify dacc (term : Simplified_named.t) ~bound_to ~allow_lifting =
     | Lift to_lift ->
       if Name_mode.is_normal occ_kind && allow_lifting then
         let static_const = create_static_const to_lift in
-        (* CR mshinwell: Make sure we never need this check now
-        (* We cannot currently handle the lifting of constants that are
-           recursive with a symbol currently being defined, unless the
-           constant is a closure, which it never is in this case.
-           (An example of such a constant would be a pair, created in a
-           recursive function [f] that has no free variables, containing
-           the closure [f].) *)
-        let overlap_with_current_definitions =
-          let free_names = Static_const.free_names static_const in
-          Symbol.Set.exists (fun sym ->
-              Name_occurrences.mem_symbol free_names sym)
-            (DE.symbols_currently_being_defined denv)
-        in
-        if overlap_with_current_definitions then term, dacc, ty
-        else *) lift dacc ty ~bound_to static_const
+        lift dacc ty ~bound_to static_const
       else
         term, dacc, ty
     | Simple simple ->

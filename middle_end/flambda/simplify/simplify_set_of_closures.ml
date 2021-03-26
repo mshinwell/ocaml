@@ -187,11 +187,7 @@ end = struct
                 Name_in_binding_pos.create name
                   (if irrelevant then NM.in_types else NM.normal)
               in
-              (* The name may be bound already when reifying the types of
-                 continuation parameters at toplevel. *)
-              (* CR mshinwell: update out of date comment.  Do we still need
-                 [define_name_if_undefined] here? *)
-              DE.define_name_if_undefined denv bound_name K.value)
+              DE.define_name denv bound_name K.value)
             closure_bound_names_inside
             denv)
         denv_inside_functions

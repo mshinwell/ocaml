@@ -58,8 +58,7 @@ let rebuild_let symbol_scoping_rule simplify_named_result
     after_rebuild body uacc
   else
     let scoping_rule =
-      (* If this is a "normal" let rather than a "let symbol", then we
-         use [Dominator] scoping for any symbol bindings we place, as the
+      (* We use [Dominator] scoping for any symbol bindings we place, as the
          types of the symbols may have been used out of syntactic scope. *)
       Option.value ~default:Symbol_scoping_rule.Dominator symbol_scoping_rule
     in
