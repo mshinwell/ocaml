@@ -77,8 +77,6 @@ let print_with_cache ~cache ppf
 let print ppf t =
   print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
-(* let invariant _t = () *)
-
 let fold_on_defined_vars f t init =
   Binding_time.Map.fold (fun _bt vars acc ->
       Variable.Set.fold (fun var acc ->
@@ -88,95 +86,6 @@ let fold_on_defined_vars f t init =
         acc)
     t.binding_times
     init
-
-let apply_renaming
-      ({ defined_vars; binding_times; equations; symbol_projections; }
-        as t)
-      perm =
-  let defined_vars_changed = ref false in
-  let defined_vars' =
-    Variable.Map.fold (fun var kind defined_vars ->
-        let var' = Renaming.apply_variable perm var in
-        if not (var == var') then begin
-          defined_vars_changed := true
-        end;
-        Variable.Map.add var' kind defined_vars)
-      defined_vars
-      Variable.Map.empty
-  in
-  let binding_times' =
-    if !defined_vars_changed then
-      Binding_time.Map.fold (fun binding_time vars binding_times ->
-          let vars' =
-            Variable.Set.map (fun var ->
-              Renaming.apply_variable perm var)
-              vars
-          in
-          Binding_time.Map.add binding_time vars' binding_times)
-        binding_times
-        Binding_time.Map.empty
-    else
-      binding_times
-  in
-  let equations_changed = ref false in
-  let equations' =
-    Name.Map.fold (fun name typ equations ->
-        let name' = Renaming.apply_name perm name in
-        let typ' = Type_grammar.apply_renaming typ perm in
-        if not (name == name' && typ == typ') then begin
-          equations_changed := true
-        end;
-        Name.Map.add name' typ' equations)
-      equations
-      Name.Map.empty
-  in
-  let symbol_projections_changed = ref false in
-  let symbol_projections' =
-    Variable.Map.fold (fun var projection symbol_projections ->
-        let var' = Renaming.apply_variable perm var in
-        let projection' =
-          Symbol_projection.apply_renaming projection perm
-        in
-        if not (var == var') ||
-           not (projection == projection') then begin
-          symbol_projections_changed := true
-        end;
-        Variable.Map.add var' projection' symbol_projections)
-      symbol_projections
-      Variable.Map.empty
-  in
-  if (not !defined_vars_changed)
-    && (not !equations_changed)
-    && (not !symbol_projections_changed)
-  then t
-  else
-    { defined_vars = defined_vars';
-      binding_times = binding_times';
-      equations = equations';
-      symbol_projections = symbol_projections';
-    }
-
-let free_names
-      { defined_vars; binding_times = _; equations; symbol_projections; } =
-  let free_names_defined_vars =
-    Name_occurrences.create_variables (Variable.Map.keys defined_vars)
-      Name_mode.in_types
-  in
-  let free_names =
-    Name.Map.fold (fun name typ free_names ->
-        let free_names' =
-          Name_occurrences.add_name (Type_grammar.free_names typ)
-            name Name_mode.in_types
-        in
-        Name_occurrences.union free_names free_names')
-      equations
-      free_names_defined_vars
-  in
-  Variable.Map.fold (fun _var proj free_names ->
-      Name_occurrences.union free_names
-        (Symbol_projection.free_names proj))
-    symbol_projections
-    free_names
 
 let empty () =
   { defined_vars = Variable.Map.empty;
