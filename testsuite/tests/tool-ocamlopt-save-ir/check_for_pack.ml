@@ -7,7 +7,7 @@
  **** script
    script = "touch empty.ml"
  ***** ocamlopt.byte
-   flags = "-S check_for_pack.cmir-linear -for-pack Foo"
+   flags = "-S check_for_pack.cmir-linear -for-pack foo"
    module = "empty.ml"
    ocamlopt_byte_exit_status = "2"
  ****** check-ocamlopt.byte-output
