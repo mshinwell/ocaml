@@ -148,3 +148,6 @@ let implementation ~backend ~start_from ~source_file ~output_prefix =
   | Emit -> emit info
   | _ -> Misc.fatal_errorf "Cannot start from %s"
            (Clflags.Compiler_pass.to_string start_from)
+
+(* CR mshinwell: Need a proper error in the case of -for-pack foo.  Or should
+   we capitalise? *)
