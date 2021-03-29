@@ -34,14 +34,11 @@ module Name = struct
     let output chan t = print (Format.formatter_of_out_channel chan) t
   end)
 
-  let isupper chr =
-    Stdlib.(=) (Char.uppercase_ascii chr) chr
-
   let of_string str =
-    if String.length str < 1 || not (isupper (String.get str 0)) then begin
+    if String.length str < 1 then begin
       Misc.fatal_errorf "Bad compilation unit name: %s" str
     end;
-    str
+    String.capitalize_ascii str
 
   let to_string t = t
 end

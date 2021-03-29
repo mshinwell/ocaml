@@ -24,7 +24,9 @@ module Name : sig
   (** Printing, comparison, sets, maps, etc. *)
   include Identifiable.S with type t := t
 
-  (** Create a compilation unit name from a string. *)
+  (** Create a compilation unit name from a string.
+      The name will always have its first character uppercased by this
+      function. *)
   val of_string : string -> t
 
   (** Convert a compilation unit name to a string. *)
