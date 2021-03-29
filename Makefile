@@ -532,7 +532,7 @@ installoptopt:
 	$(INSTALL_DATA) \
 	   utils/*.cmx parsing/*.cmx typing/*.cmx bytecomp/*.cmx \
 	   file_formats/*.cmx \
-	   lambda/*.cmx asmcomp/debug/*.cmx \
+	   lambda/*.cmx \
 	   driver/*.cmx asmcomp/*.cmx middle_end/*.cmx \
            middle_end/closure/*.cmx \
            middle_end/flambda/*.cmx \
