@@ -19,7 +19,8 @@ open! Flambda.Import
 module ART = Are_rebuilding_terms
 
 (* This is delayed to ensure evaluation happens after processing of
-   command-line flags. *)
+   command-line flags, to ensure that the desired semantics for [Invalid]
+   is respected. *)
 let invalid = lazy (Expr.create_invalid ())
 
 type t = Expr.t

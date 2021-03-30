@@ -165,7 +165,5 @@ let notify_removed ~operation t =
 
 let add_cost_metrics cost_metrics t =
   { t with cost_metrics = Flambda.Cost_metrics.(+) t.cost_metrics cost_metrics }
-let cost_metrics_add ~added t =
-  { t with cost_metrics = Flambda.Cost_metrics.(+) added t.cost_metrics }
 
 let generate_phantom_lets t = t.generate_phantom_lets

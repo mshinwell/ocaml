@@ -423,9 +423,7 @@ let create_let_symbols uacc (scoping_rule : Symbol_scoping_rule.t)
          projection operation, but it's unlikely there will be a
          significant number, and since we're at toplevel we tolerate
          them. *)
-      let defining_expr, code_size_of_defining_expr =
-        apply_projection proj
-      in
+      let defining_expr, code_size_of_defining_expr = apply_projection proj in
       let cost_metrics_of_defining_expr =
         Cost_metrics.from_size code_size_of_defining_expr
       in
@@ -568,8 +566,8 @@ let rewrite_use uacc rewrite id apply_cont : rewrite_use_result =
       Simple.List.print args
   end;
   let original_params_with_args = List.combine original_params args in
-  let used_params = Apply_cont_rewrite.used_params rewrite in
   let args =
+    let used_params = Apply_cont_rewrite.used_params rewrite in
     List.filter_map (fun (original_param, arg) ->
         if KP.Set.mem original_param used_params then Some arg
         else None)
@@ -631,16 +629,16 @@ let rewrite_exn_continuation rewrite id exn_cont =
     List.combine (List.tl original_params)
       (Exn_continuation.extra_args exn_cont)
   in
-  let used_params = Apply_cont_rewrite.used_params rewrite in
   let extra_args0 =
+    let used_params = Apply_cont_rewrite.used_params rewrite in
     List.filter_map (fun (pre_existing_extra_param, arg) ->
         if KP.Set.mem pre_existing_extra_param used_params then Some arg
         else None)
       pre_existing_extra_params_with_args
   in
-  let used_extra_params = Apply_cont_rewrite.used_extra_params rewrite in
   let extra_args1 =
     let extra_args_list = Apply_cont_rewrite.extra_args rewrite id in
+    let used_extra_params = Apply_cont_rewrite.used_extra_params rewrite in
     assert (List.compare_lengths used_extra_params extra_args_list = 0);
     List.map2
       (fun param (arg : Continuation_extra_params_and_args.Extra_arg.t) ->

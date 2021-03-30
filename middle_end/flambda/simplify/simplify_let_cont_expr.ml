@@ -173,7 +173,8 @@ let rebuild_non_recursive_let_cont_handler cont
         let behaviour =
           (* CR-someday mshinwell: This could be replaced by a more sophisticated
             analysis, but for the moment we just use a simple syntactic check. *)
-          if is_exn_handler then Unknown
+          if is_exn_handler then
+            Unknown
           else
             match RE.to_apply_cont handler (UA.are_rebuilding_terms uacc) with
             | Some apply_cont ->

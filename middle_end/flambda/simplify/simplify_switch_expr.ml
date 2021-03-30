@@ -37,6 +37,8 @@ let rebuild_switch ~simplify_let dacc ~arms ~scrutinee ~scrutinee_ty uacc
                Note that these optimisations do not currently apply when not
                rebuilding terms, since the expression that is potentially an
                [Apply_cont] is not available under such circumstances. *)
+            (* CR-someday mshinwell: Maybe [Rebuilt_expr] could preserve
+               [Apply_cont]? *)
             if not (Apply_cont.is_goto action) then Some action
             else
               let cont = Apply_cont.continuation action in
