@@ -32,14 +32,12 @@ let simplify_simple dacc simple ~min_name_mode =
   | ty -> ty
 
 type simplify_simples_result = {
-  seen_bottom : bool;
   simples : Simple.t list;
   simple_tys : Flambda_type.t list;
 }
 
 let simplify_simples dacc simples =
   let typing_env = DA.typing_env dacc in
-  let seen_bottom = ref false in
   let simple_tys =
     ListLabels.map simples ~f:(fun simple ->
       match
@@ -49,9 +47,6 @@ let simplify_simples dacc simples =
       | ty ->
         (* [ty] will always be an alias type; see the implementation of
            [TE.get_canonical_simple_in_term_exn]. *)
-        if T.is_obviously_bottom ty then begin
-          seen_bottom := true
-        end;
         ty
       | exception Not_found ->
         Misc.fatal_errorf "No canonical [Simple] for %a exists at the@ \
@@ -60,7 +55,6 @@ let simplify_simples dacc simples =
           Simple.print simple
           DA.print dacc)
   in
-  { seen_bottom = !seen_bottom;
-    simples = ListLabels.map simple_tys ~f:T.get_alias_exn;
+  { simples = ListLabels.map simple_tys ~f:T.get_alias_exn;
     simple_tys;
   }

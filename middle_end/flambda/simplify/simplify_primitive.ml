@@ -82,11 +82,8 @@ let simplify_primitive dacc (prim : P.t) dbg ~result_var =
       ~init:([], false)
       ~f:(fun (args_rev, found_invalid) arg ->
         let arg_ty = S.simplify_simple dacc arg ~min_name_mode in
-        if T.is_obviously_bottom arg_ty then
-          (arg, arg_ty) :: args_rev, true
-        else
-          let arg = T.get_alias_exn arg_ty in
-          (arg, arg_ty) :: args_rev, found_invalid)
+        let arg = T.get_alias_exn arg_ty in
+        (arg, arg_ty) :: args_rev, found_invalid)
   in
   let args = List.rev args_rev in
   if found_invalid then

@@ -701,28 +701,24 @@ let simplify_apply_shared dacc apply : _ Or_bottom.t =
   let callee_ty =
     S.simplify_simple dacc (Apply.callee apply) ~min_name_mode:NM.normal
   in
-  if T.is_obviously_bottom callee_ty then Bottom
-  else
-    let { S. seen_bottom; simples = args; simple_tys = arg_types; } =
-      S.simplify_simples dacc (Apply.args apply)
-    in
-    if seen_bottom then Bottom
-    else
-      let inlining_state =
-        Inlining_state.merge (DE.get_inlining_state (DA.denv dacc))
-          (Apply.inlining_state apply)
-      in
-      let apply =
-        Apply.create ~callee:(T.get_alias_exn callee_ty)
-          ~continuation:(Apply.continuation apply)
-          (Apply.exn_continuation apply)
-          ~args
-          ~call_kind:(Apply.call_kind apply)
-          (DE.add_inlined_debuginfo' (DA.denv dacc) (Apply.dbg apply))
-          ~inline:(Apply.inline apply)
-          ~inlining_state
-      in
-      Ok (callee_ty, apply, arg_types)
+  let { S. simples = args; simple_tys = arg_types; } =
+    S.simplify_simples dacc (Apply.args apply)
+  in
+  let inlining_state =
+    Inlining_state.merge (DE.get_inlining_state (DA.denv dacc))
+      (Apply.inlining_state apply)
+  in
+  let apply =
+    Apply.create ~callee:(T.get_alias_exn callee_ty)
+      ~continuation:(Apply.continuation apply)
+      (Apply.exn_continuation apply)
+      ~args
+      ~call_kind:(Apply.call_kind apply)
+      (DE.add_inlined_debuginfo' (DA.denv dacc) (Apply.dbg apply))
+      ~inline:(Apply.inline apply)
+      ~inlining_state
+  in
+  Ok (callee_ty, apply, arg_types)
 
 let rebuild_method_call apply ~use_id ~exn_cont_use_id uacc ~after_rebuild =
   let apply =

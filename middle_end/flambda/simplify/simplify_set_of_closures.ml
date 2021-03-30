@@ -795,27 +795,22 @@ let type_closure_elements_and_make_lifting_decision_for_one_set dacc
            (closure_elements, closure_element_types, symbol_projections) ->
         let env_entry, ty, symbol_projections =
           let ty = S.simplify_simple dacc env_entry ~min_name_mode in
-          if T.is_obviously_bottom ty then begin
-            assert (K.equal (T.kind ty) K.value);
-            env_entry, ty, symbol_projections
-          end else begin
-            let simple = T.get_alias_exn ty in
-            (* Note down separately if [simple] remains a variable and is known
-               to be equal to a projection from a symbol. *)
-            let symbol_projections =
-              Simple.pattern_match' simple
-                ~const:(fun _ -> symbol_projections)
-                ~symbol:(fun _ -> symbol_projections)
-                ~var:(fun var ->
-                  (* [var] will already be canonical, as we require for the
-                     symbol projections map. *)
-                  match DE.find_symbol_projection (DA.denv dacc) var with
-                  | None -> symbol_projections
-                  | Some proj ->
-                    Variable.Map.add var proj symbol_projections)
-            in
-            simple, ty, symbol_projections
-          end
+          let simple = T.get_alias_exn ty in
+          (* Note down separately if [simple] remains a variable and is known
+             to be equal to a projection from a symbol. *)
+          let symbol_projections =
+            Simple.pattern_match' simple
+              ~const:(fun _ -> symbol_projections)
+              ~symbol:(fun _ -> symbol_projections)
+              ~var:(fun var ->
+                (* [var] will already be canonical, as we require for the
+                   symbol projections map. *)
+                match DE.find_symbol_projection (DA.denv dacc) var with
+                | None -> symbol_projections
+                | Some proj ->
+                  Variable.Map.add var proj symbol_projections)
+          in
+          simple, ty, symbol_projections
         in
         let closure_elements =
           Var_within_closure.Map.add closure_var env_entry closure_elements

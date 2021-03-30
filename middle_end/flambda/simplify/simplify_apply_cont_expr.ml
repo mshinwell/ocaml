@@ -140,34 +140,26 @@ let rebuild_apply_cont apply_cont ~args ~rewrite_id uacc ~after_rebuild =
       Apply_cont.free_names apply_cont)
 
 let simplify_apply_cont dacc apply_cont ~down_to_up =
-  let { S. seen_bottom; simples = args; simple_tys = arg_types; } =
+  let { S. simples = args; simple_tys = arg_types; } =
     S.simplify_simples dacc (AC.args apply_cont)
   in
-  if seen_bottom then
-    down_to_up dacc ~rebuild:(fun uacc ~after_rebuild ->
-      let uacc =
-        UA.notify_removed ~operation:Removed_operations.branch uacc
-      in
-      EB.rebuild_invalid uacc ~after_rebuild
-    )
-  else
-    let use_kind : Continuation_use_kind.t =
-      (* CR mshinwell: Is [Continuation.sort] reliable enough to detect
-         the toplevel continuation?  Probably not -- we should store it in
-         the environment. *)
-      match Continuation.sort (AC.continuation apply_cont) with
-      | Normal ->
-        (* Until such time as we can manually add to the backtrace buffer,
-           never substitute a "raise" for the body of an exception handler. *)
-        if Option.is_none (Apply_cont.trap_action apply_cont) then Inlinable
-        else Non_inlinable
-      | Return | Toplevel_return | Exn -> Non_inlinable
-      | Define_root_symbol ->
-        assert (Option.is_none (Apply_cont.trap_action apply_cont));
-        Inlinable
-    in
-    let dacc, rewrite_id =
-      DA.record_continuation_use dacc (AC.continuation apply_cont)
-        use_kind ~env_at_use:(DA.denv dacc) ~arg_types
-    in
-    down_to_up dacc ~rebuild:(rebuild_apply_cont apply_cont ~args ~rewrite_id)
+  let use_kind : Continuation_use_kind.t =
+    (* CR mshinwell: Is [Continuation.sort] reliable enough to detect
+       the toplevel continuation?  Probably not -- we should store it in
+       the environment. *)
+    match Continuation.sort (AC.continuation apply_cont) with
+    | Normal ->
+      (* Until such time as we can manually add to the backtrace buffer,
+         never substitute a "raise" for the body of an exception handler. *)
+      if Option.is_none (Apply_cont.trap_action apply_cont) then Inlinable
+      else Non_inlinable
+    | Return | Toplevel_return | Exn -> Non_inlinable
+    | Define_root_symbol ->
+      assert (Option.is_none (Apply_cont.trap_action apply_cont));
+      Inlinable
+  in
+  let dacc, rewrite_id =
+    DA.record_continuation_use dacc (AC.continuation apply_cont)
+      use_kind ~env_at_use:(DA.denv dacc) ~arg_types
+  in
+  down_to_up dacc ~rebuild:(rebuild_apply_cont apply_cont ~args ~rewrite_id)

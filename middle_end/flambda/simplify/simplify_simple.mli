@@ -26,7 +26,6 @@ val simplify_simple
   -> Flambda_type.t
 
 type simplify_simples_result = private {
-  seen_bottom : bool;
   simples : Simple.t list;
   simple_tys : Flambda_type.t list;
 }
