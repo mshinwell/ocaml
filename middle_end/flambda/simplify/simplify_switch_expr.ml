@@ -33,20 +33,12 @@ let rebuild_switch ~simplify_let dacc ~arms ~scrutinee ~scrutinee_ty uacc
             (* First try to absorb any [Apply_cont] expression that forms the
                entirety of the arm's action (via an intermediate zero-arity
                continuation without trap action) into the [Switch] expression
-               itself.
-               Note that these optimisations do not currently apply when not
-               rebuilding terms, since the expression that is potentially an
-               [Apply_cont] is not available under such circumstances. *)
-            (* CR-someday mshinwell: Maybe [Rebuilt_expr] could preserve
-               [Apply_cont]? *)
+               itself. *)
             if not (Apply_cont.is_goto action) then Some action
             else
               let cont = Apply_cont.continuation action in
               let check_handler ~handler ~action =
-                match
-                  Rebuilt_expr.to_apply_cont handler
-                    (DA.are_rebuilding_terms dacc)
-                with
+                match RE.to_apply_cont handler with
                 | Some action -> Some action
                 | None -> Some action
               in

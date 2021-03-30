@@ -34,7 +34,7 @@ val print : Are_rebuilding_terms.t -> Format.formatter -> t -> unit
 (** This function may only be used when rebuilding terms. *)
 val to_expr : t -> Are_rebuilding_terms.t -> Expr.t
 
-val to_apply_cont : t -> Are_rebuilding_terms.t -> Apply_cont.t option
+val to_apply_cont : t -> Apply_cont.t option
 
 val is_unreachable : t -> Are_rebuilding_terms.t -> bool
 
@@ -50,7 +50,9 @@ val create_let
 
 val create_apply : Are_rebuilding_terms.t -> Apply.t -> t
 
-val create_apply_cont : Are_rebuilding_terms.t -> Apply_cont.t -> t
+(** [Apply_cont] expressions are always rebuilt to allow optimisations in
+    [Simplify_switch_expr] and [Simplify_let_cont_expr]. *)
+val create_apply_cont : Apply_cont.t -> t
 
 module Function_params_and_body : sig
   type t

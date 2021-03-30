@@ -176,7 +176,7 @@ let rebuild_non_recursive_let_cont_handler cont
           if is_exn_handler then
             Unknown
           else
-            match RE.to_apply_cont handler (UA.are_rebuilding_terms uacc) with
+            match RE.to_apply_cont handler with
             | Some apply_cont ->
               begin match Apply_cont.trap_action apply_cont with
               | Some _ -> Unknown
@@ -492,9 +492,7 @@ let simplify_non_recursive_let_cont ~simplify_expr dacc non_rec ~down_to_up =
                         body, uacc
                       else
                         let remove_let_cont_leaving_handler =
-                          match
-                            RE.to_apply_cont body (UA.are_rebuilding_terms uacc)
-                          with
+                          match RE.to_apply_cont body with
                           | Some apply_cont ->
                             if not (Continuation.equal cont
                               (Apply_cont.continuation apply_cont))

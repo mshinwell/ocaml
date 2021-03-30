@@ -134,7 +134,7 @@ let rebuild_apply_cont apply_cont ~args ~rewrite_id uacc ~after_rebuild =
   | Non_inlinable_zero_arity _ | Non_inlinable_non_zero_arity _
   | Toplevel_or_function_return_or_exn_continuation _ ->
     create_apply_cont ~apply_cont_to_expr:(fun apply_cont ->
-      RE.create_apply_cont (UA.are_rebuilding_terms uacc) apply_cont,
+      RE.create_apply_cont apply_cont,
       Cost_metrics.from_size (Code_size.apply_cont apply_cont),
       Apply_cont.free_names apply_cont)
 

@@ -33,12 +33,10 @@ let to_expr t are_rebuilding =
   else
     t
 
-let to_apply_cont t are_rebuilding =
-  if ART.do_not_rebuild_terms are_rebuilding then None
-  else
-    match Expr.descr t with
-    | Apply_cont apply_cont -> Some apply_cont
-    | Let _ | Let_cont _ | Apply _ | Switch _ | Invalid _ -> None
+let to_apply_cont t =
+  match Expr.descr t with
+  | Apply_cont apply_cont -> Some apply_cont
+  | Let _ | Let_cont _ | Apply _ | Switch _ | Invalid _ -> None
 
 let is_unreachable t are_rebuilding =
   if ART.do_not_rebuild_terms are_rebuilding then false
@@ -67,9 +65,8 @@ let create_apply are_rebuilding apply =
   if ART.do_not_rebuild_terms are_rebuilding then Lazy.force invalid
   else Expr.create_apply apply
 
-let create_apply_cont are_rebuilding apply_cont =
-  if ART.do_not_rebuild_terms are_rebuilding then Lazy.force invalid
-  else Expr.create_apply_cont apply_cont
+let create_apply_cont apply_cont =
+  Expr.create_apply_cont apply_cont
 
 module Function_params_and_body = struct
   type t = Function_params_and_body.t

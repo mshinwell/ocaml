@@ -523,7 +523,7 @@ let create_switch uacc ~scrutinee ~arms =
         UA.add_free_names uacc (Apply_cont.free_names action)
         |> UA.notify_added ~code_size:(Code_size.apply_cont action)
       in
-      RE.create_apply_cont (UA.are_rebuilding_terms uacc) action, uacc
+      RE.create_apply_cont action, uacc
     in
     match Target_imm.Map.get_singleton arms with
     | Some (_discriminant, action) -> change_to_apply_cont action
@@ -717,13 +717,13 @@ let add_wrapper_for_fixed_arity_continuation0 uacc cont_or_apply_cont
           Cost_metrics.from_size (Code_size.apply_cont apply_cont)
         in
         new_wrapper
-          (RE.create_apply_cont (UA.are_rebuilding_terms uacc) apply_cont)
+          (RE.create_apply_cont apply_cont)
           ~free_names:(Apply_cont.free_names apply_cont)
           ~cost_metrics
       | Expr build_expr ->
         let expr, cost_metrics, free_names =
           build_expr ~apply_cont_to_expr:(fun apply_cont ->
-            RE.create_apply_cont (UA.are_rebuilding_terms uacc) apply_cont,
+            RE.create_apply_cont apply_cont,
             Cost_metrics.from_size (Code_size.apply_cont apply_cont),
             Apply_cont.free_names apply_cont)
         in
@@ -736,7 +736,7 @@ let add_wrapper_for_fixed_arity_continuation0 uacc cont_or_apply_cont
       | Expr build_expr ->
         let expr, cost_metrics, free_names =
           build_expr ~apply_cont_to_expr:(fun apply_cont ->
-            RE.create_apply_cont (UA.are_rebuilding_terms uacc) apply_cont,
+            RE.create_apply_cont apply_cont,
             Cost_metrics.from_size (Code_size.apply_cont apply_cont),
             Apply_cont.free_names apply_cont)
         in
