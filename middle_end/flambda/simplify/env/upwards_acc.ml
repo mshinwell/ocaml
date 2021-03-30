@@ -16,6 +16,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+module ART = Are_rebuilding_terms
 module DA = Downwards_acc
 module DE = Downwards_env
 module LCS = Lifted_constant_state
@@ -34,7 +35,7 @@ type t = {
   used_closure_vars : Name_occurrences.t;
   shareable_constants : Symbol.t Static_const.Map.t;
   cost_metrics : Flambda.Cost_metrics.t;
-  are_rebuilding_terms : Are_rebuilding_terms.t;
+  are_rebuilding_terms : ART.t;
   generate_phantom_lets : bool;
 }
 
@@ -61,7 +62,7 @@ let print ppf
     Name_occurrences.print used_closure_vars
     (Static_const.Map.print Symbol.print) shareable_constants
     Flambda.Cost_metrics.print cost_metrics
-    Are_rebuilding_terms.print are_rebuilding_terms
+    ART.print are_rebuilding_terms
     generate_phantom_lets
 
 let create uenv dacc =
@@ -70,7 +71,7 @@ let create uenv dacc =
     !Clflags.debug && !Clflags.Flambda.Expert.phantom_lets
       (* It would be a waste of time generating phantom lets when not
          rebuilding terms, since they have no effect on cost metrics. *)
-      && not (Are_rebuilding_terms.do_not_rebuild_terms are_rebuilding_terms)
+      && not (ART.do_not_rebuild_terms are_rebuilding_terms)
   in
   { uenv;
     creation_dacc = dacc;
@@ -121,7 +122,7 @@ let with_uenv t uenv =
   }
 
 let remember_code_for_cmx t code =
-  if Are_rebuilding_terms.do_not_rebuild_terms t.are_rebuilding_terms then t
+  if ART.do_not_rebuild_terms t.are_rebuilding_terms then t
   else
     let all_code = Exported_code.add_code code t.all_code in
     { t with all_code; }
