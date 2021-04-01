@@ -95,7 +95,7 @@ module EvalBase = struct
 
   let eval_ident id =
     try
-      if Ident.persistent id || Ident.global id
+      if Ident.is_global_or_predef id
       then global_symbol id
       else toplevel_value id
     with _ ->

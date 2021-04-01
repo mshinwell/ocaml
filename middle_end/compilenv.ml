@@ -248,7 +248,7 @@ let approx_for_global comp_unit =
       predefined_exception_compilation_unit
       comp_unit)
      || Ident.is_predef id
-     || not (Ident.global id)
+     || not (Ident.is_global_or_predef id)
   then invalid_arg (Format.asprintf "approx_for_global %a" Ident.print id);
   let modname = Ident.name id in
   match Hashtbl.find export_infos_table modname with

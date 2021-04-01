@@ -44,7 +44,7 @@ let implementation_label = ""
 module EvalBase = struct
 
   let eval_ident id =
-    if Ident.persistent id || Ident.global id then begin
+    if Ident.is_global id || Ident.is_global_or_predef id then begin
       try
         Symtable.get_global_value id
       with Symtable.Error (Undefined_global name) ->
