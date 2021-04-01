@@ -284,8 +284,26 @@ let reading_from_a_block mutable_or_immutable =
   in
   effects, coeffects
 
-let reading_from_an_array mutable_or_immutable =
-  reading_from_a_block mutable_or_immutable
+let reading_from_an_array (array_kind : Array_kind.t)
+      (mutable_or_immutable : Mutability.t) =
+  let effects : Effects.t =
+    match array_kind with
+    | Immediates
+    | Values
+    | Naked_floats -> No_effects
+    | Float_array_opt_dynamic ->
+      (* See [Un_cps_helpers.array_load] and [Cmm_helpers.float_array_ref].
+         If the array (dynamically) has tag [Double_array_tag], then the
+         read will allocate.
+         [Immutable] here means that the returned float itself is immutable. *)
+      Only_generative_effects Immutable
+  in
+  let coeffects =
+    match mutable_or_immutable with
+    | Immutable | Immutable_unique -> Coeffects.No_coeffects
+    | Mutable -> Coeffects.Has_coeffects
+  in
+  effects, coeffects
 
 let reading_from_a_string_or_bigstring mutable_or_immutable =
   reading_from_a_block mutable_or_immutable
@@ -1148,7 +1166,7 @@ let result_kind_of_binary_primitive p : result_kind =
 let effects_and_coeffects_of_binary_primitive p =
   match p with
   | Block_load (_, mut) -> reading_from_a_block mut
-  | Array_load (_, mut) -> reading_from_an_array mut
+  | Array_load (kind, mut) -> reading_from_an_array kind mut
   | Bigarray_load (_, kind, _) -> reading_from_a_bigarray kind
   | String_or_bigstring_load (String, _) ->
     reading_from_a_string_or_bigstring Immutable
