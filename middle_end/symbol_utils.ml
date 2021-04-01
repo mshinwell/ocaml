@@ -27,12 +27,3 @@ let make_symbol ?(unitname = current_unit.ui_symbol) idopt =
   match idopt with
   | None -> prefix
   | Some id -> concat_symbol prefix id
-
-let symbol_in_current_unit name =
-  let prefix = "caml" ^ current_unit.ui_symbol in
-  name = prefix ||
-  (let lp = String.length prefix in
-   String.length name >= 2 + lp
-   && String.sub name 0 lp = prefix
-   && name.[lp] = '_'
-   && name.[lp + 1] = '_')

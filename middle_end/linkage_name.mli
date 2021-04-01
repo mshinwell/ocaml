@@ -27,3 +27,5 @@ val for_compilation_unit : Compilation_unit.t -> t
 val for_current_unit : unit -> t
 
 val for_global_ident : Ident.t -> t
+
+val caml_symbol_prefix : string

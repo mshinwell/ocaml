@@ -47,7 +47,8 @@ val is_global: Compilation_unit.t -> bool
 val is_global_or_predef: t -> bool
 val is_predef: t -> bool
 
-val compilation_unit_of_global_ident: t -> Compilation_unit.t
+val compilation_unit_of_global_ident_exn: t -> Compilation_unit.t
+val compilation_unit_of_global_ident: t -> Compilation_unit.t option
 
 val same: t -> t -> bool
         (** Compare identifiers by binding location.

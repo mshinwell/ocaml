@@ -61,6 +61,8 @@ module Prefix : sig
       as if it was generated with "-for-pack". *)
   val extract_prefix : string -> t * Name.t
 
+  val to_list_outermost_pack_first : t -> Name.t list
+
   val to_string : t -> string
 
   val is_empty : t -> bool

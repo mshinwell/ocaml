@@ -150,11 +150,16 @@ let print_with_scope ppf id = print ~with_scope:true ppf id
 
 let print ppf id = print ~with_scope:false ppf id
 
-let compilation_unit_of_global_ident t =
+let compilation_unit_of_global_ident_exn t =
   match t with
   | Global comp_unit -> comp_unit
   | Local _ | Scoped _ | Predef _ ->
     Misc.fatal_errorf "Identifier %a is not global" print t
+
+let compilation_unit_of_global_ident t =
+  match t with
+  | Global comp_unit -> Some comp_unit
+  | Local _ | Scoped _ | Predef _ -> None
 
 type 'a tbl =
     Empty
