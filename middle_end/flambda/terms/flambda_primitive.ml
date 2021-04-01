@@ -52,6 +52,9 @@ module Block_kind = struct
   type t =
     | Values of Tag.Scannable.t * (Block_of_values_field.t list)
     | Naked_floats
+    (* There is no equivalent of the dynamic float array checks
+       (c.f. [Array_kind.Float_array_opt_dynamic], below) for blocks;
+       it is known at compile time whether they are all-float. *)
 
    let print ppf t =
     match t with
