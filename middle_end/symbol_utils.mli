@@ -2,9 +2,12 @@
 (*                                                                        *)
 (*                                 OCaml                                  *)
 (*                                                                        *)
+(*             Xavier Leroy, projet Gallium, INRIA Rocquencourt           *)
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
+(*   Copyright 2010 Institut National de Recherche en Informatique et     *)
+(*     en Automatique                                                     *)
 (*   Copyright 2013--2016 OCamlPro SAS                                    *)
 (*   Copyright 2014--2016 Jane Street Group LLC                           *)
 (*                                                                        *)
@@ -14,21 +17,24 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+[@@@ocaml.warning "+a-9-40-41-42"]
 
-include Identifiable.S
+val symbol_for_global: Ident.t -> string
+        (* Return the asm symbol that refers to the given global identifier
+           flambda-only *)
 
-(* The [Ident.t] must be persistent.  This function raises an exception
-   if that is not the case. *)
-val create : Ident.t -> Linkage_name.t -> t
 
-val get_persistent_ident : t -> Ident.t
-val get_linkage_name : t -> Linkage_name.t
+val make_symbol: ?unitname:string -> string option -> string
+        (* [make_symbol ~unitname:u None] returns the asm symbol that
+           corresponds to the compilation unit [u] (default: the current unit).
+           [make_symbol ~unitname:u (Some id)] returns the asm symbol that
+           corresponds to symbol [id] in the compilation unit [u]
+           (or the current unit). *)
 
-val is_current : t -> bool
-val set_current : t -> unit
-val get_current : unit -> t option
-val get_current_exn : unit -> t
-val get_current_id_exn : unit -> Ident.t
+val symbol_in_current_unit: string -> bool
+        (* Return true if the given asm symbol belongs to the
+           current compilation unit, false otherwise. *)
 
-val string_for_printing : t -> string
+val current_unit_linkage_name: unit -> Linkage_name.t
+        (* Return the linkage_name of the unit being compiled.
+           flambda-only *)

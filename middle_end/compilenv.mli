@@ -43,26 +43,11 @@ val current_unit_name: unit -> string
         (* Return the name of the unit being compiled
            clambda-only *)
 
-val current_unit_linkage_name: unit -> Linkage_name.t
-        (* Return the linkage_name of the unit being compiled.
-           flambda-only *)
-
 val current_unit: unit -> Compilation_unit.t
         (* flambda-only *)
 
 val current_unit_symbol: unit -> Symbol.t
         (* flambda-only *)
-
-val make_symbol: ?unitname:string -> string option -> string
-        (* [make_symbol ~unitname:u None] returns the asm symbol that
-           corresponds to the compilation unit [u] (default: the current unit).
-           [make_symbol ~unitname:u (Some id)] returns the asm symbol that
-           corresponds to symbol [id] in the compilation unit [u]
-           (or the current unit). *)
-
-val symbol_in_current_unit: string -> bool
-        (* Return true if the given asm symbol belongs to the
-           current compilation unit, false otherwise. *)
 
 val is_predefined_exception: Symbol.t -> bool
         (* flambda-only *)
@@ -70,9 +55,6 @@ val is_predefined_exception: Symbol.t -> bool
 val unit_for_global: Ident.t -> Compilation_unit.t
         (* flambda-only *)
 
-val symbol_for_global: Ident.t -> string
-        (* Return the asm symbol that refers to the given global identifier
-           flambda-only *)
 val symbol_for_global': Ident.t -> Symbol.t
         (* flambda-only *)
 val global_approx: Ident.t -> Clambda.value_approximation

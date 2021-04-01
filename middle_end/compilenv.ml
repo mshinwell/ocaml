@@ -104,18 +104,6 @@ let symbolname_for_pack pack name =
 
 let unit_id_from_name name = Ident.create_persistent name
 
-let concat_symbol unitname id =
-  unitname ^ "__" ^ id
-
-let make_symbol ?(unitname = current_unit.ui_symbol) idopt =
-  let prefix = "caml" ^ unitname in
-  match idopt with
-  | None -> prefix
-  | Some id -> concat_symbol prefix id
-
-let current_unit_linkage_name () =
-  Linkage_name.create (make_symbol ~unitname:current_unit.ui_symbol None)
-
 let reset ?packname name =
   Hashtbl.clear global_infos_table;
   Set_of_closures_id.Tbl.clear imported_sets_of_closures_table;
@@ -146,15 +134,6 @@ let current_unit_infos () =
 
 let current_unit_name () =
   current_unit.ui_name
-
-let symbol_in_current_unit name =
-  let prefix = "caml" ^ current_unit.ui_symbol in
-  name = prefix ||
-  (let lp = String.length prefix in
-   String.length name >= 2 + lp
-   && String.sub name 0 lp = prefix
-   && name.[lp] = '_'
-   && name.[lp + 1] = '_')
 
 let read_unit_info filename =
   let ic = open_in_bin filename in
@@ -241,25 +220,10 @@ let global_approx id =
       | None -> Clambda.Value_unknown
       | Some ui -> get_clambda_approx ui
 
-(* Return the symbol used to refer to a global identifier *)
-
-let symbol_for_global id =
-  if Ident.is_predef id then
-    "caml_exn_" ^ Ident.name id
-  else begin
-    let unitname = Ident.name id in
-    match
-      try ignore (Hashtbl.find toplevel_approx unitname); None
-      with Not_found -> get_global_info id
-    with
-    | None -> make_symbol ~unitname:(Ident.name id) None
-    | Some ui -> make_symbol ~unitname:ui.ui_symbol None
-  end
-
 (* Register the approximation of the module being compiled *)
 
 let unit_for_global id =
-  let sym_label = Linkage_name.create (symbol_for_global id) in
+  let sym_label = Linkage_name.create (Symbol_utils.symbol_for_global id) in
   Compilation_unit.create id sym_label
 
 let predefined_exception_compilation_unit =
@@ -272,7 +236,7 @@ let is_predefined_exception sym =
     (Symbol.compilation_unit sym)
 
 let symbol_for_global' id =
-  let sym_label = Linkage_name.create (symbol_for_global id) in
+  let sym_label = Linkage_name.create (Symbol_utils.symbol_for_global id) in
   if Ident.is_predef id then
     Symbol.of_global_linkage predefined_exception_compilation_unit sym_label
   else
