@@ -36,8 +36,7 @@ type export_info =
   | Flambda of Export_info.t
 
 type unit_infos =
-  { mutable ui_name: modname;             (* Name of unit implemented *)
-    mutable ui_symbol: string;            (* Prefix for symbols *)
+  { mutable ui_name: Compilation_unit.t;  (* Compilation unit implemented *)
     mutable ui_defines: string list;      (* Unit and sub-units implemented *)
     mutable ui_imports_cmi: crcs;         (* Interfaces imported *)
     mutable ui_imports_cmx: crcs;         (* Infos imported *)

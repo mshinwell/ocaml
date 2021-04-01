@@ -107,6 +107,8 @@ module Prefix = struct
 
   let to_string p =
     Format.asprintf "%a" print p
+
+  let is_empty = List.is_empty
 end
 
 type t = {

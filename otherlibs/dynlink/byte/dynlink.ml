@@ -27,7 +27,7 @@ module Bytecode = struct
   type filename = string
 
   module Unit_header = struct
-    type t = Cmo_format.compilation_unit
+    type t = Cmo_format.compilation_unit_descr
 
     let name (t : t) = t.cu_name
     let crc _t = None
@@ -98,7 +98,7 @@ module Bytecode = struct
   let run (ic, file_name, file_digest) ~unit_header ~priv =
     let open Misc in
     let old_state = Symtable.current_state () in
-    let compunit : Cmo_format.compilation_unit = unit_header in
+    let compunit : Cmo_format.compilation_unit_descr = unit_header in
     seek_in ic compunit.cu_pos;
     let code_size = compunit.cu_codesize + 8 in
     let code = LongString.create code_size in
@@ -152,7 +152,7 @@ module Bytecode = struct
       if buffer = Config.cmo_magic_number then begin
         let compunit_pos = input_binary_int ic in  (* Go to descriptor *)
         seek_in ic compunit_pos;
-        let cu = (input_value ic : Cmo_format.compilation_unit) in
+        let cu = (input_value ic : Cmo_format.compilation_unit_descr) in
         handle, [cu]
       end else
       if buffer = Config.cma_magic_number then begin

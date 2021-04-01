@@ -88,28 +88,12 @@ let current_unit =
     ui_force_link = false;
     ui_export_info = default_ui_export_info }
 
-let symbolname_for_pack pack name =
-  match pack with
-  | None -> name
-  | Some p ->
-      let b = Buffer.create 64 in
-      for i = 0 to String.length p - 1 do
-        match p.[i] with
-        | '.' -> Buffer.add_string b "__"
-        |  c  -> Buffer.add_char b c
-      done;
-      Buffer.add_string b "__";
-      Buffer.add_string b name;
-      Buffer.contents b
-
 let unit_id_from_name name = Ident.create_persistent name
 
-let reset ?packname name =
+let reset comp_unit =
   Hashtbl.clear global_infos_table;
   Set_of_closures_id.Tbl.clear imported_sets_of_closures_table;
-  let symbol = symbolname_for_pack packname name in
-  current_unit.ui_name <- name;
-  current_unit.ui_symbol <- symbol;
+  current_unit.ui_name <- comp_unit;
   current_unit.ui_defines <- [symbol];
   current_unit.ui_imports_cmi <- [];
   current_unit.ui_imports_cmx <- [];

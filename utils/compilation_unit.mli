@@ -62,6 +62,8 @@ module Prefix : sig
   val extract_prefix : string -> t * Name.t
 
   val to_string : t -> string
+
+  val is_empty : t -> bool
 end
 
 (** The name of a compilation unit qualified with any "-for-pack" prefix that

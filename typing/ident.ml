@@ -21,7 +21,7 @@ let highest_scope = 100000000
 type t =
   | Local of { name: string; stamp: int }
   | Scoped of { name: string; stamp: int; scope: int }
-  | Global of string
+  | Global of Compilation_unit.t
   | Predef of { name: string; stamp: int }
       (* the stamp is here only for fast comparison, but the name of
          predefined identifiers is always unique. *)
@@ -43,14 +43,14 @@ let create_predef s =
   incr predefstamp;
   Predef { name = s; stamp = !predefstamp }
 
-let create_persistent s =
+let create_global s =
   Global s
 
 let name = function
   | Local { name; _ }
   | Scoped { name; _ }
-  | Global name
   | Predef { name; _ } -> name
+  | Global name -> Compilation_unit.full_path_as_string name
 
 let rename = function
   | Local { name; stamp = _ }
@@ -63,11 +63,11 @@ let rename = function
 let unique_name = function
   | Local { name; stamp }
   | Scoped { name; stamp } -> name ^ "_" ^ Int.to_string stamp
-  | Global name ->
+  | Global comp_unit ->
       (* we're adding a fake stamp, because someone could have named his unit
          [Foo_123] and since we're using unique_name to produce symbol names,
          we might clash with an ident [Local { "Foo"; 123 }]. *)
-      name ^ "_0"
+      (Compilation_unit.full_path_as_string comp_unit) ^ "_0"
   | Predef { name; _ } ->
       (* we know that none of the predef names (currently) finishes in
          "_<some number>", and that their name is unique. *)
@@ -76,19 +76,15 @@ let unique_name = function
 let unique_toplevel_name = function
   | Local { name; stamp }
   | Scoped { name; stamp } -> name ^ "/" ^ Int.to_string stamp
-  | Global name
+  | Global comp_unit -> Compilation_unit.full_path_as_string comp_unit
   | Predef { name; _ } -> name
-
-let persistent = function
-  | Global _ -> true
-  | _ -> false
 
 let equal i1 i2 =
   match i1, i2 with
   | Local { name = name1; _ }, Local { name = name2; _ }
   | Scoped { name = name1; _ }, Scoped { name = name2; _ }
   | Global name1, Global name2 ->
-      name1 = name2
+      Compilation_unit.equal name1 name2
   | Predef { stamp = s1; _ }, Predef { stamp = s2 } ->
       (* if they don't have the same stamp, they don't have the same name *)
       s1 = s2
@@ -102,7 +98,7 @@ let same i1 i2 =
   | Predef { stamp = s1; _ }, Predef { stamp = s2 } ->
       s1 = s2
   | Global name1, Global name2 ->
-      name1 = name2
+      Compilation_unit.equal name1 name2
   | _ ->
       false
 
@@ -123,11 +119,13 @@ let reinit () =
   then reinit_level := !currentstamp
   else currentstamp := !reinit_level
 
-let global = function
-  | Local _
-  | Scoped _ -> false
-  | Global _
-  | Predef _ -> true
+let is_global = function
+  | Global _ -> true
+  | Local _ | Scoped _ | Predef _ -> false
+
+let is_global_or_predef = function
+  | Global _ | Predef _ -> true
+  | Local _ | Scoped _ -> false
 
 let is_predef = function
   | Predef _ -> true
@@ -136,7 +134,7 @@ let is_predef = function
 let print ~with_scope ppf =
   let open Format in
   function
-  | Global name -> fprintf ppf "%s!" name
+  | Global name -> fprintf ppf "%a!" Compilation_unit.print name
   | Predef { name; stamp = n } ->
       fprintf ppf "%s%s!" name
         (if !Clflags.unique_ids then sprintf "/%i" n else "")
@@ -151,6 +149,12 @@ let print ~with_scope ppf =
 let print_with_scope ppf id = print ~with_scope:true ppf id
 
 let print ppf id = print ~with_scope:false ppf id
+
+let compilation_unit_of_global_ident t =
+  match t with
+  | Global comp_unit -> comp_unit
+  | Local _ | Scoped _ | Predef _ ->
+    Misc.fatal_errorf "Identifier %a is not global" print t
 
 type 'a tbl =
     Empty
@@ -340,7 +344,7 @@ let compare x y =
       else compare x.name y.name
   | Scoped _, _ -> 1
   | _, Scoped _ -> (-1)
-  | Global x, Global y -> compare x y
+  | Global x, Global y -> Compilation_unit.compare x y
   | Global _, _ -> 1
   | _, Global _ -> (-1)
   | Predef { stamp = s1; _ }, Predef { stamp = s2; _ } -> compare s1 s2

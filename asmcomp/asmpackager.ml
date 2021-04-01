@@ -19,10 +19,12 @@
 open Misc
 open Cmx_format
 
+module CU = Compilation_unit
+
 type error =
     Illegal_renaming of string * string * string
   | Forward_reference of string * string
-  | Wrong_for_pack of string * string
+  | Wrong_for_pack of string * CU.Prefix.t
   | Linking_error
   | Assembler_error of string
   | File_not_found of string
@@ -286,8 +288,8 @@ let report_error ppf = function
       fprintf ppf "Forward reference to %s in file %a" ident
         Location.print_filename file
   | Wrong_for_pack(file, path) ->
-      fprintf ppf "File %a@ was not compiled with the `-for-pack %s' option"
-              Location.print_filename file path
+      fprintf ppf "File %a@ was not compiled with the `-for-pack %@' option"
+              Location.print_filename file CU.Prefix.print path
   | File_not_found file ->
       fprintf ppf "File %s not found" file
   | Assembler_error file ->
