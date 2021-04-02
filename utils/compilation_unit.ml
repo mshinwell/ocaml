@@ -108,7 +108,12 @@ module Prefix = struct
   let to_string p =
     Format.asprintf "%a" print p
 
-  let is_empty = List.is_empty
+  let is_empty t =
+    match t with
+    | [] -> true
+    | _::_ -> false
+
+  let to_list_outermost_pack_first t = t
 end
 
 type t = {
@@ -196,3 +201,18 @@ let full_path_as_string unit =
   Format.asprintf "%a" print_full_path unit
 
 type crcs = (t * Digest.t option) list
+
+let current = ref None
+
+let set_current t =
+  current := Some t
+
+let get_current_exn () =
+  match !current with
+  | Some t -> t
+  | None -> Misc.fatal_error "No compilation unit set"
+
+let is_current t =
+  match !current with
+  | None -> false
+  | Some t' -> equal t t'

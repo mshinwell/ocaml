@@ -31,7 +31,7 @@ val print_with_scope : Format.formatter -> t -> unit
 
 val create_scoped: scope:int -> string -> t
 val create_local: string -> t
-val create_global: string -> t
+val create_persistent: string -> t
 val create_predef: string -> t
 
 val rename: t -> t
@@ -42,14 +42,6 @@ val rename: t -> t
 val name: t -> string
 val unique_name: t -> string
 val unique_toplevel_name: t -> string
-
-val is_global: Compilation_unit.t -> bool
-val is_global_or_predef: t -> bool
-val is_predef: t -> bool
-
-val compilation_unit_of_global_ident_exn: t -> Compilation_unit.t
-val compilation_unit_of_global_ident: t -> Compilation_unit.t option
-
 val same: t -> t -> bool
         (** Compare identifiers by binding location.
             Two identifiers are the same either if they are both
@@ -58,6 +50,12 @@ val same: t -> t -> bool
             name. *)
 
 val compare: t -> t -> int
+
+val is_global: t -> bool
+val is_global_or_predef: t -> bool
+val is_predef: t -> bool
+
+val compilation_unit_of_global_ident : t -> Compilation_unit.t option
 
 val scope: t -> int
 

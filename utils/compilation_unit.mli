@@ -125,3 +125,8 @@ exception Error of error
 (** The type used for recording digests of compilation units in .cmo and
     .cmx files. *)
 type crcs = (t * Digest.t option) list
+
+(* To think about: *)
+val set_current : t -> unit
+val get_current_exn : unit -> t
+val is_current : t -> bool

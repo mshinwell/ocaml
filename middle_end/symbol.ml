@@ -33,13 +33,7 @@ let label t =
   | Variable { variable; _ } ->
       (* Use the variable's compilation unit for the label, since the
          symbol's compilation unit might be a pack *)
-      let compilation_unit = Variable.get_compilation_unit variable in
-      let unit_linkage_name =
-        Linkage_name.to_string
-          (Compilation_unit.get_linkage_name compilation_unit)
-      in
-      let label = unit_linkage_name ^ "__" ^ Variable.unique_name variable in
-      Linkage_name.create label
+      Linkage_name.for_variable variable
 
 include Identifiable.Make (struct
 

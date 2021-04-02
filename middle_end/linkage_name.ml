@@ -16,8 +16,6 @@
 
 [@@@ocaml.warning "+a-9-30-40-41-42"]
 
-open! Int_replace_polymorphic_compare
-
 module CU = Compilation_unit
 
 type t = string
@@ -77,6 +75,10 @@ let for_ident ?comp_unit id =
       in
       assert (not (Ident.is_global id));
       (for_compilation_unit comp_unit) ^ separator ^ Ident.unique_name id
+
+let for_variable var =
+  (for_compilation_unit (Variable.get_compilation_unit var))
+    ^ separator ^ Variable.unique_name var
 
 let is_in_current_unit t =
   let prefix = for_current_unit () in
