@@ -76,11 +76,21 @@ let for_ident ?comp_unit id =
       assert (not (Ident.is_global id));
       (for_compilation_unit comp_unit) ^ separator ^ Ident.unique_name id
 
-let for_variable var =
-  (for_compilation_unit (Variable.get_compilation_unit var))
-    ^ separator ^ Variable.unique_name var
-
 let is_in_current_unit t =
   let prefix = for_current_unit () in
   String.equal t prefix
     || String.starts_with ~prefix:(prefix ^ separator) t
+
+module Flambda = struct
+  let for_variable var =
+    (for_compilation_unit (Variable.get_compilation_unit var))
+      ^ separator ^ Variable.unique_name var
+
+  let for_closure closure_id =
+    (for_compilation_unit (Closure_id.get_compilation_unit var))
+      ^ separator ^ Closure_id.unique_name closure_id ^ "_closure"
+
+  let for_code_of_closure closure_id =
+    (for_compilation_unit (Closure_id.get_compilation_unit closure_id))
+      ^ separator ^ Closure_id.unique_name closure_id
+end

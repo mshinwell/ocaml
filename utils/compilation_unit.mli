@@ -115,6 +115,9 @@ val full_path : t -> Name.t list
     usual conventions. *)
 val full_path_as_string : t -> string
 
+(** Return an [Ident.t] representing the given compilation unit. *)
+val to_ident : t -> Ident.t
+
 type error = private
   | Invalid_character of char
   | Bad_compilation_unit_name of string

@@ -27,7 +27,6 @@ let name_expr_from_var = Flambda_utils.name_expr_from_var
 
 type t = {
   current_unit_id : Ident.t;
-  symbol_for_global' : (Ident.t -> Symbol.t);
   backend : (module Backend_intf.S);
   mutable imported_symbols : Symbol.Set.t;
   mutable declared_symbols : (Symbol.t * Flambda.constant_defining_value) list;
@@ -337,7 +336,8 @@ let rec close t env (lam : Lambda.lambda) : Flambda.t =
     let is_zero = Variable.create Names.is_zero in
     let exn = Variable.create Names.division_by_zero in
     let exn_symbol =
-      t.symbol_for_global' Predef.ident_division_by_zero
+      Linkage_name.for_ident Predef.ident_division_by_zero
+      |> Symbol.of_global_linkage predefined_exception_compilation_unit
     in
     let dbg = Debuginfo.from_location loc in
     let zero_const : Flambda.named =
@@ -687,8 +687,7 @@ let lambda_to_flambda ~backend ~module_ident ~size lam
   let module Backend = (val backend : Backend_intf.S) in
   let compilation_unit = Compilation_unit.get_current_exn () in
   let t =
-    { current_unit_id = Compilation_unit.get_persistent_ident compilation_unit;
-      symbol_for_global' = Backend.symbol_for_global';
+    { current_unit_id = Compilation_unit.to_ident compilation_unit;
       backend;
       imported_symbols = Symbol.Set.empty;
       declared_symbols = [];

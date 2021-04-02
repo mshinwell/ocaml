@@ -33,18 +33,12 @@ val reset: Compilation_unit.t -> unit
         (* Reset the environment and record the name of the unit being
            compiled (including any associated -for-pack prefix). *)
 
-val unit_id_from_name: string -> Ident.t
-        (* flambda-only *)
-
 val current_unit_infos: unit -> unit_infos
         (* Return the infos for the unit being compiled *)
 
 val current_unit_name: unit -> string
         (* Return the name of the unit being compiled
            clambda-only *)
-
-val current_unit: unit -> Compilation_unit.t
-        (* flambda-only *)
 
 val current_unit_symbol: unit -> Symbol.t
         (* flambda-only *)
@@ -55,8 +49,6 @@ val is_predefined_exception: Symbol.t -> bool
 val unit_for_global: Ident.t -> Compilation_unit.t
         (* flambda-only *)
 
-val symbol_for_global': Ident.t -> Symbol.t
-        (* flambda-only *)
 val global_approx: Ident.t -> Clambda.value_approximation
         (* Return the approximation for the given global identifier
            clambda-only *)
@@ -84,13 +76,6 @@ val need_send_fun: int -> unit
            message sending) function with the given arity *)
 
 val new_const_symbol : unit -> string
-val closure_symbol : Closure_id.t -> Symbol.t
-        (* Symbol of a function if the function is
-           closed (statically allocated)
-           flambda-only *)
-val function_label : Closure_id.t -> string
-        (* linkage name of the code of a function
-           flambda-only *)
 
 val new_structured_constant:
   Clambda.ustructured_constant ->

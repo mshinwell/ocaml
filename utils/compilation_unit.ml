@@ -134,17 +134,17 @@ let of_string str =
 
 let none = create (Name.of_string "*none*")
 
-let name unit = unit.basename
+let name t = t.basename
 
-let for_pack_prefix unit = unit.for_pack_prefix
+let for_pack_prefix t = t.for_pack_prefix
 
 let is_packed t =
   match t.for_pack_prefix with
   | [] -> false
   | _::_ -> true
 
-let full_path unit =
-  unit.for_pack_prefix @ [ unit.basename ]
+let full_path t =
+  t.for_pack_prefix @ [ t.basename ]
 
 include Identifiable.Make (struct
   type nonrec t = t
@@ -189,16 +189,16 @@ end)
 let print_name ppf t =
   Format.pp_print_string ppf t.basename
 
-let print_full_path fmt unit =
-  match unit.for_pack_prefix with
-  | [] -> Format.fprintf fmt "%a" Name.print unit.basename
+let print_full_path fmt t =
+  match t.for_pack_prefix with
+  | [] -> Format.fprintf fmt "%a" Name.print t.basename
   | _::_ ->
     Format.fprintf fmt "%a.%a"
-      Prefix.print unit.for_pack_prefix
-      Name.print unit.basename
+      Prefix.print t.for_pack_prefix
+      Name.print t.basename
 
-let full_path_as_string unit =
-  Format.asprintf "%a" print_full_path unit
+let full_path_as_string t =
+  Format.asprintf "%a" print_full_path t
 
 type crcs = (t * Digest.t option) list
 
@@ -216,3 +216,5 @@ let is_current t =
   match !current with
   | None -> false
   | Some t' -> equal t t'
+
+let to_ident t = Ident.create_persistent (full_path_as_string t)

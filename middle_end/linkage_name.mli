@@ -23,13 +23,16 @@ val to_string : t -> string
 val create : string -> t
 
 val for_compilation_unit : Compilation_unit.t -> t
-
 val for_current_unit : unit -> t
 
 val for_ident : ?comp_unit:Compilation_unit.t -> Ident.t -> t
 
-val for_variable : Variable.t -> t
-
 val is_in_current_unit : t -> bool
 
 val caml_symbol_prefix : string
+
+module Flambda : sig
+  val for_variable : Variable.t -> t
+  val for_closure : Closure_id.t -> t
+  val for_code_of_closure : Closure_id.t -> t
+end
