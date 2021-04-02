@@ -133,17 +133,14 @@ module Flambda = struct
     }
 end
 
-let for_entry_function compilation_unit =
+let for_fixed_name compilation_unit ~name =
   let linkage_name =
-    (linkage_name_for_compilation_unit compilation_unit) ^ separator ^ "entry"
+    (linkage_name_for_compilation_unit compilation_unit) ^ separator ^ name
   in
   { compilation_unit;
     linkage_name;
     hash = Hashtbl.hash linkage_name;
   }
-
-let for_entry_function_in_current_unit () =
-  for_entry_function (Compilation_unit.get_current_exn ())
 
 let const_label = ref 0
 

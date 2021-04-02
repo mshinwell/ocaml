@@ -29,7 +29,12 @@ val imported_sets_of_closures_table
   : Simple_value_approx.function_declarations option Set_of_closures_id.Tbl.t
         (* flambda-only *)
 
-val reset: Compilation_unit.t -> unit
+val reset
+(* XXX maybe this doesn't need to be optional *)
+   : ?for_pack_prefix:Compilation_unit.Prefix.t
+  -> module_name:string
+  -> unit
+  -> unit
         (* Reset the environment and record the name of the unit being
            compiled (including any associated -for-pack prefix). *)
 
@@ -63,6 +68,8 @@ val need_send_fun: int -> unit
            message sending) function with the given arity *)
 
 val new_const_symbol : unit -> string
+
+val make_symbol : ?unitname:string -> string -> string
 
 val new_structured_constant:
   Clambda.ustructured_constant ->

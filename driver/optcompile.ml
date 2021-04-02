@@ -85,7 +85,10 @@ let clambda i backend Typedtree.{structure; coercion; _} =
 
 (* Emit assembly directly from Linear IR *)
 let emit i =
-  Compilenv.reset ?packname:!Clflags.for_package i.module_name;
+  let for_pack_prefix =
+    Option.map Compilation_unit.Prefix.of_string !Clflags.for_package
+  in
+  Compilenv.reset ?for_pack_prefix ~module_name:i.module_name;
   Asmgen.compile_implementation_linear i.output_prefix ~progname:i.source_file
 
 let implementation ~backend ~start_from ~source_file ~output_prefix =

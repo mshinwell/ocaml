@@ -86,7 +86,7 @@ let check_closure t ulam named : Clambda.ulambda =
     t.constants_for_instrumentation <-
       Symbol.Map.add sym (Clambda.Uconst_string str)
         t.constants_for_instrumentation;
-    let sym = Symbol.to_string sym in
+    let sym = Symbol.linkage_name sym in
     Uprim (Pccall desc,
            [ulam; Clambda.Uconst (Uconst_ref (sym, None))],
            Debuginfo.none)
@@ -105,9 +105,9 @@ let check_field t ulam pos named_opt : Clambda.ulambda =
     in
     let sym = Symbol.for_new_const_in_current_unit () in
     t.constants_for_instrumentation <-
-      Symbol.Map.add sym' (Clambda.Uconst_string str)
+      Symbol.Map.add sym (Clambda.Uconst_string str)
         t.constants_for_instrumentation;
-    let sym = Symbol.to_string sym in
+    let sym = Symbol.linkage_name sym in
     Uprim (Pccall desc, [ulam; Clambda.Uconst (Uconst_int pos);
         Clambda.Uconst (Uconst_ref (sym, None))],
       Debuginfo.none)
@@ -213,7 +213,7 @@ let to_uconst_symbol env symbol : Clambda.ustructured_constant option =
   | Some _ -> None
 
 let to_clambda_symbol' env sym : Clambda.uconstant =
-  let lbl = Symbol.to_string (Symbol.label sym) in
+  let lbl = Symbol.linkage_name sym in
   Uconst_ref (lbl, to_uconst_symbol env sym)
 
 let to_clambda_symbol env sym : Clambda.ulambda =
@@ -440,7 +440,10 @@ and to_clambda_switch t env cases num_keys default =
 
 and to_clambda_direct_apply t func args direct_func dbg env : Clambda.ulambda =
   let closed = is_function_constant t direct_func in
-  let label = Compilenv.function_label direct_func in
+  let label =
+    Symbol.Flambda.for_code_of_closure direct_func
+    |> Symbol.linkage_name
+  in
   let uargs =
     let uargs = subst_vars env args in
     (* Remove the closure argument if the closure is closed.  (Note that the
@@ -530,7 +533,11 @@ and to_clambda_set_of_closures t env
           env, id :: params)
         function_decl.params (env, [])
     in
-    { label = Compilenv.function_label closure_id;
+    let label =
+      Symbol.Flambda.for_code_of_closure closure_id
+      |> Symbol.linkage_name
+    in
+    { label;
       arity = Flambda_utils.function_arity function_decl;
       params =
         List.map
@@ -563,7 +570,7 @@ and to_clambda_closed_set_of_closures t env symbol
     let env =
       List.fold_left (fun env (var, _) ->
           let closure_id = Closure_id.wrap var in
-          let symbol = Compilenv.closure_symbol closure_id in
+          let symbol = Symbol.Flambda.for_closure closure_id in
           Env.add_subst env var (to_clambda_symbol env symbol))
         (Env.keep_only_symbols env)
         functions
@@ -578,7 +585,11 @@ and to_clambda_closed_set_of_closures t env symbol
       Un_anf.apply ~ppf_dump:t.ppf_dump ~what:symbol
         (to_clambda t env_body function_decl.body)
     in
-    { label = Compilenv.function_label (Closure_id.wrap id);
+    let label =
+      Symbol.Flambda.for_code_of_closure (Closure_id.wrap id)
+      |> Symbol.linkage_name
+    in
+    { label;
       arity = Flambda_utils.function_arity function_decl;
       params = List.map (fun var -> VP.create var, Lambda.Pgenval) params;
       return = Lambda.Pgenval;
@@ -588,7 +599,7 @@ and to_clambda_closed_set_of_closures t env symbol
     }
   in
   let ufunct = List.map to_clambda_function functions in
-  let closure_lbl = Symbol.to_string (Symbol.label symbol) in
+  let closure_lbl = Symbol.linkage_name symbol in
   Uconst_closure (ufunct, closure_lbl, [])
 
 let to_clambda_initialize_symbol t env symbol fields : Clambda.ulambda =
@@ -675,13 +686,13 @@ let to_clambda_program t env constants (program : Flambda.program) =
                 in
                 Some (Clambda.Uconst_field_int n)
             | Some (Flambda.Symbol sym) ->
-                let lbl = Symbol.to_string (Symbol.label sym) in
+                let lbl = Symbol.linkage_name sym in
                 Some (Clambda.Uconst_field_ref lbl))
           fields
       in
       let e1 = to_clambda_initialize_symbol t env symbol init_fields in
       let preallocated_block : Clambda.preallocated_block =
-        { symbol = Symbol.to_string (Symbol.label symbol);
+        { symbol = Symbol.linkage_name symbol;
           exported = true;
           tag = Tag.to_int tag;
           fields = constant_fields;

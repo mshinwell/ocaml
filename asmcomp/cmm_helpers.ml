@@ -2578,11 +2578,7 @@ let entry_point namelist =
   let body =
     List.fold_right
       (fun name next ->
-        let comp_unit = Compilation_unit.of_string name in
-        let entry_sym =
-          Symbol.for_entry_function comp_unit
-          |> Symbol.linkage_name
-        in
+        let entry_sym = Compilenv.make_symbol ~unitname:name "entry" in
         Csequence(Cop(Capply typ_void,
                          [cconst_symbol entry_sym], dbg ()),
                   Csequence(incr_global_inited (), next)))
@@ -2600,13 +2596,9 @@ let entry_point namelist =
 
 let cint_zero = Cint 0n
 
-
-(* XXX We need a [make_symbol]
-   (which should also parse name:string -> Compilation_unit.t) *)
-
 let global_table namelist =
   let mksym name =
-    Csymbol_address (Compilenv.make_symbol ~unitname:name (Some "gc_roots"))
+    Csymbol_address (Compilenv.make_symbol ~unitname:name "gc_roots")
   in
   Cdata(Cglobal_symbol "caml_globals" ::
         Cdefine_symbol "caml_globals" ::
@@ -2627,7 +2619,7 @@ let globals_map v = global_data "caml_globals_map" v
 
 let frame_table namelist =
   let mksym name =
-    Csymbol_address (Compilenv.make_symbol ~unitname:name (Some "frametable"))
+    Csymbol_address (Compilenv.make_symbol ~unitname:name "frametable")
   in
   Cdata(Cglobal_symbol "caml_frametable" ::
         Cdefine_symbol "caml_frametable" ::
@@ -2638,8 +2630,8 @@ let frame_table namelist =
 
 let segment_table namelist symbol begname endname =
   let addsyms name lst =
-    Csymbol_address (Compilenv.make_symbol ~unitname:name (Some begname)) ::
-    Csymbol_address (Compilenv.make_symbol ~unitname:name (Some endname)) ::
+    Csymbol_address (Compilenv.make_symbol ~unitname:name begname) ::
+    Csymbol_address (Compilenv.make_symbol ~unitname:name endname) ::
     lst
   in
   Cdata(Cglobal_symbol symbol ::
@@ -2758,7 +2750,7 @@ let emit_constant_closure ((_, global_symb) as symb) fundecls clos_vars cont =
 (* Build the NULL terminated array of gc roots *)
 
 let emit_gc_roots_table ~symbols cont =
-  let table_symbol = Compilenv.make_symbol (Some "gc_roots") in
+  let table_symbol = Compilenv.make_symbol "gc_roots" in
   Cdata(Cglobal_symbol table_symbol ::
         Cdefine_symbol table_symbol ::
         List.map (fun s -> Csymbol_address s) symbols @

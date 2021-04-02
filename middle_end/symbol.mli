@@ -25,11 +25,10 @@ type t
 val for_ident : Ident.t -> t
 
 val for_current_unit : unit -> t
-
-val for_entry_function : Compilation_unit.t -> t
-val for_entry_function_in_current_unit : unit -> t
-
 val for_new_const_in_current_unit : unit -> t
+
+(** To be used for "entry" functions, etc. *)
+val for_fixed_name : Compilation_unit.t -> name:string -> t
 
 module Flambda : sig
   val for_variable : Variable.t -> t

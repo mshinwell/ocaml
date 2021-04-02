@@ -89,14 +89,14 @@ let current_unit =
 
 let unit_id_from_name name = Ident.create_persistent name
 
-let reset ?for_pack_prefix name =
+let reset ?for_pack_prefix ~module_name () =
   Hashtbl.clear global_infos_table;
   Set_of_closures_id.Tbl.clear imported_sets_of_closures_table;
   let compilation_unit =
-    Compilation_unit.create ?for_pack_prefix name
+    Compilation_unit.create ?for_pack_prefix module_name
   in
   Compilation_unit.set_current compilation_unit;
-  current_unit.ui_name <- comp_unit;
+  current_unit.ui_name <- compilation_unit;
   let symbol =
     Symbol.for_current_unit ()
     |> Symbol.linkage_name
@@ -281,6 +281,15 @@ let backtrack s = structured_constants := s
 let new_const_symbol () =
   Symbol.for_new_const_in_current_unit ()
   |> Symbol.to_string
+
+let make_symbol ?unitname name =
+  let comp_unit =
+    match unitname with
+    | None -> Compilation_unit.get_current_exn ()
+    | Some unitname -> Compilation_unit.of_string unitname
+  in
+  Symbol.for_fixed_name comp_unit ~name
+  |> Symbol.linkage_name
 
 let new_structured_constant cst ~shared =
   let {strcst_shared; strcst_all} = !structured_constants in
