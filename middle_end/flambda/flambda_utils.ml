@@ -817,7 +817,7 @@ let fun_vars_referenced_in_decls
   let symbols_to_fun_vars =
     Variable.Set.fold (fun fun_var symbols_to_fun_vars ->
         let closure_id = Closure_id.wrap fun_var in
-        let symbol = Symbol.for_closure closure_id in
+        let symbol = Symbol.Flambda.for_closure closure_id in
         Symbol.Map.add symbol fun_var symbols_to_fun_vars)
       fun_vars
       Symbol.Map.empty

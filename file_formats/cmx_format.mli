@@ -37,7 +37,9 @@ type export_info =
 
 type unit_infos =
   { mutable ui_name: Compilation_unit.t;  (* Compilation unit implemented *)
-    mutable ui_defines: string list;      (* Unit and sub-units implemented *)
+    (* CR mshinwell: ui_defines should be Compilation_unit.t list *)
+    mutable ui_defines: string list;      (* Linkage names for unit and *)
+                                          (* sub-units implemented *)
     mutable ui_imports_cmi: crcs;         (* Interfaces imported *)
     mutable ui_imports_cmx: crcs;         (* Infos imported *)
     mutable ui_curry_fun: int list;       (* Currying functions needed *)

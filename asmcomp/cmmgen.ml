@@ -1464,7 +1464,11 @@ let compunit (ulam, preallocated_blocks, constants) =
         (fun () -> dbg)
     else
       transl empty_env ulam in
-  let c1 = [Cfunction {fun_name = Compilenv.make_symbol (Some "entry");
+  let fun_name =
+    Symbol.for_entry_function_in_current_unit ()
+    |> Symbol.linkage_name
+  in
+  let c1 = [Cfunction {fun_name;
                        fun_args = [];
                        fun_body = init_code;
                        (* This function is often large and run only once.

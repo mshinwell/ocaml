@@ -89,10 +89,18 @@ let current_unit =
 
 let unit_id_from_name name = Ident.create_persistent name
 
-let reset comp_unit =
+let reset ?for_pack_prefix name =
   Hashtbl.clear global_infos_table;
   Set_of_closures_id.Tbl.clear imported_sets_of_closures_table;
+  let compilation_unit =
+    Compilation_unit.create ?for_pack_prefix name
+  in
+  Compilation_unit.set_current compilation_unit;
   current_unit.ui_name <- comp_unit;
+  let symbol =
+    Symbol.for_current_unit ()
+    |> Symbol.linkage_name
+  in
   current_unit.ui_defines <- [symbol];
   current_unit.ui_imports_cmi <- [];
   current_unit.ui_imports_cmx <- [];
@@ -104,13 +112,7 @@ let reset comp_unit =
   structured_constants := structured_constants_empty;
   current_unit.ui_export_info <- default_ui_export_info;
   merged_environment := Export_info.empty;
-  Hashtbl.clear export_infos_table;
-  let compilation_unit =
-    Compilation_unit.create
-      (Ident.create_persistent name)
-      (current_unit_linkage_name ())
-  in
-  Compilation_unit.set_current compilation_unit
+  Hashtbl.clear export_infos_table
 
 let current_unit_infos () =
   current_unit

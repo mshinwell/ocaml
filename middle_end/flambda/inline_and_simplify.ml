@@ -582,7 +582,6 @@ and simplify_set_of_closures original_env r
        references to functions via symbols or variables. *)
     Freshening.rewrite_recursive_calls_with_symbols (E.freshening original_env)
       set_of_closures.function_decls
-      ~make_closure_symbol:Backend.closure_symbol
   in
   let env = E.increase_closure_depth original_env in
   let free_vars, specialised_args, function_decls, parameter_approximations,
@@ -628,12 +627,10 @@ and simplify_set_of_closures original_env r
     Flambda.update_function_declarations function_decls ~funs
   in
   let invariant_params =
-    lazy (Invariant_params.invariant_params_in_recursion function_decls
-      ~backend:(E.backend env))
+    lazy (Invariant_params.invariant_params_in_recursion function_decls)
   in
   let recursive =
-    lazy (Find_recursive_functions.in_function_declarations function_decls
-      ~backend:(E.backend env))
+    lazy (Find_recursive_functions.in_function_declarations function_decls)
   in
   let keep_body =
     Inline_and_simplify_aux.keep_body_check

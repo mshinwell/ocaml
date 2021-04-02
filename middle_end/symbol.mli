@@ -24,6 +24,11 @@ type t
     it is [Global] or [Predef]. *)
 val for_ident : Ident.t -> t
 
+val for_current_unit : unit -> t
+
+val for_entry_function : Compilation_unit.t -> t
+val for_entry_function_in_current_unit : unit -> t
+
 val for_new_const_in_current_unit : unit -> t
 
 module Flambda : sig
@@ -37,6 +42,4 @@ val linkage_name : t -> string
 
 include Identifiable.S with type t := t
 
-val to_string : t -> string
-
-val is_in_current_unit : t -> bool
+val is_predef_exn : t -> bool

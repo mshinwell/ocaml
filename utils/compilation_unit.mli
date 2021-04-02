@@ -93,6 +93,8 @@ val create : ?for_pack_prefix:Prefix.t -> Name.t -> t
     mangled in any way). The "-for-pack" of prefix is extracted if there is
     any. *)
 val of_string : string -> t
+(* CR mshinwell: It's kind of bad that [create name] and [of_string name]
+   do different things w.r.t. the prefix. *)
 
 (** A distinguished compilation unit for initialisation of mutable state. *)
 val dummy : t

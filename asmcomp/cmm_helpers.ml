@@ -2578,7 +2578,11 @@ let entry_point namelist =
   let body =
     List.fold_right
       (fun name next ->
-        let entry_sym = Compilenv.make_symbol ~unitname:name (Some "entry") in
+        let comp_unit = Compilation_unit.of_string name in
+        let entry_sym =
+          Symbol.for_entry_function comp_unit
+          |> Symbol.linkage_name
+        in
         Csequence(Cop(Capply typ_void,
                          [cconst_symbol entry_sym], dbg ()),
                   Csequence(incr_global_inited (), next)))
@@ -2595,6 +2599,10 @@ let entry_point namelist =
 (* Generate the table of globals *)
 
 let cint_zero = Cint 0n
+
+
+(* XXX We need a [make_symbol]
+   (which should also parse name:string -> Compilation_unit.t) *)
 
 let global_table namelist =
   let mksym name =

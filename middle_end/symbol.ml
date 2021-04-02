@@ -64,18 +64,19 @@ let linkage_name_for_compilation_unit comp_unit =
   caml_symbol_prefix ^ suffix
 
 let linkage_name_for_current_unit () =
-  for_compilation_unit (CU.get_current_exn ())
+  linkage_name_for_compilation_unit (CU.get_current_exn ())
 
 let linkage_name_for_ident id =
-  if Ident.is_predef id
-  then "caml_exn_" ^ Ident.name id
-  else
-    match Ident.compilation_unit_of_global_or_predef_ident id with
-    | Some comp_unit -> for_compilation_unit comp_unit
-    | None ->
-      assert (not (Ident.is_global id));
-      (for_compilation_unit (CU.get_current_exn ()))
-        ^ separator ^ Ident.unique_name id
+  if Ident.is_predef id then
+    "caml_exn_" ^ Ident.name id
+  else if Ident.is_global id then
+    Ident.compilation_unit_of_global_or_predef_ident id
+    |> linkage_name_for_compilation_unit
+  else begin
+    assert (not (Ident.is_global id));
+    (linkage_name_for_compilation_unit (CU.get_current_exn ()))
+      ^ separator ^ Ident.unique_name id
+  end
 
 let for_ident id =
   let linkage_name = linkage_name_for_ident id in
@@ -89,16 +90,19 @@ let for_ident id =
     hash = Hashtbl.hash linkage_name;
   }
 
-let is_in_current_unit t =
-  let prefix = linkage_name_for_current_unit () in
-  String.equal t.linkage_name prefix
-    || String.starts_with ~prefix:(prefix ^ separator) t.linkage_name
+let for_current_unit () =
+  let linkage_name = linkage_name_for_current_unit () in
+  let compilation_unit = Compilation_unit.get_current_exn () in
+  { compilation_unit;
+    linkage_name;
+    hash = Hashtbl.hash linkage_name;
+  }
 
 module Flambda = struct
   let for_variable var =
     let compilation_unit = Variable.get_compilation_unit var in
     let linkage_name =
-      (for_compilation_unit compilation_unit)
+      (linkage_name_for_compilation_unit compilation_unit)
         ^ separator ^ Variable.unique_name var
     in
     { compilation_unit;
@@ -109,7 +113,7 @@ module Flambda = struct
   let for_closure closure_id =
     let compilation_unit = Closure_id.get_compilation_unit closure_id in
     let linkage_name =
-      (for_compilation_unit compilation_unit)
+      (linkage_name_for_compilation_unit compilation_unit)
         ^ separator ^ Closure_id.unique_name closure_id ^ "_closure"
     in
     { compilation_unit;
@@ -120,7 +124,7 @@ module Flambda = struct
   let for_code_of_closure closure_id =
     let compilation_unit = Closure_id.get_compilation_unit closure_id in
     let linkage_name =
-      (for_compilation_unit compilation_unit)
+      (linkage_name_for_compilation_unit compilation_unit)
         ^ separator ^ Closure_id.unique_name closure_id
     in
     { compilation_unit;
@@ -128,6 +132,18 @@ module Flambda = struct
       hash = Hashtbl.hash linkage_name;
     }
 end
+
+let for_entry_function compilation_unit =
+  let linkage_name =
+    (linkage_name_for_compilation_unit compilation_unit) ^ separator ^ "entry"
+  in
+  { compilation_unit;
+    linkage_name;
+    hash = Hashtbl.hash linkage_name;
+  }
+
+let for_entry_function_in_current_unit () =
+  for_entry_function (Compilation_unit.get_current_exn ())
 
 let const_label = ref 0
 
@@ -140,3 +156,6 @@ let for_new_const_in_current_unit () =
     linkage_name;
     hash = Hashtbl.hash linkage_name;
   }
+
+let is_predef_exn t =
+  Compilation_unit.equal t.compilation_unit Compilation_unit.predef_exn

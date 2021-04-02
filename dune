@@ -110,7 +110,7 @@
    ;; middle_end/
    backend_intf backend_var backend_var clambda clambda_primitives
    compilation_unit compilenv convert_primitives internal_variable_names
-   linkage_name printclambda printclambda_primitives semantics_of_primitives
+   printclambda printclambda_primitives semantics_of_primitives
    symbol variable
 
    ;; middle_end/closure/

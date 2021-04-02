@@ -3057,39 +3057,37 @@ middle_end/clambda_primitives.cmi : \
     parsing/asttypes.cmi
 middle_end/compilenv.cmo : \
     utils/warnings.cmi \
+    middle_end/symbol.cmi \
     middle_end/flambda/simple_value_approx.cmi \
     middle_end/flambda/base_types/set_of_closures_id.cmi \
     typing/path.cmi \
     utils/misc.cmi \
     parsing/location.cmi \
     utils/load_path.cmi \
-    middle_end/linkage_name.cmi \
     typing/ident.cmi \
     middle_end/flambda/export_info.cmi \
     typing/env.cmi \
     utils/config.cmi \
     utils/compilation_unit.cmi \
     file_formats/cmx_format.cmi \
-    middle_end/flambda/base_types/closure_id.cmi \
     utils/clflags.cmi \
     middle_end/clambda.cmi \
     middle_end/compilenv.cmi
 middle_end/compilenv.cmx : \
     utils/warnings.cmx \
+    middle_end/symbol.cmx \
     middle_end/flambda/simple_value_approx.cmx \
     middle_end/flambda/base_types/set_of_closures_id.cmx \
     typing/path.cmx \
     utils/misc.cmx \
     parsing/location.cmx \
     utils/load_path.cmx \
-    middle_end/linkage_name.cmx \
     typing/ident.cmx \
     middle_end/flambda/export_info.cmx \
     typing/env.cmx \
     utils/config.cmx \
     utils/compilation_unit.cmx \
     file_formats/cmx_format.cmi \
-    middle_end/flambda/base_types/closure_id.cmx \
     utils/clflags.cmx \
     middle_end/clambda.cmx \
     middle_end/compilenv.cmi
@@ -3130,26 +3128,6 @@ middle_end/internal_variable_names.cmx : \
     middle_end/internal_variable_names.cmi
 middle_end/internal_variable_names.cmi : \
     lambda/lambda.cmi
-middle_end/linkage_name.cmo : \
-    middle_end/variable.cmi \
-    utils/misc.cmi \
-    utils/identifiable.cmi \
-    typing/ident.cmi \
-    utils/compilation_unit.cmi \
-    middle_end/flambda/base_types/closure_id.cmi \
-    middle_end/linkage_name.cmi
-middle_end/linkage_name.cmx : \
-    middle_end/variable.cmx \
-    utils/misc.cmx \
-    utils/identifiable.cmx \
-    typing/ident.cmx \
-    utils/compilation_unit.cmx \
-    middle_end/flambda/base_types/closure_id.cmx \
-    middle_end/linkage_name.cmi
-middle_end/linkage_name.cmi : \
-    utils/identifiable.cmi \
-    typing/ident.cmi \
-    utils/compilation_unit.cmi
 middle_end/printclambda.cmo : \
     lambda/printlambda.cmi \
     middle_end/printclambda_primitives.cmi \
@@ -3196,8 +3174,6 @@ middle_end/semantics_of_primitives.cmi : \
     middle_end/clambda_primitives.cmi
 middle_end/symbol.cmo : \
     middle_end/variable.cmi \
-    utils/misc.cmi \
-    middle_end/linkage_name.cmi \
     utils/identifiable.cmi \
     typing/ident.cmi \
     utils/compilation_unit.cmi \
@@ -3205,8 +3181,6 @@ middle_end/symbol.cmo : \
     middle_end/symbol.cmi
 middle_end/symbol.cmx : \
     middle_end/variable.cmx \
-    utils/misc.cmx \
-    middle_end/linkage_name.cmx \
     utils/identifiable.cmx \
     typing/ident.cmx \
     utils/compilation_unit.cmx \
@@ -3214,18 +3188,10 @@ middle_end/symbol.cmx : \
     middle_end/symbol.cmi
 middle_end/symbol.cmi : \
     middle_end/variable.cmi \
-    middle_end/linkage_name.cmi \
     utils/identifiable.cmi \
     typing/ident.cmi \
     utils/compilation_unit.cmi \
     middle_end/flambda/base_types/closure_id.cmi
-middle_end/symbol_utils.cmo : \
-    middle_end/symbol_utils.cmi
-middle_end/symbol_utils.cmx : \
-    middle_end/symbol_utils.cmi
-middle_end/symbol_utils.cmi : \
-    middle_end/linkage_name.cmi \
-    typing/ident.cmi
 middle_end/variable.cmo : \
     utils/misc.cmi \
     middle_end/internal_variable_names.cmi \
@@ -3732,6 +3698,7 @@ file_formats/linear_format.cmi : \
     asmcomp/cmm.cmi
 middle_end/closure/closure.cmo : \
     utils/warnings.cmi \
+    middle_end/symbol.cmi \
     lambda/switch.cmi \
     lambda/simplif.cmi \
     middle_end/semantics_of_primitives.cmi \
@@ -3739,7 +3706,6 @@ middle_end/closure/closure.cmo : \
     utils/numbers.cmi \
     utils/misc.cmi \
     parsing/location.cmi \
-    middle_end/linkage_name.cmi \
     lambda/lambda.cmi \
     typing/ident.cmi \
     typing/env.cmi \
@@ -3756,6 +3722,7 @@ middle_end/closure/closure.cmo : \
     middle_end/closure/closure.cmi
 middle_end/closure/closure.cmx : \
     utils/warnings.cmx \
+    middle_end/symbol.cmx \
     lambda/switch.cmx \
     lambda/simplif.cmx \
     middle_end/semantics_of_primitives.cmx \
@@ -3763,7 +3730,6 @@ middle_end/closure/closure.cmx : \
     utils/numbers.cmx \
     utils/misc.cmx \
     parsing/location.cmx \
-    middle_end/linkage_name.cmx \
     lambda/lambda.cmx \
     typing/ident.cmx \
     typing/env.cmx \
@@ -3783,9 +3749,9 @@ middle_end/closure/closure.cmi : \
     middle_end/clambda.cmi \
     middle_end/backend_intf.cmi
 middle_end/closure/closure_middle_end.cmo : \
+    middle_end/symbol.cmi \
     middle_end/printclambda.cmi \
     typing/path.cmi \
-    middle_end/linkage_name.cmi \
     lambda/lambda.cmi \
     typing/ident.cmi \
     middle_end/compilenv.cmi \
@@ -3794,9 +3760,9 @@ middle_end/closure/closure_middle_end.cmo : \
     middle_end/clambda.cmi \
     middle_end/closure/closure_middle_end.cmi
 middle_end/closure/closure_middle_end.cmx : \
+    middle_end/symbol.cmx \
     middle_end/printclambda.cmx \
     typing/path.cmx \
-    middle_end/linkage_name.cmx \
     lambda/lambda.cmx \
     typing/ident.cmx \
     middle_end/compilenv.cmx \
@@ -4296,7 +4262,6 @@ middle_end/flambda/flambda_middle_end.cmo : \
     middle_end/printclambda.cmi \
     utils/misc.cmi \
     parsing/location.cmi \
-    middle_end/linkage_name.cmi \
     middle_end/flambda/lift_let_to_initialize_symbol.cmi \
     middle_end/flambda/lift_constants.cmi \
     middle_end/flambda/lift_code.cmi \
@@ -4331,7 +4296,6 @@ middle_end/flambda/flambda_middle_end.cmx : \
     middle_end/printclambda.cmx \
     utils/misc.cmx \
     parsing/location.cmx \
-    middle_end/linkage_name.cmx \
     middle_end/flambda/lift_let_to_initialize_symbol.cmx \
     middle_end/flambda/lift_constants.cmx \
     middle_end/flambda/lift_code.cmx \
@@ -4371,7 +4335,6 @@ middle_end/flambda/flambda_to_clambda.cmo : \
     utils/numbers.cmi \
     middle_end/flambda/base_types/mutable_variable.cmi \
     utils/misc.cmi \
-    middle_end/linkage_name.cmi \
     lambda/lambda.cmi \
     middle_end/flambda/initialize_symbol_to_let_symbol.cmi \
     middle_end/flambda/flambda_utils.cmi \
@@ -4401,7 +4364,6 @@ middle_end/flambda/flambda_to_clambda.cmx : \
     utils/numbers.cmx \
     middle_end/flambda/base_types/mutable_variable.cmx \
     utils/misc.cmx \
-    middle_end/linkage_name.cmx \
     lambda/lambda.cmx \
     middle_end/flambda/initialize_symbol_to_let_symbol.cmx \
     middle_end/flambda/flambda_utils.cmx \
