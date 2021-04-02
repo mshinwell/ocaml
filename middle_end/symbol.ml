@@ -47,11 +47,6 @@ let of_global_linkage compilation_unit label =
   let hash = Linkage_name.hash label in
   Linkage { compilation_unit; hash; label }
 
-let for_predef_exn id =
-  if not (Ident.is_predef id) then begin
-    Misc.fatal_errorf "%a is not a predef-exn identifier" Ident.print id
-  end;
-
 let for_ident id =
   let linkage_name = Linkage_name.for_ident id in
   let hash = Linkage_name.hash linkage_name in
