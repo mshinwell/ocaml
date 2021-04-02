@@ -82,11 +82,11 @@ let check_closure t ulam named : Clambda.ulambda =
         ~arity:2 ~alloc:false
     in
     let str = Format.asprintf "%a" Flambda.print_named named in
-    let sym = Linkage_name.for_new_const_in_current_unit () in
+    let sym = Symbol.for_new_const_in_current_unit () in
     t.constants_for_instrumentation <-
       Symbol.Map.add sym (Clambda.Uconst_string str)
         t.constants_for_instrumentation;
-    let sym = Linkage_name.to_string sym in
+    let sym = Symbol.to_string sym in
     Uprim (Pccall desc,
            [ulam; Clambda.Uconst (Uconst_ref (sym, None))],
            Debuginfo.none)
@@ -103,11 +103,11 @@ let check_field t ulam pos named_opt : Clambda.ulambda =
       | None -> "<none>"
       | Some named -> Format.asprintf "%a" Flambda.print_named named
     in
-    let sym = Linkage_name.for_new_const_in_current_unit () in
+    let sym = Symbol.for_new_const_in_current_unit () in
     t.constants_for_instrumentation <-
       Symbol.Map.add sym' (Clambda.Uconst_string str)
         t.constants_for_instrumentation;
-    let sym = Linkage_name.to_string sym in
+    let sym = Symbol.to_string sym in
     Uprim (Pccall desc, [ulam; Clambda.Uconst (Uconst_int pos);
         Clambda.Uconst (Uconst_ref (sym, None))],
       Debuginfo.none)
@@ -213,7 +213,7 @@ let to_uconst_symbol env symbol : Clambda.ustructured_constant option =
   | Some _ -> None
 
 let to_clambda_symbol' env sym : Clambda.uconstant =
-  let lbl = Linkage_name.to_string (Symbol.label sym) in
+  let lbl = Symbol.to_string (Symbol.label sym) in
   Uconst_ref (lbl, to_uconst_symbol env sym)
 
 let to_clambda_symbol env sym : Clambda.ulambda =
@@ -588,7 +588,7 @@ and to_clambda_closed_set_of_closures t env symbol
     }
   in
   let ufunct = List.map to_clambda_function functions in
-  let closure_lbl = Linkage_name.to_string (Symbol.label symbol) in
+  let closure_lbl = Symbol.to_string (Symbol.label symbol) in
   Uconst_closure (ufunct, closure_lbl, [])
 
 let to_clambda_initialize_symbol t env symbol fields : Clambda.ulambda =
@@ -675,13 +675,13 @@ let to_clambda_program t env constants (program : Flambda.program) =
                 in
                 Some (Clambda.Uconst_field_int n)
             | Some (Flambda.Symbol sym) ->
-                let lbl = Linkage_name.to_string (Symbol.label sym) in
+                let lbl = Symbol.to_string (Symbol.label sym) in
                 Some (Clambda.Uconst_field_ref lbl))
           fields
       in
       let e1 = to_clambda_initialize_symbol t env symbol init_fields in
       let preallocated_block : Clambda.preallocated_block =
-        { symbol = Linkage_name.to_string (Symbol.label symbol);
+        { symbol = Symbol.to_string (Symbol.label symbol);
           exported = true;
           tag = Tag.to_int tag;
           fields = constant_fields;

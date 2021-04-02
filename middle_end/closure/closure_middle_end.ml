@@ -41,8 +41,8 @@ let lambda_to_clambda ~backend ~prefixname:_ ~ppf_dump
     }
   in
   let symbol =
-    Linkage_name.for_current_unit ()
-    |> Linkage_name.to_string
+    Symbol.for_current_unit ()
+    |> Symbol.to_string
   in
   let preallocated_block =
     Clambda.{

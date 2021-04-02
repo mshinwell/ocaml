@@ -237,7 +237,8 @@ let lambda_to_clambda ~backend ~prefixname ~ppf_dump
   in
   let constants =
     List.map (fun (symbol, definition) ->
-        { Clambda.symbol = Linkage_name.to_string (Symbol.label symbol);
+        { Clambda.
+          symbol = Symbol.to_string symbol;
           exported = true;
           definition;
           provenance = None;

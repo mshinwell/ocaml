@@ -64,8 +64,8 @@ let rec build_closure_env env_param pos = function
 
 let getglobal dbg id =
   let symbol =
-    Linkage_name.for_ident id
-    |> Linkage_name.to_string
+    Symbol.for_ident id
+    |> Symbol.to_string
   in
   Uprim (P.Pread_symbol symbol, [], dbg)
 
@@ -1250,8 +1250,8 @@ and close_functions { backend; fenv; cenv; mutable_vars } fun_defs =
       (function
           (id, Lfunction{kind; params; return; body; loc}) ->
             let label =
-              Linkage_name.for_ident id
-              |> Linkage_name.to_string
+              Symbol.for_ident id
+              |> Symbol.to_string
             in
             let arity = List.length params in
             let fundesc =
@@ -1496,8 +1496,8 @@ let reset () =
 let intro ~backend ~size lam =
   reset ();
   let id =
-    Linkage_name.for_current_unit ()
-    |> Linkage_name.to_string
+    Symbol.for_current_unit ()
+    |> Symbol.to_string
   in
   global_approx := Array.init size (fun i -> Value_global_field (id, i));
   Compilenv.set_global_approx(Value_tuple !global_approx);

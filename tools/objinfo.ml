@@ -163,14 +163,10 @@ let print_cmx_infos (ui, crc) =
     else
       printf "Flambda unit\n";
     if not !no_approx then begin
-      let cu =
-        Compilation_unit.create (Ident.create_persistent ui.ui_name)
-          (Linkage_name.create "__dummy__")
-      in
+      let cu = Symbol.for_ident (Ident.create_persistent ui.ui_name) in
       Compilation_unit.set_current cu;
       let root_symbols =
-        List.map (fun s ->
-            Symbol.of_global_linkage cu (Linkage_name.create ("caml"^s)))
+        List.map (fun s -> Symbol.for_ident (Ident.create_persistent s))
           ui.ui_defines
       in
       Format.printf "approximations@ %a@.@."

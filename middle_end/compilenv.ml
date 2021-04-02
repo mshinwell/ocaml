@@ -277,8 +277,8 @@ let snapshot () = !structured_constants
 let backtrack s = structured_constants := s
 
 let new_const_symbol () =
-  Linkage_name.for_new_const_in_current_unit ()
-  |> Linkage_name.to_string
+  Symbol.for_new_const_in_current_unit ()
+  |> Symbol.to_string
 
 let new_structured_constant cst ~shared =
   let {strcst_shared; strcst_all} = !structured_constants in
@@ -327,14 +327,6 @@ let structured_constants () =
          definition;
          provenance = Some provenance;
        })
-
-let function_label fv =
-  let compilation_unit = Closure_id.get_compilation_unit fv in
-  let unitname =
-    Linkage_name.to_string
-      (Compilation_unit.get_linkage_name compilation_unit)
-  in
-  (concat_symbol unitname (Closure_id.unique_name fv))
 
 let require_global global_ident =
   if not (Ident.is_predef global_ident) then
