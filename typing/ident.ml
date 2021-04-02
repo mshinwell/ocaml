@@ -154,7 +154,7 @@ let print ppf id = print ~with_scope:false ppf id
 
 let compilation_unit_of_global_or_predef_ident t =
   match t with
-  | Global name -> Some (Compilation_unit.of_string name)
+  | Global name -> Compilation_unit.of_string name
   | Predef _ -> Compilation_unit.predef_exn
   | Local _ | Scoped _ ->
     Misc.fatal_errorf "%a is not a global or predef-exn Ident" print t

@@ -80,12 +80,3 @@ let for_code_of_closure closure_id =
     linkage_name;
     hash = Linkage_name.hash linkage_name;
   }
-
-let compilation_unit t = t.compilation_unit
-
-let print_opt ppf = function
-  | None -> Format.fprintf ppf "<no symbol>"
-  | Some t -> print ppf t
-
-let compare_lists l1 l2 =
-  Misc.Stdlib.List.compare compare l1 l2

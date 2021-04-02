@@ -16,19 +16,27 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
-include Identifiable.S
+(** Symbols that identify statically-allocated code or data. *)
 
-val to_string : t -> string
+type t
 
-val create : string -> t
-
-val for_compilation_unit : Compilation_unit.t -> t
-val for_current_unit : unit -> t
+(** It is assumed that the provided [Ident.t] is in the current unit unless
+    it is [Global] or [Predef]. *)
+val for_ident : Ident.t -> t
 
 val for_new_const_in_current_unit : unit -> t
 
-val for_ident : ?comp_unit:Compilation_unit.t -> Ident.t -> t
+module Flambda : sig
+  val for_variable : Variable.t -> t
+  val for_closure : Closure_id.t -> t
+  val for_code_of_closure : Closure_id.t -> t
+end
+
+val compilation_unit : t -> Compilation_unit.t
+val linkage_name : t -> string
+
+include Identifiable.S with type t := t
+
+val to_string : t -> string
 
 val is_in_current_unit : t -> bool
-
-val caml_symbol_prefix : string
