@@ -133,11 +133,6 @@ let is_predef = function
   | Predef _ -> true
   | _ -> false
 
-let compilation_unit_of_global_ident t =
-  match t with
-  | Global name -> Some (Compilation_unit.of_string name)
-  | Predef _ | Local _ | Scoped _ -> None
-
 let print ~with_scope ppf =
   let open Format in
   function
@@ -156,6 +151,16 @@ let print ~with_scope ppf =
 let print_with_scope ppf id = print ~with_scope:true ppf id
 
 let print ppf id = print ~with_scope:false ppf id
+
+let compilation_unit_of_global_or_predef_ident t =
+  match t with
+  | Global name -> Some (Compilation_unit.of_string name)
+  | Predef _ -> Compilation_unit.predef_exn
+  | Local _ | Scoped _ ->
+    Misc.fatal_errorf "%a is not a global or predef-exn Ident" print t
+
+let of_compilation_unit comp_unit =
+  Global (Compilation_unit.full_path_as_string comp_unit)
 
 type 'a tbl =
     Empty

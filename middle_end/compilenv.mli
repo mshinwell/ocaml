@@ -36,19 +36,6 @@ val reset: Compilation_unit.t -> unit
 val current_unit_infos: unit -> unit_infos
         (* Return the infos for the unit being compiled *)
 
-val current_unit_name: unit -> string
-        (* Return the name of the unit being compiled
-           clambda-only *)
-
-val current_unit_symbol: unit -> Symbol.t
-        (* flambda-only *)
-
-val is_predefined_exception: Symbol.t -> bool
-        (* flambda-only *)
-
-val unit_for_global: Ident.t -> Compilation_unit.t
-        (* flambda-only *)
-
 val global_approx: Ident.t -> Clambda.value_approximation
         (* Return the approximation for the given global identifier
            clambda-only *)

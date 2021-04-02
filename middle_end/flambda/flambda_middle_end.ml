@@ -25,7 +25,7 @@ let _dump_function_sizes flam ~backend =
       Variable.Map.iter (fun fun_var
             (function_decl : Flambda.function_declaration) ->
           let closure_id = Closure_id.wrap fun_var in
-          let symbol = Backend.closure_symbol closure_id in
+          let symbol = Symbol.for_closure closure_id in
           match Inlining_cost.lambda_smaller' function_decl.body ~than with
           | Some size -> Format.eprintf "%a %d\n" Symbol.print symbol size
           | None -> assert false)

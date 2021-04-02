@@ -55,7 +55,8 @@ val is_global: t -> bool
 val is_global_or_predef: t -> bool
 val is_predef: t -> bool
 
-val compilation_unit_of_global_ident : t -> Compilation_unit.t option
+val compilation_unit_of_global_or_predef_ident : t -> Compilation_unit.t
+val of_compilation_unit : Compilation_unit.t -> t
 
 val scope: t -> int
 

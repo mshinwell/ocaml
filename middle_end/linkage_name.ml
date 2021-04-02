@@ -87,10 +87,16 @@ module Flambda = struct
       ^ separator ^ Variable.unique_name var
 
   let for_closure closure_id =
-    (for_compilation_unit (Closure_id.get_compilation_unit var))
+    (for_compilation_unit (Closure_id.get_compilation_unit closure_id))
       ^ separator ^ Closure_id.unique_name closure_id ^ "_closure"
 
   let for_code_of_closure closure_id =
     (for_compilation_unit (Closure_id.get_compilation_unit closure_id))
       ^ separator ^ Closure_id.unique_name closure_id
 end
+
+let const_label = ref 0
+
+let for_new_const_in_current_unit () =
+  incr const_label;
+  for_current_unit () ^ separator ^ (Int.to_string !const_label)

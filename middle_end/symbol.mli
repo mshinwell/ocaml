@@ -28,16 +28,20 @@
 
 include Identifiable.S
 
-val of_variable : Variable.t -> t
+(** It is assumed that the provided [Ident.t] is in the current unit unless
+    it is [Global] or [Predef]. *)
+val for_ident : Ident.t -> t
+
+val for_variable : Variable.t -> t
+val for_closure : Closure_id.t -> t
+val for_code_of_closure : Closure_id.t -> t
 
 (* Create the symbol without prefixing with the compilation unit.
    Used for global symbols like predefined exceptions *)
 val of_global_linkage : Compilation_unit.t -> Linkage_name.t -> t
 
-val import_for_pack : pack:Compilation_unit.t -> t -> t
-
 val compilation_unit : t -> Compilation_unit.t
-val label : t -> Linkage_name.t
+val linkage_name : t -> Linkage_name.t
 
 val print_opt : Format.formatter -> t option -> unit
 

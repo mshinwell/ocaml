@@ -132,7 +132,9 @@ let of_string str =
   let for_pack_prefix, name = Prefix.extract_prefix str in
   create ~for_pack_prefix name
 
-let none = create (Name.of_string "*none*")
+let dummy = create (Name.of_string "*none*")
+
+let predef_exn = create (Name.of_string "*predef*")
 
 let name t = t.basename
 
@@ -216,5 +218,3 @@ let is_current t =
   match !current with
   | None -> false
   | Some t' -> equal t t'
-
-let to_ident t = Ident.create_persistent (full_path_as_string t)

@@ -40,9 +40,13 @@ let lambda_to_clambda ~backend ~prefixname:_ ~ppf_dump
         Path.Pident (Ident.create_persistent (Compilenv.current_unit_name ()));
     }
   in
+  let symbol =
+    Linkage_name.for_current_unit ()
+    |> Linkage_name.to_string
+  in
   let preallocated_block =
     Clambda.{
-      symbol = Compilenv.make_symbol None;
+      symbol;
       exported = true;
       tag = 0;
       fields = List.init lambda.main_module_block_size (fun _ -> None);

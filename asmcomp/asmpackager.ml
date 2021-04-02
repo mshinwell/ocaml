@@ -189,11 +189,8 @@ let build_package_cmx members cmxfile =
     if Config.flambda then
       List.map (fun info ->
           { info with
-            ui_export_info =
-              Flambda
-                (Export_info_for_pack.import_for_pack ~pack_units
-                   ~pack:(Compilenv.current_unit ())
-                   (get_export_info info)) })
+            ui_export_info = Flambda (get_export_info info);
+          })
         units
     else
       units
@@ -204,16 +201,13 @@ let build_package_cmx members cmxfile =
       let ui_export_info =
         List.fold_left (fun acc info ->
             Export_info.merge acc (get_export_info info))
-          (Export_info_for_pack.import_for_pack ~pack_units
-             ~pack:(Compilenv.current_unit ())
-             (get_export_info ui))
+          (get_export_info ui)
           units
       in
       Flambda ui_export_info
     else
       Clambda (get_approx ui)
   in
-  Export_info_for_pack.clear_import_state ();
   let pkg_infos =
     { ui_name = ui.ui_name;
       ui_symbol = ui.ui_symbol;

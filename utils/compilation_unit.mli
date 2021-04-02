@@ -95,7 +95,10 @@ val create : ?for_pack_prefix:Prefix.t -> Name.t -> t
 val of_string : string -> t
 
 (** A distinguished compilation unit for initialisation of mutable state. *)
-val none : t
+val dummy : t
+
+(** A distinguished compilation unit for predefined exceptions. *)
+val predef_exn : t
 
 (** The name of the compilation unit, excluding any [for_pack_prefix]. *)
 val name : t -> Name.t
@@ -114,9 +117,6 @@ val full_path : t -> Name.t list
 (** Returns the full path of the compilation unit, as a string, following
     usual conventions. *)
 val full_path_as_string : t -> string
-
-(** Return an [Ident.t] representing the given compilation unit. *)
-val to_ident : t -> Ident.t
 
 type error = private
   | Invalid_character of char

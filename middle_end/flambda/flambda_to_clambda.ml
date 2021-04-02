@@ -38,7 +38,8 @@ type t = {
 
 let get_fun_offset t closure_id =
   let fun_offset_table =
-    if Closure_id.in_compilation_unit closure_id (Compilenv.current_unit ())
+    if Closure_id.in_compilation_unit closure_id
+         (Compilation_unit.get_current_exn ())
     then
       t.current_unit.fun_offset_table
     else
@@ -52,7 +53,7 @@ let get_fun_offset t closure_id =
 let get_fv_offset t var_within_closure =
   let fv_offset_table =
     if Var_within_closure.in_compilation_unit var_within_closure
-        (Compilenv.current_unit ())
+         (Compilation_unit.get_current_exn ())
     then t.current_unit.fv_offset_table
     else t.imported_units.fv_offset_table
   in
@@ -81,14 +82,11 @@ let check_closure t ulam named : Clambda.ulambda =
         ~arity:2 ~alloc:false
     in
     let str = Format.asprintf "%a" Flambda.print_named named in
-    let sym = Compilenv.new_const_symbol () in
-    let sym' =
-      Symbol.of_global_linkage (Compilation_unit.get_current_exn ())
-        (Linkage_name.create sym)
-    in
+    let sym = Linkage_name.for_new_const_in_current_unit () in
     t.constants_for_instrumentation <-
-      Symbol.Map.add sym' (Clambda.Uconst_string str)
+      Symbol.Map.add sym (Clambda.Uconst_string str)
         t.constants_for_instrumentation;
+    let sym = Linkage_name.to_string sym in
     Uprim (Pccall desc,
            [ulam; Clambda.Uconst (Uconst_ref (sym, None))],
            Debuginfo.none)
@@ -105,14 +103,11 @@ let check_field t ulam pos named_opt : Clambda.ulambda =
       | None -> "<none>"
       | Some named -> Format.asprintf "%a" Flambda.print_named named
     in
-    let sym = Compilenv.new_const_symbol () in
-    let sym' =
-      Symbol.of_global_linkage (Compilation_unit.get_current_exn ())
-        (Linkage_name.create sym)
-    in
+    let sym = Linkage_name.for_new_const_in_current_unit () in
     t.constants_for_instrumentation <-
       Symbol.Map.add sym' (Clambda.Uconst_string str)
         t.constants_for_instrumentation;
+    let sym = Linkage_name.to_string sym in
     Uprim (Pccall desc, [ulam; Clambda.Uconst (Uconst_int pos);
         Clambda.Uconst (Uconst_ref (sym, None))],
       Debuginfo.none)

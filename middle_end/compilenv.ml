@@ -77,8 +77,7 @@ let default_ui_export_info =
     Cmx_format.Clambda Value_unknown
 
 let current_unit =
-  { ui_name = "";
-    ui_symbol = "";
+  { ui_name = Compilation_unit.dummy;
     ui_defines = [];
     ui_imports_cmi = [];
     ui_imports_cmx = [];
@@ -206,26 +205,6 @@ let global_approx id =
 
 (* Register the approximation of the module being compiled *)
 
-let unit_for_global id =
-  let sym_label = Linkage_name.create (Symbol_utils.symbol_for_global id) in
-  Compilation_unit.create id sym_label
-
-let predefined_exception_compilation_unit =
-  Compilation_unit.create (Ident.create_persistent "__dummy__")
-    (Linkage_name.create "__dummy__")
-
-let is_predefined_exception sym =
-  Compilation_unit.equal
-    predefined_exception_compilation_unit
-    (Symbol.compilation_unit sym)
-
-let symbol_for_global' id =
-  let sym_label = Linkage_name.create (Symbol_utils.symbol_for_global id) in
-  if Ident.is_predef id then
-    Symbol.of_global_linkage predefined_exception_compilation_unit sym_label
-  else
-    Symbol.of_global_linkage (unit_for_global id) sym_label
-
 let set_global_approx approx =
   assert(not Config.flambda);
   current_unit.ui_export_info <- Clambda approx
@@ -294,22 +273,12 @@ let save_unit_info filename =
   current_unit.ui_imports_cmi <- Env.imports();
   write_unit_info current_unit filename
 
-let current_unit () =
-  match Compilation_unit.get_current () with
-  | Some current_unit -> current_unit
-  | None -> Misc.fatal_error "Compilenv.current_unit"
-
-let current_unit_symbol () =
-  Symbol.of_global_linkage (current_unit ()) (current_unit_linkage_name ())
-
-let const_label = ref 0
-
-let new_const_symbol () =
-  incr const_label;
-  make_symbol (Some (Int.to_string !const_label))
-
 let snapshot () = !structured_constants
 let backtrack s = structured_constants := s
+
+let new_const_symbol () =
+  Linkage_name.for_new_const_in_current_unit ()
+  |> Linkage_name.to_string
 
 let new_structured_constant cst ~shared =
   let {strcst_shared; strcst_all} = !structured_constants in

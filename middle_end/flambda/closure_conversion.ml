@@ -335,10 +335,7 @@ let rec close t env (lam : Lambda.lambda) : Flambda.t =
     let zero = Variable.create Names.zero in
     let is_zero = Variable.create Names.is_zero in
     let exn = Variable.create Names.division_by_zero in
-    let exn_symbol =
-      Linkage_name.for_ident Predef.ident_division_by_zero
-      |> Symbol.of_global_linkage predefined_exception_compilation_unit
-    in
+    let exn_symbol = Symbol.for_ident Predef.ident_division_by_zero in
     let dbg = Debuginfo.from_location loc in
     let zero_const : Flambda.named =
       match prim with
@@ -465,12 +462,12 @@ let rec close t env (lam : Lambda.lambda) : Flambda.t =
     Misc.fatal_errorf "[Psetfield (Pgetglobal ...)] is \
         forbidden upon entry to the middle end"
   | Lprim (Pgetglobal id, [], _) when Ident.is_predef id ->
-    let symbol = t.symbol_for_global' id in
+    let symbol = Symbol.for_ident id in
     t.imported_symbols <- Symbol.Set.add symbol t.imported_symbols;
     name_expr (Symbol symbol) ~name:Names.predef_exn
   | Lprim (Pgetglobal id, [], _) ->
     assert (not (Ident.same id t.current_unit_id));
-    let symbol = t.symbol_for_global' id in
+    let symbol = Symbol.for_ident id in
     t.imported_symbols <- Symbol.Set.add symbol t.imported_symbols;
     name_expr (Symbol symbol) ~name:Names.pgetglobal
   | Lprim (lambda_p, args, loc) ->
@@ -684,16 +681,15 @@ and close_let_bound_expression t ?let_rec_ident let_bound_var env
 let lambda_to_flambda ~backend ~module_ident ~size lam
       : Flambda.program =
   let lam = add_default_argument_wrappers lam in
-  let module Backend = (val backend : Backend_intf.S) in
   let compilation_unit = Compilation_unit.get_current_exn () in
   let t =
-    { current_unit_id = Compilation_unit.to_ident compilation_unit;
+    { current_unit_id = Ident.of_compilation_unit compilation_unit;
       backend;
       imported_symbols = Symbol.Set.empty;
       declared_symbols = [];
     }
   in
-  let module_symbol = Backend.symbol_for_global' module_ident in
+  let module_symbol = Symbol.for_ident module_ident in
   let block_symbol =
     let var = Variable.create Internal_variable_names.module_as_block in
     Symbol.of_variable var

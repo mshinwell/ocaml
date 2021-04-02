@@ -26,7 +26,7 @@ let import_set_of_closures =
     let sym_to_fun_var_map (clos : A.function_declarations) =
       Variable.Map.fold (fun fun_var _ acc ->
            let closure_id = Closure_id.wrap fun_var in
-           let sym = Compilenv.closure_symbol closure_id in
+           let sym = Symbol.for_closure closure_id in
            Symbol.Map.add sym fun_var acc)
         clos.funs Symbol.Map.empty
     in

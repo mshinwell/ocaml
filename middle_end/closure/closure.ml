@@ -63,7 +63,11 @@ let rec build_closure_env env_param pos = function
    contain the right names if the -for-pack option is active. *)
 
 let getglobal dbg id =
-  Uprim(P.Pread_symbol (Compilenv.symbol_for_global id), [], dbg)
+  let symbol =
+    Linkage_name.for_ident id
+    |> Linkage_name.to_string
+  in
+  Uprim (P.Pread_symbol symbol, [], dbg)
 
 (* Check if a variable occurs in a [clambda] term. *)
 
@@ -1245,7 +1249,10 @@ and close_functions { backend; fenv; cenv; mutable_vars } fun_defs =
     List.map
       (function
           (id, Lfunction{kind; params; return; body; loc}) ->
-            let label = Compilenv.make_symbol (Some (V.unique_name id)) in
+            let label =
+              Linkage_name.for_ident id
+              |> Linkage_name.to_string
+            in
             let arity = List.length params in
             let fundesc =
               {fun_label = label;
@@ -1488,7 +1495,10 @@ let reset () =
 
 let intro ~backend ~size lam =
   reset ();
-  let id = Compilenv.make_symbol None in
+  let id =
+    Linkage_name.for_current_unit ()
+    |> Linkage_name.to_string
+  in
   global_approx := Array.init size (fun i -> Value_global_field (id, i));
   Compilenv.set_global_approx(Value_tuple !global_approx);
   let (ulam, _approx) =
