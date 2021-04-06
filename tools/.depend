@@ -91,7 +91,7 @@ objinfo.cmo : \
     ../utils/misc.cmi \
     ../typing/ident.cmi \
     ../middle_end/flambda/export_info.cmi \
-    ../middle_end/compilation_unit.cmi \
+    ../utils/compilation_unit.cmi \
     ../file_formats/cmxs_format.cmi \
     ../file_formats/cmx_format.cmi \
     ../file_formats/cmt_format.cmi \
@@ -106,7 +106,7 @@ objinfo.cmx : \
     ../utils/misc.cmx \
     ../typing/ident.cmx \
     ../middle_end/flambda/export_info.cmx \
-    ../middle_end/compilation_unit.cmx \
+    ../utils/compilation_unit.cmx \
     ../file_formats/cmxs_format.cmi \
     ../file_formats/cmx_format.cmi \
     ../file_formats/cmt_format.cmx \
