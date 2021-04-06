@@ -219,7 +219,7 @@ let lambda_to_clambda ~backend ~prefixname ~ppf_dump
       ~module_ident:program.module_ident
       ~module_initializer:program.code
   in
-  let export = Build_export_info.build_transient ~backend program in
+  let export = Build_export_info.build_transient program in
   let clambda, preallocated_blocks, constants =
     Profile.record_call "backend" (fun () ->
       (program, export)

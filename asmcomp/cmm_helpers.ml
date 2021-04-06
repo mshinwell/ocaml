@@ -2668,7 +2668,7 @@ let predef_exception i name =
 
 let plugin_header units =
   let mk ((ui : Cmx_format.unit_infos),crc) : Cmxs_format.dynunit =
-    { dynu_name = ui.ui_name;
+    { dynu_name = Compilation_unit.full_path_as_string ui.ui_name;
       dynu_crc = crc;
       dynu_imports_cmi = ui.ui_imports_cmi;
       dynu_imports_cmx = ui.ui_imports_cmx;

@@ -24,7 +24,7 @@ module CU = Compilation_unit
 type error =
     Illegal_renaming of string * string * string
   | Forward_reference of string * string
-  | Wrong_for_pack of string * CU.Prefix.t
+  | Wrong_for_pack of string * string
   | Linking_error
   | Assembler_error of string
   | File_not_found of string
@@ -38,7 +38,7 @@ type pack_member_kind = PM_intf | PM_impl of unit_infos
 
 type pack_member =
   { pm_file: string;
-    pm_name: string;
+    pm_name: string; (* CR mshinwell: -> CU.Name.t *)
     pm_kind: pack_member_kind }
 
 let read_member_info pack_path file = (
@@ -49,10 +49,11 @@ let read_member_info pack_path file = (
       PM_intf
     else begin
       let (info, crc) = Compilenv.read_unit_info file in
-      if info.ui_name <> name
-      then raise(Error(Illegal_renaming(name, file, info.ui_name)));
-      if info.ui_symbol <>
-         (Compilenv.current_unit_infos()).ui_symbol ^ "__" ^ info.ui_name
+      if not (CU.Name.equal (CU.name info.ui_name) (CU.Name.of_string name))
+      then raise(Error(Illegal_renaming(name, file,
+         CU.Name.to_string (CU.name info.ui_name))));
+      if not (CU.Prefix.equal (CU.for_pack_prefix info.ui_name)
+               (CU.for_pack_prefix (CU.get_current_exn ())))
       then raise(Error(Wrong_for_pack(file, pack_path)));
       Asmlink.check_consistency file info crc;
       Compilenv.cache_unit_info info;
@@ -91,7 +92,11 @@ let make_package_object ~ppf_dump members targetobj targetname coercion
         (* Put the full name of the module in the temporary file name
            to avoid collisions with MSVC's link /lib in case of successive
            packs *)
-        Filename.temp_file (Compilenv.make_symbol (Some "")) Config.ext_obj in
+        let name =
+          Symbol.for_current_unit ()
+          |> Symbol.linkage_name
+        in
+        Filename.temp_file name Config.ext_obj in
     let components =
       List.map
         (fun m ->
@@ -167,6 +172,7 @@ let build_package_cmx members cmxfile =
   let unit_names =
     List.map (fun m -> m.pm_name) members in
   let filter lst =
+    (* XXX polymorphic compare *)
     List.filter (fun (name, _crc) -> not (List.mem name unit_names)) lst in
   let union lst =
     List.fold_left
@@ -178,13 +184,6 @@ let build_package_cmx members cmxfile =
       (fun m accu ->
         match m.pm_kind with PM_intf -> accu | PM_impl info -> info :: accu)
       members [] in
-  let pack_units =
-    List.fold_left
-      (fun set info ->
-         let unit_id = Compilenv.unit_id_from_name info.ui_name in
-         Compilation_unit.Set.add
-           (Compilenv.unit_for_global unit_id) set)
-      Compilation_unit.Set.empty units in
   let units =
     if Config.flambda then
       List.map (fun info ->
@@ -208,14 +207,20 @@ let build_package_cmx members cmxfile =
     else
       Clambda (get_approx ui)
   in
+  let symbol =
+    Symbol.for_compilation_unit ui.ui_name
+    |> Symbol.linkage_name
+  in
+  let ui_name_as_string =
+    CU.full_path_as_string ui.ui_name
+  in
   let pkg_infos =
     { ui_name = ui.ui_name;
-      ui_symbol = ui.ui_symbol;
       ui_defines =
           List.flatten (List.map (fun info -> info.ui_defines) units) @
-          [ui.ui_symbol];
+          [symbol];
       ui_imports_cmi =
-          (ui.ui_name, Some (Env.crc_of_unit ui.ui_name)) ::
+          (ui_name_as_string, Some (Env.crc_of_unit ui_name_as_string)) ::
           filter(Asmlink.extract_crc_interfaces());
       ui_imports_cmx =
           filter(Asmlink.extract_crc_implementations());
@@ -260,7 +265,11 @@ let package_files ~ppf_dump initial_env files targetcmx ~backend =
   (* Set the name of the current "input" *)
   Location.input_name := targetcmx;
   (* Set the name of the current compunit *)
-  Compilenv.reset ?packname:!Clflags.for_package targetname;
+  let comp_unit =
+    let for_pack_prefix = CU.Prefix.parse_for_pack !Clflags.for_package in
+    CU.create ~for_pack_prefix (CU.Name.of_string targetname)
+  in
+  Compilenv.reset comp_unit;
   Misc.try_finally (fun () ->
       let coercion =
         Typemod.package_units initial_env files targetcmi targetname in
@@ -282,8 +291,8 @@ let report_error ppf = function
       fprintf ppf "Forward reference to %s in file %a" ident
         Location.print_filename file
   | Wrong_for_pack(file, path) ->
-      fprintf ppf "File %a@ was not compiled with the `-for-pack %@' option"
-              Location.print_filename file CU.Prefix.print path
+      fprintf ppf "File %a@ was not compiled with the `-for-pack %s@' option"
+              Location.print_filename file path
   | File_not_found file ->
       fprintf ppf "File %s not found" file
   | Assembler_error file ->

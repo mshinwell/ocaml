@@ -29,12 +29,7 @@ val imported_sets_of_closures_table
   : Simple_value_approx.function_declarations option Set_of_closures_id.Tbl.t
         (* flambda-only *)
 
-val reset
-(* XXX maybe this doesn't need to be optional *)
-   : ?for_pack_prefix:Compilation_unit.Prefix.t
-  -> module_name:string
-  -> unit
-  -> unit
+val reset : Compilation_unit.t -> unit
         (* Reset the environment and record the name of the unit being
            compiled (including any associated -for-pack prefix). *)
 

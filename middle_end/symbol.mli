@@ -24,6 +24,7 @@ type t
     it is [Global] or [Predef]. *)
 val for_ident : Ident.t -> t
 
+val for_compilation_unit : Compilation_unit.t -> t
 val for_current_unit : unit -> t
 val for_new_const_in_current_unit : unit -> t
 

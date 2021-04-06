@@ -149,10 +149,13 @@ let read_library_info filename =
 (* Read and cache info on global identifiers *)
 
 let get_global_info global_ident = (
-  let modname = Ident.name global_ident in
-  if modname = current_unit.ui_name then
+  let comp_unit =
+    Ident.compilation_unit_of_global_or_predef_ident global_ident
+  in
+  if Compilation_unit.equal comp_unit current_unit.ui_name then
     Some current_unit
   else begin
+    let modname = Ident.name global_ident in
     try
       Hashtbl.find global_infos_table modname
     with Not_found ->

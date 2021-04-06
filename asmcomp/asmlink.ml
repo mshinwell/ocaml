@@ -20,6 +20,7 @@ open Config
 open Cmx_format
 open Compilenv
 
+module CU = Compilation_unit
 module String = Misc.Stdlib.String
 
 type error =
@@ -55,7 +56,7 @@ let check_consistency file_name unit crc =
         match crco with
           None -> ()
         | Some crc ->
-            if name = unit.ui_name
+            if CU.Name.equal (CU.Name.of_string name) (CU.name unit.ui_name)
             then Cmi_consistbl.set crc_interfaces name crc file_name
             else Cmi_consistbl.check crc_interfaces name crc file_name)
       unit.ui_imports_cmi
@@ -84,17 +85,19 @@ let check_consistency file_name unit crc =
     } ->
     raise(Error(Inconsistent_implementation(name, user, auth)))
   end;
+  let ui_name = CU.full_path_as_string unit.ui_name in
   begin try
-    let source = List.assoc unit.ui_name !implementations_defined in
-    raise (Error(Multiple_definition(unit.ui_name, file_name, source)))
+    let source = List.assoc ui_name !implementations_defined in
+    raise (Error(Multiple_definition(ui_name, file_name, source)))
   with Not_found -> ()
   end;
-  implementations := unit.ui_name :: !implementations;
-  Cmx_consistbl.set crc_implementations unit.ui_name crc file_name;
+  implementations := ui_name :: !implementations;
+  Cmx_consistbl.set crc_implementations ui_name crc file_name;
   implementations_defined :=
-    (unit.ui_name, file_name) :: !implementations_defined;
-  if unit.ui_symbol <> unit.ui_name then
-    cmx_required := unit.ui_name :: !cmx_required
+    (ui_name, file_name) :: !implementations_defined;
+  (* XXX *)
+  if unit.ui_symbol <> ui_name then
+    cmx_required := ui_name :: !cmx_required
 
 let extract_crc_interfaces () =
   Cmi_consistbl.extract !interfaces crc_interfaces

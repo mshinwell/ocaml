@@ -90,13 +90,15 @@ let for_ident id =
     hash = Hashtbl.hash linkage_name;
   }
 
-let for_current_unit () =
+let for_compilation_unit compilation_unit =
   let linkage_name = linkage_name_for_current_unit () in
-  let compilation_unit = Compilation_unit.get_current_exn () in
   { compilation_unit;
     linkage_name;
     hash = Hashtbl.hash linkage_name;
   }
+
+let for_current_unit () =
+  for_compilation_unit (Compilation_unit.get_current_exn ())
 
 module Flambda = struct
   let for_variable var =
