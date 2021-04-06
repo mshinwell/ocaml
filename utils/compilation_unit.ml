@@ -27,7 +27,14 @@ type error =
 
 exception Error of error
 
-module Name = struct
+(* CR mshinwell: add sig here to hide "= string" *)
+module Name : sig
+  type t
+  include Identifiable.S with type t := t
+  val dummy : t
+  val of_string : string -> t
+  val to_string : t -> string
+end = struct
   type t = string
 
   include Identifiable.Make (struct
@@ -44,6 +51,7 @@ module Name = struct
     Char.equal (Char.uppercase_ascii chr) chr
 
   let of_string str =
+    if String.starts_with ~prefix:"caml" str then assert false; (* XXX *)
     if String.length str < 1 || not (isupper (String.get str 0)) then begin
       raise (Error (Bad_compilation_unit_name str))
     end;
@@ -54,23 +62,31 @@ module Name = struct
   let to_string t = t
 end
 
-module Prefix = struct
+module Prefix : sig
+  type t
+  include Identifiable.S with type t := t
+  val parse_for_pack : string option -> t
+  val extract_prefix : string -> t * Name.t
+  val to_list_outermost_pack_first : t -> Name.t list
+  val to_string : t -> string
+  val empty : t
+  val is_empty : t -> bool
+end = struct
   type t = Name.t list
 
   include Identifiable.Make (struct
     type nonrec t = t
+
     let equal = List.equal Name.equal
 
     let compare = List.compare Name.compare
 
     let hash = Hashtbl.hash
 
-    let print fmt p =
+    let print ppf p =
       Format.pp_print_list
         ~pp_sep:(fun ppf () -> Format.pp_print_string ppf ".")
-        Format.pp_print_string
-        fmt
-        p
+        Name.print ppf p
 
     let output chan t = print (Format.formatter_of_out_channel chan) t
   end)
@@ -92,7 +108,7 @@ module Prefix = struct
           if not (is_valid_character (i=0) c) then
             raise (Error (Invalid_character c)))
         module_name);
-    prefix
+    ListLabels.map prefix ~f:Name.of_string
 
   let parse_for_pack = function
     | None -> []
@@ -100,13 +116,15 @@ module Prefix = struct
 
   let extract_prefix name =
     match String.rindex_opt name '.' with
-    | None -> [], name
+    | None -> [], Name.of_string name
     | Some pos ->
       parse (String.sub name 0 (pos+1)),
-      String.sub name (pos+1) (String.length name - pos - 1)
+      Name.of_string (String.sub name (pos+1) (String.length name - pos - 1))
 
   let to_string p =
     Format.asprintf "%a" print p
+
+  let empty = []
 
   let is_empty t =
     match t with
@@ -117,15 +135,15 @@ module Prefix = struct
 end
 
 type t = {
-  basename : Name.t;
+  name : Name.t;
   for_pack_prefix : Prefix.t;
   hash : int;
 }
 
-let create ?(for_pack_prefix = []) basename =
-  { basename;
+let create ?(for_pack_prefix = Prefix.empty) name =
+  { name;
     for_pack_prefix;
-    hash = Hashtbl.hash (basename, for_pack_prefix)
+    hash = Hashtbl.hash (name, for_pack_prefix)
   }
 
 let of_string str =
@@ -136,32 +154,29 @@ let dummy = create (Name.of_string "*none*")
 
 let predef_exn = create (Name.of_string "*predef*")
 
-let name t = t.basename
+let name t = t.name
 
 let for_pack_prefix t = t.for_pack_prefix
 
-let is_packed t =
-  match t.for_pack_prefix with
-  | [] -> false
-  | _::_ -> true
+let is_packed t = not (Prefix.is_empty t.for_pack_prefix)
 
 let full_path t =
-  t.for_pack_prefix @ [ t.basename ]
+  (Prefix.to_list_outermost_pack_first t.for_pack_prefix) @ [ t.name ]
 
 include Identifiable.Make (struct
   type nonrec t = t
 
   let compare
-        ({ basename = basename1; for_pack_prefix = for_pack_prefix1;
+        ({ name = name1; for_pack_prefix = for_pack_prefix1;
            hash = hash1; _} as t1)
-        ({ basename = basename2; for_pack_prefix = for_pack_prefix2;
+        ({ name = name2; for_pack_prefix = for_pack_prefix2;
            hash = hash2; _} as t2) =
     if t1 == t2 then 0
     else
       let c = Stdlib.compare hash1 hash2 in
       if c <> 0 then c
       else
-        let c = String.compare basename1 basename2 in
+        let c = Name.compare name1 name2 in
         if c <> 0 then c
         else Prefix.compare for_pack_prefix1 for_pack_prefix2
 
@@ -169,18 +184,17 @@ include Identifiable.Make (struct
     if x == y then true
     else compare x y = 0
 
-  let print ppf { for_pack_prefix; hash = _; basename } =
-    match for_pack_prefix with
-    | [] ->
+  let print ppf { for_pack_prefix; hash = _; name } =
+    if Prefix.is_empty for_pack_prefix then
       Format.fprintf ppf "@[<hov 1>(\
-          @[<hov 1>(id@ %s)@])@]"
-        basename
-    | for_pack_prefix ->
+          @[<hov 1>(id@ %a)@])@]"
+        Name.print name
+    else
       Format.fprintf ppf "@[<hov 1>(\
           @[<hov 1>(for_pack_prefix@ %a)@]@;\
-          @[<hov 1>(basename@ %s)@]"
+          @[<hov 1>(name@ %a)@]"
         Prefix.print for_pack_prefix
-        basename
+        Name.print name
 
   let output oc t =
     print (Format.formatter_of_out_channel oc) t
@@ -189,15 +203,15 @@ include Identifiable.Make (struct
 end)
 
 let print_name ppf t =
-  Format.pp_print_string ppf t.basename
+  Format.fprintf ppf "%a" Name.print t.name
 
 let print_full_path fmt t =
-  match t.for_pack_prefix with
-  | [] -> Format.fprintf fmt "%a" Name.print t.basename
-  | _::_ ->
+  if Prefix.is_empty t.for_pack_prefix then
+    Format.fprintf fmt "%a" Name.print t.name
+  else
     Format.fprintf fmt "%a.%a"
       Prefix.print t.for_pack_prefix
-      Name.print t.basename
+      Name.print t.name
 
 let full_path_as_string t =
   Format.asprintf "%a" print_full_path t

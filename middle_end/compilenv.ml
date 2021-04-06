@@ -284,7 +284,10 @@ let make_symbol ?unitname name =
   let comp_unit =
     match unitname with
     | None -> CU.get_current_exn ()
-    | Some unitname -> CU.of_string unitname
+    | Some unitname ->
+      Printf.eprintf "make_symbol for unit %s name %s\n%!"
+        unitname name;
+      CU.of_string unitname
   in
   Symbol.for_fixed_name comp_unit ~name
   |> Symbol.linkage_name

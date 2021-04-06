@@ -43,6 +43,7 @@ static value Val_handle(void* handle) {
 }
 
 static void *getsym(void *handle, const char *module, const char *name){
+  /* "caml" must match symbol.ml */
   char *fullname = caml_stat_strconcat(3, "caml", module, name);
   void *sym;
   sym = caml_dlsym (handle, fullname);
