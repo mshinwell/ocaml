@@ -94,22 +94,10 @@ let print_cma_infos (lib : Cmo_format.library) =
   printf "\n";
   List.iter print_cmo_infos lib.lib_units
 
-let print_pers_flags =
-  let open Cmi_format in
-  function
-  | Rectypes -> printf " -rectypes"
-  | Alerts _ -> ()
-  | Opaque -> printf " -opaque"
-  | Unsafe_string -> printf " -unsafe-string"
-  | Pack modname -> printf " -for-pack %s" modname
-
-let print_cmi_infos name crcs flags =
+let print_cmi_infos name crcs =
   printf "Unit name: %s\n" name;
   printf "Interfaces imported:\n";
-  List.iter print_name_crc crcs;
-  printf "Compilation flags:";
-  List.iter print_pers_flags flags
-
+  List.iter print_name_crc crcs
 
 let print_cmt_infos cmt =
   let open Cmt_format in
@@ -298,10 +286,7 @@ let dump_obj_by_kind filename ic obj_kind =
        begin match cmi with
          | None -> ()
          | Some cmi ->
-             print_cmi_infos
-               cmi.Cmi_format.cmi_name
-               cmi.Cmi_format.cmi_crcs
-               cmi.Cmi_format.cmi_flags
+            print_cmi_infos cmi.Cmi_format.cmi_name cmi.Cmi_format.cmi_crcs
        end;
        begin match cmt with
          | None -> ()

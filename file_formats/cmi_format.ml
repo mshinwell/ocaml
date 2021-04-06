@@ -20,7 +20,6 @@ type pers_flags =
   | Alerts of alerts
   | Opaque
   | Unsafe_string
-  | Pack of Misc.modname
 
 type error =
   | Not_an_interface of filepath
