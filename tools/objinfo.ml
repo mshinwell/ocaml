@@ -64,7 +64,7 @@ let print_required_global id =
   printf "\t%s\n" (Ident.name id)
 
 let print_cmo_infos cu =
-  printf "Unit name: %s\n" cu.cu_name;
+  printf "Unit name: %s\n" (Compilation_unit.Name.to_string cu.cu_name);
   print_string "Interfaces imported:\n";
   List.iter print_name_crc cu.cu_imports;
   print_string "Required globals:\n";
@@ -137,7 +137,8 @@ open Cmxs_format
 
 let print_cmx_infos (ui, crc) =
   print_general_infos
-    ui.ui_name crc ui.ui_defines ui.ui_imports_cmi ui.ui_imports_cmx;
+    (Compilation_unit.full_path_as_string ui.ui_name)
+    crc ui.ui_defines ui.ui_imports_cmi ui.ui_imports_cmx;
   begin match ui.ui_export_info with
   | Clambda approx ->
     if not !no_approx then begin
@@ -151,8 +152,7 @@ let print_cmx_infos (ui, crc) =
     else
       printf "Flambda unit\n";
     if not !no_approx then begin
-      let cu = Symbol.for_ident (Ident.create_persistent ui.ui_name) in
-      Compilation_unit.set_current cu;
+      Compilation_unit.set_current ui.ui_name;
       let root_symbols =
         List.map (fun s -> Symbol.for_ident (Ident.create_persistent s))
           ui.ui_defines
@@ -271,7 +271,7 @@ let dump_obj_by_kind filename ic obj_kind =
     | Cmo ->
        let cu_pos = input_binary_int ic in
        seek_in ic cu_pos;
-       let cu = (input_value ic : compilation_unit) in
+       let cu = (input_value ic : compilation_unit_descr) in
        close_in ic;
        print_cmo_infos cu
     | Cma ->
