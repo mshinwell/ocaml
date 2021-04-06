@@ -270,7 +270,8 @@ let make_shared_startup_file ~ppf_dump units =
   compile_phrase (Cmm_helpers.plugin_header units);
   compile_phrase
     (Cmm_helpers.global_table
-       (List.map (fun (ui,_) -> ui.ui_symbol) units));
+       (List.map (fun (ui,_) ->
+          Symbol.linkage_name (Symbol.for_compilation_unit ui.ui_name)) units));
   if !Clflags.output_complete_object then
     force_linking_of_startup ~ppf_dump;
   (* this is to force a reference to all units, otherwise the linker
