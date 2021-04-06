@@ -95,8 +95,7 @@ let check_consistency file_name unit crc =
   Cmx_consistbl.set crc_implementations ui_name crc file_name;
   implementations_defined :=
     (ui_name, file_name) :: !implementations_defined;
-  (* XXX *)
-  if unit.ui_symbol <> ui_name then
+  if CU.is_packed unit.ui_name then
     cmx_required := ui_name :: !cmx_required
 
 let extract_crc_interfaces () =
@@ -187,10 +186,11 @@ let read_file obj_name =
   end
   else raise(Error(Not_an_object_file file_name))
 
-let scan_file file tolink = match file with
+let scan_file file tolink =
+  match file with
   | Unit (file_name,info,crc) ->
       (* This is a .cmx file. It must be linked in any case. *)
-      remove_required info.ui_name;
+      remove_required (CU.Name.to_string (CU.name info.ui_name));
       List.iter (add_required file_name) info.ui_imports_cmx;
       (info, file_name, crc) :: tolink
   | Library (file_name,infos) ->
@@ -199,13 +199,14 @@ let scan_file file tolink = match file with
       add_ccobjs (Filename.dirname file_name) infos;
       List.fold_right
         (fun (info, crc) reqd ->
+           let ui_name = CU.Name.to_string (CU.name info.ui_name) in
            if info.ui_force_link
            || !Clflags.link_everything
-           || is_required info.ui_name
+           || is_required ui_name
            then begin
-             remove_required info.ui_name;
+             remove_required ui_name;
              List.iter (add_required (Printf.sprintf "%s(%s)"
-                                        file_name info.ui_name))
+                                        file_name ui_name))
                info.ui_imports_cmx;
              (info, file_name, crc) :: reqd
            end else
@@ -222,9 +223,10 @@ let make_globals_map units_list ~crc_interfaces =
   let crc_interfaces = String.Tbl.of_seq (List.to_seq crc_interfaces) in
   let defined =
     List.map (fun (unit, _, impl_crc) ->
-        let intf_crc = String.Tbl.find crc_interfaces unit.ui_name in
-        String.Tbl.remove crc_interfaces unit.ui_name;
-        (unit.ui_name, intf_crc, Some impl_crc, unit.ui_defines))
+        let ui_name = CU.Name.to_string (CU.name unit.ui_name) in
+        let intf_crc = String.Tbl.find crc_interfaces ui_name in
+        String.Tbl.remove crc_interfaces ui_name;
+        (ui_name, intf_crc, Some impl_crc, unit.ui_defines))
       units_list
   in
   String.Tbl.fold (fun name intf acc ->
@@ -234,7 +236,8 @@ let make_globals_map units_list ~crc_interfaces =
 let make_startup_file ~ppf_dump units_list ~crc_interfaces =
   let compile_phrase p = Asmgen.compile_phrase ~ppf_dump p in
   Location.input_name := "caml_startup"; (* set name of "current" input *)
-  Compilenv.reset "_startup";
+  let comp_unit = CU.create (CU.Name.of_string "_startup") in
+  Compilenv.reset comp_unit;
   (* set the name of the "current" compunit *)
   Emit.begin_assembly ();
   let name_list =
@@ -263,7 +266,8 @@ let make_startup_file ~ppf_dump units_list ~crc_interfaces =
 let make_shared_startup_file ~ppf_dump units =
   let compile_phrase p = Asmgen.compile_phrase ~ppf_dump p in
   Location.input_name := "caml_startup";
-  Compilenv.reset "_shared_startup";
+  let comp_unit = CU.create (CU.Name.of_string "_shared_startup") in
+  Compilenv.reset comp_unit;
   Emit.begin_assembly ();
   List.iter compile_phrase
     (Cmm_helpers.generic_functions true (List.map fst units));
