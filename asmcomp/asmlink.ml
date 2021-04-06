@@ -233,12 +233,12 @@ let make_globals_map units_list ~crc_interfaces =
       (name, intf, None, []) :: acc)
     crc_interfaces defined
 
+let startup_comp_unit = CU.create (CU.Name.of_string "_startup")
+
 let make_startup_file ~ppf_dump units_list ~crc_interfaces =
   let compile_phrase p = Asmgen.compile_phrase ~ppf_dump p in
   Location.input_name := "caml_startup"; (* set name of "current" input *)
-  let comp_unit = CU.create (CU.Name.of_string "_startup") in
-  Compilenv.reset comp_unit;
-  (* set the name of the "current" compunit *)
+  Compilenv.reset startup_comp_unit;
   Emit.begin_assembly ();
   let name_list =
     List.flatten (List.map (fun (info,_,_) -> info.ui_defines) units_list) in
@@ -251,13 +251,27 @@ let make_startup_file ~ppf_dump units_list ~crc_interfaces =
   compile_phrase (Cmm_helpers.global_table name_list);
   let globals_map = make_globals_map units_list ~crc_interfaces in
   compile_phrase (Cmm_helpers.globals_map globals_map);
-  compile_phrase(Cmm_helpers.data_segment_table ("_startup" :: name_list));
+  let startup_name =
+    Symbol.for_compilation_unit startup_comp_unit
+    |> Symbol.linkage_name
+  in
+  compile_phrase(Cmm_helpers.data_segment_table (startup_name :: name_list));
+  let hot_name =
+    CU.create (CU.Name.of_string "_hot")
+    |> Symbol.for_compilation_unit
+    |> Symbol.linkage_name
+  in
+  let system_name =
+    CU.create (CU.Name.of_string "_system")
+    |> Symbol.for_compilation_unit
+    |> Symbol.linkage_name
+  in
   if !Clflags.function_sections then
     compile_phrase
-      (Cmm_helpers.code_segment_table("_hot" :: "_startup" :: name_list))
+      (Cmm_helpers.code_segment_table(hot_name :: startup_name :: name_list))
   else
-    compile_phrase(Cmm_helpers.code_segment_table("_startup" :: name_list));
-  let all_names = "_startup" :: "_system" :: name_list in
+    compile_phrase(Cmm_helpers.code_segment_table(startup_name :: name_list));
+  let all_names = startup_name :: system_name :: name_list in
   compile_phrase (Cmm_helpers.frame_table all_names);
   if !Clflags.output_complete_object then
     force_linking_of_startup ~ppf_dump;
@@ -266,8 +280,7 @@ let make_startup_file ~ppf_dump units_list ~crc_interfaces =
 let make_shared_startup_file ~ppf_dump units =
   let compile_phrase p = Asmgen.compile_phrase ~ppf_dump p in
   Location.input_name := "caml_startup";
-  let comp_unit = CU.create (CU.Name.of_string "_shared_startup") in
-  Compilenv.reset comp_unit;
+  Compilenv.reset startup_comp_unit;
   Emit.begin_assembly ();
   List.iter compile_phrase
     (Cmm_helpers.generic_functions true (List.map fst units));
