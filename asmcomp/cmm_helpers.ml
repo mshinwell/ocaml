@@ -2563,6 +2563,16 @@ let emit_float_array_constant symb fields cont =
   emit_block symb (floatarray_header (List.length fields))
     (Misc.map_end (fun f -> Cdouble f) fields cont)
 
+let make_symbol ?unit_linkage_name name =
+  let unit_linkage_name =
+    match unit_linkage_name with
+    | None ->
+      Symbol.for_current_unit ()
+      |> Symbol.linkage_name
+    | Some unit_linkage_name -> unit_linkage_name
+  in
+  unit_linkage_name ^ Symbol.separator ^ name
+
 (* Generate the entry point *)
 
 let entry_point namelist =
@@ -2578,7 +2588,7 @@ let entry_point namelist =
   let body =
     List.fold_right
       (fun name next ->
-        let entry_sym = Compilenv.make_symbol ~unitname:name "entry" in
+        let entry_sym = make_symbol ~unit_linkage_name:name "entry" in
         Csequence(Cop(Capply typ_void,
                          [cconst_symbol entry_sym], dbg ()),
                   Csequence(incr_global_inited (), next)))
@@ -2598,7 +2608,7 @@ let cint_zero = Cint 0n
 
 let global_table namelist =
   let mksym name =
-    Csymbol_address (Compilenv.make_symbol ~unitname:name "gc_roots")
+    Csymbol_address (make_symbol ~unit_linkage_name:name "gc_roots")
   in
   Cdata(Cglobal_symbol "caml_globals" ::
         Cdefine_symbol "caml_globals" ::
@@ -2619,7 +2629,7 @@ let globals_map v = global_data "caml_globals_map" v
 
 let frame_table namelist =
   let mksym name =
-    Csymbol_address (Compilenv.make_symbol ~unitname:name "frametable")
+    Csymbol_address (make_symbol ~unit_linkage_name:name "frametable")
   in
   Cdata(Cglobal_symbol "caml_frametable" ::
         Cdefine_symbol "caml_frametable" ::
@@ -2630,8 +2640,8 @@ let frame_table namelist =
 
 let segment_table namelist symbol begname endname =
   let addsyms name lst =
-    Csymbol_address (Compilenv.make_symbol ~unitname:name begname) ::
-    Csymbol_address (Compilenv.make_symbol ~unitname:name endname) ::
+    Csymbol_address (make_symbol ~unit_linkage_name:name begname) ::
+    Csymbol_address (make_symbol ~unit_linkage_name:name endname) ::
     lst
   in
   Cdata(Cglobal_symbol symbol ::
@@ -2751,7 +2761,7 @@ let emit_constant_closure ((_, global_symb) as symb) fundecls clos_vars cont =
 (* Build the NULL terminated array of gc roots *)
 
 let emit_gc_roots_table ~symbols cont =
-  let table_symbol = Compilenv.make_symbol "gc_roots" in
+  let table_symbol = make_symbol "gc_roots" in
   Cdata(Cglobal_symbol table_symbol ::
         Cdefine_symbol table_symbol ::
         List.map (fun s -> Csymbol_address s) symbols @

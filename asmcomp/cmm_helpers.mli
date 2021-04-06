@@ -651,3 +651,5 @@ val emit_constant_closure :
 
 val emit_preallocated_blocks :
   Clambda.preallocated_block list -> phrase list -> phrase list
+
+val make_symbol : ?unit_linkage_name:string -> string -> string

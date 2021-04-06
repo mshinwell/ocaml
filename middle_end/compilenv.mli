@@ -64,8 +64,6 @@ val need_send_fun: int -> unit
 
 val new_const_symbol : unit -> string
 
-val make_symbol : ?unitname:string -> string -> string
-
 val new_structured_constant:
   Clambda.ustructured_constant ->
   shared:bool -> (* can be shared with another structurally equal constant *)

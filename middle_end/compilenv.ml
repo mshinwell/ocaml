@@ -280,18 +280,6 @@ let new_const_symbol () =
   Symbol.for_new_const_in_current_unit ()
   |> Symbol.linkage_name
 
-let make_symbol ?unitname name =
-  let comp_unit =
-    match unitname with
-    | None -> CU.get_current_exn ()
-    | Some unitname ->
-      Printf.eprintf "make_symbol for unit %s name %s\n%!"
-        unitname name;
-      CU.of_string unitname
-  in
-  Symbol.for_fixed_name comp_unit ~name
-  |> Symbol.linkage_name
-
 let new_structured_constant cst ~shared =
   let {strcst_shared; strcst_all} = !structured_constants in
   if shared then

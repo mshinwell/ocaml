@@ -28,9 +28,6 @@ val for_compilation_unit : Compilation_unit.t -> t
 val for_current_unit : unit -> t
 val for_new_const_in_current_unit : unit -> t
 
-(** To be used for "entry" functions, etc. *)
-val for_fixed_name : Compilation_unit.t -> name:string -> t
-
 module Flambda : sig
   val for_variable : Variable.t -> t
   val for_closure : Closure_id.t -> t
@@ -43,3 +40,5 @@ val linkage_name : t -> string
 include Identifiable.S with type t := t
 
 val is_predef_exn : t -> bool
+
+val separator : string
