@@ -85,7 +85,7 @@ let check_consistency file_name unit crc =
     } ->
     raise(Error(Inconsistent_implementation(name, user, auth)))
   end;
-  let ui_name = CU.full_path_as_string unit.ui_name in
+  let ui_name = CU.Name.to_string (CU.name unit.ui_name) in
   begin try
     let source = List.assoc ui_name !implementations_defined in
     raise (Error(Multiple_definition(ui_name, file_name, source)))

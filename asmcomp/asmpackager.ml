@@ -211,9 +211,7 @@ let build_package_cmx members cmxfile =
     Symbol.for_compilation_unit ui.ui_name
     |> Symbol.linkage_name
   in
-  let ui_name_as_string =
-    CU.full_path_as_string ui.ui_name
-  in
+  let ui_name_as_string = CU.Name.to_string (CU.name ui.ui_name) in
   let pkg_infos =
     { ui_name = ui.ui_name;
       ui_defines =

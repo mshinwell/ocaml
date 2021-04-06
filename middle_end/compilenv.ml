@@ -24,6 +24,8 @@
 open Config
 open Cmx_format
 
+module CU = Compilation_unit
+
 type error =
     Not_a_unit_info of string
   | Corrupted_unit_info of string
@@ -77,7 +79,7 @@ let default_ui_export_info =
     Cmx_format.Clambda Value_unknown
 
 let current_unit =
-  { ui_name = Compilation_unit.dummy;
+  { ui_name = CU.dummy;
     ui_defines = [];
     ui_imports_cmi = [];
     ui_imports_cmx = [];
@@ -87,15 +89,10 @@ let current_unit =
     ui_force_link = false;
     ui_export_info = default_ui_export_info }
 
-let unit_id_from_name name = Ident.create_persistent name
-
-let reset ?for_pack_prefix ~module_name () =
+let reset compilation_unit =
   Hashtbl.clear global_infos_table;
   Set_of_closures_id.Tbl.clear imported_sets_of_closures_table;
-  let compilation_unit =
-    Compilation_unit.create ?for_pack_prefix module_name
-  in
-  Compilation_unit.set_current compilation_unit;
+  CU.set_current compilation_unit;
   current_unit.ui_name <- compilation_unit;
   let symbol =
     Symbol.for_current_unit ()
@@ -116,9 +113,6 @@ let reset ?for_pack_prefix ~module_name () =
 
 let current_unit_infos () =
   current_unit
-
-let current_unit_name () =
-  current_unit.ui_name
 
 let read_unit_info filename =
   let ic = open_in_bin filename in
@@ -152,7 +146,7 @@ let get_global_info global_ident = (
   let comp_unit =
     Ident.compilation_unit_of_global_or_predef_ident global_ident
   in
-  if Compilation_unit.equal comp_unit current_unit.ui_name then
+  if CU.equal comp_unit current_unit.ui_name then
     Some current_unit
   else begin
     let modname = Ident.name global_ident in
@@ -166,8 +160,11 @@ let get_global_info global_ident = (
             let filename =
               Load_path.find_uncap (modname ^ ".cmx") in
             let (ui, crc) = read_unit_info filename in
-            if ui.ui_name <> modname then
-              raise(Error(Illegal_renaming(modname, ui.ui_name, filename)));
+            if not (CU.Name.equal (CU.name ui.ui_name)
+                     (CU.Name.of_string modname))
+            then
+              raise(Error(Illegal_renaming(modname,
+                CU.Name.to_string (CU.name ui.ui_name), filename)));
             (Some ui, Some crc)
           with Not_found ->
             let warn = Warnings.No_cmx_file modname in
@@ -183,7 +180,8 @@ let get_global_info global_ident = (
 )
 
 let cache_unit_info ui =
-  Hashtbl.add global_infos_table ui.ui_name (Some ui)
+  Hashtbl.add global_infos_table (CU.Name.to_string (CU.name ui.ui_name))
+    (Some ui)
 
 (* Return the approximation of a global identifier *)
 
@@ -197,7 +195,8 @@ let toplevel_approx :
   (string, Clambda.value_approximation) Hashtbl.t = Hashtbl.create 16
 
 let record_global_approx_toplevel () =
-  Hashtbl.add toplevel_approx current_unit.ui_name
+  Hashtbl.add toplevel_approx
+    (CU.Name.to_string (CU.name current_unit.ui_name))
     (get_clambda_approx current_unit)
 
 let global_approx id =
@@ -227,12 +226,8 @@ let set_export_info export_info =
   current_unit.ui_export_info <- Flambda export_info
 
 let approx_for_global comp_unit =
-  let id = Compilation_unit.get_persistent_ident comp_unit in
-  if (Compilation_unit.equal
-      predefined_exception_compilation_unit
-      comp_unit)
-     || Ident.is_predef id
-     || not (Ident.is_global_or_predef id)
+  let id = Ident.of_compilation_unit comp_unit in
+  if CU.equal comp_unit CU.predef_exn
   then invalid_arg (Format.asprintf "approx_for_global %a" Ident.print id);
   let modname = Ident.name id in
   match Hashtbl.find export_infos_table modname with
@@ -283,13 +278,13 @@ let backtrack s = structured_constants := s
 
 let new_const_symbol () =
   Symbol.for_new_const_in_current_unit ()
-  |> Symbol.to_string
+  |> Symbol.linkage_name
 
 let make_symbol ?unitname name =
   let comp_unit =
     match unitname with
-    | None -> Compilation_unit.get_current_exn ()
-    | Some unitname -> Compilation_unit.of_string unitname
+    | None -> CU.get_current_exn ()
+    | Some unitname -> CU.of_string unitname
   in
   Symbol.for_fixed_name comp_unit ~name
   |> Symbol.linkage_name
@@ -329,7 +324,8 @@ let structured_constants () =
   let provenance : Clambda.usymbol_provenance =
     { original_idents = [];
       module_path =
-        Path.Pident (Ident.create_persistent (current_unit_name ()));
+        Path.Pident (Ident.of_compilation_unit (
+          Compilation_unit.get_current_exn ()));
     }
   in
   SymMap.bindings (!structured_constants).strcst_all
