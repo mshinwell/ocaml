@@ -1015,6 +1015,11 @@ let mk_flambda_expert_max_block_size_for_projections f =
     this value"
 ;;
 
+let mk_flambda_expert_max_unboxing_depth f =
+  "-flambda-expert-max-unboxing-depth", Arg.Int f,
+  " Do not unbox types deeper that this value"
+;;
+
 let mk_flambda_debug_permute_every_name f =
   "-flambda-debug-permute-every-name", Arg.Unit f,
     " Permute every name to check permutation works"
@@ -1277,6 +1282,7 @@ module type Optcommon_options = sig
   val _no_flambda_expert_phantom_lets : unit -> unit
   val _flambda_expert_max_inlining_depth : int -> unit
   val _flambda_expert_max_block_size_for_projections : int -> unit
+  val _flambda_expert_max_unboxing_depth : int -> unit
   val _flambda_debug_permute_every_name : unit -> unit
   val _no_flambda_debug_permute_every_name : unit -> unit
   val _flambda_debug_concrete_types_only_on_canonicals : unit -> unit
@@ -1647,6 +1653,8 @@ struct
       F._flambda_expert_max_inlining_depth;
     mk_flambda_expert_max_block_size_for_projections
       F._flambda_expert_max_block_size_for_projections;
+    mk_flambda_expert_max_unboxing_depth
+      F._flambda_expert_max_unboxing_depth;
     mk_flambda_debug_permute_every_name
       F._flambda_debug_permute_every_name;
     mk_no_flambda_debug_permute_every_name
@@ -1814,6 +1822,8 @@ module Make_opttop_options (F : Opttop_options) = struct
       F._flambda_expert_max_inlining_depth;
     mk_flambda_expert_max_block_size_for_projections
       F._flambda_expert_max_block_size_for_projections;
+    mk_flambda_expert_max_unboxing_depth
+      F._flambda_expert_max_unboxing_depth;
     mk_flambda_debug_permute_every_name
       F._flambda_debug_permute_every_name;
     mk_no_flambda_debug_permute_every_name
@@ -2141,6 +2151,8 @@ module Default = struct
       Flambda.Expert.max_inlining_depth := depth
     let _flambda_expert_max_block_size_for_projections size =
       Flambda.Expert.max_block_size_for_projections := Some size
+    let _flambda_expert_max_unboxing_depth depth =
+      Flambda.Expert.max_unboxing_depth := depth
     let _flambda_debug_permute_every_name =
       set Flambda.Debug.permute_every_name
     let _no_flambda_debug_permute_every_name =
