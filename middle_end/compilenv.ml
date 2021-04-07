@@ -142,11 +142,13 @@ let read_library_info filename =
 
 (* Read and cache info on global identifiers *)
 
-let get_global_info global_ident = (
-  let comp_unit =
-    Ident.compilation_unit_of_global_or_predef_ident global_ident
+let get_global_info global_ident =
+  assert (Ident.is_global global_ident);
+  (* [global_ident] is expected not to have any pack prefix. *)
+  let comp_unit_name =
+    CU.Name.of_string (Ident.name global_ident)
   in
-  if CU.equal comp_unit current_unit.ui_name then
+  if CU.Name.equal comp_unit_name (CU.name current_unit.ui_name) then
     Some current_unit
   else begin
     let modname = Ident.name global_ident in
@@ -177,7 +179,6 @@ let get_global_info global_ident = (
       Hashtbl.add global_infos_table modname infos;
       infos
   end
-)
 
 let cache_unit_info ui =
   Hashtbl.add global_infos_table (CU.Name.to_string (CU.name ui.ui_name))

@@ -51,8 +51,10 @@ end = struct
     Char.equal (Char.uppercase_ascii chr) chr
 
   let of_string str =
-    if String.starts_with ~prefix:"caml" str then assert false; (* XXX *)
-    if String.length str < 1 || not (isupper (String.get str 0)) then begin
+    if String.length str < 1
+      || not (isupper (String.get str 0))
+      || String.contains str '.'
+    then begin
       raise (Error (Bad_compilation_unit_name str))
     end;
     str
