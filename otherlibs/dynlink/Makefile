@@ -87,6 +87,7 @@ COMPILERLIBS_SOURCES=\
   utils/load_path.ml \
   utils/int_replace_polymorphic_compare.ml \
   utils/lazy_backtrack.ml \
+  utils/compilation_unit.ml \
   parsing/location.ml \
   parsing/longident.ml \
   parsing/docstrings.ml \
