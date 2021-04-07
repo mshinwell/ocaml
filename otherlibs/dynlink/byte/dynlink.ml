@@ -29,7 +29,7 @@ module Bytecode = struct
   module Unit_header = struct
     type t = Cmo_format.compilation_unit_descr
 
-    let name (t : t) = t.cu_name
+    let name (t : t) = Compilation_unit.Name.to_string t.cu_name
     let crc _t = None
 
     let interface_imports (t : t) = t.cu_imports
@@ -124,7 +124,10 @@ module Bytecode = struct
        digest of file contents + unit name.
        Unit name is needed for .cma files, which produce several code
        fragments. *)
-    let digest = Digest.string (file_digest ^ compunit.cu_name) in
+    let digest =
+      Digest.string
+        (file_digest ^ Compilation_unit.Name.to_string compunit.cu_name)
+    in
     let events =
       if compunit.cu_debug = 0 then [| |]
       else begin
