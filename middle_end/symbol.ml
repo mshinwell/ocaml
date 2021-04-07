@@ -91,7 +91,7 @@ let for_ident id =
   }
 
 let for_compilation_unit compilation_unit =
-  let linkage_name = linkage_name_for_current_unit () in
+  let linkage_name = linkage_name_for_compilation_unit compilation_unit in
   { compilation_unit;
     linkage_name;
     hash = Hashtbl.hash linkage_name;

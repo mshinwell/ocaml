@@ -233,11 +233,10 @@ let make_globals_map units_list ~crc_interfaces =
       (name, intf, None, []) :: acc)
     crc_interfaces defined
 
-let startup_comp_unit = CU.create (CU.Name.of_string "_startup")
-
 let make_startup_file ~ppf_dump units_list ~crc_interfaces =
   let compile_phrase p = Asmgen.compile_phrase ~ppf_dump p in
   Location.input_name := "caml_startup"; (* set name of "current" input *)
+  let startup_comp_unit = CU.create (CU.Name.of_string "_startup") in
   Compilenv.reset startup_comp_unit;
   Emit.begin_assembly ();
   let name_list =
@@ -280,7 +279,10 @@ let make_startup_file ~ppf_dump units_list ~crc_interfaces =
 let make_shared_startup_file ~ppf_dump units =
   let compile_phrase p = Asmgen.compile_phrase ~ppf_dump p in
   Location.input_name := "caml_startup";
-  Compilenv.reset startup_comp_unit;
+  let shared_startup_comp_unit =
+    CU.create (CU.Name.of_string "_shared_startup")
+  in
+  Compilenv.reset shared_startup_comp_unit;
   Emit.begin_assembly ();
   List.iter compile_phrase
     (Cmm_helpers.generic_functions true (List.map fst units));
