@@ -184,11 +184,19 @@ let build_package_cmx members cmxfile =
       (fun m accu ->
         match m.pm_kind with PM_intf -> accu | PM_impl info -> info :: accu)
       members [] in
+  let pack_units =
+    List.map (fun info -> info.ui_name) units
+    |> Compilation_unit.Set.of_list
+  in
   let units =
     if Config.flambda then
       List.map (fun info ->
           { info with
-            ui_export_info = Flambda (get_export_info info);
+            ui_export_info =
+              Flambda
+                (Export_info_for_pack.import_for_pack ~pack_units
+                  ~pack:(Compilation_unit.get_current_exn ())
+                  (get_export_info info));
           })
         units
     else
@@ -199,7 +207,10 @@ let build_package_cmx members cmxfile =
     if Config.flambda then
       let ui_export_info =
         List.fold_left (fun acc info ->
-            Export_info.merge acc (get_export_info info))
+            Export_info.merge acc
+              (Export_info_for_pack.import_for_pack ~pack_units
+                ~pack:(Compilation_unit.get_current_exn ())
+                (get_export_info info)))
           (get_export_info ui)
           units
       in
@@ -207,6 +218,7 @@ let build_package_cmx members cmxfile =
     else
       Clambda (get_approx ui)
   in
+  Export_info_for_pack.clear_import_state ();
   let symbol =
     Symbol.for_compilation_unit ui.ui_name
     |> Symbol.linkage_name

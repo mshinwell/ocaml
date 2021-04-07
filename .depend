@@ -2259,6 +2259,7 @@ asmcomp/asmpackager.cmo : \
     lambda/lambda.cmi \
     typing/ident.cmi \
     middle_end/flambda/flambda_middle_end.cmi \
+    middle_end/flambda/export_info_for_pack.cmi \
     middle_end/flambda/export_info.cmi \
     typing/env.cmi \
     utils/config.cmi \
@@ -2283,6 +2284,7 @@ asmcomp/asmpackager.cmx : \
     lambda/lambda.cmx \
     typing/ident.cmx \
     middle_end/flambda/flambda_middle_end.cmx \
+    middle_end/flambda/export_info_for_pack.cmx \
     middle_end/flambda/export_info.cmx \
     typing/env.cmx \
     utils/config.cmx \
@@ -2349,6 +2351,7 @@ asmcomp/cmm.cmi : \
     parsing/asttypes.cmi
 asmcomp/cmm_helpers.cmo : \
     utils/targetint.cmi \
+    middle_end/symbol.cmi \
     lambda/switch.cmi \
     asmcomp/strmatch.cmi \
     asmcomp/proc.cmi \
@@ -2373,6 +2376,7 @@ asmcomp/cmm_helpers.cmo : \
     asmcomp/cmm_helpers.cmi
 asmcomp/cmm_helpers.cmx : \
     utils/targetint.cmx \
+    middle_end/symbol.cmx \
     lambda/switch.cmx \
     asmcomp/strmatch.cmx \
     asmcomp/proc.cmx \
@@ -2522,7 +2526,7 @@ asmcomp/emit.cmo : \
     asmcomp/emitaux.cmi \
     utils/domainstate.cmi \
     utils/config.cmi \
-    middle_end/compilenv.cmi \
+    asmcomp/cmm_helpers.cmi \
     asmcomp/cmm.cmi \
     utils/clflags.cmi \
     asmcomp/branch_relaxation.cmi \
@@ -2544,7 +2548,7 @@ asmcomp/emit.cmx : \
     asmcomp/emitaux.cmx \
     utils/domainstate.cmx \
     utils/config.cmx \
-    middle_end/compilenv.cmx \
+    asmcomp/cmm_helpers.cmx \
     asmcomp/cmm.cmx \
     utils/clflags.cmx \
     asmcomp/branch_relaxation.cmx \
@@ -4087,6 +4091,37 @@ middle_end/flambda/export_info.cmi : \
     middle_end/flambda/base_types/export_id.cmi \
     utils/compilation_unit.cmi \
     middle_end/flambda/base_types/closure_id.cmi
+middle_end/flambda/export_info_for_pack.cmo : \
+    middle_end/variable.cmi \
+    middle_end/flambda/base_types/var_within_closure.cmi \
+    middle_end/symbol.cmi \
+    middle_end/flambda/simple_value_approx.cmi \
+    middle_end/flambda/base_types/set_of_closures_origin.cmi \
+    middle_end/flambda/base_types/set_of_closures_id.cmi \
+    middle_end/flambda/flambda_iterators.cmi \
+    middle_end/flambda/flambda.cmi \
+    middle_end/flambda/export_info.cmi \
+    middle_end/flambda/base_types/export_id.cmi \
+    utils/compilation_unit.cmi \
+    middle_end/flambda/base_types/closure_id.cmi \
+    middle_end/flambda/export_info_for_pack.cmi
+middle_end/flambda/export_info_for_pack.cmx : \
+    middle_end/variable.cmx \
+    middle_end/flambda/base_types/var_within_closure.cmx \
+    middle_end/symbol.cmx \
+    middle_end/flambda/simple_value_approx.cmx \
+    middle_end/flambda/base_types/set_of_closures_origin.cmx \
+    middle_end/flambda/base_types/set_of_closures_id.cmx \
+    middle_end/flambda/flambda_iterators.cmx \
+    middle_end/flambda/flambda.cmx \
+    middle_end/flambda/export_info.cmx \
+    middle_end/flambda/base_types/export_id.cmx \
+    utils/compilation_unit.cmx \
+    middle_end/flambda/base_types/closure_id.cmx \
+    middle_end/flambda/export_info_for_pack.cmi
+middle_end/flambda/export_info_for_pack.cmi : \
+    middle_end/flambda/export_info.cmi \
+    utils/compilation_unit.cmi
 middle_end/flambda/extract_projections.cmo : \
     middle_end/variable.cmi \
     middle_end/flambda/base_types/var_within_closure.cmi \

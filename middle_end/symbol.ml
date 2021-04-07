@@ -149,3 +149,6 @@ let for_new_const_in_current_unit () =
 
 let is_predef_exn t =
   Compilation_unit.equal t.compilation_unit Compilation_unit.predef_exn
+
+let import_for_pack t ~pack =
+  { t with compilation_unit = pack; }
