@@ -53,7 +53,7 @@ let read_member_info pack_path file = (
       then raise(Error(Illegal_renaming(name, file,
          CU.Name.to_string (CU.name info.ui_name))));
       if not (CU.Prefix.equal (CU.for_pack_prefix info.ui_name)
-               (CU.for_pack_prefix (CU.get_current_exn ())))
+               (CU.Prefix.parse_for_pack (Some pack_path)))
       then raise(Error(Wrong_for_pack(file, pack_path)));
       Asmlink.check_consistency file info crc;
       Compilenv.cache_unit_info info;
@@ -301,7 +301,7 @@ let report_error ppf = function
       fprintf ppf "Forward reference to %s in file %a" ident
         Location.print_filename file
   | Wrong_for_pack(file, path) ->
-      fprintf ppf "File %a@ was not compiled with the `-for-pack %s@' option"
+      fprintf ppf "File %a@ was not compiled with the `-for-pack %s' option"
               Location.print_filename file path
   | File_not_found file ->
       fprintf ppf "File %s not found" file
