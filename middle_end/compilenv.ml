@@ -227,9 +227,9 @@ let set_export_info export_info =
   current_unit.ui_export_info <- Flambda export_info
 
 let approx_for_global comp_unit =
-  let id = Ident.of_compilation_unit comp_unit in
   if CU.equal comp_unit CU.predef_exn
-  then invalid_arg (Format.asprintf "approx_for_global %a" Ident.print id);
+  then invalid_arg "approx_for_global with predef_exn compilation unit";
+  let id = Ident.of_compilation_unit_name (CU.name comp_unit) in
   let modname = Ident.name id in
   match Hashtbl.find export_infos_table modname with
   | otherwise -> Some otherwise
@@ -316,8 +316,8 @@ let structured_constants () =
   let provenance : Clambda.usymbol_provenance =
     { original_idents = [];
       module_path =
-        Path.Pident (Ident.of_compilation_unit (
-          Compilation_unit.get_current_exn ()));
+        Path.Pident (Ident.of_compilation_unit_name (
+          Compilation_unit.name (Compilation_unit.get_current_exn ())));
     }
   in
   SymMap.bindings (!structured_constants).strcst_all

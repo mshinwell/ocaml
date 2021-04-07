@@ -682,8 +682,12 @@ let lambda_to_flambda ~backend ~module_ident ~size lam
       : Flambda.program =
   let lam = add_default_argument_wrappers lam in
   let compilation_unit = Compilation_unit.get_current_exn () in
+  let current_unit_id =
+    Compilation_unit.name compilation_unit
+    |> Ident.of_compilation_unit_name
+  in
   let t =
-    { current_unit_id = Ident.of_compilation_unit compilation_unit;
+    { current_unit_id;
       backend;
       imported_symbols = Symbol.Set.empty;
       declared_symbols = [];

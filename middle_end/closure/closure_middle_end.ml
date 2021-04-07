@@ -34,11 +34,12 @@ let lambda_to_clambda ~backend ~prefixname:_ ~ppf_dump
   let clambda =
     Closure.intro ~backend ~size:lambda.main_module_block_size lambda.code
   in
-  let current_unit_ident =
-    Compilation_unit.get_current_exn ()
-    |> Ident.of_compilation_unit
-  in
   let provenance : Clambda.usymbol_provenance =
+    let current_unit_ident =
+      Compilation_unit.get_current_exn ()
+      |> Compilation_unit.name
+      |> Ident.of_compilation_unit_name
+    in
     { original_idents = [];
       module_path = Path.Pident current_unit_ident;
     }
