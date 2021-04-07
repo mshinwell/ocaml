@@ -268,6 +268,7 @@ module Flambda : sig
     val phantom_lets : bool ref
     val max_inlining_depth : int ref
     val max_block_size_for_projections : int option ref
+    val max_unboxing_depth : int ref
   end
 
   module Debug : sig
