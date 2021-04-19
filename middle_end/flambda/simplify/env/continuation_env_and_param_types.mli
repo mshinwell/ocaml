@@ -16,13 +16,17 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+type arg_at_use = {
+  arg_type : Flambda_type.t;
+  typing_env : Flambda_type.Typing_env.t;
+  cse : Common_subexpression_elimination.t;
+}
+
 type t =
   | No_uses
   | Uses of {
       handler_env : Downwards_env.t;
-      arg_types_by_use_id :
-        (Flambda_type.Typing_env.t * Flambda_type.t)
-          Apply_cont_rewrite_id.Map.t list;
+      arg_types_by_use_id : arg_at_use Apply_cont_rewrite_id.Map.t list;
       extra_params_and_args : Continuation_extra_params_and_args.t;
       is_single_inlinable_use : bool;
     }

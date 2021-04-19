@@ -281,12 +281,16 @@ Format.eprintf "The extra params and args are:@ %a\n%!"
     in
     let arg_types_by_use_id =
       List.fold_left (fun args use ->
-          List.map2 (fun arg_map arg_type ->
-              Apply_cont_rewrite_id.Map.add (U.id use)
-                (DE.typing_env (U.env_at_use use), arg_type)
-                arg_map)
-            args
-            (U.arg_types use))
+        List.map2 (fun arg_map arg_type ->
+          let env_at_use = U.env_at_use use in
+          let typing_env = DE.typing_env env_at_use in
+          let cse = DE.cse env_at_use in
+          let arg_at_use : Continuation_env_and_param_types.arg_at_use =
+            { arg_type; typing_env; cse; }
+          in
+          Apply_cont_rewrite_id.Map.add (U.id use) arg_at_use arg_map)
+          args
+          (U.arg_types use))
         (List.map (fun _ -> Apply_cont_rewrite_id.Map.empty) t.arity)
         uses
     in

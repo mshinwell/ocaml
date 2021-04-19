@@ -18,12 +18,19 @@
 
 module T = Flambda_type
 module TE = Flambda_type.Typing_env
+module CSE = Common_subexpression_elimination
+
+type arg_at_use = {
+  arg_type : T.t;
+  typing_env : TE.t;
+  cse : CSE.t;
+}
 
 type t =
   | No_uses
   | Uses of {
       handler_env : Downwards_env.t;
-      arg_types_by_use_id : (TE.t * T.t) Apply_cont_rewrite_id.Map.t list;
+      arg_types_by_use_id : arg_at_use Apply_cont_rewrite_id.Map.t list;
       extra_params_and_args : Continuation_extra_params_and_args.t;
       is_single_inlinable_use : bool;
     }
