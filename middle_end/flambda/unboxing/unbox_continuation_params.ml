@@ -17,1139 +17,1417 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 open! Simplify_import
+module Const = Reg_width_things.Const (* CR: add this in Simplify_import ? *)
 
-(* CR mshinwell: Add a command-line flag. *)
-let max_unboxing_depth = 1
 
-type 'a create_use_info_result =
-  | Ok of 'a
-  | Do_not_unbox_this_parameter
+(* Invalid constants, Poison and aliases
 
-type untag =
-  | Untag
-  | No_untagging
+   A poison (or invalid_constant) value is a value that will (or should) never
+   actually be read during execution of the program; but has to be provided in
+   the program to respect arity.
 
-type project_field_result =
-  | Simple of Simple.t
-  | Default_behaviour of untag
+   There are 3 cases where we produce invalid constants:
+   - in dead branchs of code (i.e. when the `prove_simple` function of an
+     unboxer returns `Invalid`
+   - we generate extra parameters for each field of each potential tag when
+     unboxing a variant and thus at each call site we have to provide values
+     for each field; in particular for fields of a tag that is not the one at
+     a call-site, we must provide poison values.
+   - when we recursively try to unbox a field of a variant, for which a poison
+     value was generated at call site, the unboxer also generates an invalid
+     constant.
 
-module type Unboxing_spec = sig
-  module Index : sig
-    include Identifiable.S
-    val to_string : t -> string
-  end
+   Example:
+   ```
+   if b then
+      (* 1 *) apply_cont k (Block (Tag 0) (foo))
+   else
+      (* 2 *) apply_cont k (Block (Tag 1) (foo bar))
+   where k v =
+   switch (tag v) with
+   | 0 -> k1 (field0 v)
+   | 1 -> k2 (field0 v) (field1 v)
+   ```
 
-  module Info : sig type t end
+   when unboxing the parameter v of k, we create the following parameters:
+   - is_int and constant_ctor (not used in this case)
+   - tag
+   - unboxedfield_tag0_0, unboxed_field_tag1_0 and unboxed_field_tag1_1
+     for the three different fields that belong to the variant.
 
-  module Use_info : sig
-    type t
+   Thus at each call site, while the value for the unboxed field of the
+   corresponding tag are known and usable, there can be no correct values
+   for the values of unboxed fields of other tags,
+   e.g. at call site (* 1 *), the tag of `v` is 0, and the value computed
+   for unboxedfield_tag0_0 is `foo`, and we know that in the handler of
+   k (and later) the unboxedfield_tag1_0 and unboxed_field_tag1_1 parameters
+   will never actually be used since they should onyl be used when the tag
+   of `v` is 1. However we must still provide value to the apply_cont.
 
-    val create : TE.t -> type_at_use:T.t -> t create_use_info_result
-  end
+   After unboxing, we thus get the following:
 
-  val var_name : string
+   ```
+   if b then
+      let v = Block (Tag 0) (foo) in
+      (* 1 *) apply_cont k v 0 foo #poison #poison
+   else
+      let v = Block (Tag 1) (foo bar) in
+      (* 2 *) apply_cont k v 1 #poison foo bar
+   where k v unboxed_tag
+      unboxedfield_tag0_0 unboxedfield_tag1_0 unboxedfield_tag1_1 =
+   switch tag with
+   | 0 -> k1 unboxedfield_tag0_0
+   | 1 -> k2 unboxedfield_tag1_0 unboxedfield_tag1_1
+   ```
 
-  val kind_of_unboxed_field_of_param : Index.t -> K.t
+   where the handler of `k` has been simplified thanks to the equations added
+   to the typing env by the unboxing decisions. This is done by
+   `denv_of_decision`, by performing meets on the typing environment between
+   the existing type for parameters, and the shape corresponding to the
+   unboxing decisions (additionally, equations about get_tag and is_int are
+   added to the cse environment of the denv).
 
-  val unbox_recursively : field_type:T.t -> bool
+   In this example, a meet will be performed between:
+   - v = Variant (Tag 0 -> (Known 1) (foo)
+                  Tag 1 -> (Known 2) (foo bar)
+     the type computed by the join on the continuation uses (before unboxing)
+   - Variant (Tag 0 -> (Known 1) (unboxedfield_tag0_0)
+              Tag 1 -> (Known 2) (unboxedfield_tag1_0 unboxedfield_tag1_1)
+     the shape create from the unboxing decision
+   and will result an empty env_extension, and the following updated type for the
+   variant:
+   - v = Variant (
+      Tag 0 -> (Known 1) (foo) (env_extension (foo = unboxedfield_tag0_0))
+      Tag 1 -> (Known 2) (foo bar) (env_extension (foo = unboxedfield_tag1_0)
+                                                  (bar = unboxedfield_tag1_1))
+     )
 
-  val unused_extra_arg : Use_info.t -> Index.t -> Simple.t option
+   The handler of `k` is then simplified, and after a switch on the tag of the
+   variant, the env_extension corresponding to the tag is added to each
+   branch's typing environment. In each branch, the loads to access the
+   variant's fields can be resolved to the unboxed parameters added,
+   eliminating reads, and in this case allowing to remove the parameter `v`,
+   and thus also remove its allocation before the apply_cont to k.
 
-  val make_boxed_value
-     : Info.t
-    -> param_being_unboxed:KP.t
-    -> new_params:KP.t Index.Map.t
-    -> fields:T.t Index.Map.t
-    -> T.t * (DE.t -> DE.t) * TEE.t
+   Note that simply adding the three following equations
+      (foo = unboxedfield_tag0_0)
+      (foo = unboxedfield_tag1_0)
+      (bar = unboxedfield_tag1_1)
+   to the typing env in `denv_of_decision` would be incorrect. This is because
+   with these three equations at the same time, unboxedfield_tag0_0 and
+   unboxedfield_tag1_0 would become aliased, and thus the simplifier would be
+   allowed to substitute unboxedfield_tag0_0 to unboxedfield_tag1_0 anywhere in
+   the handler, which is incorrect (and will lead to segfaults !). This problem
+   is avoided in the current code because when performing the meet between the
+   param type and the unboxing shape, the env_extension returned by row_like is
+   empty because it is the join of the env_extensions for each tag. We then
+   never open together the env_extensions that are specific to each tag.
 
-  val extend_with_projection
-     : Info.t
-    -> TE.t
-    -> T.t
-    -> Index.t
-    -> index_var:Variable.t
-    -> untagged_index_var:Variable.t
-    -> result_kind:K.t
-    -> TEE.t Or_bottom.t
+   Now consider that a second pass of unboxing is performed on `k`. Before that
+   second unboxing decision, the code will look like this:
 
-  val project_field
-     : Info.t
-    -> Use_info.t
-    -> block:Simple.t option
-    -> index:Index.t
-    -> project_field_result
-end
+   ```
+   if b then
+      (* 1 *) apply_cont k 0 foo #poison #poison
+   else
+      (* 2 *) apply_cont k 1 #poison foo bar
+   where k unboxed_tag
+    unboxedfield_tag0_0
+    unboxedfield_tag1_0 unboxedfield_tag1_1 =
+   switch tag with
+   | 0 -> k1 unboxedfield_tag0_0
+   | 1 -> k2 unboxedfield_tag1_0 unboxedfield_tag1_1
+   ```
 
-type 'a or_aborted =
-  | Continue of 'a
-  | Aborted
+   We need here be careful about the handling of the `#poison` values with
+   regards to the join performed at the continuation use sites. More
+   specifically, while #poison may be locally considered as bottom on values
+   during the join, it cannot be considered as bottom when it comes to aliases,
+   otherwise we could end up in a situation where unboxedfield_tag0_0 and
+   unboxedfield_tag1_0 become aliased.
 
-module Make (U : Unboxing_spec) = struct
-  module Index = U.Index
+   Currently, the values generated by this module are constants of the correct
+   kind, with no special behavior with regards to type. The joins will thus use
+   the actual runtime value, and avoid any problem with invalid aliases.
+   However, this leads to a loss of precision for the types of unboxed
+   parameters, and often prevent further unboxing. A dedicated poison
+   value/constant might enable the join to avoid this loss of precision, *but*
+   one should be careful that such poisons does not introduce aliases as
+   described above.
 
-  let unbox_one_field_of_one_parameter info ~extra_param ~index
-        ~arg_types_by_use_id : _ or_aborted =
-    (*
-    Format.eprintf "UNBOX: %a\n%!" Index.print index;
-    *)
-    let param_kind = K.With_subkind.kind (KP.kind extra_param) in
-    let field_var = Variable.create "field_at_use" in
-    let field_name =
-      Name_in_binding_pos.create (Name.var field_var) Name_mode.in_types
-    in
-    Apply_cont_rewrite_id.Map.fold
-      (fun id (typing_env_at_use, arg_type_at_use, use_info)
-           (acc : _ or_aborted) ->
-        match acc with
-        | Aborted ->
-          (*
-          Format.eprintf "Already aborted\n%!";
-          *)
-          Aborted
-        | Continue (extra_args, field_types_by_id) ->
-          let untagged_field_var = Variable.create "untagged_field_at_use" in
-          let typing_env_at_use =
-            (* CR mshinwell: This definition is not needed unless the index
-               needs an untagging operation. *)
-            TE.add_definition typing_env_at_use
-              (Name_in_binding_pos.var
-                (Var_in_binding_pos.create untagged_field_var NM.normal))
-              K.naked_immediate
-          in
-          let env_extension =
-            U.extend_with_projection info typing_env_at_use arg_type_at_use
-              index ~index_var:field_var ~untagged_index_var:untagged_field_var
-              ~result_kind:param_kind
-          in
-          let field = Simple.var field_var in
-          let block =
-            (* CR mshinwell: Also done in [Simplify_toplevel], move to [TE] *)
-            match T.get_alias_exn arg_type_at_use with
-            | exception Not_found -> None
-            | block ->
-              match
-                TE.get_canonical_simple_exn typing_env_at_use block
-                  ~min_name_mode:Name_mode.normal
-                  ~name_mode_of_existing_simple:NM.normal
-              with
-              | exception Not_found -> None
-              | block -> Some block
-          in
-          let fail () =
-            (*
-            Format.eprintf "not found\n%!";
-            *)
-            (* CR mshinwell: This should not be called "unused" *)
-            match U.unused_extra_arg use_info index with
-            | None ->
-              (*
-              Format.eprintf "Aborting\n%!";
-              *)
-              Aborted
-            | Some simple ->
-              (*
-              Format.eprintf "Using placeholder %a\n%!"
-                Simple.print simple;
-              *)
-              let extra_arg : EA.t = Already_in_scope simple in
-              let extra_args =
-                Apply_cont_rewrite_id.Map.add id extra_arg extra_args
-              in
-              Continue (extra_args, field_types_by_id)
-          in
-          match env_extension with
-          | Bottom ->
-            (* The shape will always match the type of the argument unless
-               we are trying to retrieve part of the argument that just
-               does not exist (e.g. a field in a variant type that does
-               not exist across all non-constant constructors). *)
-            (* CR mshinwell: [U.unused_extra_arg] should always return
-               [Some] in this case *)
-            fail ()
-          | Ok env_extension ->
-            let typing_env_at_use =
-              TE.add_definition typing_env_at_use field_name param_kind
-            in
-            let typing_env_at_use =
-              TE.add_env_extension typing_env_at_use env_extension
-            in
-            let field_type = T.alias_type_of param_kind field in
-            let field_types_by_id =
-              Apply_cont_rewrite_id.Map.add id
-                (typing_env_at_use, field_type)
-                field_types_by_id
-            in
-            match U.project_field info use_info ~block ~index with
-            | Simple simple ->
-              let extra_arg : EA.t = Already_in_scope simple in
-              let extra_args =
-                Apply_cont_rewrite_id.Map.add id extra_arg extra_args
-              in
-              Continue (extra_args, field_types_by_id)
-            | Default_behaviour untag ->
-              (* Don't unbox parameters unless, at all use sites, there is a
-                 non-irrelevant [Simple] available for the corresponding field
-                 of the block. *)
-              (* CR-someday pchambart: This shouldn't add another load if
-                 there is already one in the list of parameters.  That is,
-                   apply_cont k (a, b) a
-                   where k x y
-                 should become:
-                   apply_cont k (a, b) a b
-                   where k x y b'
-                 not:
-                   apply_cont k (a, b) a a b
-                   where k x y a' b'
-                 mshinwell: We never add any loads now, but might in the future.
-              *)
-              (*
-              Format.eprintf "Getting canonical for field %a: "
-                Simple.print field;
-              Format.eprintf "Canonical lookup is in:@ %a\n%!"
-                TE.print typing_env_at_use;
-              *)
-              let found_canonical simple untag =
-                (*
-                Format.eprintf "= %a\n%!" Simple.print simple;
-                *)
-                let extra_arg : EA.t =
-                  match untag with
-                  | No_untagging -> Already_in_scope simple
-                  | Untag ->
-                    New_let_binding (untagged_field_var,
-                      Unary (Unbox_number Untagged_immediate, simple))
-                in
-                let extra_args =
-                  Apply_cont_rewrite_id.Map.add id extra_arg extra_args
-                in
-                Continue (extra_args, field_types_by_id)
-              in
-              match
-                TE.get_canonical_simple_exn typing_env_at_use field
-                  ~min_name_mode:NM.normal
-                  ~name_mode_of_existing_simple:NM.normal
-              with
-              | exception Not_found ->
-                begin match untag with
-                | No_untagging -> fail ()
-                | Untag ->
-                  (* If we need an untagged value (such as for constant
-                     constructors), then if we couldn't find a [Simple]
-                     holding the tagged value (which we can subsequently
-                     untag), try finding a [Simple] holding the untagged
-                     value. *)
-                  let untagged_field = Simple.var untagged_field_var in
-                  match
-                    TE.get_canonical_simple_exn typing_env_at_use
-                      untagged_field
-                      ~min_name_mode:NM.normal
-                      ~name_mode_of_existing_simple:NM.normal
-                  with
-                  | exception Not_found -> fail ()
-                  | untagged_simple ->
-                    if Simple.equal untagged_simple untagged_field then Aborted
-                    else found_canonical untagged_simple No_untagging
-                end
-              | simple ->
-                if Simple.equal simple field then Aborted
-                else found_canonical simple untag)
-      arg_types_by_use_id
-      (Continue (Apply_cont_rewrite_id.Map.empty,
-        Apply_cont_rewrite_id.Map.empty))
-
-  let unbox_fields_of_one_parameter info ~new_params
-        ~arg_types_by_use_id extra_params_and_args : _ or_aborted =
-    let result =
-      Index.Map.fold (fun index extra_param acc : _ or_aborted ->
-          match acc with
-          | Aborted -> Aborted
-          | Continue (param_types_rev, all_field_types_by_id_rev,
-              extra_params_and_args) ->
-            (*
-            Format.eprintf "INDEX %a\n%!" Index.print index;
-            *)
-            let result =
-              unbox_one_field_of_one_parameter info ~extra_param ~index
-                ~arg_types_by_use_id
-            in
-            match result with
-            | Aborted -> Aborted
-            | Continue (extra_args, field_types_by_id) ->
-              let param_type =
-                T.alias_type_of (K.With_subkind.kind (KP.kind extra_param))
-                  (KP.simple extra_param)
-              in
-              let all_field_types_by_id_rev =
-                field_types_by_id :: all_field_types_by_id_rev
-              in
-              let extra_params_and_args =
-                EPA.add extra_params_and_args ~extra_param ~extra_args
-              in
-              Continue (Index.Map.add index param_type param_types_rev,
-                all_field_types_by_id_rev, extra_params_and_args))
-        new_params
-        (Continue (Index.Map.empty, [], extra_params_and_args))
-    in
-    match result with
-    | Aborted -> Aborted
-    | Continue (param_types, all_field_types_by_id_rev,
-        extra_params_and_args) ->
-      Continue (param_types, List.rev all_field_types_by_id_rev,
-        extra_params_and_args)
-
-  let unbox_one_parameter denv ~depth ~arg_types_by_use_id
-        ~param_being_unboxed ~param_type extra_params_and_args ~unbox_value
-        info indexes =
-    let orig_arg_types_by_use_id = arg_types_by_use_id in
-    let arg_types_by_use_id =
-      Apply_cont_rewrite_id.Map.filter_map
-        (fun _ (typing_env_at_use, arg_type_at_use) ->
-          let use_info =
-            U.Use_info.create typing_env_at_use ~type_at_use:arg_type_at_use
-          in
-          match use_info with
-          | Do_not_unbox_this_parameter -> None
-          | Ok use_info ->
-            Some (typing_env_at_use, arg_type_at_use, use_info))
-        arg_types_by_use_id
-    in
-    let do_not_unbox =
-      Apply_cont_rewrite_id.Map.cardinal orig_arg_types_by_use_id
-        <> Apply_cont_rewrite_id.Map.cardinal arg_types_by_use_id
-    in
-    if do_not_unbox then
-      denv, param_type, extra_params_and_args
-    else
-      let new_params =
-        Index.Set.fold (fun index new_params ->
-            let name =
-              Format.asprintf "%s_%s" U.var_name (Index.to_string index)
-            in
-            let var = Variable.create name in
-            let param =
-              KP.create var
-                (K.With_subkind.create (U.kind_of_unboxed_field_of_param index)
-                  Anything)
-            in
-            Index.Map.add index param new_params)
-          indexes
-          Index.Map.empty
-      in
-      let result =
-        unbox_fields_of_one_parameter info ~new_params
-          ~arg_types_by_use_id extra_params_and_args
-      in
-      match result with
-      | Aborted -> denv, param_type, extra_params_and_args
-      | Continue (fields, all_field_types_by_id, extra_params_and_args) ->
-        let block_type, cse, env_extension =
-          U.make_boxed_value info ~param_being_unboxed ~new_params ~fields
-        in
-        let denv = cse denv in
-        let denv =
-          DE.map_typing_env denv ~f:(fun typing_env ->
-            let typing_env =
-              TE.add_definitions_of_params typing_env
-                ~params:(Index.Map.data new_params)
-            in
-            TE.add_env_extension typing_env env_extension)
-        in
-        match T.meet (DE.typing_env denv) block_type param_type with
-        | Bottom ->
-          Misc.fatal_errorf "[meet] between %a and %a should not have \
-            failed.  Typing env:@ %a"
-            T.print block_type
-            T.print param_type
-            DE.print denv
-        | Ok (param_type, env_extension) ->
-          let denv =
-            DE.map_typing_env denv ~f:(fun typing_env ->
-              TE.add_env_extension typing_env env_extension)
-          in
-          assert (Index.Map.cardinal fields =
-            List.length all_field_types_by_id);
-          let denv, extra_params_and_args =
-            List.fold_left2
-              (fun (denv, extra_params_and_args)
-                  field_type field_types_by_id ->
-                if not (U.unbox_recursively ~field_type) then
-                  denv, extra_params_and_args
-                else begin
-                  let denv, _, extra_params_and_args =
-                    unbox_value denv ~depth:(depth + 1)
-                      ~arg_types_by_use_id:field_types_by_id
-                      ~param_being_unboxed
-                      ~param_type:field_type extra_params_and_args
-                  in
-                  denv, extra_params_and_args
-                end)
-              (denv, extra_params_and_args)
-              (Index.Map.data fields) all_field_types_by_id
-          in
-          denv, param_type, extra_params_and_args
-end
-
-module Block_of_values_spec : Unboxing_spec
-  with module Info = Tag
-  with module Index = Targetint.OCaml =
-struct
-  module Index = Targetint.OCaml
-  module Info = Tag
-
-  module Use_info = struct
-    type t = unit
-
-    let create _denv ~type_at_use:_ : _ create_use_info_result = Ok ()
-  end
-
-  let var_name = "unboxed"
-
-  let unbox_recursively ~field_type =
-    assert (K.equal (T.kind field_type) K.value);
-    true
-
-  let kind_of_unboxed_field_of_param _index = K.value
-
-  let unused_extra_arg _ _index = None
-
-  let make_boxed_value tag ~param_being_unboxed:_ ~new_params:_ ~fields =
-    let fields = Index.Map.data fields in
-    T.immutable_block ~is_unique:false tag ~field_kind:K.value ~fields,
-      Fun.id,
-      TEE.empty ()
-
-  let make_boxed_value_accommodating tag index ~index_var
-        ~untagged_index_var:_ =
-    T.immutable_block_with_size_at_least ~tag:(Known tag)
-      ~n:(Targetint.OCaml.add index Targetint.OCaml.one)
-      ~field_kind:K.value
-      ~field_n_minus_one:index_var
-
-  let extend_with_projection tag typing_env block_ty index ~index_var
-        ~untagged_index_var ~result_kind : _ Or_bottom.t =
-    match T.prove_block_field_simple typing_env ~min_name_mode:Name_mode.normal
-            block_ty (Target_imm.int index)
-    with
-    | Invalid ->
-      Ok (TEE.one_equation (Name.var index_var) (T.bottom result_kind))
-    | Proved simple ->
-      Ok (TEE.one_equation (Name.var index_var)
-            (T.alias_type_of result_kind simple))
-    | Unknown ->
-      let shape =
-        (* CR mshinwell: Rename, something about "shape" *)
-        make_boxed_value_accommodating tag index ~index_var
-          ~untagged_index_var
-      in
-      let result_var =
-        Var_in_binding_pos.create index_var Name_mode.normal
-      in
-      (*
-      Format.eprintf "Shape:@ %a@ arg_type_at_use:@ %a@ env:@ %a\n%!"
-        T.print shape
-        T.print arg_type_at_use
-        TE.print typing_env_at_use;
-      *)
-      T.meet_shape typing_env block_ty
-        ~shape ~result_var ~result_kind
-
-  let project_field _tag () ~block:_ ~index:_ : project_field_result =
-    Default_behaviour No_untagging
-end
-
-module Variant : sig
-  type t
-
-  val create : T.variant_like_proof -> t
-
-  val max_size : t -> Targetint.OCaml.t
-
-  val const_ctors : t -> Target_imm.Set.t Or_unknown.t
-
-  val non_const_ctors_with_sizes : t -> Targetint.OCaml.t Tag.Scannable.Map.t
-end = struct
-  type t = T.variant_like_proof
-
-  let create variant = variant
-
-  let const_ctors (t : t) = t.const_ctors
-  let non_const_ctors_with_sizes (t : t) = t.non_const_ctors_with_sizes
-
-  let max_size (t : t) =
-    Tag.Scannable.Map.fold (fun _tag size max_size ->
-        if Targetint.OCaml.compare size max_size > 0 then size
-        else max_size)
-      t.non_const_ctors_with_sizes
-      Targetint.OCaml.zero
-end
-
-module Variant_index : sig
-  type t =
-    | Is_int
-    | Const_ctor
-    | Tag  (* CR mshinwell: rename to Get_tag *)
-    | Field of { index : Targetint.OCaml.t; }
-
-  include Identifiable.S with type t := t
-
-  val to_string : t -> string
-end = struct
-  type t =
-    | Is_int
-    | Const_ctor
-    | Tag
-    | Field of { index : Targetint.OCaml.t; }
-
-  include Identifiable.Make (struct
-    type nonrec t = t
-
-    let compare t1 t2 =
-      match t1, t2 with
-      | Is_int, Is_int -> 0
-      | Const_ctor, Const_ctor -> 0
-      | Tag, Tag -> 0
-      | Field { index = index1; }, Field { index = index2; } ->
-        Targetint.OCaml.compare index1 index2
-      | Is_int, _ -> -1
-      | _, Is_int -> 1
-      | Const_ctor, _ -> -1
-      | _, Const_ctor -> 1
-      | Tag, _ -> -1
-      | _, Tag -> 1
-
-    let equal t1 t2 = (compare t1 t2 = 0)
-
-    let print ppf t =
-      match t with
-      | Is_int -> Format.pp_print_string ppf "Is_int"
-      | Const_ctor -> Format.pp_print_string ppf "Const_ctor"
-      | Tag -> Format.pp_print_string ppf "Tag"
-      | Field { index; } ->
-        Format.fprintf ppf "@[<hov 1>(Field@ %a)@]"
-          Targetint.OCaml.print index
-
-    let output _ _ = Misc.fatal_error "Not yet implemented"
-    let hash _ = Misc.fatal_error "Not yet implemented"
-  end)
-
-  let to_string t =
-    match t with
-    | Is_int -> "is_int"
-    | Const_ctor -> "const_ctor"
-    | Tag -> "tag"
-    | Field { index; } ->
-      Format.asprintf "field%a" Targetint.OCaml.print index
-end
-
-(* CR mshinwell: Presumably this can supercede [Block_of_values_spec]? *)
-module Variants_spec : Unboxing_spec
-  with module Info = Variant
-  with module Index = Variant_index =
-struct
-  module Index = Variant_index
-
-  module Info = Variant
-
-  module Use_info = struct
-    type t =
-      | Const_ctor
-      | Block of { tag : Tag.t; size : Targetint.OCaml.t; }
-
-    let create typing_env ~type_at_use : _ create_use_info_result =
-      (* To avoid having to insert a [Switch], for the moment we only unbox
-         when the type at each use is that of either an immediate or a block
-         of a unique size, but not any more general variant. *)
-      match T.prove_tags_and_sizes typing_env type_at_use with
-      | Proved tags_to_sizes ->
-        begin match Tag.Map.get_singleton tags_to_sizes with
-        | Some (tag, size) -> Ok (Block { tag; size; })
-        | None -> Do_not_unbox_this_parameter
-        end
-(* CR mshinwell: See CR below
-        let unique_size =
-          Tag.Map.data tags_to_sizes
-          |> Targetint.OCaml.Set.of_list
-          |> Targetint.OCaml.Set.get_singleton
-        in
-        begin match unique_size with
-        | Some size -> Ok (Block { size; })
-        | None -> Do_not_unbox_this_parameter
-        end
+   In these cases, some information could be recovered by attaching
+   env_extension to each branch of a switch on the tag of the variant. This is
+   not implemented yet.
 *)
-      | Unknown | Invalid ->
-        match T.prove_is_a_tagged_immediate typing_env type_at_use with
-        | Proved () -> Ok Const_ctor
-        | Unknown | Invalid -> Do_not_unbox_this_parameter
-        | Wrong_kind ->
-          Misc.fatal_errorf "Type %a should be of kind [Value]"
-            T.print type_at_use
-  end
 
-  let var_name = "unboxed"
 
-  let unbox_recursively ~field_type:_ = false
+(* Typedefs for unboxing decisions *)
+(* ******************************* *)
 
-  let kind_of_unboxed_field_of_param (index : Index.t) =
-    match index with
-    | Is_int | Tag | Const_ctor -> K.naked_immediate
-    | Field _ -> K.value
+type do_not_unbox_reason =
+  | Not_beneficial
+  | Max_depth_exceeded
+  | Incomplete_parameter_type
+  | Not_enough_information_at_use
 
-  let unused_extra_arg (use_info : Use_info.t) (index : Index.t) =
-    match index with
-    | Is_int
-    | Tag ->
-      (* These arguments are filled in later via [project_field]. *)
-      Some Simple.untagged_const_zero
-    | Const_ctor ->
-      begin match use_info with
-      | Const_ctor ->
-        (* If the argument at the use is known to be a constant constructor,
-           but there is no available [Simple] corresponding to it, then we
-           cannot unbox. *)
-        None
-      | Block _ ->
-        (* There are no constant constructors in the variant at the use site.
-           We provide a dummy value. *)
-        Some Simple.untagged_const_zero
-      end
-    | Field { index; } ->
-      begin match use_info with
-      | Block { tag = _; size; } ->
-        (* If the argument at the use is known to be a block, but the field
-           at [index] has no available [Simple] corresponding to it, then we
-           cannot unbox. *)
-        if Targetint.OCaml.(<) index size then None
-        else begin
-          (* If the argument at the use is known to be a block, but it has
-             fewer fields than the maximum number of fields for the variant,
-             then we provide a dummy value. *)
-          Some Simple.const_zero
-        end
-      | Const_ctor ->
-        (* There are no blocks in the variant at the use site.  We again
-           provide a dummy value. *)
-        Some Simple.const_zero
-      end
+(* extra_params_and_args : epa *)
+type epa = {
+  param : Variable.t;
+  args : EPA.Extra_arg.t Apply_cont_rewrite_id.Map.t;
+}
 
-  let make_boxed_value variant ~param_being_unboxed ~new_params ~fields =
-    let ty =
-      let const_ctors =
-        T.alias_type_of K.naked_immediate
-          (KP.simple (Index.Map.find Const_ctor new_params))
-      in
-      let non_const_ctors =
-        Tag.Scannable.Map.map (fun size ->
-            List.map (fun index ->
-                let index : Index.t = Field { index; } in
-                match Index.Map.find index fields with
-                | exception Not_found ->
-                  Misc.fatal_errorf "No field for index %a" Index.print index
-                | field -> field)
-              (Targetint.OCaml.zero_to_n_minus_one ~n:size))
-          (Variant.non_const_ctors_with_sizes variant)
-      in
-      T.variant ~const_ctors ~non_const_ctors
-    in
-    let param_being_unboxed = KP.simple param_being_unboxed in
-    let is_int_name = KP.name (Index.Map.find Is_int new_params) in
-    let get_tag_name = KP.name (Index.Map.find Tag new_params) in
-    let is_int = Simple.name is_int_name in
-    let get_tag = Simple.name get_tag_name in
-    let is_int_prim =
-      P.Eligible_for_cse.create_exn (Unary (Is_int, param_being_unboxed))
-    in
-    let get_tag_prim =
-      P.Eligible_for_cse.create_exn (Unary (Get_tag, param_being_unboxed))
-    in
-    let cse denv =
-      let denv = DE.add_cse denv is_int_prim ~bound_to:is_int in
-      DE.add_cse denv get_tag_prim ~bound_to:get_tag
-    in
-    let env_extension =
-      TEE.one_equation is_int_name
-        (T.is_int_for_scrutinee ~scrutinee:param_being_unboxed)
-    in
-    let env_extension =
-      TEE.add_or_replace_equation env_extension get_tag_name
-        (T.get_tag_for_block ~block:param_being_unboxed)
-    in
-    ty, cse, env_extension
+type unboxing_decision =
+  | Unique_tag_and_size of {
+      tag : Tag.t;
+      fields : field_decision list;
+    }
+  | Variant of {
+      tag : epa;
+      constant_constructors : const_ctors;
+      fields_by_tag : field_decision list Tag.Scannable.Map.t;
+    }
+  | Closure_single_entry of {
+      closure_id : Closure_id.t;
+      vars_within_closure : field_decision Var_within_closure.Map.t;
+    }
+  | Number of Flambda_kind.Naked_number_kind.t * epa
 
-  let make_boxed_value_accommodating _variant (index : Index.t) ~index_var
-        ~untagged_index_var =
-    match index with
-    | Is_int
-    | Tag -> T.any_value ()
-    | Const_ctor ->
-      T.open_variant_from_const_ctors_type
-        ~const_ctors:(T.alias_type_of K.naked_immediate (
-          Simple.var untagged_index_var))
-    | Field { index; } ->
-      T.open_variant_from_non_const_ctor_with_size_at_least
-        ~n:(Targetint.OCaml.add index Targetint.OCaml.one)
-        ~field_n_minus_one:index_var
+and field_decision = {
+  epa : epa;
+  decision : decision;
+}
 
-  let extend_with_projection tag typing_env base_ty index ~index_var
-        ~untagged_index_var ~result_kind =
-    let shape =
-      (* CR mshinwell: Rename, something about "shape" *)
-      make_boxed_value_accommodating tag index ~index_var
-        ~untagged_index_var
-    in
-    let result_var =
-      Var_in_binding_pos.create index_var Name_mode.normal
-    in
-    (*
-    Format.eprintf "Shape:@ %a@ arg_type_at_use:@ %a@ env:@ %a\n%!"
-      T.print shape
-      T.print arg_type_at_use
-      TE.print typing_env_at_use;
-    *)
-    T.meet_shape typing_env base_ty
-      ~shape ~result_var ~result_kind
+and const_ctors =
+  | Zero
+  | At_least_one of {
+      is_int : epa;
+      ctor : decision;
+    }
 
-  (* CR mshinwell: Could extend to handle cases where e.g. it's always a
-     constant ctor at a use, but not a unique one, and likewise for blocks
-     where the sizes are equal but the tags differ.  This sort of thing will
-     necessitate inserting extra operations. *)
+and decision =
+  | Unbox of unboxing_decision
+  | Do_not_unbox of do_not_unbox_reason
 
-  let project_field _variant (use_info : Use_info.t) ~block:_
-        ~(index : Index.t) : project_field_result =
-    match index with
-    | Is_int ->
-      let simple =
-        match use_info with
-        | Const_ctor -> Simple.untagged_const_true
-        | Block _ -> Simple.untagged_const_false
-      in
-      Simple simple
-    | Const_ctor ->
-      begin match use_info with
-      | Const_ctor -> Default_behaviour Untag
-      | Block _ -> Simple Simple.untagged_const_zero
-      end
-    | Tag ->
-      begin match use_info with
-      | Const_ctor -> Simple Simple.untagged_const_zero
-      | Block { tag; size = _; } ->
-        Simple (Simple.untagged_const_int (Tag.to_targetint_ocaml tag))
-      end
-    | Field { index; } ->
-      match use_info with
-      | Const_ctor -> Simple Simple.const_zero
-      | Block { tag = _; size = size_at_use; } ->
-        if Targetint.OCaml.compare index size_at_use >= 0 then
-          Simple Simple.const_zero
-        else
-          Default_behaviour No_untagging
-end
+type decisions = {
+  decisions : (KP.t * decision) list;
+  rewrite_ids_seen : Apply_cont_rewrite_id.Set.t;
+}
 
-module Block_of_naked_floats_spec : Unboxing_spec
-  with module Info = Tag
-  with module Index = Targetint.OCaml =
-struct
-  module Index = Targetint.OCaml
-  module Info = Tag
+(* Decision update pass.
 
-  module Use_info = struct
-    type t = unit
+   This notion of pass is used when turning a potential unboxing
+   decision into a decision compatible with the given set of uses of the
+   continuation. Indeed, depending on whether enough information is
+   availbale at the use site, we can end up ina  few different cases:
+   - enough information, and the unboxed values are directly available,
+     in which case, we can use them directly
+   - the unboxed values are not available directly, but can be "reasonably"
+     computed by introducing a let-binding (e.g. a block field projection).
+   - the unboxed values are not available, and would be too costly to
+     compute (see the example about variants a few lines down).
 
-    let create _typing_env ~type_at_use:_ : _ create_use_info_result = Ok ()
-  end
+   Thus, the first pass is used to filter out decisions which would end
+   up in the third case. *)
+type pass =
+  | Filter of { recursive : bool; }
+  (* First pass when computing unboxing decisions. This is done before
+     insepcting the handler of the continuation whose parameters we are
+     trying to unbox. For non-recursive continuation, that means that
+     all use-sites of the continuation are known, but for recursive
+     continuations, there are likely use sites that are not known at
+     this point.
 
-  let var_name = "unboxed"
+     For recursive continuations, we need to prevent unboxing variants
+     and closures because we cannot be sure that reasonable extra_args can, be
+     compute for all use-sites. For instance:
 
-  let unbox_recursively ~field_type =
-    assert (K.equal (T.kind field_type) K.naked_float);
-    false
+     let rec cont k x y =
+       switch y with
+       | 0 -> k (Some x)
+       | 1 -> k (f x) (* for some function f in scope *)
 
-  let kind_of_unboxed_field_of_param _index = K.naked_float
+     In this case, even if we know that x is an option, to unbox it, we'd
+     need to introduce a switch in the `1` branch, which is
+     1) not implemented (although tecnically possible)
+     2) not efficient or beneficial in most cases
+  *)
+  | Compute_all_extra_args
+  (* Last pass, after the traversla of the handler of the continuation.
+     Thus, at this point, all use-sites are known, and we can compute
+     the extra args that were not compute in the first pass (i.e. for
+     use-sites that were not known during the first pass). *)
 
-  let unused_extra_arg _ _index = None
 
-  let make_boxed_value tag ~param_being_unboxed:_ ~new_params:_ ~fields =
-    let fields = Index.Map.data fields in
-    T.immutable_block ~is_unique:false tag ~field_kind:K.naked_float ~fields,
-      Fun.id,
-      TEE.empty ()
+(* Printing *)
+(* ******** *)
 
-  let make_boxed_value_accommodating tag index ~index_var
-        ~untagged_index_var:_ =
-    T.immutable_block_with_size_at_least ~tag:(Known tag)
-      ~n:(Targetint.OCaml.add index Targetint.OCaml.one)
-      ~field_kind:K.naked_float
-      ~field_n_minus_one:index_var
+let print_epa fmt { param; args = _; } =
+  Format.fprintf fmt "@[<hv 1>(\
+    @[<hov>(param %a)@]@ \
+    @[<v 2>(args@ <...>)@]\
+    )"
+    Variable.print param
+    (* (Apply_cont_rewrite_id.Map.print EPA.Extra_arg.print) args *)
 
-  let extend_with_projection tag typing_env base_ty index ~index_var
-        ~untagged_index_var ~result_kind =
-    let shape =
-      (* CR mshinwell: Rename, something about "shape" *)
-      make_boxed_value_accommodating tag index ~index_var
-        ~untagged_index_var
-    in
-    let result_var =
-      Var_in_binding_pos.create index_var Name_mode.normal
-    in
-    (*
-    Format.eprintf "Shape:@ %a@ arg_type_at_use:@ %a@ env:@ %a\n%!"
-      T.print shape
-      T.print arg_type_at_use
-      TE.print typing_env_at_use;
-    *)
-    T.meet_shape typing_env base_ty
-      ~shape ~result_var ~result_kind
+let print_do_not_unbox_reason ppf = function
+  | Not_beneficial ->
+    Format.fprintf ppf "not_beneficial"
+  | Max_depth_exceeded ->
+    Format.fprintf ppf "max_depth_exceeded"
+  | Incomplete_parameter_type ->
+    Format.fprintf ppf "incomplete_parameter_type"
+  | Not_enough_information_at_use ->
+    Format.fprintf ppf "not_enough_information_at_use"
 
-  let project_field _tag () ~block:_ ~index:_ : project_field_result =
-    Default_behaviour No_untagging
-end
+let rec print_decision ppf = function
+  | Do_not_unbox reason ->
+    Format.fprintf ppf "@[<hov 1>(do_not_unbox@ %a)@]"
+      print_do_not_unbox_reason reason
+  | Unbox Unique_tag_and_size { tag; fields; } ->
+    Format.fprintf ppf "@[<v 1>(unique_tag_and_size@ \
+      @[<h>(static_tag %a)@]@ \
+      @[<hv 2>(fields@ %a)@]\
+      )@]"
+      Tag.print tag
+      print_fields_decisions fields
+  | Unbox Variant { tag; constant_constructors; fields_by_tag; } ->
+    Format.fprintf ppf "@[<v 2>(variant@ \
+      @[<hov>(tag %a)@]@ \
+      @[<hv 2>(constant_constructors@ %a)@]@ \
+      @[<v 2>(fields_by_tag@ %a)@]\
+      )@]"
+      print_epa tag
+      print_const_ctor_num constant_constructors
+      (Tag.Scannable.Map.print print_fields_decisions) fields_by_tag
+  | Unbox Closure_single_entry { closure_id; vars_within_closure; } ->
+    Format.fprintf ppf "@[<hov 1>(closure_single_entry@ \
+      @[<hov>(closure_id@ %a)@]@ \
+      @[<hv 2>(var_within_closures@ %a)@]\
+      )@]"
+      Closure_id.print closure_id
+      (Var_within_closure.Map.print print_field_decision) vars_within_closure
+  | Unbox Number (kind, epa) ->
+    Format.fprintf ppf "@[<hv 1>(number@ \
+      @[<h>(kind %a)@]@ \
+      @[<hv 1>(var %a)@]\
+    )@]"
+    Flambda_kind.Naked_number_kind.print kind
+    print_epa epa
 
-module Closures_info = struct
-  type t = {
-    closure_id : Closure_id.t;
-    closures_entry : T.Closures_entry.t;
+and print_field_decision ppf { epa; decision; } =
+  Format.fprintf ppf "@[<hv 1>(@,\
+    @[<hov 1>(var %a)@]@ \
+    @[<hv 1>(decision@ %a)@]\
+    )@]"
+    print_epa epa
+    print_decision decision
+
+and print_fields_decisions ppf l =
+  let pp_sep = Format.pp_print_space in
+  Format.fprintf ppf "%a"
+    (Format.pp_print_list ~pp_sep print_field_decision) l
+
+and print_const_ctor_num ppf = function
+  | Zero -> Format.fprintf ppf "no_constant_constructors"
+  | At_least_one { is_int; ctor; } ->
+    Format.fprintf ppf "@[<hov 1>(const_ctors@ \
+      @[<hov 1>(is_int@ %a)@]@ \
+      @[<hov 1>(ctor@ %a)@]\
+      )@]"
+      print_epa is_int
+      print_decision ctor
+
+let print ppf { decisions; rewrite_ids_seen; } =
+  let pp_sep = Format.pp_print_space in
+  let aux ppf (param, decision) =
+    Format.fprintf ppf "@[<hov 1>(%a@ %a)@]"
+      KP.print param print_decision decision
+  in
+  Format.fprintf ppf "@[<hov 1>(\
+    @[<hov 1>(decisions@ %a)@]@ \
+    @[<hov 1>(rewrite_ids_seen@ %a)@]\
+    )@]"
+    (Format.pp_print_list ~pp_sep aux) decisions
+    Apply_cont_rewrite_id.Set.print rewrite_ids_seen
+
+
+(* small helper used later *)
+let pp_tag print_tag ppf tag =
+  if print_tag then Format.fprintf ppf "_%d" (Tag.to_int tag)
+
+
+(* Unboxers *)
+(* ******** *)
+
+type number_decider = {
+  param_name : string;
+  kind : Flambda_kind.Naked_number_kind.t;
+  prove_is_a_boxed_number : TE.t -> T.t -> unit T.proof_allowing_kind_mismatch;
+}
+
+type unboxer = {
+  var_name : string;
+  invalid_const : Const.t;
+  unboxing_prim : Simple.t -> Flambda_primitive.t;
+  prove_simple :
+    TE.t -> min_name_mode:Name_mode.t -> T.t -> Simple.t T.proof;
+}
+
+module Immediate = struct
+
+  let decider = {
+    param_name = "naked_immediate";
+    kind = K.Naked_number_kind.Naked_immediate;
+    prove_is_a_boxed_number = T.prove_is_a_tagged_immediate;
   }
+
+  let unboxing_prim simple =
+    Flambda_primitive.(Unary (Unbox_number Untagged_immediate, simple))
+
+  let unboxer = {
+    var_name = "naked_immediate";
+    invalid_const = Const.naked_immediate (Target_imm.int (Targetint.OCaml.of_int 0xabcd));
+    unboxing_prim;
+    prove_simple = T.prove_is_always_tagging_of_simple;
+  }
+
 end
 
-module Closures_spec : Unboxing_spec
-  with module Info = Closures_info
-  with module Index = Var_within_closure =
-struct
-  module Index = Var_within_closure
-  module Info = Closures_info
+module Float = struct
 
-  module Use_info = struct
-    type t = unit
+  let decider = {
+    param_name = "unboxed_float";
+    kind = K.Naked_number_kind.Naked_float;
+    prove_is_a_boxed_number = T.prove_is_a_boxed_float;
+  }
 
-    let create _typing_env ~type_at_use:_ : _ create_use_info_result = Ok ()
-  end
+  let unboxing_prim simple =
+    Flambda_primitive.(Unary (Unbox_number Naked_float, simple))
 
-  let var_name = "unboxed_clos_var"
+  let unboxer = {
+    var_name = "unboxed_float";
+    invalid_const = Const.naked_float Numbers.Float_by_bit_pattern.zero;
+    unboxing_prim;
+    prove_simple = T.prove_boxed_float_containing_simple;
+  }
 
-  let unbox_recursively ~field_type =
-    assert (K.equal (T.kind field_type) K.value);
-    true
-
-  let kind_of_unboxed_field_of_param _index = K.value
-
-  let unused_extra_arg _ _index = None
-
-  let make_boxed_value (info : Info.t) ~param_being_unboxed:_ ~new_params:_
-        ~fields:closure_vars =
-    let closures_entry = info.closures_entry in
-    let all_function_decls_in_set =
-      T.Closures_entry.function_decl_types closures_entry
-    in
-    let all_closures_in_set = T.Closures_entry.closure_types closures_entry in
-    let ty =
-      T.exactly_this_closure info.closure_id
-        ~all_function_decls_in_set
-        ~all_closures_in_set
-        ~all_closure_vars_in_set:closure_vars
-    in
-    ty, Fun.id, TEE.empty ()
-
-  let make_boxed_value_accommodating (info : Info.t) closure_var ~index_var
-        ~untagged_index_var:_ =
-    T.closure_with_at_least_this_closure_var closure_var
-      ~this_closure:info.closure_id
-      ~closure_element_var:index_var
-
-  let extend_with_projection tag typing_env base_ty index ~index_var
-        ~untagged_index_var ~result_kind : _ Or_bottom.t =
-    match T.prove_project_var_simple typing_env ~min_name_mode:Name_mode.normal
-            base_ty index
-    with
-    | Invalid ->
-      Ok (TEE.one_equation (Name.var index_var) (T.bottom result_kind))
-    | Proved simple ->
-      Ok (TEE.one_equation (Name.var index_var)
-            (T.alias_type_of result_kind simple))
-    | Unknown ->
-      let shape =
-        (* CR mshinwell: Rename, something about "shape" *)
-        make_boxed_value_accommodating tag index ~index_var
-          ~untagged_index_var
-      in
-      let result_var =
-        Var_in_binding_pos.create index_var Name_mode.normal
-      in
-      (*
-      Format.eprintf "Shape:@ %a@ arg_type_at_use:@ %a@ env:@ %a\n%!"
-        T.print shape
-        T.print arg_type_at_use
-        TE.print typing_env_at_use;
-      *)
-      T.meet_shape typing_env base_ty
-        ~shape ~result_var ~result_kind
-
-  let project_field _tag () ~block:_ ~index:_ : project_field_result =
-    Default_behaviour No_untagging
 end
 
-module Make_unboxed_number_spec (N : sig
-  val name : string
-  val var_name : string
+module Int32 = struct
 
-  val tag : Tag.t
+  let decider = {
+    param_name = "unboxed_int32";
+    kind = K.Naked_number_kind.Naked_int32;
+    prove_is_a_boxed_number = T.prove_is_a_boxed_int32;
+  }
 
-  val unboxed_kind : K.t
+  let unboxing_prim simple =
+    Flambda_primitive.(Unary (Unbox_number Naked_int32, simple))
 
-  val box : T.t -> T.t
-end) = struct
-  module Index = Targetint.OCaml
-  module Info = Tag
+  let unboxer = {
+    var_name = "unboxed_int32";
+    invalid_const = Const.naked_int32 Int32.(div 0xabcd0l 2l);
+    unboxing_prim;
+    prove_simple = T.prove_boxed_int32_containing_simple;
+  }
 
-  module Use_info = struct
-    type t = unit
-
-    let create _typing_env ~type_at_use:_ : _ create_use_info_result = Ok ()
-  end
-
-  let var_name = N.var_name
-
-  let unbox_recursively ~field_type =
-    assert (K.equal (T.kind field_type) N.unboxed_kind);
-    false
-
-  let kind_of_unboxed_field_of_param _index = N.unboxed_kind
-
-  let unused_extra_arg _ _index = None
-
-  let make_boxed_value tag ~param_being_unboxed:_ ~new_params:_ ~fields =
-    assert (Tag.equal tag N.tag);
-    let fields = Index.Map.data fields in
-    match fields with
-    | [field] -> N.box field, Fun.id, TEE.empty ()
-    | _ -> Misc.fatal_errorf "Boxed %ss only have one field" N.name
-
-  let make_boxed_value_accommodating _tag index ~index_var
-        ~untagged_index_var:_ =
-    (* CR mshinwell: Should create the type using the tag too. *)
-    if not (Targetint.OCaml.equal index Targetint.OCaml.zero) then begin
-       Misc.fatal_errorf "Boxed %ss only have one field" N.name
-    end;
-    N.box (T.alias_type_of N.unboxed_kind (Simple.var index_var))
-
-  let extend_with_projection tag typing_env base_ty index ~index_var
-        ~untagged_index_var ~result_kind =
-    let shape =
-      (* CR mshinwell: Rename, something about "shape" *)
-      make_boxed_value_accommodating tag index ~index_var
-        ~untagged_index_var
-    in
-    let result_var =
-      Var_in_binding_pos.create index_var Name_mode.normal
-    in
-    (*
-    Format.eprintf "Shape:@ %a@ arg_type_at_use:@ %a@ env:@ %a\n%!"
-      T.print shape
-      T.print arg_type_at_use
-      TE.print typing_env_at_use;
-    *)
-    T.meet_shape typing_env base_ty
-      ~shape ~result_var ~result_kind
-
-  let project_field _tag () ~block:_ ~index:_ : project_field_result =
-    Default_behaviour No_untagging
 end
 
-module Target_imm_spec : Unboxing_spec
-  with module Info = Tag
-  with module Index = Targetint.OCaml =
-Make_unboxed_number_spec (struct
-  let name = "immediate"
-  let var_name = "untagged_imm"
-  let tag = Tag.zero  (* CR mshinwell: make optional *)
-  let unboxed_kind = K.naked_immediate
-  let box = T.tag_immediate
-end)
+module Int64 = struct
 
-module Float_spec : Unboxing_spec
-  with module Info = Tag
-  with module Index = Targetint.OCaml =
-Make_unboxed_number_spec (struct
-  let name = "float"
-  let var_name = "unboxed_float"
-  let tag = Tag.double_tag
-  let unboxed_kind = K.naked_float
-  let box = T.box_float
-end)
+  let decider = {
+    param_name = "unboxed_int64";
+    kind = K.Naked_number_kind.Naked_int64;
+    prove_is_a_boxed_number = T.prove_is_a_boxed_int64;
+  }
 
-module Int32_spec : Unboxing_spec
-  with module Info = Tag
-  with module Index = Targetint.OCaml =
-Make_unboxed_number_spec (struct
-  let name = "int32"
-  let var_name = "unboxed_int32"
-  let tag = Tag.custom_tag
-  let unboxed_kind = K.naked_int32
-  let box = T.box_int32
-end)
+  let unboxing_prim simple =
+    Flambda_primitive.(Unary (Unbox_number Naked_int64, simple))
 
-module Int64_spec : Unboxing_spec
-  with module Info = Tag
-  with module Index = Targetint.OCaml =
-Make_unboxed_number_spec (struct
-  let name = "int64"
-  let var_name = "unboxed_int64"
-  let tag = Tag.custom_tag
-  let unboxed_kind = K.naked_int64
-  let box = T.box_int64
-end)
+  let unboxer = {
+    var_name = "unboxed_int64";
+    invalid_const = Const.naked_int64 Int64.(div 0xdcba0L 2L);
+    unboxing_prim;
+    prove_simple = T.prove_boxed_int64_containing_simple;
+  }
 
-module Nativeint_spec : Unboxing_spec
-  with module Info = Tag
-  with module Index = Targetint.OCaml =
-Make_unboxed_number_spec (struct
-  let name = "nativeint"
-  let var_name = "unboxed_nativeint"
-  let tag = Tag.custom_tag
-  let unboxed_kind = K.naked_nativeint
-  let box = T.box_nativeint
-end)
+end
 
-module Blocks_of_values = Make (Block_of_values_spec)
-module Blocks_of_naked_floats = Make (Block_of_naked_floats_spec)
-module Variants = Make (Variants_spec)
-module Closures = Make (Closures_spec)
-module Target_imms = Make (Target_imm_spec)
-module Floats = Make (Float_spec)
-module Int32s = Make (Int32_spec)
-module Int64s = Make (Int64_spec)
-module Nativeints = Make (Nativeint_spec)
+module Nativeint = struct
 
-let unboxed_number_decisions = [
-  T.prove_is_a_tagged_immediate, Target_imms.unbox_one_parameter, Tag.zero;
-  T.prove_is_a_boxed_float, Floats.unbox_one_parameter, Tag.double_tag;
-  T.prove_is_a_boxed_int32, Int32s.unbox_one_parameter, Tag.custom_tag;
-  T.prove_is_a_boxed_int64, Int64s.unbox_one_parameter, Tag.custom_tag;
-  T.prove_is_a_boxed_nativeint, Nativeints.unbox_one_parameter, Tag.custom_tag;
+  let decider = {
+    param_name = "unboxed_nativeint";
+    kind = K.Naked_number_kind.Naked_nativeint;
+    prove_is_a_boxed_number = T.prove_is_a_boxed_nativeint;
+  }
+
+  let unboxing_prim simple =
+    Flambda_primitive.(Unary (Unbox_number Naked_nativeint, simple))
+
+  let unboxer = {
+    var_name = "unboxed_nativeint";
+    invalid_const = Const.naked_nativeint Targetint.zero;
+    unboxing_prim;
+    prove_simple = T.prove_boxed_nativeint_containing_simple;
+  }
+
+end
+
+module Field = struct
+
+  let unboxing_prim bak field_nth block_simple =
+    let field_const = Simple.const (Const.tagged_immediate field_nth) in
+    Flambda_primitive.(
+      Binary (Block_load (bak, Immutable), block_simple, field_const)
+    )
+
+  let unboxer cst bak field_nth = {
+    var_name = "field_at_use";
+    invalid_const = cst;
+    unboxing_prim = unboxing_prim bak field_nth;
+    prove_simple = (fun tenv ~min_name_mode t ->
+      T.prove_block_field_simple tenv ~min_name_mode t field_nth);
+  }
+
+end
+
+module Closure_field = struct
+
+  let unboxing_prim closure_id var closure_simple =
+    Flambda_primitive.(Unary (
+      Project_var { project_from = closure_id; var }, closure_simple))
+
+  let unboxer closure_id var = {
+    var_name = "closure_field_at_use";
+    invalid_const = Const.const_zero;
+    unboxing_prim = unboxing_prim closure_id var;
+    prove_simple = (fun tenv ~min_name_mode t ->
+      T.prove_project_var_simple tenv ~min_name_mode t var);
+  }
+
+end
+
+
+(* Some helpers *)
+(* ************ *)
+
+let new_param name = {
+  param = Variable.create name;
+  args = Apply_cont_rewrite_id.Map.empty;
+}
+
+let update_param_args epa rewrite_id extra_arg =
+  assert (not (Apply_cont_rewrite_id.Map.mem rewrite_id epa.args));
+  let args = Apply_cont_rewrite_id.Map.add rewrite_id extra_arg epa.args in
+  { epa with args; }
+
+
+(* Unfold a type into a decision tree *)
+(* ********************************** *)
+
+(* CR: make this a Clflag *)
+let max_unboxing_depth = 1
+let unbox_numbers = true
+let unbox_blocks = true
+let unbox_variants = true
+let unbox_closures = true
+
+let make_optimistic_const_ctor () =
+  let is_int = new_param "is_int" in
+  let unboxed_const_ctor = new_param "unboxed_const_ctor" in
+  let ctor = Unbox (Number (Naked_immediate, unboxed_const_ctor)) in
+  At_least_one { is_int; ctor; }
+
+let make_optimistic_number_decision tenv param_type decider : decision option =
+  match decider.prove_is_a_boxed_number tenv param_type with
+  | Proved () ->
+    let naked_number = new_param decider.param_name in
+    Some (Unbox (Number (decider.kind, naked_number)))
+  | Wrong_kind | Invalid | Unknown ->
+    None
+
+let decide tenv param_type deciders : decision option =
+  List.find_map (make_optimistic_number_decision tenv param_type) deciders
+
+let deciders = [
+  Immediate.decider;
+  Float.decider;
+  Int32.decider;
+  Int64.decider;
+  Nativeint.decider;
 ]
 
-let rec make_unboxing_decision denv ~depth ~arg_types_by_use_id
-      ~param_being_unboxed ~param_type extra_params_and_args =
-  if depth > max_unboxing_depth then
-    denv, param_type, extra_params_and_args
-  else
-    match T.prove_unique_tag_and_size (DE.typing_env denv) param_type with
-    | Proved (tag, size) ->
-      let indexes =
-        let size = Targetint.OCaml.to_int size in
-        Targetint.OCaml.Set.of_list
-          (List.init size (fun index -> Targetint.OCaml.of_int index))
-      in
-      (* If the fields have kind [Naked_float] then the [tag] will always
-         be [Tag.double_array_tag].  See [Row_like.For_blocks]. *)
-      if Tag.equal tag Tag.double_array_tag then
-        Blocks_of_naked_floats.unbox_one_parameter denv ~depth
-          ~arg_types_by_use_id ~param_being_unboxed ~param_type
-          extra_params_and_args ~unbox_value:make_unboxing_decision
-          tag indexes
-      else
-        begin match Tag.Scannable.of_tag tag with
-        | Some _ ->
-          Blocks_of_values.unbox_one_parameter denv ~depth
-            ~arg_types_by_use_id ~param_being_unboxed ~param_type
-            extra_params_and_args ~unbox_value:make_unboxing_decision
-            tag indexes
-        | None ->
-          Misc.fatal_errorf "Block that is not of tag [Double_array_tag] \
-              and yet also not scannable:@ %a@ in env:@ %a"
-            T.print param_type
-            DE.print denv
-        end
-    | Wrong_kind | Invalid | Unknown ->
-      match T.prove_variant_like (DE.typing_env denv) param_type with
-      | Proved variant ->
-        (*
-        Format.eprintf "Starting variant unboxing\n%!";
-        *)
-        let variant = Variant.create variant in
+let rec make_optimist_decision ~depth tenv param_type : decision =
+  match decide tenv param_type deciders with
+  | Some decision ->
+    if unbox_numbers then decision else Do_not_unbox Incomplete_parameter_type
+  | None ->
+    if depth >= max_unboxing_depth then Do_not_unbox Max_depth_exceeded
+    else match T.prove_unique_tag_and_size tenv param_type with
+      | Proved (tag, size) when unbox_blocks ->
         let fields =
-          let size = Targetint.OCaml.to_int (Variant.max_size variant) in
-          Variant_index.Set.of_list
-            (List.init size (fun index : Variant_index.t ->
-              Field { index = Targetint.OCaml.of_int index; }))
+          make_optimistic_fields
+            ~add_tag_to_name:false ~depth
+            tenv param_type tag size
         in
-        let indexes =
-          Variant_index.Set.empty
-          |> Variant_index.Set.add Is_int
-          |> Variant_index.Set.add Const_ctor
-          |> Variant_index.Set.add Tag
-          |> Variant_index.Set.union fields
+        Unbox (Unique_tag_and_size { tag; fields; })
+      | Proved _ | Wrong_kind | Invalid | Unknown ->
+        match T.prove_variant_like tenv param_type with
+        | Proved { const_ctors; non_const_ctors_with_sizes; } when unbox_variants->
+          let tag = new_param "tag" in
+          let constant_constructors =
+            match const_ctors with
+            | Known set when Target_imm.Set.is_empty set -> Zero
+            | Unknown | Known _ -> make_optimistic_const_ctor ()
+          in
+          let fields_by_tag =
+            Tag.Scannable.Map.mapi (fun scannable_tag size ->
+              let tag = Tag.Scannable.to_tag scannable_tag in
+              make_optimistic_fields
+                ~add_tag_to_name:true ~depth
+                tenv param_type tag size
+            ) non_const_ctors_with_sizes
+          in
+          Unbox (Variant { tag; constant_constructors; fields_by_tag; })
+        | Proved _ | Wrong_kind | Invalid | Unknown ->
+          begin match T.prove_single_closures_entry' tenv param_type with
+          | Proved (closure_id, closures_entry, _fun_decl) when unbox_closures ->
+            let vars_within_closure =
+              make_optimistic_vars_within_closure ~depth tenv closures_entry
+            in
+            Unbox (Closure_single_entry { closure_id; vars_within_closure })
+          | Proved _ | Wrong_kind | Invalid | Unknown -> Do_not_unbox Incomplete_parameter_type
+          end
+
+and make_optimistic_fields
+      ~add_tag_to_name ~depth
+      tenv param_type (tag : Tag.t) size =
+  let field_kind, field_base_name =
+    if Tag.equal tag Tag.double_array_tag
+    then K.naked_float, "unboxed_float_field"
+    else K.value, "unboxed_field"
+  in
+  let field_name n =
+    Format.asprintf "%s%a_%d" field_base_name (pp_tag add_tag_to_name) tag n
+  in
+  let field_vars =
+    List.init (Targetint.OCaml.to_int size)
+      (fun i -> new_param (field_name i))
+  in
+  let type_of_var epa =
+    Flambda_type.alias_type_of field_kind (Simple.var epa.param)
+  in
+  let field_types = List.map type_of_var field_vars in
+  let tenv =
+    List.fold_left (fun acc { param = var; args = _; } ->
+      let name = Name_in_binding_pos.create (Name.var var) Name_mode.normal in
+      TE.add_definition acc name field_kind
+    ) tenv field_vars
+  in
+  let shape =
+    Flambda_type.immutable_block ~is_unique:false tag
+      ~field_kind ~fields:field_types
+  in
+  let env_extension =
+    match T.meet tenv param_type shape with
+    | Ok (_, env_extension) -> env_extension
+    | Bottom ->
+      Misc.fatal_errorf "Meet failed whereas prove previously succeeded"
+  in
+  let tenv = TE.add_env_extension tenv env_extension in
+  let fields =
+    List.map2 (fun epa var_type ->
+      let decision = make_optimist_decision ~depth:(depth + 1) tenv var_type in
+      { epa; decision; }
+    ) field_vars field_types
+  in
+  fields
+
+and make_optimistic_vars_within_closure
+      ~depth tenv closures_entry =
+  let map = T.Closures_entry.closure_var_types closures_entry in
+  Var_within_closure.Map.mapi (fun var_within_closure var_type ->
+    let epa = new_param (Var_within_closure.to_string var_within_closure) in
+    let decision = make_optimist_decision ~depth:(depth + 1) tenv var_type in
+    { epa; decision; }
+  ) map
+
+
+(* Decision tree -> actual typing env *)
+(* ********************************** *)
+
+let add_equation_on_var denv var shape =
+  let kind = T.kind shape in
+  let var_type = T.alias_type_of kind (Simple.var var) in
+  match T.meet (DE.typing_env denv) var_type shape with
+  | Ok (_ty, env_extension) ->
+    DE.map_typing_env denv ~f:(fun tenv ->
+      TE.add_env_extension tenv env_extension)
+  | Bottom ->
+    Misc.fatal_errorf "Meet failed whereas prove previously succeeded"
+
+let denv_of_number_decision naked_kind shape param_var naked_var denv : DE.t =
+  let naked_name =
+    Var_in_binding_pos.create naked_var Name_mode.normal
+  in
+  let denv = DE.define_variable denv naked_name naked_kind in
+  add_equation_on_var denv param_var shape
+
+let rec denv_of_decision denv param_var decision : DE.t =
+  match decision with
+  | Do_not_unbox _ -> denv
+  | Unbox Unique_tag_and_size { tag; fields; } ->
+    let field_kind =
+      if Tag.equal tag Tag.double_array_tag then K.naked_float else K.value
+    in
+    let denv =
+      List.fold_left (fun denv { epa = { param = var; _ }; _ } ->
+        let v = Var_in_binding_pos.create var Name_mode.normal in
+        DE.define_variable denv v field_kind
+      ) denv fields
+    in
+    let type_of_var field =
+      Flambda_type.alias_type_of field_kind (Simple.var field.epa.param)
+    in
+    let field_types = List.map type_of_var fields in
+    let shape =
+      Flambda_type.immutable_block ~is_unique:false tag
+        ~field_kind ~fields:field_types
+    in
+    let denv = add_equation_on_var denv param_var shape in
+    List.fold_left (fun denv field ->
+      denv_of_decision denv field.epa.param field.decision
+    ) denv fields
+
+  (* Closure case *)
+  | Unbox Closure_single_entry { closure_id; vars_within_closure; } ->
+    let denv =
+      Var_within_closure.Map.fold (fun _ { epa = { param = var; _ }; _ } denv ->
+        let v = Var_in_binding_pos.create var Name_mode.normal in
+        DE.define_variable denv v K.value
+      ) vars_within_closure denv
+    in
+    let map =
+      Var_within_closure.Map.map
+        (fun { epa = { param = var; _ }; _ } -> var) vars_within_closure
+    in
+    let shape =
+      Flambda_type.closure_with_at_least_these_closure_vars
+        ~this_closure:closure_id map
+    in
+    let denv = add_equation_on_var denv param_var shape in
+    Var_within_closure.Map.fold (fun _ field denv ->
+      denv_of_decision denv field.epa.param field.decision
+    ) vars_within_closure denv
+
+  (* Variant case*)
+  | Unbox Variant { tag; constant_constructors; fields_by_tag; } ->
+    (* Adapt the denv for the tag *)
+    let tag_v = Var_in_binding_pos.create tag.param Name_mode.normal in
+    let denv = DE.define_variable denv tag_v K.naked_immediate in
+    let denv =
+      DE.add_equation_on_variable denv tag.param
+        (T.get_tag_for_block ~block:(Simple.var param_var))
+    in
+    let get_tag_prim =
+      P.Eligible_for_cse.create_exn (Unary (Get_tag, Simple.var param_var))
+    in
+    let denv = DE.add_cse denv get_tag_prim ~bound_to:(Simple.var tag.param) in
+    (* Same thing for is_int *)
+    let denv =
+      match constant_constructors with
+      | Zero -> denv
+      | At_least_one { is_int; _ } ->
+        let is_int_v = Var_in_binding_pos.create is_int.param Name_mode.normal in
+        let denv = DE.define_variable denv is_int_v K.naked_immediate in
+        let denv =
+          DE.add_equation_on_variable denv is_int.param
+            (T.is_int_for_scrutinee ~scrutinee:(Simple.var param_var))
         in
-        Variants.unbox_one_parameter denv ~depth
-          ~arg_types_by_use_id ~param_being_unboxed ~param_type
-          extra_params_and_args ~unbox_value:make_unboxing_decision
-          variant indexes
-      | Invalid | Unknown | Wrong_kind ->
-        match T.prove_single_closures_entry' (DE.typing_env denv) param_type with
-        | Proved (closure_id, closures_entry, Ok _func_decl_type) ->
-          let closure_var_types =
-            T.Closures_entry.closure_var_types closures_entry
-          in
-          let info : Closures_spec.Info.t =
-            { closure_id;
-              closures_entry;
-            }
-          in
-          let closure_vars = Var_within_closure.Map.keys closure_var_types in
-          Closures.unbox_one_parameter denv ~depth
-            ~arg_types_by_use_id ~param_being_unboxed ~param_type
-            extra_params_and_args ~unbox_value:make_unboxing_decision
-            info closure_vars
-        | Proved (_, _, (Unknown | Bottom)) | Wrong_kind | Invalid | Unknown ->
-          let rec try_unboxing = function
-            | [] -> denv, param_type, extra_params_and_args
-            | (prover, unboxer, tag) :: decisions ->
-              let proof : _ T.proof_allowing_kind_mismatch =
-                prover (DE.typing_env denv) param_type
+        let is_int_prim =
+          P.Eligible_for_cse.create_exn (Unary (Is_int, Simple.var param_var))
+        in
+        let denv = DE.add_cse denv is_int_prim ~bound_to:(Simple.var is_int.param) in
+        denv
+    in
+    let denv, const_ctors =
+      match constant_constructors with
+      | Zero ->
+        denv, T.bottom K.naked_immediate
+      | At_least_one { ctor = Do_not_unbox _; _ } ->
+        denv, T.unknown K.naked_immediate
+      | At_least_one { ctor = Unbox Number (Naked_immediate, ctor_epa); _ } ->
+        let v = Var_in_binding_pos.create ctor_epa.param Name_mode.normal in
+        let denv = DE.define_variable denv v K.naked_immediate in
+        let ty = Flambda_type.alias_type_of K.naked_immediate (Simple.var ctor_epa.param) in
+        denv, ty
+      | At_least_one { ctor = Unbox _; _ } ->
+        Misc.fatal_errorf "Variant constant constructor unboxed with a kind other \
+                           than naked_immediate."
+    in
+    let denv =
+      Tag.Scannable.Map.fold (fun _ block_fields denv ->
+        List.fold_left (fun denv { epa = { param = var; _ }; _ } ->
+          let v = Var_in_binding_pos.create var Name_mode.normal in
+          DE.define_variable denv v K.value
+        ) denv block_fields)
+        fields_by_tag denv
+    in
+    let non_const_ctors =
+      Tag.Scannable.Map.map (fun block_fields ->
+        List.map (fun field ->
+          Flambda_type.alias_type_of K.value (Simple.var field.epa.param)
+        ) block_fields
+      ) fields_by_tag
+    in
+    let shape = T.variant ~const_ctors ~non_const_ctors in
+    let denv = add_equation_on_var denv param_var shape in
+    (* recursion *)
+    Tag.Scannable.Map.fold (fun _ block_fields denv ->
+      List.fold_left (fun denv field ->
+        denv_of_decision denv field.epa.param field.decision
+      ) denv block_fields
+    ) fields_by_tag denv
+
+
+  (* Number cases *)
+  | Unbox Number (Naked_immediate, { param = naked_immediate; args = _; }) ->
+    let shape = T.tagged_immediate_alias_to ~naked_immediate in
+    denv_of_number_decision K.naked_immediate shape
+      param_var naked_immediate denv
+  | Unbox Number (Naked_float, { param = naked_float; args = _; }) ->
+    let shape = T.boxed_float_alias_to ~naked_float in
+    denv_of_number_decision K.naked_float shape
+      param_var naked_float denv
+  | Unbox Number (Naked_int32, { param = naked_int32; args = _; }) ->
+    let shape = T.boxed_int32_alias_to ~naked_int32 in
+    denv_of_number_decision K.naked_int32 shape
+      param_var naked_int32 denv
+  | Unbox Number (Naked_int64, { param = naked_int64; args = _; }) ->
+    let shape = T.boxed_int64_alias_to ~naked_int64 in
+    denv_of_number_decision K.naked_int64 shape
+      param_var naked_int64 denv
+  | Unbox Number (Naked_nativeint, { param = naked_nativeint; args = _; }) ->
+    let shape = T.boxed_nativeint_alias_to ~naked_nativeint in
+    denv_of_number_decision K.naked_nativeint shape
+      param_var naked_nativeint denv
+
+
+
+(* Compute extra args and filter decisions *)
+(* *************************************** *)
+
+exception Prevent_this_unboxing
+
+let prevent_current_unboxing () = raise Prevent_this_unboxing
+
+type unboxed_arg =
+  | Poison (* used for recursive calls *)
+  | Available of Simple.t
+  | Generated of Variable.t
+  | Added_by_wrapper_at_rewrite_use of { nth_arg : int; }
+
+(*
+let print_unboxed_arg ppf = function
+  | Poison -> Format.fprintf ppf "poison"
+  | Available simple -> Format.fprintf ppf "simple: %a" Simple.print simple
+  | Generated v -> Format.fprintf ppf "generated: %a" Variable.print v
+  | Added_by_wrapper_at_rewrite_use {nth_arg } ->
+    Format.fprintf ppf "added_by_wrapper(%d)" nth_arg
+*)
+
+let type_of_arg_being_unboxed unboxed_arg =
+  let aux simple = T.alias_type_of K.value simple in
+  match unboxed_arg with
+  | Poison -> None
+  | Available simple -> Some (aux simple)
+  | Generated var -> Some (aux (Simple.var var))
+  | Added_by_wrapper_at_rewrite_use _ -> prevent_current_unboxing ()
+
+let arg_being_unboxed_of_extra_arg extra_arg =
+  match (extra_arg : EPA.Extra_arg.t) with
+  | Already_in_scope simple -> Available simple
+  | New_let_binding (var, _)
+  | New_let_binding_with_named_args (var, _) -> Generated var
+
+let extra_arg_of_arg_being_unboxed unboxer typing_env_at_use arg_being_unboxed =
+  match arg_being_unboxed with
+  | Poison ->
+    EPA.Extra_arg.Already_in_scope (Simple.const unboxer.invalid_const)
+  | Available arg_at_use ->
+    let arg_type = T.alias_type_of K.value arg_at_use in
+    begin match unboxer.prove_simple typing_env_at_use arg_type
+                  ~min_name_mode:Name_mode.normal with
+    | Proved simple ->
+      EPA.Extra_arg.Already_in_scope simple
+    | Invalid ->
+      EPA.Extra_arg.Already_in_scope (Simple.const unboxer.invalid_const)
+    | Unknown ->
+      let var = Variable.create unboxer.var_name in
+      let prim = unboxer.unboxing_prim arg_at_use in
+      EPA.Extra_arg.New_let_binding (var, prim)
+    end
+  | Generated var ->
+    let arg_at_use = Simple.var var in
+    let var = Variable.create unboxer.var_name in
+    let prim = unboxer.unboxing_prim arg_at_use in
+    EPA.Extra_arg.New_let_binding (var, prim)
+  | Added_by_wrapper_at_rewrite_use { nth_arg; } ->
+    let var = Variable.create "unboxed_field" in
+    EPA.Extra_arg.New_let_binding_with_named_args (var, (fun args ->
+      let arg_simple = List.nth args nth_arg in
+      unboxer.unboxing_prim arg_simple
+    ))
+
+
+(* Helpers for the variant case *)
+(* **************************** *)
+
+type variant_argument =
+  | Not_a_constant_constructor
+  | Maybe_constant_constructor of {
+      is_int : Simple.t;
+      arg_being_unboxed : unboxed_arg;
+    }
+
+let extra_arg_for_is_int = function
+  | Maybe_constant_constructor { is_int; _ } ->
+    EPA.Extra_arg.Already_in_scope is_int
+  | Not_a_constant_constructor ->
+    EPA.Extra_arg.Already_in_scope Simple.untagged_const_false
+
+let extra_arg_for_ctor typing_env_at_use = function
+  | Not_a_constant_constructor ->
+    EPA.Extra_arg.Already_in_scope (
+      Simple.untagged_const_int (Targetint.OCaml.of_int 0))
+  | Maybe_constant_constructor { arg_being_unboxed; _ } ->
+    match type_of_arg_being_unboxed arg_being_unboxed with
+    | None ->
+      EPA.Extra_arg.Already_in_scope (
+        Simple.untagged_const_int (Targetint.OCaml.of_int 0))
+    | Some arg_type ->
+      match T.prove_could_be_tagging_of_simple typing_env_at_use
+              ~min_name_mode:Name_mode.normal arg_type with
+      | Proved simple ->
+        EPA.Extra_arg.Already_in_scope simple
+      | Unknown -> prevent_current_unboxing ()
+      | Invalid ->
+        (* Presumably, this means that we are in an impossible-to-reach
+           case, and thus as in other cases, we only need to provide
+           well-kinded values. *)
+        EPA.Extra_arg.Already_in_scope (
+          Simple.untagged_const_int (Targetint.OCaml.of_int 0))
+
+let extra_args_for_const_ctor_of_variant
+      constant_constructors_decision typing_env_at_use
+      rewrite_id variant_arg =
+  match constant_constructors_decision with
+  | Zero ->
+    begin match variant_arg with
+    | Not_a_constant_constructor -> constant_constructors_decision
+    | Maybe_constant_constructor _ ->
+      Misc.fatal_errorf "The unboxed variant parameter was determined to have \
+                         no constant cases when deciding to unbox it (using the \
+                         parameter type), but at the use site, it is a constant \
+                         constructor."
+    end
+  | At_least_one { ctor = Do_not_unbox reason; is_int; } ->
+    let is_int =
+      update_param_args is_int rewrite_id (extra_arg_for_is_int variant_arg)
+    in
+    At_least_one { ctor = Do_not_unbox reason; is_int; }
+
+  | At_least_one { ctor = Unbox Number (Naked_immediate, ctor); is_int; } ->
+    let is_int =
+      update_param_args is_int rewrite_id (extra_arg_for_is_int variant_arg)
+    in
+    begin try
+      let ctor =
+        update_param_args ctor rewrite_id
+          (extra_arg_for_ctor typing_env_at_use variant_arg)
+      in
+      At_least_one { ctor = Unbox (Number (Naked_immediate, ctor)); is_int; }
+    with Prevent_this_unboxing ->
+      At_least_one { ctor = Do_not_unbox Not_enough_information_at_use; is_int; }
+    end
+  | At_least_one { ctor = Unbox _ ; _ } ->
+    Misc.fatal_errorf "Bad kind for unboxing the constant constructor \
+                       of a variant"
+
+
+(* Filter out non beneficial decisions *)
+(* *********************************** *)
+
+let is_unboxing_beneficial_for_epa epa =
+  Apply_cont_rewrite_id.Map.exists (fun _ extra_arg ->
+    match (extra_arg : EPA.Extra_arg.t) with
+    | Already_in_scope _ -> true
+    | New_let_binding _ | New_let_binding_with_named_args _ -> false
+  ) epa.args
+
+let rec filter_non_beneficial_decisions decision : decision =
+  match (decision : decision) with
+  | Do_not_unbox _ -> decision
+
+  | Unbox Unique_tag_and_size { tag; fields; } ->
+    let is_unboxing_beneficial, fields =
+      List.fold_left_map (fun is_unboxing_beneficial { epa; decision; } ->
+        let is_unboxing_beneficial =
+          is_unboxing_beneficial || is_unboxing_beneficial_for_epa epa
+        in
+        let decision = filter_non_beneficial_decisions decision in
+        is_unboxing_beneficial, { epa; decision; }
+      ) false fields
+    in
+    if is_unboxing_beneficial then
+      Unbox (Unique_tag_and_size { tag; fields; })
+    else
+      Do_not_unbox Not_beneficial
+
+  | Unbox Closure_single_entry { closure_id; vars_within_closure; } ->
+    let is_unboxing_beneficial = ref false in
+    let vars_within_closure =
+      Var_within_closure.Map.map (fun { epa; decision; } ->
+        is_unboxing_beneficial :=
+          !is_unboxing_beneficial || is_unboxing_beneficial_for_epa epa;
+        let decision = filter_non_beneficial_decisions decision in
+        { epa; decision; }
+      ) vars_within_closure
+    in
+    if !is_unboxing_beneficial then
+      Unbox (Closure_single_entry { closure_id; vars_within_closure; })
+    else
+      Do_not_unbox Not_beneficial
+
+  | Unbox Variant { tag; constant_constructors; fields_by_tag; } ->
+    let is_unboxing_beneficial = ref false in
+    let fields_by_tag =
+      Tag.Scannable.Map.map (List.map (fun { epa; decision; } ->
+          is_unboxing_beneficial :=
+            !is_unboxing_beneficial || is_unboxing_beneficial_for_epa epa;
+          let decision = filter_non_beneficial_decisions decision in
+          { epa; decision; }
+      )) fields_by_tag
+    in
+    if !is_unboxing_beneficial then
+      Unbox (Variant { tag; constant_constructors; fields_by_tag; })
+    else
+      Do_not_unbox Not_beneficial
+
+  | (Unbox Number (Naked_immediate, _)) as decision ->
+    (* At worse, this unboxing untags an integer *)
+    decision
+
+  | (Unbox Number (_, epa)) as decision ->
+    if is_unboxing_beneficial_for_epa epa then decision else Do_not_unbox Not_beneficial
+
+
+
+(* Helpers for the number case *)
+(* *************************** *)
+
+let compute_extra_arg_for_number kind unboxer epa
+      rewrite_id typing_env_at_use arg_being_unboxed =
+  let extra_arg =
+    extra_arg_of_arg_being_unboxed unboxer
+      typing_env_at_use arg_being_unboxed
+  in
+  let epa = update_param_args epa rewrite_id extra_arg in
+  Unbox (Number (kind, epa))
+
+
+(* Recursive descent on decisions *)
+(* ****************************** *)
+
+let are_there_unknown_use_sites = function
+  | Filter { recursive; } -> recursive
+  | Compute_all_extra_args -> false
+
+let rec compute_extra_args_for_one_decision_and_use ~pass
+          rewrite_id typing_env_at_use arg_being_unboxed decision =
+  try
+    compute_extra_args_for_one_decision_and_use_aux ~pass
+      rewrite_id typing_env_at_use arg_being_unboxed decision
+  with Prevent_this_unboxing ->
+    begin match pass with
+    | Filter _ -> Do_not_unbox Not_enough_information_at_use
+    | Compute_all_extra_args ->
+      Misc.fatal_errorf "This case should have been filtered out before."
+    end
+
+and compute_extra_args_for_one_decision_and_use_aux ~pass
+          rewrite_id typing_env_at_use arg_being_unboxed decision =
+  match decision with
+  | Do_not_unbox _ -> decision
+  | Unbox Unique_tag_and_size { tag; fields; } ->
+    compute_extra_args_for_block ~pass
+      rewrite_id typing_env_at_use arg_being_unboxed tag fields
+  | Unbox Closure_single_entry { closure_id; vars_within_closure; } ->
+    if are_there_unknown_use_sites pass then
+      prevent_current_unboxing ()
+    else
+      compute_extra_args_for_closure ~pass
+        rewrite_id typing_env_at_use arg_being_unboxed
+        closure_id vars_within_closure
+  | Unbox Variant { tag; constant_constructors; fields_by_tag; } ->
+    if are_there_unknown_use_sites pass then
+      prevent_current_unboxing ()
+    else begin
+      let invalid () =
+        (* Invalid here means that the apply_cont is unreachable, i.e. the args
+           we generated will never be actually used at runtime, so the values of
+           the args do not matter, they are here to make the kind checker happy. *)
+        compute_extra_args_for_variant ~pass
+          rewrite_id typing_env_at_use arg_being_unboxed
+          tag constant_constructors fields_by_tag
+          (Or_unknown.Known Target_imm.Set.empty) Tag.Scannable.Map.empty
+      in
+      begin match type_of_arg_being_unboxed arg_being_unboxed with
+      | None -> invalid ()
+      | Some arg_type ->
+        begin match T.prove_variant_like typing_env_at_use arg_type with
+        | Wrong_kind -> Misc.fatal_errorf "Kind error while unboxing a variant"
+        | Unknown -> prevent_current_unboxing ()
+        | Invalid -> invalid ()
+        | Proved { const_ctors; non_const_ctors_with_sizes; } ->
+          compute_extra_args_for_variant ~pass
+            rewrite_id typing_env_at_use arg_being_unboxed
+            tag constant_constructors fields_by_tag
+            const_ctors non_const_ctors_with_sizes
+        end
+      end
+    end
+  | Unbox Number (Naked_float, epa) ->
+    compute_extra_arg_for_number Naked_float Float.unboxer epa
+      rewrite_id typing_env_at_use arg_being_unboxed
+  | Unbox Number (Naked_int32, epa) ->
+    compute_extra_arg_for_number Naked_int32 Int32.unboxer epa
+      rewrite_id typing_env_at_use arg_being_unboxed
+  | Unbox Number (Naked_int64, epa) ->
+    compute_extra_arg_for_number Naked_int64 Int64.unboxer epa
+      rewrite_id typing_env_at_use arg_being_unboxed
+  | Unbox Number (Naked_nativeint, epa) ->
+    compute_extra_arg_for_number Naked_nativeint Nativeint.unboxer epa
+      rewrite_id typing_env_at_use arg_being_unboxed
+  | Unbox Number (Naked_immediate, epa) ->
+    compute_extra_arg_for_number Naked_immediate Immediate.unboxer epa
+      rewrite_id typing_env_at_use arg_being_unboxed
+
+and compute_extra_args_for_block ~pass
+      rewrite_id typing_env_at_use arg_being_unboxed
+      tag fields =
+  let size = Or_unknown.Known (Targetint.OCaml.of_int (List.length fields)) in
+  let bak, invalid_const =
+    if Tag.equal tag Tag.double_array_tag then
+      P.Block_access_kind.Naked_floats { size; },
+      Const.naked_float Numbers.Float_by_bit_pattern.zero
+    else
+      P.Block_access_kind.Values {
+        size;
+        tag = Option.get (Tag.Scannable.of_tag tag);
+        field_kind = Any_value;
+      }, Const.const_zero
+  in
+  let _, fields =
+    List.fold_left_map
+      (fun field_nth { epa; decision; } ->
+         let unboxer = Field.unboxer invalid_const bak field_nth in
+         let new_extra_arg =
+           extra_arg_of_arg_being_unboxed unboxer
+             typing_env_at_use arg_being_unboxed
+         in
+         let epa = update_param_args epa rewrite_id new_extra_arg in
+         let decision =
+           compute_extra_args_for_one_decision_and_use ~pass
+             rewrite_id typing_env_at_use
+             (arg_being_unboxed_of_extra_arg new_extra_arg) decision
+         in
+         Target_imm.(add one field_nth), { epa; decision; }
+      ) Target_imm.zero fields
+  in
+  Unbox (Unique_tag_and_size { tag; fields; })
+
+and compute_extra_args_for_closure ~pass
+      rewrite_id typing_env_at_use arg_being_unboxed
+      closure_id vars_within_closure =
+  let vars_within_closure =
+    Var_within_closure.Map.mapi (fun var { epa; decision; } ->
+      let unboxer = Closure_field.unboxer closure_id var in
+      let new_extra_arg =
+        extra_arg_of_arg_being_unboxed unboxer
+          typing_env_at_use arg_being_unboxed
+      in
+      let epa = update_param_args epa rewrite_id new_extra_arg in
+      let decision =
+        compute_extra_args_for_one_decision_and_use ~pass
+          rewrite_id typing_env_at_use
+          (arg_being_unboxed_of_extra_arg new_extra_arg) decision
+      in
+      { epa; decision; }
+    ) vars_within_closure
+  in
+  Unbox (Closure_single_entry { closure_id; vars_within_closure; })
+
+and compute_extra_args_for_variant ~pass
+      rewrite_id typing_env_at_use arg_being_unboxed
+      tag constant_constructors fields_by_tag (* unboxing decision *)
+      const_ctors non_const_ctors_with_sizes (* type info at the use site *)
+  =
+  let are_there_constant_constructors =
+    match (const_ctors : _ Or_unknown.t) with
+    | Unknown -> true
+    | Known set -> not (Target_imm.Set.is_empty set)
+  in
+  let are_there_non_constant_constructors =
+    not (Tag.Scannable.Map.is_empty non_const_ctors_with_sizes)
+  in
+  let constant_constructors =
+    if not are_there_constant_constructors then
+      extra_args_for_const_ctor_of_variant
+        constant_constructors typing_env_at_use
+        rewrite_id Not_a_constant_constructor
+    else if not are_there_non_constant_constructors then
+      extra_args_for_const_ctor_of_variant
+        constant_constructors typing_env_at_use rewrite_id
+        (Maybe_constant_constructor
+           { arg_being_unboxed; is_int = Simple.untagged_const_true;})
+    else begin
+      (* CR: one might want to try and use the cse at use to allow
+             unboxing when the tag is not know statically but can be
+             recovered through the cse. *)
+      prevent_current_unboxing ()
+    end
+  in
+  let tag_at_use_site =
+    if not are_there_non_constant_constructors then
+      Tag.Scannable.zero
+    else
+      match Tag.Scannable.Map.get_singleton non_const_ctors_with_sizes with
+      | None -> prevent_current_unboxing ()
+      | Some (tag, _) -> tag
+  in
+  let tag_extra_arg =
+    tag_at_use_site
+    |> Tag.Scannable.to_targetint
+    |> Targetint.OCaml.of_targetint
+    |> Const.untagged_const_int
+    |> Simple.const
+    |> (fun x -> EPA.Extra_arg.Already_in_scope x)
+  in
+  let tag = update_param_args tag rewrite_id tag_extra_arg in
+  let fields_by_tag =
+    Tag.Scannable.Map.mapi (fun tag_decision block_fields ->
+      let size = List.length block_fields in
+      (* see comment way above about invalid constants, poison and aliases *)
+      let invalid_const = Const.const_int (Targetint.OCaml.of_int 0xbaba) in
+      let bak : Flambda_primitive.Block_access_kind.t =
+        Values {
+          size = Known (Targetint.OCaml.of_int size);
+          tag = tag_decision;
+          field_kind = Any_value;
+        }
+      in
+      let new_fields_decisions, _ =
+        List.fold_left (fun (new_decisions, field_nth) { epa; decision; } ->
+          let new_extra_arg, new_arg_being_unboxed =
+            if are_there_non_constant_constructors
+            && Tag.Scannable.equal tag_at_use_site tag_decision then begin
+              let unboxer = Field.unboxer invalid_const bak field_nth in
+              let new_extra_arg =
+                extra_arg_of_arg_being_unboxed unboxer
+                  typing_env_at_use arg_being_unboxed
               in
-              match proof with
-              | Proved () ->
-                let indexes =
-                  Targetint.OCaml.Set.singleton Targetint.OCaml.zero
-                in
-                unboxer denv ~depth ~arg_types_by_use_id
-                  ~param_being_unboxed ~param_type extra_params_and_args
-                  ~unbox_value:make_unboxing_decision tag indexes
-              | Wrong_kind | Invalid | Unknown -> try_unboxing decisions
+              let new_arg_being_unboxed =
+                arg_being_unboxed_of_extra_arg new_extra_arg
+              in
+              new_extra_arg, new_arg_being_unboxed
+            end else begin
+              EPA.Extra_arg.Already_in_scope (Simple.const invalid_const), Poison
+            end
           in
-          try_unboxing unboxed_number_decisions
-
-let make_unboxing_decisions0 denv ~arg_types_by_use_id ~params
-      ~param_types extra_params_and_args =
-  assert (List.compare_lengths params param_types = 0);
-  let denv, param_types_rev, extra_params_and_args =
-    List.fold_left (fun (denv, param_types_rev, extra_params_and_args)
-              (arg_types_by_use_id, (param, param_type)) ->
-        (* Temporary hack before the merge of the split unboxing work *)
-        let arg_types_by_use_id =
-          Apply_cont_rewrite_id.Map.map
-            (fun { Continuation_env_and_param_types.arg_type; typing_env; } ->
-              typing_env, arg_type
-            ) arg_types_by_use_id
-        in
-        let denv, param_type, extra_params_and_args =
-          make_unboxing_decision denv ~depth:1 ~arg_types_by_use_id
-            ~param_being_unboxed:param ~param_type extra_params_and_args
-        in
-        denv, param_type :: param_types_rev, extra_params_and_args)
-      (denv, [], extra_params_and_args)
-      (List.combine arg_types_by_use_id
-        (List.combine params param_types))
+          let epa = update_param_args epa rewrite_id new_extra_arg in
+          let decision =
+            compute_extra_args_for_one_decision_and_use ~pass
+              rewrite_id typing_env_at_use
+              new_arg_being_unboxed decision
+          in
+          let new_decisions = { epa; decision; } :: new_decisions in
+          (new_decisions, Target_imm.(add one field_nth))
+        ) ([], Target_imm.zero) block_fields
+      in
+      List.rev new_fields_decisions
+    ) fields_by_tag
   in
-  let denv =
-    DE.map_typing_env denv ~f:(fun typing_env ->
-      TE.add_equations_on_params typing_env
-        ~params ~param_types:(List.rev param_types_rev))
-  in
-  denv, extra_params_and_args
+  Unbox (Variant { tag; constant_constructors; fields_by_tag; })
 
-let make_unboxing_decisions denv ~arg_types_by_use_id ~params
-      ~param_types extra_params_and_args =
-  if Flambda_features.unbox_along_intra_function_control_flow () then
-    make_unboxing_decisions0 denv ~arg_types_by_use_id ~params
-      ~param_types extra_params_and_args
-  else
-    denv, extra_params_and_args
+
+
+(* Add extra params and args *)
+(* ************************* *)
+
+let add_extra_params_and_args extra_params_and_args decision =
+  let rec aux extra_params_and_args = function
+    | Do_not_unbox _ -> extra_params_and_args
+    | Unbox Unique_tag_and_size { tag; fields; } ->
+      List.fold_left (fun extra_params_and_args { epa; decision; } ->
+        let kind =
+          if Tag.equal Tag.double_array_tag tag then
+            K.With_subkind.naked_float
+          else
+            K.With_subkind.any_value
+        in
+        let extra_param = KP.create epa.param kind in
+        let extra_params_and_args =
+          EPA.add extra_params_and_args ~extra_param ~extra_args:epa.args
+        in
+        aux extra_params_and_args decision
+      ) extra_params_and_args fields
+    | Unbox Closure_single_entry { closure_id = _; vars_within_closure; } ->
+      Var_within_closure.Map.fold (fun _ { epa; decision; } extra_params_and_args ->
+        let extra_param = KP.create epa.param K.With_subkind.any_value in
+        let extra_params_and_args =
+          EPA.add extra_params_and_args ~extra_param ~extra_args:epa.args
+        in
+        aux extra_params_and_args decision
+      ) vars_within_closure extra_params_and_args
+    | Unbox Variant { tag; constant_constructors; fields_by_tag; } ->
+      let extra_params_and_args =
+        Tag.Scannable.Map.fold (fun _ block_fields extra_params_and_args ->
+          List.fold_left (fun extra_params_and_args { epa; decision; } ->
+            let extra_param = KP.create epa.param K.With_subkind.any_value in
+            let extra_params_and_args =
+              EPA.add extra_params_and_args ~extra_param ~extra_args:epa.args
+            in
+            aux extra_params_and_args decision
+          ) extra_params_and_args block_fields
+        ) fields_by_tag extra_params_and_args
+      in
+      let extra_params_and_args =
+        match constant_constructors with
+        | Zero -> extra_params_and_args
+        | At_least_one { is_int; ctor = Do_not_unbox _; _ } ->
+          let extra_param = KP.create is_int.param K.With_subkind.naked_immediate in
+          EPA.add extra_params_and_args ~extra_param ~extra_args:is_int.args
+        | At_least_one { is_int; ctor = Unbox Number (Naked_immediate, ctor); } ->
+          let extra_param = KP.create is_int.param K.With_subkind.naked_immediate in
+          let extra_params_and_args =
+            EPA.add extra_params_and_args ~extra_param ~extra_args:is_int.args
+          in
+          let extra_param = KP.create ctor.param K.With_subkind.naked_immediate in
+          EPA.add extra_params_and_args ~extra_param ~extra_args:ctor.args
+        | At_least_one { is_int = _; ctor = Unbox _ } ->
+          Misc.fatal_errorf "Trying to unbox the constant constructor of a variant \
+                             with a kind other than naked_immediate."
+      in
+      let extra_param = KP.create tag.param K.With_subkind.naked_immediate in
+      EPA.add extra_params_and_args ~extra_param ~extra_args:tag.args
+    | Unbox Number (naked_number_kind, epa) ->
+      (* CR pchambart: This is seriously too contrived for what it's doing.
+         Flambda_kind.With_subkind needs a function for doing that *)
+      let boxable_number_kind =
+        K.Boxable_number.of_naked_number_kind naked_number_kind
+      in
+      let kind = K.Boxable_number.to_kind boxable_number_kind in
+      let kind_with_subkind =
+        K.With_subkind.create kind K.With_subkind.Subkind.Anything
+      in
+      let extra_param = KP.create epa.param kind_with_subkind in
+      EPA.add extra_params_and_args ~extra_param ~extra_args:epa.args
+  in
+  aux extra_params_and_args decision
+
+
+(* Filter decisions *)
+(* **************** *)
+
+let update_decision ~pass
+      rewrite_ids_already_seen nth_arg arg_type_by_use_id = function
+  | Do_not_unbox _ as decision -> decision
+  | decision ->
+    Apply_cont_rewrite_id.Map.fold
+      (fun rewrite_id (arg_at_use : Continuation_env_and_param_types.arg_at_use) decision ->
+         if Apply_cont_rewrite_id.Set.mem rewrite_id rewrite_ids_already_seen then
+           decision
+         else begin
+           let typing_env_at_use = arg_at_use.typing_env in
+           let arg_type_at_use = arg_at_use.arg_type in
+           match TE.get_alias_then_canonical_simple_exn typing_env_at_use
+                   ~min_name_mode:Name_mode.normal arg_type_at_use with
+           | simple ->
+             compute_extra_args_for_one_decision_and_use
+               ~pass rewrite_id typing_env_at_use
+               (Available simple) decision
+           | exception Not_found ->
+             compute_extra_args_for_one_decision_and_use
+               ~pass rewrite_id typing_env_at_use
+               (Added_by_wrapper_at_rewrite_use { nth_arg; }) decision
+         end
+      ) arg_type_by_use_id decision
+
+
+(* Exported functions *)
+(* ****************** *)
+
+let make_decisions
+      ~continuation_is_recursive
+      ~arg_types_by_use_id
+      denv params params_types : DE.t * decisions =
+  let empty = Apply_cont_rewrite_id.Set.empty in
+  let _, denv, rev_decisions, seen =
+    Misc.Stdlib.List.fold_left3
+      (fun (nth, denv, rev_decisions, seen) param param_type arg_type_by_use_id ->
+         (* Make an optimist decision, filter it based on the arg types at the
+            use sites (to prevent decisions that would be detrimental),
+            and compute the necessary denv. *)
+         let decision =
+           make_optimist_decision ~depth:0 (DE.typing_env denv) param_type
+           |> update_decision empty nth arg_type_by_use_id
+                ~pass:(Filter { recursive = continuation_is_recursive; })
+           |> filter_non_beneficial_decisions
+         in
+         let denv = denv_of_decision denv (KP.var param) decision in
+         (* Compute the set of rewrite ids that have been considered when
+            updating decisions, and check that all arg_type_by_use_id cover
+            the same set of rewrite ids. *)
+         let seen =
+           match seen with
+           | Some s ->
+             assert (Apply_cont_rewrite_id.Map.for_all (fun id _ ->
+               Apply_cont_rewrite_id.Set.mem id s) arg_type_by_use_id);
+             s
+           | None ->
+             Apply_cont_rewrite_id.Map.fold (fun id _ acc ->
+               Apply_cont_rewrite_id.Set.add id acc
+             ) arg_type_by_use_id empty
+         in
+         (nth + 1, denv, decision :: rev_decisions, Some seen)
+      ) (0, denv, [], None) params params_types arg_types_by_use_id
+  in
+  let rewrite_ids_seen =
+    match seen with
+    | None -> empty
+    | Some s -> s
+  in
+  let decisions = List.combine params (List.rev rev_decisions) in
+  denv, { decisions; rewrite_ids_seen; }
+
+
+let compute_extra_params_and_args { decisions; rewrite_ids_seen; }
+      ~arg_types_by_use_id existing_extra_params_and_args =
+  let _, extra_params_and_args =
+    List.fold_left2
+      (fun (nth, extra_params_and_args) arg_type_by_use_id (_, decision) ->
+         let decision =
+           update_decision ~pass:Compute_all_extra_args
+             rewrite_ids_seen nth arg_type_by_use_id decision
+         in
+         let extra_params_and_args =
+           add_extra_params_and_args extra_params_and_args decision
+         in
+         (nth + 1, extra_params_and_args)
+      ) (0, existing_extra_params_and_args) arg_types_by_use_id decisions
+  in
+  extra_params_and_args
+
+
+

@@ -346,8 +346,16 @@ let simplify_non_recursive_let_cont_handler ~simplify_expr
         let param_types =
           TE.find_params (DE.typing_env handler_env) params
         in
-        Unbox_continuation_params.make_unboxing_decisions handler_env
-          ~arg_types_by_use_id ~params ~param_types extra_params_and_args
+        let handler_env, decisions =
+          Unbox_continuation_params.make_decisions handler_env
+            ~continuation_is_recursive:false
+            ~arg_types_by_use_id params param_types
+        in
+        let epa =
+          Unbox_continuation_params.compute_extra_params_and_args
+            ~arg_types_by_use_id decisions extra_params_and_args
+        in
+        handler_env, epa
       | Return | Toplevel_return ->
         assert (not is_exn_handler);
         handler_env, extra_params_and_args
