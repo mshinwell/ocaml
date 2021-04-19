@@ -1,4 +1,5 @@
 external (+) : int -> int -> int = "%addint"
+external id : 'a -> 'a = "%opaque"
 
 let f1 b x =
   let opt =
@@ -20,7 +21,10 @@ let f2 x y a b =
     | true, true -> A
     | true, false -> B
     | false, true -> C a
-    | false, false -> D (a, b)
+    | false, false ->
+      let toto = if id false then C b else D (a, b) in
+      (* let _ = id () in *)
+      toto
   in
   match t with
   | C a -> a
