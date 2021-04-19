@@ -74,10 +74,8 @@ module For_blocks : sig
   *)
   val get_field : t -> Target_imm.t -> Type_grammar.t Or_unknown_or_bottom.t
 
-  (*
   val get_variant_field :
     t -> Tag.t -> Target_imm.t -> Type_grammar.t Or_unknown_or_bottom.t
-  *)
 
   val is_bottom : t -> bool
 
