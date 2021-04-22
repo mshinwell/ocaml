@@ -702,7 +702,7 @@ let simplify_function_call ~simplify_expr dacc apply ~callee_ty
       EB.rebuild_invalid uacc ~after_rebuild
     )
 
-let simplify_apply_shared dacc apply : _ Or_bottom.t =
+let simplify_apply_shared dacc apply =
   let callee_ty =
     S.simplify_simple dacc (Apply.callee apply) ~min_name_mode:NM.normal
   in
@@ -724,7 +724,7 @@ let simplify_apply_shared dacc apply : _ Or_bottom.t =
       ~inline:(Apply.inline apply)
       ~inlining_state
   in
-  Ok (callee_ty, apply, arg_types)
+  callee_ty, apply, arg_types
 
 let rebuild_method_call apply ~use_id ~exn_cont_use_id uacc ~after_rebuild =
   let apply =
@@ -867,22 +867,14 @@ let simplify_c_call ~simplify_expr dacc apply ~callee_ty ~param_arity
       ~rebuild:(rebuild_c_call apply ~use_id ~exn_cont_use_id ~return_arity)
 
 let simplify_apply ~simplify_expr dacc apply ~down_to_up =
-  match simplify_apply_shared dacc apply with
-  | Bottom ->
-    down_to_up dacc ~rebuild:(fun uacc ~after_rebuild ->
-      let uacc =
-        UA.notify_removed ~operation:Removed_operations.call uacc
-      in
-      EB.rebuild_invalid uacc ~after_rebuild
-    )
-  | Ok (callee_ty, apply, arg_types) ->
-    match Apply.call_kind apply with
-    | Function call ->
-      simplify_function_call ~simplify_expr dacc apply ~callee_ty call
-         ~arg_types ~down_to_up
-    | Method { kind; obj; } ->
-      simplify_method_call dacc apply ~callee_ty ~kind ~obj ~arg_types
-        ~down_to_up
-    | C_call { alloc = _; param_arity; return_arity; } ->
-      simplify_c_call ~simplify_expr dacc apply ~callee_ty ~param_arity
-        ~return_arity ~arg_types ~down_to_up
+  let callee_ty, apply, arg_types = simplify_apply_shared dacc apply in
+  match Apply.call_kind apply with
+  | Function call ->
+    simplify_function_call ~simplify_expr dacc apply ~callee_ty call
+        ~arg_types ~down_to_up
+  | Method { kind; obj; } ->
+    simplify_method_call dacc apply ~callee_ty ~kind ~obj ~arg_types
+      ~down_to_up
+  | C_call { alloc = _; param_arity; return_arity; } ->
+    simplify_c_call ~simplify_expr dacc apply ~callee_ty ~param_arity
+      ~return_arity ~arg_types ~down_to_up
