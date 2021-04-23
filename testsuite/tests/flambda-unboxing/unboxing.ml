@@ -189,13 +189,13 @@ let () =
   check_no_alloc __LINE__ aux (true, false) (1,2) 1;
   (* Check closures *)
   let aux b x res =
-    let bar y =
+    let[@inline] bar y =
       Sys.opaque_identity ();
       let aux z = x + y + z in
       aux
     in
     let f, _ =
-      if b then bar 3, 1 else bar 42, 2
+      if b then (bar[@inlined]) 3, 1 else (bar[@inlined]) 42, 2
     in
     f x = res
   in
