@@ -75,7 +75,6 @@ type pass =
   | Filter of { recursive : bool; }
   | Compute_all_extra_args
 
-
 (* Printing *)
 (* ******** *)
 
@@ -167,3 +166,16 @@ let print ppf { decisions; rewrite_ids_seen; } =
     )@]"
     (Format.pp_print_list ~pp_sep aux) decisions
     Apply_cont_rewrite_id.Set.print rewrite_ids_seen
+
+(* Some helpers *)
+(* ************ *)
+
+let new_param name = {
+  param = Variable.create name;
+  args = Apply_cont_rewrite_id.Map.empty;
+}
+
+let update_param_args epa rewrite_id extra_arg =
+  assert (not (Apply_cont_rewrite_id.Map.mem rewrite_id epa.args));
+  let args = Apply_cont_rewrite_id.Map.add rewrite_id extra_arg epa.args in
+  { epa with args; }

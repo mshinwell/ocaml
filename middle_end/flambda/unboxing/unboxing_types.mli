@@ -116,3 +116,11 @@ type pass =
      use-sites that were not known during the first pass). *)
 
 val print : Format.formatter -> decisions -> unit
+
+val new_param : string -> epa
+
+val update_param_args
+   : epa
+  -> Apply_cont_rewrite_id.t
+  -> EPA.Extra_arg.t
+  -> epa
