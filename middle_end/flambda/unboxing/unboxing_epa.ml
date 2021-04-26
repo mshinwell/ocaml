@@ -14,7 +14,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-30-40-41-42"]
+[@@@ocaml.warning "+a-30-40-41-42"]
 
 open! Simplify_import
 
@@ -159,7 +159,12 @@ let extra_args_for_const_ctor_of_variant
         is_int;
       }
     end
-  | At_least_one { ctor = Unbox _ ; _ } ->
+  | At_least_one {
+      ctor = Unbox (
+        Unique_tag_and_size _ | Variant _ | Closure_single_entry _
+      | Number ((Naked_float | Naked_int32 | Naked_int64 | Naked_nativeint),
+                _));
+      is_int = _; } ->
     Misc.fatal_errorf "Bad kind for unboxing the constant constructor \
                        of a variant"
 
@@ -461,7 +466,12 @@ let add_extra_params_and_args extra_params_and_args decision =
             KP.create ctor.param K.With_subkind.naked_immediate
           in
           EPA.add extra_params_and_args ~extra_param ~extra_args:ctor.args
-        | At_least_one { is_int = _; ctor = Unbox _ } ->
+        | At_least_one {
+            ctor = Unbox (
+              Unique_tag_and_size _ | Variant _ | Closure_single_entry _
+            | Number ((Naked_float | Naked_int32 | Naked_int64
+                       | Naked_nativeint), _));
+            is_int = _; } ->
           Misc.fatal_errorf
             "Trying to unbox the constant constructor of a variant \
              with a kind other than naked_immediate."
