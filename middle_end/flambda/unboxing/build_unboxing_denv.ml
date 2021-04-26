@@ -14,7 +14,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-30-40-41-42"]
+[@@@ocaml.warning "+a-30-40-41-42"]
 
 open! Simplify_import
 
@@ -132,7 +132,12 @@ let rec denv_of_decision denv ~param_var decision : DE.t =
           T.alias_type_of K.naked_immediate (Simple.var ctor_epa.param)
         in
         denv, ty
-      | At_least_one { ctor = Unbox _; _ } ->
+      | At_least_one {
+          ctor = Unbox (
+            Unique_tag_and_size _ | Variant _ | Closure_single_entry _
+          | Number ((Naked_float | Naked_int32 | Naked_int64 | Naked_nativeint),
+                    _));
+          is_int = _; } ->
         Misc.fatal_errorf "Variant constant constructor unboxed with a kind \
           other than naked_immediate."
     in
