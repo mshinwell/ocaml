@@ -71,49 +71,9 @@ type decisions = {
   rewrite_ids_seen : Apply_cont_rewrite_id.Set.t;
 }
 
-(* Decision update pass.
-
-   This notion of pass is used when turning a potential unboxing
-   decision into a decision compatible with the given set of uses of the
-   continuation. Indeed, depending on whether enough information is
-   availbale at the use site, we can end up ina  few different cases:
-   - enough information, and the unboxed values are directly available,
-     in which case, we can use them directly
-   - the unboxed values are not available directly, but can be "reasonably"
-     computed by introducing a let-binding (e.g. a block field projection).
-   - the unboxed values are not available, and would be too costly to
-     compute (see the example about variants a few lines down).
-
-   Thus, the first pass is used to filter out decisions which would end
-   up in the third case. *)
 type pass =
   | Filter of { recursive : bool; }
-  (* First pass when computing unboxing decisions. This is done before
-     insepcting the handler of the continuation whose parameters we are
-     trying to unbox. For non-recursive continuation, that means that
-     all use-sites of the continuation are known, but for recursive
-     continuations, there are likely use sites that are not known at
-     this point.
-
-     For recursive continuations, we need to prevent unboxing variants
-     and closures because we cannot be sure that reasonable extra_args can, be
-     compute for all use-sites. For instance:
-
-     let rec cont k x y =
-       switch y with
-       | 0 -> k (Some x)
-       | 1 -> k (f x) (* for some function f in scope *)
-
-     In this case, even if we know that x is an option, to unbox it, we'd
-     need to introduce a switch in the `1` branch, which is
-     1) not implemented (although tecnically possible)
-     2) not efficient or beneficial in most cases
-  *)
   | Compute_all_extra_args
-  (* Last pass, after the traversla of the handler of the continuation.
-     Thus, at this point, all use-sites are known, and we can compute
-     the extra args that were not compute in the first pass (i.e. for
-     use-sites that were not known during the first pass). *)
 
 
 (* Printing *)
