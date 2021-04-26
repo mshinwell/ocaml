@@ -272,7 +272,7 @@ and compute_extra_args_for_block ~pass
   let _, fields =
     List.fold_left_map
       (fun field_nth { epa; decision; } ->
-         let unboxer = U.Field.unboxer invalid_const bak field_nth in
+         let unboxer = U.Field.unboxer ~invalid_const bak ~index:field_nth in
          let new_extra_arg =
            extra_arg_of_arg_being_unboxed unboxer
              ~typing_env_at_use arg_being_unboxed
@@ -373,7 +373,9 @@ and compute_extra_args_for_variant ~pass
           let new_extra_arg, new_arg_being_unboxed =
             if are_there_non_constant_constructors
             && Tag.Scannable.equal tag_at_use_site tag_decision then begin
-              let unboxer = U.Field.unboxer invalid_const bak field_nth in
+              let unboxer =
+                U.Field.unboxer ~invalid_const bak ~index:field_nth
+              in
               let new_extra_arg =
                 extra_arg_of_arg_being_unboxed unboxer
                   ~typing_env_at_use arg_being_unboxed

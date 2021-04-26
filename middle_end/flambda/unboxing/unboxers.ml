@@ -14,30 +14,32 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-30-40-41-42"]
+[@@@ocaml.warning "+a-30-40-41-42"]
 
 open! Simplify_import
 
 open Unboxing_types
 
-(* Unboxers *)
-(* ******** *)
-
 type number_decider = {
   param_name : string;
-  kind : Flambda_kind.Naked_number_kind.t;
+  kind : K.Naked_number_kind.t;
   prove_is_a_boxed_number : TE.t -> T.t -> unit T.proof_allowing_kind_mismatch;
 }
 
 type unboxer = {
   var_name : string;
   invalid_const : Const.t;
-  unboxing_prim : Simple.t -> Flambda_primitive.t;
+  unboxing_prim : Simple.t -> P.t;
   prove_simple : TE.t -> min_name_mode:Name_mode.t -> T.t -> Simple.t T.proof;
 }
 
-module Immediate = struct
+module type Number_S = sig
+  val decider : number_decider
+  val unboxing_prim : Simple.t -> P.t
+  val unboxer : unboxer
+end
 
+module Immediate = struct
   let decider = {
     param_name = "naked_immediate";
     kind = K.Naked_number_kind.Naked_immediate;
@@ -45,19 +47,18 @@ module Immediate = struct
   }
 
   let unboxing_prim simple =
-    Flambda_primitive.(Unary (Unbox_number Untagged_immediate, simple))
+    P.(Unary (Unbox_number Untagged_immediate, simple))
 
   let unboxer = {
     var_name = "naked_immediate";
-    invalid_const = Const.naked_immediate (Target_imm.int (Targetint.OCaml.of_int 0xabcd));
+    invalid_const =
+      Const.naked_immediate (Target_imm.int (Targetint.OCaml.of_int 0xabcd));
     unboxing_prim;
     prove_simple = T.prove_is_always_tagging_of_simple;
   }
-
 end
 
 module Float = struct
-
   let decider = {
     param_name = "unboxed_float";
     kind = K.Naked_number_kind.Naked_float;
@@ -65,7 +66,7 @@ module Float = struct
   }
 
   let unboxing_prim simple =
-    Flambda_primitive.(Unary (Unbox_number Naked_float, simple))
+    P.(Unary (Unbox_number Naked_float, simple))
 
   let unboxer = {
     var_name = "unboxed_float";
@@ -73,11 +74,9 @@ module Float = struct
     unboxing_prim;
     prove_simple = T.prove_boxed_float_containing_simple;
   }
-
 end
 
 module Int32 = struct
-
   let decider = {
     param_name = "unboxed_int32";
     kind = K.Naked_number_kind.Naked_int32;
@@ -85,7 +84,7 @@ module Int32 = struct
   }
 
   let unboxing_prim simple =
-    Flambda_primitive.(Unary (Unbox_number Naked_int32, simple))
+    P.(Unary (Unbox_number Naked_int32, simple))
 
   let unboxer = {
     var_name = "unboxed_int32";
@@ -93,11 +92,9 @@ module Int32 = struct
     unboxing_prim;
     prove_simple = T.prove_boxed_int32_containing_simple;
   }
-
 end
 
 module Int64 = struct
-
   let decider = {
     param_name = "unboxed_int64";
     kind = K.Naked_number_kind.Naked_int64;
@@ -105,7 +102,7 @@ module Int64 = struct
   }
 
   let unboxing_prim simple =
-    Flambda_primitive.(Unary (Unbox_number Naked_int64, simple))
+    P.(Unary (Unbox_number Naked_int64, simple))
 
   let unboxer = {
     var_name = "unboxed_int64";
@@ -113,11 +110,9 @@ module Int64 = struct
     unboxing_prim;
     prove_simple = T.prove_boxed_int64_containing_simple;
   }
-
 end
 
 module Nativeint = struct
-
   let decider = {
     param_name = "unboxed_nativeint";
     kind = K.Naked_number_kind.Naked_nativeint;
@@ -125,7 +120,7 @@ module Nativeint = struct
   }
 
   let unboxing_prim simple =
-    Flambda_primitive.(Unary (Unbox_number Naked_nativeint, simple))
+    P.(Unary (Unbox_number Naked_nativeint, simple))
 
   let unboxer = {
     var_name = "unboxed_nativeint";
@@ -133,39 +128,31 @@ module Nativeint = struct
     unboxing_prim;
     prove_simple = T.prove_boxed_nativeint_containing_simple;
   }
-
 end
 
 module Field = struct
+  let unboxing_prim bak ~block ~index =
+    let field_const = Simple.const (Const.tagged_immediate index) in
+    P.Binary (Block_load (bak, Immutable), block, field_const)
 
-  let unboxing_prim bak field_nth block_simple =
-    let field_const = Simple.const (Const.tagged_immediate field_nth) in
-    Flambda_primitive.(
-      Binary (Block_load (bak, Immutable), block_simple, field_const)
-    )
-
-  let unboxer cst bak field_nth = {
+  let unboxer ~invalid_const bak ~index = {
     var_name = "field_at_use";
-    invalid_const = cst;
-    unboxing_prim = unboxing_prim bak field_nth;
+    invalid_const;
+    unboxing_prim = (fun block -> unboxing_prim bak ~block ~index);
     prove_simple = (fun tenv ~min_name_mode t ->
-      T.prove_block_field_simple tenv ~min_name_mode t field_nth);
+      T.prove_block_field_simple tenv ~min_name_mode t index);
   }
-
 end
 
 module Closure_field = struct
-
-  let unboxing_prim closure_id var closure_simple =
-    Flambda_primitive.(Unary (
-      Project_var { project_from = closure_id; var }, closure_simple))
+  let unboxing_prim closure_id ~closure var =
+    P.Unary (Project_var { project_from = closure_id; var }, closure)
 
   let unboxer closure_id var = {
     var_name = "closure_field_at_use";
     invalid_const = Const.const_zero;
-    unboxing_prim = unboxing_prim closure_id var;
+    unboxing_prim = (fun closure -> unboxing_prim closure_id ~closure var);
     prove_simple = (fun tenv ~min_name_mode t ->
       T.prove_project_var_simple tenv ~min_name_mode t var);
   }
-
 end
