@@ -170,75 +170,6 @@ let extra_args_for_const_ctor_of_variant
     Misc.fatal_errorf "Bad kind for unboxing the constant constructor \
                        of a variant"
 
-
-(* Filter out non beneficial decisions *)
-(* *********************************** *)
-
-let is_unboxing_beneficial_for_epa epa =
-  Apply_cont_rewrite_id.Map.exists (fun _ extra_arg ->
-    match (extra_arg : EPA.Extra_arg.t) with
-    | Already_in_scope _ -> true
-    | New_let_binding _ | New_let_binding_with_named_args _ -> false
-  ) epa.args
-
-let rec filter_non_beneficial_decisions decision : decision =
-  match (decision : decision) with
-  | Do_not_unbox _ -> decision
-
-  | Unbox Unique_tag_and_size { tag; fields; } ->
-    let is_unboxing_beneficial, fields =
-      List.fold_left_map (fun is_unboxing_beneficial { epa; decision; } ->
-        let is_unboxing_beneficial =
-          is_unboxing_beneficial || is_unboxing_beneficial_for_epa epa
-        in
-        let decision = filter_non_beneficial_decisions decision in
-        is_unboxing_beneficial, { epa; decision; }
-      ) false fields
-    in
-    if is_unboxing_beneficial then
-      Unbox (Unique_tag_and_size { tag; fields; })
-    else
-      Do_not_unbox Not_beneficial
-
-  | Unbox Closure_single_entry { closure_id; vars_within_closure; } ->
-    let is_unboxing_beneficial = ref false in
-    let vars_within_closure =
-      Var_within_closure.Map.map (fun { epa; decision; } ->
-        is_unboxing_beneficial :=
-          !is_unboxing_beneficial || is_unboxing_beneficial_for_epa epa;
-        let decision = filter_non_beneficial_decisions decision in
-        { epa; decision; }
-      ) vars_within_closure
-    in
-    if !is_unboxing_beneficial then
-      Unbox (Closure_single_entry { closure_id; vars_within_closure; })
-    else
-      Do_not_unbox Not_beneficial
-
-  | Unbox Variant { tag; constant_constructors; fields_by_tag; } ->
-    let is_unboxing_beneficial = ref false in
-    let fields_by_tag =
-      Tag.Scannable.Map.map (List.map (fun { epa; decision; } ->
-          is_unboxing_beneficial :=
-            !is_unboxing_beneficial || is_unboxing_beneficial_for_epa epa;
-          let decision = filter_non_beneficial_decisions decision in
-          { epa; decision; }
-      )) fields_by_tag
-    in
-    if !is_unboxing_beneficial then
-      Unbox (Variant { tag; constant_constructors; fields_by_tag; })
-    else
-      Do_not_unbox Not_beneficial
-
-  | (Unbox Number (Naked_immediate, _)) as decision ->
-    (* At worse, this unboxing untags an integer *)
-    decision
-
-  | (Unbox Number (_, epa)) as decision ->
-    if is_unboxing_beneficial_for_epa epa then decision
-    else Do_not_unbox Not_beneficial
-
-
 (* Helpers for the number case *)
 (* *************************** *)
 
@@ -613,7 +544,7 @@ let make_decisions
              (DE.typing_env denv) ~param_type
            |> update_decision empty nth arg_type_by_use_id
                 ~pass:(Filter { recursive = continuation_is_recursive; })
-           |> filter_non_beneficial_decisions
+           |> Is_unboxing_beneficial.filter_non_beneficial_decisions
          in
          let denv =
            Build_unboxing_denv.denv_of_decision denv ~param_var:(KP.var param)
