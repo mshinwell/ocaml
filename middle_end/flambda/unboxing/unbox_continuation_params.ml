@@ -110,7 +110,7 @@ let rec denv_of_decision denv param_var decision : DE.t =
       match constant_constructors with
       | Zero -> denv
       | At_least_one { is_int; _ } ->
-        let is_int_v = Var_in_binding_pos.create is_int.param Name_mode.normal in
+        let is_int_v = VB.create is_int.param Name_mode.normal in
         let denv = DE.define_variable denv is_int_v K.naked_immediate in
         let denv =
           DE.add_equation_on_variable denv is_int.param
@@ -119,7 +119,9 @@ let rec denv_of_decision denv param_var decision : DE.t =
         let is_int_prim =
           P.Eligible_for_cse.create_exn (Unary (Is_int, Simple.var param_var))
         in
-        let denv = DE.add_cse denv is_int_prim ~bound_to:(Simple.var is_int.param) in
+        let denv =
+          DE.add_cse denv is_int_prim ~bound_to:(Simple.var is_int.param)
+        in
         denv
     in
     let denv, const_ctors =
@@ -131,11 +133,13 @@ let rec denv_of_decision denv param_var decision : DE.t =
       | At_least_one { ctor = Unbox Number (Naked_immediate, ctor_epa); _ } ->
         let v = Var_in_binding_pos.create ctor_epa.param Name_mode.normal in
         let denv = DE.define_variable denv v K.naked_immediate in
-        let ty = Flambda_type.alias_type_of K.naked_immediate (Simple.var ctor_epa.param) in
+        let ty =
+          T.alias_type_of K.naked_immediate (Simple.var ctor_epa.param)
+        in
         denv, ty
       | At_least_one { ctor = Unbox _; _ } ->
-        Misc.fatal_errorf "Variant constant constructor unboxed with a kind other \
-                           than naked_immediate."
+        Misc.fatal_errorf "Variant constant constructor unboxed with a kind \
+          other than naked_immediate."
     in
     let denv =
       Tag.Scannable.Map.fold (fun _ block_fields denv ->
@@ -299,10 +303,11 @@ let extra_args_for_const_ctor_of_variant
     begin match variant_arg with
     | Not_a_constant_constructor -> constant_constructors_decision
     | Maybe_constant_constructor _ ->
-      Misc.fatal_errorf "The unboxed variant parameter was determined to have \
-                         no constant cases when deciding to unbox it (using the \
-                         parameter type), but at the use site, it is a constant \
-                         constructor."
+      Misc.fatal_errorf
+        "The unboxed variant parameter was determined to have \
+         no constant cases when deciding to unbox it (using the \
+         parameter type), but at the use site, it is a constant \
+         constructor."
     end
   | At_least_one { ctor = Do_not_unbox reason; is_int; } ->
     let is_int =
@@ -321,7 +326,10 @@ let extra_args_for_const_ctor_of_variant
       in
       At_least_one { ctor = Unbox (Number (Naked_immediate, ctor)); is_int; }
     with Prevent_this_unboxing ->
-      At_least_one { ctor = Do_not_unbox Not_enough_information_at_use; is_int; }
+      At_least_one {
+        ctor = Do_not_unbox Not_enough_information_at_use;
+        is_int;
+      }
     end
   | At_least_one { ctor = Unbox _ ; _ } ->
     Misc.fatal_errorf "Bad kind for unboxing the constant constructor \
@@ -392,8 +400,8 @@ let rec filter_non_beneficial_decisions decision : decision =
     decision
 
   | (Unbox Number (_, epa)) as decision ->
-    if is_unboxing_beneficial_for_epa epa then decision else Do_not_unbox Not_beneficial
-
+    if is_unboxing_beneficial_for_epa epa then decision
+    else Do_not_unbox Not_beneficial
 
 
 (* Helpers for the number case *)
@@ -449,7 +457,8 @@ and compute_extra_args_for_one_decision_and_use_aux ~pass
       let invalid () =
         (* Invalid here means that the apply_cont is unreachable, i.e. the args
            we generated will never be actually used at runtime, so the values of
-           the args do not matter, they are here to make the kind checker happy. *)
+           the args do not matter, they are here to make the kind checker
+           happy. *)
         compute_extra_args_for_variant ~pass
           rewrite_id typing_env_at_use arg_being_unboxed
           tag constant_constructors fields_by_tag
@@ -615,7 +624,8 @@ and compute_extra_args_for_variant ~pass
               in
               new_extra_arg, new_arg_being_unboxed
             end else begin
-              EPA.Extra_arg.Already_in_scope (Simple.const invalid_const), Poison
+              EPA.Extra_arg.Already_in_scope (Simple.const invalid_const),
+              Poison
             end
           in
           let epa = update_param_args epa rewrite_id new_extra_arg in
@@ -656,13 +666,14 @@ let add_extra_params_and_args extra_params_and_args decision =
         aux extra_params_and_args decision
       ) extra_params_and_args fields
     | Unbox Closure_single_entry { closure_id = _; vars_within_closure; } ->
-      Var_within_closure.Map.fold (fun _ { epa; decision; } extra_params_and_args ->
-        let extra_param = KP.create epa.param K.With_subkind.any_value in
-        let extra_params_and_args =
-          EPA.add extra_params_and_args ~extra_param ~extra_args:epa.args
-        in
-        aux extra_params_and_args decision
-      ) vars_within_closure extra_params_and_args
+      Var_within_closure.Map.fold
+        (fun _ { epa; decision; } extra_params_and_args ->
+          let extra_param = KP.create epa.param K.With_subkind.any_value in
+          let extra_params_and_args =
+            EPA.add extra_params_and_args ~extra_param ~extra_args:epa.args
+          in
+          aux extra_params_and_args decision)
+        vars_within_closure extra_params_and_args
     | Unbox Variant { tag; constant_constructors; fields_by_tag; } ->
       let extra_params_and_args =
         Tag.Scannable.Map.fold (fun _ block_fields extra_params_and_args ->
@@ -679,18 +690,25 @@ let add_extra_params_and_args extra_params_and_args decision =
         match constant_constructors with
         | Zero -> extra_params_and_args
         | At_least_one { is_int; ctor = Do_not_unbox _; _ } ->
-          let extra_param = KP.create is_int.param K.With_subkind.naked_immediate in
+          let extra_param =
+            KP.create is_int.param K.With_subkind.naked_immediate
+          in
           EPA.add extra_params_and_args ~extra_param ~extra_args:is_int.args
         | At_least_one { is_int; ctor = Unbox Number (Naked_immediate, ctor); } ->
-          let extra_param = KP.create is_int.param K.With_subkind.naked_immediate in
+          let extra_param =
+            KP.create is_int.param K.With_subkind.naked_immediate
+          in
           let extra_params_and_args =
             EPA.add extra_params_and_args ~extra_param ~extra_args:is_int.args
           in
-          let extra_param = KP.create ctor.param K.With_subkind.naked_immediate in
+          let extra_param =
+            KP.create ctor.param K.With_subkind.naked_immediate
+          in
           EPA.add extra_params_and_args ~extra_param ~extra_args:ctor.args
         | At_least_one { is_int = _; ctor = Unbox _ } ->
-          Misc.fatal_errorf "Trying to unbox the constant constructor of a variant \
-                             with a kind other than naked_immediate."
+          Misc.fatal_errorf
+            "Trying to unbox the constant constructor of a variant \
+             with a kind other than naked_immediate."
       in
       let extra_param = KP.create tag.param K.With_subkind.naked_immediate in
       EPA.add extra_params_and_args ~extra_param ~extra_args:tag.args
@@ -718,9 +736,11 @@ let update_decision ~pass
   | Do_not_unbox _ as decision -> decision
   | decision ->
     Apply_cont_rewrite_id.Map.fold
-      (fun rewrite_id (arg_at_use : Continuation_env_and_param_types.arg_at_use) decision ->
-         if Apply_cont_rewrite_id.Set.mem rewrite_id rewrite_ids_already_seen then
-           decision
+      (fun rewrite_id
+           (arg_at_use : Continuation_env_and_param_types.arg_at_use)
+           decision ->
+         if Apply_cont_rewrite_id.Set.mem rewrite_id rewrite_ids_already_seen
+         then decision
          else begin
            let typing_env_at_use = arg_at_use.typing_env in
            let arg_type_at_use = arg_at_use.arg_type in
@@ -748,7 +768,8 @@ let make_decisions
   let empty = Apply_cont_rewrite_id.Set.empty in
   let _, denv, rev_decisions, seen =
     Misc.Stdlib.List.fold_left3
-      (fun (nth, denv, rev_decisions, seen) param param_type arg_type_by_use_id ->
+      (fun (nth, denv, rev_decisions, seen) param param_type
+           arg_type_by_use_id ->
          (* Make an optimist decision, filter it based on the arg types at the
             use sites (to prevent decisions that would be detrimental),
             and compute the necessary denv. *)

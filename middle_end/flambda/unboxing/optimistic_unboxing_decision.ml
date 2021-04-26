@@ -77,7 +77,8 @@ let rec make_optimistic_decision ~depth tenv ~param_type : decision =
         Unbox (Unique_tag_and_size { tag; fields; })
       | Proved _ | Wrong_kind | Invalid | Unknown ->
         match T.prove_variant_like tenv param_type with
-        | Proved { const_ctors; non_const_ctors_with_sizes; } when unbox_variants->
+        | Proved { const_ctors; non_const_ctors_with_sizes; }
+            when unbox_variants ->
           let tag = new_param "tag" in
           let constant_constructors =
             match const_ctors with
@@ -95,12 +96,14 @@ let rec make_optimistic_decision ~depth tenv ~param_type : decision =
           Unbox (Variant { tag; constant_constructors; fields_by_tag; })
         | Proved _ | Wrong_kind | Invalid | Unknown ->
           begin match T.prove_single_closures_entry' tenv param_type with
-          | Proved (closure_id, closures_entry, _fun_decl) when unbox_closures ->
+          | Proved (closure_id, closures_entry, _fun_decl)
+              when unbox_closures ->
             let vars_within_closure =
               make_optimistic_vars_within_closure ~depth tenv closures_entry
             in
             Unbox (Closure_single_entry { closure_id; vars_within_closure })
-          | Proved _ | Wrong_kind | Invalid | Unknown -> Do_not_unbox Incomplete_parameter_type
+          | Proved _ | Wrong_kind | Invalid | Unknown ->
+            Do_not_unbox Incomplete_parameter_type
           end
 
 and make_optimistic_fields
