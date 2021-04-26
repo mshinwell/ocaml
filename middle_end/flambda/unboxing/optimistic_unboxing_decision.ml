@@ -61,7 +61,7 @@ let deciders = [
   U.Nativeint.decider;
 ]
 
-let rec make_optimistic_decision ~depth tenv param_type : decision =
+let rec make_optimistic_decision ~depth tenv ~param_type : decision =
   match decide tenv param_type deciders with
   | Some decision ->
     if unbox_numbers then decision else Do_not_unbox Incomplete_parameter_type
@@ -142,7 +142,7 @@ and make_optimistic_fields
   let fields =
     List.map2 (fun epa var_type ->
       let decision =
-        make_optimistic_decision ~depth:(depth + 1) tenv var_type
+        make_optimistic_decision ~depth:(depth + 1) tenv ~param_type:var_type
       in
       { epa; decision; }
     ) field_vars field_types
@@ -154,6 +154,8 @@ and make_optimistic_vars_within_closure
   let map = T.Closures_entry.closure_var_types closures_entry in
   Var_within_closure.Map.mapi (fun var_within_closure var_type ->
     let epa = new_param (Var_within_closure.to_string var_within_closure) in
-    let decision = make_optimistic_decision ~depth:(depth + 1) tenv var_type in
+    let decision =
+      make_optimistic_decision ~depth:(depth + 1) tenv ~param_type:var_type
+    in
     { epa; decision; }
   ) map

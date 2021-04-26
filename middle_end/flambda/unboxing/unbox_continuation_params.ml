@@ -754,7 +754,7 @@ let make_decisions
             and compute the necessary denv. *)
          let decision =
            Optimistic_unboxing_decision.make_optimistic_decision ~depth:0
-             (DE.typing_env denv) param_type
+             (DE.typing_env denv) ~param_type
            |> update_decision empty nth arg_type_by_use_id
                 ~pass:(Filter { recursive = continuation_is_recursive; })
            |> filter_non_beneficial_decisions
