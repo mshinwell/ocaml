@@ -19,7 +19,7 @@
 open! Simplify_import
 open Unboxing_types
 
-let is_unboxing_beneficial_for_epa epa =
+let is_unboxing_beneficial_for_epa (epa : Extra_param_and_args.t) =
   Apply_cont_rewrite_id.Map.exists (fun _ extra_arg ->
     match (extra_arg : EPA.Extra_arg.t) with
     | Already_in_scope _ -> true

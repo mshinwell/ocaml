@@ -28,11 +28,16 @@ type do_not_unbox_reason =
   | Incomplete_parameter_type
   | Not_enough_information_at_use
 
-(* extra_params_and_args : epa *)
-type epa = {
-  param : Variable.t;
-  args : EPA.Extra_arg.t Apply_cont_rewrite_id.Map.t;
-}
+module Extra_param_and_args : sig
+  type t = private {
+    param : Variable.t;
+    args : EPA.Extra_arg.t Apply_cont_rewrite_id.Map.t;
+  }
+
+  val create : name:string -> t
+
+  val update_param_args : t -> Apply_cont_rewrite_id.t -> EPA.Extra_arg.t -> t
+end
 
 type unboxing_decision =
   | Unique_tag_and_size of {
@@ -40,7 +45,7 @@ type unboxing_decision =
       fields : field_decision list;
     }
   | Variant of {
-      tag : epa;
+      tag : Extra_param_and_args.t;
       constant_constructors : const_ctors;
       fields_by_tag : field_decision list Tag.Scannable.Map.t;
     }
@@ -48,17 +53,17 @@ type unboxing_decision =
       closure_id : Closure_id.t;
       vars_within_closure : field_decision Var_within_closure.Map.t;
     }
-  | Number of Flambda_kind.Naked_number_kind.t * epa
+  | Number of Flambda_kind.Naked_number_kind.t * Extra_param_and_args.t
 
 and field_decision = {
-  epa : epa;
+  epa : Extra_param_and_args.t;
   decision : decision;
 }
 
 and const_ctors =
   | Zero
   | At_least_one of {
-      is_int : epa;
+      is_int : Extra_param_and_args.t;
       ctor : decision;
     }
 
@@ -116,11 +121,3 @@ type pass =
      use-sites that were not known during the first pass). *)
 
 val print : Format.formatter -> decisions -> unit
-
-val new_param : string -> epa
-
-val update_param_args
-   : epa
-  -> Apply_cont_rewrite_id.t
-  -> EPA.Extra_arg.t
-  -> epa

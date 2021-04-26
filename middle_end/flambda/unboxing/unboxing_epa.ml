@@ -139,17 +139,19 @@ let extra_args_for_const_ctor_of_variant
     end
   | At_least_one { ctor = Do_not_unbox reason; is_int; } ->
     let is_int =
-      update_param_args is_int rewrite_id (extra_arg_for_is_int variant_arg)
+      Extra_param_and_args.update_param_args is_int rewrite_id
+        (extra_arg_for_is_int variant_arg)
     in
     At_least_one { ctor = Do_not_unbox reason; is_int; }
 
   | At_least_one { ctor = Unbox Number (Naked_immediate, ctor); is_int; } ->
     let is_int =
-      update_param_args is_int rewrite_id (extra_arg_for_is_int variant_arg)
+      Extra_param_and_args.update_param_args is_int rewrite_id
+        (extra_arg_for_is_int variant_arg)
     in
     begin try
       let ctor =
-        update_param_args ctor rewrite_id
+        Extra_param_and_args.update_param_args ctor rewrite_id
           (extra_arg_for_ctor ~typing_env_at_use variant_arg)
       in
       At_least_one { ctor = Unbox (Number (Naked_immediate, ctor)); is_int; }
@@ -177,7 +179,7 @@ let compute_extra_arg_for_number kind unboxer epa
     extra_arg_of_arg_being_unboxed unboxer
       ~typing_env_at_use arg_being_unboxed
   in
-  let epa = update_param_args epa rewrite_id extra_arg in
+  let epa = Extra_param_and_args.update_param_args epa rewrite_id extra_arg in
   Unbox (Number (kind, epa))
 
 
@@ -282,7 +284,9 @@ and compute_extra_args_for_block ~pass
            extra_arg_of_arg_being_unboxed unboxer
              ~typing_env_at_use arg_being_unboxed
          in
-         let epa = update_param_args epa rewrite_id new_extra_arg in
+         let epa =
+           Extra_param_and_args.update_param_args epa rewrite_id new_extra_arg
+         in
          let decision =
            compute_extra_args_for_one_decision_and_use ~pass
              rewrite_id ~typing_env_at_use
@@ -303,7 +307,9 @@ and compute_extra_args_for_closure ~pass
         extra_arg_of_arg_being_unboxed unboxer
           ~typing_env_at_use arg_being_unboxed
       in
-      let epa = update_param_args epa rewrite_id new_extra_arg in
+      let epa =
+        Extra_param_and_args.update_param_args epa rewrite_id new_extra_arg
+      in
       let decision =
         compute_extra_args_for_one_decision_and_use ~pass
           rewrite_id ~typing_env_at_use
@@ -360,7 +366,9 @@ and compute_extra_args_for_variant ~pass
     |> Simple.const
     |> (fun x -> EPA.Extra_arg.Already_in_scope x)
   in
-  let tag = update_param_args tag rewrite_id tag_extra_arg in
+  let tag =
+    Extra_param_and_args.update_param_args tag rewrite_id tag_extra_arg
+  in
   let fields_by_tag =
     Tag.Scannable.Map.mapi (fun tag_decision block_fields ->
       let size = List.length block_fields in
@@ -394,7 +402,9 @@ and compute_extra_args_for_variant ~pass
               Poison
             end
           in
-          let epa = update_param_args epa rewrite_id new_extra_arg in
+          let epa =
+            Extra_param_and_args.update_param_args epa rewrite_id new_extra_arg
+          in
           let decision =
             compute_extra_args_for_one_decision_and_use ~pass
               rewrite_id ~typing_env_at_use

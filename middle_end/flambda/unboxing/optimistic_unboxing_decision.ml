@@ -36,8 +36,10 @@ let unbox_variants = true
 let unbox_closures = true
 
 let make_optimistic_const_ctor () =
-  let is_int = new_param "is_int" in
-  let unboxed_const_ctor = new_param "unboxed_const_ctor" in
+  let is_int = Extra_param_and_args.create ~name:"is_int" in
+  let unboxed_const_ctor =
+    Extra_param_and_args.create ~name:"unboxed_const_ctor"
+  in
   let ctor = Unbox (Number (Naked_immediate, unboxed_const_ctor)) in
   At_least_one { is_int; ctor; }
 
@@ -45,7 +47,9 @@ let make_optimistic_number_decision tenv param_type
       (decider : Unboxers.number_decider) : decision option =
   match decider.prove_is_a_boxed_number tenv param_type with
   | Proved () ->
-    let naked_number = new_param decider.param_name in
+    let naked_number =
+      Extra_param_and_args.create ~name:decider.param_name
+    in
     Some (Unbox (Number (decider.kind, naked_number)))
   | Wrong_kind | Invalid | Unknown ->
     None
@@ -79,7 +83,7 @@ let rec make_optimistic_decision ~depth tenv ~param_type : decision =
         match T.prove_variant_like tenv param_type with
         | Proved { const_ctors; non_const_ctors_with_sizes; }
             when unbox_variants ->
-          let tag = new_param "tag" in
+          let tag = Extra_param_and_args.create ~name:"tag" in
           let constant_constructors =
             match const_ctors with
             | Known set when Target_imm.Set.is_empty set -> Zero
@@ -119,14 +123,14 @@ and make_optimistic_fields
   in
   let field_vars =
     List.init (Targetint.OCaml.to_int size)
-      (fun i -> new_param (field_name i))
+      (fun i -> Extra_param_and_args.create ~name:(field_name i))
   in
-  let type_of_var epa =
+  let type_of_var (epa : Extra_param_and_args.t) =
     Flambda_type.alias_type_of field_kind (Simple.var epa.param)
   in
   let field_types = List.map type_of_var field_vars in
   let tenv =
-    List.fold_left (fun acc { param = var; args = _; } ->
+    List.fold_left (fun acc { Extra_param_and_args. param = var; args = _; } ->
       let name = Name_in_binding_pos.create (Name.var var) Name_mode.normal in
       TE.add_definition acc name field_kind
     ) tenv field_vars
@@ -156,7 +160,10 @@ and make_optimistic_vars_within_closure
       ~depth tenv closures_entry =
   let map = T.Closures_entry.closure_var_types closures_entry in
   Var_within_closure.Map.mapi (fun var_within_closure var_type ->
-    let epa = new_param (Var_within_closure.to_string var_within_closure) in
+    let epa =
+      Extra_param_and_args.create
+        ~name:(Var_within_closure.to_string var_within_closure)
+    in
     let decision =
       make_optimistic_decision ~depth:(depth + 1) tenv ~param_type:var_type
     in

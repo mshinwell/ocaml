@@ -28,11 +28,30 @@ type do_not_unbox_reason =
   | Incomplete_parameter_type
   | Not_enough_information_at_use
 
-(* extra_params_and_args : epa *)
-type epa = {
-  param : Variable.t;
-  args : EPA.Extra_arg.t Apply_cont_rewrite_id.Map.t;
-}
+module Extra_param_and_args = struct
+  type t = {
+    param : Variable.t;
+    args : EPA.Extra_arg.t Apply_cont_rewrite_id.Map.t;
+  }
+
+  let create ~name = {
+    param = Variable.create name;
+    args = Apply_cont_rewrite_id.Map.empty;
+  }
+
+  let update_param_args t rewrite_id extra_arg =
+    assert (not (Apply_cont_rewrite_id.Map.mem rewrite_id t.args));
+    let args = Apply_cont_rewrite_id.Map.add rewrite_id extra_arg t.args in
+    { t with args; }
+
+  let print fmt { param; args = _; } =
+    Format.fprintf fmt "@[<hv 1>(\
+      @[<hov>(param %a)@]@ \
+      @[<v 2>(args@ <...>)@]\
+      )"
+      Variable.print param
+      (* (Apply_cont_rewrite_id.Map.print EPA.Extra_arg.print) args *)
+end
 
 type unboxing_decision =
   | Unique_tag_and_size of {
@@ -40,7 +59,7 @@ type unboxing_decision =
       fields : field_decision list;
     }
   | Variant of {
-      tag : epa;
+      tag : Extra_param_and_args.t;
       constant_constructors : const_ctors;
       fields_by_tag : field_decision list Tag.Scannable.Map.t;
     }
@@ -48,17 +67,17 @@ type unboxing_decision =
       closure_id : Closure_id.t;
       vars_within_closure : field_decision Var_within_closure.Map.t;
     }
-  | Number of Flambda_kind.Naked_number_kind.t * epa
+  | Number of Flambda_kind.Naked_number_kind.t * Extra_param_and_args.t
 
 and field_decision = {
-  epa : epa;
+  epa : Extra_param_and_args.t;
   decision : decision;
 }
 
 and const_ctors =
   | Zero
   | At_least_one of {
-      is_int : epa;
+      is_int : Extra_param_and_args.t;
       ctor : decision;
     }
 
@@ -77,14 +96,6 @@ type pass =
 
 (* Printing *)
 (* ******** *)
-
-let print_epa fmt { param; args = _; } =
-  Format.fprintf fmt "@[<hv 1>(\
-    @[<hov>(param %a)@]@ \
-    @[<v 2>(args@ <...>)@]\
-    )"
-    Variable.print param
-    (* (Apply_cont_rewrite_id.Map.print EPA.Extra_arg.print) args *)
 
 let print_do_not_unbox_reason ppf = function
   | Not_beneficial ->
@@ -113,7 +124,7 @@ let rec print_decision ppf = function
       @[<hv 2>(constant_constructors@ %a)@]@ \
       @[<v 2>(fields_by_tag@ %a)@]\
       )@]"
-      print_epa tag
+      Extra_param_and_args.print tag
       print_const_ctor_num constant_constructors
       (Tag.Scannable.Map.print print_fields_decisions) fields_by_tag
   | Unbox Closure_single_entry { closure_id; vars_within_closure; } ->
@@ -129,14 +140,14 @@ let rec print_decision ppf = function
       @[<hv 1>(var %a)@]\
     )@]"
     Flambda_kind.Naked_number_kind.print kind
-    print_epa epa
+    Extra_param_and_args.print epa
 
 and print_field_decision ppf { epa; decision; } =
   Format.fprintf ppf "@[<hv 1>(@,\
     @[<hov 1>(var %a)@]@ \
     @[<hv 1>(decision@ %a)@]\
     )@]"
-    print_epa epa
+    Extra_param_and_args.print epa
     print_decision decision
 
 and print_fields_decisions ppf l =
@@ -151,7 +162,7 @@ and print_const_ctor_num ppf = function
       @[<hov 1>(is_int@ %a)@]@ \
       @[<hov 1>(ctor@ %a)@]\
       )@]"
-      print_epa is_int
+      Extra_param_and_args.print is_int
       print_decision ctor
 
 let print ppf { decisions; rewrite_ids_seen; } =
@@ -166,16 +177,3 @@ let print ppf { decisions; rewrite_ids_seen; } =
     )@]"
     (Format.pp_print_list ~pp_sep aux) decisions
     Apply_cont_rewrite_id.Set.print rewrite_ids_seen
-
-(* Some helpers *)
-(* ************ *)
-
-let new_param name = {
-  param = Variable.create name;
-  args = Apply_cont_rewrite_id.Map.empty;
-}
-
-let update_param_args epa rewrite_id extra_arg =
-  assert (not (Apply_cont_rewrite_id.Map.mem rewrite_id epa.args));
-  let args = Apply_cont_rewrite_id.Map.add rewrite_id extra_arg epa.args in
-  { epa with args; }
