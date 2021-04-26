@@ -33,8 +33,7 @@ type unboxer = {
   var_name : string;
   invalid_const : Const.t;
   unboxing_prim : Simple.t -> Flambda_primitive.t;
-  prove_simple :
-    TE.t -> min_name_mode:Name_mode.t -> T.t -> Simple.t T.proof;
+  prove_simple : TE.t -> min_name_mode:Name_mode.t -> T.t -> Simple.t T.proof;
 }
 
 module Immediate = struct
