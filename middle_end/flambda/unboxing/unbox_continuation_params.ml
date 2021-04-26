@@ -14,7 +14,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-30-40-41-42"]
+[@@@ocaml.warning "+a-30-40-41-42"]
 
 open! Simplify_import
 
@@ -27,7 +27,7 @@ let print = print
 let update_decision ~pass
       rewrite_ids_already_seen nth_arg arg_type_by_use_id = function
   | Do_not_unbox _ as decision -> decision
-  | decision ->
+  | Unbox _ as decision ->
     Apply_cont_rewrite_id.Map.fold
       (fun rewrite_id
            (arg_at_use : Continuation_env_and_param_types.arg_at_use)
