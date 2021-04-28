@@ -330,6 +330,12 @@ MIDDLE_END_FLAMBDA_SIMPLIFY=\
   middle_end/flambda/simplify/simplify_simple.cmo \
   middle_end/flambda/simplify/simplify_import.cmo \
   middle_end/flambda/simplify/basic/simplify_named_result.cmo \
+  middle_end/flambda/unboxing/build_unboxing_denv.cmo \
+  middle_end/flambda/unboxing/is_unboxing_beneficial.cmo \
+  middle_end/flambda/unboxing/optimistic_unboxing_decision.cmo \
+  middle_end/flambda/unboxing/unboxers.cmo \
+  middle_end/flambda/unboxing/unboxing_epa.cmo \
+  middle_end/flambda/unboxing/unboxing_types.cmo \
   middle_end/flambda/unboxing/unbox_continuation_params.cmo \
   middle_end/flambda/lifting/sort_lifted_constants.cmo \
   middle_end/flambda/lifting/reification.cmo \
