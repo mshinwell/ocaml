@@ -45,7 +45,7 @@ type unboxing_decision =
     }
   | Variant of {
       tag : Extra_param_and_args.t;
-      constant_constructors : const_ctors_decision;
+      const_ctors : const_ctors_decision;
       fields_by_tag : field_decision list Tag.Scannable.Map.t;
     }
   | Closure_single_entry of {

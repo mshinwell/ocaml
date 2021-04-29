@@ -67,7 +67,7 @@ let rec filter_non_beneficial_decisions decision : U.decision =
     else
       Do_not_unbox Not_beneficial
 
-  | Unbox Variant { tag; constant_constructors; fields_by_tag; } ->
+  | Unbox Variant { tag; const_ctors; fields_by_tag; } ->
     let is_unboxing_beneficial = ref false in
     let fields_by_tag =
       Tag.Scannable.Map.map
@@ -80,7 +80,7 @@ let rec filter_non_beneficial_decisions decision : U.decision =
         )) fields_by_tag
     in
     if !is_unboxing_beneficial then
-      Unbox (Variant { tag; constant_constructors; fields_by_tag; })
+      Unbox (Variant { tag; const_ctors; fields_by_tag; })
     else
       Do_not_unbox Not_beneficial
 

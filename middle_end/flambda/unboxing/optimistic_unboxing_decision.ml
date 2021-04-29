@@ -80,7 +80,7 @@ let rec make_optimistic_decision ~depth tenv ~param_type : U.decision =
         | Proved { const_ctors; non_const_ctors_with_sizes; }
             when unbox_variants ->
           let tag = Extra_param_and_args.create ~name:"tag" in
-          let constant_constructors : U.const_ctors_decision =
+          let const_ctors : U.const_ctors_decision =
             match const_ctors with
             | Known set when Target_imm.Set.is_empty set -> Zero
             | Unknown | Known _ -> make_optimistic_const_ctor ()
@@ -93,7 +93,7 @@ let rec make_optimistic_decision ~depth tenv ~param_type : U.decision =
                 tenv param_type tag size
             ) non_const_ctors_with_sizes
           in
-          Unbox (Variant { tag; constant_constructors; fields_by_tag; })
+          Unbox (Variant { tag; const_ctors; fields_by_tag; })
         | Proved _ | Wrong_kind | Invalid | Unknown ->
           begin match T.prove_single_closures_entry' tenv param_type with
           | Proved (closure_id, closures_entry, _fun_decl)

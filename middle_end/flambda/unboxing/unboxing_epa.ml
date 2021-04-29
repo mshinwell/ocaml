@@ -214,7 +214,8 @@ and compute_extra_args_for_one_decision_and_use_aux ~(pass : U.pass)
       compute_extra_args_for_closure ~pass
         rewrite_id ~typing_env_at_use arg_being_unboxed
         closure_id vars_within_closure
-  | Unbox Variant { tag; constant_constructors; fields_by_tag; } ->
+  | Unbox Variant { tag; const_ctors = const_ctors_from_decision;
+                    fields_by_tag; } ->
     if are_there_unknown_use_sites pass then
       prevent_current_unboxing ()
     else begin
@@ -226,7 +227,7 @@ and compute_extra_args_for_one_decision_and_use_aux ~(pass : U.pass)
         compute_extra_args_for_variant ~pass
           rewrite_id ~typing_env_at_use arg_being_unboxed
           ~tag_from_decision:tag
-          ~const_ctors_from_decision:constant_constructors
+          ~const_ctors_from_decision
           ~fields_by_tag_from_decision:fields_by_tag
           ~const_ctors_at_use:(Or_unknown.Known Target_imm.Set.empty)
           ~non_const_ctors_with_sizes_at_use:Tag.Scannable.Map.empty
@@ -242,7 +243,7 @@ and compute_extra_args_for_one_decision_and_use_aux ~(pass : U.pass)
           compute_extra_args_for_variant ~pass
             rewrite_id ~typing_env_at_use arg_being_unboxed
             ~tag_from_decision:tag
-            ~const_ctors_from_decision:constant_constructors
+            ~const_ctors_from_decision
             ~fields_by_tag_from_decision:fields_by_tag
             ~const_ctors_at_use:const_ctors
             ~non_const_ctors_with_sizes_at_use:non_const_ctors_with_sizes
@@ -343,7 +344,7 @@ and compute_extra_args_for_variant ~pass
   let are_there_non_const_ctors_at_use =
     not (Tag.Scannable.Map.is_empty non_const_ctors_with_sizes_at_use)
   in
-  let constant_constructors =
+  let const_ctors =
     if not are_there_const_ctors_at_use then
       extra_args_for_const_ctor_of_variant
         const_ctors_from_decision ~typing_env_at_use
@@ -432,7 +433,7 @@ and compute_extra_args_for_variant ~pass
       List.rev new_fields_decisions
     ) fields_by_tag_from_decision
   in
-  Unbox (Variant { tag; constant_constructors; fields_by_tag; })
+  Unbox (Variant { tag; const_ctors; fields_by_tag; })
 
 let add_extra_params_and_args extra_params_and_args decision =
   let rec aux extra_params_and_args (decision : U.decision) =
@@ -462,7 +463,7 @@ let add_extra_params_and_args extra_params_and_args decision =
           in
           aux extra_params_and_args decision)
         vars_within_closure extra_params_and_args
-    | Unbox Variant { tag; constant_constructors; fields_by_tag; } ->
+    | Unbox Variant { tag; const_ctors; fields_by_tag; } ->
       let extra_params_and_args =
         Tag.Scannable.Map.fold (fun _ block_fields extra_params_and_args ->
           List.fold_left (fun extra_params_and_args
@@ -476,7 +477,7 @@ let add_extra_params_and_args extra_params_and_args decision =
         ) fields_by_tag extra_params_and_args
       in
       let extra_params_and_args =
-        match constant_constructors with
+        match const_ctors with
         | Zero -> extra_params_and_args
         | At_least_one { is_int; ctor = Do_not_unbox _; _ } ->
           let extra_param =

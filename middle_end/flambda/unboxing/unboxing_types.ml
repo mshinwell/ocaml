@@ -59,7 +59,7 @@ type unboxing_decision =
     }
   | Variant of {
       tag : Extra_param_and_args.t;
-      constant_constructors : const_ctors_decision;
+      const_ctors : const_ctors_decision;
       fields_by_tag : field_decision list Tag.Scannable.Map.t;
     }
   | Closure_single_entry of {
@@ -117,14 +117,14 @@ let rec print_decision ppf = function
       )@]"
       Tag.print tag
       print_fields_decisions fields
-  | Unbox Variant { tag; constant_constructors; fields_by_tag; } ->
+  | Unbox Variant { tag; const_ctors; fields_by_tag; } ->
     Format.fprintf ppf "@[<v 2>(variant@ \
       @[<hov>(tag %a)@]@ \
-      @[<hv 2>(constant_constructors@ %a)@]@ \
+      @[<hv 2>(const_ctors@ %a)@]@ \
       @[<v 2>(fields_by_tag@ %a)@]\
       )@]"
       Extra_param_and_args.print tag
-      print_const_ctor_num constant_constructors
+      print_const_ctor_num const_ctors
       (Tag.Scannable.Map.print print_fields_decisions) fields_by_tag
   | Unbox Closure_single_entry { closure_id; vars_within_closure; } ->
     Format.fprintf ppf "@[<hov 1>(closure_single_entry@ \
@@ -155,7 +155,7 @@ and print_fields_decisions ppf l =
     (Format.pp_print_list ~pp_sep print_field_decision) l
 
 and print_const_ctor_num ppf = function
-  | Zero -> Format.fprintf ppf "no_constant_constructors"
+  | Zero -> Format.fprintf ppf "no_const_ctors"
   | At_least_one { is_int; ctor; } ->
     Format.fprintf ppf "@[<hov 1>(const_ctors@ \
       @[<hov 1>(is_int@ %a)@]@ \

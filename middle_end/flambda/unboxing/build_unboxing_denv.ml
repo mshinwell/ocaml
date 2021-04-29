@@ -82,7 +82,7 @@ let rec denv_of_decision denv ~param_var (decision : U.decision) : DE.t =
     Var_within_closure.Map.fold (fun _ (field : U.field_decision) denv ->
       denv_of_decision denv ~param_var:field.epa.param field.decision
     ) vars_within_closure denv
-  | Unbox Variant { tag; constant_constructors; fields_by_tag; } ->
+  | Unbox Variant { tag; const_ctors; fields_by_tag; } ->
     (* Adapt the denv for the tag *)
     let tag_v = VB.create tag.param Name_mode.normal in
     let denv = DE.define_variable denv tag_v K.naked_immediate in
@@ -96,7 +96,7 @@ let rec denv_of_decision denv ~param_var (decision : U.decision) : DE.t =
     let denv = DE.add_cse denv get_tag_prim ~bound_to:(Simple.var tag.param) in
     (* Same thing for is_int *)
     let denv =
-      match constant_constructors with
+      match const_ctors with
       | Zero -> denv
       | At_least_one { is_int; _ } ->
         let is_int_v = VB.create is_int.param Name_mode.normal in
@@ -114,7 +114,7 @@ let rec denv_of_decision denv ~param_var (decision : U.decision) : DE.t =
         denv
     in
     let denv, const_ctors =
-      match constant_constructors with
+      match const_ctors with
       | Zero ->
         denv, T.bottom K.naked_immediate
       | At_least_one { ctor = Do_not_unbox _; _ } ->
