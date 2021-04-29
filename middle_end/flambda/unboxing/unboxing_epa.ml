@@ -114,7 +114,7 @@ let extra_arg_for_ctor ~typing_env_at_use = function
         EPA.Extra_arg.Already_in_scope simple
       | Unknown -> prevent_current_unboxing ()
       | Invalid ->
-        (* Presumably, this means that we are in an impossible-to-reach
+        (* [Invalid] this means that we are in an impossible-to-reach
            case, and thus as in other cases, we only need to provide
            well-kinded values. *)
         EPA.Extra_arg.Already_in_scope (
@@ -219,14 +219,17 @@ and compute_extra_args_for_one_decision_and_use_aux ~(pass : U.pass)
       prevent_current_unboxing ()
     else begin
       let invalid () =
-        (* Invalid here means that the apply_cont is unreachable, i.e. the args
+        (* Invalid here means that the Apply_cont is unreachable, i.e. the args
            we generated will never be actually used at runtime, so the values of
            the args do not matter, they are here to make the kind checker
            happy. *)
         compute_extra_args_for_variant ~pass
           rewrite_id ~typing_env_at_use arg_being_unboxed
-          tag constant_constructors fields_by_tag
-          (Or_unknown.Known Target_imm.Set.empty) Tag.Scannable.Map.empty
+          ~tag_from_decision:tag
+          ~const_ctors_from_decision:constant_constructors
+          ~fields_by_tag_from_decision:fields_by_tag
+          ~const_ctors_at_use:(Or_unknown.Known Target_imm.Set.empty)
+          ~non_const_ctors_with_sizes_at_use:Tag.Scannable.Map.empty
       in
       begin match type_of_arg_being_unboxed arg_being_unboxed with
       | None -> invalid ()
@@ -238,8 +241,11 @@ and compute_extra_args_for_one_decision_and_use_aux ~(pass : U.pass)
         | Proved { const_ctors; non_const_ctors_with_sizes; } ->
           compute_extra_args_for_variant ~pass
             rewrite_id ~typing_env_at_use arg_being_unboxed
-            tag constant_constructors fields_by_tag
-            const_ctors non_const_ctors_with_sizes
+            ~tag_from_decision:tag
+            ~const_ctors_from_decision:constant_constructors
+            ~fields_by_tag_from_decision:fields_by_tag
+            ~const_ctors_at_use:const_ctors
+            ~non_const_ctors_with_sizes_at_use:non_const_ctors_with_sizes
         end
       end
     end
@@ -324,26 +330,27 @@ and compute_extra_args_for_closure ~pass
 
 and compute_extra_args_for_variant ~pass
       rewrite_id ~typing_env_at_use arg_being_unboxed
-      tag constant_constructors fields_by_tag (* unboxing decision *)
-      const_ctors non_const_ctors_with_sizes (* type info at the use site *)
+      ~tag_from_decision ~const_ctors_from_decision
+      ~fields_by_tag_from_decision
+      ~const_ctors_at_use ~non_const_ctors_with_sizes_at_use
       : U.decision
   =
-  let are_there_constant_constructors =
-    match (const_ctors : _ Or_unknown.t) with
+  let are_there_const_ctors_at_use =
+    match (const_ctors_at_use : _ Or_unknown.t) with
     | Unknown -> true
     | Known set -> not (Target_imm.Set.is_empty set)
   in
-  let are_there_non_constant_constructors =
-    not (Tag.Scannable.Map.is_empty non_const_ctors_with_sizes)
+  let are_there_non_const_ctors_at_use =
+    not (Tag.Scannable.Map.is_empty non_const_ctors_with_sizes_at_use)
   in
   let constant_constructors =
-    if not are_there_constant_constructors then
+    if not are_there_const_ctors_at_use then
       extra_args_for_const_ctor_of_variant
-        constant_constructors ~typing_env_at_use
+        const_ctors_from_decision ~typing_env_at_use
         rewrite_id Not_a_constant_constructor
-    else if not are_there_non_constant_constructors then
+    else if not are_there_non_const_ctors_at_use then
       extra_args_for_const_ctor_of_variant
-        constant_constructors ~typing_env_at_use rewrite_id
+        const_ctors_from_decision ~typing_env_at_use rewrite_id
         (Maybe_constant_constructor
            { arg_being_unboxed; is_int = Simple.untagged_const_true;})
     else begin
@@ -354,10 +361,12 @@ and compute_extra_args_for_variant ~pass
     end
   in
   let tag_at_use_site =
-    if not are_there_non_constant_constructors then
+    if not are_there_non_const_ctors_at_use then
       Tag.Scannable.zero
     else
-      match Tag.Scannable.Map.get_singleton non_const_ctors_with_sizes with
+      match
+        Tag.Scannable.Map.get_singleton non_const_ctors_with_sizes_at_use
+      with
       | None -> prevent_current_unboxing ()
       | Some (tag, _) -> tag
   in
@@ -370,7 +379,8 @@ and compute_extra_args_for_variant ~pass
     |> (fun x -> EPA.Extra_arg.Already_in_scope x)
   in
   let tag =
-    Extra_param_and_args.update_param_args tag rewrite_id tag_extra_arg
+    Extra_param_and_args.update_param_args tag_from_decision
+      rewrite_id tag_extra_arg
   in
   let fields_by_tag =
     Tag.Scannable.Map.mapi (fun tag_decision block_fields ->
@@ -388,7 +398,7 @@ and compute_extra_args_for_variant ~pass
         List.fold_left (fun (new_decisions, field_nth)
               ({ epa; decision; } : U.field_decision) ->
           let new_extra_arg, new_arg_being_unboxed =
-            if are_there_non_constant_constructors
+            if are_there_non_const_ctors_at_use
             && Tag.Scannable.equal tag_at_use_site tag_decision then begin
               let unboxer =
                 Unboxers.Field.unboxer ~invalid_const bak ~index:field_nth
@@ -420,7 +430,7 @@ and compute_extra_args_for_variant ~pass
         ) ([], Target_imm.zero) block_fields
       in
       List.rev new_fields_decisions
-    ) fields_by_tag
+    ) fields_by_tag_from_decision
   in
   Unbox (Variant { tag; constant_constructors; fields_by_tag; })
 
