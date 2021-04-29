@@ -52,6 +52,8 @@ type unboxing_decision =
       closure_id : Closure_id.t;
       vars_within_closure : field_decision Var_within_closure.Map.t;
     }
+  (* By "single entry" we mean that the corresponding set of closures only
+     contains a single closure. *)
   | Number of Flambda_kind.Naked_number_kind.t * Extra_param_and_args.t
 
 and field_decision = {
