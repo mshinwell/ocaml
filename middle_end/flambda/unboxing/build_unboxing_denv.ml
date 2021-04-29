@@ -20,9 +20,6 @@ open! Simplify_import
 
 module U = Unboxing_types
 
-(* Decision tree -> actual typing env *)
-(* ********************************** *)
-
 let add_equation_on_var denv var shape =
   let kind = T.kind shape in
   let var_type = T.alias_type_of kind (Simple.var var) in
@@ -34,9 +31,7 @@ let add_equation_on_var denv var shape =
     Misc.fatal_errorf "Meet failed whereas prove previously succeeded"
 
 let denv_of_number_decision naked_kind shape param_var naked_var denv : DE.t =
-  let naked_name =
-    Var_in_binding_pos.create naked_var Name_mode.normal
-  in
+  let naked_name = VB.create naked_var Name_mode.normal in
   let denv = DE.define_variable denv naked_name naked_kind in
   add_equation_on_var denv param_var shape
 
@@ -50,29 +45,27 @@ let rec denv_of_decision denv ~param_var (decision : U.decision) : DE.t =
     let denv =
       List.fold_left
         (fun denv ({ epa = { param = var; _ }; _ } : U.field_decision) ->
-          let v = Var_in_binding_pos.create var Name_mode.normal in
+          let v = VB.create var Name_mode.normal in
           DE.define_variable denv v field_kind
         ) denv fields
     in
     let type_of_var (field : U.field_decision) =
-      Flambda_type.alias_type_of field_kind (Simple.var field.epa.param)
+      T.alias_type_of field_kind (Simple.var field.epa.param)
     in
     let field_types = List.map type_of_var fields in
     let shape =
-      Flambda_type.immutable_block ~is_unique:false tag
+      T.immutable_block ~is_unique:false tag
         ~field_kind ~fields:field_types
     in
     let denv = add_equation_on_var denv param_var shape in
     List.fold_left (fun denv (field : U.field_decision) ->
       denv_of_decision denv ~param_var:field.epa.param field.decision
     ) denv fields
-
-  (* Closure case *)
   | Unbox Closure_single_entry { closure_id; vars_within_closure; } ->
     let denv =
       Var_within_closure.Map.fold
         (fun _ ({ epa = { param = var; _ }; _ } : U.field_decision) denv ->
-          let v = Var_in_binding_pos.create var Name_mode.normal in
+          let v = VB.create var Name_mode.normal in
           DE.define_variable denv v K.value
         ) vars_within_closure denv
     in
@@ -82,18 +75,16 @@ let rec denv_of_decision denv ~param_var (decision : U.decision) : DE.t =
         vars_within_closure
     in
     let shape =
-      Flambda_type.closure_with_at_least_these_closure_vars
+      T.closure_with_at_least_these_closure_vars
         ~this_closure:closure_id map
     in
     let denv = add_equation_on_var denv param_var shape in
     Var_within_closure.Map.fold (fun _ (field : U.field_decision) denv ->
       denv_of_decision denv ~param_var:field.epa.param field.decision
     ) vars_within_closure denv
-
-  (* Variant case*)
   | Unbox Variant { tag; constant_constructors; fields_by_tag; } ->
     (* Adapt the denv for the tag *)
-    let tag_v = Var_in_binding_pos.create tag.param Name_mode.normal in
+    let tag_v = VB.create tag.param Name_mode.normal in
     let denv = DE.define_variable denv tag_v K.naked_immediate in
     let denv =
       DE.add_equation_on_variable denv tag.param
@@ -129,7 +120,7 @@ let rec denv_of_decision denv ~param_var (decision : U.decision) : DE.t =
       | At_least_one { ctor = Do_not_unbox _; _ } ->
         denv, T.unknown K.naked_immediate
       | At_least_one { ctor = Unbox Number (Naked_immediate, ctor_epa); _ } ->
-        let v = Var_in_binding_pos.create ctor_epa.param Name_mode.normal in
+        let v = VB.create ctor_epa.param Name_mode.normal in
         let denv = DE.define_variable denv v K.naked_immediate in
         let ty =
           T.alias_type_of K.naked_immediate (Simple.var ctor_epa.param)
@@ -148,7 +139,7 @@ let rec denv_of_decision denv ~param_var (decision : U.decision) : DE.t =
       Tag.Scannable.Map.fold (fun _ block_fields denv ->
         List.fold_left
           (fun denv ({ epa = { param = var; _ }; _ } : U.field_decision) ->
-            let v = Var_in_binding_pos.create var Name_mode.normal in
+            let v = VB.create var Name_mode.normal in
             DE.define_variable denv v K.value
           ) denv block_fields)
           fields_by_tag denv
@@ -156,21 +147,18 @@ let rec denv_of_decision denv ~param_var (decision : U.decision) : DE.t =
     let non_const_ctors =
       Tag.Scannable.Map.map (fun block_fields ->
         List.map (fun (field : U.field_decision) ->
-          Flambda_type.alias_type_of K.value (Simple.var field.epa.param)
+          T.alias_type_of K.value (Simple.var field.epa.param)
         ) block_fields
       ) fields_by_tag
     in
     let shape = T.variant ~const_ctors ~non_const_ctors in
     let denv = add_equation_on_var denv param_var shape in
-    (* recursion *)
+    (* Recurse on the fields *)
     Tag.Scannable.Map.fold (fun _ block_fields denv ->
       List.fold_left (fun denv (field : U.field_decision) ->
         denv_of_decision denv ~param_var:field.epa.param field.decision
       ) denv block_fields
     ) fields_by_tag denv
-
-
-  (* Number cases *)
   | Unbox Number (Naked_immediate, { param = naked_immediate; args = _; }) ->
     let shape = T.tagged_immediate_alias_to ~naked_immediate in
     denv_of_number_decision K.naked_immediate shape

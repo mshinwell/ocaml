@@ -14,6 +14,9 @@
 (*                                                                        *)
 (**************************************************************************)
 
+(** Transform an unboxing decision tree into the downwards environment
+    required for simplification. *)
+
 [@@@ocaml.warning "+a-30-40-41-42"]
 
 open! Simplify_import
