@@ -18,8 +18,8 @@
 
 open! Simplify_import
 
-open Unboxing_types
-module U = Unboxers
+module U = Unboxing_types
+module Extra_param_and_args = U.Extra_param_and_args
 
 exception Prevent_current_unboxing
 
@@ -82,7 +82,6 @@ let extra_arg_of_arg_being_unboxed (unboxer : Unboxers.unboxer)
       unboxer.unboxing_prim arg_simple
     ))
 
-
 (* Helpers for the variant case *)
 (* **************************** *)
 
@@ -122,12 +121,12 @@ let extra_arg_for_ctor ~typing_env_at_use = function
           Simple.untagged_const_int (Targetint.OCaml.of_int 0))
 
 let extra_args_for_const_ctor_of_variant
-      constant_constructors_decision ~typing_env_at_use
-      rewrite_id variant_arg =
-  match constant_constructors_decision with
+      (const_ctors_decision : U.const_ctors_decision)
+      ~typing_env_at_use rewrite_id variant_arg : U.const_ctors_decision =
+  match const_ctors_decision with
   | Zero ->
     begin match variant_arg with
-    | Not_a_constant_constructor -> constant_constructors_decision
+    | Not_a_constant_constructor -> const_ctors_decision
     | Maybe_constant_constructor _ ->
       Misc.fatal_errorf
         "The unboxed variant parameter was determined to have \
@@ -141,7 +140,6 @@ let extra_args_for_const_ctor_of_variant
         (extra_arg_for_is_int variant_arg)
     in
     At_least_one { ctor = Do_not_unbox reason; is_int; }
-
   | At_least_one { ctor = Unbox Number (Naked_immediate, ctor); is_int; } ->
     let is_int =
       Extra_param_and_args.update_param_args is_int rewrite_id
@@ -172,7 +170,7 @@ let extra_args_for_const_ctor_of_variant
 (* *************************** *)
 
 let compute_extra_arg_for_number kind unboxer epa
-      rewrite_id ~typing_env_at_use arg_being_unboxed =
+      rewrite_id ~typing_env_at_use arg_being_unboxed : U.decision =
   let extra_arg =
     extra_arg_of_arg_being_unboxed unboxer
       ~typing_env_at_use arg_being_unboxed
@@ -180,16 +178,17 @@ let compute_extra_arg_for_number kind unboxer epa
   let epa = Extra_param_and_args.update_param_args epa rewrite_id extra_arg in
   Unbox (Number (kind, epa))
 
-
 (* Recursive descent on decisions *)
 (* ****************************** *)
 
-let are_there_unknown_use_sites = function
+let are_there_unknown_use_sites (pass : U.pass) =
+  match pass with
   | Filter { recursive; } -> recursive
   | Compute_all_extra_args -> false
 
-let rec compute_extra_args_for_one_decision_and_use ~pass
-          rewrite_id ~typing_env_at_use arg_being_unboxed decision =
+let rec compute_extra_args_for_one_decision_and_use ~(pass : U.pass)
+          rewrite_id ~typing_env_at_use arg_being_unboxed decision
+          : U.decision =
   try
     compute_extra_args_for_one_decision_and_use_aux ~pass
       rewrite_id ~typing_env_at_use arg_being_unboxed decision
@@ -200,8 +199,9 @@ let rec compute_extra_args_for_one_decision_and_use ~pass
       Misc.fatal_errorf "This case should have been filtered out before."
     end
 
-and compute_extra_args_for_one_decision_and_use_aux ~pass
-          rewrite_id ~typing_env_at_use arg_being_unboxed decision =
+and compute_extra_args_for_one_decision_and_use_aux ~(pass : U.pass)
+          rewrite_id ~typing_env_at_use arg_being_unboxed
+          (decision : U.decision) : U.decision =
   match decision with
   | Do_not_unbox _ -> decision
   | Unbox Unique_tag_and_size { tag; fields; } ->
@@ -244,24 +244,24 @@ and compute_extra_args_for_one_decision_and_use_aux ~pass
       end
     end
   | Unbox Number (Naked_float, epa) ->
-    compute_extra_arg_for_number Naked_float U.Float.unboxer epa
+    compute_extra_arg_for_number Naked_float Unboxers.Float.unboxer epa
       rewrite_id ~typing_env_at_use arg_being_unboxed
   | Unbox Number (Naked_int32, epa) ->
-    compute_extra_arg_for_number Naked_int32 U.Int32.unboxer epa
+    compute_extra_arg_for_number Naked_int32 Unboxers.Int32.unboxer epa
       rewrite_id ~typing_env_at_use arg_being_unboxed
   | Unbox Number (Naked_int64, epa) ->
-    compute_extra_arg_for_number Naked_int64 U.Int64.unboxer epa
+    compute_extra_arg_for_number Naked_int64 Unboxers.Int64.unboxer epa
       rewrite_id ~typing_env_at_use arg_being_unboxed
   | Unbox Number (Naked_nativeint, epa) ->
-    compute_extra_arg_for_number Naked_nativeint U.Nativeint.unboxer epa
+    compute_extra_arg_for_number Naked_nativeint Unboxers.Nativeint.unboxer epa
       rewrite_id ~typing_env_at_use arg_being_unboxed
   | Unbox Number (Naked_immediate, epa) ->
-    compute_extra_arg_for_number Naked_immediate U.Immediate.unboxer epa
+    compute_extra_arg_for_number Naked_immediate Unboxers.Immediate.unboxer epa
       rewrite_id ~typing_env_at_use arg_being_unboxed
 
 and compute_extra_args_for_block ~pass
       rewrite_id ~typing_env_at_use arg_being_unboxed
-      tag fields =
+      tag fields : U.decision =
   let size = Or_unknown.Known (Targetint.OCaml.of_int (List.length fields)) in
   let bak, invalid_const =
     if Tag.equal tag Tag.double_array_tag then
@@ -276,8 +276,11 @@ and compute_extra_args_for_block ~pass
   in
   let _, fields =
     List.fold_left_map
-      (fun field_nth { epa; decision; } ->
-         let unboxer = U.Field.unboxer ~invalid_const bak ~index:field_nth in
+      (fun field_nth ({ epa; decision; } : U.field_decision)
+           : (_ * U.field_decision) ->
+         let unboxer =
+           Unboxers.Field.unboxer ~invalid_const bak ~index:field_nth
+         in
          let new_extra_arg =
            extra_arg_of_arg_being_unboxed unboxer
              ~typing_env_at_use arg_being_unboxed
@@ -297,24 +300,25 @@ and compute_extra_args_for_block ~pass
 
 and compute_extra_args_for_closure ~pass
       rewrite_id ~typing_env_at_use arg_being_unboxed
-      closure_id vars_within_closure =
+      closure_id vars_within_closure : U.decision =
   let vars_within_closure =
-    Var_within_closure.Map.mapi (fun var { epa; decision; } ->
-      let unboxer = U.Closure_field.unboxer closure_id var in
-      let new_extra_arg =
-        extra_arg_of_arg_being_unboxed unboxer
-          ~typing_env_at_use arg_being_unboxed
-      in
-      let epa =
-        Extra_param_and_args.update_param_args epa rewrite_id new_extra_arg
-      in
-      let decision =
-        compute_extra_args_for_one_decision_and_use ~pass
-          rewrite_id ~typing_env_at_use
-          (arg_being_unboxed_of_extra_arg new_extra_arg) decision
-      in
-      { epa; decision; }
-    ) vars_within_closure
+    Var_within_closure.Map.mapi
+      (fun var ({ epa; decision; } : U.field_decision) : U.field_decision ->
+        let unboxer = Unboxers.Closure_field.unboxer closure_id var in
+        let new_extra_arg =
+          extra_arg_of_arg_being_unboxed unboxer
+            ~typing_env_at_use arg_being_unboxed
+        in
+        let epa =
+          Extra_param_and_args.update_param_args epa rewrite_id new_extra_arg
+        in
+        let decision =
+          compute_extra_args_for_one_decision_and_use ~pass
+            rewrite_id ~typing_env_at_use
+            (arg_being_unboxed_of_extra_arg new_extra_arg) decision
+        in
+        { epa; decision; }
+      ) vars_within_closure
   in
   Unbox (Closure_single_entry { closure_id; vars_within_closure; })
 
@@ -322,6 +326,7 @@ and compute_extra_args_for_variant ~pass
       rewrite_id ~typing_env_at_use arg_being_unboxed
       tag constant_constructors fields_by_tag (* unboxing decision *)
       const_ctors non_const_ctors_with_sizes (* type info at the use site *)
+      : U.decision
   =
   let are_there_constant_constructors =
     match (const_ctors : _ Or_unknown.t) with
@@ -342,9 +347,9 @@ and compute_extra_args_for_variant ~pass
         (Maybe_constant_constructor
            { arg_being_unboxed; is_int = Simple.untagged_const_true;})
     else begin
-      (* CR: one might want to try and use the cse at use to allow
-             unboxing when the tag is not know statically but can be
-             recovered through the cse. *)
+      (* CR gbury: one might want to try and use the cse at use to allow
+         unboxing when the tag is not know statically but can be
+         recovered through the cse. *)
       prevent_current_unboxing ()
     end
   in
@@ -380,12 +385,13 @@ and compute_extra_args_for_variant ~pass
         }
       in
       let new_fields_decisions, _ =
-        List.fold_left (fun (new_decisions, field_nth) { epa; decision; } ->
+        List.fold_left (fun (new_decisions, field_nth)
+              ({ epa; decision; } : U.field_decision) ->
           let new_extra_arg, new_arg_being_unboxed =
             if are_there_non_constant_constructors
             && Tag.Scannable.equal tag_at_use_site tag_decision then begin
               let unboxer =
-                U.Field.unboxer ~invalid_const bak ~index:field_nth
+                Unboxers.Field.unboxer ~invalid_const bak ~index:field_nth
               in
               let new_extra_arg =
                 extra_arg_of_arg_being_unboxed unboxer
@@ -408,7 +414,8 @@ and compute_extra_args_for_variant ~pass
               rewrite_id ~typing_env_at_use
               new_arg_being_unboxed decision
           in
-          let new_decisions = { epa; decision; } :: new_decisions in
+          let field_decision : U.field_decision = { epa; decision; } in
+          let new_decisions = field_decision :: new_decisions in
           (new_decisions, Target_imm.(add one field_nth))
         ) ([], Target_imm.zero) block_fields
       in
@@ -418,10 +425,12 @@ and compute_extra_args_for_variant ~pass
   Unbox (Variant { tag; constant_constructors; fields_by_tag; })
 
 let add_extra_params_and_args extra_params_and_args decision =
-  let rec aux extra_params_and_args = function
+  let rec aux extra_params_and_args (decision : U.decision) =
+    match decision with
     | Do_not_unbox _ -> extra_params_and_args
     | Unbox Unique_tag_and_size { tag; fields; } ->
-      List.fold_left (fun extra_params_and_args { epa; decision; } ->
+      List.fold_left (fun extra_params_and_args
+            ({ epa; decision; } : U.field_decision) ->
         let kind =
           if Tag.equal Tag.double_array_tag tag then
             K.With_subkind.naked_float
@@ -436,7 +445,7 @@ let add_extra_params_and_args extra_params_and_args decision =
       ) extra_params_and_args fields
     | Unbox Closure_single_entry { closure_id = _; vars_within_closure; } ->
       Var_within_closure.Map.fold
-        (fun _ { epa; decision; } extra_params_and_args ->
+        (fun _ ({ epa; decision; } : U.field_decision) extra_params_and_args ->
           let extra_param = KP.create epa.param K.With_subkind.any_value in
           let extra_params_and_args =
             EPA.add extra_params_and_args ~extra_param ~extra_args:epa.args
@@ -446,7 +455,8 @@ let add_extra_params_and_args extra_params_and_args decision =
     | Unbox Variant { tag; constant_constructors; fields_by_tag; } ->
       let extra_params_and_args =
         Tag.Scannable.Map.fold (fun _ block_fields extra_params_and_args ->
-          List.fold_left (fun extra_params_and_args { epa; decision; } ->
+          List.fold_left (fun extra_params_and_args
+                ({ epa; decision; } : U.field_decision) ->
             let extra_param = KP.create epa.param K.With_subkind.any_value in
             let extra_params_and_args =
               EPA.add extra_params_and_args ~extra_param ~extra_args:epa.args
@@ -463,7 +473,8 @@ let add_extra_params_and_args extra_params_and_args decision =
             KP.create is_int.param K.With_subkind.naked_immediate
           in
           EPA.add extra_params_and_args ~extra_param ~extra_args:is_int.args
-        | At_least_one { is_int; ctor = Unbox Number (Naked_immediate, ctor); } ->
+        | At_least_one { is_int;
+            ctor = Unbox Number (Naked_immediate, ctor); } ->
           let extra_param =
             KP.create is_int.param K.With_subkind.naked_immediate
           in
@@ -482,7 +493,7 @@ let add_extra_params_and_args extra_params_and_args decision =
             is_int = _; } ->
           Misc.fatal_errorf
             "Trying to unbox the constant constructor of a variant \
-             with a kind other than naked_immediate."
+             with a kind other than Naked_immediate."
       in
       let extra_param = KP.create tag.param K.With_subkind.naked_immediate in
       EPA.add extra_params_and_args ~extra_param ~extra_args:tag.args

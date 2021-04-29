@@ -18,8 +18,6 @@
 
 open! Simplify_import
 
-open Unboxing_types
-
 type number_decider = {
   param_name : string;
   kind : K.Naked_number_kind.t;

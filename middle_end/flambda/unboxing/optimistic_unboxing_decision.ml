@@ -31,7 +31,7 @@ let unbox_blocks = true
 let unbox_variants = true
 let unbox_closures = true
 
-let make_optimistic_const_ctor () : U.const_ctors =
+let make_optimistic_const_ctor () : U.const_ctors_decision =
   let is_int = Extra_param_and_args.create ~name:"is_int" in
   let unboxed_const_ctor =
     Extra_param_and_args.create ~name:"unboxed_const_ctor"
@@ -80,7 +80,7 @@ let rec make_optimistic_decision ~depth tenv ~param_type : U.decision =
         | Proved { const_ctors; non_const_ctors_with_sizes; }
             when unbox_variants ->
           let tag = Extra_param_and_args.create ~name:"tag" in
-          let constant_constructors : U.const_ctors =
+          let constant_constructors : U.const_ctors_decision =
             match const_ctors with
             | Known set when Target_imm.Set.is_empty set -> Zero
             | Unknown | Known _ -> make_optimistic_const_ctor ()

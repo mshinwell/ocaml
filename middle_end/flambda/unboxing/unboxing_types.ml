@@ -17,7 +17,6 @@
 [@@@ocaml.warning "+a-30-40-41-42"]
 
 open! Simplify_import
-module Const = Reg_width_things.Const (* CR: add this in Simplify_import ? *)
 
 (* Typedefs for unboxing decisions *)
 (* ******************************* *)
@@ -60,7 +59,7 @@ type unboxing_decision =
     }
   | Variant of {
       tag : Extra_param_and_args.t;
-      constant_constructors : const_ctors;
+      constant_constructors : const_ctors_decision;
       fields_by_tag : field_decision list Tag.Scannable.Map.t;
     }
   | Closure_single_entry of {
@@ -74,7 +73,7 @@ and field_decision = {
   decision : decision;
 }
 
-and const_ctors =
+and const_ctors_decision =
   | Zero
   | At_least_one of {
       is_int : Extra_param_and_args.t;
