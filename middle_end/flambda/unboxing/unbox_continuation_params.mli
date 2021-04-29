@@ -18,25 +18,24 @@
 
 open! Simplify_import
 
-type decisions
-
-val print : Format.formatter -> decisions -> unit
+module Decisions : sig
+  type t
+end
 
 val make_decisions
-  : continuation_is_recursive:bool
+   : continuation_is_recursive:bool
   -> arg_types_by_use_id:
        Continuation_env_and_param_types.arg_at_use
          Apply_cont_rewrite_id.Map.t list
   -> DE.t
   -> KP.t list
   -> T.t list
-  -> DE.t * decisions
+  -> DE.t * Decisions.t
 
 val compute_extra_params_and_args
-  : decisions
+   : Decisions.t
   -> arg_types_by_use_id:
        Continuation_env_and_param_types.arg_at_use
          Apply_cont_rewrite_id.Map.t list
   -> EPA.t
   -> EPA.t
-

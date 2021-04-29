@@ -18,14 +18,15 @@
 
 open! Simplify_import
 
-open Unboxing_types
+module U = Unboxing_types
 
-type nonrec decisions = decisions
+module Decisions = struct
+  type t = U.decisions
+end
 
-let print = print
-
-let update_decision ~pass
-      rewrite_ids_already_seen nth_arg arg_type_by_use_id = function
+let update_decision ~pass rewrite_ids_already_seen nth_arg arg_type_by_use_id
+      (decision : U.decision) =
+  match decision with
   | Do_not_unbox _ as decision -> decision
   | Unbox _ as decision ->
     Apply_cont_rewrite_id.Map.fold
@@ -50,10 +51,8 @@ let update_decision ~pass
          end
       ) arg_type_by_use_id decision
 
-let make_decisions
-      ~continuation_is_recursive
-      ~arg_types_by_use_id
-      denv params params_types : DE.t * decisions =
+let make_decisions ~continuation_is_recursive ~arg_types_by_use_id
+      denv params params_types : DE.t * Decisions.t =
   let empty = Apply_cont_rewrite_id.Set.empty in
   let _, denv, rev_decisions, seen =
     Misc.Stdlib.List.fold_left3
@@ -98,7 +97,8 @@ let make_decisions
   let decisions = List.combine params (List.rev rev_decisions) in
   denv, { decisions; rewrite_ids_seen; }
 
-let compute_extra_params_and_args { decisions; rewrite_ids_seen; }
+let compute_extra_params_and_args
+      ({ decisions; rewrite_ids_seen; } : Decisions.t)
       ~arg_types_by_use_id existing_extra_params_and_args =
   let _, extra_params_and_args =
     List.fold_left2
