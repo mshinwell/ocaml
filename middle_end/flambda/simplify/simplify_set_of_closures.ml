@@ -37,7 +37,7 @@ let function_decl_type ~pass ~cost_metrics_source denv function_decl ?code_id
     At_function_declaration { code_id = Code_id.export code_id; pass; decision; })
     ~dbg:(DE.add_inlined_debuginfo' denv (FD.dbg function_decl));
   match Inlining_decision.Function_declaration_decision.behaviour decision with
-  | Can_not_be_inlined ->
+  | Cannot_be_inlined ->
     T.create_non_inlinable_function_declaration
       ~code_id
       ~is_tupled:(FD.is_tupled function_decl)

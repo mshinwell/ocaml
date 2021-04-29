@@ -39,7 +39,7 @@ module Function_declaration_decision : sig
   val report : Format.formatter -> t -> unit
 
   type inlining_behaviour = private
-    | Can_not_be_inlined
+    | Cannot_be_inlined
     | Must_be_inlined
     | Could_possibly_be_inlined
 
