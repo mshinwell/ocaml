@@ -498,14 +498,8 @@ let add_extra_params_and_args extra_params_and_args decision =
       let extra_param = KP.create tag.param K.With_subkind.naked_immediate in
       EPA.add extra_params_and_args ~extra_param ~extra_args:tag.args
     | Unbox Number (naked_number_kind, epa) ->
-      (* CR pchambart: This is seriously too contrived for what it's doing.
-         Flambda_kind.With_subkind needs a function for doing that *)
-      let boxable_number_kind =
-        K.Boxable_number.of_naked_number_kind naked_number_kind
-      in
-      let kind = K.Boxable_number.to_kind boxable_number_kind in
       let kind_with_subkind =
-        K.With_subkind.create kind K.With_subkind.Subkind.Anything
+        K.With_subkind.of_naked_number_kind naked_number_kind
       in
       let extra_param = KP.create epa.param kind_with_subkind in
       EPA.add extra_params_and_args ~extra_param ~extra_args:epa.args

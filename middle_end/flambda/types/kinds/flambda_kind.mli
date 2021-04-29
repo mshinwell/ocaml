@@ -187,6 +187,8 @@ module With_subkind : sig
   val boxed_nativeint : t
   val tagged_immediate : t
 
+  val of_naked_number_kind : Naked_number_kind.t -> t
+
   type descr = private
     | Any_value
     | Naked_number of Naked_number_kind.t

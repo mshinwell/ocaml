@@ -436,6 +436,14 @@ module With_subkind = struct
   let boxed_nativeint = create value Boxed_nativeint
   let tagged_immediate = create value Tagged_immediate
 
+  let of_naked_number_kind (naked_number_kind : Naked_number_kind.t) =
+    match naked_number_kind with
+    | Naked_immediate -> naked_immediate
+    | Naked_float -> naked_float
+    | Naked_int32 -> naked_int32
+    | Naked_int64 -> naked_int64
+    | Naked_nativeint -> naked_nativeint
+
   include Identifiable.Make (struct
     type nonrec t = t
 
