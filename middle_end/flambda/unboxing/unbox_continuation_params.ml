@@ -24,8 +24,8 @@ module Decisions = struct
   type t = U.decisions
 end
 
-let update_decision ~pass rewrite_ids_already_seen nth_arg arg_type_by_use_id
-      (decision : U.decision) =
+let refine_decision_based_on_arg_types_at_uses ~pass ~rewrite_ids_seen nth_arg
+      arg_type_by_use_id (decision : U.decision) =
   match decision with
   | Do_not_unbox _ as decision -> decision
   | Unbox _ as decision ->
@@ -33,7 +33,7 @@ let update_decision ~pass rewrite_ids_already_seen nth_arg arg_type_by_use_id
       (fun rewrite_id
            (arg_at_use : Continuation_env_and_param_types.arg_at_use)
            decision ->
-         if Apply_cont_rewrite_id.Set.mem rewrite_id rewrite_ids_already_seen
+         if Apply_cont_rewrite_id.Set.mem rewrite_id rewrite_ids_seen
          then decision
          else begin
            let typing_env_at_use = arg_at_use.typing_env in
@@ -58,13 +58,14 @@ let make_decisions ~continuation_is_recursive ~arg_types_by_use_id
     Misc.Stdlib.List.fold_left3
       (fun (nth, denv, rev_decisions, seen) param param_type
            arg_type_by_use_id ->
-         (* Make an optimist decision, filter it based on the arg types at the
+         (* Make an optimistic decision, filter it based on the arg types at the
             use sites (to prevent decisions that would be detrimental),
             and compute the necessary denv. *)
          let decision =
            Optimistic_unboxing_decision.make_optimistic_decision ~depth:0
              (DE.typing_env denv) ~param_type
-           |> update_decision empty nth arg_type_by_use_id
+           |> refine_decision_based_on_arg_types_at_uses
+                ~rewrite_ids_seen:empty nth arg_type_by_use_id
                 ~pass:(Filter { recursive = continuation_is_recursive; })
            |> Is_unboxing_beneficial.filter_non_beneficial_decisions
          in
@@ -73,7 +74,7 @@ let make_decisions ~continuation_is_recursive ~arg_types_by_use_id
              decision
          in
          (* Compute the set of rewrite ids that have been considered when
-            updating decisions, and check that all arg_type_by_use_id cover
+            updating decisions, and check that all [arg_type_by_use_id]s cover
             the same set of rewrite ids. *)
          let seen =
            match seen with
@@ -104,8 +105,9 @@ let compute_extra_params_and_args
     List.fold_left2
       (fun (nth, extra_params_and_args) arg_type_by_use_id (_, decision) ->
          let decision =
-           update_decision ~pass:Compute_all_extra_args
-             rewrite_ids_seen nth arg_type_by_use_id decision
+           refine_decision_based_on_arg_types_at_uses
+             ~pass:Compute_all_extra_args
+             ~rewrite_ids_seen nth arg_type_by_use_id decision
          in
          let extra_params_and_args =
            Unboxing_epa.add_extra_params_and_args

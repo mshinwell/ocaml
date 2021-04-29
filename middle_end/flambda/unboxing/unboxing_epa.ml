@@ -21,9 +21,9 @@ open! Simplify_import
 open Unboxing_types
 module U = Unboxers
 
-exception Prevent_this_unboxing
+exception Prevent_current_unboxing
 
-let prevent_current_unboxing () = raise Prevent_this_unboxing
+let prevent_current_unboxing () = raise Prevent_current_unboxing
 
 type unboxed_arg =
   | Poison (* used for recursive calls *)
@@ -31,14 +31,12 @@ type unboxed_arg =
   | Generated of Variable.t
   | Added_by_wrapper_at_rewrite_use of { nth_arg : int; }
 
-(*
-let print_unboxed_arg ppf = function
+let _print_unboxed_arg ppf = function
   | Poison -> Format.fprintf ppf "poison"
   | Available simple -> Format.fprintf ppf "simple: %a" Simple.print simple
   | Generated v -> Format.fprintf ppf "generated: %a" Variable.print v
   | Added_by_wrapper_at_rewrite_use {nth_arg } ->
     Format.fprintf ppf "added_by_wrapper(%d)" nth_arg
-*)
 
 let type_of_arg_being_unboxed unboxed_arg =
   let aux simple = T.alias_type_of K.value simple in
@@ -155,7 +153,7 @@ let extra_args_for_const_ctor_of_variant
           (extra_arg_for_ctor ~typing_env_at_use variant_arg)
       in
       At_least_one { ctor = Unbox (Number (Naked_immediate, ctor)); is_int; }
-    with Prevent_this_unboxing ->
+    with Prevent_current_unboxing ->
       At_least_one {
         ctor = Do_not_unbox Not_enough_information_at_use;
         is_int;
@@ -195,7 +193,7 @@ let rec compute_extra_args_for_one_decision_and_use ~pass
   try
     compute_extra_args_for_one_decision_and_use_aux ~pass
       rewrite_id ~typing_env_at_use arg_being_unboxed decision
-  with Prevent_this_unboxing ->
+  with Prevent_current_unboxing ->
     begin match pass with
     | Filter _ -> Do_not_unbox Not_enough_information_at_use
     | Compute_all_extra_args ->
