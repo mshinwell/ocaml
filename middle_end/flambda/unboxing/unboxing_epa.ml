@@ -356,7 +356,7 @@ and compute_extra_args_for_variant ~pass
            { arg_being_unboxed; is_int = Simple.untagged_const_true;})
     else begin
       (* CR gbury: one might want to try and use the cse at use to allow
-         unboxing when the tag is not know statically but can be
+         unboxing when the tag is not known statically but can be
          recovered through the cse. *)
       prevent_current_unboxing ()
     end

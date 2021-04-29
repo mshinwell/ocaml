@@ -18,9 +18,6 @@
 
 open! Simplify_import
 
-(* Typedefs for unboxing decisions *)
-(* ******************************* *)
-
 type do_not_unbox_reason =
   | Not_beneficial
   | Max_depth_exceeded
@@ -176,3 +173,12 @@ let print ppf { decisions; rewrite_ids_seen; } =
     )@]"
     (Format.pp_print_list ~pp_sep aux) decisions
     Apply_cont_rewrite_id.Set.print rewrite_ids_seen
+
+module Decisions = struct
+  type t = decisions = {
+    decisions : (KP.t * decision) list;
+    rewrite_ids_seen : Apply_cont_rewrite_id.Set.t;
+  }
+
+  let print = print
+end

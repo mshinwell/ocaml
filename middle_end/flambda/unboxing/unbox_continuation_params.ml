@@ -19,10 +19,7 @@
 open! Simplify_import
 
 module U = Unboxing_types
-
-module Decisions = struct
-  type t = U.decisions
-end
+module Decisions = U.Decisions
 
 let refine_decision_based_on_arg_types_at_uses ~pass ~rewrite_ids_seen nth_arg
       arg_type_by_use_id (decision : U.decision) =
