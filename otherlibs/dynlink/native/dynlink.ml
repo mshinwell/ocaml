@@ -26,10 +26,10 @@ module DC = Dynlink_common
 module DT = Dynlink_types
 
 type global_map = {
-  name : string;
+  name : Compilation_unit.Name.t;
   crc_intf : Digest.t option;
   crc_impl : Digest.t option;
-  syms : string list
+  syms : Symbol.t list;
 }
 
 module Native = struct
@@ -51,7 +51,12 @@ module Native = struct
     let interface_imports (t : t) = t.dynu_imports_cmi
     let implementation_imports (t : t) = t.dynu_imports_cmx
 
-    let defined_symbols (t : t) = t.dynu_defines
+    let defined_symbols (t : t) =
+      List.map (fun comp_unit ->
+          Symbol.for_compilation_unit comp_unit
+          |> Symbol.linkage_name)
+        t.dynu_defines
+
     let unsafe_module _t = false
   end
 
@@ -65,6 +70,8 @@ module Native = struct
   let fold_initial_units ~init ~f =
     let rank = ref 0 in
     List.fold_left (fun acc { name; crc_intf; crc_impl; syms; } ->
+        let name = Compilation_unit.Name.to_string name in
+        let syms = List.map Symbol.linkage_name syms in
         rank := !rank + List.length syms;
         let implementation =
           match crc_impl with

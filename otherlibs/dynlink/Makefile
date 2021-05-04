@@ -87,6 +87,7 @@ COMPILERLIBS_SOURCES=\
   utils/load_path.ml \
   utils/int_replace_polymorphic_compare.ml \
   utils/lazy_backtrack.ml \
+  utils/compilation_unit.ml \
   parsing/location.ml \
   parsing/longident.ml \
   parsing/docstrings.ml \
@@ -110,6 +111,11 @@ COMPILERLIBS_SOURCES=\
   lambda/debuginfo.ml \
   lambda/lambda.ml \
   lambda/runtimedef.ml \
+  middle_end/internal_variable_names.ml \
+  middle_end/variable.ml \
+  middle_end/flambda/base_types/closure_element.ml \
+  middle_end/flambda/base_types/closure_id.ml \
+  middle_end/symbol.ml \
   bytecomp/instruct.ml \
   bytecomp/opcodes.ml \
   bytecomp/bytesections.ml \

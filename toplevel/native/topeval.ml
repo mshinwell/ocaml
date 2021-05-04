@@ -35,7 +35,10 @@ external ndl_run_toplevel: string -> string -> res
 let implementation_label = "native toplevel"
 
 let global_symbol id =
-  let sym = Compilenv.symbol_for_global id in
+  let sym =
+    Symbol.for_ident id
+    |> Symbol.linkage_name
+  in
   match Dynlink.unsafe_get_global_value ~bytecode_or_asm_symbol:sym with
   | None ->
     fatal_error ("Toploop.global_symbol " ^ (Ident.unique_name id))
@@ -95,7 +98,7 @@ module EvalBase = struct
 
   let eval_ident id =
     try
-      if Ident.persistent id || Ident.global id
+      if Ident.is_global_or_predef id
       then global_symbol id
       else toplevel_value id
     with _ ->
@@ -118,8 +121,8 @@ let phrase_name = ref "TOP"
 module Backend = struct
   (* See backend_intf.mli. *)
 
-  let symbol_for_global' = Compilenv.symbol_for_global'
-  let closure_symbol = Compilenv.closure_symbol
+  let pack_prefix_for_ident id =
+    Compilenv.pack_prefix_for_global_ident id
 
   let really_import_approx = Import_approx.really_import_approx
   let import_symbol = Import_approx.import_symbol
@@ -197,7 +200,10 @@ let execute_phrase print_outcome ppf phr =
       let oldenv = !toplevel_env in
       incr phrase_seqid;
       phrase_name := Printf.sprintf "TOP%i" !phrase_seqid;
-      Compilenv.reset ?packname:None !phrase_name;
+      let comp_unit =
+        Compilation_unit.create (Compilation_unit.Name.of_string !phrase_name)
+      in
+      Compilenv.reset comp_unit;
       Typecore.reset_delayed_checks ();
       let sstr, rewritten =
         match sstr with
