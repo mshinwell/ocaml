@@ -22,7 +22,7 @@ let compile_file filename =
     Emitaux.output_channel := open_out out_name
   end; (* otherwise, stdout *)
   let comp_unit =
-    Compilation_unit.create (Compilation_unit.Name.of_string "test")
+    Compilation_unit.create (Compilation_unit.Name.of_string "Test")
   in
   Compilenv.reset comp_unit;
   Emit.begin_assembly();
