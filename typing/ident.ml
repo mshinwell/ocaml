@@ -154,14 +154,14 @@ let print_with_scope ppf id = print ~with_scope:true ppf id
 
 let print ppf id = print ~with_scope:false ppf id
 
-let compilation_unit_name_of_global_ident t =
+let compilation_unit_of_global_ident t =
   match t with
-  | Global name -> CU.Name.of_string name
+  | Global name -> CU.of_string name
   | Predef _ | Local _ | Scoped _ ->
     Misc.fatal_errorf "%a is not a global Ident" print t
 
-let of_compilation_unit_name comp_unit_name =
-  Global (CU.Name.to_string comp_unit_name)
+let of_compilation_unit comp_unit =
+  Global (CU.full_path_as_string comp_unit)
 
 type 'a tbl =
     Empty

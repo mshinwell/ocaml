@@ -71,6 +71,9 @@ let for_ident id =
     if Ident.is_predef id then
       "caml_exn_" ^ Ident.name id, CU.predef_exn
     else if Ident.is_global id then
+      let compilation_unit = Ident.compilation_unit_name_of_global_ident id in
+      linkage_name_for_compilation_unit compilation_unit, compilation_unit
+      (*
       let comp_unit_name = Ident.compilation_unit_name_of_global_ident id in
       let current_comp_unit = CU.get_current_exn () in
       let current_comp_unit_name = CU.name current_comp_unit in
@@ -81,8 +84,9 @@ let for_ident id =
       else
         let compilation_unit = CU.create comp_unit_name in
         linkage_name_for_compilation_unit compilation_unit, compilation_unit
+        *)
     else
-      let compilation_unit = CU.get_current_exn () in
+      let compilation_unit = CU.get_current_exn () inx
       let linkage_name =
         linkage_name_for_compilation_unit compilation_unit
           ^ separator ^ Ident.unique_name id
