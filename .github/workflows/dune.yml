@@ -130,6 +130,10 @@ jobs:
     - name: Build the flambda compiler (stage 1)
       working-directory: test
       run: dune build --profile release --display quiet @world
+    # Run meet test, it only works after dune build @world
+    - name: run flambda internal tests
+      working-directory: test
+      run: dune exec middle_end/flambda/tests/meet_test.exe
     # Output full dune log in case of build failure
     - name: Dump dune log if build failed
       working-directory: test
