@@ -60,27 +60,27 @@ jobs:
         key: ${{ matrix.os }}-cache-install-ocaml4120-flambda-dune213
 
     # ### STEP 1 ###
-    # Get a working 4.10 statmemprof ocaml install, with dune
+    # Get a working 4.12 statmemprof ocaml install, with dune
     #
     # For that, checkout the relevant repo, build and install ocaml in
     # a dedicated directory, and build and install dune in that directory
     #
     # Additionally, a cache of the install directory is used, so that the
-    # checkout and build of 4.10 is skipped if the cache is hit.
+    # checkout and build of 4.12 is skipped if the cache is hit.
     # If cache is hit, then restore backup ocamlopt.opt
     - name: Restore ocamlopt backup
       if: steps.cache.outputs.cache-hit == 'true'
       run: |
         cp install/bin/ocamlopt.opt.backup install/bin/ocamlopt.opt
-    # If cache is not hit: checkout a 4.10 branch
-    - name: Checkout ocaml.4.10
+    # If cache is not hit: checkout a 4.12 branch
+    - name: Checkout ocaml.4.12
       uses: actions/checkout@master
       if: steps.cache.outputs.cache-hit != 'true'
       with:
         repository: 'ocaml/ocaml'
         path: 'base'
         ref: '4.12'
-    # Apply ocamltest patch to 4.10 repo
+    # Apply ocamltest patch to 4.12 repo
     - name: Apply ocamltest patch
       if: steps.cache.outputs.cache-hit != 'true'
       working-directory: base
@@ -119,10 +119,10 @@ jobs:
 
 
     # ### STEP 2 ###
-    # Build the flambda-enabled compiler using the 4.10+flambda
+    # Build the flambda2-enabled compiler using the 4.12
     # compiler and dune.
 
-    # Configure the flambda compiler
+    # Configure the flambda2 compiler
     - name: Configure the flambda compiler (stage 1)
       working-directory: test
       run: ./configure --enable-flambda --without-ocamldoc
@@ -147,7 +147,7 @@ jobs:
 
 
     # ### STEP 3 ###
-    # Build the compiler again, this time using the flambda compiler.
+    # Build the flambda2 compiler again, this time using the flambda2 compiler.
     # Build ocamlc, ocamlopt.opt using dune
     #
     # Apply some patch
