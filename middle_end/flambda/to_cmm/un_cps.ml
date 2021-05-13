@@ -1054,7 +1054,7 @@ and wrap_cont env res effs call e =
 and apply_cont env res e =
   let k = Apply_cont_expr.continuation e in
   let args = Apply_cont_expr.args e in
-  if Continuation.is_exn k then
+  if Env.is_exn_handler env k then
     apply_cont_exn env res e k args
   else if Continuation.equal (Env.return_cont env) k then
     apply_cont_ret env res e k args
@@ -1486,7 +1486,7 @@ let unit (middle_end_result : Flambda_middle_end.middle_end_result) =
        (Module initialisers return the unit value). *)
     let env =
       Env.mk offsets functions_info dummy_k
-        (Flambda_unit.exn_continuation unit)
+        ~exn_continuation:(Flambda_unit.exn_continuation unit)
         ~used_closure_vars
     in
     let _env, return_cont_params =

@@ -18,10 +18,6 @@
     associated with an [Apply_cont] node; the trap action is executed before
     the application of the continuation.
 
-    [Pop] may not appear to need the [exn_handler] value during Flambda
-    passes---but in fact it does, since it compiles to a reference to such
-    continuation, and must not be moved out of its scope.
-
     Beware: continuations cannot be used both as an exception handler and as
     a normal continuation (since continuations used as exception handlers
     use a calling convention that may differ from normal).
@@ -38,6 +34,10 @@ type t =
   | Push of { exn_handler : Continuation.t; }
   | Pop of {
       exn_handler : Continuation.t;
+      (** Note that even for [Pop], [exn_handler] might not match the
+          target continuation in the enclosing [Apply_cont_expr].  One
+          example is when a value is being returned from the end of the
+          non-exceptional block of a try...with. *)
       raise_kind : raise_kind option;
     }
 

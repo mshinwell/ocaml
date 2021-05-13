@@ -163,10 +163,9 @@ Format.eprintf "%d uses for %a\n%!"
 Format.eprintf "Unknown at or later than %a\n%!"
   Scope.print (Scope.next definition_scope_level);
 *)
-    let handler_env, extra_params_and_args, is_single_inlinable_use =
+    let handler_env, extra_params_and_args, is_single_inlinable_use, escapes =
       match use_envs_with_ids with
-      | [use_env, _, Inlinable]
-          when not (Continuation.is_exn t.continuation) ->
+      | [use_env, _, Inlinable] ->
         (* We need to make sure any lifted constants generated during the
            simplification of the body are in the environment.  Otherwise
            we might share a constant based on information in [DA] but then
@@ -176,9 +175,9 @@ Format.eprintf "Unknown at or later than %a\n%!"
           LCS.add_to_denv ~maybe_already_defined:() use_env
             consts_lifted_during_body
         in
-        use_env, Continuation_extra_params_and_args.empty, true
-      | [] | [_, _, (Inlinable | Non_inlinable)]
-      | (_, _, (Inlinable | Non_inlinable)) :: _ ->
+        use_env, Continuation_extra_params_and_args.empty, true, false
+      | [] | [_, _, (Non_inlinable _)]
+      | (_, _, (Inlinable | Non_inlinable _)) :: _ ->
         (* The lifted constants are put into the fork environment now because
            it overall makes things easier; the join operation can just discard
            any equation about a lifted constant (any such equation could not be
@@ -275,9 +274,17 @@ Format.eprintf "The extra params and args are:@ %a\n%!"
         in
         match use_envs_with_ids with
         | [_, _, Inlinable] -> assert false  (* handled above *)
-        | [] | [_, _, Non_inlinable]
-        | (_, _, (Inlinable | Non_inlinable)) :: _ ->
-          denv, extra_params_and_args, false
+        | [] | [_, _, Non_inlinable _]
+        | (_, _, (Inlinable | Non_inlinable _)) :: _ ->
+          let escapes =
+            List.exists
+              (fun (_, _, (cont_use_kind : Continuation_use_kind.t)) ->
+                match cont_use_kind with
+                | Inlinable | Non_inlinable { escaping = false; } -> false
+                | Non_inlinable { escaping = true; } -> true)
+              use_envs_with_ids
+          in
+          denv, extra_params_and_args, false, escapes
     in
     let arg_types_by_use_id =
       List.fold_left (fun args use ->
@@ -298,6 +305,7 @@ Format.eprintf "The extra params and args are:@ %a\n%!"
       arg_types_by_use_id;
       extra_params_and_args;
       is_single_inlinable_use;
+      escapes;
     }
 
 let get_typing_env_no_more_than_one_use t =

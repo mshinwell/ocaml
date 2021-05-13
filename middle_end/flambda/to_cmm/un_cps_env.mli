@@ -48,7 +48,7 @@ type t
 val mk :
   Exported_offsets.t ->
   Exported_code.t ->
-  Continuation.t -> Continuation.t ->
+  Continuation.t -> exn_continuation:Continuation.t ->
   used_closure_vars:Var_within_closure.Set.t Or_unknown.t -> t
 (** [mk offsets k k_exn ~used_closure_vars] creates a local environment for
     translating a flambda expression, with return continuation [k], exception
@@ -153,7 +153,12 @@ val add_inline_cont :
 val add_exn_handler :
   t -> Continuation.t -> Flambda_arity.t
   -> t * (Backend_var.t * Flambda_kind.t) list
-(** Setup the extra mutable variables needed if the handler has extra arguments *)
+(** Register the given continuation as an exception handler and set up the
+    extra mutable variables needed if the handler has extra arguments *)
+
+val is_exn_handler : t -> Continuation.t -> bool
+(** Return whether the given continuation has been registered as an
+    exception handler. *)
 
 val get_exn_extra_args :
   t -> Continuation.t -> Backend_var.t list

@@ -54,6 +54,13 @@ val continuation_uses_env : t -> Continuation_uses_env.t
 
 val with_continuation_uses_env : t -> cont_uses_env:Continuation_uses_env.t -> t
 
+(** Mark that an exception handler continuation should be converted to a
+    normal continuation.  This is used when turning local exceptions into
+    jumps. *)
+val demote_exn_handler : t -> Continuation.t -> t
+
+val demoted_exn_handlers : t -> Continuation.Set.t
+
 val code_age_relation : t -> Code_age_relation.t
 
 val with_code_age_relation : t -> Code_age_relation.t -> t

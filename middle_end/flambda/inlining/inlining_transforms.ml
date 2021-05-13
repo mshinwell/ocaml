@@ -93,7 +93,7 @@ let wrap_inlined_body_for_exn_support ~extra_args ~apply_exn_continuation
      a lazy rewriting, that would add the correct extra args
      to all uses of the exception continuation in the body.
    *)
-  let wrapper = Continuation.create ~sort:Exn () in
+  let wrapper = Continuation.create ~sort:Normal_or_exn () in
   let body_with_pop =
     match (apply_return_continuation : Apply.Result_continuation.t) with
     | Never_returns ->

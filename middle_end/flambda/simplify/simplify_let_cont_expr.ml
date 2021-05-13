@@ -19,9 +19,9 @@
 open! Simplify_import
 
 let rebuild_one_continuation_handler cont ~at_unit_toplevel
-      (recursive : Recursive.t) (cont_handler : CH.t) ~params
-      ~(extra_params_and_args : EPA.t) ~is_single_inlinable_use handler uacc
-      ~after_rebuild =
+      (recursive : Recursive.t) ~params
+      ~(extra_params_and_args : EPA.t) ~is_single_inlinable_use
+      ~is_exn_handler handler uacc ~after_rebuild =
   let handler, uacc =
     let params = params @ extra_params_and_args.extra_params in
     (* We might need to place lifted constants now, as they could
@@ -111,7 +111,7 @@ let rebuild_one_continuation_handler cont ~at_unit_toplevel
             (* CR mshinwell: We should have a robust means of propagating which
                parameter is the exception bucket.  Then this hack can be
                removed. *)
-            if !first && Continuation.is_exn cont then begin
+            if !first && is_exn_handler then begin
               first := false;
               true
             end else begin
@@ -177,14 +177,15 @@ let rebuild_one_continuation_handler cont ~at_unit_toplevel
     RE.Continuation_handler.create (UA.are_rebuilding_terms uacc)
       params ~handler
       ~free_names_of_handler:free_names
-      ~is_exn_handler:(CH.is_exn_handler cont_handler)
+      ~is_exn_handler
   in
   after_rebuild cont_handler ~params ~handler
     ~free_names_of_handler:free_names ~cost_metrics_of_handler:cost_metrics uacc
 
 let simplify_one_continuation_handler ~simplify_expr dacc cont
-      ~at_unit_toplevel recursive cont_handler ~params ~handler
-      ~extra_params_and_args ~is_single_inlinable_use ~down_to_up =
+      ~at_unit_toplevel recursive ~params ~handler
+      ~extra_params_and_args ~is_single_inlinable_use
+      ~is_exn_handler ~down_to_up =
   simplify_expr dacc handler
     ~down_to_up:(fun dacc ~rebuild ->
       down_to_up dacc ~rebuild:(fun uacc ~after_rebuild ->
@@ -194,8 +195,9 @@ let simplify_one_continuation_handler ~simplify_expr dacc cont
         assert (Name_occurrences.is_empty (UA.name_occurrences uacc));
         rebuild uacc ~after_rebuild:(fun handler uacc ->
           rebuild_one_continuation_handler cont ~at_unit_toplevel recursive
-            cont_handler ~params ~extra_params_and_args
-            ~is_single_inlinable_use handler uacc ~after_rebuild)))
+            ~params ~extra_params_and_args
+            ~is_single_inlinable_use ~is_exn_handler
+            handler uacc ~after_rebuild)))
 
 type behaviour =
   | Unreachable
@@ -332,36 +334,58 @@ let simplify_non_recursive_let_cont_handler ~simplify_expr
           ~is_single_inlinable_use:false scope ~is_exn_handler
           EPA.empty cont_handler uacc ~after_rebuild)
   | Uses { handler_env; arg_types_by_use_id; extra_params_and_args;
-           is_single_inlinable_use; } ->
-    let handler_env, extra_params_and_args =
-      (* Unbox the parameters of the continuation if possible.
-         Any such unboxing will induce a rewrite (or wrapper) on
-         the application sites of the continuation. *)
+           is_single_inlinable_use; escapes; } ->
+    let handler_env, extra_params_and_args, is_exn_handler, dacc =
       match Continuation.sort cont with
-      | Normal when is_single_inlinable_use ->
-        assert (not is_exn_handler);
-        handler_env, extra_params_and_args
-      | Normal | Define_root_symbol ->
-        assert (not is_exn_handler);
-        let param_types =
-          TE.find_params (DE.typing_env handler_env) params
+      | Normal_or_exn when is_single_inlinable_use ->
+        if is_exn_handler then begin
+          (* This should be prevented by [Simplify_apply_cont_expr]. *)
+          Misc.fatal_errorf "Exception handlers should never be marked as \
+              [Inlinable]:@ %a"
+            CH.print cont_handler
+        end;
+        handler_env, extra_params_and_args, false, dacc
+      | Normal_or_exn | Define_root_symbol ->
+        let old_is_exn_handler = is_exn_handler in
+        (* If the continuation is an exception handler but it never escapes,
+           it can be demoted to a normal (non-exception) handler.  It will
+           then become eligible for unboxing. *)
+        let is_exn_handler =
+          is_exn_handler && escapes
         in
-        let handler_env, decisions =
-          Unbox_continuation_params.make_decisions handler_env
-            ~continuation_is_recursive:false
-            ~arg_types_by_use_id params param_types
+        let dacc =
+          if not (Bool.equal old_is_exn_handler is_exn_handler) then
+            DA.demote_exn_handler dacc cont
+          else
+            dacc
         in
-        let epa =
-          Unbox_continuation_params.compute_extra_params_and_args
-            ~arg_types_by_use_id decisions extra_params_and_args
-        in
-        handler_env, epa
+        if is_exn_handler then
+          handler_env, extra_params_and_args, true, dacc
+        else
+          (* Unbox the parameters of the continuation if possible.
+             Any such unboxing will induce a rewrite (or wrapper) on
+             the application sites of the continuation. *)
+          let param_types =
+            TE.find_params (DE.typing_env handler_env) params
+          in
+          let handler_env, decisions =
+            Unbox_continuation_params.make_decisions handler_env
+              ~continuation_is_recursive:false
+              ~arg_types_by_use_id params param_types
+          in
+          let epa =
+            Unbox_continuation_params.compute_extra_params_and_args
+              ~arg_types_by_use_id decisions extra_params_and_args
+          in
+          handler_env, epa, false, dacc
       | Return | Toplevel_return ->
-        assert (not is_exn_handler);
-        handler_env, extra_params_and_args
-      | Exn ->
-        assert is_exn_handler;
-        handler_env, extra_params_and_args
+        if is_exn_handler then begin
+          (* This should be prevented by [Simplify_apply_cont_expr]. *)
+          Misc.fatal_errorf "Exception handlers should never be marked as \
+              [Return] or [Toplevel_return]:@ %a"
+            CH.print cont_handler
+        end;
+        handler_env, extra_params_and_args, false, dacc
     in
     let dacc =
       DA.map_data_flow dacc
@@ -410,8 +434,9 @@ let simplify_non_recursive_let_cont_handler ~simplify_expr
       |> DA.with_denv dacc
     in
     simplify_one_continuation_handler ~simplify_expr dacc cont ~at_unit_toplevel
-      Non_recursive cont_handler ~params ~handler ~extra_params_and_args
-      ~is_single_inlinable_use ~down_to_up:(fun dacc ~rebuild ->
+      Non_recursive ~params ~handler ~extra_params_and_args
+      ~is_single_inlinable_use ~is_exn_handler
+      ~down_to_up:(fun dacc ~rebuild ->
         down_to_up dacc ~continuation_has_zero_uses:false
           ~rebuild:(fun uacc ~after_rebuild ->
             rebuild uacc ~after_rebuild:(fun cont_handler ~params ~handler
@@ -643,7 +668,7 @@ let rebuild_recursive_let_cont_handlers cont ~params ~original_cont_scope_level
    simplification of multiple recursive handlers. *)
 let simplify_recursive_let_cont_handlers ~simplify_expr
       ~denv_before_body ~dacc_after_body
-      cont params ~handler cont_handler ~prior_lifted_constants
+      cont params ~handler ~prior_lifted_constants
       ~original_cont_scope_level ~down_to_up =
   let dacc_after_body =
     DA.map_data_flow dacc_after_body ~f:(
@@ -674,8 +699,9 @@ let simplify_recursive_let_cont_handlers ~simplify_expr
   let extra_params_and_args = Continuation_extra_params_and_args.empty in
   simplify_one_continuation_handler ~simplify_expr dacc cont
     ~at_unit_toplevel:false Recursive
-    cont_handler ~params ~handler
+    ~params ~handler
     ~extra_params_and_args ~is_single_inlinable_use:false
+    ~is_exn_handler:false
     ~down_to_up:(fun dacc ~rebuild:rebuild_handler ->
       let dacc = DA.map_data_flow dacc ~f:(Data_flow.exit_continuation cont) in
       let cont_uses_env = CUE.remove (DA.continuation_uses_env dacc) cont in
@@ -775,7 +801,7 @@ let simplify_recursive_let_cont ~simplify_expr dacc recs ~down_to_up =
       simplify_expr dacc body
         ~down_to_up:(fun dacc_after_body ~rebuild:rebuild_body ->
           simplify_recursive_let_cont_handlers ~simplify_expr ~denv_before_body
-            ~dacc_after_body cont params ~handler cont_handler
+            ~dacc_after_body cont params ~handler
             ~prior_lifted_constants ~original_cont_scope_level
             ~down_to_up:(fun dacc ~rebuild:rebuild_handlers ->
               down_to_up dacc ~rebuild:(fun uacc ~after_rebuild ->

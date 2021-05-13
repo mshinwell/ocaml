@@ -133,6 +133,8 @@ type t = {
   conts : cont Continuation.Map.t;
   (* Map from continuations to handlers (i.e variables bound by the
      continuation and expression of the continuation handler). *)
+  exn_handlers : Continuation.Set.t;
+  (* All continuations that act as exception handlers. *)
   exn_conts_extra_args : Backend_var.t list Continuation.Map.t;
   (* Mutable variables used for compiling extra arguments to
      exception handlers *)
@@ -144,7 +146,8 @@ type t = {
 
 }
 
-let mk offsets functions_info k_return k_exn ~used_closure_vars = {
+let mk offsets functions_info k_return ~exn_continuation:k_exn
+      ~used_closure_vars = {
   k_return; k_exn; used_closure_vars; offsets;
   functions_info;
   stages = [];
@@ -152,6 +155,7 @@ let mk offsets functions_info k_return k_exn ~used_closure_vars = {
   vars = Variable.Map.empty;
   vars_extra = Variable.Map.empty;
   conts = Continuation.Map.empty;
+  exn_handlers = Continuation.Set.singleton k_exn;
   exn_conts_extra_args = Continuation.Map.empty;
   names_in_scope = Code_id_or_symbol.Set.empty;
   deleted = Code_id.Set.empty;
@@ -169,6 +173,7 @@ let enter_function_def env k_return k_exn = {
   used_code_ids = env.used_code_ids;
   (* local info *)
   k_return; k_exn;
+  exn_handlers = Continuation.Set.singleton k_exn;
   stages = [];
   pures = Variable.Map.empty;
   vars = Variable.Map.empty;
@@ -266,6 +271,11 @@ let add_inline_cont env k vars ~handler_params_occurrences e =
   { env with conts }
 
 let add_exn_handler env k arity =
+  let env =
+    { env with
+      exn_handlers = Continuation.Set.add k env.exn_handlers;
+    }
+  in
   match arity with
   | [] -> Misc.fatal_error "Exception handler with no arguments"
   | [_] -> env, []
@@ -277,6 +287,9 @@ let add_exn_handler env k arity =
       { env with exn_conts_extra_args =
                    Continuation.Map.add k vars_only env.exn_conts_extra_args; },
       mut_vars
+
+let is_exn_handler t cont =
+  Continuation.Set.mem cont t.exn_handlers
 
 let get_exn_extra_args env k =
   match Continuation.Map.find_opt k env.exn_conts_extra_args with

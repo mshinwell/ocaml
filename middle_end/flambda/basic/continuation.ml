@@ -35,19 +35,17 @@ end;
 
 module Sort = struct
   type t =
-    | Normal
+    | Normal_or_exn
     | Return
     | Define_root_symbol
     | Toplevel_return
-    | Exn
 
   let to_string t =
     match t with
-    | Normal -> "Normal"
+    | Normal_or_exn -> "Normal_or_exn"
     | Return -> "Return"
     | Define_root_symbol -> "Define_root_symbol"
     | Toplevel_return -> "Toplevel_return"
-    | Exn -> "Exn"
 
   let print ppf t = Format.pp_print_string ppf (to_string t)
 end
@@ -121,7 +119,7 @@ let initialise () = grand_table_of_continuations := Table.create ()
 (* CR mshinwell: Document why this uses [next_raise_count].  Does it need
    to?  It would be better if it didn't. *)
 let create ?sort ?name () : t =
-  let sort = Option.value sort ~default:Sort.Normal in
+  let sort = Option.value sort ~default:Sort.Normal_or_exn in
   let name = Option.value name ~default:"k" in
   let compilation_unit = Compilation_unit.get_current_exn () in
   let previous_compilation_units = [] in
@@ -216,11 +214,3 @@ module With_args = struct
       print (Format.formatter_of_out_channel chan) t
   end)
 end
-
-let is_exn t =
-  match sort t with
-  | Exn -> true
-  | Normal
-  | Return
-  | Define_root_symbol
-  | Toplevel_return -> false

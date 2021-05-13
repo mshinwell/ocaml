@@ -80,7 +80,9 @@ let rebuild_apply_cont apply_cont ~args ~rewrite_id uacc ~after_rebuild =
         match AC.trap_action apply_cont with
         | None -> apply_cont
         | Some (Push { exn_handler; } | Pop { exn_handler; _ }) ->
-          if UE.mem_continuation uenv exn_handler then apply_cont
+          if UE.mem_continuation uenv exn_handler
+            && not (UA.is_demoted_exn_handler uacc exn_handler)
+          then apply_cont
           else AC.clear_trap_action apply_cont
       in
       match rewrite with
@@ -155,12 +157,22 @@ let simplify_apply_cont dacc apply_cont ~down_to_up =
        the toplevel continuation?  Probably not -- we should store it in
        the environment. *)
     match Continuation.sort (AC.continuation apply_cont) with
-    | Normal ->
-      (* Until such time as we can manually add to the backtrace buffer,
-         never substitute a "raise" for the body of an exception handler. *)
-      if Option.is_none (Apply_cont.trap_action apply_cont) then Inlinable
-      else Non_inlinable
-    | Return | Toplevel_return | Exn -> Non_inlinable
+    | Normal_or_exn ->
+      begin match Apply_cont.trap_action apply_cont with
+      | None -> Inlinable
+      | Some (Push _) -> Non_inlinable { escaping = false; }
+      | Some (Pop { raise_kind; _ }) ->
+        match raise_kind with
+        | None | Some Regular | Some Reraise ->
+          (* Until such time as we can manually add to the backtrace buffer,
+             we only convert "raise_notrace" into jumps.  So we set
+             [escaping = true] for these other cases. *)
+          Non_inlinable { escaping = true; }
+        | Some No_trace ->
+          Non_inlinable { escaping = false; }
+      end
+    | Return | Toplevel_return ->
+      Non_inlinable { escaping = false; }
     | Define_root_symbol ->
       assert (Option.is_none (Apply_cont.trap_action apply_cont));
       Inlinable

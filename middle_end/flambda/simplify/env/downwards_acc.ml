@@ -30,18 +30,20 @@ type t = {
   used_closure_vars : Name_occurrences.t;
   lifted_constants : LCS.t;
   data_flow : Data_flow.t;
+  demoted_exn_handlers : Continuation.Set.t;
 }
 
 let print ppf
       { denv; continuation_uses_env; shareable_constants; used_closure_vars;
-        lifted_constants; data_flow; } =
+        lifted_constants; data_flow; demoted_exn_handlers; } =
   Format.fprintf ppf "@[<hov 1>(\
       @[<hov 1>(denv@ %a)@]@ \
       @[<hov 1>(continuation_uses_env@ %a)@]@ \
       @[<hov 1>(shareable_constants@ %a)@]@ \
       @[<hov 1>(used_closure_vars@ %a)@]@ \
       @[<hov 1>(lifted_constant_state@ %a)@]@ \
-      @[<hov 1>(data_flow %a)@]\
+      @[<hov 1>(data_flow@ %a)@]@ \
+      @[<hov 1>(demoted_exn_handlers@ %a)@]\
       )@]"
     DE.print denv
     CUE.print continuation_uses_env
@@ -49,6 +51,7 @@ let print ppf
     Name_occurrences.print used_closure_vars
     LCS.print lifted_constants
     Data_flow.print data_flow
+    Continuation.Set.print demoted_exn_handlers
 
 let create denv continuation_uses_env =
   { denv;
@@ -57,6 +60,7 @@ let create denv continuation_uses_env =
     used_closure_vars = Name_occurrences.empty;
     lifted_constants = LCS.empty;
     data_flow = Data_flow.empty;
+    demoted_exn_handlers = Continuation.Set.empty;
   }
 
 let denv t = t.denv
@@ -201,3 +205,10 @@ let are_rebuilding_terms t =
 
 let do_not_rebuild_terms t =
   Are_rebuilding_terms.do_not_rebuild_terms (are_rebuilding_terms t)
+
+let demote_exn_handler t cont =
+  { t with
+    demoted_exn_handlers = Continuation.Set.add cont t.demoted_exn_handlers;
+  }
+
+let demoted_exn_handlers t = t.demoted_exn_handlers

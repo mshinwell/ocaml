@@ -18,4 +18,4 @@
 
 type t =
   | Inlinable
-  | Non_inlinable
+  | Non_inlinable of { escaping : bool; }

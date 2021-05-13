@@ -1369,7 +1369,7 @@ and cont_handlers env handler1 handler2 =
 
 let flambda_units u1 u2 =
   let ret_cont = Continuation.create ~sort:Toplevel_return () in
-  let exn_cont = Continuation.create ~sort:Exn () in
+  let exn_cont = Continuation.create ~sort:Normal_or_exn () in
   let mk_perm u =
     let perm = Renaming.empty in
     let perm =

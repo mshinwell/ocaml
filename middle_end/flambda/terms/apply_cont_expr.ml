@@ -29,10 +29,17 @@ include Identifiable.Make (struct
   let print ppf { k; args; trap_action; dbg; } =
     let name, trap_action =
       match Continuation.sort k, trap_action, args with
-      | Normal, None, [] -> "goto", None
-      | Normal, None, _::_ -> "apply_cont", None
-      | Normal, Some trap_action, [] -> "goto", Some trap_action
-      | Normal, Some trap_action, _::_ -> "apply_cont", Some trap_action
+      | Normal_or_exn, None, [] -> "goto", None
+      | Normal_or_exn, None, _::_ -> "apply_cont", None
+      | Normal_or_exn, Some (Push _), [] -> "goto", trap_action
+      | Normal_or_exn, Some (Push _), _::_ -> "apply_cont", trap_action
+      | Normal_or_exn, Some (Pop { exn_handler; _ }), _ ->
+        if Continuation.equal k exn_handler then "raise", trap_action
+        else
+          begin match args with
+          | [] -> "goto", trap_action
+          | _::_ -> "apply_cont", trap_action
+          end
       | Return, None, [] -> "return", None
       | Return, None, _::_ -> "return", None
       | Return, Some trap_action, [] -> "return", Some trap_action
@@ -53,12 +60,6 @@ include Identifiable.Make (struct
         "module_init_end", Some trap_action
       | Toplevel_return, Some trap_action, _::_ ->
         "module_init_end", Some trap_action
-      (* CR mshinwell: See CR on [create], below. *)
-      | Exn, (None | Some (Push _)), []
-      | Exn, (None | Some (Push _)), _::_ ->
-        "apply_cont", trap_action (*assert false*)
-      | Exn, Some (Pop _), [] -> "raise", None
-      | Exn, Some (Pop _), _::_ -> "raise", None
     in
     Format.fprintf ppf "@[<hov 1>%a@<0>%s%s@<0>%s %a"
       Trap_action.Option.print trap_action
@@ -133,7 +134,7 @@ let invariant env ({ k; args; trap_action; dbg=_; } as t) =
       print t
   end;
   begin match kind with
-  | Normal -> ()
+  | Normal_or_exn -> ()
   | Exn_handler ->
     Misc.fatal_errorf "Continuation %a is an exception handler \
         but is used in this [Apply_cont] term as a normal continuation:@ \
@@ -148,7 +149,7 @@ let invariant env ({ k; args; trap_action; dbg=_; } as t) =
     | Some (arity, kind (*, cont_stack *)) ->
       begin match kind with
       | Exn_handler -> ()
-      | Normal ->
+      | Normal_or_exn ->
         Misc.fatal_errorf "Continuation %a is a normal continuation  \
             but is used in the trap action of this [Apply] term as an \
             exception handler:@ %a"

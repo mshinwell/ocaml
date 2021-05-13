@@ -38,13 +38,14 @@ type t = {
   are_rebuilding_terms : ART.t;
   generate_phantom_lets : bool;
   required_variables : Variable.Set.t;
+  demoted_exn_handlers : Continuation.Set.t;
 }
 
 let print ppf
       { uenv; creation_dacc = _; code_age_relation; lifted_constants;
         name_occurrences; used_closure_vars; all_code = _;
         shareable_constants; cost_metrics; are_rebuilding_terms;
-        generate_phantom_lets; required_variables; } =
+        generate_phantom_lets; required_variables; demoted_exn_handlers; } =
   Format.fprintf ppf "@[<hov 1>(\
       @[<hov 1>(uenv@ %a)@]@ \
       @[<hov 1>(code_age_relation@ %a)@]@ \
@@ -55,7 +56,8 @@ let print ppf
       @[<hov 1>(cost_metrics@ %a)@]@ \
       @[<hov 1>(are_rebuilding_terms@ %a)@]@ \
       @[<hov 1>(generate_phantom_lets@ %b)@]@ \
-      @[<hov 1>(required_variables %a)@]\
+      @[<hov 1>(required_variables@ %a)@]@ \
+      @[<hov 1>(demoted_exn_handlers@ %a)@]\
       )@]"
     UE.print uenv
     Code_age_relation.print code_age_relation
@@ -67,6 +69,7 @@ let print ppf
     ART.print are_rebuilding_terms
     generate_phantom_lets
     Variable.Set.print required_variables
+    Continuation.Set.print demoted_exn_handlers
 
 let create ~required_variables uenv dacc =
   let are_rebuilding_terms = DE.are_rebuilding_terms (DA.denv dacc) in
@@ -87,6 +90,7 @@ let create ~required_variables uenv dacc =
     are_rebuilding_terms;
     generate_phantom_lets;
     required_variables;
+    demoted_exn_handlers = DA.demoted_exn_handlers dacc;
   }
 
 let creation_dacc t = t.creation_dacc
@@ -168,3 +172,6 @@ let add_cost_metrics cost_metrics t =
   { t with cost_metrics = Flambda.Cost_metrics.(+) t.cost_metrics cost_metrics }
 
 let generate_phantom_lets t = t.generate_phantom_lets
+
+let is_demoted_exn_handler t cont =
+  Continuation.Set.mem cont t.demoted_exn_handlers

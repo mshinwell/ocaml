@@ -91,3 +91,5 @@ val notify_removed: operation:Removed_operations.t -> t -> t
 val generate_phantom_lets : t -> bool
 
 val are_rebuilding_terms : t -> Are_rebuilding_terms.t
+
+val is_demoted_exn_handler : t -> Continuation.t -> bool

@@ -155,7 +155,8 @@ let simplify_direct_full_application ~simplify_expr dacc apply function_decl_opt
       | Never_returns -> dacc, None
       | Return apply_return_continuation ->
         let dacc, use_id =
-          DA.record_continuation_use dacc apply_return_continuation Non_inlinable
+          DA.record_continuation_use dacc apply_return_continuation
+            (Non_inlinable { escaping = true; })
             ~env_at_use:(DA.denv dacc)
             ~arg_types:(T.unknown_types_from_arity_with_subkinds result_arity)
         in
@@ -164,7 +165,7 @@ let simplify_direct_full_application ~simplify_expr dacc apply function_decl_opt
     let dacc, exn_cont_use_id =
       DA.record_continuation_use dacc
         (Exn_continuation.exn_handler (Apply.exn_continuation apply))
-        Non_inlinable
+        (Non_inlinable { escaping = true; })
         ~env_at_use:(DA.denv dacc)
         ~arg_types:(T.unknown_types_from_arity_with_subkinds (
           Exn_continuation.arity (Apply.exn_continuation apply)))
@@ -505,7 +506,7 @@ let simplify_function_call_where_callee's_type_unavailable dacc apply
   let dacc, exn_cont_use_id =
     DA.record_continuation_use dacc
       (Exn_continuation.exn_handler (Apply.exn_continuation apply))
-      Non_inlinable
+      (Non_inlinable { escaping = true; })
       ~env_at_use:(DA.denv dacc)
       ~arg_types:(T.unknown_types_from_arity_with_subkinds (
         Exn_continuation.arity (Apply.exn_continuation apply)))
@@ -521,14 +522,17 @@ let simplify_function_call_where_callee's_type_unavailable dacc apply
         Apply.print apply
     end;
 *)
-    DA.record_continuation_use dacc cont Non_inlinable ~env_at_use
+    DA.record_continuation_use dacc cont
+      (Non_inlinable { escaping = true; })
+      ~env_at_use
       ~arg_types:(T.unknown_types_from_arity_with_subkinds return_arity)
   in
   let call_kind, use_id, dacc =
     match call with
     | Indirect_unknown_arity ->
       let dacc, use_id =
-        DA.record_continuation_use dacc cont Non_inlinable
+        DA.record_continuation_use dacc cont
+          (Non_inlinable { escaping = true; })
           ~env_at_use ~arg_types:[T.any_value ()]
       in
       Call_kind.indirect_function_call_unknown_arity (), use_id, dacc
@@ -772,14 +776,15 @@ let simplify_method_call dacc apply ~callee_ty ~kind:_ ~obj ~arg_types
       Apply.print apply
   end;
   let dacc, use_id =
-    DA.record_continuation_use dacc apply_cont Non_inlinable
+    DA.record_continuation_use dacc apply_cont
+      (Non_inlinable { escaping = true; })
       ~env_at_use:denv
       ~arg_types:[T.any_value ()]
   in
   let dacc, exn_cont_use_id =
     DA.record_continuation_use dacc
       (Exn_continuation.exn_handler (Apply.exn_continuation apply))
-      Non_inlinable
+      (Non_inlinable { escaping = true; })
       ~env_at_use:(DA.denv dacc)
       ~arg_types:(T.unknown_types_from_arity_with_subkinds (
         Exn_continuation.arity (Apply.exn_continuation apply)))
@@ -857,7 +862,8 @@ let simplify_c_call ~simplify_expr dacc apply ~callee_ty ~param_arity
       match Apply.continuation apply with
       | Return apply_continuation ->
         let dacc, use_id =
-          DA.record_continuation_use dacc apply_continuation Non_inlinable
+          DA.record_continuation_use dacc apply_continuation
+            (Non_inlinable { escaping = true; })
             ~env_at_use:(DA.denv dacc)
             ~arg_types:(T.unknown_types_from_arity return_arity)
         in
@@ -869,7 +875,7 @@ let simplify_c_call ~simplify_expr dacc apply ~callee_ty ~param_arity
       (* CR mshinwell: Try to factor out these stanzas, here and above. *)
       DA.record_continuation_use dacc
         (Exn_continuation.exn_handler (Apply.exn_continuation apply))
-        Non_inlinable
+        (Non_inlinable { escaping = true; })
         ~env_at_use:(DA.denv dacc)
         ~arg_types:(T.unknown_types_from_arity_with_subkinds (
           Exn_continuation.arity (Apply.exn_continuation apply)))

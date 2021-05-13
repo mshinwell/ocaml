@@ -558,7 +558,7 @@ let rec cps_non_tail env (lam : L.lambda) (k : Ident.t -> Ilambda.t)
     let body_result = Ident.create_local "body_result" in
     let result_var = Ident.create_local "try_with_result" in
     let body_continuation = Continuation.create () in
-    let handler_continuation = Continuation.create ~sort:Exn () in
+    let handler_continuation = Continuation.create ~sort:Normal_or_exn () in
     let poptrap_continuation = Continuation.create () in
     let after_continuation = Continuation.create () in
     let old_try_stack = !try_stack in
@@ -872,7 +872,7 @@ and cps_tail env (lam : L.lambda) (k : Continuation.t) (k_exn : Continuation.t)
   | Ltrywith (body, id, handler) ->
     let body_result = Ident.create_local "body_result" in
     let body_continuation = Continuation.create () in
-    let handler_continuation = Continuation.create ~sort:Exn () in
+    let handler_continuation = Continuation.create ~sort:Normal_or_exn () in
     let poptrap_continuation = Continuation.create () in
     let old_try_stack = !try_stack in
     try_stack := handler_continuation :: old_try_stack;
@@ -986,7 +986,7 @@ and cps_function env ~stub
       ({ kind; params; return; body; attr; loc; } : L.lfunction)
       : Ilambda.function_declaration =
   let body_cont = Continuation.create ~sort:Return () in
-  let body_exn_cont = Continuation.create ~sort:Exn () in
+  let body_exn_cont = Continuation.create ~sort:Normal_or_exn () in
   let free_idents_of_body = Lambda.free_variables body in
   let body = cps_tail env body body_cont body_exn_cont in
   let exn_continuation : I.exn_continuation =
@@ -1166,7 +1166,7 @@ let lambda_to_ilambda lam : Ilambda.program =
   in
   let env = Env.create ~current_unit_id in
   let the_end = Continuation.create ~sort:Define_root_symbol () in
-  let the_end_exn = Continuation.create ~sort:Exn () in
+  let the_end_exn = Continuation.create ~sort:Normal_or_exn () in
   let ilam = cps_tail env lam the_end the_end_exn in
   let exn_continuation : I.exn_continuation =
     { exn_handler = the_end_exn;

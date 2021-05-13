@@ -25,11 +25,10 @@ include Identifiable.S with type t := t
 
 module Sort : sig
   type t =
-    | Normal
+    | Normal_or_exn
     | Return
     | Define_root_symbol
     | Toplevel_return
-    | Exn
 end
 
 val create : ?sort:Sort.t -> ?name:string -> unit -> t
@@ -43,8 +42,6 @@ val name_stamp : t -> int
 val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
 
 val sort : t -> Sort.t
-
-val is_exn : t -> bool
 
 val export : t -> exported
 
