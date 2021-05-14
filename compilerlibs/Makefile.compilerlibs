@@ -195,6 +195,7 @@ MIDDLE_END_FLAMBDA_COMPILENV_DEPS=\
   middle_end/flambda/compilenv_deps/flambda_features.cmo
 
 MIDDLE_END_FLAMBDA_BASIC=\
+  middle_end/flambda/types/basic/unit.cmo \
   middle_end/flambda/types/kinds/flambda_kind.cmo \
   middle_end/flambda/basic/reg_width_const.cmo \
   middle_end/flambda/basic/continuation.cmo \
@@ -272,7 +273,6 @@ MIDDLE_END_FLAMBDA_TYPES=\
   middle_end/flambda/types/type_descr_intf.cmo \
   middle_end/flambda/types/type_head_intf.cmo \
   middle_end/flambda/types/flambda_type.cmo \
-  middle_end/flambda/types/basic/unit.cmo \
   middle_end/flambda/types/basic/closure_id_set.cmo \
   middle_end/flambda/types/basic/closure_id_or_unknown_and_var_within_closure_set.cmo \
   middle_end/flambda/types/basic/closure_id_and_var_within_closure_set.cmo
