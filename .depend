@@ -9493,6 +9493,7 @@ middle_end/flambda/types/basic/var_within_closure_set.cmi : \
     utils/identifiable.cmi
 middle_end/flambda/types/env/aliases.cmo : \
     middle_end/flambda/compilenv_deps/variable.cmi \
+    middle_end/flambda/types/basic/unit.cmi \
     middle_end/flambda/basic/simple.cmi \
     middle_end/flambda/naming/renaming.cmi \
     middle_end/flambda/compilenv_deps/reg_width_things.cmi \
@@ -9506,6 +9507,7 @@ middle_end/flambda/types/env/aliases.cmo : \
     middle_end/flambda/types/env/aliases.cmi
 middle_end/flambda/types/env/aliases.cmx : \
     middle_end/flambda/compilenv_deps/variable.cmx \
+    middle_end/flambda/types/basic/unit.cmx \
     middle_end/flambda/basic/simple.cmx \
     middle_end/flambda/naming/renaming.cmx \
     middle_end/flambda/compilenv_deps/reg_width_things.cmx \
