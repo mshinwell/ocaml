@@ -165,9 +165,13 @@ let simplify_apply_cont dacc apply_cont ~down_to_up =
         match raise_kind with
         | None | Some Regular | Some Reraise ->
           (* Until such time as we can manually add to the backtrace buffer,
-             we only convert "raise_notrace" into jumps.  So we set
-             [escaping = true] for these other cases. *)
-          Non_inlinable { escaping = true; }
+             we only convert "raise_notrace" into jumps, except if debugging
+             information generation is disabled.  (This matches the handling
+             at Cmm level; see [Cmm_helpers.raise_prim].)
+             We set [escaping = true] for the cases we do not want to
+             convert into jumps. *)
+          if !Clflags.debug then Non_inlinable { escaping = true; }
+          else Non_inlinable { escaping = false; }
         | Some No_trace ->
           Non_inlinable { escaping = false; }
       end
