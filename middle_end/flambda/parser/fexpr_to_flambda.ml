@@ -97,7 +97,7 @@ let fresh_cont env ?sort { Fexpr.txt = name; loc = _ } arity =
     continuations = CM.add name (c, arity) env.continuations }
 
 let fresh_exn_cont env { Fexpr.txt = name; loc = _ } =
-  let c = Continuation.create ~sort:Normal_or_exn ~name () in
+  let c = Continuation.create ~name () in
   let e = Exn_continuation.create ~exn_handler:c ~extra_args:[] in
   e,
   { env with
@@ -788,9 +788,7 @@ let conv ~backend ~module_ident (fexpr : Fexpr.flambda_unit) : Flambda_unit.t =
       Ident.create_persistent (Ident.name module_ident))
   in
   let return_continuation = Continuation.create ~name:"done" () in
-  let exn_continuation =
-    Continuation.create ~sort:Normal_or_exn ~name:"error" ()
-  in
+  let exn_continuation = Continuation.create ~name:"error" () in
   let exn_continuation_as_exn_continuation =
     Exn_continuation.create ~exn_handler:exn_continuation ~extra_args:[]
   in
