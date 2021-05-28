@@ -25,6 +25,23 @@ let symbol_flags = 1
 let const_flags = 2
 let simple_flags = 3
 
+let current_compilation_unit_flag = 4
+
+let has_var_flag flags =
+  flags land var_flags <> 0
+
+let has_symbol_flag flags =
+  flags land symbol_flags <> 0
+
+let has_const_flag flags =
+  flags land const_flags <> 0
+
+let has_simple_flag flags =
+  flags land simple_flags <> 0
+
+let has_current_compilation_unit_flags flags =
+  flags land current_compilation_unit_flag <> 0
+
 module Const_data = struct
   type t =
     | Naked_immediate of Target_imm.t
@@ -333,7 +350,12 @@ module Variable = struct
 
   let find_data t = Table.find !grand_table_of_variables t
 
-  let compilation_unit t = (find_data t).compilation_unit
+  let compilation_unit t =
+    if has_current_compilation_unit_flags (Id.flags t) then
+      Compilation_unit.get_current_exn ()
+    else
+      (find_data t).compilation_unit
+
   let name t = (find_data t).name
   let name_stamp t = (find_data t).name_stamp
   let user_visible t = (find_data t).user_visible
@@ -354,7 +376,8 @@ module Variable = struct
         user_visible = Option.is_some user_visible;
       }
     in
-    Table.add !grand_table_of_variables data
+    let t = Table.add !grand_table_of_variables data in
+    Id.with_flags t current_compilation_unit_flag
 
   module T0 = struct
     let compare = Id.compare
@@ -415,7 +438,11 @@ module Symbol = struct
 
   let unsafe_create compilation_unit linkage_name =
     let data : Symbol_data.t = { compilation_unit; linkage_name; } in
-    Table.add !grand_table_of_symbols data
+    let t = Table.add !grand_table_of_symbols data in
+    if Compilation_unit.equal compilation_unit
+         (Compilation_unit.get_current_exn ())
+    then Id.with_flags t current_compilation_unit_flag
+    else t
 
   let create compilation_unit linkage_name =
     let unit_linkage_name =
@@ -428,7 +455,12 @@ module Symbol = struct
     in
     unsafe_create compilation_unit linkage_name
 
-  let compilation_unit t = (find_data t).compilation_unit
+  let compilation_unit t =
+    if has_current_compilation_unit_flags (Id.flags t) then
+      Compilation_unit.get_current_exn ()
+    else
+      (find_data t).compilation_unit
+
   let linkage_name t = (find_data t).linkage_name
 
   module T0 = struct
@@ -474,8 +506,8 @@ module Name = struct
 
   let [@inline always] pattern_match t ~var ~symbol =
     let flags = Id.flags t in
-    if flags = var_flags then var t
-    else if flags = symbol_flags then symbol t
+    if has_var_flag flags then var t
+    else if has_symbol_flag flags then symbol t
     else assert false
 
   module T0 = struct
@@ -520,7 +552,7 @@ module Simple = struct
   let find_data t = Table.find !grand_table_of_simples t
 
   let has_coercion t =
-    Id.flags t = simple_flags
+    has_simple_flag (Id.flags t)
 
   let name n = n
   let var v = v
@@ -530,18 +562,18 @@ module Simple = struct
 
   let [@inline always] pattern_match t ~name ~const =
     let flags = Id.flags t in
-    if flags = var_flags then
+    if has_var_flag flags then
       (name [@inlined hint]) (Name.var t) ~coercion:Coercion.id
-    else if flags = symbol_flags then
+    else if has_symbol_flag flags then
       (name [@inlined hint]) (Name.symbol t) ~coercion:Coercion.id
-    else if flags = const_flags then (const [@inlined hint]) t
-    else if flags = simple_flags then
+    else if has_const_flag flags then (const [@inlined hint]) t
+    else if has_simple_flag flags then
       let { Simple_data.simple = t; coercion } = find_data t in
       let flags = Id.flags t in
-      if flags = var_flags then (name [@inlined hint]) (Name.var t) ~coercion
-      else if flags = symbol_flags then
+      if has_var_flag flags then (name [@inlined hint]) (Name.var t) ~coercion
+      else if has_symbol_flag flags then
         (name [@inlined hint]) (Name.symbol t) ~coercion
-      else if flags = const_flags then (const [@inlined hint]) t
+      else if has_const_flag flags then (const [@inlined hint]) t
       else assert false
     else assert false
 
@@ -559,7 +591,7 @@ module Simple = struct
 
   let [@inline always] coercion t =
     let flags = Id.flags t in
-    if flags = simple_flags then (find_data t).coercion
+    if has_simple_flag flags then (find_data t).coercion
     else Coercion.id
 
   module T0 = struct
