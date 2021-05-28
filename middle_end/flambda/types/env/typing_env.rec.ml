@@ -836,7 +836,9 @@ let add_symbol_definition t sym =
   (* CR mshinwell: check for redefinition when invariants enabled? *)
   let comp_unit = Symbol.compilation_unit sym in
   let this_comp_unit = Compilation_unit.get_current_exn () in
-  if (not (Compilation_unit.equal comp_unit this_comp_unit)) then begin
+  if (not (Compilation_unit.equal comp_unit this_comp_unit))
+       && not (Compilation_unit.is_predefined_exception comp_unit)
+  then begin
     Misc.fatal_errorf "Cannot define symbol %a that belongs to a different \
         compilation unit@ (%a, current unit: %a) %b@ in environment:@ %a"
       Symbol.print sym
