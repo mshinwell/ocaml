@@ -30,7 +30,6 @@ let which_thing_mask = 3
 let current_compilation_unit_flag = 4
 
 let renamed_flag = 8
-let mask_renamed id = id land (lnot renamed_flag)
 
 let is_renamed id =
   id land renamed_flag = renamed_flag
@@ -49,6 +48,9 @@ let has_simple_flag flags =
 
 let has_current_compilation_unit_flags flags =
   flags land current_compilation_unit_flag = current_compilation_unit_flag
+
+let mask_for_find id =
+  id land (lnot (current_compilation_unit_flag lor renamed_flag))
 
 module Const_data = struct
   type t =
@@ -357,7 +359,15 @@ module Variable = struct
     grand_table_of_variables := Table.create ()
 
   let find_data t =
-    Table.find !grand_table_of_variables (mask_renamed t)
+    Table.find !grand_table_of_variables (mask_for_find t)
+
+  let is_renamed = is_renamed
+
+  let mark_renamed t =
+    if is_renamed t then
+      Misc.fatal_error "Variable is already renamed"
+    else
+      t lor (renamed_flag lor current_compilation_unit_flag)
 
   let compilation_unit t =
     if has_current_compilation_unit_flags (Id.flags t) then
@@ -384,16 +394,8 @@ module Variable = struct
         user_visible = Option.is_some user_visible;
       }
     in
-    Table.add !grand_table_of_variables data
-      ~extra_flags:current_compilation_unit_flag
-
-  let is_renamed = is_renamed
-
-  let mark_renamed t =
-    if is_renamed t then
-      Misc.fatal_error "Variable is already renamed"
-    else
-      t lor renamed_flag
+    let t = Table.add !grand_table_of_variables data ~extra_flags:0 in
+    t lor current_compilation_unit_flag
 
   let name_stamp0 t (var_data : Variable_data.t) =
     var_data.name_stamp * 2
@@ -462,7 +464,7 @@ module Symbol = struct
   let initialise () =
     grand_table_of_symbols := Table.create ()
 
-  let find_data t = Table.find !grand_table_of_symbols t
+  let find_data t = Table.find !grand_table_of_symbols (mask_for_find t)
 
   let unsafe_create compilation_unit linkage_name =
     let data : Symbol_data.t = { compilation_unit; linkage_name; } in
@@ -480,7 +482,8 @@ module Symbol = struct
           Misc.fatal_error "Cannot create non-predef or external (non-Flambda) \
             symbols until current compilation unit has been set"
     in
-    Table.add !grand_table_of_symbols data ~extra_flags
+    let t = Table.add !grand_table_of_symbols data ~extra_flags:0 in
+    t lor extra_flags
 
   let create compilation_unit linkage_name =
     let unit_linkage_name =

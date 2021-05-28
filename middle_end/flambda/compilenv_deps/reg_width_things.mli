@@ -93,6 +93,8 @@ module Variable : sig
   (** One renaming can be performed without re-hashing. *)
   val is_renamed : t -> bool
 
+  (** Marking renamed also changes the variable to be associated with the
+      current compilation unit. *)
   val mark_renamed : t -> t
 
   val export : t -> exported
