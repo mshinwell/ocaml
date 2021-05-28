@@ -101,6 +101,6 @@ end) = struct
       end
 
   let find t id =
-    assert (Id.flags id = E.flags);
+    assert (Id.flags id land E.flags = E.flags);
     HT.find t id
 end
