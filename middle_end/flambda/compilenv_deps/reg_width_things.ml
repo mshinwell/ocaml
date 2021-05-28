@@ -449,7 +449,7 @@ module Variable = struct
       if is_renamed t then Compilation_unit.get_current_exn ()
       else exported.compilation_unit
     in
-    let name_stamp = create_name_stamp () in
+    let name_stamp = name_stamp0 t exported in
     { exported with
       compilation_unit;
       name_stamp;
