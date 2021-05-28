@@ -80,7 +80,11 @@ let get_linkage_name cu = cu.linkage_name
 
 let current = ref None
 
-let set_current t = current := Some t
+let set_current t =
+  match !current with
+  | None -> current := Some t
+  | Some _ -> Misc.fatal_error "Can only set current compilation unit once"
+
 let get_current () = !current
 let get_current_exn () =
   match !current with
