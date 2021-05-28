@@ -65,6 +65,7 @@ end) = struct
 
   let add t elt =
     let id = Id.with_flags (E.hash elt) E.flags in
+    let flags = Id.flags id in
     match HT.find t id with
     | exception Not_found ->
       HT.add t id elt;
@@ -80,7 +81,7 @@ end) = struct
              care not to alter the flags bits. *)
           while !id <> starting_id do
             (* CR mshinwell: performance could be improved *)
-            while Id.flags !id <> E.flags do
+            while Id.flags !id <> flags do
               incr id;
             done;
             match HT.find t !id with
@@ -93,10 +94,10 @@ end) = struct
         with
         | Can_add id ->
           HT.add t id elt;
-          assert (Id.flags id = E.flags);
+          assert (Id.flags id land E.flags = E.flags);
           id
         | Already_added id ->
-          assert (Id.flags id = E.flags);
+          assert (Id.flags id land E.flags = E.flags);
           id
       end
 
