@@ -415,7 +415,8 @@ module Variable = struct
     let print ppf t =
       let cu = compilation_unit t in
       if Compilation_unit.equal cu (Compilation_unit.get_current_exn ())
-      then Format.fprintf ppf "%s/%d" (name t) (name_stamp t)
+      then Format.fprintf ppf "%s/%d[renamed=%b,raw_stamp=%d]" (name t) (name_stamp t)
+        (is_renamed t) ((find_data t).name_stamp)
       else
         Format.fprintf ppf "%a.%s/%d"
           Compilation_unit.print cu
