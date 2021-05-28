@@ -29,6 +29,12 @@ let which_thing_mask = 3
 
 let current_compilation_unit_flag = 4
 
+let renamed_flag = 8
+let mask_renamed id = id land (lnot renamed_flag)
+
+let is_renamed id =
+  id land renamed_flag = renamed_flag
+
 let has_var_flag flags =
   flags land which_thing_mask = var_flags
 
@@ -350,7 +356,8 @@ module Variable = struct
   let initialise () =
     grand_table_of_variables := Table.create ()
 
-  let find_data t = Table.find !grand_table_of_variables t
+  let find_data t =
+    Table.find !grand_table_of_variables (mask_renamed t)
 
   let compilation_unit t =
     if has_current_compilation_unit_flags (Id.flags t) then
@@ -359,7 +366,6 @@ module Variable = struct
       (find_data t).compilation_unit
 
   let name t = (find_data t).name
-  let name_stamp t = (find_data t).name_stamp
   let user_visible t = (find_data t).user_visible
 
   let previous_name_stamp = ref (-1)
@@ -380,6 +386,21 @@ module Variable = struct
     in
     Table.add !grand_table_of_variables data
       ~extra_flags:current_compilation_unit_flag
+
+  let is_renamed = is_renamed
+
+  let mark_renamed t =
+    if is_renamed t then
+      Misc.fatal_error "Variable is already renamed"
+    else
+      t lor renamed_flag
+
+  let name_stamp0 t (var_data : Variable_data.t) =
+    var_data.name_stamp * 2
+      + if is_renamed t then 1 else 0
+
+  let name_stamp t =
+    name_stamp0 t (find_data t)
 
   module T0 = struct
     let compare = Id.compare
@@ -410,7 +431,12 @@ module Variable = struct
   module Map = Patricia_tree.Make_map (struct let print = print end) (Set)
   module Tbl = Identifiable.Make_tbl (Numbers.Int) (Map)
 
-  let export t = find_data t
+  let export t =
+    let exported = find_data t in
+    (* The renaming flag will be cleared upon import, so we must distinguish
+       between the un-renamed and once-renamed versions upon export. *)
+    let name_stamp = name_stamp0 t exported in
+    { exported with name_stamp; }
 
   let import (data : exported) =
     Table.add !grand_table_of_variables data ~extra_flags:0

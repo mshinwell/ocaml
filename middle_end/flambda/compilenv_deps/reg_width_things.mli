@@ -90,6 +90,11 @@ module Variable : sig
 
   val user_visible : t -> bool
 
+  (** One renaming can be performed without re-hashing. *)
+  val is_renamed : t -> bool
+
+  val mark_renamed : t -> t
+
   val export : t -> exported
 
   val import : exported -> t

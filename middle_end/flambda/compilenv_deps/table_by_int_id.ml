@@ -21,7 +21,7 @@ module Int = Numbers.Int
 module Id = struct
   include Int
 
-  let num_empty_bottom_bits = 3
+  let num_empty_bottom_bits = 4
   let mask_selecting_top_bits = (-1) lsl num_empty_bottom_bits
   let mask_selecting_bottom_bits = lnot mask_selecting_top_bits
 

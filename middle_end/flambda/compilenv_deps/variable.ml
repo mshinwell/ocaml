@@ -21,14 +21,19 @@ include Reg_width_things.Variable
 let create_with_same_name_as_ident ?user_visible ident : t =
   create ?user_visible (Ident.name ident)
 
+(* CR mshinwell: maybe ditch [append] since we can't always support it *)
 let rename ?append t =
-  let name =
-    match append with
-    | None -> (name t)
-    | Some s -> (name t) ^ s
-  in
-  let user_visible = if user_visible t then Some () else None in
-  create ?user_visible name
+  if not (is_renamed t) then
+    (* Rename by just setting one bit if possible. *)
+    mark_renamed t
+  else
+    let name =
+      match append with
+      | None -> (name t)
+      | Some s -> (name t) ^ s
+    in
+    let user_visible = if user_visible t then Some () else None in
+    create ?user_visible name
 
 let raw_name = name
 let raw_name_stamp = name_stamp
