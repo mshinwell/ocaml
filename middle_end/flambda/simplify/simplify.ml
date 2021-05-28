@@ -58,7 +58,7 @@ let run ~backend ~round unit =
     predefined_exception_typing_env ~backend ~resolver ~get_imported_names
   in
   imported_units :=
-    Compilation_unit.Map.add (Compilation_unit.predefined_exception ())
+  Compilation_unit.Map.add (Compilation_unit.predefined_exception ())
       (Some predefined_exception_typing_env)
       !imported_units;
   imported_names :=

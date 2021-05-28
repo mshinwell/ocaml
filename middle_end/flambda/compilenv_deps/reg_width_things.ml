@@ -28,19 +28,19 @@ let simple_flags = 3
 let current_compilation_unit_flag = 4
 
 let has_var_flag flags =
-  flags land var_flags <> 0
+  flags land var_flags = var_flags
 
 let has_symbol_flag flags =
-  flags land symbol_flags <> 0
+  flags land symbol_flags = symbol_flags
 
 let has_const_flag flags =
-  flags land const_flags <> 0
+  flags land const_flags = const_flags
 
 let has_simple_flag flags =
-  flags land simple_flags <> 0
+  flags land simple_flags = simple_flags
 
 let has_current_compilation_unit_flags flags =
-  flags land current_compilation_unit_flag <> 0
+  flags land current_compilation_unit_flag = current_compilation_unit_flag
 
 module Const_data = struct
   type t =
