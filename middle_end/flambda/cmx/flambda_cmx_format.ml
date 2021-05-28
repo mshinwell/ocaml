@@ -111,11 +111,16 @@ let import_typing_env_and_code0 t =
       let new_key = import data in
       if key == new_key then None else Some new_key
   in
+  let filter' import =
+    fun key data ->
+      let new_key = import key data in
+      if key == new_key then None else Some new_key
+  in
   let symbols =
     Symbol.Map.filter_map (filter Symbol.import) t.table_data.symbols
   in
   let variables =
-    Variable.Map.filter_map (filter Variable.import) t.table_data.variables
+    Variable.Map.filter_map (filter' Variable.import) t.table_data.variables
   in
   let simples =
     Simple.Map.filter_map (filter Simple.import) t.table_data.simples

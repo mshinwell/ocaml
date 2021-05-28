@@ -50,3 +50,5 @@ module List : sig
 
   val rename : ?append:string -> t -> t
 end
+
+val has_been_imported : t -> t

@@ -63,20 +63,7 @@ end) = struct
   exception Can_add of int
   exception Already_added of int
 
-  (* XXX remove extra_flags *)
-  let add t elt ~extra_flags:_ =
-    (*
-    if E.flags land extra_flags <> 0 then begin
-      Misc.fatal_errorf "Clash on flags: E.flags = %d, extra_flags = %d"
-        E.flags extra_flags
-    end;
-    if extra_flags land Id.mask_selecting_top_bits <> 0 then begin
-      Misc.fatal_errorf "Invalid extra_flags: %d" extra_flags
-    end;
-    let flags = E.flags lor extra_flags in
-    *)
-    let flags = E.flags in
-    let id = Id.with_flags (E.hash elt) flags in
+  let add0 t ~id ~flags elt =
     match HT.find t id with
     | exception Not_found ->
       HT.add t id elt;
@@ -111,6 +98,14 @@ end) = struct
           assert (Id.flags id = flags);
           id
       end
+
+  let add t elt =
+    let flags = E.flags in
+    let id = Id.with_flags (E.hash elt) flags in
+    add0 t ~id ~flags elt
+
+  let add_using_existing_id t elt ~existing_id =
+    add0 t ~id:existing_id ~flags:(Id.flags existing_id) elt
 
   let find t id =
     assert (Id.flags id land E.flags = E.flags);

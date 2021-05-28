@@ -99,7 +99,9 @@ module Variable : sig
 
   val export : t -> exported
 
-  val import : exported -> t
+  val import : t -> exported -> t
+
+  val has_been_imported : t -> t
 
   val map_compilation_unit :
     (Compilation_unit.t -> Compilation_unit.t) -> exported -> exported

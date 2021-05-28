@@ -106,6 +106,7 @@ end = struct
     | exception Not_found -> orig
 
   let variable t orig =
+    let orig = Variable.has_been_imported orig in
     match Variable.Map.find orig t.variables with
     | variable -> variable
     | exception Not_found -> orig
@@ -160,8 +161,7 @@ let create_import_map ~symbols ~variables ~simples ~consts ~code_ids
     Import_map.create ~symbols ~variables ~simples ~consts ~code_ids
       ~continuations ~used_closure_vars
   in
-  if Import_map.is_empty import_map then empty
-  else { empty with import_map = Some import_map; }
+  { empty with import_map = Some import_map; }
 
 let print ppf
       { continuations; variables; code_ids; symbols; depth_variables;

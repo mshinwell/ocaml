@@ -290,7 +290,7 @@ module Const = struct
   module Descr = Const_data
 
   let create (data : Const_data.t) =
-    Table.add !grand_table_of_constants data ~extra_flags:0
+    Table.add !grand_table_of_constants data
 
   let naked_immediate imm = create (Naked_immediate imm)
   let tagged_immediate imm = create (Tagged_immediate imm)
@@ -382,21 +382,21 @@ module Variable = struct
 
   let previous_name_stamp = ref (-1)
 
+  let create_name_stamp () =
+    (* CR mshinwell: check for overflow on 32 bit *)
+    incr previous_name_stamp;
+    !previous_name_stamp
+
   let create ?user_visible name =
-    let name_stamp =
-      (* CR mshinwell: check for overflow on 32 bit *)
-      incr previous_name_stamp;
-      !previous_name_stamp
-    in
     let data : Variable_data.t =
       { compilation_unit = Compilation_unit.get_current_exn ();
         previous_compilation_units = [];
         name;
-        name_stamp;
+        name_stamp = create_name_stamp ();
         user_visible = Option.is_some user_visible;
       }
     in
-    let t = Table.add !grand_table_of_variables data ~extra_flags:0 in
+    let t = Table.add !grand_table_of_variables data in
     t lor current_compilation_unit_flag
 
   let name_stamp0 t (var_data : Variable_data.t) =
@@ -439,20 +439,31 @@ module Variable = struct
     let exported = find_data t in
     (* The renaming flag will be cleared upon import, so we must distinguish
        between the un-renamed and once-renamed versions upon export.
+       We do this by creating a new name stamp (this is like delaying the
+       slow path case of [Variable.rename]).
        Since setting the renaming flag implies moving into the current
-       compilation unit, we must also reflect any such change. *)
+       compilation unit, we must also reflect any such change.
+       The code in [import] below ensures that we do not re-hash based on this
+       new data (which would cause large import renaming maps). *)
     let compilation_unit =
       if is_renamed t then Compilation_unit.get_current_exn ()
       else exported.compilation_unit
     in
-    let name_stamp = name_stamp0 t exported in
+    let name_stamp = create_name_stamp () in
     { exported with
       compilation_unit;
       name_stamp;
     }
 
-  let import (data : exported) =
-    Table.add !grand_table_of_variables data ~extra_flags:0
+  let import t (data : exported) =
+    Table.add_using_existing_id !grand_table_of_variables data
+      ~existing_id:(mask_for_find t)
+
+  (* To avoid large import maps, we special-case the operation of clearing
+     the "current compilation unit" and "has been renamed" bits, upon
+     import. *)
+  let has_been_imported t =
+    mask_for_find t
 
   let map_compilation_unit f (data : exported) : exported =
     let new_compilation_unit = f data.compilation_unit in
@@ -493,7 +504,7 @@ module Symbol = struct
           Misc.fatal_error "Cannot create non-predef or external (non-Flambda) \
             symbols until current compilation unit has been set"
     in
-    let t = Table.add !grand_table_of_symbols data ~extra_flags:0 in
+    let t = Table.add !grand_table_of_symbols data in
     t lor extra_flags
 
   let create compilation_unit linkage_name =
@@ -544,7 +555,7 @@ module Symbol = struct
   let export t = find_data t
 
   let import (data : exported) =
-    Table.add !grand_table_of_symbols data ~extra_flags:0
+    Table.add !grand_table_of_symbols data
 
   let map_compilation_unit f (data : exported) : exported =
     { data with compilation_unit = f data.compilation_unit; }
@@ -680,7 +691,7 @@ module Simple = struct
       match coercion t with
       | Id ->
         let data : Simple_data.t = { simple = t; coercion = new_coercion; } in
-        Table.add !grand_table_of_simples data ~extra_flags:0
+        Table.add !grand_table_of_simples data
       | Non_id _ ->
         Misc.fatal_errorf "Cannot add [Coercion] to [Simple] %a that already \
             has non-identity [Coercion]"
@@ -698,7 +709,7 @@ module Simple = struct
        and well-defined, but means that the real import functions
        (in Renaming) are responsible for importing the underlying
        name/const. *)
-    Table.add !grand_table_of_simples data ~extra_flags:0
+    Table.add !grand_table_of_simples data
 
   let map_compilation_unit _f data =
     (* The compilation unit is not associated with the simple directly,
