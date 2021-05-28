@@ -445,10 +445,12 @@ module Symbol = struct
         then current_compilation_unit_flag
         else 0
       | None ->
-        if Compilation_unit.is_predefined_exception compilation_unit then 0
+        if Compilation_unit.is_predefined_exception compilation_unit
+             || Compilation_unit.is_external_symbols compilation_unit
+        then 0
         else
-          Misc.fatal_error "Cannot create non-predef exn symbols until \
-            current compilation unit has been set"
+          Misc.fatal_error "Cannot create non-predef or external (non-Flambda) \
+            symbols until current compilation unit has been set"
     in
     Table.add !grand_table_of_symbols data ~extra_flags
 
