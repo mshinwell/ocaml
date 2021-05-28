@@ -372,8 +372,10 @@ module Variable = struct
   let compilation_unit t =
     if has_current_compilation_unit_flags (Id.flags t) then
       Compilation_unit.get_current_exn ()
-    else
+    else begin
+      assert (not (is_renamed t));
       (find_data t).compilation_unit
+    end
 
   let name t = (find_data t).name
   let user_visible t = (find_data t).user_visible
@@ -436,9 +438,18 @@ module Variable = struct
   let export t =
     let exported = find_data t in
     (* The renaming flag will be cleared upon import, so we must distinguish
-       between the un-renamed and once-renamed versions upon export. *)
+       between the un-renamed and once-renamed versions upon export.
+       Since setting the renaming flag implies moving into the current
+       compilation unit, we must also reflect any such change. *)
+    let compilation_unit =
+      if is_renamed t then Compilation_unit.get_current_exn ()
+      else exported.compilation_unit
+    in
     let name_stamp = name_stamp0 t exported in
-    { exported with name_stamp; }
+    { exported with
+      compilation_unit;
+      name_stamp;
+    }
 
   let import (data : exported) =
     Table.add !grand_table_of_variables data ~extra_flags:0
