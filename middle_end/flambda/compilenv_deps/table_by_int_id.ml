@@ -105,6 +105,9 @@ end) = struct
     add0 t ~id ~flags elt
 
   let add_using_existing_id t elt ~existing_id =
+    (* XXX check that the flags of existing_id contain E.flags.  For
+       the moment (all other flags bits should be clear): *)
+    assert (Id.flags existing_id = E.flags);
     add0 t ~id:existing_id ~flags:(Id.flags existing_id) elt
 
   let find t id =
