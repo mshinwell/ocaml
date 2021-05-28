@@ -439,12 +439,10 @@ module Symbol = struct
   let unsafe_create compilation_unit linkage_name =
     let data : Symbol_data.t = { compilation_unit; linkage_name; } in
     let extra_flags =
-      match Compilation_unit.get_current () with
-      | None -> 0
-      | Some current_unit ->
-        if Compilation_unit.equal compilation_unit current_unit
-        then current_compilation_unit_flag
-        else 0
+      if Compilation_unit.equal compilation_unit
+           (Compilation_unit.get_current_exn ())
+      then current_compilation_unit_flag
+      else 0
     in
     Table.add !grand_table_of_symbols data ~extra_flags
 

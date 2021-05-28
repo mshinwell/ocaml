@@ -90,8 +90,9 @@ let print_list_of_simple_or_prim ppf simple_or_prim_list =
     simple_or_prim_list
 
 let caml_ml_array_bound_error =
-  let name = Linkage_name.create "caml_ml_array_bound_error" in
-  Symbol.create (Compilation_unit.external_symbols ()) name
+  lazy (
+    let name = Linkage_name.create "caml_ml_array_bound_error" in
+    Symbol.create (Compilation_unit.external_symbols ()) name)
 
 let raise_exn_for_failure acc ~dbg exn_cont exn_bucket extra_let_binding =
   let exn_handler = Exn_continuation.exn_handler exn_cont in
@@ -136,9 +137,10 @@ let expression_for_failure acc ~backend exn_cont ~register_const_string
     raise_exn_for_failure acc ~dbg exn_cont
       (Simple.symbol B.division_by_zero) None
   | Index_out_of_bounds ->
+    (* CR mshinwell: why is this "if true" here? *)
     if true then begin
       let call =
-        let callee = Simple.symbol caml_ml_array_bound_error in
+        let callee = Simple.symbol (Lazy.force caml_ml_array_bound_error) in
         let continuation = Apply.Result_continuation.Never_returns in
         let args = [] in
         let call_kind = Call_kind.c_call
