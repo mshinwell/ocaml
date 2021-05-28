@@ -92,7 +92,7 @@ let create ~name compilation_unit =
       linkage_name;
     }
   in
-  Table.add !grand_table_of_code_ids data
+  Table.add !grand_table_of_code_ids data ~extra_flags:0
 
 let rename t = create ~name:(name t) (Compilation_unit.get_current_exn ())
 
@@ -137,7 +137,7 @@ let invert_map map =
 let export t = find_data t
 
 let import (data : exported) =
-  Table.add !grand_table_of_code_ids data
+  Table.add !grand_table_of_code_ids data ~extra_flags:0
 
 let map_compilation_unit f (data : exported) : exported =
   { data with compilation_unit = f data.compilation_unit;

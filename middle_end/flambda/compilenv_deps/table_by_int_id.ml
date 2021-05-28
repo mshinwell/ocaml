@@ -63,9 +63,9 @@ end) = struct
   exception Can_add of int
   exception Already_added of int
 
-  let add t elt =
-    let id = Id.with_flags (E.hash elt) E.flags in
-    let flags = Id.flags id in
+  let add t elt ~extra_flags =
+    let flags = E.flags lor extra_flags in
+    let id = Id.with_flags (E.hash elt) flags in
     match HT.find t id with
     | exception Not_found ->
       HT.add t id elt;
@@ -94,10 +94,10 @@ end) = struct
         with
         | Can_add id ->
           HT.add t id elt;
-          assert (Id.flags id land E.flags = E.flags);
+          assert (Id.flags id = flags);
           id
         | Already_added id ->
-          assert (Id.flags id land E.flags = E.flags);
+          assert (Id.flags id = flags);
           id
       end
 

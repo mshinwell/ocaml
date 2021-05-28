@@ -280,7 +280,7 @@ module Const = struct
   module Descr = Const_data
 
   let create (data : Const_data.t) =
-    Table.add !grand_table_of_constants data
+    Table.add !grand_table_of_constants data ~extra_flags:0
 
   let naked_immediate imm = create (Naked_immediate imm)
   let tagged_immediate imm = create (Tagged_immediate imm)
@@ -376,8 +376,8 @@ module Variable = struct
         user_visible = Option.is_some user_visible;
       }
     in
-    let t = Table.add !grand_table_of_variables data in
-    Id.with_flags t current_compilation_unit_flag
+    Table.add !grand_table_of_variables data
+      ~extra_flags:current_compilation_unit_flag
 
   module T0 = struct
     let compare = Id.compare
@@ -411,7 +411,7 @@ module Variable = struct
   let export t = find_data t
 
   let import (data : exported) =
-    Table.add !grand_table_of_variables data
+    Table.add !grand_table_of_variables data ~extra_flags:0
 
   let map_compilation_unit f (data : exported) : exported =
     let new_compilation_unit = f data.compilation_unit in
@@ -438,13 +438,15 @@ module Symbol = struct
 
   let unsafe_create compilation_unit linkage_name =
     let data : Symbol_data.t = { compilation_unit; linkage_name; } in
-    let t = Table.add !grand_table_of_symbols data in
-    match Compilation_unit.get_current () with
-    | None -> t
-    | Some current_unit ->
-      if Compilation_unit.equal compilation_unit current_unit
-      then Id.with_flags t current_compilation_unit_flag
-      else t
+    let extra_flags =
+      match Compilation_unit.get_current () with
+      | None -> 0
+      | Some current_unit ->
+        if Compilation_unit.equal compilation_unit current_unit
+        then current_compilation_unit_flag
+        else 0
+    in
+    Table.add !grand_table_of_symbols data ~extra_flags
 
   let create compilation_unit linkage_name =
     let unit_linkage_name =
@@ -494,7 +496,7 @@ module Symbol = struct
   let export t = find_data t
 
   let import (data : exported) =
-    Table.add !grand_table_of_symbols data
+    Table.add !grand_table_of_symbols data ~extra_flags:0
 
   let map_compilation_unit f (data : exported) : exported =
     { data with compilation_unit = f data.compilation_unit; }
@@ -630,7 +632,7 @@ module Simple = struct
       match coercion t with
       | Id ->
         let data : Simple_data.t = { simple = t; coercion = new_coercion; } in
-        Table.add !grand_table_of_simples data
+        Table.add !grand_table_of_simples data ~extra_flags:0
       | Non_id _ ->
         Misc.fatal_errorf "Cannot add [Coercion] to [Simple] %a that already \
             has non-identity [Coercion]"
@@ -648,7 +650,7 @@ module Simple = struct
        and well-defined, but means that the real import functions
        (in Renaming) are responsible for importing the underlying
        name/const. *)
-    Table.add !grand_table_of_simples data
+    Table.add !grand_table_of_simples data ~extra_flags:0
 
   let map_compilation_unit _f data =
     (* The compilation unit is not associated with the simple directly,

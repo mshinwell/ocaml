@@ -49,7 +49,7 @@ end) : sig
 
   val create : unit -> t
 
-  val add : t -> E.t -> Id.t
+  val add : t -> E.t -> extra_flags:int -> Id.t
 
   val find : t -> Id.t -> E.t
 end

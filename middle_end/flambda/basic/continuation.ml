@@ -127,7 +127,7 @@ let create ?sort ?name () : t =
   let data : Data.t =
     { compilation_unit; previous_compilation_units; name; name_stamp; sort }
   in
-  Table.add !grand_table_of_continuations data
+  Table.add !grand_table_of_continuations data ~extra_flags:0
 
 let find_data t = Table.find !grand_table_of_continuations t
 
@@ -176,7 +176,7 @@ let print_with_cache ~cache:_ ppf t = print ppf t
 
 let export t = find_data t
 
-let import data = Table.add !grand_table_of_continuations data
+let import data = Table.add !grand_table_of_continuations data ~extra_flags:0
 
 let map_compilation_unit f (data : Data.t) : Data.t =
   let new_compilation_unit = f data.compilation_unit in
