@@ -68,6 +68,9 @@ end) = struct
       Misc.fatal_errorf "Clash on flags: E.flags = %d, extra_flags = %d"
         E.flags extra_flags
     end;
+    if extra_flags land Id.mask_selecting_top_bits <> 0 then begin
+      Misc.fatal_errorf "Invalid extra_flags: %d" extra_flags
+    end;
     let flags = E.flags lor extra_flags in
     let id = Id.with_flags (E.hash elt) flags in
     match HT.find t id with
