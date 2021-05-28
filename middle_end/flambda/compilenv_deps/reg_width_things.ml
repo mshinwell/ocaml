@@ -25,19 +25,21 @@ let symbol_flags = 1
 let const_flags = 2
 let simple_flags = 3
 
+let which_thing_mask = 3
+
 let current_compilation_unit_flag = 4
 
 let has_var_flag flags =
-  flags land var_flags = var_flags
+  flags land which_thing_mask = var_flags
 
 let has_symbol_flag flags =
-  flags land symbol_flags = symbol_flags
+  flags land which_thing_mask = symbol_flags
 
 let has_const_flag flags =
-  flags land const_flags = const_flags
+  flags land which_thing_mask = const_flags
 
 let has_simple_flag flags =
-  flags land simple_flags = simple_flags
+  flags land which_thing_mask = simple_flags
 
 let has_current_compilation_unit_flags flags =
   flags land current_compilation_unit_flag = current_compilation_unit_flag

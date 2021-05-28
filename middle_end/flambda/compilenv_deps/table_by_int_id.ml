@@ -75,7 +75,6 @@ end) = struct
     let id = Id.with_flags (E.hash elt) flags in
     match HT.find t id with
     | exception Not_found ->
-      Format.eprintf "adding %x (case 1) fl %d\n%!" id E.flags;
       HT.add t id elt;
       id
     | existing_elt ->
@@ -102,17 +101,14 @@ end) = struct
         with
         | Can_add id ->
           HT.add t id elt;
-          Format.eprintf "adding %x (case 2) fl %d\n%!" id E.flags;
           assert (Id.flags id = flags);
           id
         | Already_added id ->
-          Format.eprintf "adding %x (case 3) fl %d\n%!" id E.flags;
           assert (Id.flags id = flags);
           id
       end
 
   let find t id =
     assert (Id.flags id land E.flags = E.flags);
-    Printf.eprintf "E.flags = %d, finding %x\n%!" E.flags id;
     HT.find t id
 end
