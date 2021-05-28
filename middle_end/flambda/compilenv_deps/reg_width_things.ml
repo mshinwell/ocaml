@@ -439,10 +439,16 @@ module Symbol = struct
   let unsafe_create compilation_unit linkage_name =
     let data : Symbol_data.t = { compilation_unit; linkage_name; } in
     let extra_flags =
-      if Compilation_unit.equal compilation_unit
-           (Compilation_unit.get_current_exn ())
-      then current_compilation_unit_flag
-      else 0
+      match Compilation_unit.get_current () with
+      | Some current_unit ->
+        if Compilation_unit.equal compilation_unit current_unit
+        then current_compilation_unit_flag
+        else 0
+      | None ->
+        if Compilation_unit.is_predefined_exception compilation_unit then 0
+        else
+          Misc.fatal_error "Cannot create non-predef exn symbols until \
+            current compilation unit has been set"
     in
     Table.add !grand_table_of_symbols data ~extra_flags
 
