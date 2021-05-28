@@ -107,5 +107,6 @@ end) = struct
 
   let find t id =
     assert (Id.flags id land E.flags = E.flags);
+    Printf.eprintf "finding %d\n%!" id;
     HT.find t id
 end
