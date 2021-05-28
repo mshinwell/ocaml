@@ -41,8 +41,9 @@ module Import_map : sig
     -> used_closure_vars : Var_within_closure.Set.t
     -> t
 
+(*
   val is_empty : t -> bool
-
+*)
   val const : t -> Const.t -> Const.t
   val variable : t -> Variable.t -> Variable.t
   val symbol : t -> Symbol.t -> Symbol.t
@@ -71,7 +72,7 @@ end = struct
        are really missing at this point). *)
   }
 
-  let is_empty
+  let _is_empty
         { symbols; variables; simples; consts; code_ids; continuations;
           used_closure_vars;
         } =
@@ -187,9 +188,12 @@ let is_empty
   && Code_ids.is_empty code_ids
   && Symbols.is_empty symbols
   && Depth_variables.is_empty depth_variables
-  && match import_map with
+  && Option.is_none import_map
+
+  (*match import_map with
      | None -> true
      | Some import_map -> Import_map.is_empty import_map
+     *)
 
 let compose0
       ~second:
