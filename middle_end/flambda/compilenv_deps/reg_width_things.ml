@@ -418,10 +418,11 @@ module Variable = struct
       then Format.fprintf ppf "%s/%d[renamed=%b,raw_stamp=%d]" (name t) (name_stamp t)
         (is_renamed t) ((find_data t).name_stamp)
       else
-        Format.fprintf ppf "%a.%s/%d"
+        Format.fprintf ppf "%a.%s/%d[renamed=%b,raw_stamp=%d]*"
           Compilation_unit.print cu
           (name t)
           (name_stamp t)
+          (is_renamed t) ((find_data t).name_stamp)
 
     let output chan t = print (Format.formatter_of_out_channel chan) t
   end
