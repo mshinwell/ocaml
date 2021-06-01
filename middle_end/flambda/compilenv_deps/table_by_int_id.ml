@@ -49,8 +49,7 @@ module Make (E : sig
 end) = struct
   module HT = Hashtbl.Make (struct
     type t = int
-    (* CR mshinwell: maybe this should be a proper hash function *)
-    let hash (t : t) = Hashtbl.hash t
+    let hash t = t
     let equal t1 t2 = (t1 == t2)
   end)
 
