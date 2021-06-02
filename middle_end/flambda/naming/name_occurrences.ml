@@ -581,7 +581,7 @@ end = struct
       let map = N.Map.filter (fun name _ -> f name) map in
       if N.Map.is_empty map then Empty
       else Potentially_many map
-end [@@@inlined always]
+end [@@inline always]
 
 module For_names = For_one_variety_of_names (struct
   include Name
