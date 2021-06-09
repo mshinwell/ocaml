@@ -55,9 +55,13 @@ module Calling_convention = struct
     P.pattern_match params_and_body ~f
 end
 
+type code_status =
+  | Loaded of C.t
+  | Not_loaded
+
 type t0 =
   | Present of {
-    code : C.t;
+    mutable code : code_status;
     calling_convention : Calling_convention.t;
   }
   | Imported of { calling_convention : Calling_convention.t; }
@@ -66,13 +70,20 @@ type t = t0 Code_id.Map.t
 
 let print0 ppf t0 =
   match t0 with
-  | Present { code; calling_convention; } ->
+  | Present { code = Loaded code; calling_convention; } ->
     Format.fprintf ppf
       "@[<hov 1>(Present@ (\
          @[<hov 1>(code@ %a)@]\
          @[<hov 1>(calling_convention@ %a)@]\
        ))@]"
       C.print code
+      Calling_convention.print calling_convention
+  | Present { code = Not_loaded; calling_convention; } ->
+    Format.fprintf ppf
+      "@[<hov 1>(Present@ (\
+         @[<hov 1>(code@ Not_loaded)@]\
+         @[<hov 1>(calling_convention@ %a)@]\
+       ))@]"
       Calling_convention.print calling_convention
   | Imported { calling_convention; } ->
     Format.fprintf ppf
@@ -143,11 +154,18 @@ let merge t1 t2 =
 let mem code_id t =
   Code_id.Map.mem code_id t
 
+let load_code code_id =
+  ...
+
 let find_code t code_id =
   match Code_id.Map.find code_id t with
   | exception Not_found ->
     Misc.fatal_errorf "Code ID %a not bound" Code_id.print code_id
-  | Present { code; calling_convention = _; } -> code
+  | Present { code = Loaded code; calling_convention = _; } -> code
+  | Present ({ code = Not_loaded; calling_convention = _; } as t0) ->
+    let code = load_code code_id in
+    t0.code <- Loaded code;
+    code
   | Imported _ ->
     Misc.fatal_errorf "Actual code for Code ID %a is missing"
       Code_id.print code_id
