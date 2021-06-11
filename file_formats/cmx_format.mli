@@ -29,11 +29,14 @@ open Misc
         points)
      - list of currying functions and application functions needed
    The .cmx file contains these infos (as an externed record) plus a MD5
-   of these infos *)
+   of these infos
+   The .cmx file is structured so that the approximation / export info has
+   to be read explicitly, possibly in several pieces, to reduce overhead. *)
 
-type export_info =
-  | Clambda of Clambda.value_approximation
-  | Flambda of Flambda_cmx_format.t option
+type section =
+  { byte_offset_in_cmx : int;
+    contents : Obj.t option;
+  }
 
 type unit_infos =
   { mutable ui_name: modname;             (* Name of unit implemented *)
@@ -44,8 +47,15 @@ type unit_infos =
     mutable ui_curry_fun: int list;       (* Currying functions needed *)
     mutable ui_apply_fun: int list;       (* Apply functions needed *)
     mutable ui_send_fun: int list;        (* Send functions needed *)
-    mutable ui_export_info: export_info;
-    mutable ui_force_link: bool }         (* Always linked *)
+    mutable ui_force_link: bool;          (* Always linked *)
+    mutable ui_section_toc: int list;     (* Byte offsets of sections in .cmx *)
+    (* The following fields are only for the use of Compilenv and have no
+       meaning when written to the .cmx file. *)
+    mutable ui_channel: in_channel option;
+    mutable ui_sections: section array;
+    mutable ui_index_of_next_section_to_write: int;
+    mutable ui_sections_to_write_rev: Obj.t list;
+  }
 
 (* Each .a library has a matching .cmxa file that provides the following
    infos on the library: *)

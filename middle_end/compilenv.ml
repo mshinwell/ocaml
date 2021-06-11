@@ -34,6 +34,10 @@ exception Error of error
 let global_infos_table =
   (Hashtbl.create 17 : (string, unit_infos option) Hashtbl.t)
 
+type section_contents =
+  | Closure of Clambda.value_approximation
+  | Flambda of Obj.t
+
 module CstMap =
   Map.Make(struct
     type t = Clambda.ustructured_constant
@@ -60,7 +64,7 @@ let structured_constants = ref structured_constants_empty
 
 let exported_constants = Hashtbl.create 17
 
-let default_ui_export_info =
+let default_export_info =
   if Config.flambda then Cmx_format.Flambda None
   else Cmx_format.Clambda Value_unknown
 
@@ -74,7 +78,11 @@ let current_unit =
     ui_apply_fun = [];
     ui_send_fun = [];
     ui_force_link = false;
-    ui_export_info = default_ui_export_info }
+    ui_section_toc = [];
+    ui_channel = None;
+    ui_sections = [| |];
+  }
+
 
 let symbolname_for_pack pack name =
   match pack with
@@ -118,7 +126,9 @@ let reset ?packname name =
   current_unit.ui_force_link <- !Clflags.link_everything;
   Hashtbl.clear exported_constants;
   structured_constants := structured_constants_empty;
-  current_unit.ui_export_info <- default_ui_export_info;
+  current_unit.ui_section_toc <- [];
+  current_unit.ui_channel <- None;
+  current_unit.ui_sections <- [| |];
   let compilation_unit =
     Compilation_unit.create
       (Ident.create_persistent name)
@@ -151,11 +161,26 @@ let read_unit_info filename =
     end;
     let ui = (input_value ic : unit_infos) in
     let crc = Digest.input ic in
-    close_in ic;
-    (ui, crc)
+    ui.ui_channel <- Some ic;
+    let sections =
+      Array.of_list ui.ui_section_toc
+      |> Array.map (fun byte_offset_in_cmx ->
+        { byte_offset_in_cmx;
+          contents = None;
+        })
+    in
+    ui.ui_sections <- sections;
+    ui, crc
   with End_of_file | Failure _ ->
     close_in ic;
     raise(Error(Corrupted_unit_info(filename)))
+
+let close_cmx_file ui =
+  match ui.ui_channel with
+  | None -> None
+  | Some ic ->
+    close_in ic;
+    ui.ui_channel <- None
 
 let read_library_info filename =
   let ic = open_in_bin filename in
@@ -166,6 +191,62 @@ let read_library_info filename =
   close_in ic;
   infos
 
+(* Management of .cmx file sections *)
+
+let add_section ui (section : section_contents) =
+  match ui.ui_section_toc with
+  | [] ->
+    let index = ui.ui_index_of_next_section_to_write in
+    ui.ui_sections_to_write <- (Obj.repr section) :: ui.ui_sections_to_write;
+    ui.ui_index_of_next_section_to_write <- index + 1;
+    index
+  | _::_ ->
+    Misc.fatal_errorf "unit_infos record for unit %s already has sections \
+        from when it was read from a .cmx file.  It is not expected that \
+        more sections are added to such units."
+      ui.ui_symbol
+
+let prepare_sections_for_export ui =
+  let _, section_toc_rev, marshalled_rev =
+    ListLabels.fold_left (List.rev ui.ui_sections_to_write_rev)
+      ~init:(0, [], [])
+      ~f:(fun (byte_offset, section_toc_rev, marshalled_rev) contents ->
+        let section_toc = byte_offset :: section_toc_rev in
+        let marshalled = Marshal.to_string contents [] in
+        let marshalled = marshalled :: marshalled_rev in
+        let byte_offset = byte_offset + String.length marshalled in
+        byte_offset, section_toc_rev, marshalled_rev)
+  in
+  close_cmx_file ui;
+  ui.ui_sections <- [| |];
+  ui.ui_index_of_next_section_to_write <- 0;
+  ui.ui_sections_to_write_rev <- [];
+  ui.ui_section_toc <- List.rev section_toc_rev;
+  List.rev marshalled
+
+let num_sections_read_from_cmx_file ui =
+  Array.length ui.ui_sections
+
+let read_section_from_cmx_file ui ~index =
+  match ui.ui_channel with
+  | None -> None
+  | Some ic ->
+    let num_sections = num_sections_read_from_cmx_file ui in
+    if index < 0 || index >= num_sections then
+      Misc.fatal_errorf ".cmx file for unit %s only has %d sections, but \
+          the section at index %d was requested"
+        ui.ui_symbol
+        num_sections
+        index
+    else
+      let { byte_offset_in_cmx; contents; } = ui.ui_sections.(index) in
+      match contents with
+      | Some contents -> Some contents
+      | None ->
+        seek_in ic byte_offset_in_cmx;
+        let contents : Obj.t option = Some (input_value ic) in
+        ui.ui_sections.(index) <- { byte_offset_in_cmx; contents; };
+        contents
 
 (* Read and cache info on global identifiers *)
 
@@ -177,20 +258,20 @@ let get_global_info global_ident = (
     try
       Hashtbl.find global_infos_table modname
     with Not_found ->
-      let (infos, crc) =
-        if Env.is_imported_opaque modname then (None, None)
+      let (infos, crc, ic) =
+        if Env.is_imported_opaque modname then (None, None, None)
         else begin
           try
             let filename =
               Load_path.find_uncap (modname ^ ".cmx") in
-            let (ui, crc) = read_unit_info filename in
+            let (ui, crc, ic) = read_unit_info filename in
             if ui.ui_name <> modname then
               raise(Error(Illegal_renaming(modname, ui.ui_name, filename)));
-            (Some ui, Some crc)
+            (Some ui, Some crc, Some ic)
           with Not_found ->
             let warn = Warnings.No_cmx_file modname in
               Location.prerr_warning Location.none warn;
-              (None, None)
+              (None, None, None)
           end
       in
       current_unit.ui_imports_cmx <-
@@ -207,9 +288,15 @@ let cache_unit_info ui =
 
 let get_clambda_approx ui =
   assert(not Config.flambda);
-  match ui.ui_export_info with
-  | Clambda approx -> approx
-  | Flambda _ -> Misc.fatal_error "Not a Closure approx"
+  if num_sections_read_from_cmx_file ui <> 1 then
+    Misc.fatal_error "Not a Closure approx (wrong number of sections)"
+  else
+    let (info : first_section_export_info) =
+      read_section_from_cmx_file ui ~index:0
+    in
+    match info with
+    | Closure approx -> approx
+    | Flambda _ -> Misc.fatal_error "Not a Closure approx"
 
 let toplevel_approx :
   (string, Clambda.value_approximation) Hashtbl.t = Hashtbl.create 16
@@ -268,12 +355,29 @@ let get_global_info' id =
   | None -> None
   | Some ui -> Some ui.ui_export_info
 
-let set_global_info info =
-  current_unit.ui_export_info <- info
+let set_flambda_export_info flambda_cmx =
+  let module F = Flambda_cmx_format in
+  match current_unit.ui_sections_to_write_rev with
+  | [] ->
+    (* First the subsidiary sections have their indexes (not byte offsets)
+       assigned.  Then the remainder of the Flambda export info is updated
+       to take account of these offsets, before being put out as the last
+       section. *)
+    let subsidiary_sections_map =
+      F.create_subsidiary_sections_map flambda_cmx ~f:(fun contents ->
+        add_section ui (Flambda contents))
+    in
+    let flambda_cmx =
+      F.with_subsidiary_sections_map flambda_cmx subsidiary_sections_map
+    in
+    ignore ((add_section ui (Flambda (F.header_contents flambda_cmx))) : int)
+  | _::_ -> Misc.fatal_error "Flambda export info already set"
 
 let set_global_approx approx =
   assert(not Config.flambda);
-  set_global_info (Clambda approx)
+  match current_unit.ui_sections_to_write_rev with
+  | [] -> ignore ((add_section ui (Closure approx)) : int)
+  | _::_ -> Misc.fatal_error "Closure value approximation already set"
 
 (* Exporting and importing cross module information *)
 

@@ -52,3 +52,23 @@ val merge : t option -> t option -> t option
 
 (** For ocamlobjinfo *)
 val print : Format.formatter -> t -> unit
+
+(** The following is for writing values of type [t] into different sections
+    of a .cmx file.  This in particular allows code to be demarshalled
+    lazily. *)
+
+type subsidiary_sections_map
+
+(** For each non-header section, the provided [f] must give the assigned index
+    (as needed for [Compilenv.read_section_from_cmx_file]) of the section
+    in the .cmx file being prepared. *)
+val create_subsidiary_sections_map
+   : t
+  -> f:(Obj.t -> int)
+  -> subsidiary_sections_map
+
+val with_subsidiary_sections_map : t -> subsidiary_sections_map -> t
+
+(** [with_subsidiary_sections_map] must be called before this function, or
+    the header will not reflect the indexes of the subsidiary sections. *)
+val header_contents : t -> Obj.t
