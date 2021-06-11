@@ -334,8 +334,6 @@ module Flambda_backend = struct
   let max_sensible_number_of_arguments =
     Proc.max_arguments_for_tailcalls - 1
 
-  let set_global_info info = Compilenv.set_global_info (Flambda (Some info))
-
   let get_global_info comp_unit =
     (* The Flambda simplifier should have returned the typing information
        for the predefined exception compilation unit before getting here. *)

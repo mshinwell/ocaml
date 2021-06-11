@@ -79,6 +79,7 @@ let current_unit =
     ui_send_fun = [];
     ui_force_link = false;
     ui_section_toc = [];
+    (* CR mshinwell: When are we going to close the .cmx files? *)
     ui_channel = None;
     ui_sections = [| |];
   }
@@ -244,7 +245,7 @@ let read_section_from_cmx_file ui ~index =
       | Some contents -> Some contents
       | None ->
         seek_in ic byte_offset_in_cmx;
-        let contents : Obj.t option = Some (input_value ic) in
+        let contents : section_contents option = Some (input_value ic) in
         ui.ui_sections.(index) <- { byte_offset_in_cmx; contents; };
         contents
 
@@ -350,10 +351,39 @@ let symbol_for_global' id =
   else
     Symbol.create (unit_for_global id) sym_label
 
-let get_global_info' id =
+(* Exporting and importing cross module information for Closure *)
+
+let set_global_approx approx =
+  assert(not Config.flambda);
+  match current_unit.ui_sections_to_write_rev with
+  | [] -> ignore ((add_section ui (Closure approx)) : int)
+  | _::_ -> Misc.fatal_error "Closure value approximation already set"
+
+(* Handling of export information for Flambda 2 *)
+
+let ensure_is_flambda_section ui section_contents =
+  match section_contents with
+  | None -> None
+  | Some (Flambda contents) -> Some contents
+  | Some (Closure _) ->
+    Misc.fatal_errorf "The .cmx file for module %s was written by the \
+        Closure middle end, not Flambda 2.  Please recompile it."
+      ui.ui_name
+
+let read_flambda_header_section_from_cmx_file id =
   match get_global_info id with
   | None -> None
-  | Some ui -> Some ui.ui_export_info
+  | Some ui ->
+    let index = num_sections_read_from_cmx_file ui - 1 in
+    read_section_from_cmx_file ui ~index
+    |> ensure_is_flambda_section ui
+
+let read_flambda_section_from_cmx_file id ~index =
+  match get_global_info id with
+  | None -> None
+  | Some ui ->
+    read_section_from_cmx_file ui ~index
+    |> ensure_is_flambda_section ui
 
 let set_flambda_export_info flambda_cmx =
   let module F = Flambda_cmx_format in
@@ -372,14 +402,6 @@ let set_flambda_export_info flambda_cmx =
     in
     ignore ((add_section ui (Flambda (F.header_contents flambda_cmx))) : int)
   | _::_ -> Misc.fatal_error "Flambda export info already set"
-
-let set_global_approx approx =
-  assert(not Config.flambda);
-  match current_unit.ui_sections_to_write_rev with
-  | [] -> ignore ((add_section ui (Closure approx)) : int)
-  | _::_ -> Misc.fatal_error "Closure value approximation already set"
-
-(* Exporting and importing cross module information *)
 
 (* Record that a currying function or application function is needed *)
 

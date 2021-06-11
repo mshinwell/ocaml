@@ -84,18 +84,10 @@ val set_global_approx: Clambda.value_approximation -> unit
 val record_global_approx_toplevel: unit -> unit
         (* Record the current approximation for the current toplevel phrase
            clambda-only *)
-val get_global_info' : Ident.t -> Cmx_format.export_info option
-val set_global_info : Cmx_format.export_info -> unit
 
-(* val set_export_info: Export_info.t -> unit *)
-        (* Record the information of the unit being compiled
-           flambda-only *)
-(* val approx_env: unit -> Export_info.t *)
-        (* Returns all the information loaded from external compilation units
-           flambda-only *)
-(* val approx_for_global: Compilation_unit.t -> Export_info.t option *)
-        (* Loads the exported information declaring the compilation_unit
-           flambda-only *)
+val read_flambda_section_from_cmx_file : Ident.t -> index:int -> Obj.t option
+
+val set_flambda_export_info : Flambda_cmx_format.t -> unit
 
 val need_curry_fun: int -> unit
 val need_apply_fun: int -> unit
