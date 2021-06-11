@@ -67,8 +67,6 @@ val create_subsidiary_sections_map
   -> f:(Obj.t -> int)
   -> subsidiary_sections_map
 
-val with_subsidiary_sections_map : t -> subsidiary_sections_map -> t
+val header_contents : t -> subsidiary_sections_map -> t
 
-(** [with_subsidiary_sections_map] must be called before this function, or
-    the header will not reflect the indexes of the subsidiary sections. *)
-val header_contents : t -> Obj.t
+val associate_with_loaded_cmx_file : t -> Cmx_format.unit_infos -> t

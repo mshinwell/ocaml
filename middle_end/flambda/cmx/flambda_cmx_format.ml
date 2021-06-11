@@ -96,12 +96,12 @@ let create ~final_typing_env ~all_code ~exported_offsets ~used_closure_vars =
     }
   in
   [{ original_compilation_unit = Compilation_unit.get_current_exn ();
-    final_typing_env;
-    all_code;
-    exported_offsets;
+     final_typing_env;
+     all_code;
+     exported_offsets;
      used_closure_vars;
-    table_data;
-   }]
+     table_data;
+  }]
 
 let import_typing_env_and_code0 t =
   (* First create map for data that does not contain ids, i.e. everything
@@ -265,3 +265,28 @@ let print ppf t =
   | t0 :: t ->
     Format.fprintf ppf "Packed units:@ @[<v>(%a)%a@]"
       print0 t0 print_rest t
+
+let create_subsidiary_sections_map t ~f =
+  ListLabels.fold_left t ~init:Code_id.Map.empty
+    ~f:(fun map t0 ->
+      Exported_code.fold t0.all_code ~init:map
+        ~f:(fun map code_id code ->
+          let index = f (Obj.obj code) in
+          Code_id.Map.add code_id index map))
+
+let header_contents t subsidiary_sections_map =
+  ListLabels.map t ~f:(fun t0 ->
+    let all_code =
+      Exported_code.prepare_for_cmx_header_section t0.all_code
+        ~code_sections_map:subsidiary_sections_map
+    in
+    { t0 with all_code; })
+  |> Obj.obj
+
+let associate_with_loaded_cmx_file t cmx_format_unit_infos =
+  ListLabels.map t ~f:(fun t0 ->
+    let all_code =
+      Exported_code.associate_with_loaded_cmx_file t0.all_code
+        cmx_format_unit_infos
+    in
+    { t0 with all_code; })

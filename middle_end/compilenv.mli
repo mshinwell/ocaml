@@ -29,6 +29,10 @@ open Cmx_format
  *   : Simple_value_approx.function_declarations option Set_of_closures_id.Tbl.t *)
         (* flambda-only *)
 
+module Cmx_section_offset : sig
+  type t
+end
+
 val reset: ?packname:string -> string -> unit
         (* Reset the environment and record the name of the unit being
            compiled (arg).  Optional argument is [-for-pack] prefix. *)
@@ -85,7 +89,9 @@ val record_global_approx_toplevel: unit -> unit
         (* Record the current approximation for the current toplevel phrase
            clambda-only *)
 
-val read_flambda_section_from_cmx_file : Ident.t -> index:int -> Obj.t option
+val read_flambda_header_section_from_cmx_file : Ident.t -> Flambda_cmx_format.t
+
+val read_flambda_section_from_cmx_file : unit_infos -> index:int -> Obj.t option
 
 val set_flambda_export_info : Flambda_cmx_format.t -> unit
 

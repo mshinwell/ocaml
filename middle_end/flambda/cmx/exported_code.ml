@@ -57,7 +57,7 @@ end
 
 type code_status =
   | Loaded of C.t
-  | Not_loaded
+  | Not_loaded of Compilenv.Cmx_section_index.t
 
 type t0 =
   | Present of {
@@ -66,7 +66,11 @@ type t0 =
   }
   | Imported of { calling_convention : Calling_convention.t; }
 
-type t = t0 Code_id.Map.t
+type t = {
+  code : t0 Code_id.Map.t;
+  code_sections_map : Compilenv.Cmx_section_index.t Code_id.Map.t;
+  cmx_format_unit_infos : Cmx_format.unit_infos;
+}
 
 let print0 ppf t0 =
   match t0 with
@@ -154,16 +158,23 @@ let merge t1 t2 =
 let mem code_id t =
   Code_id.Map.mem code_id t
 
-let load_code code_id =
-  ...
+let load_code t code_id : Code.t =
+  match Code_id.Map.find code_id t.code_sections_map with
+  | exception Not_found ->
+    Misc.fatal_errorf "Code ID %a not found in code sections map:@ %a"
+      Code_id.print code_id
+      print t
+  | index ->
+    Compilenv.read_flambda_section_from_cmx_file t.cmx_format_unit_infos index
+    |> Obj.repr
 
 let find_code t code_id =
   match Code_id.Map.find code_id t with
   | exception Not_found ->
     Misc.fatal_errorf "Code ID %a not bound" Code_id.print code_id
   | Present { code = Loaded code; calling_convention = _; } -> code
-  | Present ({ code = Not_loaded; calling_convention = _; } as t0) ->
-    let code = load_code code_id in
+  | Present ({ code = Not_loaded index; calling_convention = _; } as t0) ->
+    let code = load_code t code_id index in
     t0.code <- Loaded code;
     code
   | Imported _ ->
@@ -234,3 +245,17 @@ let apply_renaming code_id_map renaming t =
 
 let iter t f =
   Code_id.Map.iter (fun id -> function | Present {code; _} -> f id code | _ -> ()) t
+
+let fold t ~init ~f =
+  Code_id.Map.fold (fun code_id code acc ->
+      match code with
+      | Present { code; } -> f acc code_id code
+      | Imported _ -> acc)
+    t
+    init
+
+let associate_with_loaded_cmx_file t cmx_format_unit_infos =
+  { t with cmx_format_unit_infos; }
+
+let prepare_for_cmx_header_section t ~code_sections_map =
+  { t with code_sections_map; }

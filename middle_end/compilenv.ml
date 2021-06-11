@@ -375,15 +375,19 @@ let read_flambda_header_section_from_cmx_file id =
   | None -> None
   | Some ui ->
     let index = num_sections_read_from_cmx_file ui - 1 in
-    read_section_from_cmx_file ui ~index
-    |> ensure_is_flambda_section ui
+    let flambda_cmx_format : Flambda_cmx_format.t =
+      read_section_from_cmx_file ui ~index
+      |> ensure_is_flambda_section ui
+      |> Obj.repr
+    in
+    let flambda_cmx_format =
+      Flambda_cmx_format.associate_with_loaded_cmx_file flambda_cmx_format ui
+    in
+    cmx_format
 
-let read_flambda_section_from_cmx_file id ~index =
-  match get_global_info id with
-  | None -> None
-  | Some ui ->
-    read_section_from_cmx_file ui ~index
-    |> ensure_is_flambda_section ui
+let read_flambda_section_from_cmx_file ui ~index =
+  read_section_from_cmx_file ui ~index
+  |> ensure_is_flambda_section ui
 
 let set_flambda_export_info flambda_cmx =
   let module F = Flambda_cmx_format in
@@ -398,9 +402,9 @@ let set_flambda_export_info flambda_cmx =
         add_section ui (Flambda contents))
     in
     let flambda_cmx =
-      F.with_subsidiary_sections_map flambda_cmx subsidiary_sections_map
+      F.header_contents flambda_cmx subsidiary_sections_map
     in
-    ignore ((add_section ui (Flambda (F.header_contents flambda_cmx))) : int)
+    ignore ((add_section ui (Flambda header_contents)) : int)
   | _::_ -> Misc.fatal_error "Flambda export info already set"
 
 (* Record that a currying function or application function is needed *)

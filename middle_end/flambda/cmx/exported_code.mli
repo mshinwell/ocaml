@@ -52,3 +52,16 @@ val find_calling_convention : t -> Code_id.t -> Calling_convention.t
 val remove_unreachable : t -> reachable_names:Name_occurrences.t -> t
 
 val iter : t -> (Code_id.t -> Flambda.Code.t -> unit) -> unit
+
+val fold
+   : t
+  -> init:'a
+  -> f:('a -> Code_id.t -> Flambda.Code.t -> 'a)
+  -> 'a
+
+val associate_with_loaded_cmx_file : t -> Cmx_format.unit_infos -> t
+
+val prepare_for_cmx_header_section
+   : t
+  -> code_sections_map:Compilenv.Cmx_section_offset.t Code_id.Map.t
+  -> t
