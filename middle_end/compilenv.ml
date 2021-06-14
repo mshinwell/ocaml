@@ -79,11 +79,13 @@ let current_unit =
     ui_send_fun = [];
     ui_force_link = false;
     ui_section_toc = [];
-    (* CR mshinwell: When are we going to close the .cmx files? *)
     ui_channel = None;
     ui_sections = [| |];
+    ui_index_of_next_section_to_write = 0;
+    ui_sections_to_write_rev = [];
   }
 
+(* CR mshinwell: When are we going to close the .cmx files? *)
 
 let symbolname_for_pack pack name =
   match pack with
@@ -130,12 +132,17 @@ let reset ?packname name =
   current_unit.ui_section_toc <- [];
   current_unit.ui_channel <- None;
   current_unit.ui_sections <- [| |];
+  current_unit.ui_index_of_next_section_to_write <- 0;
+  current_unit.ui_sections_to_write_rev <- [];
   let compilation_unit =
     Compilation_unit.create
       (Ident.create_persistent name)
       (current_unit_linkage_name ())
   in
   Compilation_unit.set_current compilation_unit
+
+let clear_export_info_for_current_unit () =
+  current_unit.ui_section_toc <- []
 
 let current_unit_infos () =
   current_unit
@@ -306,6 +313,8 @@ let record_global_approx_toplevel () =
   Hashtbl.add toplevel_approx current_unit.ui_name
     (get_clambda_approx current_unit)
 
+let global_approx_for_unit = get_clambda_approx
+
 let global_approx id =
   if Ident.is_predef id then Clambda.Value_unknown
   else try Hashtbl.find toplevel_approx (Ident.name id)
@@ -353,11 +362,14 @@ let symbol_for_global' id =
 
 (* Exporting and importing cross module information for Closure *)
 
-let set_global_approx approx =
+let set_global_approx_for_unit ui approx =
   assert(not Config.flambda);
-  match current_unit.ui_sections_to_write_rev with
+  match ui.ui_sections_to_write_rev with
   | [] -> ignore ((add_section ui (Closure approx)) : int)
   | _::_ -> Misc.fatal_error "Closure value approximation already set"
+
+let set_global_approx approx =
+  set_global_approx_for_unit current_unit approx
 
 (* Handling of export information for Flambda 2 *)
 
@@ -370,26 +382,29 @@ let ensure_is_flambda_section ui section_contents =
         Closure middle end, not Flambda 2.  Please recompile it."
       ui.ui_name
 
+let read_flambda_header_section_for_unit_from_cmx_file ui ~index =
+  let index = num_sections_read_from_cmx_file ui - 1 in
+  let flambda_cmx_format : Flambda_cmx_format.t =
+    read_section_from_cmx_file ui ~index
+    |> ensure_is_flambda_section ui
+    |> Obj.repr
+  in
+  let flambda_cmx_format =
+    Flambda_cmx_format.associate_with_loaded_cmx_file flambda_cmx_format ui
+  in
+  cmx_format
+
 let read_flambda_header_section_from_cmx_file id =
   match get_global_info id with
   | None -> None
   | Some ui ->
-    let index = num_sections_read_from_cmx_file ui - 1 in
-    let flambda_cmx_format : Flambda_cmx_format.t =
-      read_section_from_cmx_file ui ~index
-      |> ensure_is_flambda_section ui
-      |> Obj.repr
-    in
-    let flambda_cmx_format =
-      Flambda_cmx_format.associate_with_loaded_cmx_file flambda_cmx_format ui
-    in
-    cmx_format
+    Some (read_flambda_header_section_for_unit_from_cmx_file ui)
 
 let read_flambda_section_from_cmx_file ui ~index =
   read_section_from_cmx_file ui ~index
   |> ensure_is_flambda_section ui
 
-let set_flambda_export_info flambda_cmx =
+let set_flambda_export_info_for_unit ui flambda_cmx =
   let module F = Flambda_cmx_format in
   match current_unit.ui_sections_to_write_rev with
   | [] ->
@@ -407,7 +422,8 @@ let set_flambda_export_info flambda_cmx =
     ignore ((add_section ui (Flambda header_contents)) : int)
   | _::_ -> Misc.fatal_error "Flambda export info already set"
 
-(* Record that a currying function or application function is needed *)
+let set_flambda_export_info flambda_cmx =
+  set_flambda_export_info_for_unit current_unit
 
 let need_curry_fun n =
   if not (List.mem n current_unit.ui_curry_fun) then

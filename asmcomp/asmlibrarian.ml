@@ -41,7 +41,7 @@ let read_info name =
      since the compiler will go looking directly for .cmx files.
      The linker, which is the only one that reads .cmxa files, does not
      need the approximation. *)
-  info.ui_section_toc <- [];
+  Compilenv.clear_export_info_for_current_unit ();
   (Filename.chop_suffix filename ".cmx" ^ ext_obj, (info, crc))
 
 let create_archive file_list lib_name =
