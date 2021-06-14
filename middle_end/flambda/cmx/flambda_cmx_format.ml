@@ -220,9 +220,11 @@ let update_for_pack0 ~pack_units ~pack t =
       continuations;
     }
   in
+  Exported_code.load_all_code_from_cmx_file t.all_code;
   { t with table_data; }
 
 let update_for_pack ~pack_units ~pack t_opt =
+  (* XXX This needs to force loading of all code *)
   match t_opt with
   | None -> None
   | Some t -> Some (List.map (update_for_pack0 ~pack_units ~pack) t)

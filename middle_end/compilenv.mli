@@ -29,10 +29,6 @@ open Cmx_format
  *   : Simple_value_approx.function_declarations option Set_of_closures_id.Tbl.t *)
         (* flambda-only *)
 
-module Cmx_section_offset : sig
-  type t
-end
-
 val reset: ?packname:string -> string -> unit
         (* Reset the environment and record the name of the unit being
            compiled (arg).  Optional argument is [-for-pack] prefix. *)

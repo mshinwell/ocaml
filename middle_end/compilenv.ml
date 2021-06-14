@@ -382,6 +382,10 @@ let ensure_is_flambda_section ui section_contents =
         Closure middle end, not Flambda 2.  Please recompile it."
       ui.ui_name
 
+let read_flambda_section_from_cmx_file ui ~index =
+  read_section_from_cmx_file ui ~index
+  |> ensure_is_flambda_section ui
+
 let read_flambda_header_section_for_unit_from_cmx_file ui ~index =
   let index = num_sections_read_from_cmx_file ui - 1 in
   let flambda_cmx_format : Flambda_cmx_format.t =
@@ -390,7 +394,9 @@ let read_flambda_header_section_for_unit_from_cmx_file ui ~index =
     |> Obj.repr
   in
   let flambda_cmx_format =
-    Flambda_cmx_format.associate_with_loaded_cmx_file flambda_cmx_format ui
+    Flambda_cmx_format.associate_with_loaded_cmx_file flambda_cmx_format
+      ~read_flambda_section_from_cmx_file:(fun ~index ->
+        read_flambda_section_from_cmx_file ui ~index)
   in
   cmx_format
 
@@ -399,10 +405,6 @@ let read_flambda_header_section_from_cmx_file id =
   | None -> None
   | Some ui ->
     Some (read_flambda_header_section_for_unit_from_cmx_file ui)
-
-let read_flambda_section_from_cmx_file ui ~index =
-  read_section_from_cmx_file ui ~index
-  |> ensure_is_flambda_section ui
 
 let set_flambda_export_info_for_unit ui flambda_cmx =
   let module F = Flambda_cmx_format in

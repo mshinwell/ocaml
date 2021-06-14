@@ -69,4 +69,9 @@ val create_subsidiary_sections_map
 
 val header_contents : t -> subsidiary_sections_map -> t
 
-val associate_with_loaded_cmx_file : t -> Cmx_format.unit_infos -> t
+val associate_with_loaded_cmx_file
+   : t
+  -> read_flambda_section_from_cmx_file:(index:int -> Obj.t)
+  -> t
+
+val load_all_sections_from_cmx_file : t -> unit

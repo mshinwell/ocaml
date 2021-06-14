@@ -59,9 +59,14 @@ val fold
   -> f:('a -> Code_id.t -> Flambda.Code.t -> 'a)
   -> 'a
 
-val associate_with_loaded_cmx_file : t -> Cmx_format.unit_infos -> t
+val associate_with_loaded_cmx_file
+   : t
+  -> read_flambda_section_from_cmx_file:(index:int -> Obj.t)
+  -> t
 
 val prepare_for_cmx_header_section
    : t
-  -> code_sections_map:Compilenv.Cmx_section_offset.t Code_id.Map.t
+  -> code_sections_map:int Code_id.Map.t
   -> t
+
+val load_all_code_from_cmx_file : t -> unit
