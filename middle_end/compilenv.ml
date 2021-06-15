@@ -387,18 +387,13 @@ let read_flambda_section_from_cmx_file ui ~index =
   |> ensure_is_flambda_section ui
 
 let read_flambda_header_section_for_unit_from_cmx_file ui ~index =
+  (* The header is always the last section. *)
   let index = num_sections_read_from_cmx_file ui - 1 in
-  let flambda_cmx_format : Flambda_cmx_format.t =
-    read_section_from_cmx_file ui ~index
-    |> ensure_is_flambda_section ui
-    |> Obj.repr
-  in
-  let flambda_cmx_format =
-    Flambda_cmx_format.associate_with_loaded_cmx_file flambda_cmx_format
-      ~read_flambda_section_from_cmx_file:(fun ~index ->
-        read_flambda_section_from_cmx_file ui ~index)
-  in
-  cmx_format
+  read_section_from_cmx_file ui ~index
+  |> ensure_is_flambda_section ui
+  |> Flambda_cmx_format.associate_with_loaded_cmx_file
+    ~read_flambda_section_from_cmx_file:(fun ~index ->
+      read_flambda_section_from_cmx_file ui ~index)
 
 let read_flambda_header_section_from_cmx_file id =
   match get_global_info id with

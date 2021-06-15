@@ -59,7 +59,8 @@ end
 
 type code_status =
   | Loaded of C.t
-  | Not_loaded
+  | Not_loaded of { read_flambda_section_from_cmx_file: (index:int -> C.t); }
+  | Pending_association_with_cmx_file
 
 type t0 =
   | Present of {
@@ -71,7 +72,6 @@ type t0 =
 type t = {
   code : t0 Code_id.Map.t;
   code_sections_map : int Code_id.Map.t;
-  read_flambda_section_from_cmx_file : (index:int -> Obj.t);
 }
 
 let print0 ppf t0 =
@@ -96,16 +96,12 @@ let print0 ppf t0 =
       "@[<hov 1>(Imported@ (calling_convention@ %a))@]"
       Calling_convention.print calling_convention
 
-let print ppf { code; code_sections_map = _;
-                read_flambda_section_from_cmx_file = _; } =
+let print ppf { code; code_sections_map = _; } =
   Code_id.Map.print print0 ppf code
 
 let empty =
   { code = Code_id.Map.empty;
     code_sections_map = Code_id.Map.empty;
-    read_flambda_section_from_cmx_file =
-      (fun ~index:_ ->
-        Misc.fatal_error "This [Exported_code] was not read from a .cmx file");
   }
 
 let add_code code t =
@@ -155,15 +151,7 @@ let merge t1 t2 =
       (Present { calling_convention = cc_present; code; } as t0)
     | (Present { calling_convention = cc_present; code; } as t0),
       Imported { calling_convention = cc_imported; } ->
-      if Calling_convention.equal cc_present cc_imported then
-        match code with
-        | Loaded _ -> Some t0
-        | Not_loaded ->
-          (* To keep things simple we don't allow a value of type [t] to
-             reference pieces of code across multiple .cmx files.  As such,
-             before merging values of type [t], all code must be loaded. *)
-          Misc.fatal_error "Must call \
-            [Exported_code.load_all_code_from_cmx_file] before [merge]"
+      if Calling_convention.equal cc_present cc_imported then Some t0
       else
         Misc.fatal_errorf
           "Code_id %a is present with calling convention %a\
@@ -178,7 +166,7 @@ let merge t1 t2 =
 let mem code_id t =
   Code_id.Map.mem code_id t.code
 
-let load_code t code_id : Code.t =
+let load_code t code_id ~read_flambda_section_from_cmx_file : Code.t =
   match Code_id.Map.find code_id t.code_sections_map with
   | exception Not_found ->
     Misc.fatal_errorf "Code ID %a not found in code sections map:@ %a"
@@ -186,28 +174,21 @@ let load_code t code_id : Code.t =
       print t
   | index ->
     (* This calls back into [Compilenv]. *)
-    t.read_flambda_section_from_cmx_file ~index
-    |> Obj.obj
-
-let load_all_code_from_cmx_file t =
-  Code_id.Map.iter (fun code_id code ->
-      match code with
-      | Present ({ code = Not_loaded; _ } as t0) ->
-        let code = load_code t code_id in
-        t0.code <- Loaded code
-      | Present { code = Loaded _; _ }
-      | Imported _ -> ())
-    t.code
+    read_flambda_section_from_cmx_file ~index
 
 let find_code t code_id =
   match Code_id.Map.find code_id t.code with
   | exception Not_found ->
     Misc.fatal_errorf "Code ID %a not bound" Code_id.print code_id
   | Present { code = Loaded code; calling_convention = _; } -> code
-  | Present ({ code = Not_loaded; calling_convention = _; } as t0) ->
-    let code = load_code t code_id in
+  | Present ({ code = Not_loaded { read_flambda_section_from_cmx_file; };
+               calling_convention = _; } as t0) ->
+    let code = load_code t code_id ~read_flambda_section_from_cmx_file in
     t0.code <- Loaded code;
     code
+  | Present { code = Pending_association_with_cmx_file; _ } ->
+    Misc.fatal_error "Must associate [Exported_code] with a .cmx file before \
+      calling [find_code]"
   | Imported _ ->
     Misc.fatal_errorf "Actual code for Code ID %a is missing"
       Code_id.print code_id
@@ -244,7 +225,11 @@ let remove_unreachable t ~reachable_names =
 let load_code_if_necessary t code_id code =
   match code with
   | Loaded code -> code
-  | Not_loaded -> load_code t code_id
+  | Not_loaded { read_flambda_section_from_cmx_file; } ->
+    load_code t code_id ~read_flambda_section_from_cmx_file
+  | Pending_association_with_cmx_file ->
+    Misc.fatal_error "Must associate [Exported_code] with a .cmx file before \
+      calling [load_code_if_necessary]"
 
 let all_ids_for_export t =
   Code_id.Map.fold (fun code_id code_data all_ids ->
@@ -297,9 +282,28 @@ let fold t ~init ~f =
     t.code
     init
 
+let map_present_code t ~f =
+  let code =
+    Code_id.Map.map (fun t0 ->
+        match t0 with
+        | Present { code; calling_convention; } ->
+          Present {
+            code = f code;
+            calling_convention;
+          }
+        | Imported _ -> t0)
+      t.code
+  in
+  { t with code; }
+
+let prepare_for_cmx_header_section t =
+  map_present_code t ~f:(fun _ -> Pending_association_with_cmx_file)
+
 let associate_with_loaded_cmx_file t
       ~read_flambda_section_from_cmx_file =
-  { t with read_flambda_section_from_cmx_file; }
-
-let prepare_for_cmx_header_section t ~code_sections_map =
-  { t with code_sections_map; }
+  map_present_code t ~f:(function
+    | Pending_association_with_cmx_file ->
+      Not_loaded { read_flambda_section_from_cmx_file; }
+    | Loaded _ | Not_loaded _ ->
+      Misc.fatal_error "Code in .cmx files should always be in state \
+        [Pending_association_with_cmx_file]")

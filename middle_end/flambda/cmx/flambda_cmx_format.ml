@@ -268,27 +268,39 @@ let print ppf t =
     Format.fprintf ppf "Packed units:@ @[<v>(%a)%a@]"
       print0 t0 print_rest t
 
-let create_subsidiary_sections_map t ~f =
+type header_for_cmx_file = {
+  t : t;
+  code_sections_map : int Code_id.Map.t;
+}
+
+let create_code_sections_map t ~f =
   ListLabels.fold_left t ~init:Code_id.Map.empty
     ~f:(fun map t0 ->
       Exported_code.fold t0.all_code ~init:map
         ~f:(fun map code_id code ->
-          let index = f (Obj.obj code) in
+          let index = f (Obj.repr code) in
           Code_id.Map.add code_id index map))
 
-let header_contents t subsidiary_sections_map =
-  ListLabels.map t ~f:(fun t0 ->
-    let all_code =
-      Exported_code.prepare_for_cmx_header_section t0.all_code
-        ~code_sections_map:subsidiary_sections_map
-    in
-    { t0 with all_code; })
-  |> Obj.obj
+let header_contents t ~add_code_section =
+  let code_sections_map = create_code_sections_map t ~f:add_code_section in
+  let t =
+    ListLabels.map t ~f:(fun t0 ->
+      { t0 with
+        all_code = Exported_code.prepare_for_cmx_header_section t0.all_code;
+      })
+  in
+  let header =
+    { t;
+      code_sections_map;
+    }
+  in
+  Obj.repr header
 
-let associate_with_loaded_cmx_file t cmx_format_unit_infos =
-  ListLabels.map t ~f:(fun t0 ->
+let associate_with_loaded_cmx_file header ~read_flambda_section_from_cmx_file =
+  let header : header_for_cmx_file = Obj.obj header in
+  ListLabels.map header.t ~f:(fun t0 ->
     let all_code =
       Exported_code.associate_with_loaded_cmx_file t0.all_code
-        cmx_format_unit_infos
+        ~read_flambda_section_from_cmx_file
     in
     { t0 with all_code; })
