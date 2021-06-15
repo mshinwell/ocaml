@@ -141,8 +141,12 @@ let reset ?packname name =
   in
   Compilation_unit.set_current compilation_unit
 
-let clear_export_info_for_current_unit () =
-  current_unit.ui_section_toc <- []
+let clear_export_info_for_unit ui =
+  ui.ui_section_toc <- [];
+  ui.ui_channel <- None;
+  ui.ui_sections <- [| |];
+  ui.ui_index_of_next_section_to_write <- 0;
+  ui.ui_sections_to_write_rev <- []
 
 let current_unit_infos () =
   current_unit

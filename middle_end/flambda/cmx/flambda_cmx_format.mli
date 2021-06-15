@@ -66,5 +66,3 @@ val associate_with_loaded_cmx_file
    : header_contents:Obj.t
   -> read_flambda_section_from_cmx_file:(index:int -> Obj.t)
   -> t
-
-val force_load_all_code : t -> unit

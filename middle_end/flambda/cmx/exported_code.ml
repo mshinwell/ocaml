@@ -385,8 +385,3 @@ let associate_with_loaded_cmx_file t
           [Pending_association_with_cmx_file]")
   in
   { t with code_sections_map; }
-
-let force_load_all_code t =
-  Code_id.Map.iter (fun code_id _ ->
-      ignore ((find_code t code_id) : C.t))
-    t.code_sections_map

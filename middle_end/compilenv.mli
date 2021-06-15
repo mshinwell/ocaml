@@ -96,7 +96,7 @@ val record_global_approx_toplevel: unit -> unit
         (* Record the current approximation for the current toplevel phrase
            clambda-only *)
 
-val clear_export_info_for_current_unit : unit -> unit
+val clear_export_info_for_unit : Cmx_format.unit_infos -> unit
 
 val read_flambda_header_section_for_unit_from_cmx_file
    : Cmx_format.unit_infos

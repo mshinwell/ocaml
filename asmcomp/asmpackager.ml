@@ -217,9 +217,7 @@ let build_package_cmx members cmxfile =
             (Compilenv.read_flambda_header_section_for_unit_from_cmx_file ui))
         units
     in
-    Option.iter (fun flambda_cmx ->
-        Flambda_cmx_format.force_load_all_code flambda_cmx;
-        Compilenv.set_flambda_export_info_for_unit pkg_infos flambda_cmx)
+    Option.iter (Compilenv.set_flambda_export_info_for_unit pkg_infos)
       flambda_cmx
   end else begin
     Compilenv.set_global_approx_for_unit pkg_infos
