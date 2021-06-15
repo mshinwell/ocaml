@@ -153,7 +153,9 @@ let mark_as_imported t =
   let code = Code_id.Map.map forget_params_and_body t.code in
   { t with code; }
 
-let merge t1 t2 =
+let merge
+      { code = code1; code_sections_map = code_sections_map1; }
+      { code = code2; code_sections_map = code_sections_map2; } =
   let merge_one code_id t01 t02 =
     match t01, t02 with
     | Imported { calling_convention = cc1; },
@@ -182,8 +184,13 @@ let merge t1 t2 =
           Calling_convention.print cc_present
           Calling_convention.print cc_imported
   in
-  let code = Code_id.Map.union merge_one t1.code t2.code in
-  { empty with code; }
+  let code = Code_id.Map.union merge_one code1 code2 in
+  let code_sections_map =
+    Code_id.Map.disjoint_union code_sections_map1 code_sections_map2
+  in
+  { code;
+    code_sections_map;
+  }
 
 let mem code_id t =
   Code_id.Map.mem code_id t.code

@@ -169,8 +169,10 @@ let read_unit_info filename =
     end;
     let ui = (input_value ic : unit_infos) in
     let offset_after_cmx_infos = pos_in ic in
-    Printf.printf "loading cmx %s: offset after cmx_infos = %d\n%!"
+    (*
+    Printf.eprintf "loading cmx %s: offset after cmx_infos = %d\n%!"
       ui.ui_symbol offset_after_cmx_infos;
+    *)
     ui.ui_channel <- Some ic;
     let last_byte_offset_in_cmx = ref 0 in
     let sections =
@@ -223,12 +225,14 @@ let add_section ui (section : section_contents) =
       ui.ui_symbol
 
 let prepare_sections_for_export ui =
-  Printf.eprintf "prepare_sections_for_export\n%!";
+  (* Printf.eprintf "prepare_sections_for_export\n%!"; *)
   let _, section_toc_rev, marshalled_rev =
     ListLabels.fold_left (List.rev ui.ui_sections_to_write_rev)
       ~init:(0, [], [])
       ~f:(fun (byte_offset, section_toc_rev, marshalled_rev) contents ->
+        (*
         Printf.eprintf "--> next section at byte_offset %d\n%!" byte_offset;
+        *)
         let section_toc_rev = byte_offset :: section_toc_rev in
         let marshalled_data = Marshal.to_string contents [] in
         let marshalled_rev = marshalled_data :: marshalled_rev in
@@ -245,9 +249,11 @@ let num_sections_read_from_cmx_file ui =
   Array.length ui.ui_sections
 
 let read_section_from_cmx_file ui ~index =
+  (*
   Printf.eprintf "read_section_from_cmx_file %s: index %d\nbacktrace:\n%s%!"
     ui.ui_symbol index
     (Printexc.raw_backtrace_to_string (Printexc.get_callstack 10));
+  *)
   match ui.ui_channel with
   | None -> None
   | Some ic ->
@@ -263,7 +269,7 @@ let read_section_from_cmx_file ui ~index =
       match section_contents with
       | Some section_contents -> Some section_contents
       | None ->
-        Printf.eprintf "--> seeking to %d\n%!" byte_offset_in_cmx;
+        (* Printf.eprintf "--> seeking to %d\n%!" byte_offset_in_cmx; *)
         seek_in ic byte_offset_in_cmx;
         let section_contents : Obj.t option = Some (input_value ic) in
         ui.ui_sections.(index) <- { byte_offset_in_cmx; section_contents; };
