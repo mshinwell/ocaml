@@ -245,8 +245,9 @@ let num_sections_read_from_cmx_file ui =
   Array.length ui.ui_sections
 
 let read_section_from_cmx_file ui ~index =
-  Printf.eprintf "read_section_from_cmx_file %s: index %d\n%!"
-    ui.ui_symbol index;
+  Printf.eprintf "read_section_from_cmx_file %s: index %d\nbacktrace:\n%s%!"
+    ui.ui_symbol index
+    (Printexc.raw_backtrace_to_string (Printexc.get_callstack 10));
   match ui.ui_channel with
   | None -> None
   | Some ic ->

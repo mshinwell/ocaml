@@ -59,7 +59,17 @@ end
 
 type code_status =
   | Loaded of C.t
-  | Not_loaded of { read_flambda_section_from_cmx_file: (index:int -> C.t); }
+  | Not_loaded of {
+      (* To avoid creating a new closure per piece of code, we record here
+         a closure that is able to load from the correct .cmx file (values
+         of type [t] may involve code from various different .cmx files),
+         with the actual section index stored separately in the
+         [code_sections_map] (which was already computed). *)
+      read_flambda_section_from_cmx_file : (index:int -> C.t);
+      (* To avoid loading code solely for the purposes of applying a
+         renaming, we delay renamings here. *)
+      renaming : Renaming.t;
+    }
   | Pending_association_with_cmx_file
 
 type t0 =
@@ -193,9 +203,13 @@ let find_code t code_id =
   | exception Not_found ->
     Misc.fatal_errorf "Code ID %a not bound" Code_id.print code_id
   | Present { code = Loaded code; calling_convention = _; } -> code
-  | Present ({ code = Not_loaded { read_flambda_section_from_cmx_file; };
+  | Present ({ code = Not_loaded {
+                 read_flambda_section_from_cmx_file;
+                 renaming;
+               };
                calling_convention = _; } as t0) ->
     let code = load_code t code_id ~read_flambda_section_from_cmx_file in
+    let code = Code.apply_renaming code renaming in
     t0.code <- Loaded code;
     code
   | Present { code = Pending_association_with_cmx_file; _ } ->
@@ -206,6 +220,8 @@ let find_code t code_id =
       Code_id.print code_id
 
 let find_code_if_not_imported t code_id =
+  (* CR mshinwell: try to refactor with the previous function too so we
+     only have one copy of this code *)
   match Code_id.Map.find code_id t.code with
   | exception Not_found ->
     (* In some cases a code ID is created, the corresponding closure
@@ -219,9 +235,12 @@ let find_code_if_not_imported t code_id =
        computation, and have to assume that it fits the above case. *)
     None
   | Present { code = Loaded code; calling_convention = _; } -> Some code
-  | Present ({ code = Not_loaded { read_flambda_section_from_cmx_file; };
+  | Present ({ code = Not_loaded {
+                 read_flambda_section_from_cmx_file;
+                 renaming; };
                calling_convention = _; } as t0) ->
     let code = load_code t code_id ~read_flambda_section_from_cmx_file in
+    let code = Code.apply_renaming code renaming in
     t0.code <- Loaded code;
     Some code
   | Present { code = Pending_association_with_cmx_file; _ } ->
@@ -248,7 +267,7 @@ let remove_unreachable t ~reachable_names =
 let load_code_if_necessary t code_id code =
   match code with
   | Loaded code -> code
-  | Not_loaded { read_flambda_section_from_cmx_file; } ->
+  | Not_loaded { read_flambda_section_from_cmx_file; _ } ->
     load_code t code_id ~read_flambda_section_from_cmx_file
   | Pending_association_with_cmx_file ->
     Misc.fatal_error "Must associate [Exported_code] with a .cmx file before \
@@ -279,10 +298,23 @@ let apply_renaming code_id_map renaming t =
           in
           let code_data =
             match code_data with
-            | Present { calling_convention; code; } ->
-              let code = load_code_if_necessary t code_id code in
+            | Present { calling_convention; code = Loaded code; } ->
               let code = C.apply_renaming code renaming in
               Present { calling_convention; code = Loaded code; }
+            | Present { calling_convention; code = Not_loaded {
+                read_flambda_section_from_cmx_file;
+                renaming = existing_renaming; };
+              } ->
+              let renaming =
+                Renaming.compose ~second:renaming ~first:existing_renaming
+              in
+              Present { calling_convention; code = Not_loaded {
+                read_flambda_section_from_cmx_file;
+                renaming; };
+              }
+            | Present { code = Pending_association_with_cmx_file; _ } ->
+              Misc.fatal_error "Must associate [Exported_code] with a .cmx \
+                file before calling [apply_renaming]"
             | Imported { calling_convention; } ->
               Imported { calling_convention; }
           in
@@ -337,7 +369,10 @@ let associate_with_loaded_cmx_file t
   let t =
     map_present_code t ~f:(function
       | Pending_association_with_cmx_file ->
-        Not_loaded { read_flambda_section_from_cmx_file; }
+        Not_loaded {
+          read_flambda_section_from_cmx_file;
+          renaming = Renaming.empty;
+        }
       | Loaded _ | Not_loaded _ ->
         Misc.fatal_error "Code in .cmx files should always be in state \
           [Pending_association_with_cmx_file]")
