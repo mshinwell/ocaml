@@ -84,10 +84,17 @@ let print0 ppf t0 =
        ))@]"
       C.print code
       Calling_convention.print calling_convention
-  | Present { code = Not_loaded; calling_convention; } ->
+  | Present { code = Not_loaded _; calling_convention; } ->
     Format.fprintf ppf
       "@[<hov 1>(Present@ (\
          @[<hov 1>(code@ Not_loaded)@]\
+         @[<hov 1>(calling_convention@ %a)@]\
+       ))@]"
+      Calling_convention.print calling_convention
+  | Present { code = Pending_association_with_cmx_file; calling_convention; } ->
+    Format.fprintf ppf
+      "@[<hov 1>(Present@ (\
+         @[<hov 1>(code@ Pending_association_with_cmx_file)@]\
          @[<hov 1>(calling_convention@ %a)@]\
        ))@]"
       Calling_convention.print calling_convention
@@ -148,8 +155,8 @@ let merge t1 t2 =
       Misc.fatal_errorf "Cannot merge two definitions for code id %a"
         Code_id.print code_id
     | Imported { calling_convention = cc_imported; },
-      (Present { calling_convention = cc_present; code; } as t0)
-    | (Present { calling_convention = cc_present; code; } as t0),
+      (Present { calling_convention = cc_present; code = _; } as t0)
+    | (Present { calling_convention = cc_present; code = _; } as t0),
       Imported { calling_convention = cc_imported; } ->
       if Calling_convention.equal cc_present cc_imported then Some t0
       else
@@ -194,7 +201,7 @@ let find_code t code_id =
       Code_id.print code_id
 
 let find_code_if_not_imported t code_id =
-  match Code_id.Map.find code_id t with
+  match Code_id.Map.find code_id t.code with
   | exception Not_found ->
     (* In some cases a code ID is created, the corresponding closure
        stored into another closure, but the corresponding closure variable
@@ -206,21 +213,32 @@ let find_code_if_not_imported t code_id =
        instead so we can end up with missing code IDs during the reachability
        computation, and have to assume that it fits the above case. *)
     None
-  | Present { code; calling_convention = _; } -> Some code
+  | Present { code = Loaded code; calling_convention = _; } -> Some code
+  | Present ({ code = Not_loaded { read_flambda_section_from_cmx_file; };
+               calling_convention = _; } as t0) ->
+    let code = load_code t code_id ~read_flambda_section_from_cmx_file in
+    t0.code <- Loaded code;
+    Some code
+  | Present { code = Pending_association_with_cmx_file; _ } ->
+    Misc.fatal_error "Must associate [Exported_code] with a .cmx file before \
+      calling [find_code_if_not_imported]"
   | Imported _ ->
     None
 
 let find_calling_convention t code_id =
-  match Code_id.Map.find code_id t with
+  match Code_id.Map.find code_id t.code with
   | exception Not_found ->
     Misc.fatal_errorf "Code ID %a not bound" Code_id.print code_id
   | Present { code = _; calling_convention; } -> calling_convention
   | Imported { calling_convention; } -> calling_convention
 
 let remove_unreachable t ~reachable_names =
-  Code_id.Map.filter (fun code_id _exported_code ->
-      Name_occurrences.mem_code_id reachable_names code_id)
-    t
+  let code =
+    Code_id.Map.filter (fun code_id _exported_code ->
+        Name_occurrences.mem_code_id reachable_names code_id)
+      t.code
+  in
+  { t with code; }
 
 let load_code_if_necessary t code_id code =
   match code with
@@ -270,7 +288,13 @@ let apply_renaming code_id_map renaming t =
     { t with code; }
 
 let iter t f =
-  Code_id.Map.iter (fun id -> function | Present {code; _} -> f id code | _ -> ()) t
+  Code_id.Map.iter
+    (fun id -> function
+      | Present {code; _} ->
+        let code = load_code_if_necessary t id code in
+        f id code
+      | _ -> ())
+    t.code
 
 let fold t ~init ~f =
   Code_id.Map.fold (fun code_id code acc ->
@@ -301,6 +325,10 @@ let prepare_for_cmx_header_section t =
 
 let associate_with_loaded_cmx_file t
       ~read_flambda_section_from_cmx_file =
+  let read_flambda_section_from_cmx_file ~index : C.t =
+    read_flambda_section_from_cmx_file ~index
+    |> Obj.obj
+  in
   map_present_code t ~f:(function
     | Pending_association_with_cmx_file ->
       Not_loaded { read_flambda_section_from_cmx_file; }
