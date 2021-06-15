@@ -138,6 +138,7 @@ open Cmxs_format
 let print_cmx_infos (ui, crc) =
   print_general_infos
     ui.ui_name crc ui.ui_defines ui.ui_imports_cmi ui.ui_imports_cmx;
+  (* CR mshinwell: fix this
   begin match ui.ui_export_info with
   | Clambda approx ->
     if not !no_approx then begin
@@ -153,6 +154,7 @@ let print_cmx_infos (ui, crc) =
       Format.fprintf Format.std_formatter "@[<hov 2>%a@]"
         Flambda_cmx_format.print info
   end;
+  *)
   let pr_funs _ fns =
     List.iter (fun arity -> printf " %d" arity) fns in
   printf "Currying functions:%a\n" pr_funs ui.ui_curry_fun;

@@ -70,3 +70,5 @@ val associate_with_loaded_cmx_file
   -> read_flambda_section_from_cmx_file:(index:int -> Obj.t)
   -> code_sections_map:int Code_id.Map.t
   -> t
+
+val force_load_all_code : t -> unit

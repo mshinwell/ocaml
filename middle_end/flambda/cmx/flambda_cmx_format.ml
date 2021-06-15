@@ -304,3 +304,6 @@ let associate_with_loaded_cmx_file ~header_contents
         ~code_sections_map:header.code_sections_map
     in
     { t0 with all_code; })
+
+let force_load_all_code t =
+  List.iter (fun t0 -> Exported_code.force_load_all_code t0.all_code) t
