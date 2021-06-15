@@ -44,14 +44,6 @@ let rec load_cmx_file_contents backend comp_unit ~imported_units ~imported_names
       in
       let newly_imported_names = TE.name_domain typing_env in
       imported_names := Name.Set.union newly_imported_names !imported_names;
-
-(* XXX This [Emported_code] is being used to hold imported code from
-   multiple units
-
-   This means that [Not_loaded] will need to take a closure which does the
-   loading, instead of just the "int".  This should be ok because before we
-   marshal, we force all of the code, so the closures won't be there. *)
-
       imported_code := Exported_code.merge code !imported_code;
       let offsets = Flambda_cmx_format.exported_offsets cmx in
       Exported_offsets.import_offsets offsets;

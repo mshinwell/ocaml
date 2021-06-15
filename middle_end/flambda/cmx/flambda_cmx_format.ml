@@ -294,8 +294,9 @@ let header_contents t ~add_code_section =
   in
   Obj.repr header
 
-let associate_with_loaded_cmx_file header ~read_flambda_section_from_cmx_file =
-  let header : header_for_cmx_file = Obj.obj header in
+let associate_with_loaded_cmx_file ~header_contents
+      ~read_flambda_section_from_cmx_file =
+  let header : header_for_cmx_file = Obj.obj header_contents in
   ListLabels.map header.t ~f:(fun t0 ->
     let all_code =
       Exported_code.associate_with_loaded_cmx_file t0.all_code

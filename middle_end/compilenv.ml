@@ -174,7 +174,7 @@ let read_unit_info filename =
       Array.of_list ui.ui_section_toc
       |> Array.map (fun byte_offset_in_cmx ->
         { byte_offset_in_cmx;
-          contents = None;
+          section_contents = None;
         })
     in
     ui.ui_sections <- sections;
@@ -248,14 +248,14 @@ let read_section_from_cmx_file ui ~index =
         num_sections
         index
     else
-      let { byte_offset_in_cmx; contents; } = ui.ui_sections.(index) in
-      match contents with
-      | Some contents -> Some contents
+      let { byte_offset_in_cmx; section_contents; } = ui.ui_sections.(index) in
+      match section_contents with
+      | Some section_contents -> Some section_contents
       | None ->
         seek_in ic byte_offset_in_cmx;
-        let contents : Obj.t option = Some (input_value ic) in
-        ui.ui_sections.(index) <- { byte_offset_in_cmx; contents; };
-        contents
+        let section_contents : Obj.t option = Some (input_value ic) in
+        ui.ui_sections.(index) <- { byte_offset_in_cmx; section_contents; };
+        section_contents
 
 (* Read and cache info on global identifiers *)
 
@@ -394,26 +394,20 @@ let read_flambda_section_from_cmx_file ui ~index =
 let read_flambda_header_section_for_unit_from_cmx_file ui =
   (* The header is always the last section. *)
   let index = num_sections_read_from_cmx_file ui - 1 in
-  let contents =
-    read_section_from_cmx_file ui ~index
-    |> ensure_is_flambda_section ui
-  in
-  match contents with
-  (* CR mshinwell: improve these errors *)
-  | None -> Misc.fatal_error "Could not read Flambda header section"
-  | Some contents ->
-    let cmx_format : Flambda_cmx_format.t = Obj.obj contents in
-    Flambda_cmx_format.associate_with_loaded_cmx_file cmx_format
-      ~read_flambda_section_from_cmx_file:(fun ~index ->
-        match read_flambda_section_from_cmx_file ui ~index with
-        | None -> Misc.fatal_error "Could not read Flambda section"
-        | Some contents -> contents)
+  read_section_from_cmx_file ui ~index
+  |> ensure_is_flambda_section ui
+  |> Option.map (fun contents ->
+      Flambda_cmx_format.associate_with_loaded_cmx_file
+        ~header_contents:contents
+        ~read_flambda_section_from_cmx_file:(fun ~index ->
+          match read_flambda_section_from_cmx_file ui ~index with
+          | None -> Misc.fatal_error "Could not read Flambda section"
+          | Some contents -> contents))
 
 let read_flambda_header_section_from_cmx_file id =
   match get_global_info id with
   | None -> None
-  | Some ui ->
-    Some (read_flambda_header_section_for_unit_from_cmx_file ui)
+  | Some ui -> read_flambda_header_section_for_unit_from_cmx_file ui
 
 let set_flambda_export_info_for_unit ui flambda_cmx =
   let module F = Flambda_cmx_format in
@@ -423,12 +417,10 @@ let set_flambda_export_info_for_unit ui flambda_cmx =
        assigned.  Then the remainder of the Flambda export info is updated
        to take account of these offsets, before being put out as the last
        section. *)
-    let subsidiary_sections_map =
-      F.create_subsidiary_sections_map flambda_cmx ~f:(fun contents ->
-        add_section ui (Flambda contents))
-    in
     let header_contents =
-      F.header_contents flambda_cmx subsidiary_sections_map
+      F.header_contents flambda_cmx
+        ~add_code_section:(fun contents ->
+          add_section ui (Flambda contents))
       |> Obj.repr
     in
     ignore ((add_section ui (Flambda header_contents)) : int)
@@ -453,9 +445,11 @@ let need_send_fun n =
 (* Write the description of the current unit *)
 
 let write_unit_info info filename =
+  let marshalled_sections = prepare_sections_for_export info in
   let oc = open_out_bin filename in
   output_string oc cmx_magic_number;
   output_value oc info;
+  List.iter (output_value oc) marshalled_sections;
   flush oc;
   let crc = Digest.file filename in
   Digest.output oc crc;

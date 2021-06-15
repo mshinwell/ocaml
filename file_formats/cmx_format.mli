@@ -35,7 +35,7 @@ open Misc
 
 type section =
   { byte_offset_in_cmx : int;
-    contents : Obj.t option;
+    section_contents : Obj.t option;
   }
 
 type unit_infos =

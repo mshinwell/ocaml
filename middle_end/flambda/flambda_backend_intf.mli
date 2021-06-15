@@ -59,5 +59,5 @@ module type S = sig
       entail passing arguments on the stack; see [Selectgen]). *)
   val max_sensible_number_of_arguments : int
 
-  val get_global_info : Compilation_unit.t -> Obj.t option
+  val get_global_info : Compilation_unit.t -> Flambda_cmx_format.t option
 end

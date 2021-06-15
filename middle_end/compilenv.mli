@@ -100,7 +100,7 @@ val clear_export_info_for_current_unit : unit -> unit
 
 val read_flambda_header_section_for_unit_from_cmx_file
    : Cmx_format.unit_infos
-  -> Flambda_cmx_format.t
+  -> Flambda_cmx_format.t option
 
 val read_flambda_header_section_from_cmx_file
    : Ident.t

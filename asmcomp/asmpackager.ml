@@ -154,12 +154,6 @@ let make_package_object ~ppf_dump members targetobj targetname coercion
 
 (* Make the .cmx file for the package *)
 
-let get_approx ui =
-  assert(not Config.flambda);
-  match ui.ui_export_info with
-  | Clambda info -> info
-  | Flambda _ -> assert false
-
 let build_package_cmx members cmxfile =
   let unit_names =
     List.map (fun m -> m.pm_name) members in
@@ -223,7 +217,8 @@ let build_package_cmx members cmxfile =
             (Compilenv.read_flambda_header_section_for_unit_from_cmx_file ui))
         units
     in
-    Compilenv.set_flambda_export_info_for_unit pkg_infos flambda_cmx
+    Option.iter (Compilenv.set_flambda_export_info_for_unit pkg_infos)
+      flambda_cmx
   end else begin
     Compilenv.set_global_approx_for_unit pkg_infos
       (Compilenv.global_approx_for_unit ui)

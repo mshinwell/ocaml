@@ -57,21 +57,12 @@ val print : Format.formatter -> t -> unit
     of a .cmx file.  This in particular allows code to be demarshalled
     lazily. *)
 
-type subsidiary_sections_map
-
-(** For each non-header section, the provided [f] must give the assigned index
-    (as needed for [Compilenv.read_section_from_cmx_file]) of the section
-    in the .cmx file being prepared. *)
-val create_subsidiary_sections_map
+val header_contents
    : t
-  -> f:(Obj.t -> int)
-  -> subsidiary_sections_map
-
-val header_contents : t -> subsidiary_sections_map -> t
+  -> add_code_section:(Obj.t -> int)
+  -> Obj.t
 
 val associate_with_loaded_cmx_file
-   : t
+   : header_contents:Obj.t
   -> read_flambda_section_from_cmx_file:(index:int -> Obj.t)
   -> t
-
-val load_all_sections_from_cmx_file : t -> unit
