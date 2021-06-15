@@ -213,8 +213,11 @@ let build_package_cmx members cmxfile =
               (Compilenv.read_flambda_header_section_for_unit_from_cmx_file
                 info))
             acc)
+        (Some Flambda_cmx_format.empty)
+        (* CR mshinwell: don't understand existing code
         (Flambda_cmx_format.update_for_pack ~pack_units ~pack
             (Compilenv.read_flambda_header_section_for_unit_from_cmx_file ui))
+        *)
         units
     in
     Option.iter (Compilenv.set_flambda_export_info_for_unit pkg_infos)

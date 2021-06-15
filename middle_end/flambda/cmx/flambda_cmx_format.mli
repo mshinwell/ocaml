@@ -28,6 +28,8 @@ val create
   -> used_closure_vars:Var_within_closure.Set.t
   -> t
 
+val empty : t
+
 val import_typing_env_and_code
    : t
   -> Flambda_type.Typing_env.Serializable.t *

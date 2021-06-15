@@ -41,6 +41,8 @@ type t0 = {
 
 type t = t0 list
 
+let empty = []
+
 let create ~final_typing_env ~all_code ~exported_offsets ~used_closure_vars =
   let typing_env_exported_ids =
     Flambda_type.Typing_env.Serializable.all_ids_for_export final_typing_env
