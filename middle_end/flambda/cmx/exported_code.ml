@@ -103,8 +103,13 @@ let print0 ppf t0 =
       "@[<hov 1>(Imported@ (calling_convention@ %a))@]"
       Calling_convention.print calling_convention
 
-let print ppf { code; code_sections_map = _; } =
-  Code_id.Map.print print0 ppf code
+let print ppf { code; code_sections_map; } =
+  Format.fprintf ppf "@[<hov 1>(\
+      @[(code@ %a)@]@ \
+      @[(code_sections_map@ %a)@]\
+      @]"
+  (Code_id.Map.print print0) code
+  (Code_id.Map.print Numbers.Int.print) code_sections_map
 
 let empty =
   { code = Code_id.Map.empty;
@@ -324,14 +329,17 @@ let prepare_for_cmx_header_section t =
   map_present_code t ~f:(fun _ -> Pending_association_with_cmx_file)
 
 let associate_with_loaded_cmx_file t
-      ~read_flambda_section_from_cmx_file =
+      ~read_flambda_section_from_cmx_file ~code_sections_map =
   let read_flambda_section_from_cmx_file ~index : C.t =
     read_flambda_section_from_cmx_file ~index
     |> Obj.obj
   in
-  map_present_code t ~f:(function
-    | Pending_association_with_cmx_file ->
-      Not_loaded { read_flambda_section_from_cmx_file; }
-    | Loaded _ | Not_loaded _ ->
-      Misc.fatal_error "Code in .cmx files should always be in state \
-        [Pending_association_with_cmx_file]")
+  let t =
+    map_present_code t ~f:(function
+      | Pending_association_with_cmx_file ->
+        Not_loaded { read_flambda_section_from_cmx_file; }
+      | Loaded _ | Not_loaded _ ->
+        Misc.fatal_error "Code in .cmx files should always be in state \
+          [Pending_association_with_cmx_file]")
+  in
+  { t with code_sections_map; }

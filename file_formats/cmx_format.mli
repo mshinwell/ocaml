@@ -48,7 +48,9 @@ type unit_infos =
     mutable ui_apply_fun: int list;       (* Apply functions needed *)
     mutable ui_send_fun: int list;        (* Send functions needed *)
     mutable ui_force_link: bool;          (* Always linked *)
-    mutable ui_section_toc: int list;     (* Byte offsets of sections in .cmx *)
+    mutable ui_section_toc: int list;     (* Byte offsets of sections in .cmx
+                                             relative to byte immediately after
+                                             this record *)
     (* The following fields are only for the use of Compilenv and have no
        meaning when written to the .cmx file. *)
     mutable ui_channel: in_channel option;

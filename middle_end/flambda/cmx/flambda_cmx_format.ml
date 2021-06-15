@@ -301,5 +301,6 @@ let associate_with_loaded_cmx_file ~header_contents
     let all_code =
       Exported_code.associate_with_loaded_cmx_file t0.all_code
         ~read_flambda_section_from_cmx_file
+        ~code_sections_map:header.code_sections_map
     in
     { t0 with all_code; })
