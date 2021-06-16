@@ -252,20 +252,36 @@ type middle_end_flambda =
   -> module_initializer:Lambda.lambda
   -> Flambda_middle_end.middle_end_result
 
+external fork : unit -> (int [@untagged]) = "caml_alloc_dummy" "fork"
+external sleep : (int [@untagged]) -> (int [@untagged]) = "caml_alloc_dummy" "sleep"
+
+let rec spin () = spin ()
+
 let compile_implementation_flambda ?toplevel ~backend ~filename ~prefixname
     ~size:module_block_size_in_words ~module_ident ~module_initializer
     ~middle_end ~ppf_dump ~required_globals () =
+  let comp_flambda () =
+    Ident.Set.iter Compilenv.require_global required_globals;
+    let translated_program =
+      (middle_end : middle_end_flambda) ~backend ~module_block_size_in_words
+        ~filename ~prefixname ~ppf_dump ~module_ident ~module_initializer
+    in
+    end_gen_implementation ?toplevel ~ppf_dump Un_cps.unit
+      translated_program
+  in
   compile_unit ~output_prefix:prefixname
     ~asm_filename:(asm_filename prefixname) ~keep_asm:!keep_asm_file
     ~obj_filename:(prefixname ^ ext_obj)
     (fun () ->
-      Ident.Set.iter Compilenv.require_global required_globals;
-      let translated_program =
-        (middle_end : middle_end_flambda) ~backend ~module_block_size_in_words
-          ~filename ~prefixname ~ppf_dump ~module_ident ~module_initializer
-      in
-      end_gen_implementation ?toplevel ~ppf_dump Un_cps.unit
-        translated_program)
+      match Sys.getenv "TRACING" with
+      | exception Not_found -> comp_flambda ()
+      | _ ->
+        if fork () = 0 then begin
+          Printf.eprintf "attach perf now\n%!";
+          let (_ : int) = sleep 10 in
+          comp_flambda ()
+        end
+        else spin ())
 
 let compile_implementation_flambda_for_ilambdac ?toplevel ~prefixname
     ~ppf_dump ~required_globals program =

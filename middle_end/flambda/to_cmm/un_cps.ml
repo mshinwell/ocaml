@@ -1527,7 +1527,10 @@ let unit (middle_end_result : Flambda_middle_end.middle_end_result) =
     let data, gc_roots, functions = R.to_cmm res in
     let cmm_data = C.flush_cmmgen_state () in
     let roots = List.map symbol gc_roots in
-    (C.gc_root_table roots) :: data @ cmm_data @ functions @ [entry]
+    match Sys.getenv "TRACING" with
+    | exception Not_found ->
+      (C.gc_root_table roots) :: data @ cmm_data @ functions @ [entry]
+    | _ -> exit 0
     (* Misc.fatal_error "To be continued" *)
     (* let functions = program_functions offsets used_closure_vars unit in *)
   )
