@@ -3,7 +3,7 @@
         {
             "label": "Build world (Flambda + release profile)",
             "type": "shell",
-            "command": "/Users/mark/dev/dune/dune-4.11.1-flambda.sh build @world --profile=release",
+            "command": "/Users/mark/dev/dune/dune-4.12.0-flambda.sh build @world --profile=release",
             "group": "build",
             "problemMatcher": [
                 "$ocamlc"
