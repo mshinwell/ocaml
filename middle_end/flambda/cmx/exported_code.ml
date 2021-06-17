@@ -57,6 +57,11 @@ module Calling_convention = struct
     P.pattern_match params_and_body ~f
 end
 
+type code_in_cmx = {
+  code : C.t;
+  table_data : Ids_for_export.Table_data.t;
+}
+
 type code_status =
   | Loaded of C.t
   | Not_loaded of {
@@ -65,10 +70,8 @@ type code_status =
          of type [t] may involve code from various different .cmx files),
          with the actual section index stored separately in the
          [code_sections_map] (which was already computed). *)
-      read_flambda_section_from_cmx_file : (index:int -> C.t);
-      (* To avoid loading code solely for the purposes of applying a
-         renaming, we delay renamings here. *)
-      renaming : Renaming.t;
+      read_flambda_section_from_cmx_file : (index:int -> code_in_cmx);
+      used_closure_vars : Var_within_closure.Set.t;
     }
   | Pending_association_with_cmx_file
 
@@ -195,7 +198,8 @@ let merge
 let mem code_id t =
   Code_id.Map.mem code_id t.code
 
-let load_code t code_id ~read_flambda_section_from_cmx_file : Code.t =
+let load_code t code_id ~read_flambda_section_from_cmx_file
+      ~used_closure_vars : Code.t =
   match Code_id.Map.find code_id t.code_sections_map with
   | exception Not_found ->
     Misc.fatal_errorf "Code ID %a not found in code sections map:@ %a"
@@ -203,7 +207,12 @@ let load_code t code_id ~read_flambda_section_from_cmx_file : Code.t =
       print t
   | index ->
     (* This calls back into [Compilenv]. *)
-    read_flambda_section_from_cmx_file ~index
+    let { code; table_data; } = read_flambda_section_from_cmx_file ~index in
+    let renaming =
+      Ids_for_export.Table_data.to_import_renaming table_data
+        ~used_closure_vars
+    in
+    Code.apply_renaming code renaming
 
 let find_code t code_id =
   match Code_id.Map.find code_id t.code with
@@ -212,11 +221,13 @@ let find_code t code_id =
   | Present { code = Loaded code; calling_convention = _; } -> code
   | Present ({ code = Not_loaded {
                  read_flambda_section_from_cmx_file;
-                 renaming;
+                 used_closure_vars;
                };
                calling_convention = _; } as t0) ->
-    let code = load_code t code_id ~read_flambda_section_from_cmx_file in
-    let code = Code.apply_renaming code renaming in
+    let code =
+      load_code t code_id ~read_flambda_section_from_cmx_file
+        ~used_closure_vars
+    in
     t0.code <- Loaded code;
     code
   | Present { code = Pending_association_with_cmx_file; _ } ->
@@ -244,10 +255,13 @@ let find_code_if_not_imported t code_id =
   | Present { code = Loaded code; calling_convention = _; } -> Some code
   | Present ({ code = Not_loaded {
                  read_flambda_section_from_cmx_file;
-                 renaming; };
+                 used_closure_vars;
+               };
                calling_convention = _; } as t0) ->
-    let code = load_code t code_id ~read_flambda_section_from_cmx_file in
-    let code = Code.apply_renaming code renaming in
+    let code =
+      load_code t code_id ~read_flambda_section_from_cmx_file
+        ~used_closure_vars
+    in
     t0.code <- Loaded code;
     Some code
   | Present { code = Pending_association_with_cmx_file; _ } ->
@@ -274,8 +288,8 @@ let remove_unreachable t ~reachable_names =
 let load_code_if_necessary t code_id code =
   match code with
   | Loaded code -> code
-  | Not_loaded { read_flambda_section_from_cmx_file; _ } ->
-    load_code t code_id ~read_flambda_section_from_cmx_file
+  | Not_loaded { read_flambda_section_from_cmx_file; used_closure_vars; } ->
+    load_code t code_id ~read_flambda_section_from_cmx_file ~used_closure_vars
   | Pending_association_with_cmx_file ->
     Misc.fatal_error "Must associate [Exported_code] with a .cmx file before \
       calling [load_code_if_necessary]"
@@ -308,17 +322,12 @@ let apply_renaming code_id_map renaming t =
             | Present { calling_convention; code = Loaded code; } ->
               let code = C.apply_renaming code renaming in
               Present { calling_convention; code = Loaded code; }
-            | Present { calling_convention; code = Not_loaded {
-                read_flambda_section_from_cmx_file;
-                renaming = existing_renaming; };
+            | Present { calling_convention = _; code = Not_loaded {
+                  read_flambda_section_from_cmx_file = _;
+                  used_closure_vars = _;
+                };
               } ->
-              let renaming =
-                Renaming.compose ~second:renaming ~first:existing_renaming
-              in
-              Present { calling_convention; code = Not_loaded {
-                read_flambda_section_from_cmx_file;
-                renaming; };
-              }
+              code_data
             | Present { code = Pending_association_with_cmx_file; _ } ->
               Misc.fatal_error "Must associate [Exported_code] with a .cmx \
                 file before calling [apply_renaming]"
@@ -350,6 +359,25 @@ let fold t ~init ~f =
     t.code
     init
 
+let fold_for_cmx t ~init ~f =
+  Code_id.Map.fold (fun code_id code acc ->
+      match code with
+      | Present { code; _ } ->
+        let code = load_code_if_necessary t code_id code in
+        let table_data =
+          Code.all_ids_for_export code
+          |> Ids_for_export.Table_data.create
+        in
+        let code_in_cmx =
+          { code;
+            table_data;
+          }
+        in
+        f acc code_id (Obj.repr code_in_cmx)
+      | Imported _ -> acc)
+    t.code
+    init
+
 let map_present_code t ~f =
   let code =
     Code_id.Map.map (fun t0 ->
@@ -368,8 +396,9 @@ let prepare_for_cmx_header_section t =
   map_present_code t ~f:(fun _ -> Pending_association_with_cmx_file)
 
 let associate_with_loaded_cmx_file t
-      ~read_flambda_section_from_cmx_file ~code_sections_map =
-  let read_flambda_section_from_cmx_file ~index : C.t =
+      ~read_flambda_section_from_cmx_file ~code_sections_map
+      ~used_closure_vars =
+  let read_flambda_section_from_cmx_file ~index : code_in_cmx =
     read_flambda_section_from_cmx_file ~index
     |> Obj.obj
   in
@@ -378,7 +407,7 @@ let associate_with_loaded_cmx_file t
       | Pending_association_with_cmx_file ->
         Not_loaded {
           read_flambda_section_from_cmx_file;
-          renaming = Renaming.empty;
+          used_closure_vars;
         }
       | Loaded _ | Not_loaded _ ->
         Misc.fatal_error "Code in .cmx files should always be in state \

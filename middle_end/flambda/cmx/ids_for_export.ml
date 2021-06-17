@@ -128,3 +128,136 @@ let rec union_list ts =
   match ts with
   | [] -> empty
   | t::ts -> union t (union_list ts)
+
+module Table_data = struct
+  type ids_for_export = t
+
+  type t = {
+    symbols : Symbol.exported Symbol.Map.t;
+    variables : Variable.exported Variable.Map.t;
+    simples : Simple.exported Simple.Map.t;
+    consts : Const.exported Const.Map.t;
+    code_ids : Code_id.exported Code_id.Map.t;
+    continuations : Continuation.exported Continuation.Map.t;
+  }
+
+  let create (ids_for_export : ids_for_export) =
+    let symbols =
+      Symbol.Set.fold (fun symbol symbols ->
+          Symbol.Map.add symbol (Symbol.export symbol) symbols)
+        ids_for_export.symbols
+        Symbol.Map.empty
+    in
+    let variables =
+      Variable.Set.fold (fun variable variables ->
+          Variable.Map.add variable (Variable.export variable) variables)
+        ids_for_export.variables
+        Variable.Map.empty
+    in
+    let simples =
+      Reg_width_things.Simple.Set.fold (fun simple simples ->
+          Simple.Map.add simple (Simple.export simple) simples)
+        ids_for_export.simples
+        Simple.Map.empty
+    in
+    let consts =
+      Const.Set.fold (fun const consts ->
+          Const.Map.add const (Const.export const) consts)
+        ids_for_export.consts
+        Const.Map.empty
+    in
+    let code_ids =
+      Code_id.Set.fold (fun code_id code_ids ->
+          Code_id.Map.add code_id (Code_id.export code_id) code_ids)
+        ids_for_export.code_ids
+        Code_id.Map.empty
+    in
+    let continuations =
+      Continuation.Set.fold (fun continuation continuations ->
+          Continuation.Map.add continuation (Continuation.export continuation)
+            continuations)
+        ids_for_export.continuations
+        Continuation.Map.empty
+    in
+    { symbols;
+      variables;
+      simples;
+      consts;
+      code_ids;
+      continuations;
+    }
+
+  let to_import_renaming t ~used_closure_vars =
+    (* First create map for data that does not contain ids, i.e. everything
+      except simples *)
+    let filter import =
+      fun key data ->
+        let new_key = import data in
+        if key == new_key then None else Some new_key
+    in
+    let symbols =
+      Symbol.Map.filter_map (filter Symbol.import) t.symbols
+    in
+    let variables =
+      Variable.Map.filter_map (filter Variable.import) t.variables
+    in
+    let simples =
+      Simple.Map.filter_map (filter Simple.import) t.simples
+    in
+    let consts =
+      Const.Map.filter_map (filter Const.import) t.consts
+    in
+    let code_ids =
+      Code_id.Map.filter_map (filter Code_id.import) t.code_ids
+    in
+    let continuations =
+      Continuation.Map.filter_map (filter Continuation.import)
+        t.continuations
+    in
+    Renaming.create_import_map
+      ~symbols
+      ~variables
+      ~simples
+      ~consts
+      ~code_ids
+      ~continuations
+      ~used_closure_vars
+
+  let update_for_pack t ~pack_units ~pack =
+    let update_cu unit =
+      if Compilation_unit.Set.mem unit pack_units
+      then pack
+      else unit
+    in
+    let symbols =
+      Symbol.Map.map (Symbol.map_compilation_unit update_cu)
+        t.symbols
+    in
+    let variables =
+      Variable.Map.map (Variable.map_compilation_unit update_cu)
+        t.variables
+    in
+    let simples =
+      Simple.Map.map (Simple.map_compilation_unit update_cu)
+        t.simples
+    in
+    let consts =
+      Const.Map.map (Const.map_compilation_unit update_cu)
+        t.consts
+    in
+    let code_ids =
+      Code_id.Map.map (Code_id.map_compilation_unit update_cu)
+        t.code_ids
+    in
+    let continuations =
+      Continuation.Map.map (Continuation.map_compilation_unit update_cu)
+        t.continuations
+    in
+    { symbols;
+      variables;
+      simples;
+      consts;
+      code_ids;
+      continuations;
+    }
+end

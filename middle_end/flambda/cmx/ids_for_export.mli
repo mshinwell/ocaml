@@ -59,3 +59,21 @@ val add_continuation : t -> Continuation.t -> t
 val union : t -> t -> t
 
 val union_list : t list -> t
+
+module Table_data : sig
+  type ids_for_export = t
+  type t
+
+  val create : ids_for_export -> t
+
+  val to_import_renaming
+     : t
+    -> used_closure_vars:Var_within_closure.Set.t
+    -> Renaming.t
+
+  val update_for_pack
+     : t
+    -> pack_units:Compilation_unit.Set.t
+    -> pack:Compilation_unit.t
+    -> t
+end

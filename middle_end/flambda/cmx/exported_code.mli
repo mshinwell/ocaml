@@ -59,6 +59,12 @@ val fold
   -> f:('a -> Code_id.t -> Flambda.Code.t -> 'a)
   -> 'a
 
+val fold_for_cmx
+   : t
+  -> init:'a
+  -> f:('a -> Code_id.t -> Obj.t -> 'a)
+  -> 'a
+
 (** This function must be called _after_ all code from the value of type [t]
     has been marshalled to the .cmx file (e.g. by using [fold]).
     The returned value of type [t] should not be altered before it is
@@ -69,4 +75,5 @@ val associate_with_loaded_cmx_file
    : t
   -> read_flambda_section_from_cmx_file:(index:int -> Obj.t)
   -> code_sections_map:int Code_id.Map.t
+  -> used_closure_vars:Var_within_closure.Set.t
   -> t
