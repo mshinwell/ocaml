@@ -147,62 +147,74 @@ module Make (Head : Type_head_intf.S
     | No_alias head -> head
     | Equals _ -> Misc.fatal_errorf "Expected [No_alias]:@ %a" T.print t
 
-  let expand_head ~force_to_kind t env kind : _ Or_unknown_or_bottom.t =
+  let expand_head0 ~known_canonical_simple ~force_to_kind t env kind
+        : _ Or_unknown_or_bottom.t =
     match descr t with
     | No_alias head -> head
     | Equals simple ->
-      let min_name_mode = Name_mode.in_types in
-      match
-        TE.get_canonical_simple_exn env simple ~min_name_mode
-          ~existing_simple_cannot_be_phantom:()
-      with
-      | exception Not_found ->
-        Misc.fatal_errorf "Cannot find canonical simple for %a when \
-            expanding head in environment:@ %a"
-          Simple.print simple
-          TE.print env
-      | simple ->
-        let [@inline always] const const =
-          let typ =
-            match Reg_width_const.descr const with
-            | Naked_immediate i -> T.this_naked_immediate_without_alias i
-            | Tagged_immediate i -> T.this_tagged_immediate_without_alias i
-            | Naked_float f -> T.this_naked_float_without_alias f
-            | Naked_int32 i -> T.this_naked_int32_without_alias i
-            | Naked_int64 i -> T.this_naked_int64_without_alias i
-            | Naked_nativeint i -> T.this_naked_nativeint_without_alias i
-          in
-          force_to_head ~force_to_kind typ
-        in
-        let [@inline always] name name ~coercion:_ : _ Or_unknown_or_bottom.t =
-          (* CR lmaurer: Coercion dropped! *)
-          let t = force_to_kind (TE.find env name (Some kind)) in
-          match descr t with
-          | No_alias Bottom -> Bottom
-          | No_alias Unknown -> Unknown
-          | No_alias (Ok head) -> Ok head
-            (* CR mshinwell: Fix coercion
-            begin match coercion with
-            | None -> Ok head
-            | Some coercion ->
-              (* CR mshinwell: check coercion handling is correct, after
-                 recent changes in this area *)
-              (* [simple] already has [coercion] applied to it (see
-                 [get_canonical_simple], above).  However we also need to
-                 apply it to the expanded head of the type. *)
-              match Head.apply_coercion head coercion with
-              | Bottom -> Bottom
-              | Ok head -> Ok head
-            end
-            *)
-          | Equals _ ->
-            Misc.fatal_errorf "Canonical alias %a should never have \
-                [Equals] type %a:@ %a"
+      let simple =
+        match known_canonical_simple with
+        | Some simple ->
+          (* This stops canonicalising twice when called from
+             [get_canonical_simples_and_expand_heads], below. *)
+          simple
+        | None ->
+          let min_name_mode = Name_mode.in_types in
+          match
+            TE.get_canonical_simple_exn env simple ~min_name_mode
+              ~existing_simple_cannot_be_phantom:()
+          with
+          | exception Not_found ->
+            Misc.fatal_errorf "Cannot find canonical simple for %a when \
+                expanding head in environment:@ %a"
               Simple.print simple
-              print t
               TE.print env
+          | simple -> simple
+      in
+      let [@inline always] const const =
+        let typ =
+          match Reg_width_const.descr const with
+          | Naked_immediate i -> T.this_naked_immediate_without_alias i
+          | Tagged_immediate i -> T.this_tagged_immediate_without_alias i
+          | Naked_float f -> T.this_naked_float_without_alias f
+          | Naked_int32 i -> T.this_naked_int32_without_alias i
+          | Naked_int64 i -> T.this_naked_int64_without_alias i
+          | Naked_nativeint i -> T.this_naked_nativeint_without_alias i
         in
-        Simple.pattern_match simple ~const ~name
+        force_to_head ~force_to_kind typ
+      in
+      let [@inline always] name name ~coercion:_ : _ Or_unknown_or_bottom.t =
+        (* CR lmaurer: Coercion dropped! *)
+        let t = force_to_kind (TE.find env name (Some kind)) in
+        match descr t with
+        | No_alias Bottom -> Bottom
+        | No_alias Unknown -> Unknown
+        | No_alias (Ok head) -> Ok head
+          (* CR mshinwell: Fix coercion
+          begin match coercion with
+          | None -> Ok head
+          | Some coercion ->
+            (* CR mshinwell: check coercion handling is correct, after
+                recent changes in this area *)
+            (* [simple] already has [coercion] applied to it (see
+                [get_canonical_simple], above).  However we also need to
+                apply it to the expanded head of the type. *)
+            match Head.apply_coercion head coercion with
+            | Bottom -> Bottom
+            | Ok head -> Ok head
+          end
+          *)
+        | Equals _ ->
+          Misc.fatal_errorf "Canonical alias %a should never have \
+              [Equals] type %a:@ %a"
+            Simple.print simple
+            print t
+            TE.print env
+      in
+      Simple.pattern_match simple ~const ~name
+
+  let expand_head ~force_to_kind t env kind =
+    expand_head0 ~known_canonical_simple:None ~force_to_kind t env kind
 
   let expand_head' ~force_to_kind t env kind =
     match expand_head ~force_to_kind t env kind with
@@ -266,7 +278,10 @@ module Make (Head : Type_head_intf.S
       | exception Not_found -> None
       | canonical_simple -> Some canonical_simple
     in
-    let head1 = expand_head ~force_to_kind left_ty left_env kind in
+    let head1 =
+      expand_head0 ~known_canonical_simple:canonical_simple1
+        ~force_to_kind left_ty left_env kind
+    in
     let canonical_simple2 =
       match
         TE.get_alias_then_canonical_simple_exn right_env (to_type right_ty)
@@ -276,7 +291,10 @@ module Make (Head : Type_head_intf.S
       | exception Not_found -> None
       | canonical_simple -> Some canonical_simple
     in
-    let head2 = expand_head ~force_to_kind right_ty right_env kind in
+    let head2 =
+      expand_head0 ~known_canonical_simple:canonical_simple2
+        ~force_to_kind right_ty right_env kind
+    in
     canonical_simple1, head1, canonical_simple2, head2
 
   type meet_or_join_head_or_unknown_or_bottom_result =

@@ -743,37 +743,39 @@ let binding_time_and_mode_of_simple t simple =
     ~name:(fun name ~coercion:_ -> binding_time_and_mode t name)
 
 let mem ?min_name_mode t name =
-  Name.pattern_match name
-    ~var:(fun _var ->
-      let name_mode =
-        match Name.Map.find name (names_to_types t) with
-        | exception Not_found ->
-          if Name.Set.mem name (t.get_imported_names ())
-          then Some Name_mode.in_types
-          else None
-        | _ty, binding_time, name_mode ->
-          let scoped_name_mode =
-            Binding_time.With_name_mode.scoped_name_mode
-              (Binding_time.With_name_mode.create binding_time name_mode)
-              ~min_binding_time:t.min_binding_time
-          in
-          Some scoped_name_mode
-      in
-      match name_mode, min_name_mode with
-      | None, _ -> false
-      | Some _, None -> true
-      | Some name_mode, Some min_name_mode ->
-        begin match
-          Name_mode.compare_partial_order min_name_mode name_mode
-        with
-        | None -> false
-        | Some c -> c <= 0
-        end)
-    ~symbol:(fun sym ->
-      (* CR mshinwell: This might not take account of symbols in missing
-         .cmx files *)
-      Symbol.Set.mem sym t.defined_symbols
-        || Name.Set.mem name (t.get_imported_names ()))
+  let [@inline always] var _ =
+    let name_mode =
+      match Name.Map.find name (names_to_types t) with
+      | exception Not_found ->
+        if Name.Set.mem name (t.get_imported_names ())
+        then Some Name_mode.in_types
+        else None
+      | _ty, binding_time, name_mode ->
+        let scoped_name_mode =
+          Binding_time.With_name_mode.scoped_name_mode
+            (Binding_time.With_name_mode.create binding_time name_mode)
+            ~min_binding_time:t.min_binding_time
+        in
+        Some scoped_name_mode
+    in
+    match name_mode, min_name_mode with
+    | None, _ -> false
+    | Some _, None -> true
+    | Some name_mode, Some min_name_mode ->
+      begin match
+        Name_mode.compare_partial_order min_name_mode name_mode
+      with
+      | None -> false
+      | Some c -> c <= 0
+      end
+  in
+  let [@inline always] symbol sym =
+    (* CR mshinwell: This might not take account of symbols in missing
+       .cmx files *)
+    Symbol.Set.mem sym t.defined_symbols
+      || Name.Set.mem name (t.get_imported_names ())
+  in
+  Name.pattern_match name ~var ~symbol
 
 let mem_simple ?min_name_mode t simple =
   Simple.pattern_match simple
