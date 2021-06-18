@@ -29,7 +29,11 @@ let simplify_field_of_block dacc (field : Field_of_block.t) =
   | Dynamically_computed var ->
     let min_name_mode = Name_mode.normal in
     let ty = S.simplify_simple dacc (Simple.var var) ~min_name_mode in
-    let simple = T.get_alias_exn ty in
+    let simple =
+      match T.get_alias_exn ty with
+      | exception Not_found -> Simple.var var
+      | simple -> simple
+    in
     Simple.pattern_match simple
       ~name:(fun name ~coercion:_ ->
         (* CR lmaurer: Coercion dropped! *)

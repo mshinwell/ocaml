@@ -83,7 +83,11 @@ let simplify_primitive dacc (prim : P.t) dbg ~result_var =
       ~init:([], false)
       ~f:(fun (args_rev, found_invalid) arg ->
         let arg_ty = S.simplify_simple dacc arg ~min_name_mode in
-        let arg = T.get_alias_exn arg_ty in
+        let arg =
+          match T.get_alias_exn arg_ty with
+          | exception Not_found -> arg
+          | arg -> arg
+        in
         (arg, arg_ty) :: args_rev, found_invalid)
   in
   let args = List.rev args_rev in

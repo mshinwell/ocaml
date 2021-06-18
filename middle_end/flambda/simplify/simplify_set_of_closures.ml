@@ -836,7 +836,11 @@ let type_closure_elements_and_make_lifting_decision_for_one_set dacc
            (closure_elements, closure_element_types, symbol_projections) ->
         let env_entry, ty, symbol_projections =
           let ty = S.simplify_simple dacc env_entry ~min_name_mode in
-          let simple = T.get_alias_exn ty in
+          let simple =
+            match T.get_alias_exn ty with
+            | exception Not_found -> env_entry
+            | simple -> simple
+          in
           (* Note down separately if [simple] remains a variable and is known
              to be equal to a projection from a symbol. *)
           let symbol_projections =

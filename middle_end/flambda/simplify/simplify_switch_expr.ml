@@ -264,7 +264,11 @@ let simplify_switch ~simplify_let dacc switch ~down_to_up =
   let scrutinee_ty =
     S.simplify_simple dacc scrutinee ~min_name_mode:NM.normal
   in
-  let scrutinee = T.get_alias_exn scrutinee_ty in
+  let scrutinee =
+    match T.get_alias_exn scrutinee_ty with
+    | exception Not_found -> scrutinee
+    | scrutinee -> scrutinee
+  in
   let arms, dacc =
     let typing_env_at_use = DA.typing_env dacc in
     Target_imm.Map.fold (fun arm action (arms, dacc) ->

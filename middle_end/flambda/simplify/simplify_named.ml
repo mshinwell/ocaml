@@ -150,7 +150,11 @@ let simplify_named0 dacc (bindable_let_bound : Bindable_let_bound.t)
     let bound_var = Bindable_let_bound.must_be_singleton bindable_let_bound in
     let min_name_mode = Var_in_binding_pos.name_mode bound_var in
     let ty = S.simplify_simple dacc simple ~min_name_mode in
-    let new_simple = T.get_alias_exn ty in
+    let new_simple =
+      match T.get_alias_exn ty with
+      | exception Not_found -> simple
+      | new_simple -> new_simple
+    in
     let dacc = DA.add_variable dacc bound_var ty in
     let defining_expr =
       if simple == new_simple then Simplified_named.reachable named
@@ -199,11 +203,7 @@ let simplify_named0 dacc (bindable_let_bound : Bindable_let_bound.t)
          sufficiently precise for the reification check and the subsequent
          is-bottom check (see below). *)
       match TEE.find env_extension (Name.var (VB.var bound_var)) with
-      | exception Not_found ->
-        Misc.fatal_errorf "Simplification of primitive %a did not yield a \
-            type for [bound_var]:@ %a"
-          P.print prim
-          TEE.print env_extension
+      | exception Not_found -> term, dacc, T.unknown kind
       | ty ->
         Reification.try_to_reify dacc term ~bound_to:bound_var ~allow_lifting ty
     in
