@@ -20,10 +20,12 @@ open! Int_replace_polymorphic_compare
 
 module Id = Table_by_int_id.Id
 
-let var_flags = 0
-let symbol_flags = 1
-let const_flags = 2
-let simple_flags = 3
+let normal_var_flags = 0b001
+let phantom_var_flags = 0b010
+let in_types_var_flags = 0b011
+let symbol_flags = 0b010
+let const_flags = 0b011
+let simple_flags = 0b110
 
 module Const_data = struct
   type t =
@@ -129,7 +131,9 @@ module Const_data = struct
   end)
 end
 
-module Variable_data = struct
+module Make_variable_data (F : sig
+  val flags : int
+end) = struct
   type t = {
     compilation_unit : Compilation_unit.t;
     previous_compilation_units : Compilation_unit.t list;
@@ -138,7 +142,7 @@ module Variable_data = struct
     user_visible : bool;
   }
 
-  let flags = var_flags
+  let flags = F.flags
 
   let print ppf { compilation_unit; previous_compilation_units = _;
                   name; name_stamp; user_visible; } =
@@ -189,7 +193,19 @@ module Variable_data = struct
         && previous_compilation_units_match
              previous_compilation_units1
              previous_compilation_units2
-end
+end [@@inline always]
+
+module Normal_variable_data = Make_variable_data (struct
+  let flags = normal_var_flags
+end)
+
+module Phantom_variable_data = Make_variable_data (struct
+  let flags = phantom_var_flags
+end)
+
+module In_types_variable_data = Make_variable_data (struct
+  let flags = in_types_var_flags
+end)
 
 module Symbol_data = struct
   type t = {
@@ -323,38 +339,125 @@ end
 
 module Variable = struct
   type t = Id.t
-  type exported = Variable_data.t
 
-  module Table = Table_by_int_id.Make (Variable_data)
-  let grand_table_of_variables = ref (Table.create ())
+  type exported =
+    | Normal of Normal_variable_data.t
+    | Phantom of Phantom_variable_data.t
+    | In_types of In_types_variable_data.t
+
+  module Normal_table = Table_by_int_id.Make (Normal_variable_data)
+  module Phantom_table = Table_by_int_id.Make (Phantom_variable_data)
+  module In_types_table = Table_by_int_id.Make (In_types_variable_data)
+
+  let name_mode t =
+    if Id.flags t = normal_var_flags then Name_mode.normal
+    else if Id.flags t = phantom_var_flags then Name_mode.phantom
+    else if Id.flags t = in_types_var_flags then Name_mode.in_types
+    else Misc.fatal_error "Illegal variable ID 0x%x" (t :> int)
+
+  let grand_table_of_normal_variables = ref (Normal_table.create ())
+  let grand_table_of_phantom_variables = ref (Phantom_table.create ())
+  let grand_table_of_in_types_variables = ref (In_types_table.create ())
 
   let initialise () =
-    grand_table_of_variables := Table.create ()
+    grand_table_of_normal_variables := Normal_table.create ();
+    grand_table_of_phantom_variables := Phantom_table.create ();
+    grand_table_of_in_types_variables := In_types_table.create ()
 
-  let find_data t = Table.find !grand_table_of_variables t
+  let compilation_unit t =
+    match Name_mode.descr (name_mode t) with
+    | Normal ->
+      let data = Normal_table.find !grand_table_of_normal_variables t in
+      data.compilation_unit
+    | Phantom ->
+      let data = Phantom_table.find !grand_table_of_phantom_variables t in
+      data.compilation_unit
+    | In_types ->
+      let data = In_types_table.find !grand_table_of_in_types_variables t in
+      data.compilation_unit
 
-  let compilation_unit t = (find_data t).compilation_unit
-  let name t = (find_data t).name
-  let name_stamp t = (find_data t).name_stamp
-  let user_visible t = (find_data t).user_visible
+  let name t =
+    match Name_mode.descr (name_mode t) with
+    | Normal ->
+      let data = Normal_table.find !grand_table_of_normal_variables t in
+      data.name
+    | Phantom ->
+      let data = Phantom_table.find !grand_table_of_phantom_variables t in
+      data.name
+    | In_types ->
+      let data = In_types_table.find !grand_table_of_in_types_variables t in
+      data.name
+
+  let name_stamp t =
+    match Name_mode.descr (name_mode t) with
+    | Normal ->
+      let data = Normal_table.find !grand_table_of_normal_variables t in
+      data.name_stamp
+    | Phantom ->
+      let data = Phantom_table.find !grand_table_of_phantom_variables t in
+      data.name_stamp
+    | In_types ->
+      let data = In_types_table.find !grand_table_of_in_types_variables t in
+      data.name_stamp
+
+  let user_visible t =
+    match Name_mode.descr (name_mode t) with
+    | Normal ->
+      let data = Normal_table.find !grand_table_of_normal_variables t in
+      data.user_visible
+    | Phantom ->
+      let data = Phantom_table.find !grand_table_of_phantom_variables t in
+      data.user_visible
+    | In_types ->
+      let data = In_types_table.find !grand_table_of_in_types_variables t in
+      data.user_visible
 
   let previous_name_stamp = ref (-1)
 
-  let create ?user_visible name =
+(* XXX will probably have to make name_mode mandatory
+Otherwise we'll have Var_in_binding_pos.create returning a new variable
+which won't match what is in the term abstracted over *)
+
+  let create ?(name_mode = Name_mode.normal) ?user_visible name =
     let name_stamp =
       (* CR mshinwell: check for overflow on 32 bit *)
       incr previous_name_stamp;
       !previous_name_stamp
     in
-    let data : Variable_data.t =
-      { compilation_unit = Compilation_unit.get_current_exn ();
-        previous_compilation_units = [];
-        name;
-        name_stamp;
-        user_visible = Option.is_some user_visible;
-      }
-    in
-    Table.add !grand_table_of_variables data
+    let compilation_unit = Compilation_unit.get_current_exn () in
+    let previous_compilation_units = [] in
+    let user_visible = Option.is_some user_visible in
+    match Name_mode.descr name_mode with
+    | Normal ->
+      let data : Normal_variable_data.t =
+        { compilation_unit;
+          previous_compilation_units;
+          name;
+          name_stamp;
+          user_visible;
+        }
+      in
+      Normal_table.add !grand_table_of_normal_variables data
+    | Phantom ->
+      let data : Phantom_variable_data.t =
+        { compilation_unit;
+          previous_compilation_units;
+          name;
+          name_stamp;
+          user_visible;
+        }
+      in
+      Phantom_table.add !grand_table_of_phantom_variables data
+    | In_types ->
+      let data : In_types_variable_data.t =
+        { compilation_unit;
+          previous_compilation_units;
+          name;
+          name_stamp;
+          user_visible;
+        }
+      in
+      In_types_table.add !grand_table_of_in_types_variables data
 
   module T0 = struct
     let compare = Id.compare
@@ -385,20 +488,69 @@ module Variable = struct
   module Map = Patricia_tree.Make_map (struct let print = print end) (Set)
   module Tbl = Identifiable.Make_tbl (Numbers.Int) (Map)
 
-  let export t = find_data t
+  let export t : exported =
+    match Name_mode.descr (name_mode t) with
+    | Normal ->
+      Normal (Normal_table.find !grand_table_of_normal_variables t)
+    | Phantom ->
+      Phantom (Phantom_table.find !grand_table_of_phantom_variables t)
+    | In_types ->
+      In_types (In_types_table.find !grand_table_of_in_types_variables t)
 
   let import (data : exported) =
-    Table.add !grand_table_of_variables data
+    match data with
+    | Normal data ->
+      Normal_table.add !grand_table_of_normal_variables data
+    | Phantom data ->
+      Phantom_table.add !grand_table_of_phantom_variables data
+    | In_types data ->
+      In_types_table.add !grand_table_of_in_types_variables data
 
   let map_compilation_unit f (data : exported) : exported =
-    let new_compilation_unit = f data.compilation_unit in
-    if Compilation_unit.equal new_compilation_unit data.compilation_unit
+    let old_compilation_unit =
+      match data with
+      | Normal data -> data.compilation_unit
+      | Phantom data -> data.compilation_unit
+      | In_types data -> data.compilation_unit
+    in
+    let old_previous_compilation_units =
+      match data with
+      | Normal data -> data.previous_compilation_units
+      | Phantom data -> data.previous_compilation_units
+      | In_types data -> data.previous_compilation_units
+    in
+    let new_compilation_unit = f old_compilation_unit in
+    if Compilation_unit.equal new_compilation_unit old_compilation_unit
     then data
     else
-      { data with compilation_unit = new_compilation_unit;
-                  previous_compilation_units =
-                    data.compilation_unit :: data.previous_compilation_units;
-      }
+      let compilation_unit = new_compilation_unit in
+      let previous_compilation_units =
+        old_compilation_unit :: old_previous_compilation_units
+      in
+      match data with
+      | Normal data ->
+        Normal {
+          data with
+          compilation_unit;
+          previous_compilation_units;
+        }
+      | Phantom data ->
+        Phantom {
+          data with
+          compilation_unit;
+          previous_compilation_units;
+        }
+      | In_types data ->
+        In_types {
+          data with
+          compilation_unit;
+          previous_compilation_units;
+        }
+
+  let with_name_mode t new_name_mode =
+    if Name_mode.equal (name_mode t) new_name_mode then t
+    else
+
 end
 
 module Symbol = struct
@@ -474,9 +626,16 @@ module Name = struct
 
   let [@inline always] pattern_match t ~var ~symbol =
     let flags = Id.flags t in
-    if flags = var_flags then var t
+    if flags = normal_var_flags then var t
+    else if flags = phantom_var_flags then var t
+    else if flags = in_types_var_flags then var t
     else if flags = symbol_flags then symbol t
     else assert false
+
+  let name_mode t =
+    pattern_match t
+      ~var:(fun var -> Variable.name_mode var)
+      ~symbol:(fun _ -> Name_mode.normal)
 
   module T0 = struct
     let compare = Id.compare
@@ -530,7 +689,10 @@ module Simple = struct
 
   let [@inline always] pattern_match t ~name ~const =
     let flags = Id.flags t in
-    if flags = var_flags then
+    if flags = normal_var_flags
+       || flags = phantom_var_flags
+       || flags = in_types_var_flags
+    then
       (name [@inlined hint]) (Name.var t) ~coercion:Coercion.id
     else if flags = symbol_flags then
       (name [@inlined hint]) (Name.symbol t) ~coercion:Coercion.id
@@ -538,12 +700,20 @@ module Simple = struct
     else if flags = simple_flags then
       let { Simple_data.simple = t; coercion } = find_data t in
       let flags = Id.flags t in
-      if flags = var_flags then (name [@inlined hint]) (Name.var t) ~coercion
+      if flags = normal_var_flags
+        || flags = phantom_var_flags
+        || flags = in_types_var_flags
+      then (name [@inlined hint]) (Name.var t) ~coercion
       else if flags = symbol_flags then
         (name [@inlined hint]) (Name.symbol t) ~coercion
       else if flags = const_flags then (const [@inlined hint]) t
       else assert false
     else assert false
+
+  let name_mode t =
+    pattern_match t
+      ~name:(fun name ~coercion:_ -> Name.name_mode name)
+      ~const:(fun _ -> Name_mode.normal)
 
   let same t1 t2 =
     let name n1 ~coercion:co1 =

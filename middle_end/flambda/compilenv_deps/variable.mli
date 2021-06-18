@@ -38,6 +38,8 @@ val print_opt : Format.formatter -> t option -> unit
 val raw_name : t -> string
 val raw_name_stamp : t -> int
 
+val with_name_mode : t -> Name_mode.t -> t
+
 (** If the given variable has the given stamp, call the user-supplied
     function.  For debugging purposes only. *)
 val debug_when_stamp_matches : t -> stamp:int -> f:(unit -> unit) -> unit

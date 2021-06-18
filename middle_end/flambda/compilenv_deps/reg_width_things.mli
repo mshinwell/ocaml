@@ -80,7 +80,8 @@ module Variable : sig
 
   include Identifiable.S with type t := t
 
-  val create : ?user_visible:unit -> string -> t
+  (* CR mshinwell: make [name_mode] mandatory *)
+  val create : ?name_mode:Name_mode.t -> ?user_visible:unit -> string -> t
 
   val compilation_unit : t -> Compilation_unit.t
 
@@ -96,6 +97,10 @@ module Variable : sig
 
   val map_compilation_unit :
     (Compilation_unit.t -> Compilation_unit.t) -> exported -> exported
+
+  val name_mode : t -> Name_mode.t
+
+  val with_name_mode : t -> Name_mode.t -> t
 end
 
 module Symbol : sig
@@ -136,6 +141,8 @@ module Name : sig
     -> var:(Variable.t -> 'a)
     -> symbol:(Symbol.t -> 'a)
     -> 'a
+
+  val name_mode : t -> Name_mode.t
 end
 
 module Simple : sig
@@ -179,6 +186,8 @@ module Simple : sig
 
   val map_compilation_unit :
     (Compilation_unit.t -> Compilation_unit.t) -> exported -> exported
+
+  val name_mode : t -> Name_mode.t
 end
 
 val initialise : unit -> unit

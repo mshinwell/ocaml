@@ -33,7 +33,7 @@ module Cached : sig
 
   val names_to_types
      : t
-    -> (Type_grammar.t * Binding_time.t * Name_mode.t) Name.Map.t
+    -> (Type_grammar.t * Binding_time.t) Name.Map.t
 
   val aliases : t -> Aliases.t
 
@@ -42,7 +42,6 @@ module Cached : sig
     -> Name.t
     -> Type_grammar.t
     -> Binding_time.t
-    -> Name_mode.t
     -> t
 
   val replace_variable_binding
@@ -66,27 +65,27 @@ module Cached : sig
   val merge : t -> t -> t
 end = struct
   type t = {
-    names_to_types :
-      (Type_grammar.t * Binding_time.t * Name_mode.t) Name.Map.t;
+    names_to_types : (Type_grammar.t * Binding_time.t) Name.Map.t;
     aliases : Aliases.t;
     symbol_projections : Symbol_projection.t Variable.Map.t;
   }
 
-  let print_kind_and_mode ~min_binding_time ppf (ty, binding_time, mode) =
+  let print_kind_and_mode ~min_binding_time mode ppf
+        (name, (ty, binding_time)) =
     let kind = Type_grammar.kind ty in
     let mode =
       Binding_time.With_name_mode.scoped_name_mode
-        (Binding_time.With_name_mode.create binding_time mode)
+        (Binding_time.With_name_mode.create binding_time (Name.mode name))
         ~min_binding_time
     in
     Format.fprintf ppf ":: %a %a"
       Flambda_kind.print kind
       Name_mode.print mode
 
-  let print_name_modes ~restrict_to ~min_binding_time ppf t =
-    Name.Map.print (print_kind_and_mode ~min_binding_time) ppf
-      (Name.Map.filter (fun name _ -> Name.Set.mem name restrict_to)
-        t.names_to_types)
+  let print_name_modes ~restrict_to ~min_binding_time mode ppf t =
+    |> Name.Map.filter (fun name _ -> Name.Set.mem name restrict_to)
+    |> Name.Map.mapi (fun name data -> name, data)
+    |> Name.Map.print (print_kind_and_mode ~min_binding_time) ppf
 
 (*
   let _print_with_cache ~cache ppf { names_to_types; aliases; } =
@@ -131,9 +130,9 @@ end = struct
      (used to be add-or-replace), the [names_to_types] map addition was a
      major source of allocation. *)
 
-  let add_or_replace_binding t (name : Name.t) ty binding_time name_mode =
+  let add_or_replace_binding t (name : Name.t) ty binding_time =
     let names_to_types =
-      Name.Map.add name (ty, binding_time, name_mode) t.names_to_types
+      Name.Map.add name (ty, binding_time) t.names_to_types
     in
     { names_to_types;
       aliases = t.aliases;
@@ -143,8 +142,7 @@ end = struct
   let replace_variable_binding t var ty =
     let names_to_types =
       Name.Map.replace (Name.var var)
-        (function (_old_ty, binding_time, name_mode) ->
-          ty, binding_time, name_mode)
+        (function (_old_ty, binding_time) -> ty, binding_time)
         t.names_to_types
     in
     { names_to_types;
@@ -182,9 +180,9 @@ end = struct
 
   let apply_renaming { names_to_types; aliases; symbol_projections; } renaming =
     let names_to_types =
-      Name.Map.fold (fun name (ty, binding_time, mode) acc ->
+      Name.Map.fold (fun name (ty, binding_time) acc ->
           Name.Map.add (Renaming.apply_name renaming name)
-            (Type_grammar.apply_renaming ty renaming, binding_time, mode)
+            (Type_grammar.apply_renaming ty renaming, binding_time)
             acc)
         names_to_types
         Name.Map.empty
@@ -672,10 +670,9 @@ let find_with_binding_time_and_mode' t name kind =
                  scoping by binding time). *)
               ty, Binding_time.imported_variables, Name_mode.in_types)
       end
-  | found ->
-    let ty, _, _ = found in
+  | ty, binding_time ->
     check_optional_kind_matches name ty kind;
-    found
+    ty, binding_time, Name.name_mode name
 
 (* This version doesn't check min_binding_time.
    This ensures that no allocation occurs when we're not interested
@@ -689,7 +686,7 @@ let find_with_binding_time_and_mode_unscoped t name kind =
       Name.print name
 
 let find t name kind =
-  let ty, _binding_time, _name_mode =
+  let ty, _binding_time =
     find_with_binding_time_and_mode_unscoped t name kind
   in
   ty
@@ -743,20 +740,15 @@ let binding_time_and_mode_of_simple t simple =
 
 let mem ?min_name_mode t name =
   Name.pattern_match name
-    ~var:(fun _var ->
+    ~var:(fun var ->
       let name_mode =
-        match Name.Map.find name (names_to_types t) with
-        | exception Not_found ->
-          if Name.Set.mem name (t.get_imported_names ())
-          then Some Name_mode.in_types
-          else None
-        | _ty, binding_time, name_mode ->
-          let scoped_name_mode =
-            Binding_time.With_name_mode.scoped_name_mode
-              (Binding_time.With_name_mode.create binding_time name_mode)
-              ~min_binding_time:t.min_binding_time
-          in
-          Some scoped_name_mode
+        let scoped_name_mode =
+          Binding_time.With_name_mode.scoped_name_mode
+            (Binding_time.With_name_mode.create binding_time
+              (Variable.name_mode var))
+            ~min_binding_time:t.min_binding_time
+        in
+        Some scoped_name_mode
       in
       match name_mode, min_name_mode with
       | None, _ -> false
@@ -824,7 +816,7 @@ let add_variable_definition t var kind name_mode =
   let just_after_level =
     Cached.add_or_replace_binding (cached t)
       name (Type_grammar.unknown kind)
-      t.next_binding_time name_mode
+      t.next_binding_time
   in
   let current_level =
     One_level.create (current_scope t) level ~just_after_level
@@ -966,7 +958,7 @@ let rec add_equation0 (t:t) name ty =
           else
             Cached.add_or_replace_binding
               (One_level.just_after_level t.current_level)
-              name ty Binding_time.imported_variables Name_mode.in_types
+              name ty Binding_time.imported_variables
         in
         just_after_level)
       ~symbol:(fun _ ->
@@ -1259,11 +1251,10 @@ let type_simple_in_term_exn t ?min_name_mode simple =
      and even imported code is closed with respect to variables.  This also
      means that the kind of such variables should always be inferrable, so
      we pass [None] to [find] below. *)
-  let ty, _binding_time, name_mode_simple =
+  let ty, _binding_time =
     let [@inline always] const const =
       Type_grammar.type_for_const const,
         Binding_time.consts_and_discriminants,
-        Name_mode.normal
     in
     let [@inline always] name name ~coercion:_ =
       (* CR lmaurer: Coercion dropped! *)
@@ -1297,7 +1288,10 @@ let type_simple_in_term_exn t ?min_name_mode simple =
   in
   let min_name_mode =
     match min_name_mode with
-    | None -> name_mode_simple
+    | None ->
+      (* We don't need to make any adjustments according to whether the name
+         might be imported, etc. -- see comment above. *)
+      Simple.name_mode simple
     | Some name_mode -> name_mode
   in
   match
@@ -1314,9 +1308,8 @@ let type_simple_in_term_exn t ?min_name_mode simple =
     raise Misc.Fatal_error
   | alias -> Type_grammar.alias_type_of kind alias
 
-let get_canonical_simple_exn t ?min_name_mode ?name_mode_of_existing_simple
-      simple =
-  let aliases_for_simple, min_binding_time =
+let get_canonical_simple_exn t ?min_name_mode simple =
+  let aliases_for_simple, min_binding_time, unscoped_name_mode_of_simple =
     if Aliases.mem (aliases t) simple then aliases_with_min_binding_time t
     else
     Simple.pattern_match simple
@@ -1364,20 +1357,13 @@ let get_canonical_simple_exn t ?min_name_mode ?name_mode_of_existing_simple
             (* Symbols can't alias, so lookup in the current aliases is fine *)
             aliases_with_min_binding_time t))
   in
-  let name_mode_simple =
-    let in_types =
-      Simple.pattern_match simple
-        ~const:(fun _ -> false)
-        ~name:(fun name ~coercion:_ -> variable_is_from_missing_cmx_file t name)
-    in
-    if in_types then Name_mode.in_types
-    else
-      match name_mode_of_existing_simple with
-      | Some name_mode -> name_mode
-      | None ->
-        Binding_time.With_name_mode.name_mode
-          (binding_time_and_mode_of_simple t simple)
+  let scoped_name_mode_of_simple =
+    Binding_time.With_name_mode.scoped_name_mode
+      (Binding_time.With_name_mode.create binding_time
+        unscoped_name_mode_of_simple)
+      ~min_binding_time
   in
+  let name_mode_simple = Simple.name_mode simple in
   let min_name_mode =
     match min_name_mode with
     | None -> name_mode_simple
@@ -1397,12 +1383,10 @@ let get_canonical_simple_exn t ?min_name_mode ?name_mode_of_existing_simple
     raise Misc.Fatal_error
   | alias -> alias
 
-let get_alias_then_canonical_simple_exn t ?min_name_mode
-      ?name_mode_of_existing_simple typ =
+let get_alias_then_canonical_simple_exn t ?min_name_mode typ =
   let simple = Type_grammar.get_alias_exn typ in
   let simple = Simple.without_coercion simple in
-  get_canonical_simple_exn t ?min_name_mode ?name_mode_of_existing_simple
-    simple
+  get_canonical_simple_exn t ?min_name_mode simple
 
 let aliases_of_simple t ~min_name_mode simple =
   Aliases.get_aliases (aliases t) simple

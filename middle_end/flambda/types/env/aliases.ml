@@ -754,7 +754,7 @@ let add_alias t ~element1 ~coercion_from_element2_to_element1 ~element2 =
     else
       let canonical_element, demoted_canonical, alias_of_demoted_element,
           coercion_from_demoted_canonical_to_canonical,
-          coercion_from_demoted_alias_to_demoted_canonical = 
+          coercion_from_demoted_alias_to_demoted_canonical =
         let which_element =
           choose_canonical_element_to_be_demoted t
             ~canonical_element1 ~canonical_element2
@@ -773,7 +773,7 @@ let add_alias t ~element1 ~coercion_from_element2_to_element1 ~element2 =
           coercion_from_canonical_element2_to_canonical_element1,
           coercion_from_element2_to_canonical_element2
       in
-      let t = 
+      let t =
         add_alias_between_canonical_elements
           t
           ~canonical_element
@@ -835,7 +835,7 @@ let add_alias t ~element1 ~coercion_from_element2_to_element1 ~element2 =
     let canonical_element1 = element1 in
     let coercion_from_element1_to_canonical_element1 = Coercion.id in
     let coercion_from_canonical_element2_to_canonical_element1 =
-      (* canonical_element1=element1 <--[c]-- element2 
+      (* canonical_element1=element1 <--[c]-- element2
          +
          canonical_element2 <--[c2]-- element2
          ~>
@@ -1068,7 +1068,7 @@ let get_aliases t element =
       compose_map_values_exn alias_names_with_coercions_to_canonical
         ~then_:coercion_from_canonical_to_element
     in
-    
+
     if !Clflags.flambda_invariant_checks then begin
       let element_coerced_to_canonical =
         Simple.apply_coercion_exn element coercion_from_element_to_canonical
@@ -1076,7 +1076,7 @@ let get_aliases t element =
       (* These aliases are all equivalent to the canonical element, and so is
          our original [element] if we coerce it first, so the coerced form of
          [element] should be among the aliases. *)
-      assert (Name.Map.exists 
+      assert (Name.Map.exists
         (fun name coercion_from_name_to_canonical ->
           let name_coerced_to_canonical =
             Simple.apply_coercion_exn

@@ -140,13 +140,10 @@ module Typing_env : sig
     -> Typing_env_extension.With_extra_variables.t
     -> t
 
-  (** Raises [Not_found] if no canonical [Simple] was found.
-      [name_mode_of_existing_simple] can be provided to improve performance
-      of this function. *)
+  (** Raises [Not_found] if no canonical [Simple] was found. *)
   val get_canonical_simple_exn
      : t
     -> ?min_name_mode:Name_mode.t
-    -> ?name_mode_of_existing_simple:Name_mode.t
     -> Simple.t
     -> Simple.t
 
@@ -161,7 +158,6 @@ module Typing_env : sig
   val get_alias_then_canonical_simple_exn
      : t
     -> ?min_name_mode:Name_mode.t
-    -> ?name_mode_of_existing_simple:Name_mode.t
     -> flambda_type
     -> Simple.t
 

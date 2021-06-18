@@ -189,6 +189,7 @@ MIDDLE_END_FLAMBDA_COMPILENV_DEPS=\
   middle_end/flambda/compilenv_deps/depth_variable.cmo \
   middle_end/flambda/compilenv_deps/rec_info.cmo \
   middle_end/flambda/compilenv_deps/coercion.cmo \
+  middle_end/flambda/compilenv_deps/name_mode.cmo \
   middle_end/flambda/compilenv_deps/reg_width_things.cmo \
   middle_end/flambda/compilenv_deps/symbol.cmo \
   middle_end/flambda/compilenv_deps/variable.cmo \
@@ -204,7 +205,6 @@ MIDDLE_END_FLAMBDA_BASIC=\
   middle_end/flambda/basic/code_id.cmo \
   middle_end/flambda/basic/code_id_or_symbol.cmo \
   middle_end/flambda/basic/mutability.cmo \
-  middle_end/flambda/naming/name_mode.cmo \
   middle_end/flambda/naming/permutation.cmo \
   middle_end/flambda/cmx/ids_for_export.cmo \
   middle_end/flambda/naming/renaming.cmo \
