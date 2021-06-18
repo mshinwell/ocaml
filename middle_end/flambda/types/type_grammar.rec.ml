@@ -843,6 +843,7 @@ let rec make_suitable_for_environment0_core t env ~depth ~suitable_for level =
                     match
                       TE.get_canonical_simple_exn env
                         ~min_name_mode:Name_mode.in_types
+                        ~existing_simple_cannot_be_phantom:()
                         (Simple.var to_erase)
                     with
                     | exception Not_found -> level, unknown kind

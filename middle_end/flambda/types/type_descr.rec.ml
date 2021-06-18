@@ -345,11 +345,13 @@ module Make (Head : Type_head_intf.S
     match
       TE.get_alias_then_canonical_simple_exn typing_env (to_type t1)
         ~min_name_mode:Name_mode.in_types
+        ~existing_simple_cannot_be_phantom:()
     with
     | exception Not_found ->
       begin match
         TE.get_alias_then_canonical_simple_exn typing_env (to_type t2)
           ~min_name_mode:Name_mode.in_types
+        ~existing_simple_cannot_be_phantom:()
       with
       | exception Not_found ->
         begin match meet_head_or_unknown_or_bottom env head1 head2 with
@@ -386,6 +388,7 @@ module Make (Head : Type_head_intf.S
       match
         TE.get_alias_then_canonical_simple_exn typing_env (to_type t2)
           ~min_name_mode:Name_mode.in_types
+          ~existing_simple_cannot_be_phantom:()
       with
       | exception Not_found ->
         begin match meet_head_or_unknown_or_bottom env head1 head2 with

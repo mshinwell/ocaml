@@ -145,6 +145,7 @@ module Typing_env : sig
   (** Raises [Not_found] if no canonical [Simple] was found.
       [name_mode_of_existing_simple] can be provided to improve performance
       of this function. *)
+  (* CR mshinwell: make name_mode_of_existing_simple non-optional *)
   val get_canonical_simple_exn
      : t
     -> ?min_name_mode:Name_mode.t
