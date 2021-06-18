@@ -261,6 +261,7 @@ module Make (Head : Type_head_intf.S
       match
         TE.get_alias_then_canonical_simple_exn left_env (to_type left_ty)
           ~min_name_mode:Name_mode.in_types
+          ~existing_simple_cannot_be_phantom:()
       with
       | exception Not_found -> None
       | canonical_simple -> Some canonical_simple
@@ -270,6 +271,7 @@ module Make (Head : Type_head_intf.S
       match
         TE.get_alias_then_canonical_simple_exn right_env (to_type right_ty)
           ~min_name_mode:Name_mode.in_types
+          ~existing_simple_cannot_be_phantom:()
       with
       | exception Not_found -> None
       | canonical_simple -> Some canonical_simple

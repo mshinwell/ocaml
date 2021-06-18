@@ -1424,11 +1424,11 @@ let get_canonical_simple_exn t ?min_name_mode ?name_mode_of_existing_simple
   | alias -> alias
 
 let get_alias_then_canonical_simple_exn t ?min_name_mode
-      ?name_mode_of_existing_simple typ =
+      ?name_mode_of_existing_simple ?existing_simple_cannot_be_phantom typ =
   let simple = Type_grammar.get_alias_exn typ in
   let simple = Simple.without_coercion simple in
   get_canonical_simple_exn t ?min_name_mode ?name_mode_of_existing_simple
-    simple
+    ?existing_simple_cannot_be_phantom simple
 
 let aliases_of_simple t ~min_name_mode simple =
   Aliases.get_aliases (aliases t) simple

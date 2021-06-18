@@ -118,6 +118,7 @@ val get_alias_then_canonical_simple_exn
    : t
   -> ?min_name_mode:Name_mode.t
   -> ?name_mode_of_existing_simple:Name_mode.t
+  -> ?existing_simple_cannot_be_phantom:unit
   -> Type_grammar.t
   -> Simple.t
 
