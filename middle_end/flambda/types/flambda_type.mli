@@ -149,6 +149,7 @@ module Typing_env : sig
      : t
     -> ?min_name_mode:Name_mode.t
     -> ?name_mode_of_existing_simple:Name_mode.t
+    -> ?existing_simple_cannot_be_phantom:unit
     -> Simple.t
     -> Simple.t
 

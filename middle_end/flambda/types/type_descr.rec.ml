@@ -151,13 +151,16 @@ module Make (Head : Type_head_intf.S
     match descr t with
     | No_alias head -> head
     | Equals simple ->
-      let min_name_mode = Name_mode.min_in_types in
-      match TE.get_canonical_simple_exn env simple ~min_name_mode with
+      let min_name_mode = Name_mode.in_types in
+      match
+        TE.get_canonical_simple_exn env simple ~min_name_mode
+          ~existing_simple_cannot_be_phantom:()
+      with
       | exception Not_found ->
-        (* This can happen when [simple] is of [Phantom] name mode.
-           We're not interested in propagating types for phantom variables,
-           so [Unknown] is fine here. *)
-        Unknown
+        Misc.fatal_errorf "Cannot find canonical simple for %a when \
+            expanding head in environment:@ %a"
+          Simple.print simple
+          TE.print env
       | simple ->
         let [@inline always] const const =
           let typ =

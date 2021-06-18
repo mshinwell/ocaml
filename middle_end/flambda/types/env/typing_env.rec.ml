@@ -1321,7 +1321,7 @@ let type_simple_in_term_exn t ?min_name_mode simple =
     Type_grammar.alias_type_of kind alias min_name_mode
 
 let get_canonical_simple_exn t ?min_name_mode ?name_mode_of_existing_simple
-      simple =
+      ?existing_simple_cannot_be_phantom simple =
   let aliases_for_simple, min_binding_time =
     if Aliases.mem (aliases t) simple then aliases_with_min_binding_time t
     else
@@ -1332,7 +1332,7 @@ let get_canonical_simple_exn t ?min_name_mode ?name_mode_of_existing_simple
         Name.pattern_match name
           ~var:(fun var ->
             let comp_unit = Variable.compilation_unit var in
-            if Compilation_unit.equal comp_unit
+            if Compilation_unit.equal comp_unit (* CR mshinwell: always false *)
                  (Compilation_unit.get_current_exn ())
             then aliases_with_min_binding_time t
             else
@@ -1371,10 +1371,30 @@ let get_canonical_simple_exn t ?min_name_mode ?name_mode_of_existing_simple
             aliases_with_min_binding_time t))
   in
   let name_mode_simple =
+    (* [Aliases] is only going to use [name_mode_simple] in the case where
+       [simple] is already canonical.  In particular it will ensure that the
+       mode of such [Simple] is compatible with [min_name_mode].  If
+       [min_name_mode] is going to be [In_types] and we know that [simple]
+       can never be of mode [Phantom], then this check will always pass, so
+       we can just use [In_types] as [name_mode_simple]. *)
+    let must_be_in_types =
+      match existing_simple_cannot_be_phantom with
+      | Some () ->
+        begin match min_name_mode with
+        | None -> false
+        | Some min_name_mode -> Name_mode.equal min_name_mode Name_mode.in_types
+        end
+      | None -> false
+    in
     let in_types =
-      Simple.pattern_match simple
+      must_be_in_types
+      || Simple.pattern_match simple
         ~const:(fun _ -> false)
-        ~name:(fun name ~coercion:_ -> variable_is_from_missing_cmx_file t name)
+        ~name:(fun name ~coercion:_ ->
+          let in_current_unit =
+            aliases_for_simple == aliases t
+          in
+          (not in_current_unit) && variable_is_from_missing_cmx_file t name)
     in
     if in_types then Name_mode.in_types
     else
