@@ -272,16 +272,6 @@ let is_obviously_unknown (t : t) =
   | Naked_int64 ty -> T_N64.is_obviously_unknown ty
   | Naked_nativeint ty -> T_NN.is_obviously_unknown ty
 
-let alias_type_of (kind : K.t) name : t =
-  match kind with
-  | Value -> Value (T_V.create_equals name)
-  | Naked_number Naked_immediate -> Naked_immediate (T_NI.create_equals name)
-  | Naked_number Naked_float -> Naked_float (T_Nf.create_equals name)
-  | Naked_number Naked_int32 -> Naked_int32 (T_N32.create_equals name)
-  | Naked_number Naked_int64 -> Naked_int64 (T_N64.create_equals name)
-  | Naked_number Naked_nativeint -> Naked_nativeint (T_NN.create_equals name)
-  | Fabricated -> Misc.fatal_error "Only used in [Flambda_static] now"
-
 let bottom_value () = Value (T_V.bottom ())
 let bottom_naked_immediate () = Naked_immediate (T_NI.bottom ())
 let bottom_naked_float () = Naked_float (T_Nf.bottom ())
@@ -319,6 +309,25 @@ let unknown (kind : K.t) =
   | Fabricated -> Misc.fatal_error "Only used in [Flambda_static] now"
 
 let unknown_like t = unknown (kind t)
+
+let alias_type_of (kind : K.t) name name_mode : t =
+  match Name_mode.descr name_mode with
+  | Phantom ->
+    (* Prevent phantom variables appearing in types, so canonicalisation of
+       [Simple]s doesn't need to look at the name mode of the supplied
+       [Simple]. *)
+    unknown kind
+  | Normal | In_types ->
+    (* This should be the only place where the [create_equals] functions are
+       used on [Simple]s that might be [Name]s. *)
+    match kind with
+    | Value -> Value (T_V.create_equals name)
+    | Naked_number Naked_immediate -> Naked_immediate (T_NI.create_equals name)
+    | Naked_number Naked_float -> Naked_float (T_Nf.create_equals name)
+    | Naked_number Naked_int32 -> Naked_int32 (T_N32.create_equals name)
+    | Naked_number Naked_int64 -> Naked_int64 (T_N64.create_equals name)
+    | Naked_number Naked_nativeint -> Naked_nativeint (T_NN.create_equals name)
+    | Fabricated -> Misc.fatal_error "Only used in [Flambda_static] now"
 
 let this_naked_immediate i : t =
   Naked_immediate (T_NI.create_equals (Simple.const (
@@ -467,9 +476,9 @@ let tag_immediate t : t =
     Misc.fatal_errorf "Type of wrong kind for [tag_immediate]: %a"
       print t
 
-let tagged_immediate_alias_to ~naked_immediate : t =
-  tag_immediate (Naked_immediate (
-    T_NI.create_equals (Simple.var naked_immediate)))
+let tagged_immediate_alias_to ~naked_immediate name_mode : t =
+  alias_type_of K.naked_immediate (Simple.var naked_immediate) name_mode
+  |> tag_immediate
 
 let any_block () : t =
   Value (T_V.create_no_alias (Ok (Variant (Variant.create
@@ -477,11 +486,13 @@ let any_block () : t =
     ~immediates:(Known (bottom K.naked_immediate))
     ~blocks:Unknown))))
 
-let is_int_for_scrutinee ~scrutinee : t =
-  Naked_immediate (T_NI.create (Is_int (alias_type_of K.value scrutinee)))
+let is_int_for_scrutinee ~scrutinee name_mode : t =
+  Naked_immediate (T_NI.create (Is_int (
+    alias_type_of K.value scrutinee name_mode)))
 
-let get_tag_for_block ~block : t =
-  Naked_immediate (T_NI.create (Get_tag (alias_type_of K.value block)))
+let get_tag_for_block ~block name_mode : t =
+  Naked_immediate (T_NI.create (Get_tag (
+    alias_type_of K.value block name_mode)))
 
 let any_tagged_bool () = these_tagged_immediates Target_imm.all_bools
 
@@ -495,18 +506,21 @@ let these_boxed_int32s is = box_int32 (these_naked_int32s is)
 let these_boxed_int64s is = box_int64 (these_naked_int64s is)
 let these_boxed_nativeints is = box_nativeint (these_naked_nativeints is)
 
-let boxed_float_alias_to ~naked_float =
-  box_float (Naked_float (T_Nf.create_equals (Simple.var naked_float)))
+let boxed_float_alias_to ~naked_float name_mode =
+  alias_type_of K.naked_float (Simple.var naked_float) name_mode
+  |> box_float
 
-let boxed_int32_alias_to ~naked_int32 =
-  box_int32 (Naked_int32 (T_N32.create_equals (Simple.var naked_int32)))
+let boxed_int32_alias_to ~naked_int32 name_mode =
+  alias_type_of K.naked_int32 (Simple.var naked_int32) name_mode
+  |> box_int32
 
-let boxed_int64_alias_to ~naked_int64 =
-  box_int64 (Naked_int64 (T_N64.create_equals (Simple.var naked_int64)))
+let boxed_int64_alias_to ~naked_int64 name_mode =
+  alias_type_of K.naked_int64 (Simple.var naked_int64) name_mode
+  |> box_int64
 
-let boxed_nativeint_alias_to ~naked_nativeint =
-  box_nativeint (Naked_nativeint (
-    T_NN.create_equals (Simple.var naked_nativeint)))
+let boxed_nativeint_alias_to ~naked_nativeint name_mode =
+  alias_type_of K.naked_nativeint (Simple.var naked_nativeint) name_mode
+  |> box_nativeint
 
 let blocks_with_these_tags tags : _ Or_unknown.t =
   if Tag.Set.for_all Tag.is_structured_block tags then
@@ -540,7 +554,9 @@ let immutable_block_with_size_at_least ~tag ~n ~field_kind ~field_n_minus_one =
   let field_tys =
     List.init n (fun index ->
       if index < n - 1 then unknown field_kind
-      else alias_type_of field_kind (Simple.var field_n_minus_one))
+      else
+        alias_type_of field_kind (Simple.var field_n_minus_one)
+          Name_mode.normal)
   in
   Value (T_V.create_no_alias (Ok (Variant (Variant.create
     ~is_unique:false
@@ -574,7 +590,8 @@ let open_variant_from_non_const_ctor_with_size_at_least ~n ~field_n_minus_one =
   let field_tys =
     List.init n (fun index ->
       if index < n - 1 then any_value ()
-      else alias_type_of K.value (Simple.var field_n_minus_one))
+      else
+        alias_type_of K.value (Simple.var field_n_minus_one) Name_mode.normal)
   in
   Value (T_V.create_no_alias (Ok (Variant (Variant.create
     ~is_unique:false
@@ -642,7 +659,8 @@ let exactly_this_closure closure_id ~all_function_decls_in_set:function_decls
 
 let at_least_the_closures_with_ids ~this_closure closure_ids_and_bindings =
   let closure_ids_and_types =
-    Closure_id.Map.map (fun bound_to -> alias_type_of K.value bound_to)
+    Closure_id.Map.map (fun bound_to ->
+        alias_type_of K.value bound_to Name_mode.normal)
       closure_ids_and_bindings
   in
   let function_decls =
@@ -673,7 +691,9 @@ let at_least_the_closures_with_ids ~this_closure closure_ids_and_bindings =
 
 let closure_with_at_least_these_closure_vars ~this_closure closure_vars : t =
   let closure_var_types =
-    let type_of_var v = alias_type_of K.value (Simple.var v) in
+    let type_of_var v =
+      alias_type_of K.value (Simple.var v) Name_mode.normal
+    in
     let map = Var_within_closure.Map.map type_of_var closure_vars in
     Product.Var_within_closure_indexed.create Flambda_kind.value map
   in
@@ -828,7 +848,8 @@ let rec make_suitable_for_environment0_core t env ~depth ~suitable_for level =
                     | exception Not_found -> level, unknown kind
                     | canonical_simple ->
                       if TE.mem_simple suitable_for canonical_simple then
-                        level, alias_type_of kind canonical_simple
+                        level,
+                        alias_type_of kind canonical_simple Name_mode.in_types
                       else
                         let t = TE.find env (Name.var to_erase) (Some kind) in
                         let t = expand_head' t env in

@@ -20,7 +20,7 @@ open! Simplify_import
 
 let simplify_make_block_of_values dacc _prim dbg tag ~shape
       ~(mutable_or_immutable : Mutability.t)
-      args_with_tys ~result_var =
+      args_with_tys ~result_var name_mode =
   let denv = DA.denv dacc in
   let args, _arg_tys = List.split args_with_tys in
   let invalid () =
@@ -48,7 +48,7 @@ let simplify_make_block_of_values dacc _prim dbg tag ~shape
           ~name:(fun name ~coercion:_ ->
               (* CR lmaurer: Coercion dropped! Though why not just [arg] rather
                  than [Simple.name name]? *)
-              T.alias_type_of K.value (Simple.name name)))
+              T.alias_type_of K.value (Simple.name name) name_mode))
       args_with_tys shape
   in
   if !found_bottom then begin
@@ -77,7 +77,7 @@ let simplify_make_block_of_values dacc _prim dbg tag ~shape
 
 let simplify_make_block_of_floats dacc _prim dbg
       ~(mutable_or_immutable : Mutability.t)
-      args_with_tys ~result_var =
+      args_with_tys ~result_var name_mode =
   let denv = DA.denv dacc in
   let args = List.map fst args_with_tys in
   let invalid () =
@@ -100,7 +100,7 @@ let simplify_make_block_of_floats dacc _prim dbg
           ~name:(fun name ~coercion:_ ->
               (* CR lmaurer: Coercion dropped! Though why not just [arg] rather
                  than [Simple.name name]? *)
-              T.alias_type_of K.naked_float (Simple.name name)))
+              T.alias_type_of K.naked_float (Simple.name name) name_mode))
       args_with_tys
   in
   if !found_bottom then begin
@@ -134,9 +134,11 @@ let simplify_variadic_primitive dacc (prim : P.variadic_primitive)
     simplify_make_block_of_values dacc prim dbg tag ~shape
       ~mutable_or_immutable
       args_with_tys ~result_var:result_var'
+      (VB.name_mode result_var)
   | Make_block (Naked_floats, mutable_or_immutable) ->
     simplify_make_block_of_floats dacc prim dbg
       ~mutable_or_immutable args_with_tys ~result_var:result_var'
+      (VB.name_mode result_var)
   | Make_array _ ->
     (* CR mshinwell: The typing here needs to be improved *)
     let args, _tys = List.split args_with_tys in

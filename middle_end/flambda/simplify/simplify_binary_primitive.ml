@@ -151,7 +151,7 @@ end = struct
             N.these (N.Result.Set.of_list is)
           else
             match PR.Set.get_singleton possible_results with
-            | Some (Simple simple) -> T.alias_type_of kind simple
+            | Some (Simple simple) -> T.alias_type_of kind simple NM.normal
             | Some (Exactly _)
             | Some (Prim _)
             | None -> N.unknown op
@@ -916,7 +916,7 @@ let simplify_immutable_block_load (access_kind : P.Block_access_kind.t)
   let exactly simple =
     let env_extension =
       TEE.one_equation (Name.var result_var')
-        (T.alias_type_of result_kind simple)
+        (T.alias_type_of result_kind simple min_name_mode)
     in
     Simplified_named.reachable original_term, env_extension, dacc
   in

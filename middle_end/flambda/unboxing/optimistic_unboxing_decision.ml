@@ -122,7 +122,7 @@ and make_optimistic_fields
       (fun i -> Extra_param_and_args.create ~name:(field_name i))
   in
   let type_of_var (epa : Extra_param_and_args.t) =
-    T.alias_type_of field_kind (Simple.var epa.param)
+    T.alias_type_of field_kind (Simple.var epa.param) Name_mode.normal
   in
   let field_types = List.map type_of_var field_vars in
   let tenv =

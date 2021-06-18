@@ -102,18 +102,16 @@ let lift dacc ty ~bound_to static_const =
   in
   let symbol' = Simple.symbol symbol in
   let term = Named.create_simple symbol' in
-  let var_ty = T.alias_type_of (T.kind ty) symbol' in
+  let var_ty = T.alias_type_of (T.kind ty) symbol' NM.normal in
   let dacc =
     DA.map_denv dacc ~f:(fun denv ->
       DE.add_equation_on_variable denv bound_to var_ty)
   in
   Simplified_named.reachable term, dacc, var_ty
 
-let try_to_reify dacc (term : Simplified_named.t) ~bound_to ~allow_lifting =
-  let occ_kind = Var_in_binding_pos.name_mode bound_to in
+let try_to_reify0 dacc (term : Simplified_named.t) ~bound_to ~allow_lifting ty =
   let bound_to = Var_in_binding_pos.var bound_to in
   let denv = DA.denv dacc in
-  let ty = DE.find_variable denv bound_to in
   match term with
   | Invalid _ ->
     let ty = T.bottom_like ty in
@@ -131,7 +129,7 @@ let try_to_reify dacc (term : Simplified_named.t) ~bound_to ~allow_lifting =
     in
     match reify_result with
     | Lift to_lift ->
-      if Name_mode.is_normal occ_kind && allow_lifting then
+      if allow_lifting then
         let static_const = create_static_const dacc to_lift in
         lift dacc ty ~bound_to static_const
       else
@@ -145,7 +143,7 @@ let try_to_reify dacc (term : Simplified_named.t) ~bound_to ~allow_lifting =
       let dacc =
         if Simple.equal simple (Simple.var bound_to) then dacc
         else
-          let ty = T.alias_type_of (T.kind ty) simple in
+          let ty = T.alias_type_of (T.kind ty) simple Name_mode.normal in
           let denv = DE.add_equation_on_variable denv bound_to ty in
           DA.with_denv dacc denv
       in
@@ -157,3 +155,8 @@ let try_to_reify dacc (term : Simplified_named.t) ~bound_to ~allow_lifting =
       let ty = T.bottom_like ty in
       let denv = DE.add_equation_on_variable denv bound_to ty in
       Simplified_named.invalid (), DA.with_denv dacc denv, ty
+
+let try_to_reify dacc (term : Simplified_named.t) ~bound_to ~allow_lifting ty =
+  if Name_mode.equal (Var_in_binding_pos.name_mode bound_to) Name_mode.phantom
+  then term, dacc, ty
+  else try_to_reify0 dacc term ~bound_to ~allow_lifting ty

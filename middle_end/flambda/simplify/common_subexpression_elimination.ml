@@ -159,7 +159,6 @@ let cse_with_eligible_lhs ~typing_env_at_fork ~cse_at_each_use ~params prev_cse
             match
               TE.get_canonical_simple_exn env_at_use arg
                 ~min_name_mode:NM.normal
-                ~name_mode_of_existing_simple:NM.normal
             with
             | exception Not_found -> None
             | arg ->
@@ -180,7 +179,6 @@ let cse_with_eligible_lhs ~typing_env_at_fork ~cse_at_each_use ~params prev_cse
           match
             TE.get_canonical_simple_exn env_at_use bound_to
               ~min_name_mode:NM.normal
-              ~name_mode_of_existing_simple:NM.normal
           with
           | exception Not_found -> eligible
           | bound_to ->
@@ -256,10 +254,12 @@ let join_one_cse_equation ~cse_at_each_use prim bound_to_map
            This can be done by giving them the appropriate type. *)
         match EP.to_primitive prim with
         | Unary (Is_int, scrutinee) ->
-          Name.Map.add (Name.var var) (T.is_int_for_scrutinee ~scrutinee)
+          Name.Map.add (Name.var var)
+            (T.is_int_for_scrutinee ~scrutinee NM.normal)
             extra_equations
         | Unary (Get_tag, block) ->
-          Name.Map.add (Name.var var) (T.get_tag_for_block ~block)
+          Name.Map.add (Name.var var)
+            (T.get_tag_for_block ~block NM.normal)
             extra_equations
         | _ -> extra_equations
       in

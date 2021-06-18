@@ -45,6 +45,8 @@ val from_map : Type_grammar.t Name.Map.t -> t
 
 val add_or_replace_equation : t -> Name.t -> Type_grammar.t -> t
 
+val find : t -> Name.t -> Type_grammar.t
+
 val meet : Meet_env.t -> t -> t -> t Or_bottom.t
 
 val join : Join_env.t -> t -> t -> t

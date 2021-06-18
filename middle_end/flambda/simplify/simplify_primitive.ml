@@ -32,7 +32,6 @@ let apply_cse dacc ~original_prim =
       let canonical =
         TE.get_canonical_simple_exn (DA.typing_env dacc) simple
           ~min_name_mode:NM.normal
-          ~name_mode_of_existing_simple:NM.normal
       in
       match canonical with
       | exception Not_found -> None
@@ -50,7 +49,9 @@ let try_cse dacc ~original_prim ~simplified_args_with_tys ~min_name_mode
     match apply_cse dacc ~original_prim with
     | Some replace_with ->
       let named = Named.create_simple replace_with in
-      let ty = T.alias_type_of (P.result_kind' original_prim) replace_with in
+      let ty =
+        T.alias_type_of (P.result_kind' original_prim) replace_with NM.normal
+      in
       let env_extension = TEE.one_equation (Name.var result_var) ty in
       let args = List.map fst simplified_args_with_tys in
       let simplified_named =

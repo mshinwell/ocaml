@@ -1068,6 +1068,7 @@ and add_equation t name ty =
          canonical element. *)
       let ty =
         Type_grammar.alias_type_of kind canonical_element
+          (Binding_time.With_name_mode.name_mode binding_time_and_mode_alias_of)
       in
       alias_of_demoted_element, t, ty
   in
@@ -1313,7 +1314,11 @@ let type_simple_in_term_exn t ?min_name_mode simple =
         print t
     end;
     raise Misc.Fatal_error
-  | alias -> Type_grammar.alias_type_of kind alias
+  | alias ->
+    (* Passing [min_name_mode] is a bit of a lie, but it's certain that
+       [min_name_mode] is [Phantom] iff the actual mode (even the scoped mode)
+       of [alias] is [Phantom], which is all that matters. *)
+    Type_grammar.alias_type_of kind alias min_name_mode
 
 let get_canonical_simple_exn t ?min_name_mode ?name_mode_of_existing_simple
       simple =

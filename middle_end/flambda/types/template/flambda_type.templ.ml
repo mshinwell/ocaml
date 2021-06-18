@@ -647,7 +647,9 @@ let prove_boxed_floats env t : _ proof =
   in
   let result_simple = Simple.var result_var in
   let result_kind = K.naked_float in
-  let shape = box_float (alias_type_of result_kind result_simple) in
+  let shape =
+    box_float (alias_type_of result_kind result_simple Name_mode.normal)
+  in
   match meet_shape env t ~shape ~result_var:result_var' ~result_kind with
   | Bottom -> Invalid
   | Ok env_extension ->
@@ -668,7 +670,9 @@ let prove_boxed_int32s env t : _ proof =
   in
   let result_simple = Simple.var result_var in
   let result_kind = K.naked_int32 in
-  let shape = box_int32 (alias_type_of result_kind result_simple) in
+  let shape =
+    box_int32 (alias_type_of result_kind result_simple Name_mode.normal)
+  in
   match meet_shape env t ~shape ~result_var:result_var' ~result_kind with
   | Bottom -> Invalid
   | Ok env_extension ->
@@ -689,7 +693,9 @@ let prove_boxed_int64s env t : _ proof =
   in
   let result_simple = Simple.var result_var in
   let result_kind = K.naked_int64 in
-  let shape = box_int64 (alias_type_of result_kind result_simple) in
+  let shape =
+    box_int64 (alias_type_of result_kind result_simple Name_mode.normal)
+  in
   match meet_shape env t ~shape ~result_var:result_var' ~result_kind with
   | Bottom -> Invalid
   | Ok env_extension ->
@@ -710,7 +716,9 @@ let prove_boxed_nativeints env t : _ proof =
   in
   let result_simple = Simple.var result_var in
   let result_kind = K.naked_nativeint in
-  let shape = box_nativeint (alias_type_of result_kind result_simple) in
+  let shape =
+    box_nativeint (alias_type_of result_kind result_simple Name_mode.normal)
+  in
   match meet_shape env t ~shape ~result_var:result_var' ~result_kind with
   | Bottom -> Invalid
   | Ok env_extension ->

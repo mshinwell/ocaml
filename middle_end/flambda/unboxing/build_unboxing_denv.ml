@@ -22,7 +22,7 @@ module U = Unboxing_types
 
 let add_equation_on_var denv var shape =
   let kind = T.kind shape in
-  let var_type = T.alias_type_of kind (Simple.var var) in
+  let var_type = T.alias_type_of kind (Simple.var var) Name_mode.normal in
   match T.meet (DE.typing_env denv) var_type shape with
   | Ok (_ty, env_extension) ->
     DE.map_typing_env denv ~f:(fun tenv ->
@@ -50,7 +50,7 @@ let rec denv_of_decision denv ~param_var (decision : U.decision) : DE.t =
         ) denv fields
     in
     let type_of_var (field : U.field_decision) =
-      T.alias_type_of field_kind (Simple.var field.epa.param)
+      T.alias_type_of field_kind (Simple.var field.epa.param) Name_mode.normal
     in
     let field_types = List.map type_of_var fields in
     let shape =
@@ -88,7 +88,7 @@ let rec denv_of_decision denv ~param_var (decision : U.decision) : DE.t =
     let denv = DE.define_variable denv tag_v K.naked_immediate in
     let denv =
       DE.add_equation_on_variable denv tag.param
-        (T.get_tag_for_block ~block:(Simple.var param_var))
+        (T.get_tag_for_block ~block:(Simple.var param_var) Name_mode.normal)
     in
     let get_tag_prim =
       P.Eligible_for_cse.create_exn (Unary (Get_tag, Simple.var param_var))
@@ -103,7 +103,8 @@ let rec denv_of_decision denv ~param_var (decision : U.decision) : DE.t =
         let denv = DE.define_variable denv is_int_v K.naked_immediate in
         let denv =
           DE.add_equation_on_variable denv is_int.param
-            (T.is_int_for_scrutinee ~scrutinee:(Simple.var param_var))
+            (T.is_int_for_scrutinee ~scrutinee:(Simple.var param_var)
+              Name_mode.normal)
         in
         let is_int_prim =
           P.Eligible_for_cse.create_exn (Unary (Is_int, Simple.var param_var))
@@ -124,6 +125,7 @@ let rec denv_of_decision denv ~param_var (decision : U.decision) : DE.t =
         let denv = DE.define_variable denv v K.naked_immediate in
         let ty =
           T.alias_type_of K.naked_immediate (Simple.var ctor_epa.param)
+            Name_mode.normal
         in
         denv, ty
       | At_least_one {
@@ -148,6 +150,7 @@ let rec denv_of_decision denv ~param_var (decision : U.decision) : DE.t =
       Tag.Scannable.Map.map (fun block_fields ->
         List.map (fun (field : U.field_decision) ->
           T.alias_type_of K.value (Simple.var field.epa.param)
+            Name_mode.normal
         ) block_fields
       ) fields_by_tag
     in
@@ -160,22 +163,22 @@ let rec denv_of_decision denv ~param_var (decision : U.decision) : DE.t =
       ) denv block_fields
     ) fields_by_tag denv
   | Unbox Number (Naked_immediate, { param = naked_immediate; args = _; }) ->
-    let shape = T.tagged_immediate_alias_to ~naked_immediate in
+    let shape = T.tagged_immediate_alias_to ~naked_immediate Name_mode.normal in
     denv_of_number_decision K.naked_immediate shape
       param_var naked_immediate denv
   | Unbox Number (Naked_float, { param = naked_float; args = _; }) ->
-    let shape = T.boxed_float_alias_to ~naked_float in
+    let shape = T.boxed_float_alias_to ~naked_float Name_mode.normal in
     denv_of_number_decision K.naked_float shape
       param_var naked_float denv
   | Unbox Number (Naked_int32, { param = naked_int32; args = _; }) ->
-    let shape = T.boxed_int32_alias_to ~naked_int32 in
+    let shape = T.boxed_int32_alias_to ~naked_int32 Name_mode.normal in
     denv_of_number_decision K.naked_int32 shape
       param_var naked_int32 denv
   | Unbox Number (Naked_int64, { param = naked_int64; args = _; }) ->
-    let shape = T.boxed_int64_alias_to ~naked_int64 in
+    let shape = T.boxed_int64_alias_to ~naked_int64 Name_mode.normal in
     denv_of_number_decision K.naked_int64 shape
       param_var naked_int64 denv
   | Unbox Number (Naked_nativeint, { param = naked_nativeint; args = _; }) ->
-    let shape = T.boxed_nativeint_alias_to ~naked_nativeint in
+    let shape = T.boxed_nativeint_alias_to ~naked_nativeint Name_mode.normal in
     denv_of_number_decision K.naked_nativeint shape
       param_var naked_nativeint denv

@@ -127,7 +127,7 @@ end = struct
         in
         let types_inside_function =
           Var_within_closure.Map.add clos_var
-            (T.alias_type_of K.value (Simple.var var))
+            (T.alias_type_of K.value (Simple.var var) NM.in_types)
             types_inside_function
         in
         env_inside_function, types_inside_function)
@@ -149,7 +149,8 @@ end = struct
     let closure_types_via_aliases_all_sets =
       List.map (fun closure_bound_names_inside ->
           Closure_id.Map.map (fun name ->
-              T.alias_type_of K.value (Name_in_binding_pos.to_simple name))
+              T.alias_type_of K.value (Name_in_binding_pos.to_simple name)
+                NM.in_types)
             closure_bound_names_inside)
         closure_bound_names_all_sets_inside
     in
@@ -335,7 +336,7 @@ let dacc_inside_function context ~used_closure_vars ~shareable_constants
         let name = Name_in_binding_pos.name name in
         DE.add_variable denv
           (Var_in_binding_pos.create my_closure NM.normal)
-          (T.alias_type_of K.value (Simple.name name)))
+          (T.alias_type_of K.value (Simple.name name) NM.normal))
   in
   dacc
   |> DA.map_denv ~f:(fun denv ->
@@ -594,7 +595,8 @@ let simplify_set_of_closures0 dacc context set_of_closures
   let closure_types_by_bound_name =
     let closure_types_via_aliases =
       Closure_id.Map.map (fun name ->
-          T.alias_type_of K.value (Name_in_binding_pos.to_simple name))
+          T.alias_type_of K.value (Name_in_binding_pos.to_simple name)
+            NM.normal)
         closure_bound_names
     in
     Closure_id.Map.fold (fun closure_id _function_decl_type closure_types ->
@@ -674,7 +676,7 @@ let simplify_and_lift_set_of_closures dacc ~closure_bound_vars_inverse
   let closure_element_types =
     Var_within_closure.Map.map (fun closure_element ->
         Simple.pattern_match closure_element
-          ~const:(fun _ -> T.alias_type_of K.value closure_element)
+          ~const:(fun _ -> T.alias_type_of K.value closure_element NM.normal)
           ~name:(fun name ~coercion:_ ->
             (* CR lmaurer: Coercion dropped! *)
             Name.pattern_match name
@@ -682,13 +684,15 @@ let simplify_and_lift_set_of_closures dacc ~closure_bound_vars_inverse
                 match Variable.Map.find var closure_bound_vars_inverse with
                 | exception Not_found ->
                   assert (DE.mem_variable (DA.denv dacc) var);
-                  T.alias_type_of K.value closure_element
+                  T.alias_type_of K.value closure_element NM.normal
                 | closure_id ->
                   let closure_symbol =
                     Closure_id.Map.find closure_id closure_symbols_map
                   in
-                  T.alias_type_of K.value (Simple.symbol closure_symbol))
-                ~symbol:(fun _sym -> T.alias_type_of K.value closure_element)))
+                  T.alias_type_of K.value (Simple.symbol closure_symbol)
+                    NM.normal)
+                ~symbol:(fun _sym ->
+                  T.alias_type_of K.value closure_element NM.normal)))
       closure_elements
   in
   let context =
@@ -750,7 +754,7 @@ let simplify_and_lift_set_of_closures dacc ~closure_bound_vars_inverse
         | closure_symbol ->
           let denv =
             let simple = Simple.symbol closure_symbol in
-            let typ = T.alias_type_of K.value simple in
+            let typ = T.alias_type_of K.value simple NM.normal in
             DE.add_variable denv bound_var typ
           in
           let bindings =

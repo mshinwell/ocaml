@@ -23,4 +23,5 @@ val try_to_reify
   -> Simplified_named.t
   -> bound_to:Var_in_binding_pos.t
   -> allow_lifting:bool
+  -> Flambda_type.t
   -> Simplified_named.t * Downwards_acc.t * Flambda_type.t

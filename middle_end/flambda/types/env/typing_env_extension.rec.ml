@@ -73,6 +73,8 @@ let add_or_replace_equation t name ty =
   end;
   { equations = Name.Map.add name ty t.equations; }
 
+let find t name = Name.Map.find name t.equations
+
 let all_ids_for_export { equations; } =
   Name.Map.fold (fun name ty acc ->
     let acc = Ids_for_export.union (Type_grammar.all_ids_for_export ty) acc in

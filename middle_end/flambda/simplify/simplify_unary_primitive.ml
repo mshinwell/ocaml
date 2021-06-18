@@ -88,7 +88,7 @@ let simplify_project_var closure_id closure_element ~min_name_mode dacc
     let reachable = Simplified_named.reachable (Named.create_simple simple) in
     let env_extension =
       TEE.one_equation (Name.var result_var')
-        (T.alias_type_of K.value simple)
+        (T.alias_type_of K.value simple min_name_mode)
     in
     reachable, env_extension, dacc
   | Unknown ->
@@ -105,19 +105,21 @@ let simplify_project_var closure_id closure_element ~min_name_mode dacc
 
 let simplify_unbox_number (boxable_number_kind : K.Boxable_number.t)
       dacc ~original_term ~arg ~arg_ty:boxed_number_ty ~result_var =
+  let name_mode = VB.name_mode result_var in
   let shape, result_kind =
     let result_var = Var_in_binding_pos.var result_var in
     match boxable_number_kind with
     | Naked_float ->
-      T.boxed_float_alias_to ~naked_float:result_var, K.naked_float
+      T.boxed_float_alias_to ~naked_float:result_var name_mode, K.naked_float
     | Naked_int32 ->
-      T.boxed_int32_alias_to ~naked_int32:result_var, K.naked_int32
+      T.boxed_int32_alias_to ~naked_int32:result_var name_mode, K.naked_int32
     | Naked_int64 ->
-      T.boxed_int64_alias_to ~naked_int64:result_var, K.naked_int64
+      T.boxed_int64_alias_to ~naked_int64:result_var name_mode, K.naked_int64
     | Naked_nativeint ->
-      T.boxed_nativeint_alias_to ~naked_nativeint:result_var, K.naked_nativeint
+      T.boxed_nativeint_alias_to ~naked_nativeint:result_var name_mode,
+        K.naked_nativeint
     | Untagged_immediate ->
-      T.tagged_immediate_alias_to ~naked_immediate:result_var,
+      T.tagged_immediate_alias_to ~naked_immediate:result_var name_mode,
         K.naked_immediate
   in
   let reachable, env_extension, dacc =
@@ -162,19 +164,25 @@ let simplify_is_int_or_get_tag dacc ~original_term ~scrutinee ~scrutinee_ty:_
 let simplify_is_int dacc ~original_term ~arg:scrutinee ~arg_ty:scrutinee_ty
       ~result_var =
   simplify_is_int_or_get_tag dacc ~original_term ~scrutinee ~scrutinee_ty
-    ~result_var ~make_shape:(fun scrutinee -> T.is_int_for_scrutinee ~scrutinee)
+    ~result_var
+    ~make_shape:(fun scrutinee ->
+      T.is_int_for_scrutinee ~scrutinee (VB.name_mode result_var))
 
 let simplify_get_tag dacc ~original_term ~arg:scrutinee ~arg_ty:scrutinee_ty
       ~result_var =
   simplify_is_int_or_get_tag dacc ~original_term ~scrutinee ~scrutinee_ty
-    ~result_var ~make_shape:(fun block -> T.get_tag_for_block ~block)
+    ~result_var
+    ~make_shape:(fun block ->
+      T.get_tag_for_block ~block (VB.name_mode result_var))
 
 let simplify_array_length dacc ~original_term ~arg:_ ~arg_ty:array_ty
       ~result_var =
   let result = Simple.var (Var_in_binding_pos.var result_var) in
+  let name_mode = Var_in_binding_pos.name_mode result_var in
   Simplify_common.simplify_projection
     dacc ~original_term ~deconstructing:array_ty
-    ~shape:(T.array_of_length ~length:(T.alias_type_of K.value result))
+    ~shape:(T.array_of_length
+      ~length:(T.alias_type_of K.value result name_mode))
     ~result_var ~result_kind:K.value
 
 (* CR-someday mshinwell: Consider whether "string length" should be treated

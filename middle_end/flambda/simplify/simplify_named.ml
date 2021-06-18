@@ -193,7 +193,19 @@ let simplify_named0 dacc (bindable_let_bound : Bindable_let_bound.t)
         && Name_mode.is_normal (Var_in_binding_pos.name_mode bound_var)
     in
     let defining_expr, dacc, ty =
-      Reification.try_to_reify dacc term ~bound_to:bound_var ~allow_lifting
+      (* It should be much faster to look up the type of [bound_var] in the
+         env extension (which is often just a single equation) rather than
+         the whole typing env.  The type in the extension should always be
+         sufficiently precise for the reification check and the subsequent
+         is-bottom check (see below). *)
+      match TEE.find env_extension (Name.var (VB.var bound_var)) with
+      | exception Not_found ->
+        Misc.fatal_errorf "Simplification of primitive %a did not yield a \
+            type for [bound_var]:@ %a"
+          P.print prim
+          TEE.print env_extension
+      | ty ->
+        Reification.try_to_reify dacc term ~bound_to:bound_var ~allow_lifting ty
     in
     let defining_expr =
       if T.is_bottom (DA.typing_env dacc) ty then Simplified_named.invalid ()

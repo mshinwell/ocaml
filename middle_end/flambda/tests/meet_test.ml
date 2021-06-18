@@ -23,7 +23,9 @@ let test_meet_chains_two_vars () =
   let env =
     TE.add_definition env (Name_in_binding_pos.var var2') K.value
   in
-  let first_type_for_var2 = T.alias_type_of K.value (Simple.var var1) in
+  let first_type_for_var2 =
+    T.alias_type_of K.value (Simple.var var1) Name_mode.normal
+  in
   let env = TE.add_equation env (Name.var var2) first_type_for_var2 in
   let symbol =
     Symbol.create (Compilation_unit.get_current_exn ())
@@ -33,7 +35,9 @@ let test_meet_chains_two_vars () =
     TE.add_definition env (Name_in_binding_pos.symbol symbol) K.value
   in
   Format.eprintf "Initial situation:@ %a\n%!" TE.print env;
-  let new_type_for_var2 = T.alias_type_of K.value (Simple.symbol symbol) in
+  let new_type_for_var2 =
+    T.alias_type_of K.value (Simple.symbol symbol) Name_mode.normal
+  in
   Format.eprintf "New knowledge:@ %a : %a\n%!"
     Variable.print var2
     T.print new_type_for_var2;
@@ -62,14 +66,18 @@ let test_meet_chains_three_vars () =
   let env =
     TE.add_definition env (Name_in_binding_pos.var var2') K.value
   in
-  let first_type_for_var2 = T.alias_type_of K.value (Simple.var var1) in
+  let first_type_for_var2 =
+    T.alias_type_of K.value (Simple.var var1) Name_mode.normal
+  in
   let env = TE.add_equation env (Name.var var2) first_type_for_var2 in
   let var3 = Variable.create "var3" in
   let var3' = Var_in_binding_pos.create var3 Name_mode.normal in
   let env =
     TE.add_definition env (Name_in_binding_pos.var var3') K.value
   in
-  let first_type_for_var3 = T.alias_type_of K.value (Simple.var var2) in
+  let first_type_for_var3 =
+    T.alias_type_of K.value (Simple.var var2) Name_mode.normal
+  in
   let env = TE.add_equation env (Name.var var3) first_type_for_var3 in
   let symbol =
     Symbol.create (Compilation_unit.get_current_exn ())
@@ -79,7 +87,9 @@ let test_meet_chains_three_vars () =
     TE.add_definition env (Name_in_binding_pos.symbol symbol) K.value
   in
   Format.eprintf "Initial situation:@ %a\n%!" TE.print env;
-  let new_type_for_var3 = T.alias_type_of K.value (Simple.symbol symbol) in
+  let new_type_for_var3 =
+    T.alias_type_of K.value (Simple.symbol symbol) Name_mode.normal
+  in
   Format.eprintf "New knowledge:@ %a : %a\n%!"
     Variable.print var3
     T.print new_type_for_var3;
@@ -110,16 +120,20 @@ let meet_variants_don't_lose_aliases () =
   let ty1 =
     let non_const_ctors =
       Tag.Scannable.Map.of_list [
-        Tag.Scannable.create_exn 0, [ T.alias_type_of K.value (Simple.var vx) ];
-        Tag.Scannable.create_exn 1, [ T.alias_type_of K.value (Simple.var vy) ];
+        Tag.Scannable.create_exn 0,
+          [ T.alias_type_of K.value (Simple.var vx) Name_mode.normal ];
+        Tag.Scannable.create_exn 1,
+          [ T.alias_type_of K.value (Simple.var vy) Name_mode.normal ];
       ]
     in
     T.variant ~const_ctors ~non_const_ctors in
   let ty2 =
     let non_const_ctors =
       Tag.Scannable.Map.of_list [
-        Tag.Scannable.create_exn 0, [ T.alias_type_of K.value (Simple.var va) ];
-        Tag.Scannable.create_exn 1, [ T.alias_type_of K.value (Simple.var vb) ];
+        Tag.Scannable.create_exn 0,
+          [ T.alias_type_of K.value (Simple.var va) Name_mode.normal ];
+        Tag.Scannable.create_exn 1,
+          [ T.alias_type_of K.value (Simple.var vb) Name_mode.normal ];
       ]
     in
     T.variant ~const_ctors ~non_const_ctors in
@@ -131,7 +145,9 @@ let meet_variants_don't_lose_aliases () =
       T.print meet_ty TEE.print env_extension;
     (* Env extension should be empty *)
     let env = TE.add_equation env (Name.var v_variant) meet_ty in
-    let t_get_tag = T.get_tag_for_block ~block:(Simple.var v_variant) in
+    let t_get_tag =
+      T.get_tag_for_block ~block:(Simple.var v_variant) Name_mode.normal
+    in
     let t_tag_1 = T.this_naked_immediate Target_imm.one in
     match T.meet env t_get_tag t_tag_1 with
     | Bottom -> assert false
@@ -159,12 +175,12 @@ let test_meet_two_blocks () =
   let env =
     TE.add_equation env (Name.var block1)
       (T.immutable_block ~is_unique:false Tag.zero ~field_kind:K.value
-        ~fields:[T.alias_type_of K.value (Simple.var field1)])
+        ~fields:[T.alias_type_of K.value (Simple.var field1) Name_mode.normal])
   in
   let env =
     TE.add_equation env (Name.var block2)
       (T.immutable_block ~is_unique:false Tag.zero ~field_kind:K.value
-        ~fields:[T.alias_type_of K.value (Simple.var field2)])
+        ~fields:[T.alias_type_of K.value (Simple.var field2) Name_mode.normal])
   in
   (* let test b1 b2 env =
    *   let eq_block2 = T.alias_type_of K.value (Simple.var b2) in
@@ -180,8 +196,8 @@ let test_meet_two_blocks () =
   let f b1 b2 =
     match
     T.meet env
-      (T.alias_type_of K.value (Simple.var b1))
-      (T.alias_type_of K.value (Simple.var b2))
+      (T.alias_type_of K.value (Simple.var b1) Name_mode.normal)
+      (T.alias_type_of K.value (Simple.var b2) Name_mode.normal)
     with
     | Bottom -> assert false
     | Ok (t, tee) ->

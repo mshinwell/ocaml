@@ -39,7 +39,7 @@ let _print_unboxed_arg ppf = function
     Format.fprintf ppf "added_by_wrapper(%d)" nth_arg
 
 let type_of_arg_being_unboxed unboxed_arg =
-  let aux simple = T.alias_type_of K.value simple in
+  let aux simple = T.alias_type_of K.value simple Name_mode.normal in
   match unboxed_arg with
   | Poison -> None
   | Available simple -> Some (aux simple)
@@ -55,7 +55,7 @@ let unbox_arg (unboxer : Unboxers.unboxer)
     in
     extra_arg, Poison
   | Available arg_at_use ->
-    let arg_type = T.alias_type_of K.value arg_at_use in
+    let arg_type = T.alias_type_of K.value arg_at_use Name_mode.normal in
     begin match unboxer.prove_simple typing_env_at_use arg_type
             ~min_name_mode:Name_mode.normal with
     | Proved simple ->

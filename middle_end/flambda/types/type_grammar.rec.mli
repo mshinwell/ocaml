@@ -37,7 +37,7 @@ include Contains_ids.S with type t := t
 
 val kind : t -> Flambda_kind.t
 
-val alias_type_of : Flambda_kind.t -> Simple.t -> t
+val alias_type_of : Flambda_kind.t -> Simple.t -> Name_mode.t -> t
 
 val apply_coercion : t -> Coercion.t -> t Or_bottom.t
 
@@ -101,23 +101,23 @@ val these_naked_int32s : Int32.Set.t -> t
 val these_naked_int64s : Int64.Set.t -> t
 val these_naked_nativeints : Targetint.Set.t -> t
 
-val boxed_float_alias_to : naked_float:Variable.t -> t
-val boxed_int32_alias_to : naked_int32:Variable.t -> t
-val boxed_int64_alias_to : naked_int64:Variable.t -> t
-val boxed_nativeint_alias_to : naked_nativeint:Variable.t -> t
+val boxed_float_alias_to : naked_float:Variable.t -> Name_mode.t -> t
+val boxed_int32_alias_to : naked_int32:Variable.t -> Name_mode.t -> t
+val boxed_int64_alias_to : naked_int64:Variable.t -> Name_mode.t -> t
+val boxed_nativeint_alias_to : naked_nativeint:Variable.t -> Name_mode.t -> t
 
 val box_float : t -> t
 val box_int32 : t -> t
 val box_int64 : t -> t
 val box_nativeint : t -> t
 
-val tagged_immediate_alias_to : naked_immediate:Variable.t -> t
+val tagged_immediate_alias_to : naked_immediate:Variable.t -> Name_mode.t -> t
 val tag_immediate : t -> t
 
 val any_block : unit -> t
 
-val is_int_for_scrutinee : scrutinee:Simple.t -> t
-val get_tag_for_block : block:Simple.t -> t
+val is_int_for_scrutinee : scrutinee:Simple.t -> Name_mode.t -> t
+val get_tag_for_block : block:Simple.t -> Name_mode.t -> t
 
 (** Create a shape of blocks, for use as a meet constraint.
     Special tags are approximated to Unknown, as there is no good way
