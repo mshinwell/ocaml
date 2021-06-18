@@ -358,8 +358,6 @@ module Make (Head : Type_head_intf.S
 
   let meet ~force_to_kind ~to_type env kind ty1 ty2 t1 t2 : _ Or_bottom.t =
     let typing_env = Meet_env.env env in
-    let head1 = expand_head ~force_to_kind t1 typing_env kind in
-    let head2 = expand_head ~force_to_kind t2 typing_env kind in
     match
       TE.get_alias_then_canonical_simple_exn typing_env (to_type t1)
         ~min_name_mode:Name_mode.in_types
@@ -372,6 +370,10 @@ module Make (Head : Type_head_intf.S
         ~existing_simple_cannot_be_phantom:()
       with
       | exception Not_found ->
+        (* These [expand_head]s will not try to canonicalise any [Simple]s
+           since neither [t1] nor [t2] are [Equals] types. *)
+        let head1 = expand_head ~force_to_kind t1 typing_env kind in
+        let head2 = expand_head ~force_to_kind t2 typing_env kind in
         begin match meet_head_or_unknown_or_bottom env head1 head2 with
         | Left_head_unchanged -> Ok (ty1, TEE.empty ())
         | Right_head_unchanged -> Ok (ty2, TEE.empty ())
@@ -382,6 +384,11 @@ module Make (Head : Type_head_intf.S
           | Ok head -> Ok (to_type (create head), env_extension)
         end
       | simple2 ->
+        let head1 = expand_head ~force_to_kind t1 typing_env kind in
+        let head2 =
+          expand_head0 ~known_canonical_simple:(Some simple2) ~force_to_kind
+            t2 typing_env kind
+        in
         begin match meet_head_or_unknown_or_bottom env head1 head2 with
         | Left_head_unchanged ->
           let env_extension =
@@ -409,6 +416,11 @@ module Make (Head : Type_head_intf.S
           ~existing_simple_cannot_be_phantom:()
       with
       | exception Not_found ->
+        let head1 =
+          expand_head0 ~known_canonical_simple:(Some simple1) ~force_to_kind
+            t1 typing_env kind
+        in
+        let head2 = expand_head ~force_to_kind t2 typing_env kind in
         begin match meet_head_or_unknown_or_bottom env head1 head2 with
         | Left_head_unchanged ->
           Ok (to_type (create_equals simple1), TEE.empty ())
@@ -439,6 +451,14 @@ module Make (Head : Type_head_intf.S
         end else begin
           assert (not (Simple.equal simple1 simple2));
           let env = Meet_env.now_meeting env simple1 simple2 in
+          let head1 =
+            expand_head0 ~known_canonical_simple:(Some simple1) ~force_to_kind
+              t1 typing_env kind
+          in
+          let head2 =
+            expand_head0 ~known_canonical_simple:(Some simple2) ~force_to_kind
+              t2 typing_env kind
+          in
           (* In the following cases we may generate equations "pointing the
              wrong way", for example "y : =x" when [y] is the canonical
              element. This doesn't matter, however, because [Typing_env] sorts
