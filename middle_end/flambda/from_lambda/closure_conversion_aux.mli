@@ -122,6 +122,9 @@ module Acc : sig
   val code : t -> Flambda.Code.t Code_id.Map.t
   val free_names_of_current_function : t -> Name_occurrences.t
 
+  val seen_a_function : t -> bool
+  val with_seen_a_function : t -> bool -> t
+
   val add_declared_symbol
      : symbol:Symbol.t
     -> constant:Flambda.Static_const.t
@@ -175,7 +178,6 @@ module Function_decls : sig
       -> free_idents_of_body:Ident.Set.t
       -> stub:bool
       -> Recursive.t
-      -> contains_closures:bool
       -> t
 
 
@@ -193,7 +195,6 @@ module Function_decls : sig
     val stub : t -> bool
     val loc : t -> Lambda.scoped_location
     val recursive : t -> Recursive.t
-    val contains_closures : t -> bool
 
     (* Like [all_free_idents], but for just one function. *)
     val free_idents : t -> Ident.Set.t

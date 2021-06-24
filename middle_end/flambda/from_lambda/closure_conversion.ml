@@ -695,7 +695,6 @@ let close_one_function acc ~external_env ~by_closure_id decl
   let my_closure_id = closure_id in
   let my_depth = Depth_variable.create "my_depth" in
   let our_let_rec_ident = Function_decl.let_rec_ident decl in
-  let contains_closures = Function_decl.contains_closures decl in
   let compilation_unit = Compilation_unit.get_current_exn () in
   let code_id =
     Code_id.create ~name:(Closure_id.to_string closure_id) compilation_unit
@@ -773,6 +772,7 @@ let close_one_function acc ~external_env ~by_closure_id decl
         Kinded_parameter.create var (LC.value_kind kind))
       param_vars
   in
+  let acc = Acc.with_seen_a_function acc false in
   let acc, body =
     try body acc closure_env
     with Misc.Fatal_error -> begin
@@ -789,6 +789,7 @@ let close_one_function acc ~external_env ~by_closure_id decl
       raise Misc.Fatal_error
     end
   in
+  let contains_subfunctions = Acc.seen_a_function acc in
   let my_closure' = Simple.var my_closure in
   let acc, body =
     (* CR mshinwell: These Select_closure operations should maybe be inserted
@@ -853,7 +854,7 @@ let close_one_function acc ~external_env ~by_closure_id decl
        lifted during Closure (but will prevent inlining) but will likely have
        been lifted by our other check in [Inlining_cost] (thus preventing us
        seeing they were originally there). *)
-    if contains_closures
+    if contains_subfunctions
       && !Clflags.Flambda.Expert.fallback_inlining_heuristic
     then Never_inline
     else LC.inline_attribute (Function_decl.inline decl)
@@ -890,8 +891,9 @@ let close_one_function acc ~external_env ~by_closure_id decl
       ~cost_metrics
       ~inlining_arguments:Inlining_arguments.unknown
   in
-  Acc.add_code ~code_id ~code acc,
-  Closure_id.Map.add my_closure_id fun_decl by_closure_id
+  let acc = Acc.add_code ~code_id ~code acc in
+  let acc = Acc.with_seen_a_function acc true in
+  acc, Closure_id.Map.add my_closure_id fun_decl by_closure_id
 
 let close_functions acc external_env function_declarations =
   let compilation_unit = Compilation_unit.get_current_exn () in

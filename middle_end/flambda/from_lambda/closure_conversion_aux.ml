@@ -192,6 +192,7 @@ module Acc = struct
     code : Flambda.Code.t Code_id.Map.t;
     free_names_of_current_function : Name_occurrences.t;
     cost_metrics : Flambda.Cost_metrics.t;
+    seen_a_function : bool;
   }
 
   let cost_metrics t = t.cost_metrics
@@ -199,12 +200,17 @@ module Acc = struct
     { t with cost_metrics = Flambda.Cost_metrics.(+) t.cost_metrics metrics }
   let with_cost_metrics cost_metrics t = { t with cost_metrics }
 
+  let seen_a_function t = t.seen_a_function
+  let with_seen_a_function t seen_a_function =
+    { t with seen_a_function; }
+
   let empty = {
     declared_symbols = [];
     shareable_constants = Flambda.Static_const.Map.empty;
     code = Code_id.Map.empty;
     free_names_of_current_function = Name_occurrences.empty;
     cost_metrics = Flambda.Cost_metrics.zero;
+    seen_a_function = false;
   }
 
   let declared_symbols t = t.declared_symbols
@@ -265,12 +271,11 @@ module Function_decls = struct
       loc : Lambda.scoped_location;
       stub : bool;
       recursive : Recursive.t;
-      contains_closures : bool;
     }
 
     let create ~let_rec_ident ~closure_id ~kind ~params ~return
         ~return_continuation ~exn_continuation ~body ~attr
-        ~loc ~free_idents_of_body ~stub recursive ~contains_closures =
+        ~loc ~free_idents_of_body ~stub recursive =
       let let_rec_ident =
         match let_rec_ident with
         | None -> Ident.create_local "unnamed_function"
@@ -289,7 +294,6 @@ module Function_decls = struct
         loc;
         stub;
         recursive;
-        contains_closures;
       }
 
     let let_rec_ident t = t.let_rec_ident
@@ -307,7 +311,6 @@ module Function_decls = struct
     let stub t = t.attr.stub
     let loc t = t.loc
     let recursive t = t.recursive
-    let contains_closures t = t.contains_closures
   end
 
   type t = {
