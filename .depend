@@ -3200,27 +3200,6 @@ lambda/debuginfo.cmi : \
     parsing/location.cmi \
     typing/ident.cmi \
     parsing/asttypes.cmi
-lambda/dissect_letrec.cmo : \
-    typing/types.cmi \
-    lambda/printlambda.cmi \
-    typing/primitive.cmi \
-    utils/misc.cmi \
-    lambda/lambda.cmi \
-    typing/ident.cmi \
-    parsing/asttypes.cmi \
-    lambda/dissect_letrec.cmi
-lambda/dissect_letrec.cmx : \
-    typing/types.cmx \
-    lambda/printlambda.cmx \
-    typing/primitive.cmx \
-    utils/misc.cmx \
-    lambda/lambda.cmx \
-    typing/ident.cmx \
-    parsing/asttypes.cmi \
-    lambda/dissect_letrec.cmi
-lambda/dissect_letrec.cmi : \
-    lambda/lambda.cmi \
-    typing/ident.cmi
 lambda/lambda.cmo : \
     typing/types.cmi \
     typing/primitive.cmi \
@@ -3343,7 +3322,6 @@ lambda/simplif.cmo : \
     parsing/location.cmi \
     lambda/lambda.cmi \
     typing/ident.cmi \
-    lambda/dissect_letrec.cmi \
     lambda/debuginfo.cmi \
     utils/clflags.cmi \
     parsing/asttypes.cmi \
@@ -3354,7 +3332,6 @@ lambda/simplif.cmx : \
     parsing/location.cmx \
     lambda/lambda.cmx \
     typing/ident.cmx \
-    lambda/dissect_letrec.cmx \
     lambda/debuginfo.cmx \
     utils/clflags.cmx \
     parsing/asttypes.cmi \
@@ -3528,9 +3505,9 @@ lambda/translmod.cmo : \
     lambda/lambda.cmi \
     typing/ident.cmi \
     typing/env.cmi \
-    lambda/dissect_letrec.cmi \
     lambda/debuginfo.cmi \
     typing/ctype.cmi \
+    utils/config.cmi \
     utils/clflags.cmi \
     parsing/asttypes.cmi \
     lambda/translmod.cmi
@@ -3551,9 +3528,9 @@ lambda/translmod.cmx : \
     lambda/lambda.cmx \
     typing/ident.cmx \
     typing/env.cmx \
-    lambda/dissect_letrec.cmx \
     lambda/debuginfo.cmx \
     typing/ctype.cmx \
+    utils/config.cmx \
     utils/clflags.cmx \
     parsing/asttypes.cmi \
     lambda/translmod.cmi
@@ -5003,6 +4980,27 @@ middle_end/flambda/from_lambda/closure_conversion_aux.cmi : \
     middle_end/flambda/basic/code_id.cmi \
     middle_end/flambda/basic/closure_id.cmi \
     middle_end/flambda/naming/bindable_let_bound.cmi
+middle_end/flambda/from_lambda/dissect_letrec.cmo : \
+    typing/types.cmi \
+    lambda/printlambda.cmi \
+    typing/primitive.cmi \
+    utils/misc.cmi \
+    lambda/lambda.cmi \
+    typing/ident.cmi \
+    parsing/asttypes.cmi \
+    middle_end/flambda/from_lambda/dissect_letrec.cmi
+middle_end/flambda/from_lambda/dissect_letrec.cmx : \
+    typing/types.cmx \
+    lambda/printlambda.cmx \
+    typing/primitive.cmx \
+    utils/misc.cmx \
+    lambda/lambda.cmx \
+    typing/ident.cmx \
+    parsing/asttypes.cmi \
+    middle_end/flambda/from_lambda/dissect_letrec.cmi
+middle_end/flambda/from_lambda/dissect_letrec.cmi : \
+    lambda/lambda.cmi \
+    typing/ident.cmi
 middle_end/flambda/from_lambda/lambda_conversions.cmo : \
     middle_end/flambda/basic/trap_action.cmi \
     utils/targetint.cmi \
@@ -5058,12 +5056,12 @@ middle_end/flambda/from_lambda/lambda_to_flambda.cmo : \
     lambda/lambda.cmi \
     typing/ident.cmi \
     middle_end/flambda/terms/flambda_unit.cmi \
+    middle_end/flambda/from_lambda/dissect_letrec.cmi \
     middle_end/flambda/basic/continuation.cmi \
     middle_end/flambda/compilenv_deps/compilation_unit.cmi \
     middle_end/flambda/basic/closure_id.cmi \
     middle_end/flambda/from_lambda/closure_conversion_aux.cmi \
     middle_end/flambda/from_lambda/closure_conversion.cmi \
-    utils/clflags.cmi \
     parsing/asttypes.cmi \
     middle_end/flambda/from_lambda/lambda_to_flambda.cmi
 middle_end/flambda/from_lambda/lambda_to_flambda.cmx : \
@@ -5082,12 +5080,12 @@ middle_end/flambda/from_lambda/lambda_to_flambda.cmx : \
     lambda/lambda.cmx \
     typing/ident.cmx \
     middle_end/flambda/terms/flambda_unit.cmx \
+    middle_end/flambda/from_lambda/dissect_letrec.cmx \
     middle_end/flambda/basic/continuation.cmx \
     middle_end/flambda/compilenv_deps/compilation_unit.cmx \
     middle_end/flambda/basic/closure_id.cmx \
     middle_end/flambda/from_lambda/closure_conversion_aux.cmx \
     middle_end/flambda/from_lambda/closure_conversion.cmx \
-    utils/clflags.cmx \
     parsing/asttypes.cmi \
     middle_end/flambda/from_lambda/lambda_to_flambda.cmi
 middle_end/flambda/from_lambda/lambda_to_flambda.cmi : \

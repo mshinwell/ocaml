@@ -573,20 +573,3 @@ let dissect_letrec ~bindings ~body =
     with Bug ->
       Misc.fatal_errorf "let-rec@.%a@."
         Printlambda.lambda (Lletrec (bindings, body))
-
-let preallocate_letrec ~bindings ~body =
-  let bindings = List.rev bindings in
-  let body_with_initialization =
-  List.fold_left
-    (fun body (id, def, _size) -> Lsequence (update_dummy id def, body))
-    body bindings
-  in
-  List.fold_left
-    (fun body (id, _def, size) ->
-       let desc =
-         Primitive.simple ~name:"caml_alloc_dummy" ~arity:1 ~alloc:true
-       in
-       let size : lambda = Lconst (Const_base (Const_int size)) in
-       Llet (Strict, Pgenval, id,
-             Lprim (Pccall desc, [size], Loc_unknown), body))
-    body_with_initialization bindings

@@ -26,7 +26,3 @@ val dissect_letrec :
   dissected
 (** [dissect_letrec] assumes that bindings have not been dissected yet.
     In particular, that no arguments of function call are recursive. *)
-
-val preallocate_letrec :
-  bindings:(Ident.t * Lambda.lambda * int) list -> body:Lambda.lambda ->
-  Lambda.lambda

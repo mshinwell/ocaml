@@ -76,7 +76,6 @@ LAMBDA=lambda/tag.cmo lambda/debuginfo.cmo \
   lambda/switch.cmo lambda/matching.cmo \
   lambda/translobj.cmo lambda/translattribute.cmo \
   lambda/translprim.cmo lambda/translcore.cmo \
-  lambda/dissect_letrec.cmo \
   lambda/translclass.cmo lambda/translmod.cmo \
   lambda/simplif.cmo lambda/runtimedef.cmo
 LAMBDA_CMI=
@@ -368,6 +367,7 @@ MIDDLE_END_FLAMBDA_FROM_LAMBDA=\
   middle_end/flambda/from_lambda/lambda_to_flambda_primitives_helpers.cmo \
   middle_end/flambda/from_lambda/lambda_to_flambda_primitives.cmo \
   middle_end/flambda/from_lambda/closure_conversion.cmo \
+  middle_end/flambda/from_lambda/dissect_letrec.cmo \
   middle_end/flambda/from_lambda/lambda_to_flambda.cmo
 
 

@@ -717,14 +717,18 @@ let rec cps_non_tail acc env ccenv (lam : L.lambda)
       ~handler:(fun acc env ccenv ->
         cps_non_tail acc env ccenv body k k_exn)
   | Lletrec (bindings, body) ->
-    let function_declarations =
-      cps_function_bindings env bindings
-    in
-    let body = fun acc ccenv ->
-      cps_non_tail acc env ccenv body k k_exn
-    in
-    CC.close_let_rec acc ccenv
-      ~function_declarations ~body
+    begin match Dissect_letrec.dissect_letrec ~bindings ~body with
+    | Unchanged ->
+      let function_declarations =
+        cps_function_bindings env bindings
+      in
+      let body = fun acc ccenv ->
+        cps_non_tail acc env ccenv body k k_exn
+      in
+      CC.close_let_rec acc ccenv
+        ~function_declarations ~body
+    | Dissected lam -> cps_non_tail acc env ccenv lam k k_exn
+    end
   | Lprim (prim, args, loc) ->
     begin match transform_primitive env prim args loc with
     | Primitive (prim, args, loc) ->
@@ -1073,14 +1077,18 @@ and cps_tail acc env ccenv (lam : L.lambda) (k : Continuation.t)
       ~handler:(fun acc env ccenv ->
         cps_tail acc env ccenv body k k_exn)
   | Lletrec (bindings, body) ->
-    let function_declarations =
-      cps_function_bindings env bindings
-    in
-    let body = fun acc ccenv ->
-      cps_tail acc env ccenv body k k_exn
-    in
-    CC.close_let_rec acc ccenv
-      ~function_declarations ~body
+    begin match Dissect_letrec.dissect_letrec ~bindings ~body with
+    | Unchanged ->
+      let function_declarations =
+        cps_function_bindings env bindings
+      in
+      let body = fun acc ccenv ->
+        cps_tail acc env ccenv body k k_exn
+      in
+      CC.close_let_rec acc ccenv
+        ~function_declarations ~body
+    | Dissected lam -> cps_tail acc env ccenv lam k k_exn
+    end
   | Lprim (prim, args, loc) ->
     begin match transform_primitive env prim args loc with
     | Primitive (prim, args, loc) ->
