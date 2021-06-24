@@ -260,9 +260,31 @@ let rec prepare_letrec
        | Some current_let ->
            { letrec with consts = (current_let.ident, const) :: letrec.consts }
        | None -> dead_code lam letrec)
-  | Llet (Variable, _, _, _, _) ->
-      (* This is not supposed to appear at this point *)
-      assert false
+  | Llet (Variable, k, id, def, body) ->
+      let letrec = prepare_letrec recursive_set current_let body letrec in
+      (* Variable let comes from mutable values, and reading from it is
+         considered as inspections by Typecore.check_recursive_expression.
+         This means that either:
+         - the value does not depend on any recursive value,
+         - or it is not read in the let-rec
+      *)
+
+      (* TODO: binder dans une variable temporaire *)
+
+      let free_vars_def = Lambda.free_variables def in
+      if Ident.Set.disjoint free_vars_def recursive_set then
+        let pre ~tail : Lambda.lambda =
+          Llet (Variable, k, id, def, letrec.pre ~tail)
+        in
+        { letrec with pre }
+      else begin
+        let free_vars_body = Lambda.free_variables body in
+        (* This is infrequent enough for not caring
+           about performances *)
+        assert(not (Ident.Set.mem id free_vars_body));
+        (* It is not used, we only keep the effect *)
+        { letrec with effects = Lsequence (def, letrec.effects) }
+      end
   | Llet ((Strict | Alias | StrictOpt) as let_kind, value_kind, id, def, body)
     ->
       let letbound = Ident.Set.add id letrec.letbound in
