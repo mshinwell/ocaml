@@ -71,7 +71,7 @@ TYPING_CMI=\
   typing/annot.cmi \
   typing/outcometree.cmi
 
-LAMBDA=lambda/tag.cmo lambda/debuginfo.cmo \
+LAMBDA=lambda/debuginfo.cmo \
   lambda/lambda.cmo lambda/printlambda.cmo \
   lambda/switch.cmo lambda/matching.cmo \
   lambda/translobj.cmo lambda/translattribute.cmo \
@@ -179,6 +179,7 @@ MIDDLE_END_CLOSURE=\
 MIDDLE_END_CLOSURE_CMI=
 
 MIDDLE_END_FLAMBDA_COMPILENV_DEPS=\
+  middle_end/flambda/compilenv_deps/tag.cmo \
   middle_end/flambda/compilenv_deps/table_by_int_id.cmo \
   middle_end/flambda/compilenv_deps/patricia_tree.cmo \
   middle_end/flambda/compilenv_deps/linkage_name.cmo \

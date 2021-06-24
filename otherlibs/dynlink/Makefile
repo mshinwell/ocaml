@@ -113,7 +113,6 @@ COMPILERLIBS_SOURCES=\
   typing/persistent_env.ml \
   typing/env.ml \
   lambda/debuginfo.ml \
-  lambda/tag.ml \
   lambda/lambda.ml \
   lambda/runtimedef.ml \
   bytecomp/instruct.ml \
