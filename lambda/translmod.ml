@@ -233,6 +233,7 @@ let record_primitive = function
    upstreamed.  At that point this helper can move into that module. *)
 
 let preallocate_letrec ~bindings ~body =
+  assert Config.flambda;
   let caml_update_dummy_prim =
     Primitive.simple ~name:"caml_update_dummy" ~arity:2 ~alloc:true
   in
