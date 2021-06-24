@@ -221,8 +221,6 @@ val equal_value_kind : value_kind -> value_kind -> bool
 
 val equal_boxed_integer : boxed_integer -> boxed_integer -> bool
 
-val primitive_can_raise : primitive -> bool
-
 type structured_constant =
     Const_base of constant
   | Const_block of int * structured_constant list

@@ -593,6 +593,121 @@ let wrap_return_continuation acc env ccenv (apply : IR.apply) =
         ~body
         ~handler
 
+let primitive_can_raise (prim : Lambda.primitive) =
+  match prim with
+  | Pccall _
+  | Praise _
+  | Parrayrefs _
+  | Parraysets _
+  | Pmodint _
+  | Pdivint _
+  | Pstringrefs
+  | Pbytesrefs
+  | Pbytessets
+  | Pstring_load_16 false
+  | Pstring_load_32 false
+  | Pstring_load_64 false
+  | Pbytes_load_16 false
+  | Pbytes_load_32 false
+  | Pbytes_load_64 false
+  | Pbytes_set_16 false
+  | Pbytes_set_32 false
+  | Pbytes_set_64 false
+  | Pbigstring_load_16 false
+  | Pbigstring_load_32 false
+  | Pbigstring_load_64 false
+  | Pbigstring_set_16 false
+  | Pbigstring_set_32 false
+  | Pbigstring_set_64 false
+  | Pdivbint { is_safe = Safe; _ }
+  | Pmodbint { is_safe = Safe; _ }
+  | Pbigarrayref (false, _, _, _)
+  | Pbigarrayset (false, _, _, _)
+  (* These bigarray primitives are translated into c-calls which may
+     raise even if the unsafe flag is true *)
+  | Pbigarrayref (_, _, Pbigarray_unknown, _)
+  | Pbigarrayset (_, _, Pbigarray_unknown, _)
+  | Pbigarrayref (_, _, _, Pbigarray_unknown_layout)
+  | Pbigarrayset (_, _, _, Pbigarray_unknown_layout)
+    -> true
+  | Pidentity
+  | Pbytes_to_string
+  | Pbytes_of_string
+  | Pignore
+  | Prevapply
+  | Pdirapply
+  | Pgetglobal _
+  | Psetglobal _
+  | Pmakeblock _
+  | Pmakefloatblock _
+  | Pfield _
+  | Pfield_computed _
+  | Psetfield _
+  | Psetfield_computed _
+  | Pfloatfield _
+  | Psetfloatfield _
+  | Pduprecord _
+  | Psequand | Psequor | Pnot
+  | Pnegint | Paddint | Psubint | Pmulint
+  | Pandint | Porint | Pxorint
+  | Plslint | Plsrint | Pasrint
+  | Pintcomp _
+  | Pcompare_ints | Pcompare_floats | Pcompare_bints _
+  | Poffsetint _
+  | Poffsetref _
+  | Pintoffloat | Pfloatofint
+  | Pnegfloat | Pabsfloat
+  | Paddfloat | Psubfloat | Pmulfloat | Pdivfloat
+  | Pfloatcomp _
+  | Pstringlength | Pstringrefu
+  | Pbyteslength | Pbytesrefu | Pbytessetu
+  | Pmakearray _
+  | Pduparray _
+  | Parraylength _
+  | Parrayrefu _
+  | Parraysetu _
+  | Pisint
+  | Pisout
+  | Pbintofint _
+  | Pintofbint _
+  | Pcvtbint _
+  | Pnegbint _
+  | Paddbint _
+  | Psubbint _
+  | Pmulbint _
+  | Pdivbint _
+  | Pmodbint _
+  | Pandbint _
+  | Porbint _
+  | Pxorbint _
+  | Plslbint _
+  | Plsrbint _
+  | Pasrbint _
+  | Pbintcomp _
+  | Pbigarraydim _
+  | Pbigarrayref (true, _, _, _)
+  | Pbigarrayset (true, _, _, _)
+  | Pstring_load_16 true
+  | Pstring_load_32 true
+  | Pstring_load_64 true
+  | Pbytes_load_16 true
+  | Pbytes_load_32 true
+  | Pbytes_load_64 true
+  | Pbytes_set_16 true
+  | Pbytes_set_32 true
+  | Pbytes_set_64 true
+  | Pbigstring_load_16 true
+  | Pbigstring_load_32 true
+  | Pbigstring_load_64 true
+  | Pbigstring_set_16 true
+  | Pbigstring_set_32 true
+  | Pbigstring_set_64 true
+  | Pctconst _
+  | Pbswap16
+  | Pbbswap _
+  | Pint_as_pointer
+  | Popaque -> false
+
 let rec cps_non_tail acc env ccenv (lam : L.lambda)
           (k : Acc.t -> Env.t -> CCenv.t
             -> Ident.t -> Acc.t * Expr_with_acc.t)
@@ -689,7 +804,7 @@ let rec cps_non_tail acc env ccenv (lam : L.lambda)
     | Primitive (prim, args, loc) ->
       (* This case avoids extraneous continuations. *)
       let exn_continuation : IR.exn_continuation option =
-        if L.primitive_can_raise prim then
+        if primitive_can_raise prim then
           Some {
             exn_handler = k_exn;
             extra_args = extra_args_for_exn_continuation env k_exn;
@@ -735,7 +850,7 @@ let rec cps_non_tail acc env ccenv (lam : L.lambda)
       let name = Printlambda.name_of_primitive prim in
       let result_var = Ident.create_local name in
       let exn_continuation : IR.exn_continuation option =
-        if L.primitive_can_raise prim then
+        if primitive_can_raise prim then
           Some {
             exn_handler = k_exn;
             extra_args = extra_args_for_exn_continuation env k_exn;
@@ -1026,7 +1141,7 @@ and cps_tail acc env ccenv (lam : L.lambda) (k : Continuation.t)
     | Primitive (prim, args, loc) ->
       (* This case avoids extraneous continuations. *)
       let exn_continuation : IR.exn_continuation option =
-        if L.primitive_can_raise prim then
+        if primitive_can_raise prim then
           Some {
             exn_handler = k_exn;
             extra_args = extra_args_for_exn_continuation env k_exn;
@@ -1096,7 +1211,7 @@ and cps_tail acc env ccenv (lam : L.lambda) (k : Continuation.t)
       let name = Printlambda.name_of_primitive prim in
       let result_var = Ident.create_local name in
       let exn_continuation : IR.exn_continuation option =
-        if L.primitive_can_raise prim then
+        if primitive_can_raise prim then
           Some {
             exn_handler = k_exn;
             extra_args = extra_args_for_exn_continuation env k_exn;
