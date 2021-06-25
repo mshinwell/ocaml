@@ -92,4 +92,4 @@ val convert_field_read_semantics
 
 val convert_lambda_block_size
    : Lambda.block_size
-  -> Targetint.OCaml.t Or_unknown.t
+  -> Target_imm.Imm.t Or_unknown.t

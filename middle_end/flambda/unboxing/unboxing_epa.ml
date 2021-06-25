@@ -103,12 +103,12 @@ let extra_arg_for_is_int = function
 let extra_arg_for_ctor ~typing_env_at_use = function
   | Not_a_constant_constructor ->
     EPA.Extra_arg.Already_in_scope (
-      Simple.untagged_const_int (Targetint.OCaml.of_int 0))
+      Simple.untagged_const_int (Target_imm.Imm.of_int 0))
   | Maybe_constant_constructor { arg_being_unboxed; _ } ->
     match type_of_arg_being_unboxed arg_being_unboxed with
     | None ->
       EPA.Extra_arg.Already_in_scope (
-        Simple.untagged_const_int (Targetint.OCaml.of_int 0))
+        Simple.untagged_const_int (Target_imm.Imm.of_int 0))
     | Some arg_type ->
       match T.prove_could_be_tagging_of_simple typing_env_at_use
               ~min_name_mode:Name_mode.normal arg_type with
@@ -120,7 +120,7 @@ let extra_arg_for_ctor ~typing_env_at_use = function
            case, and thus as in other cases, we only need to provide
            well-kinded values. *)
         EPA.Extra_arg.Already_in_scope (
-          Simple.untagged_const_int (Targetint.OCaml.of_int 0))
+          Simple.untagged_const_int (Target_imm.Imm.of_int 0))
 
 let extra_args_for_const_ctor_of_variant
       (const_ctors_decision : U.const_ctors_decision)
@@ -272,7 +272,7 @@ and compute_extra_args_for_one_decision_and_use_aux ~(pass : U.pass)
 and compute_extra_args_for_block ~pass
       rewrite_id ~typing_env_at_use arg_being_unboxed
       tag fields : U.decision =
-  let size = Or_unknown.Known (Targetint.OCaml.of_int (List.length fields)) in
+  let size = Or_unknown.Known (Target_imm.Imm.of_int (List.length fields)) in
   let bak, invalid_const =
     if Tag.equal tag Tag.double_array_tag then
       P.Block_access_kind.Naked_floats { size; },
@@ -375,7 +375,7 @@ and compute_extra_args_for_variant ~pass
   let tag_extra_arg =
     tag_at_use_site
     |> Tag.Scannable.to_targetint
-    |> Targetint.OCaml.of_targetint
+    |> Target_imm.Imm.of_targetint
     |> Const.untagged_const_int
     |> Simple.const
     |> (fun x -> EPA.Extra_arg.Already_in_scope x)
@@ -388,10 +388,10 @@ and compute_extra_args_for_variant ~pass
     Tag.Scannable.Map.mapi (fun tag_decision block_fields ->
       let size = List.length block_fields in
       (* See doc/unboxing.md about invalid constants, poison and aliases. *)
-      let invalid_const = Const.const_int (Targetint.OCaml.of_int 0xbaba) in
+      let invalid_const = Const.const_int (Target_imm.Imm.of_int 0xbaba) in
       let bak : Flambda_primitive.Block_access_kind.t =
         Values {
-          size = Known (Targetint.OCaml.of_int size);
+          size = Known (Target_imm.Imm.of_int size);
           tag = tag_decision;
           field_kind = Any_value;
         }

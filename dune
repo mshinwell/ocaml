@@ -47,16 +47,14 @@
  (flags (:standard -principal -nostdlib))
  (libraries stdlib)
  (modules_without_implementation
-   annot asttypes cmo_format outcometree parsetree targetint_intf)
+   annot asttypes cmo_format outcometree parsetree)
  (modules
    ;; UTILS
    config build_path_prefix_map misc identifiable numbers arg_helper clflags
    profile terminfo ccomp warnings consistbl strongly_connected_components
-   one_bit_fewer targetint load_path
+   targetint load_path
    int_replace_polymorphic_compare printing_cache
    binutils local_store
-   ; manual update: mli only files
-   targetint_intf
 
    ;; PARSING
    location longident docstrings syntaxerr ast_helper camlinternalMenhirLib

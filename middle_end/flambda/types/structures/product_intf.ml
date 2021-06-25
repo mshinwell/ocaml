@@ -26,7 +26,7 @@ module type S_base = sig
 
   val create_top : Flambda_kind.t -> t
 
-  val width : t -> Targetint.OCaml.t
+  val width : t -> Target_imm.Imm.t
 
   val components : t -> flambda_type list
 

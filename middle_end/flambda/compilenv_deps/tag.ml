@@ -46,17 +46,21 @@ let create_exn tag =
   else
     tag
 
-let create_from_targetint ti =
-  let min_tag = Targetint.OCaml.of_int min_tag in
-  let max_tag = Targetint.OCaml.of_int max_tag in
-  if Targetint.OCaml.compare ti min_tag >= 0
-    && Targetint.OCaml.compare ti max_tag <= 0
-  then Some (Targetint.OCaml.to_int ti)
+let create_from_targetint_imm ti =
+  let min_tag = Target_imm.Imm.of_int min_tag in
+  let max_tag = Target_imm.Imm.of_int max_tag in
+  if Target_imm.Imm.compare ti min_tag >= 0
+    && Target_imm.Imm.compare ti max_tag <= 0
+  then Some (Target_imm.Imm.to_int ti)
   else None
+
+let create_from_targetint imm =
+  create_from_targetint_imm (Target_imm.to_targetint imm)
 
 let to_int t = t
 let to_targetint t = Targetint.of_int (to_int t)
-let to_targetint_ocaml t = Targetint.OCaml.of_int (to_int t)
+let to_targetint_ocaml t = Target_imm.Imm.of_int (to_int t)
+let to_target_imm t = Target_imm.int (to_targetint_ocaml t)
 
 let zero = 0
 let string_tag = Obj.string_tag

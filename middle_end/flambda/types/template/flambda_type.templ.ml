@@ -416,7 +416,7 @@ let prove_naked_immediates env t : Target_imm.Set.t proof =
     | Proved tags ->
       let is =
         Tag.Set.fold (fun tag is ->
-            Target_imm.Set.add (Target_imm.tag tag) is)
+            Target_imm.Set.add (Tag.to_target_imm tag) is)
           tags
           Target_imm.Set.empty
       in
@@ -471,7 +471,7 @@ let prove_equals_single_tagged_immediate env t : _ proof =
   | Unknown -> Unknown
   | Invalid -> Invalid
 
-let prove_tags_and_sizes env t : Targetint.OCaml.t Tag.Map.t proof =
+let prove_tags_and_sizes env t : Target_imm.Imm.t Tag.Map.t proof =
   let wrong_kind () =
     Misc.fatal_errorf "Kind error: expected [Value]:@ %a" print t
   in
@@ -507,7 +507,7 @@ let prove_tags_and_sizes env t : Targetint.OCaml.t Tag.Map.t proof =
   | Rec_info _ -> wrong_kind ()
 
 let prove_unique_tag_and_size env t
-     : (Tag.t * Targetint.OCaml.t) proof_allowing_kind_mismatch =
+     : (Tag.t * Target_imm.Imm.t) proof_allowing_kind_mismatch =
   if not (Flambda_kind.equal (kind t) Flambda_kind.value) then
     Wrong_kind
   else
@@ -521,7 +521,7 @@ let prove_unique_tag_and_size env t
 
 type variant_like_proof = {
   const_ctors : Target_imm.Set.t Or_unknown.t;
-  non_const_ctors_with_sizes : Targetint.OCaml.t Tag.Scannable.Map.t;
+  non_const_ctors_with_sizes : Target_imm.Imm.t Tag.Scannable.Map.t;
 }
 
 let prove_variant_like env t : variant_like_proof proof_allowing_kind_mismatch =
@@ -1029,7 +1029,7 @@ let reify ?allowed_if_free_vars_defined_in ?additional_free_var_criterion
           begin match Row_like.For_blocks.get_singleton blocks with
           | None -> try_canonical_simple ()
           | Some ((tag, size), field_types) ->
-            assert (Targetint.OCaml.equal size
+            assert (Target_imm.Imm.equal size
                       (Product.Int_indexed.width field_types));
             (* CR mshinwell: Could recognise other things, e.g. tagged
                immediates and float arrays, supported by [Static_part]. *)
@@ -1221,7 +1221,7 @@ let reify ?allowed_if_free_vars_defined_in ?additional_free_var_criterion
       | Proved tags ->
         let is =
           Tag.Set.fold (fun tag is ->
-              Target_imm.Set.add (Target_imm.tag tag) is)
+              Target_imm.Set.add (Tag.to_target_imm tag) is)
             tags
             Target_imm.Set.empty
         in

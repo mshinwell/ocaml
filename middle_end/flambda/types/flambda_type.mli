@@ -391,7 +391,7 @@ val immutable_block
     given variable. *)
 val immutable_block_with_size_at_least
    : tag:Tag.t Or_unknown.t
-  -> n:Targetint.OCaml.t
+  -> n:Target_imm.Imm.t
   -> field_kind:Flambda_kind.t
   -> field_n_minus_one:Variable.t
   -> t
@@ -404,7 +404,7 @@ val variant
 val open_variant_from_const_ctors_type : const_ctors:t -> t
 
 val open_variant_from_non_const_ctor_with_size_at_least
-   : n:Targetint.OCaml.t
+   : n:Target_imm.Imm.t
   -> field_n_minus_one:Variable.t
   -> t
 
@@ -521,7 +521,7 @@ val prove_naked_nativeints : Typing_env.t -> t -> Targetint.Set.t proof
 
 type variant_like_proof = private {
   const_ctors : Target_imm.Set.t Or_unknown.t;
-  non_const_ctors_with_sizes : Targetint.OCaml.t Tag.Scannable.Map.t;
+  non_const_ctors_with_sizes : Target_imm.Imm.t Tag.Scannable.Map.t;
 }
 
 val prove_variant_like
@@ -574,12 +574,12 @@ val prove_boxed_nativeints : Typing_env.t -> t -> Targetint.Set.t proof
 val prove_tags_and_sizes
    : Typing_env.t
   -> t
-  -> Targetint.OCaml.t Tag.Map.t proof
+  -> Target_imm.Imm.t Tag.Map.t proof
 
 val prove_unique_tag_and_size
    : Typing_env.t
   -> t
-  -> (Tag.t * Targetint.OCaml.t) proof_allowing_kind_mismatch
+  -> (Tag.t * Target_imm.Imm.t) proof_allowing_kind_mismatch
 
 val prove_is_int : Typing_env.t -> t -> bool proof
 

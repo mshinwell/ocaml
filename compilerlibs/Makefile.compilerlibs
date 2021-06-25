@@ -30,7 +30,6 @@ UTILS=utils/config.cmo utils/build_path_prefix_map.cmo utils/misc.cmo \
 	utils/load_path.cmo \
 	utils/terminfo.cmo utils/ccomp.cmo utils/warnings.cmo \
 	utils/consistbl.cmo utils/strongly_connected_components.cmo \
-        utils/one_bit_fewer.cmo \
 	utils/targetint.cmo utils/int_replace_polymorphic_compare.cmo \
 	utils/domainstate.cmo utils/binutils.cmo utils/printing_cache.cmo
 UTILS_CMI=
@@ -178,12 +177,13 @@ MIDDLE_END_CLOSURE=\
 MIDDLE_END_CLOSURE_CMI=
 
 MIDDLE_END_FLAMBDA_COMPILENV_DEPS=\
+  middle_end/flambda/compilenv_deps/one_bit_fewer.cmo \
   middle_end/flambda/compilenv_deps/lmap.cmo \
+  middle_end/flambda/compilenv_deps/target_imm.cmo \
   middle_end/flambda/compilenv_deps/tag.cmo \
   middle_end/flambda/compilenv_deps/table_by_int_id.cmo \
   middle_end/flambda/compilenv_deps/patricia_tree.cmo \
   middle_end/flambda/compilenv_deps/linkage_name.cmo \
-  middle_end/flambda/compilenv_deps/target_imm.cmo \
   middle_end/flambda/compilenv_deps/flambda_colours.cmo \
   middle_end/flambda/compilenv_deps/compilation_unit.cmo \
   middle_end/flambda/compilenv_deps/rec_info.cmo \

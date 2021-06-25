@@ -68,7 +68,6 @@ NATOBJS=native/dynlink_compilerlibs.cmx dynlink_types.cmx \
 COMPILERLIBS_INTFS=\
   parsing/asttypes.mli \
   parsing/parsetree.mli \
-  utils/targetint_intf.mli \
   typing/outcometree.mli \
   file_formats/cmo_format.mli \
   file_formats/cmxs_format.mli
@@ -81,7 +80,6 @@ COMPILERLIBS_SOURCES=\
   utils/misc.ml \
   utils/identifiable.ml \
   utils/numbers.ml \
-  utils/one_bit_fewer.ml \
   utils/targetint.ml \
   utils/arg_helper.ml \
   utils/clflags.ml \

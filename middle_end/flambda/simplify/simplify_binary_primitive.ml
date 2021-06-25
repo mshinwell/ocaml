@@ -441,7 +441,7 @@ end = struct
 
   let op_lhs_unknown (op : P.int_shift_op) ~rhs
         : Num.t binary_arith_outcome_for_one_side_only =
-    let module O = Targetint.OCaml in
+    let module O = Target_imm.Imm in
     let rhs = Target_imm.to_targetint rhs in
     match op with
     | Lsl | Lsr | Asr ->
@@ -540,7 +540,7 @@ end = struct
       | Ge -> Some (bool (Num.compare n1 n2 >= 0))
       end
     | Yielding_int_like_compare_functions ->
-      let int i = Target_imm.int (Targetint.OCaml.of_int i) in
+      let int i = Target_imm.int (Target_imm.Imm.of_int i) in
       let c = Num.compare n1 n2 in
       if c < 0 then Some (int (-1))
       else if c = 0 then Some (int 0)
@@ -617,7 +617,7 @@ end = struct
       | Ge -> Some (bool (Num.compare_unsigned n1 n2 >= 0))
       end
     | Yielding_int_like_compare_functions ->
-      let int i = Target_imm.int (Targetint.OCaml.of_int i) in
+      let int i = Target_imm.int (Target_imm.Imm.of_int i) in
       let c = Num.compare_unsigned n1 n2 in
       if c < 0 then Some (int (-1))
       else if c = 0 then Some (int 0)
@@ -805,7 +805,7 @@ end = struct
           Some (bool (F.IEEE_semantics.compare n1 n2 >= 0))
       end
     | Yielding_int_like_compare_functions ->
-      let int i = Target_imm.int (Targetint.OCaml.of_int i) in
+      let int i = Target_imm.int (Target_imm.Imm.of_int i) in
       let c = F.IEEE_semantics.compare n1 n2 in
       if c < 0 then Some (int (-1))
       else if c = 0 then Some (int 0)
@@ -936,8 +936,8 @@ let simplify_immutable_block_load (access_kind : P.Block_access_kind.t)
         match Flambda_features.Expert.max_block_size_for_projections () with
         | None -> false
         | Some max_size ->
-          let max_size = Targetint.OCaml.of_int max_size in
-          not (Targetint.OCaml.(<=) size max_size)
+          let max_size = Target_imm.Imm.of_int max_size in
+          not (Target_imm.Imm.(<=) size max_size)
     in
     match
       T.prove_block_field_simple typing_env ~min_name_mode block_ty index
@@ -947,7 +947,7 @@ let simplify_immutable_block_load (access_kind : P.Block_access_kind.t)
     | Unknown when skip_simplification -> unchanged ()
     | Unknown ->
       let n =
-        Targetint.OCaml.add (Target_imm.to_targetint index) Targetint.OCaml.one
+        Target_imm.Imm.add (Target_imm.to_targetint index) Target_imm.Imm.one
       in
       (* CR mshinwell: We should be able to use the size in the [access_kind]
          to constrain the type of the block *)
@@ -961,7 +961,7 @@ let simplify_immutable_block_load (access_kind : P.Block_access_kind.t)
                seem that the frontend currently emits code to create such
                blocks) and so it isn't clear whether such blocks should have
                tag zero (like zero-sized naked float arrays) or another tag. *)
-            if Targetint.OCaml.equal size Targetint.OCaml.zero then
+            if Target_imm.Imm.equal size Target_imm.Imm.zero then
               Unknown
             else
               Known Tag.double_array_tag

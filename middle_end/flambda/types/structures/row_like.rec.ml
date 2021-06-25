@@ -477,12 +477,12 @@ struct
   end
 
   module Targetint_ocaml_index = struct
-    include Targetint.OCaml
+    include Target_imm.Imm
     let subset t1 t2 = Stdlib.(<=) (compare t1 t2) 0
     (* An integer [i] represents all the values smaller than i, hence
       a smaller number is included in a bigger *)
-    let union t1 t2 = Targetint.OCaml.max t1 t2
-    let inter t1 t2 = Targetint.OCaml.min t1 t2
+    let union t1 t2 = Target_imm.Imm.max t1 t2
+    let inter t1 t2 = Target_imm.Imm.min t1 t2
     let apply_renaming t _ = t
   end
 
@@ -553,7 +553,7 @@ struct
           end
       in
       let product = Product.Int_indexed.create_from_list field_kind field_tys in
-      let size = Targetint.OCaml.of_int (List.length field_tys) in
+      let size = Target_imm.Imm.of_int (List.length field_tys) in
       match open_or_closed with
       | Open _ -> begin
         match tag with
@@ -568,7 +568,7 @@ struct
     let create_blocks_with_these_tags ~field_kind tags =
       let maps_to = Product.Int_indexed.create_top field_kind in
       let case =
-        { maps_to; index = At_least Targetint.OCaml.zero;
+        { maps_to; index = At_least Target_imm.Imm.zero;
           env_extension = TEE.empty () } in
       { known_tags = Tag.Map.of_set (fun _ -> case) tags;
         other_tags = Bottom;
@@ -586,7 +586,7 @@ struct
             let maps_to =
               Product.Int_indexed.create_from_list field_kind field_tys
             in
-            let size = Targetint.OCaml.of_int (List.length field_tys) in
+            let size = Target_imm.Imm.of_int (List.length field_tys) in
             { maps_to;
               index = Known size;
               env_extension = TEE.empty ();
@@ -597,7 +597,7 @@ struct
         other_tags = Bottom;
       }
 
-    let all_tags_and_sizes t : Targetint.OCaml.t Tag.Map.t Or_unknown.t =
+    let all_tags_and_sizes t : Target_imm.Imm.t Tag.Map.t Or_unknown.t =
       match all_tags_and_indexes t with
       | Unknown -> Unknown
       | Known tags_and_indexes ->
@@ -621,10 +621,10 @@ struct
       | None -> Unknown
       | Some ((_tag, size), maps_to) ->
         let index = Target_imm.to_targetint field_index in
-        if Targetint.OCaml.(<=) size index then Bottom
+        if Target_imm.Imm.(<=) size index then Bottom
         else
           match Product.Int_indexed.project maps_to
-                  (Targetint.OCaml.to_int index) with
+                  (Target_imm.Imm.to_int index) with
           | Unknown -> Unknown
           | Known res -> Ok res
 
@@ -635,7 +635,7 @@ struct
         | Known i when i <= index -> Bottom
         | _ ->
           match Product.Int_indexed.project maps_to
-                  (Targetint.OCaml.to_int index) with
+                  (Target_imm.Imm.to_int index) with
           | Unknown -> Unknown
           | Known res -> Ok res
       in

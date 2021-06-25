@@ -118,7 +118,7 @@ and make_optimistic_fields
     Format.asprintf "%s%a_%d" field_base_name (pp_tag add_tag_to_name) tag n
   in
   let field_vars =
-    List.init (Targetint.OCaml.to_int size)
+    List.init (Target_imm.Imm.to_int size)
       (fun i -> Extra_param_and_args.create ~name:(field_name i))
   in
   let type_of_var (epa : Extra_param_and_args.t) =

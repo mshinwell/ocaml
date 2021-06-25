@@ -105,7 +105,7 @@ let meet env t1 t2 : _ Or_bottom.t =
     | Naked_immediates tags, Get_tag ty ->
       let tags =
         I.Set.fold (fun tag tags ->
-            match Target_imm.to_tag tag with
+            match Tag.create_from_targetint tag with
             | Some tag -> Tag.Set.add tag tags
             | None -> tags (* No blocks exist with this tag *))
           tags

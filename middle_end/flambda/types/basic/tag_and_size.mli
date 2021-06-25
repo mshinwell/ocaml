@@ -16,6 +16,6 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-type t = Tag.t * Targetint.OCaml.t
+type t = Tag.t * Target_imm.Imm.t
 
 include Identifiable.S with type t := t

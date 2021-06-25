@@ -140,7 +140,7 @@ val immutable_block
 
 val immutable_block_with_size_at_least
    : tag:Tag.t Or_unknown.t
-  -> n:Targetint.OCaml.t
+  -> n:Target_imm.Imm.t
   -> field_kind:Flambda_kind.t
   -> field_n_minus_one:Variable.t
   -> t
@@ -153,7 +153,7 @@ val variant
 val open_variant_from_const_ctors_type : const_ctors:t -> t
 
 val open_variant_from_non_const_ctor_with_size_at_least
-   : n:Targetint.OCaml.t
+   : n:Target_imm.Imm.t
   -> field_n_minus_one:Variable.t
   -> t
 

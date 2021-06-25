@@ -1,8 +1,6 @@
 module type S =
   sig
     type t
-    type targetint
-    type targetint_ocaml = t
     val compare : t -> t -> int
     val equal : t -> t -> bool
     val hash : t -> int
@@ -24,7 +22,7 @@ module type S =
     val of_int_option : int -> t option
     val of_int32 : int32 -> t
     val of_int64 : int64 -> t
-    val of_targetint : targetint -> t
+    val of_targetint : Targetint.t -> t
     val of_float : float -> t
     val to_float : t -> float
     val to_int : t -> int
@@ -32,7 +30,7 @@ module type S =
     val to_int_option : t -> int option
     val to_int32 : t -> int32
     val to_int64 : t -> int64
-    val to_targetint : t -> targetint
+    val to_targetint : t -> Targetint.t
     val neg : t -> t
     val get_least_significant_16_bits_then_byte_swap : t -> t
     val add : t -> t -> t
@@ -53,7 +51,6 @@ module Make :
   functor (I : S) ->
     sig
       type t = I.t
-      type targetint_ocaml = t
       val compare : t -> t -> int
       val equal : t -> t -> bool
       val hash : t -> int
@@ -75,7 +72,7 @@ module Make :
       val of_int_option : int -> t option
       val of_int32 : int32 -> t
       val of_int64 : int64 -> t
-      val of_targetint : I.targetint -> t
+      val of_targetint : Targetint.t -> t
       val of_float : float -> t
       val to_float : t -> float
       val to_int : t -> int
@@ -83,7 +80,7 @@ module Make :
       val to_int_option : t -> int option
       val to_int32 : t -> int32
       val to_int64 : t -> int64
-      val to_targetint : t -> I.targetint
+      val to_targetint : t -> Targetint.t
       val neg : t -> t
       val get_least_significant_16_bits_then_byte_swap : t -> t
       val add : t -> t -> t

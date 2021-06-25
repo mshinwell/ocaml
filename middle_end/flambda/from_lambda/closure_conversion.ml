@@ -77,7 +77,7 @@ let rec declare_const acc (const : Lambda.structured_constant)
       : Acc.t * Static_const.Field_of_block.t * string =
   match const with
   | Const_base (Const_int c) ->
-    acc, Tagged_immediate (Target_imm.int (Targetint.OCaml.of_int c)), "int"
+    acc, Tagged_immediate (Target_imm.int (Target_imm.Imm.of_int c)), "int"
   | Const_base (Const_char c) ->
     acc, Tagged_immediate (Target_imm.char c), "char"
   | Const_base (Const_string (s, _, _)) ->
@@ -615,7 +615,7 @@ let close_switch acc env scrutinee (sw : IR.switch)
         let trap_action = close_trap_action_opt trap_action in
         let acc, args = find_simples acc env args in
         acc,
-        (Target_imm.int (Targetint.OCaml.of_int case),
+        (Target_imm.int (Target_imm.Imm.of_int case),
          Apply_cont.create ?trap_action cont ~args
            ~dbg:Debuginfo.none))
       acc
@@ -665,7 +665,7 @@ let close_switch acc env scrutinee (sw : IR.switch)
       | None -> acc, Target_imm.Map.of_list arms
       | Some (default, trap_action, args) ->
         Numbers.Int.Set.fold (fun case (acc, cases) ->
-            let case = Target_imm.int (Targetint.OCaml.of_int case) in
+            let case = Target_imm.int (Target_imm.Imm.of_int case) in
             if Target_imm.Map.mem case cases then acc, cases
             else
               let acc, args = find_simples acc env args in
@@ -1085,13 +1085,13 @@ let close_program ~backend ~module_ident ~module_block_size_in_words
     let block_access : P.Block_access_kind.t =
       Values {
         tag = Tag.Scannable.zero;
-        size = Known (Targetint.OCaml.of_int module_block_size_in_words);
+        size = Known (Target_imm.Imm.of_int module_block_size_in_words);
         field_kind = Any_value;
       }
     in
     List.fold_left (fun (acc, body) (pos, var) ->
         let var = VB.create var Name_mode.normal in
-        let pos = Target_imm.int (Targetint.OCaml.of_int pos) in
+        let pos = Target_imm.int (Target_imm.Imm.of_int pos) in
         let named =
           Named.create_prim
              (Binary (

@@ -38,7 +38,7 @@ val must_be_symbol : t -> (Symbol.t * Coercion.t) option
 val must_be_name : t -> (Name.t * Coercion.t) option
 
 (** The constant representating the given number of type "int". *)
-val const_int : Targetint.OCaml.t -> t
+val const_int : Target_imm.Imm.t -> t
 
 (** The constant representating the given boolean value. *)
 val const_bool : bool -> t
@@ -57,7 +57,7 @@ val const_zero : t
 
 val untagged_const_zero : t
 
-val untagged_const_int : Targetint.OCaml.t -> t
+val untagged_const_int : Target_imm.Imm.t -> t
 
 val const_one : t
 

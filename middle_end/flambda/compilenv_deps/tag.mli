@@ -25,11 +25,13 @@ type tag = t
 val create : int -> t option
 val create_exn : int -> t
 
-val create_from_targetint : Targetint.OCaml.t -> t option
+val create_from_targetint : Target_imm.t -> t option
+val create_from_targetint_imm : Target_imm.Imm.t -> t option
 
 val to_int : t -> int
+val to_target_imm : t -> Target_imm.t
 val to_targetint : t -> Targetint.t
-val to_targetint_ocaml : t -> Targetint.OCaml.t
+val to_targetint_ocaml : t -> Target_imm.Imm.t
 
 val zero : t
 

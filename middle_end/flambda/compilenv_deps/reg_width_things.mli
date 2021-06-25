@@ -33,13 +33,13 @@ module Const : sig
 
   val untagged_const_zero : t
 
-  val untagged_const_int : Targetint.OCaml.t -> t
+  val untagged_const_int : Target_imm.Imm.t -> t
 
   val const_zero : t
   val const_one : t
   val const_unit : t
 
-  val const_int : Targetint.OCaml.t -> t
+  val const_int : Target_imm.Imm.t -> t
 
   (** [naked_immediate] is similar to [naked_nativeint], but represents
       integers of width [n - 1] bits, where [n] is the native machine

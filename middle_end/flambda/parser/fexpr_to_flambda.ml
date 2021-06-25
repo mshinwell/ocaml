@@ -215,7 +215,7 @@ let find_code_id env code_id =
 
 let targetint (i:Fexpr.targetint) : Targetint.t = Targetint.of_int64 i
 let immediate i =
-  i |> Targetint.of_string |> Targetint.OCaml.of_targetint |> Target_imm.int
+  i |> Targetint.of_string |> Target_imm.Imm.of_targetint |> Target_imm.int
 let float f = f |> Numbers.Float_by_bit_pattern.create
 
 let value_kind_with_subkind (k : Fexpr.kind_with_subkind)
@@ -313,7 +313,7 @@ let field_of_block env (v:Fexpr.field_of_block)
   | Tagged_immediate i ->
     let i = Targetint.of_string i in
     Tagged_immediate
-      (Target_imm.int (Targetint.OCaml.of_targetint i))
+      (Target_imm.int (Target_imm.Imm.of_targetint i))
   | Dynamically_computed var ->
     let var = find_var env var in
     Dynamically_computed var
@@ -358,7 +358,7 @@ let binop (binop:Fexpr.binop) : Flambda_primitive.binary_primitive =
     let size s : _ Or_unknown.t =
       match s with
       | None -> Unknown
-      | Some s -> Known (s |> Targetint.OCaml.of_int64)
+      | Some s -> Known (s |> Target_imm.Imm.of_int64)
     in
     let access_kind : Flambda_primitive.Block_access_kind.t =
       match access_kind with
@@ -601,7 +601,7 @@ let rec expr env (e : Fexpr.expr) : Flambda.Expr.t =
   | Switch { scrutinee; cases } ->
     let arms =
       List.map (fun (case, apply) ->
-        Target_imm.int (Targetint.OCaml.of_int case),
+        Target_imm.int (Target_imm.Imm.of_int case),
         apply_cont env apply
       ) cases
       |> Target_imm.Map.of_list

@@ -68,7 +68,7 @@ let name env name =
 (* Constants *)
 
 let tag_targetint t = Targetint.(add (shift_left t 1) one)
-let targetint_of_imm i = Targetint.OCaml.to_targetint i.Target_imm.value
+let targetint_of_imm i = Target_imm.Imm.to_targetint i.Target_imm.value
 
 let const _env cst =
   match Reg_width_const.descr cst with

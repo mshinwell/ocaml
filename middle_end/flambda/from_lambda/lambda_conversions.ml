@@ -225,4 +225,4 @@ let convert_field_read_semantics (sem : L.field_read_semantics)
 let convert_lambda_block_size (size : L.block_size) : _ Or_unknown.t =
   match size with
   | Unknown -> Unknown
-  | Known size -> Known (Targetint.OCaml.of_int size)
+  | Known size -> Known (Target_imm.Imm.of_int size)

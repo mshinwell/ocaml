@@ -564,7 +564,7 @@ let blocks_with_these_tags tags : _ Or_unknown.t =
     Unknown
 
 let immutable_block ~is_unique tag ~field_kind ~fields =
-  match Targetint.OCaml.of_int_option (List.length fields) with
+  match Target_imm.Imm.of_int_option (List.length fields) with
   | None ->
     (* CR mshinwell: This should be a special kind of error. *)
     Misc.fatal_error "Block too long for target"
@@ -576,7 +576,7 @@ let immutable_block ~is_unique tag ~field_kind ~fields =
         ~field_tys:fields (Closed tag)))))))
 
 let immutable_block_with_size_at_least ~tag ~n ~field_kind ~field_n_minus_one =
-  let n = Targetint.OCaml.to_int n in
+  let n = Target_imm.Imm.to_int n in
   let field_tys =
     List.init n (fun index ->
       if index < n - 1 then unknown field_kind
@@ -610,7 +610,7 @@ let open_variant_from_const_ctors_type ~const_ctors =
       ~blocks:Unknown))))
 
 let open_variant_from_non_const_ctor_with_size_at_least ~n ~field_n_minus_one =
-  let n = Targetint.OCaml.to_int n in
+  let n = Target_imm.Imm.to_int n in
   let field_tys =
     List.init n (fun index ->
       if index < n - 1 then any_value ()
@@ -624,7 +624,7 @@ let open_variant_from_non_const_ctor_with_size_at_least ~n ~field_n_minus_one =
 
 let this_immutable_string str =
   (* CR mshinwell: Use "length" not "size" for strings *)
-  let size = Targetint.OCaml.of_int (String.length str) in
+  let size = Target_imm.Imm.of_int (String.length str) in
   let string_info =
     String_info.Set.singleton
       (String_info.create ~contents:(Contents str) ~size)
@@ -632,7 +632,7 @@ let this_immutable_string str =
   Value (T_V.create (String string_info))
 
 let mutable_string ~size =
-  let size = Targetint.OCaml.of_int size in
+  let size = Target_imm.Imm.of_int size in
   let string_info =
     String_info.Set.singleton
       (String_info.create ~contents:Unknown_or_mutable ~size)

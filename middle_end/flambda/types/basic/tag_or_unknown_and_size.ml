@@ -18,6 +18,6 @@
 
 module Tag_or_unknown = Or_unknown.Lift (Tag)
 
-type t = Tag.t Or_unknown.t * Targetint.OCaml.t
+type t = Tag.t Or_unknown.t * Target_imm.Imm.t
 
-include Identifiable.Make_pair (Tag_or_unknown) (Targetint.OCaml)
+include Identifiable.Make_pair (Tag_or_unknown) (Target_imm.Imm)

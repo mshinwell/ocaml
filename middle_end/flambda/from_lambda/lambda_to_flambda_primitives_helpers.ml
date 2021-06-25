@@ -30,18 +30,18 @@ type bounds_check_result =
 let bounds_check ~width ~string_length_in_bytes ~index_in_bytes
       : bounds_check_result =
   let index_in_bytes = Target_imm.to_targetint index_in_bytes in
-  if Targetint.OCaml.compare index_in_bytes Targetint.OCaml.zero < 0 then
+  if Target_imm.Imm.compare index_in_bytes Target_imm.Imm.zero < 0 then
     Out_of_range
   else
     let result_size_in_bytes =
-      Targetint.OCaml.of_int
+      Target_imm.Imm.of_int
         (Flambda_primitive.byte_width_of_string_accessor_width width)
     in
     (* We are careful here to avoid overflow for ease of reasoning. *)
     let highest_index_allowed =
-      Targetint.OCaml.sub string_length_in_bytes result_size_in_bytes
+      Target_imm.Imm.sub string_length_in_bytes result_size_in_bytes
     in
-    if Targetint.OCaml.compare index_in_bytes highest_index_allowed >= 0 then
+    if Target_imm.Imm.compare index_in_bytes highest_index_allowed >= 0 then
       Out_of_range
     else
       In_range

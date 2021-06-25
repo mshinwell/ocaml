@@ -18,6 +18,6 @@
 
 module Tag_or_unknown : Identifiable.S with type t = Or_unknown.Lift (Tag).t
 
-type t = Tag.t Or_unknown.t * Targetint.OCaml.t
+type t = Tag.t Or_unknown.t * Target_imm.Imm.t
 
 include Identifiable.S with type t := t

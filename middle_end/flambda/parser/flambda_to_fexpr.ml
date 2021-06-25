@@ -348,8 +348,8 @@ let kinded_parameter env (kp : Kinded_parameter.t)
   let param, env = Env.bind_var env (Kinded_parameter.var kp) in
   { param; kind = k }, env
 
-let targetint_ocaml (i : Targetint.OCaml.t) : Fexpr.targetint =
-  i |> Targetint.OCaml.to_int64
+let targetint_ocaml (i : Target_imm.Imm.t) : Fexpr.targetint =
+  i |> Target_imm.Imm.to_int64
 
 let recursive_flag (r : Recursive.t) : Fexpr.is_recursive =
   match r with
