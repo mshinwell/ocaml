@@ -46,7 +46,7 @@ module For_blocks : sig
 
   val all_tags : t -> Tag.Set.t Or_unknown.t
 
-  val all_tags_and_sizes : t -> Target_imm.Imm.t Tag.Map.t Or_unknown.t
+  val all_tags_and_sizes : t -> Targetint_31_63.Imm.t Tag.Map.t Or_unknown.t
 
   val get_singleton : t -> (Tag_and_size.t * Product.Int_indexed.t) option
 
@@ -72,10 +72,10 @@ module For_blocks : sig
       expect that doing the actual meet could give us a better result) and the
       last case where we already know what the result of the meet will be.
   *)
-  val get_field : t -> Target_imm.t -> Type_grammar.t Or_unknown_or_bottom.t
+  val get_field : t -> Targetint_31_63.t -> Type_grammar.t Or_unknown_or_bottom.t
 
   val get_variant_field :
-    t -> Tag.t -> Target_imm.t -> Type_grammar.t Or_unknown_or_bottom.t
+    t -> Tag.t -> Targetint_31_63.t -> Type_grammar.t Or_unknown_or_bottom.t
 
   val is_bottom : t -> bool
 

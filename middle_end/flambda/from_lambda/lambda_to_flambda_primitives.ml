@@ -61,7 +61,7 @@ let length_offset_of_size size =
     | Thirty_two -> 3
     | Sixty_four -> 7
   in
-  Target_imm.int (Target_imm.Imm.of_int offset)
+  Targetint_31_63.int (Targetint_31_63.Imm.of_int offset)
 
 (* This computes the maximum of a given value [x] with zero,
    in an optimized way. It takes as named argument the size (in bytes)
@@ -70,7 +70,7 @@ let length_offset_of_size size =
 let max_with_zero ~size_int x =
   let register_bitsize_minus_one =
     H.Simple (Simple.const (Reg_width_const.naked_immediate (
-        Target_imm.int (Target_imm.Imm.of_int (size_int * 8 - 1)))))
+        Targetint_31_63.int (Targetint_31_63.Imm.of_int (size_int * 8 - 1)))))
   in
   let sign =
     H.Prim (Binary (Int_shift (Naked_nativeint, Asr),
@@ -230,7 +230,7 @@ let bigarray_indexing layout b args =
   | Fortran ->
     aux 1 1 (List.map (fun idx ->
       H.Prim (Binary (Int_arith (I.Tagged_immediate, Sub), idx,
-                      H.Simple (Simple.const_int Target_imm.Imm.one)))
+                      H.Simple (Simple.const_int Targetint_31_63.Imm.one)))
     ) args)
 
 let bigarray_ref ~dbg ~unsafe kind layout b indexes =
@@ -294,25 +294,25 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
       | Record_regular ->
         Values {
           tag = Tag.Scannable.zero;
-          length = Target_imm.Imm.of_int num_fields;
+          length = Targetint_31_63.Imm.of_int num_fields;
         }
       | Record_float ->
         Naked_floats {
-          length = Target_imm.Imm.of_int num_fields;
+          length = Targetint_31_63.Imm.of_int num_fields;
         }
       | Record_unboxed _ ->
         Misc.fatal_error "Pduprecord of unboxed record"
       | Record_inlined tag ->
         Values {
           tag = Tag.Scannable.create_exn tag;
-          length = Target_imm.Imm.of_int num_fields;
+          length = Targetint_31_63.Imm.of_int num_fields;
         }
       | Record_extension _ ->
         Values {
           tag = Tag.Scannable.zero;
           (* The "+1" is because there is an extra field containing the
              hashed constructor. *)
-          length = Target_imm.Imm.of_int (num_fields + 1);
+          length = Targetint_31_63.Imm.of_int (num_fields + 1);
         }
     in
     Unary (Duplicate_block {
@@ -606,14 +606,14 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
     let const =
       Simple.const
         (Reg_width_const.tagged_immediate
-           (Target_imm.int (Target_imm.Imm.of_int n)))
+           (Targetint_31_63.int (Targetint_31_63.Imm.of_int n)))
     in
     Binary (Int_arith (I.Tagged_immediate, Add), arg, Simple const)
   | Pfield ({ index; block_info = { tag; size; }; }, sem), [arg] ->
-    let imm = Target_imm.int (Target_imm.Imm.of_int index) in
-    if not (Target_imm.is_non_negative imm) then begin
+    let imm = Targetint_31_63.int (Targetint_31_63.Imm.of_int index) in
+    if not (Targetint_31_63.is_non_negative imm) then begin
       Misc.fatal_errorf "Pfield with negative index %a"
-        Target_imm.print imm
+        Targetint_31_63.print imm
     end;
     let field = Simple.const (Reg_width_const.tagged_immediate imm) in
     let mutability = C.convert_field_read_semantics sem in
@@ -624,7 +624,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
     in
     Binary (Block_load (block_access, mutability), arg, Simple field)
   | Pfloatfield (field, sem), [arg] ->
-    let imm = Target_imm.int (Target_imm.Imm.of_int field) in
+    let imm = Targetint_31_63.int (Targetint_31_63.Imm.of_int field) in
     let field = Simple.const (Reg_width_const.tagged_immediate imm) in
     let mutability = C.convert_field_read_semantics sem in
     let block_access : P.Block_access_kind.t =
@@ -636,7 +636,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
       [block; value] ->
     let { index; block_info = { tag; size; }; } : Lambda.field_info = fi in
     let field_kind = C.convert_block_access_field_kind immediate_or_pointer in
-    let imm = Target_imm.int (Target_imm.Imm.of_int index) in
+    let imm = Targetint_31_63.int (Targetint_31_63.Imm.of_int index) in
     let field = Simple.const (Reg_width_const.tagged_immediate imm) in
     let size = C.convert_lambda_block_size size in
     let block_access : P.Block_access_kind.t =
@@ -646,7 +646,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
          C.convert_init_or_assign initialization_or_assignment),
        block, Simple field, value)
   | Psetfloatfield (field, init_or_assign), [block; value] ->
-    let imm = Target_imm.int (Target_imm.Imm.of_int field) in
+    let imm = Targetint_31_63.int (Targetint_31_63.Imm.of_int field) in
     let field = Simple.const (Reg_width_const.tagged_immediate imm) in
     let block_access : P.Block_access_kind.t =
       Naked_floats { size = Unknown; }
@@ -665,7 +665,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
                 Simple
                   (Simple.const
                      (Reg_width_const.tagged_immediate
-                        (Target_imm.int (Target_imm.Imm.zero)))));
+                        (Targetint_31_63.int (Targetint_31_63.Imm.zero)))));
       ];
       failure = Division_by_zero;
       dbg;
@@ -679,7 +679,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
                 Simple
                   (Simple.const
                      (Reg_width_const.tagged_immediate
-                        (Target_imm.int (Target_imm.Imm.zero)))));
+                        (Targetint_31_63.int (Targetint_31_63.Imm.zero)))));
       ];
       failure = Division_by_zero;
       dbg;
@@ -850,7 +850,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
     let block_access : P.Block_access_kind.t =
       Values {
         tag = Tag.Scannable.zero;
-        size = Known Target_imm.Imm.one;
+        size = Known Targetint_31_63.Imm.one;
         field_kind = Immediate;
       }
     in
@@ -858,7 +858,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
       block,
       Simple Simple.const_zero,
       Prim (Binary (Int_arith (Tagged_immediate, Add),
-        Simple (Simple.const_int (Target_imm.Imm.of_int n)),
+        Simple (Simple.const_int (Targetint_31_63.Imm.of_int n)),
         Prim (Binary (Block_load (block_access, Mutable),
           block,
           Simple Simple.const_zero)))))
@@ -869,14 +869,14 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
     begin match const with
     | Big_endian -> Simple (Simple.const_bool B.big_endian)
     | Word_size ->
-      Simple (Simple.const_int (Target_imm.Imm.of_int (8*size_int)))
+      Simple (Simple.const_int (Targetint_31_63.Imm.of_int (8*size_int)))
     | Int_size ->
-      Simple (Simple.const_int (Target_imm.Imm.of_int (8*size_int - 1)))
+      Simple (Simple.const_int (Targetint_31_63.Imm.of_int (8*size_int - 1)))
     | Max_wosize ->
       (* CR mshinwell: This depends on the number of bits in the header
          reserved for profinfo, no?  If this computation is wrong then
          the one in [Closure] (and maybe Flambda 1) is wrong. *)
-      Simple (Simple.const_int (Target_imm.Imm.of_int
+      Simple (Simple.const_int (Targetint_31_63.Imm.of_int
         ((1 lsl ((8*size_int) - 10)) - 1)))
     | Ostype_unix -> Simple (Simple.const_bool (Sys.os_type = "Unix"))
     | Ostype_win32 -> Simple (Simple.const_bool (Sys.os_type = "Win32"))

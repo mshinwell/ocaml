@@ -23,7 +23,7 @@ module Field_of_block : sig
   type t =
     | Symbol of Symbol.t
       (** The address of the given symbol. *)
-    | Tagged_immediate of Target_imm.t
+    | Tagged_immediate of Targetint_31_63.t
       (** The given tagged immediate. *)
     | Dynamically_computed of Variable.t
       (** The value of the given variable. *)

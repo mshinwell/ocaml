@@ -115,7 +115,7 @@ module Imm : sig
   (** Convert the given floating-point number to an ocaml target integer,
       discarding the fractional part (truncate towards 0). The result of the
       conversion is undefined if, after truncation, the number is outside the
-      range \[{!Target_imm.Imm.min_value}, {!Target_imm.Imm.max_value}\]. *)
+      range \[{!Targetint_31_63.Imm.min_value}, {!Targetint_31_63.Imm.max_value}\]. *)
   val of_float : float -> t
 
   (** Convert the given target integer to a floating-point number. *)

@@ -522,7 +522,7 @@ let place_lifted_constants uacc (scoping_rule : Symbol_scoping_rule.t)
   place_constants uacc ~around:body to_place_around_defining_expr
 
 let create_switch uacc ~scrutinee ~arms =
-  if Target_imm.Map.cardinal arms < 1 then
+  if Targetint_31_63.Map.cardinal arms < 1 then
     RE.create_invalid (),
     UA.notify_added ~code_size:Code_size.invalid uacc
   else
@@ -533,13 +533,13 @@ let create_switch uacc ~scrutinee ~arms =
       in
       RE.create_apply_cont action, uacc
     in
-    match Target_imm.Map.get_singleton arms with
+    match Targetint_31_63.Map.get_singleton arms with
     | Some (_discriminant, action) -> change_to_apply_cont action
     | None ->
       (* CR mshinwell: We should do a partial invariant check here (one
          which doesn't require [Invariant_env.t]. *)
       let actions =
-        Apply_cont_expr.Set.of_list (Target_imm.Map.data arms)
+        Apply_cont_expr.Set.of_list (Targetint_31_63.Map.data arms)
       in
       match Apply_cont_expr.Set.get_singleton actions with
       | Some action -> change_to_apply_cont action

@@ -29,19 +29,19 @@ type bounds_check_result =
 
 let bounds_check ~width ~string_length_in_bytes ~index_in_bytes
       : bounds_check_result =
-  let index_in_bytes = Target_imm.to_targetint index_in_bytes in
-  if Target_imm.Imm.compare index_in_bytes Target_imm.Imm.zero < 0 then
+  let index_in_bytes = Targetint_31_63.to_targetint index_in_bytes in
+  if Targetint_31_63.Imm.compare index_in_bytes Targetint_31_63.Imm.zero < 0 then
     Out_of_range
   else
     let result_size_in_bytes =
-      Target_imm.Imm.of_int
+      Targetint_31_63.Imm.of_int
         (Flambda_primitive.byte_width_of_string_accessor_width width)
     in
     (* We are careful here to avoid overflow for ease of reasoning. *)
     let highest_index_allowed =
-      Target_imm.Imm.sub string_length_in_bytes result_size_in_bytes
+      Targetint_31_63.Imm.sub string_length_in_bytes result_size_in_bytes
     in
-    if Target_imm.Imm.compare index_in_bytes highest_index_allowed >= 0 then
+    if Targetint_31_63.Imm.compare index_in_bytes highest_index_allowed >= 0 then
       Out_of_range
     else
       In_range
@@ -287,10 +287,10 @@ let rec bind_rec acc ~backend exn_cont
                    acc
                    (Switch.create
                     ~scrutinee:prim_result
-                    ~arms:(Target_imm.Map.of_list [
-                      Target_imm.bool_true,
+                    ~arms:(Targetint_31_63.Map.of_list [
+                      Targetint_31_63.bool_true,
                         Apply_cont.goto condition_passed_cont;
-                      Target_imm.bool_false,
+                      Targetint_31_63.bool_false,
                         Apply_cont.goto failure_cont;
                   ]))))
           in

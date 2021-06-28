@@ -116,10 +116,10 @@ let project_tuple ~dbg ~size ~field tuple =
   let bak : BAK.t = Values {
     field_kind = Any_value;
     tag = Tag.Scannable.zero;
-    size = Known (Target_imm.Imm.of_int size);
+    size = Known (Targetint_31_63.Imm.of_int size);
   } in
   let mutability : Mutability.t = Immutable in
-  let index = Simple.const_int (Target_imm.Imm.of_int field) in
+  let index = Simple.const_int (Targetint_31_63.Imm.of_int field) in
   let prim = P.Binary (Block_load (bak, mutability), tuple, index) in
   Named.create_prim prim dbg
 

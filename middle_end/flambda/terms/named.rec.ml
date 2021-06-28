@@ -165,7 +165,7 @@ let dummy_value (kind : K.t) : t =
     match kind with
     | Value -> Simple.const_zero
     | Naked_number Naked_immediate ->
-      Simple.const (Reg_width_const.naked_immediate Target_imm.zero)
+      Simple.const (Reg_width_const.naked_immediate Targetint_31_63.zero)
     | Naked_number Naked_float ->
       Simple.const (
         Reg_width_const.naked_float Numbers.Float_by_bit_pattern.zero)

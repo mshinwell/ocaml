@@ -132,7 +132,7 @@ let meet_variants_don't_lose_aliases () =
     (* Env extension should be empty *)
     let env = TE.add_equation env (Name.var v_variant) meet_ty in
     let t_get_tag = T.get_tag_for_block ~block:(Simple.var v_variant) in
-    let t_tag_1 = T.this_naked_immediate Target_imm.one in
+    let t_tag_1 = T.this_naked_immediate Targetint_31_63.one in
     match T.meet env t_get_tag t_tag_1 with
     | Bottom -> assert false
     | Ok (tag_meet_ty, tag_meet_env_extension) ->

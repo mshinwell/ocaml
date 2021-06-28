@@ -22,7 +22,7 @@ type string_contents =
 
 type t = {
   contents : string_contents;
-  size : Target_imm.Imm.t;
+  size : Targetint_31_63.Imm.t;
 }
 
 let create ~contents ~size =
@@ -55,16 +55,16 @@ include Identifiable.Make (struct
   let print ppf { contents; size; } =
     match contents with
     | Unknown_or_mutable ->
-      Format.fprintf ppf "(size %a)" Target_imm.Imm.print size
+      Format.fprintf ppf "(size %a)" Targetint_31_63.Imm.print size
     | Contents s ->
       let s, dots =
-        let max_size = Target_imm.Imm.ten in
-        let long = Target_imm.Imm.compare size max_size > 0 in
+        let max_size = Targetint_31_63.Imm.ten in
+        let long = Targetint_31_63.Imm.compare size max_size > 0 in
         if long then String.sub s 0 8, "..."
         else s, ""
       in
       Format.fprintf ppf "(size %a) (contents \"%S\"%s)"
-        Target_imm.Imm.print size
+        Targetint_31_63.Imm.print size
         s dots
 
   let output _ _ = Misc.fatal_error "Not yet implemented"

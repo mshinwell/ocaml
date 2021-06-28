@@ -82,7 +82,7 @@ let rec make_optimistic_decision ~depth tenv ~param_type : U.decision =
           let tag = Extra_param_and_args.create ~name:"tag" in
           let const_ctors : U.const_ctors_decision =
             match const_ctors with
-            | Known set when Target_imm.Set.is_empty set -> Zero
+            | Known set when Targetint_31_63.Set.is_empty set -> Zero
             | Unknown | Known _ -> make_optimistic_const_ctor ()
           in
           let fields_by_tag =
@@ -118,7 +118,7 @@ and make_optimistic_fields
     Format.asprintf "%s%a_%d" field_base_name (pp_tag add_tag_to_name) tag n
   in
   let field_vars =
-    List.init (Target_imm.Imm.to_int size)
+    List.init (Targetint_31_63.Imm.to_int size)
       (fun i -> Extra_param_and_args.create ~name:(field_name i))
   in
   let type_of_var (epa : Extra_param_and_args.t) =

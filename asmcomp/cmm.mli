@@ -117,7 +117,7 @@ type exit_label =
 type rec_flag = Nonrecursive | Recursive
 
 type phantom_defining_expr =
-  (* CR-soon mshinwell: Convert this to [Target_imm.Imm.t] (or whatever the
+  (* CR-soon mshinwell: Convert this to [Targetint_31_63.Imm.t] (or whatever the
      representation of "target-width OCaml integers of type [int]"
      becomes when merged). *)
   | Cphantom_const_int of Targetint.t

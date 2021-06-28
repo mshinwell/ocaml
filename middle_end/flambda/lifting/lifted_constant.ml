@@ -293,7 +293,7 @@ let apply_projection t proj =
       | Block_load { index; } ->
         T.prove_block_field_simple typing_env
           ~min_name_mode:Name_mode.normal ty
-          (Target_imm.int index)
+          (Targetint_31_63.int index)
       | Project_var { project_from = _; var; } ->
         T.prove_project_var_simple typing_env
           ~min_name_mode:Name_mode.normal ty var

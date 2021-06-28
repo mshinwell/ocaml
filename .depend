@@ -3942,7 +3942,7 @@ middle_end/flambda/compilenv_deps/rec_info.cmi : \
     utils/identifiable.cmi
 middle_end/flambda/compilenv_deps/reg_width_things.cmo : \
     utils/targetint.cmi \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     middle_end/flambda/compilenv_deps/table_by_int_id.cmi \
     middle_end/flambda/compilenv_deps/patricia_tree.cmi \
     utils/numbers.cmi \
@@ -3956,7 +3956,7 @@ middle_end/flambda/compilenv_deps/reg_width_things.cmo : \
     middle_end/flambda/compilenv_deps/reg_width_things.cmi
 middle_end/flambda/compilenv_deps/reg_width_things.cmx : \
     utils/targetint.cmx \
-    middle_end/flambda/compilenv_deps/target_imm.cmx \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmx \
     middle_end/flambda/compilenv_deps/table_by_int_id.cmx \
     middle_end/flambda/compilenv_deps/patricia_tree.cmx \
     utils/numbers.cmx \
@@ -3970,7 +3970,7 @@ middle_end/flambda/compilenv_deps/reg_width_things.cmx : \
     middle_end/flambda/compilenv_deps/reg_width_things.cmi
 middle_end/flambda/compilenv_deps/reg_width_things.cmi : \
     utils/targetint.cmi \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     middle_end/flambda/compilenv_deps/table_by_int_id.cmi \
     utils/numbers.cmi \
     middle_end/flambda/compilenv_deps/linkage_name.cmi \
@@ -4003,37 +4003,37 @@ middle_end/flambda/compilenv_deps/table_by_int_id.cmx : \
 middle_end/flambda/compilenv_deps/table_by_int_id.cmi :
 middle_end/flambda/compilenv_deps/tag.cmo : \
     utils/targetint.cmi \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     utils/numbers.cmi \
     utils/misc.cmi \
     utils/identifiable.cmi \
     middle_end/flambda/compilenv_deps/tag.cmi
 middle_end/flambda/compilenv_deps/tag.cmx : \
     utils/targetint.cmx \
-    middle_end/flambda/compilenv_deps/target_imm.cmx \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmx \
     utils/numbers.cmx \
     utils/misc.cmx \
     utils/identifiable.cmx \
     middle_end/flambda/compilenv_deps/tag.cmi
 middle_end/flambda/compilenv_deps/tag.cmi : \
     utils/targetint.cmi \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     utils/identifiable.cmi
-middle_end/flambda/compilenv_deps/target_imm.cmo : \
+middle_end/flambda/compilenv_deps/targetint_31_63.cmo : \
     utils/targetint.cmi \
     middle_end/flambda/compilenv_deps/one_bit_fewer.cmi \
     utils/numbers.cmi \
     utils/misc.cmi \
     utils/identifiable.cmi \
-    middle_end/flambda/compilenv_deps/target_imm.cmi
-middle_end/flambda/compilenv_deps/target_imm.cmx : \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi
+middle_end/flambda/compilenv_deps/targetint_31_63.cmx : \
     utils/targetint.cmx \
     middle_end/flambda/compilenv_deps/one_bit_fewer.cmx \
     utils/numbers.cmx \
     utils/misc.cmx \
     utils/identifiable.cmx \
-    middle_end/flambda/compilenv_deps/target_imm.cmi
-middle_end/flambda/compilenv_deps/target_imm.cmi : \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi
+middle_end/flambda/compilenv_deps/targetint_31_63.cmi : \
     utils/targetint.cmi \
     utils/identifiable.cmi
 middle_end/flambda/compilenv_deps/variable.cmo : \
@@ -4521,7 +4521,7 @@ middle_end/flambda/basic/simple.cmx : \
     middle_end/flambda/basic/simple.cmi
 middle_end/flambda/basic/simple.cmi : \
     middle_end/flambda/compilenv_deps/variable.cmi \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     middle_end/flambda/compilenv_deps/symbol.cmi \
     middle_end/flambda/compilenv_deps/reg_width_things.cmi \
     middle_end/flambda/basic/reg_width_const.cmi \
@@ -4717,7 +4717,7 @@ middle_end/flambda/compare/compare.cmo : \
     middle_end/flambda/compilenv_deps/variable.cmi \
     middle_end/flambda/basic/var_within_closure.cmi \
     middle_end/flambda/basic/trap_action.cmi \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     middle_end/flambda/compilenv_deps/tag.cmi \
     middle_end/flambda/compilenv_deps/symbol.cmi \
     middle_end/flambda/terms/switch_expr.cmi \
@@ -4757,7 +4757,7 @@ middle_end/flambda/compare/compare.cmx : \
     middle_end/flambda/compilenv_deps/variable.cmx \
     middle_end/flambda/basic/var_within_closure.cmx \
     middle_end/flambda/basic/trap_action.cmx \
-    middle_end/flambda/compilenv_deps/target_imm.cmx \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmx \
     middle_end/flambda/compilenv_deps/tag.cmx \
     middle_end/flambda/compilenv_deps/symbol.cmx \
     middle_end/flambda/terms/switch_expr.cmx \
@@ -4801,7 +4801,7 @@ middle_end/flambda/from_lambda/closure_conversion.cmo : \
     middle_end/flambda/naming/var_in_binding_pos.cmi \
     middle_end/flambda/basic/trap_action.cmi \
     utils/targetint.cmi \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     middle_end/flambda/compilenv_deps/tag.cmi \
     middle_end/flambda/compilenv_deps/symbol.cmi \
     lambda/switch.cmi \
@@ -4855,7 +4855,7 @@ middle_end/flambda/from_lambda/closure_conversion.cmx : \
     middle_end/flambda/naming/var_in_binding_pos.cmx \
     middle_end/flambda/basic/trap_action.cmx \
     utils/targetint.cmx \
-    middle_end/flambda/compilenv_deps/target_imm.cmx \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmx \
     middle_end/flambda/compilenv_deps/tag.cmx \
     middle_end/flambda/compilenv_deps/symbol.cmx \
     lambda/switch.cmx \
@@ -4996,7 +4996,7 @@ middle_end/flambda/from_lambda/dissect_letrec.cmi : \
     typing/ident.cmi
 middle_end/flambda/from_lambda/lambda_conversions.cmo : \
     middle_end/flambda/basic/trap_action.cmi \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     typing/primitive.cmi \
     middle_end/flambda/types/basic/or_unknown.cmi \
     middle_end/flambda/basic/mutability.cmi \
@@ -5010,7 +5010,7 @@ middle_end/flambda/from_lambda/lambda_conversions.cmo : \
     middle_end/flambda/from_lambda/lambda_conversions.cmi
 middle_end/flambda/from_lambda/lambda_conversions.cmx : \
     middle_end/flambda/basic/trap_action.cmx \
-    middle_end/flambda/compilenv_deps/target_imm.cmx \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmx \
     typing/primitive.cmx \
     middle_end/flambda/types/basic/or_unknown.cmx \
     middle_end/flambda/basic/mutability.cmx \
@@ -5024,7 +5024,7 @@ middle_end/flambda/from_lambda/lambda_conversions.cmx : \
     middle_end/flambda/from_lambda/lambda_conversions.cmi
 middle_end/flambda/from_lambda/lambda_conversions.cmi : \
     middle_end/flambda/basic/trap_action.cmi \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     typing/primitive.cmi \
     middle_end/flambda/types/basic/or_unknown.cmi \
     middle_end/flambda/basic/mutability.cmi \
@@ -5088,7 +5088,7 @@ middle_end/flambda/from_lambda/lambda_to_flambda.cmi : \
     middle_end/flambda/flambda_backend_intf.cmi
 middle_end/flambda/from_lambda/lambda_to_flambda_primitives.cmo : \
     utils/targetint.cmi \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     middle_end/flambda/compilenv_deps/tag.cmi \
     middle_end/flambda/basic/simple.cmi \
     middle_end/flambda/basic/reg_width_const.cmi \
@@ -5106,7 +5106,7 @@ middle_end/flambda/from_lambda/lambda_to_flambda_primitives.cmo : \
     middle_end/flambda/from_lambda/lambda_to_flambda_primitives.cmi
 middle_end/flambda/from_lambda/lambda_to_flambda_primitives.cmx : \
     utils/targetint.cmx \
-    middle_end/flambda/compilenv_deps/target_imm.cmx \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmx \
     middle_end/flambda/compilenv_deps/tag.cmx \
     middle_end/flambda/basic/simple.cmx \
     middle_end/flambda/basic/reg_width_const.cmx \
@@ -5135,7 +5135,7 @@ middle_end/flambda/from_lambda/lambda_to_flambda_primitives_helpers.cmo : \
     middle_end/flambda/compilenv_deps/variable.cmi \
     middle_end/flambda/naming/var_in_binding_pos.cmi \
     middle_end/flambda/basic/trap_action.cmi \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     middle_end/flambda/compilenv_deps/tag.cmi \
     middle_end/flambda/compilenv_deps/symbol.cmi \
     lambda/switch.cmi \
@@ -5160,7 +5160,7 @@ middle_end/flambda/from_lambda/lambda_to_flambda_primitives_helpers.cmx : \
     middle_end/flambda/compilenv_deps/variable.cmx \
     middle_end/flambda/naming/var_in_binding_pos.cmx \
     middle_end/flambda/basic/trap_action.cmx \
-    middle_end/flambda/compilenv_deps/target_imm.cmx \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmx \
     middle_end/flambda/compilenv_deps/tag.cmx \
     middle_end/flambda/compilenv_deps/symbol.cmx \
     lambda/switch.cmx \
@@ -5349,7 +5349,7 @@ middle_end/flambda/inlining/metrics/removed_operations.cmi : \
     middle_end/flambda/terms/flambda_primitive.cmi
 middle_end/flambda/lifting/lifted_constant.cmo : \
     middle_end/flambda/compilenv_deps/variable.cmi \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     middle_end/flambda/terms/symbol_projection.cmi \
     middle_end/flambda/compilenv_deps/symbol.cmi \
     middle_end/flambda/simplify/rebuilt_static_const.cmi \
@@ -5364,7 +5364,7 @@ middle_end/flambda/lifting/lifted_constant.cmo : \
     middle_end/flambda/lifting/lifted_constant.cmi
 middle_end/flambda/lifting/lifted_constant.cmx : \
     middle_end/flambda/compilenv_deps/variable.cmx \
-    middle_end/flambda/compilenv_deps/target_imm.cmx \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmx \
     middle_end/flambda/terms/symbol_projection.cmx \
     middle_end/flambda/compilenv_deps/symbol.cmx \
     middle_end/flambda/simplify/rebuilt_static_const.cmx \
@@ -5791,7 +5791,7 @@ middle_end/flambda/parser/fexpr_to_flambda.cmo : \
     middle_end/flambda/naming/var_in_binding_pos.cmi \
     middle_end/flambda/basic/trap_action.cmi \
     utils/targetint.cmi \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     middle_end/flambda/compilenv_deps/tag.cmi \
     middle_end/flambda/compilenv_deps/symbol.cmi \
     middle_end/flambda/basic/simple.cmi \
@@ -5841,7 +5841,7 @@ middle_end/flambda/parser/fexpr_to_flambda.cmx : \
     middle_end/flambda/naming/var_in_binding_pos.cmx \
     middle_end/flambda/basic/trap_action.cmx \
     utils/targetint.cmx \
-    middle_end/flambda/compilenv_deps/target_imm.cmx \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmx \
     middle_end/flambda/compilenv_deps/tag.cmx \
     middle_end/flambda/compilenv_deps/symbol.cmx \
     middle_end/flambda/basic/simple.cmx \
@@ -5928,7 +5928,7 @@ middle_end/flambda/parser/flambda_to_fexpr.cmo : \
     middle_end/flambda/naming/var_in_binding_pos.cmi \
     middle_end/flambda/basic/trap_action.cmi \
     utils/targetint.cmi \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     middle_end/flambda/compilenv_deps/tag.cmi \
     middle_end/flambda/basic/symbol_scoping_rule.cmi \
     middle_end/flambda/compilenv_deps/symbol.cmi \
@@ -5971,7 +5971,7 @@ middle_end/flambda/parser/flambda_to_fexpr.cmx : \
     middle_end/flambda/naming/var_in_binding_pos.cmx \
     middle_end/flambda/basic/trap_action.cmx \
     utils/targetint.cmx \
-    middle_end/flambda/compilenv_deps/target_imm.cmx \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmx \
     middle_end/flambda/compilenv_deps/tag.cmx \
     middle_end/flambda/basic/symbol_scoping_rule.cmx \
     middle_end/flambda/compilenv_deps/symbol.cmx \
@@ -6108,7 +6108,7 @@ middle_end/flambda/simplify/expr_builder.cmo : \
     middle_end/flambda/naming/var_in_binding_pos.cmi \
     middle_end/flambda/simplify/env/upwards_env.cmi \
     middle_end/flambda/simplify/env/upwards_acc.cmi \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     middle_end/flambda/compilenv_deps/tag.cmi \
     middle_end/flambda/basic/symbol_scoping_rule.cmi \
     middle_end/flambda/terms/symbol_projection.cmi \
@@ -6149,7 +6149,7 @@ middle_end/flambda/simplify/expr_builder.cmx : \
     middle_end/flambda/naming/var_in_binding_pos.cmx \
     middle_end/flambda/simplify/env/upwards_env.cmx \
     middle_end/flambda/simplify/env/upwards_acc.cmx \
-    middle_end/flambda/compilenv_deps/target_imm.cmx \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmx \
     middle_end/flambda/compilenv_deps/tag.cmx \
     middle_end/flambda/basic/symbol_scoping_rule.cmx \
     middle_end/flambda/terms/symbol_projection.cmx \
@@ -6186,7 +6186,7 @@ middle_end/flambda/simplify/expr_builder.cmx : \
     middle_end/flambda/simplify/expr_builder.cmi
 middle_end/flambda/simplify/expr_builder.cmi : \
     middle_end/flambda/simplify/env/upwards_acc.cmi \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     middle_end/flambda/basic/symbol_scoping_rule.cmi \
     middle_end/flambda/simplify/basic/simplify_named_result.cmi \
     middle_end/flambda/basic/simple.cmi \
@@ -6452,7 +6452,7 @@ middle_end/flambda/simplify/simplify_apply_expr.cmi : \
     middle_end/flambda/terms/flambda.cmi
 middle_end/flambda/simplify/simplify_binary_primitive.cmo : \
     middle_end/flambda/naming/var_in_binding_pos.cmi \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     middle_end/flambda/compilenv_deps/tag.cmi \
     middle_end/flambda/simplify/simplify_import.cmi \
     middle_end/flambda/simplify/simplify_common.cmi \
@@ -6471,7 +6471,7 @@ middle_end/flambda/simplify/simplify_binary_primitive.cmo : \
     middle_end/flambda/simplify/simplify_binary_primitive.cmi
 middle_end/flambda/simplify/simplify_binary_primitive.cmx : \
     middle_end/flambda/naming/var_in_binding_pos.cmx \
-    middle_end/flambda/compilenv_deps/target_imm.cmx \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmx \
     middle_end/flambda/compilenv_deps/tag.cmx \
     middle_end/flambda/simplify/simplify_import.cmx \
     middle_end/flambda/simplify/simplify_common.cmx \
@@ -6500,7 +6500,7 @@ middle_end/flambda/simplify/simplify_common.cmo : \
     middle_end/flambda/compilenv_deps/variable.cmi \
     middle_end/flambda/simplify/env/upwards_env.cmi \
     middle_end/flambda/simplify/env/upwards_acc.cmi \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     middle_end/flambda/compilenv_deps/tag.cmi \
     middle_end/flambda/simplify/basic/simplified_named.cmi \
     middle_end/flambda/basic/simple.cmi \
@@ -6529,7 +6529,7 @@ middle_end/flambda/simplify/simplify_common.cmx : \
     middle_end/flambda/compilenv_deps/variable.cmx \
     middle_end/flambda/simplify/env/upwards_env.cmx \
     middle_end/flambda/simplify/env/upwards_acc.cmx \
-    middle_end/flambda/compilenv_deps/target_imm.cmx \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmx \
     middle_end/flambda/compilenv_deps/tag.cmx \
     middle_end/flambda/simplify/basic/simplified_named.cmx \
     middle_end/flambda/basic/simple.cmx \
@@ -6784,7 +6784,7 @@ middle_end/flambda/simplify/simplify_let_expr.cmi : \
 middle_end/flambda/simplify/simplify_named.cmo : \
     middle_end/flambda/compilenv_deps/variable.cmi \
     middle_end/flambda/naming/var_in_binding_pos.cmi \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     middle_end/flambda/terms/symbol_projection.cmi \
     middle_end/flambda/compilenv_deps/symbol.cmi \
     middle_end/flambda/simplify/simplify_static_const.cmi \
@@ -6811,7 +6811,7 @@ middle_end/flambda/simplify/simplify_named.cmo : \
 middle_end/flambda/simplify/simplify_named.cmx : \
     middle_end/flambda/compilenv_deps/variable.cmx \
     middle_end/flambda/naming/var_in_binding_pos.cmx \
-    middle_end/flambda/compilenv_deps/target_imm.cmx \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmx \
     middle_end/flambda/terms/symbol_projection.cmx \
     middle_end/flambda/compilenv_deps/symbol.cmx \
     middle_end/flambda/simplify/simplify_static_const.cmx \
@@ -7060,7 +7060,7 @@ middle_end/flambda/simplify/simplify_static_const.cmi : \
 middle_end/flambda/simplify/simplify_switch_expr.cmo : \
     middle_end/flambda/compilenv_deps/variable.cmi \
     middle_end/flambda/naming/var_in_binding_pos.cmi \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     lambda/switch.cmi \
     middle_end/flambda/simplify/simplify_import.cmi \
     middle_end/flambda/simplify/simplify_common.cmi \
@@ -7079,7 +7079,7 @@ middle_end/flambda/simplify/simplify_switch_expr.cmo : \
 middle_end/flambda/simplify/simplify_switch_expr.cmx : \
     middle_end/flambda/compilenv_deps/variable.cmx \
     middle_end/flambda/naming/var_in_binding_pos.cmx \
-    middle_end/flambda/compilenv_deps/target_imm.cmx \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmx \
     lambda/switch.cmx \
     middle_end/flambda/simplify/simplify_import.cmx \
     middle_end/flambda/simplify/simplify_common.cmx \
@@ -7121,7 +7121,7 @@ middle_end/flambda/simplify/simplify_ternary_primitive.cmi : \
 middle_end/flambda/simplify/simplify_unary_primitive.cmo : \
     middle_end/flambda/naming/var_in_binding_pos.cmi \
     utils/targetint.cmi \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     middle_end/flambda/types/basic/string_info.cmi \
     middle_end/flambda/simplify/simplify_import.cmi \
     middle_end/flambda/simplify/simplify_common.cmi \
@@ -7135,7 +7135,7 @@ middle_end/flambda/simplify/simplify_unary_primitive.cmo : \
 middle_end/flambda/simplify/simplify_unary_primitive.cmx : \
     middle_end/flambda/naming/var_in_binding_pos.cmx \
     utils/targetint.cmx \
-    middle_end/flambda/compilenv_deps/target_imm.cmx \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmx \
     middle_end/flambda/types/basic/string_info.cmx \
     middle_end/flambda/simplify/simplify_import.cmx \
     middle_end/flambda/simplify/simplify_common.cmx \
@@ -7156,7 +7156,7 @@ middle_end/flambda/simplify/simplify_unary_primitive.cmi : \
     lambda/debuginfo.cmi
 middle_end/flambda/simplify/simplify_variadic_primitive.cmo : \
     middle_end/flambda/naming/var_in_binding_pos.cmi \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     middle_end/flambda/compilenv_deps/tag.cmi \
     middle_end/flambda/simplify/simplify_import.cmi \
     middle_end/flambda/simplify/basic/simplified_named.cmi \
@@ -7167,7 +7167,7 @@ middle_end/flambda/simplify/simplify_variadic_primitive.cmo : \
     middle_end/flambda/simplify/simplify_variadic_primitive.cmi
 middle_end/flambda/simplify/simplify_variadic_primitive.cmx : \
     middle_end/flambda/naming/var_in_binding_pos.cmx \
-    middle_end/flambda/compilenv_deps/target_imm.cmx \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmx \
     middle_end/flambda/compilenv_deps/tag.cmx \
     middle_end/flambda/simplify/simplify_import.cmx \
     middle_end/flambda/simplify/basic/simplified_named.cmx \
@@ -7670,7 +7670,7 @@ middle_end/flambda/simplify/typing_helpers/continuation_uses.cmi : \
     middle_end/flambda/basic/apply_cont_rewrite_id.cmi
 middle_end/flambda/simplify/typing_helpers/number_adjuncts.cmo : \
     utils/targetint.cmi \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     middle_end/flambda/basic/simple.cmi \
     middle_end/flambda/basic/reg_width_const.cmi \
     utils/numbers.cmi \
@@ -7682,7 +7682,7 @@ middle_end/flambda/simplify/typing_helpers/number_adjuncts.cmo : \
     middle_end/flambda/simplify/typing_helpers/number_adjuncts.cmi
 middle_end/flambda/simplify/typing_helpers/number_adjuncts.cmx : \
     utils/targetint.cmx \
-    middle_end/flambda/compilenv_deps/target_imm.cmx \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmx \
     middle_end/flambda/basic/simple.cmx \
     middle_end/flambda/basic/reg_width_const.cmx \
     utils/numbers.cmx \
@@ -7694,7 +7694,7 @@ middle_end/flambda/simplify/typing_helpers/number_adjuncts.cmx : \
     middle_end/flambda/simplify/typing_helpers/number_adjuncts.cmi
 middle_end/flambda/simplify/typing_helpers/number_adjuncts.cmi : \
     utils/targetint.cmi \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     middle_end/flambda/basic/reg_width_const.cmi \
     utils/numbers.cmi \
     utils/identifiable.cmi \
@@ -8058,7 +8058,7 @@ middle_end/flambda/terms/flambda.cmo : \
     middle_end/flambda/basic/var_within_closure.cmi \
     middle_end/flambda/naming/var_in_binding_pos.cmi \
     utils/targetint.cmi \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     middle_end/flambda/compilenv_deps/tag.cmi \
     middle_end/flambda/basic/symbol_scoping_rule.cmi \
     middle_end/flambda/compilenv_deps/symbol.cmi \
@@ -8119,7 +8119,7 @@ middle_end/flambda/terms/flambda.cmx : \
     middle_end/flambda/basic/var_within_closure.cmx \
     middle_end/flambda/naming/var_in_binding_pos.cmx \
     utils/targetint.cmx \
-    middle_end/flambda/compilenv_deps/target_imm.cmx \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmx \
     middle_end/flambda/compilenv_deps/tag.cmx \
     middle_end/flambda/basic/symbol_scoping_rule.cmx \
     middle_end/flambda/compilenv_deps/symbol.cmx \
@@ -8178,7 +8178,7 @@ middle_end/flambda/terms/flambda.cmx : \
 middle_end/flambda/terms/flambda.cmi : \
     middle_end/flambda/compilenv_deps/variable.cmi \
     utils/targetint.cmi \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     middle_end/flambda/compilenv_deps/tag.cmi \
     middle_end/flambda/compilenv_deps/symbol.cmi \
     middle_end/flambda/terms/switch_expr.cmi \
@@ -8222,7 +8222,7 @@ middle_end/flambda/terms/flambda.cmi : \
     middle_end/flambda/terms/apply_cont_expr.cmi
 middle_end/flambda/terms/flambda_primitive.cmo : \
     middle_end/flambda/basic/var_within_closure.cmi \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     middle_end/flambda/compilenv_deps/tag.cmi \
     middle_end/flambda/basic/simple.cmi \
     middle_end/flambda/types/basic/or_unknown.cmi \
@@ -8243,7 +8243,7 @@ middle_end/flambda/terms/flambda_primitive.cmo : \
     middle_end/flambda/terms/flambda_primitive.cmi
 middle_end/flambda/terms/flambda_primitive.cmx : \
     middle_end/flambda/basic/var_within_closure.cmx \
-    middle_end/flambda/compilenv_deps/target_imm.cmx \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmx \
     middle_end/flambda/compilenv_deps/tag.cmx \
     middle_end/flambda/basic/simple.cmx \
     middle_end/flambda/types/basic/or_unknown.cmx \
@@ -8264,7 +8264,7 @@ middle_end/flambda/terms/flambda_primitive.cmx : \
     middle_end/flambda/terms/flambda_primitive.cmi
 middle_end/flambda/terms/flambda_primitive.cmi : \
     middle_end/flambda/basic/var_within_closure.cmi \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     middle_end/flambda/compilenv_deps/tag.cmi \
     middle_end/flambda/basic/simple.cmi \
     middle_end/flambda/types/basic/or_unknown.cmi \
@@ -8485,7 +8485,7 @@ middle_end/flambda/terms/let_expr.rec.cmi : \
     middle_end/flambda/naming/bindable_let_bound.cmi
 middle_end/flambda/terms/named.rec.cmo : \
     utils/targetint.cmi \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     middle_end/flambda/basic/simple.cmi \
     middle_end/flambda/terms/set_of_closures.cmi \
     middle_end/flambda/basic/reg_width_const.cmi \
@@ -8502,7 +8502,7 @@ middle_end/flambda/terms/named.rec.cmo : \
     middle_end/flambda/terms/named.rec.cmi
 middle_end/flambda/terms/named.rec.cmx : \
     utils/targetint.cmx \
-    middle_end/flambda/compilenv_deps/target_imm.cmx \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmx \
     middle_end/flambda/basic/simple.cmx \
     middle_end/flambda/terms/set_of_closures.cmx \
     middle_end/flambda/basic/reg_width_const.cmx \
@@ -8621,7 +8621,7 @@ middle_end/flambda/terms/set_of_closures.cmi : \
 middle_end/flambda/terms/static_const.rec.cmo : \
     middle_end/flambda/compilenv_deps/variable.cmi \
     utils/targetint.cmi \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     middle_end/flambda/compilenv_deps/tag.cmi \
     middle_end/flambda/compilenv_deps/symbol.cmi \
     middle_end/flambda/terms/set_of_closures.cmi \
@@ -8645,7 +8645,7 @@ middle_end/flambda/terms/static_const.rec.cmo : \
 middle_end/flambda/terms/static_const.rec.cmx : \
     middle_end/flambda/compilenv_deps/variable.cmx \
     utils/targetint.cmx \
-    middle_end/flambda/compilenv_deps/target_imm.cmx \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmx \
     middle_end/flambda/compilenv_deps/tag.cmx \
     middle_end/flambda/compilenv_deps/symbol.cmx \
     middle_end/flambda/terms/set_of_closures.cmx \
@@ -8669,7 +8669,7 @@ middle_end/flambda/terms/static_const.rec.cmx : \
 middle_end/flambda/terms/static_const.rec.cmi : \
     middle_end/flambda/compilenv_deps/variable.cmi \
     utils/targetint.cmi \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     middle_end/flambda/compilenv_deps/tag.cmi \
     middle_end/flambda/compilenv_deps/symbol.cmi \
     middle_end/flambda/terms/set_of_closures.cmi \
@@ -8684,7 +8684,7 @@ middle_end/flambda/terms/static_const.rec.cmi : \
     middle_end/flambda/basic/closure_id.cmi \
     middle_end/flambda/terms/bound_symbols.cmi
 middle_end/flambda/terms/switch_expr.cmo : \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     middle_end/flambda/basic/simple.cmi \
     middle_end/flambda/naming/name_occurrences.cmi \
     middle_end/flambda/cmx/ids_for_export.cmi \
@@ -8692,7 +8692,7 @@ middle_end/flambda/terms/switch_expr.cmo : \
     middle_end/flambda/terms/apply_cont_expr.cmi \
     middle_end/flambda/terms/switch_expr.cmi
 middle_end/flambda/terms/switch_expr.cmx : \
-    middle_end/flambda/compilenv_deps/target_imm.cmx \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmx \
     middle_end/flambda/basic/simple.cmx \
     middle_end/flambda/naming/name_occurrences.cmx \
     middle_end/flambda/cmx/ids_for_export.cmx \
@@ -8700,14 +8700,14 @@ middle_end/flambda/terms/switch_expr.cmx : \
     middle_end/flambda/terms/apply_cont_expr.cmx \
     middle_end/flambda/terms/switch_expr.cmi
 middle_end/flambda/terms/switch_expr.cmi : \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     middle_end/flambda/basic/simple.cmi \
     middle_end/flambda/basic/expr_std.cmo \
     middle_end/flambda/cmx/contains_ids.cmo \
     middle_end/flambda/terms/apply_cont_expr.cmi
 middle_end/flambda/terms/symbol_projection.cmo : \
     middle_end/flambda/basic/var_within_closure.cmi \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     middle_end/flambda/compilenv_deps/symbol.cmi \
     middle_end/flambda/naming/renaming.cmi \
     middle_end/flambda/naming/name_occurrences.cmi \
@@ -8717,7 +8717,7 @@ middle_end/flambda/terms/symbol_projection.cmo : \
     middle_end/flambda/terms/symbol_projection.cmi
 middle_end/flambda/terms/symbol_projection.cmx : \
     middle_end/flambda/basic/var_within_closure.cmx \
-    middle_end/flambda/compilenv_deps/target_imm.cmx \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmx \
     middle_end/flambda/compilenv_deps/symbol.cmx \
     middle_end/flambda/naming/renaming.cmx \
     middle_end/flambda/naming/name_occurrences.cmx \
@@ -8727,7 +8727,7 @@ middle_end/flambda/terms/symbol_projection.cmx : \
     middle_end/flambda/terms/symbol_projection.cmi
 middle_end/flambda/terms/symbol_projection.cmi : \
     middle_end/flambda/basic/var_within_closure.cmi \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     middle_end/flambda/compilenv_deps/symbol.cmi \
     middle_end/flambda/naming/contains_names.cmo \
     middle_end/flambda/cmx/contains_ids.cmo \
@@ -8742,7 +8742,7 @@ middle_end/flambda/to_cmm/un_cps.cmo : \
     middle_end/flambda/to_cmm/un_cps_env.cmi \
     middle_end/flambda/to_cmm/un_cps_closure.cmi \
     utils/targetint.cmi \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     middle_end/flambda/compilenv_deps/symbol.cmi \
     lambda/switch.cmi \
     middle_end/flambda/basic/simple.cmi \
@@ -8806,7 +8806,7 @@ middle_end/flambda/to_cmm/un_cps.cmx : \
     middle_end/flambda/to_cmm/un_cps_env.cmx \
     middle_end/flambda/to_cmm/un_cps_closure.cmx \
     utils/targetint.cmx \
-    middle_end/flambda/compilenv_deps/target_imm.cmx \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmx \
     middle_end/flambda/compilenv_deps/symbol.cmx \
     lambda/switch.cmx \
     middle_end/flambda/basic/simple.cmx \
@@ -9050,7 +9050,7 @@ middle_end/flambda/to_cmm/un_cps_static.cmo : \
     middle_end/flambda/to_cmm/un_cps_env.cmi \
     middle_end/flambda/to_cmm/un_cps_closure.cmi \
     utils/targetint.cmi \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     middle_end/flambda/compilenv_deps/tag.cmi \
     middle_end/flambda/compilenv_deps/symbol.cmi \
     middle_end/flambda/basic/simple.cmi \
@@ -9086,7 +9086,7 @@ middle_end/flambda/to_cmm/un_cps_static.cmx : \
     middle_end/flambda/to_cmm/un_cps_env.cmx \
     middle_end/flambda/to_cmm/un_cps_closure.cmx \
     utils/targetint.cmx \
-    middle_end/flambda/compilenv_deps/target_imm.cmx \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmx \
     middle_end/flambda/compilenv_deps/tag.cmx \
     middle_end/flambda/compilenv_deps/symbol.cmx \
     middle_end/flambda/basic/simple.cmx \
@@ -9133,7 +9133,7 @@ middle_end/flambda/types/flambda_type.cmo : \
     middle_end/flambda/types/type_head_intf.cmo \
     middle_end/flambda/types/type_descr_intf.cmo \
     utils/targetint.cmi \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     middle_end/flambda/types/basic/tag_or_unknown_and_size.cmi \
     middle_end/flambda/types/basic/tag_and_size.cmi \
     middle_end/flambda/compilenv_deps/tag.cmi \
@@ -9188,7 +9188,7 @@ middle_end/flambda/types/flambda_type.cmx : \
     middle_end/flambda/types/type_head_intf.cmx \
     middle_end/flambda/types/type_descr_intf.cmx \
     utils/targetint.cmx \
-    middle_end/flambda/compilenv_deps/target_imm.cmx \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmx \
     middle_end/flambda/types/basic/tag_or_unknown_and_size.cmx \
     middle_end/flambda/types/basic/tag_and_size.cmx \
     middle_end/flambda/compilenv_deps/tag.cmx \
@@ -9239,7 +9239,7 @@ middle_end/flambda/types/flambda_type.cmi : \
     middle_end/flambda/basic/var_within_closure.cmi \
     middle_end/flambda/naming/var_in_binding_pos.cmi \
     utils/targetint.cmi \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     middle_end/flambda/compilenv_deps/tag.cmi \
     middle_end/flambda/terms/symbol_projection.cmi \
     middle_end/flambda/compilenv_deps/symbol.cmi \
@@ -9351,7 +9351,7 @@ middle_end/flambda/types/type_grammar.rec.cmo : \
     middle_end/flambda/compilenv_deps/variable.cmi \
     middle_end/flambda/basic/var_within_closure.cmi \
     utils/targetint.cmi \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     middle_end/flambda/compilenv_deps/tag.cmi \
     middle_end/flambda/types/basic/string_info.cmi \
     middle_end/flambda/basic/simple.cmi \
@@ -9375,7 +9375,7 @@ middle_end/flambda/types/type_grammar.rec.cmx : \
     middle_end/flambda/compilenv_deps/variable.cmx \
     middle_end/flambda/basic/var_within_closure.cmx \
     utils/targetint.cmx \
-    middle_end/flambda/compilenv_deps/target_imm.cmx \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmx \
     middle_end/flambda/compilenv_deps/tag.cmx \
     middle_end/flambda/types/basic/string_info.cmx \
     middle_end/flambda/basic/simple.cmx \
@@ -9399,7 +9399,7 @@ middle_end/flambda/types/type_grammar.rec.cmi : \
     middle_end/flambda/compilenv_deps/variable.cmi \
     middle_end/flambda/basic/var_within_closure.cmi \
     utils/targetint.cmi \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     middle_end/flambda/compilenv_deps/tag.cmi \
     middle_end/flambda/basic/simple.cmi \
     middle_end/flambda/basic/reg_width_const.cmi \
@@ -9523,46 +9523,46 @@ middle_end/flambda/types/basic/or_unknown_or_bottom.cmx : \
 middle_end/flambda/types/basic/or_unknown_or_bottom.cmi : \
     middle_end/flambda/types/basic/or_unknown.cmi
 middle_end/flambda/types/basic/string_info.cmo : \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     utils/misc.cmi \
     utils/identifiable.cmi \
     middle_end/flambda/types/basic/string_info.cmi
 middle_end/flambda/types/basic/string_info.cmx : \
-    middle_end/flambda/compilenv_deps/target_imm.cmx \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmx \
     utils/misc.cmx \
     utils/identifiable.cmx \
     middle_end/flambda/types/basic/string_info.cmi
 middle_end/flambda/types/basic/string_info.cmi : \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     utils/identifiable.cmi
 middle_end/flambda/types/basic/tag_and_size.cmo : \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     middle_end/flambda/compilenv_deps/tag.cmi \
     utils/identifiable.cmi \
     middle_end/flambda/types/basic/tag_and_size.cmi
 middle_end/flambda/types/basic/tag_and_size.cmx : \
-    middle_end/flambda/compilenv_deps/target_imm.cmx \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmx \
     middle_end/flambda/compilenv_deps/tag.cmx \
     utils/identifiable.cmx \
     middle_end/flambda/types/basic/tag_and_size.cmi
 middle_end/flambda/types/basic/tag_and_size.cmi : \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     middle_end/flambda/compilenv_deps/tag.cmi \
     utils/identifiable.cmi
 middle_end/flambda/types/basic/tag_or_unknown_and_size.cmo : \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     middle_end/flambda/compilenv_deps/tag.cmi \
     middle_end/flambda/types/basic/or_unknown.cmi \
     utils/identifiable.cmi \
     middle_end/flambda/types/basic/tag_or_unknown_and_size.cmi
 middle_end/flambda/types/basic/tag_or_unknown_and_size.cmx : \
-    middle_end/flambda/compilenv_deps/target_imm.cmx \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmx \
     middle_end/flambda/compilenv_deps/tag.cmx \
     middle_end/flambda/types/basic/or_unknown.cmx \
     utils/identifiable.cmx \
     middle_end/flambda/types/basic/tag_or_unknown_and_size.cmi
 middle_end/flambda/types/basic/tag_or_unknown_and_size.cmi : \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     middle_end/flambda/compilenv_deps/tag.cmi \
     middle_end/flambda/types/basic/or_unknown.cmi \
     utils/identifiable.cmi
@@ -9824,7 +9824,7 @@ middle_end/flambda/types/kinds/flambda_arity.cmi : \
     middle_end/flambda/types/kinds/flambda_kind.cmi
 middle_end/flambda/types/kinds/flambda_kind.cmo : \
     utils/targetint.cmi \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     utils/numbers.cmi \
     utils/misc.cmi \
     utils/identifiable.cmi \
@@ -9832,7 +9832,7 @@ middle_end/flambda/types/kinds/flambda_kind.cmo : \
     middle_end/flambda/types/kinds/flambda_kind.cmi
 middle_end/flambda/types/kinds/flambda_kind.cmx : \
     utils/targetint.cmx \
-    middle_end/flambda/compilenv_deps/target_imm.cmx \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmx \
     utils/numbers.cmx \
     utils/misc.cmx \
     utils/identifiable.cmx \
@@ -9840,7 +9840,7 @@ middle_end/flambda/types/kinds/flambda_kind.cmx : \
     middle_end/flambda/types/kinds/flambda_kind.cmi
 middle_end/flambda/types/kinds/flambda_kind.cmi : \
     utils/targetint.cmi \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     utils/numbers.cmi \
     utils/identifiable.cmi
 middle_end/flambda/types/structures/closures_entry.rec.cmo : \
@@ -9921,7 +9921,7 @@ middle_end/flambda/types/structures/function_declaration_type.rec.cmi : \
     middle_end/flambda/basic/code_id.cmi
 middle_end/flambda/types/structures/product.rec.cmo : \
     middle_end/flambda/basic/var_within_closure.cmi \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     middle_end/flambda/naming/renaming.cmi \
     middle_end/flambda/types/structures/product_intf.cmo \
     middle_end/flambda/types/basic/or_unknown.cmi \
@@ -9934,7 +9934,7 @@ middle_end/flambda/types/structures/product.rec.cmo : \
     middle_end/flambda/types/structures/product.rec.cmi
 middle_end/flambda/types/structures/product.rec.cmx : \
     middle_end/flambda/basic/var_within_closure.cmx \
-    middle_end/flambda/compilenv_deps/target_imm.cmx \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmx \
     middle_end/flambda/naming/renaming.cmx \
     middle_end/flambda/types/structures/product_intf.cmx \
     middle_end/flambda/types/basic/or_unknown.cmx \
@@ -9953,7 +9953,7 @@ middle_end/flambda/types/structures/product.rec.cmi : \
     middle_end/flambda/basic/closure_id.cmi
 middle_end/flambda/types/structures/product_intf.cmo : \
     middle_end/flambda/types/structures/type_structure_intf.cmo \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     middle_end/flambda/naming/renaming.cmi \
     middle_end/flambda/types/basic/or_unknown.cmi \
     middle_end/flambda/types/basic/or_bottom.cmi \
@@ -9961,7 +9961,7 @@ middle_end/flambda/types/structures/product_intf.cmo : \
     middle_end/flambda/types/kinds/flambda_kind.cmi
 middle_end/flambda/types/structures/product_intf.cmx : \
     middle_end/flambda/types/structures/type_structure_intf.cmx \
-    middle_end/flambda/compilenv_deps/target_imm.cmx \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmx \
     middle_end/flambda/naming/renaming.cmx \
     middle_end/flambda/types/basic/or_unknown.cmx \
     middle_end/flambda/types/basic/or_bottom.cmx \
@@ -9969,7 +9969,7 @@ middle_end/flambda/types/structures/product_intf.cmx : \
     middle_end/flambda/types/kinds/flambda_kind.cmx
 middle_end/flambda/types/structures/row_like.rec.cmo : \
     middle_end/flambda/basic/var_within_closure.cmi \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     middle_end/flambda/types/basic/tag_or_unknown_and_size.cmi \
     middle_end/flambda/compilenv_deps/tag.cmi \
     middle_end/flambda/types/structures/set_of_closures_contents.cmi \
@@ -9991,7 +9991,7 @@ middle_end/flambda/types/structures/row_like.rec.cmo : \
     middle_end/flambda/types/structures/row_like.rec.cmi
 middle_end/flambda/types/structures/row_like.rec.cmx : \
     middle_end/flambda/basic/var_within_closure.cmx \
-    middle_end/flambda/compilenv_deps/target_imm.cmx \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmx \
     middle_end/flambda/types/basic/tag_or_unknown_and_size.cmx \
     middle_end/flambda/compilenv_deps/tag.cmx \
     middle_end/flambda/types/structures/set_of_closures_contents.cmx \
@@ -10014,7 +10014,7 @@ middle_end/flambda/types/structures/row_like.rec.cmx : \
 middle_end/flambda/types/structures/row_like.rec.cmi : \
     middle_end/flambda/basic/var_within_closure.cmi \
     middle_end/flambda/types/structures/type_structure_intf.cmo \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     middle_end/flambda/types/basic/tag_and_size.cmi \
     middle_end/flambda/compilenv_deps/tag.cmi \
     middle_end/flambda/types/structures/set_of_closures_contents.cmi \
@@ -10079,7 +10079,7 @@ middle_end/flambda/types/type_of_kind/type_of_kind_naked_float0.rec.cmi : \
     middle_end/flambda/types/type_head_intf.cmo \
     utils/numbers.cmi
 middle_end/flambda/types/type_of_kind/type_of_kind_naked_immediate0.rec.cmo : \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     middle_end/flambda/compilenv_deps/tag.cmi \
     utils/printing_cache.cmi \
     middle_end/flambda/types/basic/or_unknown.cmi \
@@ -10089,7 +10089,7 @@ middle_end/flambda/types/type_of_kind/type_of_kind_naked_immediate0.rec.cmo : \
     middle_end/flambda/compilenv_deps/coercion.cmi \
     middle_end/flambda/types/type_of_kind/type_of_kind_naked_immediate0.rec.cmi
 middle_end/flambda/types/type_of_kind/type_of_kind_naked_immediate0.rec.cmx : \
-    middle_end/flambda/compilenv_deps/target_imm.cmx \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmx \
     middle_end/flambda/compilenv_deps/tag.cmx \
     utils/printing_cache.cmx \
     middle_end/flambda/types/basic/or_unknown.cmx \
@@ -10100,7 +10100,7 @@ middle_end/flambda/types/type_of_kind/type_of_kind_naked_immediate0.rec.cmx : \
     middle_end/flambda/types/type_of_kind/type_of_kind_naked_immediate0.rec.cmi
 middle_end/flambda/types/type_of_kind/type_of_kind_naked_immediate0.rec.cmi : \
     middle_end/flambda/types/type_head_intf.cmo \
-    middle_end/flambda/compilenv_deps/target_imm.cmi
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi
 middle_end/flambda/types/type_of_kind/type_of_kind_naked_int32_0.rec.cmo : \
     middle_end/flambda/types/basic/or_unknown.cmi \
     middle_end/flambda/types/basic/or_bottom.cmi \
@@ -10304,7 +10304,7 @@ middle_end/flambda/unboxing/optimistic_unboxing_decision.cmo : \
     middle_end/flambda/basic/var_within_closure.cmi \
     middle_end/flambda/unboxing/unboxing_types.cmi \
     middle_end/flambda/unboxing/unboxers.cmi \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     middle_end/flambda/compilenv_deps/tag.cmi \
     middle_end/flambda/simplify/simplify_import.cmi \
     middle_end/flambda/basic/simple.cmi \
@@ -10318,7 +10318,7 @@ middle_end/flambda/unboxing/optimistic_unboxing_decision.cmx : \
     middle_end/flambda/basic/var_within_closure.cmx \
     middle_end/flambda/unboxing/unboxing_types.cmx \
     middle_end/flambda/unboxing/unboxers.cmx \
-    middle_end/flambda/compilenv_deps/target_imm.cmx \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmx \
     middle_end/flambda/compilenv_deps/tag.cmx \
     middle_end/flambda/simplify/simplify_import.cmx \
     middle_end/flambda/basic/simple.cmx \
@@ -10361,7 +10361,7 @@ middle_end/flambda/unboxing/unbox_continuation_params.cmi : \
     middle_end/flambda/basic/apply_cont_rewrite_id.cmi
 middle_end/flambda/unboxing/unboxers.cmo : \
     utils/targetint.cmi \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     middle_end/flambda/simplify/simplify_import.cmi \
     middle_end/flambda/basic/simple.cmi \
     utils/numbers.cmi \
@@ -10369,7 +10369,7 @@ middle_end/flambda/unboxing/unboxers.cmo : \
     middle_end/flambda/unboxing/unboxers.cmi
 middle_end/flambda/unboxing/unboxers.cmx : \
     utils/targetint.cmx \
-    middle_end/flambda/compilenv_deps/target_imm.cmx \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmx \
     middle_end/flambda/simplify/simplify_import.cmx \
     middle_end/flambda/basic/simple.cmx \
     utils/numbers.cmx \
@@ -10377,7 +10377,7 @@ middle_end/flambda/unboxing/unboxers.cmx : \
     middle_end/flambda/unboxing/unboxers.cmi
 middle_end/flambda/unboxing/unboxers.cmi : \
     middle_end/flambda/basic/var_within_closure.cmi \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     middle_end/flambda/simplify/simplify_import.cmi \
     middle_end/flambda/basic/simple.cmi \
     middle_end/flambda/naming/name_mode.cmi \
@@ -10387,7 +10387,7 @@ middle_end/flambda/unboxing/unboxing_epa.cmo : \
     middle_end/flambda/basic/var_within_closure.cmi \
     middle_end/flambda/unboxing/unboxing_types.cmi \
     middle_end/flambda/unboxing/unboxers.cmi \
-    middle_end/flambda/compilenv_deps/target_imm.cmi \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
     middle_end/flambda/compilenv_deps/tag.cmi \
     middle_end/flambda/simplify/simplify_import.cmi \
     middle_end/flambda/basic/simple.cmi \
@@ -10402,7 +10402,7 @@ middle_end/flambda/unboxing/unboxing_epa.cmx : \
     middle_end/flambda/basic/var_within_closure.cmx \
     middle_end/flambda/unboxing/unboxing_types.cmx \
     middle_end/flambda/unboxing/unboxers.cmx \
-    middle_end/flambda/compilenv_deps/target_imm.cmx \
+    middle_end/flambda/compilenv_deps/targetint_31_63.cmx \
     middle_end/flambda/compilenv_deps/tag.cmx \
     middle_end/flambda/simplify/simplify_import.cmx \
     middle_end/flambda/basic/simple.cmx \

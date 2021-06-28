@@ -16,7 +16,7 @@
 
 module Projection = struct
   type t =
-    | Block_load of { index : Target_imm.Imm.t; }
+    | Block_load of { index : Targetint_31_63.Imm.t; }
     | Project_var of {
         project_from : Closure_id.t;
         var : Var_within_closure.t;
@@ -27,7 +27,7 @@ module Projection = struct
 
   let hash t =
     match t with
-    | Block_load { index; } -> Target_imm.Imm.hash index
+    | Block_load { index; } -> Targetint_31_63.Imm.hash index
     | Project_var { project_from; var; } ->
       Hashtbl.hash (Closure_id.hash project_from, Var_within_closure.hash var)
 
@@ -37,7 +37,7 @@ module Projection = struct
       Format.fprintf ppf "@[<hov 1>(Block_load@ \
           @[<hov 1>(index@ %a)@]\
           )@]"
-        Target_imm.Imm.print index
+        Targetint_31_63.Imm.print index
     | Project_var { project_from; var; } ->
       Format.fprintf ppf "@[<hov 1>(Project_var@ \
           @[<hov 1>(project_from@ %a)@]@ \
@@ -49,7 +49,7 @@ module Projection = struct
   let compare t1 t2 =
     match t1, t2 with
     | Block_load { index = index1; }, Block_load { index = index2; } ->
-      Target_imm.Imm.compare index1 index2
+      Targetint_31_63.Imm.compare index1 index2
     | Project_var { project_from = project_from1; var = var1; },
         Project_var { project_from = project_from2; var = var2; } ->
       let c = Closure_id.compare project_from1 project_from2 in

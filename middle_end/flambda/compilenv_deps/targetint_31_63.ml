@@ -132,7 +132,7 @@ module Imm = struct
       match to_int_option t with
       | Some i -> i
       | None ->
-        Misc.fatal_errorf "Target_imm.Imm.to_int_exn: %Ld out of range" t
+        Misc.fatal_errorf "Targetint_31_63.Imm.to_int_exn: %Ld out of range" t
 
     let get_least_significant_16_bits_then_byte_swap t =
       let least_significant_byte = Int64.logand t 0xffL in

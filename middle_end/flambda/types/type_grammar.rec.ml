@@ -381,10 +381,10 @@ let this_naked_nativeint i : t =
     Reg_width_const.naked_nativeint i)))
 
 let these_naked_immediates0 ~no_alias is =
-  match Target_imm.Set.get_singleton is with
+  match Targetint_31_63.Set.get_singleton is with
   | Some i when not no_alias -> this_naked_immediate i
   | _ ->
-    if Target_imm.Set.is_empty is then bottom K.naked_immediate
+    if Targetint_31_63.Set.is_empty is then bottom K.naked_immediate
     else Naked_immediate (T_NI.create_no_alias (Ok (Naked_immediates is)))
 
 let these_naked_floats0 ~no_alias fs =
@@ -416,7 +416,7 @@ let these_naked_nativeints0 ~no_alias is =
     else Naked_nativeint (T_NN.create_no_alias (Ok is))
 
 let this_naked_immediate_without_alias i =
-  these_naked_immediates0 ~no_alias:true (Target_imm.Set.singleton i)
+  these_naked_immediates0 ~no_alias:true (Targetint_31_63.Set.singleton i)
 
 let this_naked_float_without_alias f =
   these_naked_floats0 ~no_alias:true (Float.Set.singleton f)
@@ -479,10 +479,10 @@ let this_tagged_immediate imm : t =
     Reg_width_const.tagged_immediate imm)))
 
 let these_tagged_immediates0 ~no_alias imms : t =
-  match Target_imm.Set.get_singleton imms with
+  match Targetint_31_63.Set.get_singleton imms with
   | Some imm when not no_alias -> this_tagged_immediate imm
   | _ ->
-    if Target_imm.Set.is_empty imms then bottom K.value
+    if Targetint_31_63.Set.is_empty imms then bottom K.value
     else
       Value (T_V.create_no_alias (Ok (Variant (Variant.create
         ~is_unique:false
@@ -493,7 +493,7 @@ let these_tagged_immediates imms =
   these_tagged_immediates0 ~no_alias:false imms
 
 let this_tagged_immediate_without_alias imm =
-  these_tagged_immediates0 ~no_alias:true (Target_imm.Set.singleton imm)
+  these_tagged_immediates0 ~no_alias:true (Targetint_31_63.Set.singleton imm)
 
 let tag_immediate t : t =
   match t with
@@ -523,7 +523,7 @@ let is_int_for_scrutinee ~scrutinee : t =
 let get_tag_for_block ~block : t =
   Naked_immediate (T_NI.create (Get_tag (alias_type_of K.value block)))
 
-let any_tagged_bool () = these_tagged_immediates Target_imm.all_bools
+let any_tagged_bool () = these_tagged_immediates Targetint_31_63.all_bools
 
 let this_boxed_float f = box_float (this_naked_float f)
 let this_boxed_int32 i = box_int32 (this_naked_int32 i)
@@ -564,7 +564,7 @@ let blocks_with_these_tags tags : _ Or_unknown.t =
     Unknown
 
 let immutable_block ~is_unique tag ~field_kind ~fields =
-  match Target_imm.Imm.of_int_option (List.length fields) with
+  match Targetint_31_63.Imm.of_int_option (List.length fields) with
   | None ->
     (* CR mshinwell: This should be a special kind of error. *)
     Misc.fatal_error "Block too long for target"
@@ -576,7 +576,7 @@ let immutable_block ~is_unique tag ~field_kind ~fields =
         ~field_tys:fields (Closed tag)))))))
 
 let immutable_block_with_size_at_least ~tag ~n ~field_kind ~field_n_minus_one =
-  let n = Target_imm.Imm.to_int n in
+  let n = Targetint_31_63.Imm.to_int n in
   let field_tys =
     List.init n (fun index ->
       if index < n - 1 then unknown field_kind
@@ -610,7 +610,7 @@ let open_variant_from_const_ctors_type ~const_ctors =
       ~blocks:Unknown))))
 
 let open_variant_from_non_const_ctor_with_size_at_least ~n ~field_n_minus_one =
-  let n = Target_imm.Imm.to_int n in
+  let n = Targetint_31_63.Imm.to_int n in
   let field_tys =
     List.init n (fun index ->
       if index < n - 1 then any_value ()
@@ -624,7 +624,7 @@ let open_variant_from_non_const_ctor_with_size_at_least ~n ~field_n_minus_one =
 
 let this_immutable_string str =
   (* CR mshinwell: Use "length" not "size" for strings *)
-  let size = Target_imm.Imm.of_int (String.length str) in
+  let size = Targetint_31_63.Imm.of_int (String.length str) in
   let string_info =
     String_info.Set.singleton
       (String_info.create ~contents:(Contents str) ~size)
@@ -632,7 +632,7 @@ let this_immutable_string str =
   Value (T_V.create (String string_info))
 
 let mutable_string ~size =
-  let size = Target_imm.Imm.of_int size in
+  let size = Targetint_31_63.Imm.of_int size in
   let string_info =
     String_info.Set.singleton
       (String_info.create ~contents:Unknown_or_mutable ~size)

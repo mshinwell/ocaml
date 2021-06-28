@@ -50,7 +50,7 @@ module Immediate = struct
   let unboxer = {
     var_name = "naked_immediate";
     invalid_const =
-      Const.naked_immediate (Target_imm.int (Target_imm.Imm.of_int 0xabcd));
+      Const.naked_immediate (Targetint_31_63.int (Targetint_31_63.Imm.of_int 0xabcd));
     unboxing_prim;
     prove_simple = T.prove_is_always_tagging_of_simple;
   }

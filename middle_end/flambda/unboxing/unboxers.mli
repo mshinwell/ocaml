@@ -47,13 +47,13 @@ module Field : sig
   val unboxing_prim
      : P.Block_access_kind.t
     -> block:Simple.t
-    -> index:Target_imm.t
+    -> index:Targetint_31_63.t
     -> P.t
 
   val unboxer
      : invalid_const:Const.t
     -> P.Block_access_kind.t
-    -> index:Target_imm.t
+    -> index:Targetint_31_63.t
     -> unboxer
 end
 

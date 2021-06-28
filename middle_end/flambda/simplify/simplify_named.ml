@@ -75,7 +75,7 @@ let record_any_symbol_projection dacc (defining_expr : Simplified_named.t)
               Simple.pattern_match' block
                 ~const:(fun _ -> None)
                 ~symbol:(fun symbol_projected_from ~coercion:_ ->
-                  let index = Target_imm.to_targetint imm in
+                  let index = Targetint_31_63.to_targetint imm in
                   Some (SP.create symbol_projected_from
                     (SP.Projection.block_load ~index)))
                 ~var:(fun _ ~coercion:_ -> None)

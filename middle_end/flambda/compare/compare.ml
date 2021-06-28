@@ -507,7 +507,7 @@ and subst_apply_cont env apply_cont =
 and subst_switch env switch =
   let scrutinee = subst_simple env (Switch_expr.scrutinee switch) in
   let arms =
-    Target_imm.Map.map (subst_apply_cont env) (Switch_expr.arms switch)
+    Targetint_31_63.Map.map (subst_apply_cont env) (Switch_expr.arms switch)
   in
   Expr.create_switch (Switch_expr.create ~scrutinee ~arms)
 ;;
@@ -1143,7 +1143,7 @@ let switch_exprs env switch1 switch2 : Expr.t Comparison.t =
     lists
       ~f:(
         pairs
-          ~f1:(Comparator.of_predicate ~f:Target_imm.equal)
+          ~f1:(Comparator.of_predicate ~f:Targetint_31_63.equal)
           ~f2:apply_cont_exprs
           ~subst2:subst_apply_cont
       )
@@ -1151,8 +1151,8 @@ let switch_exprs env switch1 switch2 : Expr.t Comparison.t =
         (target_imm, subst_apply_cont env apply_cont)
       )
       ~subst_snd:true
-      env (Target_imm.Map.bindings arms1) (Target_imm.Map.bindings arms2)
-    |> Comparison.map ~f:Target_imm.Map.of_list
+      env (Targetint_31_63.Map.bindings arms1) (Targetint_31_63.Map.bindings arms2)
+    |> Comparison.map ~f:Targetint_31_63.Map.of_list
   in
   pairs ~f1:compare_arms ~f2:simple_exprs ~subst2:subst_simple
     env

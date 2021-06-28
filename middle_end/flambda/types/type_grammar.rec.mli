@@ -73,14 +73,14 @@ val any_naked_nativeint : unit -> t
 
 val any_rec_info : unit -> t
 
-val this_tagged_immediate : Target_imm.t -> t
+val this_tagged_immediate : Targetint_31_63.t -> t
 val this_boxed_float : Numbers.Float_by_bit_pattern.t -> t
 val this_boxed_int32 : Int32.t -> t
 val this_boxed_int64 : Int64.t -> t
 val this_boxed_nativeint : Targetint.t -> t
 
-val these_tagged_immediates : Target_imm.Set.t -> t
-val these_naked_immediates : Target_imm.Set.t -> t
+val these_tagged_immediates : Targetint_31_63.Set.t -> t
+val these_naked_immediates : Targetint_31_63.Set.t -> t
 val these_boxed_floats : Numbers.Float_by_bit_pattern.Set.t -> t
 val these_boxed_int32s : Int32.Set.t -> t
 val these_boxed_int64s : Int64.Set.t -> t
@@ -88,14 +88,14 @@ val these_boxed_nativeints : Targetint.Set.t -> t
 
 val this_rec_info : Rec_info_expr.t -> t
 
-val this_naked_immediate : Target_imm.t -> t
+val this_naked_immediate : Targetint_31_63.t -> t
 val this_naked_float : Numbers.Float_by_bit_pattern.t -> t
 val this_naked_int32 : Int32.t -> t
 val this_naked_int64 : Int64.t -> t
 val this_naked_nativeint : Targetint.t -> t
 
-val this_tagged_immediate_without_alias : Target_imm.t -> t
-val this_naked_immediate_without_alias : Target_imm.t -> t
+val this_tagged_immediate_without_alias : Targetint_31_63.t -> t
+val this_naked_immediate_without_alias : Targetint_31_63.t -> t
 val this_naked_float_without_alias : Numbers.Float_by_bit_pattern.t -> t
 val this_naked_int32_without_alias : Int32.t -> t
 val this_naked_int64_without_alias : Int64.t -> t
@@ -140,7 +140,7 @@ val immutable_block
 
 val immutable_block_with_size_at_least
    : tag:Tag.t Or_unknown.t
-  -> n:Target_imm.Imm.t
+  -> n:Targetint_31_63.Imm.t
   -> field_kind:Flambda_kind.t
   -> field_n_minus_one:Variable.t
   -> t
@@ -153,7 +153,7 @@ val variant
 val open_variant_from_const_ctors_type : const_ctors:t -> t
 
 val open_variant_from_non_const_ctor_with_size_at_least
-   : n:Target_imm.Imm.t
+   : n:Targetint_31_63.Imm.t
   -> field_n_minus_one:Variable.t
   -> t
 

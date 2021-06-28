@@ -36,7 +36,7 @@ let symbol s =
 
 let tag_targetint t = Targetint.(add (shift_left t 1) one)
 
-let targetint_of_imm i = Target_imm.Imm.to_targetint i.Target_imm.value
+let targetint_of_imm i = Targetint_31_63.Imm.to_targetint i.Targetint_31_63.value
 
 let nativeint_of_targetint t =
   match Targetint.repr t with

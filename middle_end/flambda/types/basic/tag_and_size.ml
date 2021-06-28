@@ -16,6 +16,6 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-type t = Tag.t * Target_imm.Imm.t
+type t = Tag.t * Targetint_31_63.Imm.t
 
-include Identifiable.Make_pair (Tag) (Target_imm.Imm)
+include Identifiable.Make_pair (Tag) (Targetint_31_63.Imm)

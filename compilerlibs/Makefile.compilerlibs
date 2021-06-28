@@ -179,7 +179,7 @@ MIDDLE_END_CLOSURE_CMI=
 MIDDLE_END_FLAMBDA_COMPILENV_DEPS=\
   middle_end/flambda/compilenv_deps/one_bit_fewer.cmo \
   middle_end/flambda/compilenv_deps/lmap.cmo \
-  middle_end/flambda/compilenv_deps/target_imm.cmo \
+  middle_end/flambda/compilenv_deps/targetint_31_63.cmo \
   middle_end/flambda/compilenv_deps/tag.cmo \
   middle_end/flambda/compilenv_deps/table_by_int_id.cmo \
   middle_end/flambda/compilenv_deps/patricia_tree.cmo \

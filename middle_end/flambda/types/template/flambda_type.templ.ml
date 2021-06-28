@@ -118,7 +118,7 @@ type 'a proof_allowing_kind_mismatch =
 type var_or_symbol_or_tagged_immediate =
   | Var of Variable.t
   | Symbol of Symbol.t
-  | Tagged_immediate of Target_imm.t
+  | Tagged_immediate of Targetint_31_63.t
 
 let prove_equals_to_var_or_symbol_or_tagged_immediate env t
       : (var_or_symbol_or_tagged_immediate * Coercion.t) proof =
@@ -388,23 +388,23 @@ let prove_tags_must_be_a_block env t : Tag.Set.t proof =
   | Naked_nativeint _ -> wrong_kind ()
   | Rec_info _ -> wrong_kind ()
 
-let prove_naked_immediates env t : Target_imm.Set.t proof =
+let prove_naked_immediates env t : Targetint_31_63.Set.t proof =
   let wrong_kind () =
     Misc.fatal_errorf "Kind error: expected [Naked_immediate]:@ %a" print t
   in
   match expand_head t env with
-  | Const (Naked_immediate i) -> Proved (Target_imm.Set.singleton i)
+  | Const (Naked_immediate i) -> Proved (Targetint_31_63.Set.singleton i)
   | Const (Tagged_immediate _ | Naked_float _ | Naked_int32 _
     | Naked_int64 _ | Naked_nativeint _) -> wrong_kind ()
   | Naked_immediate (Ok (Naked_immediates is)) ->
     (* CR mshinwell: As noted elsewhere, add abstraction to avoid the need
        for these checks *)
-    if Target_imm.Set.is_empty is then Invalid
+    if Targetint_31_63.Set.is_empty is then Invalid
     else Proved is
   | Naked_immediate (Ok (Is_int scrutinee_ty)) ->
     begin match prove_is_int env scrutinee_ty with
-    | Proved true -> Proved (Target_imm.Set.singleton Target_imm.bool_true)
-    | Proved false -> Proved (Target_imm.Set.singleton Target_imm.bool_false)
+    | Proved true -> Proved (Targetint_31_63.Set.singleton Targetint_31_63.bool_true)
+    | Proved false -> Proved (Targetint_31_63.Set.singleton Targetint_31_63.bool_false)
     | Unknown -> Unknown
     | Invalid -> Invalid
     end
@@ -416,9 +416,9 @@ let prove_naked_immediates env t : Target_imm.Set.t proof =
     | Proved tags ->
       let is =
         Tag.Set.fold (fun tag is ->
-            Target_imm.Set.add (Tag.to_target_imm tag) is)
+            Targetint_31_63.Set.add (Tag.to_target_imm tag) is)
           tags
-          Target_imm.Set.empty
+          Targetint_31_63.Set.empty
       in
       Proved is
     | Unknown -> Unknown
@@ -433,12 +433,12 @@ let prove_naked_immediates env t : Target_imm.Set.t proof =
   | Naked_nativeint _ -> wrong_kind ()
   | Rec_info _ -> wrong_kind ()
 
-let prove_equals_tagged_immediates env t : Target_imm.Set.t proof =
+let prove_equals_tagged_immediates env t : Targetint_31_63.Set.t proof =
   let wrong_kind () =
     Misc.fatal_errorf "Kind error: expected [Value]:@ %a" print t
   in
   match expand_head t env with
-  | Const (Tagged_immediate imm) -> Proved (Target_imm.Set.singleton imm)
+  | Const (Tagged_immediate imm) -> Proved (Targetint_31_63.Set.singleton imm)
   | Const (Naked_immediate _ | Naked_float _ | Naked_int32 _ | Naked_int64 _
     | Naked_nativeint _) -> wrong_kind ()
   | Value (Ok (Variant blocks_imms)) ->
@@ -464,14 +464,14 @@ let prove_equals_tagged_immediates env t : Target_imm.Set.t proof =
 let prove_equals_single_tagged_immediate env t : _ proof =
   match prove_equals_tagged_immediates env t with
   | Proved imms ->
-    begin match Target_imm.Set.get_singleton imms with
+    begin match Targetint_31_63.Set.get_singleton imms with
     | Some imm -> Proved imm
     | None -> Unknown
     end
   | Unknown -> Unknown
   | Invalid -> Invalid
 
-let prove_tags_and_sizes env t : Target_imm.Imm.t Tag.Map.t proof =
+let prove_tags_and_sizes env t : Targetint_31_63.Imm.t Tag.Map.t proof =
   let wrong_kind () =
     Misc.fatal_errorf "Kind error: expected [Value]:@ %a" print t
   in
@@ -507,7 +507,7 @@ let prove_tags_and_sizes env t : Target_imm.Imm.t Tag.Map.t proof =
   | Rec_info _ -> wrong_kind ()
 
 let prove_unique_tag_and_size env t
-     : (Tag.t * Target_imm.Imm.t) proof_allowing_kind_mismatch =
+     : (Tag.t * Targetint_31_63.Imm.t) proof_allowing_kind_mismatch =
   if not (Flambda_kind.equal (kind t) Flambda_kind.value) then
     Wrong_kind
   else
@@ -520,8 +520,8 @@ let prove_unique_tag_and_size env t
       | Some (tag, size) -> Proved (tag, size)
 
 type variant_like_proof = {
-  const_ctors : Target_imm.Set.t Or_unknown.t;
-  non_const_ctors_with_sizes : Target_imm.Imm.t Tag.Scannable.Map.t;
+  const_ctors : Targetint_31_63.Set.t Or_unknown.t;
+  non_const_ctors_with_sizes : Targetint_31_63.Imm.t Tag.Scannable.Map.t;
 }
 
 let prove_variant_like env t : variant_like_proof proof_allowing_kind_mismatch =
@@ -529,7 +529,7 @@ let prove_variant_like env t : variant_like_proof proof_allowing_kind_mismatch =
   match expand_head t env with
   | Const (Tagged_immediate imm) ->
     Proved {
-      const_ctors = Known (Target_imm.Set.singleton imm);
+      const_ctors = Known (Targetint_31_63.Set.singleton imm);
       non_const_ctors_with_sizes = Tag.Scannable.Map.empty;
     }
   | Const _ -> Wrong_kind
@@ -562,7 +562,7 @@ let prove_variant_like env t : variant_like_proof proof_allowing_kind_mismatch =
             | Known imms ->
               begin match prove_naked_immediates env imms with
               | Unknown -> Unknown
-              | Invalid -> Known Target_imm.Set.empty
+              | Invalid -> Known Targetint_31_63.Set.empty
               | Proved const_ctors -> Known const_ctors
               end
           in
@@ -795,7 +795,7 @@ let prove_is_tagging_of_simple
             | Unknown -> Unknown
             | Invalid -> Invalid
             | Proved imms ->
-              match Target_imm.Set.get_singleton imms with
+              match Targetint_31_63.Set.get_singleton imms with
               | Some imm ->
                 Proved (Simple.const (Reg_width_const.naked_immediate imm))
               | None -> Unknown
@@ -1029,7 +1029,7 @@ let reify ?allowed_if_free_vars_defined_in ?additional_free_var_criterion
           begin match Row_like.For_blocks.get_singleton blocks with
           | None -> try_canonical_simple ()
           | Some ((tag, size), field_types) ->
-            assert (Target_imm.Imm.equal size
+            assert (Targetint_31_63.Imm.equal size
                       (Product.Int_indexed.width field_types));
             (* CR mshinwell: Could recognise other things, e.g. tagged
                immediates and float arrays, supported by [Static_part]. *)
@@ -1076,7 +1076,7 @@ let reify ?allowed_if_free_vars_defined_in ?additional_free_var_criterion
         else if Row_like.For_blocks.is_bottom blocks then
           match prove_naked_immediates env imms with
           | Proved imms ->
-            begin match Target_imm.Set.get_singleton imms with
+            begin match Targetint_31_63.Set.get_singleton imms with
             | None -> try_canonical_simple ()
             | Some imm ->
               Simple (Simple.const (Reg_width_const.tagged_immediate imm))
@@ -1221,11 +1221,11 @@ let reify ?allowed_if_free_vars_defined_in ?additional_free_var_criterion
       | Proved tags ->
         let is =
           Tag.Set.fold (fun tag is ->
-              Target_imm.Set.add (Tag.to_target_imm tag) is)
+              Targetint_31_63.Set.add (Tag.to_target_imm tag) is)
             tags
-            Target_imm.Set.empty
+            Targetint_31_63.Set.empty
         in
-        begin match Target_imm.Set.get_singleton is with
+        begin match Targetint_31_63.Set.get_singleton is with
         | None -> try_canonical_simple ()
         | Some i -> Simple (Simple.const (Reg_width_const.naked_immediate i))
         end

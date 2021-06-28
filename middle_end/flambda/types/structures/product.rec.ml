@@ -50,7 +50,7 @@ module Make (Index : Product_intf.Index) = struct
   let create_top kind = create kind Index.Map.empty
 
   let width t =
-    Target_imm.Imm.of_int (Index.Map.cardinal t.components_by_index)
+    Targetint_31_63.Imm.of_int (Index.Map.cardinal t.components_by_index)
 
   let components t = Index.Map.data t.components_by_index
 
@@ -196,7 +196,7 @@ module Int_indexed = struct
     fields = [| |];
   }
 
-  let width t = Target_imm.Imm.of_int (Array.length t.fields)
+  let width t = Targetint_31_63.Imm.of_int (Array.length t.fields)
 
   let components t = Array.to_list t.fields
 

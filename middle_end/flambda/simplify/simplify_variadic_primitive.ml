@@ -136,9 +136,9 @@ let simplify_variadic_primitive dacc (prim : P.variadic_primitive)
     let args, _tys = List.split args_with_tys in
     let named = Named.create_prim (Variadic (prim, args)) dbg in
     let length =
-      match Target_imm.Imm.of_int_option (List.length args) with
+      match Targetint_31_63.Imm.of_int_option (List.length args) with
       | Some ti ->
-        T.this_tagged_immediate (Target_imm.int ti)
+        T.this_tagged_immediate (Targetint_31_63.int ti)
       | None ->
         T.unknown K.value
     in

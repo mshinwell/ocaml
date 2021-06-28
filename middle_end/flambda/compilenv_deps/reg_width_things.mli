@@ -33,20 +33,20 @@ module Const : sig
 
   val untagged_const_zero : t
 
-  val untagged_const_int : Target_imm.Imm.t -> t
+  val untagged_const_int : Targetint_31_63.Imm.t -> t
 
   val const_zero : t
   val const_one : t
   val const_unit : t
 
-  val const_int : Target_imm.Imm.t -> t
+  val const_int : Targetint_31_63.Imm.t -> t
 
   (** [naked_immediate] is similar to [naked_nativeint], but represents
       integers of width [n - 1] bits, where [n] is the native machine
       width. (By contrast, [naked_nativeint] represents integers of
       width [n] bits.) *)
-  val naked_immediate : Target_imm.t -> t
-  val tagged_immediate : Target_imm.t -> t
+  val naked_immediate : Targetint_31_63.t -> t
+  val tagged_immediate : Targetint_31_63.t -> t
   val naked_float : Numbers.Float_by_bit_pattern.t -> t
   val naked_int32 : Int32.t -> t
   val naked_int64 : Int64.t -> t
@@ -54,8 +54,8 @@ module Const : sig
 
   module Descr : sig
     type t = private
-      | Naked_immediate of Target_imm.t
-      | Tagged_immediate of Target_imm.t
+      | Naked_immediate of Targetint_31_63.t
+      | Tagged_immediate of Targetint_31_63.t
       | Naked_float of Numbers.Float_by_bit_pattern.t
       | Naked_int32 of Int32.t
       | Naked_int64 of Int64.t

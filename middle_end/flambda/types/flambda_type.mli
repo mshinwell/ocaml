@@ -330,13 +330,13 @@ val any_rec_info : unit -> t
 
 (** Building of types representing tagged / boxed values from specified
     constants. *)
-val this_tagged_immediate : Target_imm.t -> t
+val this_tagged_immediate : Targetint_31_63.t -> t
 val this_boxed_float : Numbers.Float_by_bit_pattern.t -> t
 val this_boxed_int32 : Int32.t -> t
 val this_boxed_int64 : Int64.t -> t
 val this_boxed_nativeint : Targetint.t -> t
 
-val these_tagged_immediates : Target_imm.Set.t -> t
+val these_tagged_immediates : Targetint_31_63.Set.t -> t
 val these_boxed_floats : Numbers.Float_by_bit_pattern.Set.t -> t
 val these_boxed_int32s : Int32.Set.t -> t
 val these_boxed_int64s : Int64.Set.t -> t
@@ -344,7 +344,7 @@ val these_boxed_nativeints : Targetint.Set.t -> t
 
 (** Building of types representing untagged / unboxed values from
     specified constants. *)
-val this_naked_immediate : Target_imm.t -> t
+val this_naked_immediate : Targetint_31_63.t -> t
 val this_naked_float : Numbers.Float_by_bit_pattern.t -> t
 val this_naked_int32 : Int32.t -> t
 val this_naked_int64 : Int64.t -> t
@@ -352,7 +352,7 @@ val this_naked_nativeint : Targetint.t -> t
 
 val this_rec_info : Rec_info_expr.t -> t
 
-val these_naked_immediates : Target_imm.Set.t -> t
+val these_naked_immediates : Targetint_31_63.Set.t -> t
 val these_naked_floats : Numbers.Float_by_bit_pattern.Set.t -> t
 val these_naked_int32s : Int32.Set.t -> t
 val these_naked_int64s : Int64.Set.t -> t
@@ -391,7 +391,7 @@ val immutable_block
     given variable. *)
 val immutable_block_with_size_at_least
    : tag:Tag.t Or_unknown.t
-  -> n:Target_imm.Imm.t
+  -> n:Targetint_31_63.Imm.t
   -> field_kind:Flambda_kind.t
   -> field_n_minus_one:Variable.t
   -> t
@@ -404,7 +404,7 @@ val variant
 val open_variant_from_const_ctors_type : const_ctors:t -> t
 
 val open_variant_from_non_const_ctor_with_size_at_least
-   : n:Target_imm.Imm.t
+   : n:Targetint_31_63.Imm.t
   -> field_n_minus_one:Variable.t
   -> t
 
@@ -496,17 +496,17 @@ type 'a proof_allowing_kind_mismatch = private
 val prove_equals_tagged_immediates
    : Typing_env.t
   -> t
-  -> Target_imm.Set.t proof
+  -> Targetint_31_63.Set.t proof
 
 val prove_naked_immediates
    : Typing_env.t
   -> t
-  -> Target_imm.Set.t proof
+  -> Targetint_31_63.Set.t proof
 
 val prove_equals_single_tagged_immediate
    : Typing_env.t
   -> t
-  -> Target_imm.t proof
+  -> Targetint_31_63.t proof
 
 val prove_naked_floats
    : Typing_env.t
@@ -520,8 +520,8 @@ val prove_naked_int64s : Typing_env.t -> t -> Numbers.Int64.Set.t proof
 val prove_naked_nativeints : Typing_env.t -> t -> Targetint.Set.t proof
 
 type variant_like_proof = private {
-  const_ctors : Target_imm.Set.t Or_unknown.t;
-  non_const_ctors_with_sizes : Target_imm.Imm.t Tag.Scannable.Map.t;
+  const_ctors : Targetint_31_63.Set.t Or_unknown.t;
+  non_const_ctors_with_sizes : Targetint_31_63.Imm.t Tag.Scannable.Map.t;
 }
 
 val prove_variant_like
@@ -574,12 +574,12 @@ val prove_boxed_nativeints : Typing_env.t -> t -> Targetint.Set.t proof
 val prove_tags_and_sizes
    : Typing_env.t
   -> t
-  -> Target_imm.Imm.t Tag.Map.t proof
+  -> Targetint_31_63.Imm.t Tag.Map.t proof
 
 val prove_unique_tag_and_size
    : Typing_env.t
   -> t
-  -> (Tag.t * Target_imm.Imm.t) proof_allowing_kind_mismatch
+  -> (Tag.t * Targetint_31_63.Imm.t) proof_allowing_kind_mismatch
 
 val prove_is_int : Typing_env.t -> t -> bool proof
 
@@ -649,7 +649,7 @@ val prove_block_field_simple
    : Typing_env.t
   -> min_name_mode:Name_mode.t
   -> t
-  -> Target_imm.t
+  -> Targetint_31_63.t
   -> Simple.t proof
 
 val prove_variant_field_simple
@@ -657,7 +657,7 @@ val prove_variant_field_simple
   -> min_name_mode:Name_mode.t
   -> t
   -> Tag.t
-  -> Target_imm.t
+  -> Targetint_31_63.t
   -> Simple.t proof
 
 val prove_project_var_simple
@@ -675,7 +675,7 @@ val prove_rec_info
 type var_or_symbol_or_tagged_immediate = private
   | Var of Variable.t
   | Symbol of Symbol.t
-  | Tagged_immediate of Target_imm.t
+  | Tagged_immediate of Targetint_31_63.t
 
 type to_lift = (* private *) (* CR mshinwell: resurrect *)
   | Immutable_block of

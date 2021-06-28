@@ -68,7 +68,7 @@ let name env name =
 (* Constants *)
 
 let tag_targetint t = Targetint.(add (shift_left t 1) one)
-let targetint_of_imm i = Target_imm.Imm.to_targetint i.Target_imm.value
+let targetint_of_imm i = Targetint_31_63.Imm.to_targetint i.Targetint_31_63.value
 
 let const _env cst =
   match Reg_width_const.descr cst with
@@ -1189,7 +1189,7 @@ and switch env res s =
      switches (but that might be up-to-debate on small switches with
      3-5 arms). *)
   let scrutinee, tag_discriminant =
-    match Target_imm.Map.cardinal arms with
+    match Targetint_31_63.Map.cardinal arms with
     | 2 ->
       begin match match_var_with_extra_info env scrutinee with
       | None -> e, false
@@ -1226,7 +1226,7 @@ and cmm_arith_size e =
   | _ -> 0
 
 and prepare_discriminant ~tag d =
-  let targetint_d = Target_imm.to_targetint' d in
+  let targetint_d = Targetint_31_63.to_targetint' d in
   let prepared_d =
     if tag then tag_targetint targetint_d else targetint_d
   in
@@ -1243,13 +1243,13 @@ and make_arm ~tag_discriminant env res (d, action) =
      that the scrutinee is adequately tagged/untagged) *)
 and make_switch ~tag_discriminant env res e arms =
   let wrap, env = Env.flush_delayed_lets env in
-  match Target_imm.Map.cardinal arms with
+  match Targetint_31_63.Map.cardinal arms with
 
   (* Binary case: if-then-else *)
   | 2 ->
     let aux = make_arm ~tag_discriminant env in
-    let first_arm, res = aux res @@ Target_imm.Map.min_binding arms in
-    let second_arm, res = aux res @@ Target_imm.Map.max_binding arms in
+    let first_arm, res = aux res @@ Targetint_31_63.Map.min_binding arms in
+    let second_arm, res = aux res @@ Targetint_31_63.Map.max_binding arms in
     begin match first_arm, second_arm with
     (* These switchs are actually if-then-elses.
        On such switches, transl_switch_clambda will introduce a let-binding
@@ -1271,12 +1271,12 @@ and make_switch ~tag_discriminant env res e arms =
     (* The transl_switch_clambda expects an index array such that
        index.(d) is the index in [cases] of the expression to
        execute when [e] matches [d]. *)
-    let (max_d, _) = Target_imm.Map.max_binding arms in
+    let (max_d, _) = Targetint_31_63.Map.max_binding arms in
     let m = prepare_discriminant ~tag:tag_discriminant max_d in
     let cases = Array.make (n + 1) C.unreachable in
     let index = Array.make (m + 2) n in
     let _, res =
-      Target_imm.Map.fold (fun discriminant action (i, res) ->
+      Targetint_31_63.Map.fold (fun discriminant action (i, res) ->
         let (d, cmm_action), res =
           make_arm ~tag_discriminant env res (discriminant, action)
         in
