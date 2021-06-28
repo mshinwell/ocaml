@@ -24,6 +24,12 @@ let () =
       Misc.fatal_error "Flambda 2 does not yet support 32-bit compilation"
     end
 
+(* CR mshinwell/gbury:  maybe we might want to consider adding some more checks
+in some of the conversions functions to be more safe and more consistent in the
+handling of overflows ? For instance One_bit_fewer.of_int silently truncates the
+input int to make it fit, whereas we probably want to make it produce an error ?
+*)
+
 module Imm = struct
   module T0 = struct
     include Numbers.Int64
