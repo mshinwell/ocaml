@@ -28,6 +28,8 @@ module Imm = struct
   module T0 = struct
     include Numbers.Int64
 
+    (* CR mshinwell/gbury: Do these need specialising to int64? *)
+
     let compare = compare
 
     let equal = equal
@@ -106,9 +108,9 @@ module Imm = struct
 
     let max_string_length = Int64.sub (Int64.mul 8L max_array_length) 1L
 
-    let max t1 t2 = if Stdlib.compare t1 t2 < 0 then t2 else t1
+    let max t1 t2 = if Int64.compare t1 t2 < 0 then t2 else t1
 
-    let min t1 t2 = if Stdlib.compare t1 t2 < 0 then t1 else t2
+    let min t1 t2 = if Int64.compare t1 t2 < 0 then t1 else t2
 
     let ( <= ) t1 t2 = Stdlib.( <= ) (compare t1 t2) 0
 
@@ -123,7 +125,8 @@ module Imm = struct
     let to_int_exn t =
       match to_int_option t with
       | Some i -> i
-      | None -> Misc.fatal_errorf "Target_imm.Imm.to_int_exn %Ld" t
+      | None ->
+        Misc.fatal_errorf "Target_imm.Imm.to_int_exn: %Ld out of range" t
 
     let get_least_significant_16_bits_then_byte_swap t =
       let least_significant_byte = Int64.logand t 0xffL in
