@@ -134,7 +134,7 @@ let with_shift shift if_undefined f =
 
 module For_tagged_immediates : Int_number_kind = struct
   module Num = struct
-    include Target_imm
+    include Targetint_31_63
 
     let strictly_negative t =
       compare t zero < 0
@@ -200,7 +200,7 @@ end
 
 module For_naked_immediates : Int_number_kind = struct
   module Num = struct
-    include Target_imm
+    include Targetint_31_63
 
     let strictly_negative t =
       compare t zero < 0

@@ -388,7 +388,7 @@ module Int_ops_for_binary_shift (I : A.Int_number_kind) : sig
     with type op = P.int_shift_op
 end = struct
   module Lhs = I.Num
-  module Rhs = Target_imm
+  module Rhs = Targetint_31_63
   module Result = I.Num
 
   type op = P.int_shift_op
@@ -501,7 +501,7 @@ module Int_ops_for_binary_comp (I : A.Int_number_kind) : sig
 end = struct
   module Lhs = I.Num
   module Rhs = I.Num
-  module Result = Target_imm
+  module Result = Targetint_31_63
 
   type op = P.ordered_comparison P.comparison_behaviour
 
@@ -578,7 +578,7 @@ module Int_ops_for_binary_comp_unsigned (I : A.Int_number_kind) : sig
 end = struct
   module Lhs = I.Num
   module Rhs = I.Num
-  module Result = Target_imm
+  module Result = Targetint_31_63
 
   type op = P.ordered_comparison P.comparison_behaviour
 
@@ -749,7 +749,7 @@ end = struct
 
   module Lhs = F
   module Rhs = F
-  module Result = Target_imm
+  module Result = Targetint_31_63
 
   type op = P.comparison P.comparison_behaviour
 
@@ -839,7 +839,7 @@ module Int_ops_for_binary_eq_comp (I : A.Int_number_kind) : sig
 end = struct
   module Lhs = I.Num
   module Rhs = I.Num
-  module Result = Target_imm
+  module Result = Targetint_31_63
 
   type op = P.equality_comparison
 

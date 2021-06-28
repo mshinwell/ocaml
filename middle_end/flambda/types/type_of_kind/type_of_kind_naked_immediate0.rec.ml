@@ -16,7 +16,7 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
-module I = Target_imm
+module I = Targetint_31_63
 module T = Type_grammar
 module TE = Typing_env
 module TEE = Typing_env_extension
