@@ -16,6 +16,14 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
+let () =
+  match Targetint.num_bits with
+  | Sixty_four -> ()
+  | Thirty_two ->
+    if Config.flambda then begin
+      Misc.fatal_error "Flambda 2 does not yet support 32-bit compilation"
+    end
+
 module Imm = struct
   module T0 = struct
     include Numbers.Int64
