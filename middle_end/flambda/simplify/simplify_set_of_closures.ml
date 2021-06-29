@@ -361,162 +361,160 @@ type simplify_function_result = {
 let simplify_function context ~used_closure_vars ~shareable_constants
       closure_id function_decl ~closure_bound_names_inside_function
       code_age_relation ~lifted_consts_prev_functions =
-  let name = Closure_id.to_string closure_id in
-  Profile.record_call ~accumulate:true name (fun () ->
-    let code_id = FD.code_id function_decl in
-    let code = DE.find_code (DA.denv (C.dacc_prior_to_sets context)) code_id in
-    let params_and_body =
-      Code.params_and_body_must_be_present code ~error_context:"Simplifying"
-    in
-    let params_and_body, dacc_after_body, free_names_of_code,
-        uacc_after_upwards_traversal, inlining_arguments =
-      Function_params_and_body.pattern_match params_and_body
-        ~f:(fun ~return_continuation exn_continuation params ~body
-                ~my_closure ~is_my_closure_used:_ ~my_depth ->
-          let dacc =
-            dacc_inside_function context ~used_closure_vars ~shareable_constants
-              ~params ~my_closure closure_id
-              ~closure_bound_names_inside_function
-              ~inlining_arguments:(Code.inlining_arguments code)
+  let code_id = FD.code_id function_decl in
+  let code = DE.find_code (DA.denv (C.dacc_prior_to_sets context)) code_id in
+  let params_and_body =
+    Code.params_and_body_must_be_present code ~error_context:"Simplifying"
+  in
+  let params_and_body, dacc_after_body, free_names_of_code,
+      uacc_after_upwards_traversal, inlining_arguments =
+    Function_params_and_body.pattern_match params_and_body
+      ~f:(fun ~return_continuation exn_continuation params ~body
+              ~my_closure ~is_my_closure_used:_ ~my_depth ->
+        let dacc =
+          dacc_inside_function context ~used_closure_vars ~shareable_constants
+            ~params ~my_closure closure_id
+            ~closure_bound_names_inside_function
+            ~inlining_arguments:(Code.inlining_arguments code)
+        in
+        if not (DA.no_lifted_constants dacc) then begin
+          Misc.fatal_errorf "Did not expect lifted constants in [dacc]:@ %a"
+            DA.print dacc
+        end;
+        let dacc =
+          DA.map_denv dacc ~f:(fun denv ->
+            denv
+            |> DE.enter_closure code_id
+                 return_continuation exn_continuation
+            |> DE.map_typing_env ~f:(fun typing_env ->
+              let code_age_relation =
+                (* CR mshinwell: Tidy up propagation to avoid union *)
+                Code_age_relation.union (TE.code_age_relation typing_env)
+                  code_age_relation
+              in
+              TE.with_code_age_relation typing_env code_age_relation)
+            |> fun denv ->
+              (* Lifted constants from previous functions in the set get
+                 put into the environment for subsequent functions. *)
+              LCS.add_to_denv denv lifted_consts_prev_functions)
+        in
+        let inlining_arguments = DE.inlining_arguments (DA.denv dacc) in
+        assert (not (DE.at_unit_toplevel (DA.denv dacc)));
+        (* CR mshinwell: DE.no_longer_defining_symbol is redundant now? *)
+        match
+          C.simplify_toplevel context dacc body
+            ~return_continuation exn_continuation
+            ~return_arity:(Code.result_arity code)
+            ~return_cont_scope:Scope.initial
+            ~exn_cont_scope:(Scope.next Scope.initial)
+        with
+        | body, uacc ->
+          let dacc_after_body = UA.creation_dacc uacc in
+          let dbg = Function_params_and_body.debuginfo params_and_body in
+          (* CR mshinwell: Should probably look at [cont_uses]? *)
+          let free_names_of_body = UA.name_occurrences uacc in
+          let params_and_body =
+            RE.Function_params_and_body.create ~free_names_of_body
+              ~return_continuation exn_continuation params ~dbg ~body
+              ~my_closure ~my_depth
           in
-          if not (DA.no_lifted_constants dacc) then begin
-            Misc.fatal_errorf "Did not expect lifted constants in [dacc]:@ %a"
+          (* Free names of the code = free names of the body minus the
+             return and exception continuations, the parameters and the
+             [my_closure] variable. *)
+          let free_names_of_code =
+            Name_occurrences.remove_continuation free_names_of_body
+              return_continuation
+          in
+          let free_names_of_code =
+            Name_occurrences.remove_continuation free_names_of_code
+              (Exn_continuation.exn_handler exn_continuation)
+          in
+          let free_names_of_code =
+            Name_occurrences.remove_var free_names_of_code my_closure
+          in
+          let free_names_of_code =
+            Name_occurrences.diff free_names_of_code
+              (KP.List.free_names params)
+          in
+          if not (
+            Name_occurrences.no_variables free_names_of_code
+            && Name_occurrences.no_continuations free_names_of_code)
+          then begin
+            Misc.fatal_errorf "Unexpected free name(s):@ %a@ in:@ \n%a@ \n\
+                Simplified version:@ fun %a %a ->@ \n  %a"
+              Name_occurrences.print free_names_of_code
+              Function_declaration.print function_decl
+              KP.List.print params
+              Variable.print my_closure
+              (RE.print (UA.are_rebuilding_terms uacc)) body
+          end;
+          params_and_body, dacc_after_body, free_names_of_code, uacc,
+          inlining_arguments
+        | exception Misc.Fatal_error ->
+          if !Clflags.flambda_context_on_error then begin
+            Format.eprintf "\n%sContext is:%s simplifying function \
+                with closure ID %a,@ params %a,@ return continuation %a,@ \
+                exn continuation %a,@ my_closure %a,@ body:@ %a@ \
+                with downwards accumulator:@ %a\n"
+              (Flambda_colours.error ())
+              (Flambda_colours.normal ())
+              Closure_id.print closure_id
+              Kinded_parameter.List.print params
+              Continuation.print return_continuation
+              Exn_continuation.print exn_continuation
+              Variable.print my_closure
+              Expr.print body
               DA.print dacc
           end;
-          let dacc =
-            DA.map_denv dacc ~f:(fun denv ->
-              denv
-              |> DE.enter_closure code_id
-                   return_continuation exn_continuation
-              |> DE.map_typing_env ~f:(fun typing_env ->
-                let code_age_relation =
-                  (* CR mshinwell: Tidy up propagation to avoid union *)
-                  Code_age_relation.union (TE.code_age_relation typing_env)
-                    code_age_relation
-                in
-                TE.with_code_age_relation typing_env code_age_relation)
-              |> fun denv ->
-                (* Lifted constants from previous functions in the set get
-                   put into the environment for subsequent functions. *)
-                LCS.add_to_denv denv lifted_consts_prev_functions)
-          in
-          let inlining_arguments = DE.inlining_arguments (DA.denv dacc) in
-          assert (not (DE.at_unit_toplevel (DA.denv dacc)));
-          (* CR mshinwell: DE.no_longer_defining_symbol is redundant now? *)
-          match
-            C.simplify_toplevel context dacc body
-              ~return_continuation exn_continuation
-              ~return_arity:(Code.result_arity code)
-              ~return_cont_scope:Scope.initial
-              ~exn_cont_scope:(Scope.next Scope.initial)
-          with
-          | body, uacc ->
-            let dacc_after_body = UA.creation_dacc uacc in
-            let dbg = Function_params_and_body.debuginfo params_and_body in
-            (* CR mshinwell: Should probably look at [cont_uses]? *)
-            let free_names_of_body = UA.name_occurrences uacc in
-            let params_and_body =
-              RE.Function_params_and_body.create ~free_names_of_body
-                ~return_continuation exn_continuation params ~dbg ~body
-                ~my_closure ~my_depth
-            in
-            (* Free names of the code = free names of the body minus the
-               return and exception continuations, the parameters and the
-               [my_closure] variable. *)
-            let free_names_of_code =
-              Name_occurrences.remove_continuation free_names_of_body
-                return_continuation
-            in
-            let free_names_of_code =
-              Name_occurrences.remove_continuation free_names_of_code
-                (Exn_continuation.exn_handler exn_continuation)
-            in
-            let free_names_of_code =
-              Name_occurrences.remove_var free_names_of_code my_closure
-            in
-            let free_names_of_code =
-              Name_occurrences.diff free_names_of_code
-                (KP.List.free_names params)
-            in
-            if not (
-              Name_occurrences.no_variables free_names_of_code
-              && Name_occurrences.no_continuations free_names_of_code)
-            then begin
-              Misc.fatal_errorf "Unexpected free name(s):@ %a@ in:@ \n%a@ \n\
-                  Simplified version:@ fun %a %a ->@ \n  %a"
-                Name_occurrences.print free_names_of_code
-                Function_declaration.print function_decl
-                KP.List.print params
-                Variable.print my_closure
-                (RE.print (UA.are_rebuilding_terms uacc)) body
-            end;
-            params_and_body, dacc_after_body, free_names_of_code, uacc,
-            inlining_arguments
-          | exception Misc.Fatal_error ->
-            if !Clflags.flambda_context_on_error then begin
-              Format.eprintf "\n%sContext is:%s simplifying function \
-                  with closure ID %a,@ params %a,@ return continuation %a,@ \
-                  exn continuation %a,@ my_closure %a,@ body:@ %a@ \
-                  with downwards accumulator:@ %a\n"
-                (Flambda_colours.error ())
-                (Flambda_colours.normal ())
-                Closure_id.print closure_id
-                Kinded_parameter.List.print params
-                Continuation.print return_continuation
-                Exn_continuation.print exn_continuation
-                Variable.print my_closure
-                Expr.print body
-                DA.print dacc
-            end;
-            raise Misc.Fatal_error)
-    in
-    let cost_metrics = UA.cost_metrics uacc_after_upwards_traversal in
-    let old_code_id = code_id in
-    let new_code_id =
-      Code_id.Map.find old_code_id (C.old_to_new_code_ids_all_sets context)
-    in
-    let code =
-      Rebuilt_static_const.create_code
-        (DA.are_rebuilding_terms dacc_after_body)
-        new_code_id
-        ~params_and_body:(Present (params_and_body, free_names_of_code))
-        ~newer_version_of:(Some old_code_id)
-        ~params_arity:(Code.params_arity code)
-        ~result_arity:(Code.result_arity code)
-        ~stub:(Code.stub code)
-        ~inline:(Code.inline code)
-        ~is_a_functor:(Code.is_a_functor code)
-        ~recursive:(Code.recursive code)
-        ~cost_metrics
-        ~inlining_arguments
-    in
-    let function_decl = FD.update_code_id function_decl new_code_id in
-    let function_type =
-      (* When not rebuilding terms we always give a non-inlinable function type,
-         since the body is not available for inlining, but we would still like
-         to generate direct calls to the function *)
-      if Are_rebuilding_terms.do_not_rebuild_terms
-           (DA.are_rebuilding_terms dacc_after_body)
-      then
-        T.create_non_inlinable_function_declaration
-          ~code_id:new_code_id
-          ~is_tupled:(FD.is_tupled function_decl)
-      else
-        (* We need to manually specify the cost metrics to use to ensure that
-           they are the one of the body after simplification. *)
-        function_decl_type
-          ~pass:Inlining_report.After_simplify
-          ~cost_metrics_source:(Metrics cost_metrics)
-          (DA.denv dacc_after_body) function_decl
-          Rec_info.unknown
-    in
-    { function_decl;
-      new_code_id;
-      code;
-      function_type;
-      dacc_after_body;
-      uacc_after_upwards_traversal;
-    })
+          raise Misc.Fatal_error)
+  in
+  let cost_metrics = UA.cost_metrics uacc_after_upwards_traversal in
+  let old_code_id = code_id in
+  let new_code_id =
+    Code_id.Map.find old_code_id (C.old_to_new_code_ids_all_sets context)
+  in
+  let code =
+    Rebuilt_static_const.create_code
+      (DA.are_rebuilding_terms dacc_after_body)
+      new_code_id
+      ~params_and_body:(Present (params_and_body, free_names_of_code))
+      ~newer_version_of:(Some old_code_id)
+      ~params_arity:(Code.params_arity code)
+      ~result_arity:(Code.result_arity code)
+      ~stub:(Code.stub code)
+      ~inline:(Code.inline code)
+      ~is_a_functor:(Code.is_a_functor code)
+      ~recursive:(Code.recursive code)
+      ~cost_metrics
+      ~inlining_arguments
+  in
+  let function_decl = FD.update_code_id function_decl new_code_id in
+  let function_type =
+    (* When not rebuilding terms we always give a non-inlinable function type,
+       since the body is not available for inlining, but we would still like
+       to generate direct calls to the function *)
+    if Are_rebuilding_terms.do_not_rebuild_terms
+         (DA.are_rebuilding_terms dacc_after_body)
+    then
+      T.create_non_inlinable_function_declaration
+        ~code_id:new_code_id
+        ~is_tupled:(FD.is_tupled function_decl)
+    else
+      (* We need to manually specify the cost metrics to use to ensure that
+         they are the one of the body after simplification. *)
+      function_decl_type
+        ~pass:Inlining_report.After_simplify
+        ~cost_metrics_source:(Metrics cost_metrics)
+        (DA.denv dacc_after_body) function_decl
+        Rec_info.unknown
+  in
+  { function_decl;
+    new_code_id;
+    code;
+    function_type;
+    dacc_after_body;
+    uacc_after_upwards_traversal;
+  }
 
 type simplify_set_of_closures0_result = {
   set_of_closures : Flambda.Set_of_closures.t;

@@ -2197,8 +2197,8 @@ module Default = struct
     let _ccopt s = Compenv.first_ccopts := (s :: (!Compenv.first_ccopts))
     let _config = Misc.show_config_and_exit
     let _config_var = Misc.show_config_variable_and_exit
-    let _dprofile () = profile_columns := Profile.all_columns; Profile.enable ()
-    let _dtimings () = profile_columns := [`Time]; Profile.enable ()
+    let _dprofile () = profile_columns := Profile.all_columns
+    let _dtimings () = profile_columns := [`Time]
     let _dump_into_file = set dump_into_file
     let _for_pack s = for_package := (Some s)
     let _g = set debug

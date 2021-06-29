@@ -25,8 +25,6 @@ type file = string
 val reset : unit -> unit
 (** erase all recorded profile information *)
 
-val enable : unit -> unit
-
 val record_call : ?accumulate:bool -> string -> (unit -> 'a) -> 'a
 (** [record_call pass f] calls [f] and records its profile information. *)
 

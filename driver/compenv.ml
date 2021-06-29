@@ -484,8 +484,7 @@ let read_one_param ppf position name v =
   | "timings" | "profile" ->
      let if_on = if name = "timings" then [ `Time ] else Profile.all_columns in
      let enabled = check_bool ppf name v in
-     profile_columns := if enabled then if_on else [];
-     if enabled then Profile.enable ()
+     profile_columns := if enabled then if_on else []
 
   | "stop-after" ->
     set_compiler_pass ppf v ~name Clflags.stop_after ~filter:(fun _ -> true)
