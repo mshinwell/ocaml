@@ -58,6 +58,7 @@ external make : int -> 'a -> 'a array = "caml_make_vect"
    Consequently, if [x] is mutable, it is shared among all elements
    of the array, and modifying [x] through one of the array entries
    will modify all other entries at the same time.
+
    @raise Invalid_argument if [n < 0] or [n > Sys.max_array_length].
    If the value of [x] is a floating-point number, then the maximum
    size is only [Sys.max_array_length / 2].*)
@@ -81,6 +82,7 @@ val init : int -> (int -> 'a) -> 'a array
    with element number [i] initialized to the result of [f i].
    In other terms, [init n f] tabulates the results of [f]
    applied to the integers [0] to [n-1].
+
    @raise Invalid_argument if [n < 0] or [n > Sys.max_array_length].
    If the return type of [f] is [float], then the maximum
    size is only [Sys.max_array_length / 2].*)
@@ -92,6 +94,7 @@ val make_matrix : int -> int -> 'a -> 'a array array
    are initially physically equal to [e].
    The element ([x,y]) of a matrix [m] is accessed
    with the notation [m.(x).(y)].
+
    @raise Invalid_argument if [dimx] or [dimy] is negative or
    greater than {!Sys.max_array_length}.
    If the value of [e] is a floating-point number, then the maximum
