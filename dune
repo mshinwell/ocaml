@@ -176,17 +176,6 @@
 (rule
  (copy main.exe ocamlc))
 
-;;;;;;;;;;;;;;;;;;;;
-;;; ilambda test ;;;
-;;;;;;;;;;;;;;;;;;;;
-
-(executable
- (name ilambdac)
- (modes byte)
- (flags (:standard -principal -nostdlib -cclib "-I runtime"))
- (libraries ocamloptcommon ocamloptcomp ocamlmiddleend flambda ocamlcommon runtime stdlib)
- (modules ilambdac))
-
 ;;;;;;;;;;;;;;;;
 ;;; ocamlopt ;;;
 ;;;;;;;;;;;;;;;;

@@ -61,15 +61,6 @@ val compile_implementation_flambda
   -> unit
   -> unit
 
-(** Specialised version of [compile_implementation_flambda] for ilambdac. *)
-val compile_implementation_flambda_for_ilambdac
-   : ?toplevel:(string -> bool)
-  -> prefixname:string
-  -> ppf_dump:Format.formatter
-  -> required_globals:Ident.Set.t
-  -> Flambda_middle_end.middle_end_result
-  -> unit
-
 val compile_implementation_linear :
     string -> progname:string -> unit 
 

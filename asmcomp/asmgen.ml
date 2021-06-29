@@ -267,16 +267,6 @@ let compile_implementation_flambda ?toplevel ~backend ~filename ~prefixname
       end_gen_implementation ?toplevel ~ppf_dump Un_cps.unit
         translated_program)
 
-let compile_implementation_flambda_for_ilambdac ?toplevel ~prefixname
-    ~ppf_dump ~required_globals program =
-  compile_unit ~output_prefix:prefixname
-    ~asm_filename:(asm_filename prefixname) ~keep_asm:!keep_asm_file
-    ~obj_filename:(prefixname ^ ext_obj)
-    (fun () ->
-      Ident.Set.iter Compilenv.require_global required_globals;
-      end_gen_implementation ?toplevel ~ppf_dump
-        Un_cps.unit program)
-
 module Flambda_backend = struct
   let symbol_for_module_block id =
     assert (Ident.global id);

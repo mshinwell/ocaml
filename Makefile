@@ -89,8 +89,6 @@ BYTESTART=driver/main.cmo
 
 OPTSTART=driver/optmain.cmo
 
-ILAMBDASTART=driver/ilambdac.cmo
-
 TOPLEVELSTART=toplevel/topstart.cmo
 
 OPTTOPLEVELSTART=toplevel/opttopstart.cmo
@@ -655,10 +653,6 @@ ocamlopt$(EXE): compilerlibs/ocamlcommon.cma compilerlibs/ocamloptcomp.cma \
           $(OPTSTART)
 	$(CAMLC) $(LINKFLAGS) -o $@ $^
 
-ilambdac: compilerlibs/ocamlcommon.cma compilerlibs/ocamloptcomp.cma \
-          $(ILAMBDASTART)
-	$(CAMLC) $(LINKFLAGS) -o $@ $^
-
 partialclean::
 	rm -f ocamlopt$(EXE)
 
@@ -733,12 +727,8 @@ ocamlopt-memtrace.opt: ocamlopt.opt otherlibrariesopt memprof/memtrace
 partialclean::
 	$(MAKE) -C memprof/memtrace clean
 
-ilambdac.opt: compilerlibs/ocamlcommon.cmxa compilerlibs/ocamloptcomp.cmxa \
-              $(ILAMBDASTART:.cmo=.cmx)
-	$(CAMLOPT_CMD) $(LINKFLAGS) -o $@ $^
-
 partialclean::
-	rm -f ocamlopt.opt$(EXE) ocamlopt-memtrace.opt ilambdac.opt
+	rm -f ocamlopt.opt$(EXE) ocamlopt-memtrace.opt
 
 # The predefined exceptions and primitives
 

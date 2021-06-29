@@ -10579,30 +10579,6 @@ driver/errors.cmx : \
     parsing/location.cmx \
     driver/errors.cmi
 driver/errors.cmi :
-driver/ilambdac.cmo : \
-    middle_end/flambda/compilenv_deps/symbol.cmi \
-    asmcomp/proc.cmi \
-    typing/predef.cmi \
-    middle_end/flambda/compilenv_deps/linkage_name.cmi \
-    typing/ident.cmi \
-    middle_end/flambda/flambda_backend_intf.cmi \
-    middle_end/compilenv.cmi \
-    middle_end/flambda/compilenv_deps/compilation_unit.cmi \
-    utils/clflags.cmi \
-    asmcomp/asmgen.cmi \
-    asmcomp/arch.cmo
-driver/ilambdac.cmx : \
-    middle_end/flambda/compilenv_deps/symbol.cmx \
-    asmcomp/proc.cmx \
-    typing/predef.cmx \
-    middle_end/flambda/compilenv_deps/linkage_name.cmx \
-    typing/ident.cmx \
-    middle_end/flambda/flambda_backend_intf.cmi \
-    middle_end/compilenv.cmx \
-    middle_end/flambda/compilenv_deps/compilation_unit.cmx \
-    utils/clflags.cmx \
-    asmcomp/asmgen.cmx \
-    asmcomp/arch.cmx
 driver/main.cmo : \
     driver/maindriver.cmi
 driver/main.cmx : \
