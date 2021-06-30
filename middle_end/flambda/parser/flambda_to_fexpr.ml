@@ -288,7 +288,7 @@ let name env n =
     ~var:(fun v : Fexpr.name -> Var (Env.find_var_exn env v))
     ~symbol:(fun s : Fexpr.name -> Symbol (Env.find_symbol_exn env s))
 
-let float f = f |> Numbers.Float_by_bit_pattern.to_float
+let float f = f |> Numeric_types.Float_by_bit_pattern.to_float
 let targetint i = i |> Targetint_32_64.to_int64
 
 let const c : Fexpr.const =

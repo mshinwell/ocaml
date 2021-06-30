@@ -60,7 +60,7 @@ let const_static _env cst =
   | Tagged_immediate i ->
       [C.cint (nativeint_of_targetint (tag_targetint (targetint_of_imm i)))]
   | Naked_float f ->
-      [C.cfloat (Numbers.Float_by_bit_pattern.to_float f)]
+      [C.cfloat (Numeric_types.Float_by_bit_pattern.to_float f)]
   | Naked_int32 i ->
       [C.cint (Nativeint.of_int32 i)]
   | Naked_int64 i ->
@@ -319,8 +319,8 @@ let static_const0 env r ~updates ~params_and_body
       in
       env, r, updates
   | Block_like s, Boxed_float v ->
-      let default = Numbers.Float_by_bit_pattern.zero in
-      let transl = Numbers.Float_by_bit_pattern.to_float in
+      let default = Numeric_types.Float_by_bit_pattern.zero in
+      let transl = Numeric_types.Float_by_bit_pattern.to_float in
       let r, updates =
         static_boxed_number
           Cmm.Double_u env s default C.emit_float_constant transl v r updates
@@ -352,7 +352,7 @@ let static_const0 env r ~updates ~params_and_body
       let name = symbol s in
       let aux =
         Or_variable.value_map ~default:0.
-          ~f:Numbers.Float_by_bit_pattern.to_float
+          ~f:Numeric_types.Float_by_bit_pattern.to_float
       in
       let static_fields = List.map aux fields in
       let float_array =

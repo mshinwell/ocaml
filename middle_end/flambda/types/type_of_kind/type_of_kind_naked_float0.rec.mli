@@ -16,7 +16,7 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
-type t = Numbers.Float_by_bit_pattern.Set.t
+type t = Numeric_types.Float_by_bit_pattern.Set.t
 
 include Type_head_intf.S
   with type t := t

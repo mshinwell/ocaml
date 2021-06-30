@@ -24,7 +24,7 @@ type elt = {
   apply_result_conts : Continuation.Set.t;
   bindings : Name_occurrences.t Variable.Map.t;
   apply_cont_args :
-    Name_occurrences.t Numbers.Int.Map.t Continuation.Map.t;
+    Name_occurrences.t Numeric_types.Int.Map.t Continuation.Map.t;
 }
 
 type t = {
@@ -53,7 +53,7 @@ let print_elt ppf
     Name_occurrences.print used_in_handler
     Continuation.Set.print apply_result_conts
     (Variable.Map.print Name_occurrences.print) bindings
-    (Continuation.Map.print (Numbers.Int.Map.print Name_occurrences.print))
+    (Continuation.Map.print (Numeric_types.Int.Map.print Name_occurrences.print))
     apply_cont_args
 
 let print_stack ppf stack =
@@ -163,10 +163,10 @@ let add_apply_cont_args cont arg_name_occurrences t =
   update_top_of_stack ~t ~f:(fun elt ->
     let apply_cont_args =
       Continuation.Map.update cont (fun map_opt ->
-        let map = Option.value ~default:Numbers.Int.Map.empty map_opt in
+        let map = Option.value ~default:Numeric_types.Int.Map.empty map_opt in
         let map, _ = List.fold_left (fun (map, i) name_occurrences ->
           let map =
-            Numbers.Int.Map.update i (fun old_opt ->
+            Numeric_types.Int.Map.update i (fun old_opt ->
               let old = Option.value ~default:Name_occurrences.empty old_opt in
               Some (Name_occurrences.union old name_occurrences)
             ) map
@@ -286,7 +286,7 @@ module Dependency_graph = struct
     Continuation.Map.fold (fun k args t ->
       if Continuation.equal return_continuation k ||
          Continuation.equal exn_continuation k then begin
-        Numbers.Int.Map.fold (fun _ name_occurrences t ->
+        Numeric_types.Int.Map.fold (fun _ name_occurrences t ->
           add_name_occurrences name_occurrences t
         ) args t
       end else begin
@@ -297,7 +297,7 @@ module Dependency_graph = struct
             Misc.fatal_errorf "Continuation not found during Data_flow: %a@."
               Continuation.print k
         in
-        Numbers.Int.Map.fold (fun i name_occurrence t ->
+        Numeric_types.Int.Map.fold (fun i name_occurrence t ->
           (* Note on the direction of the edge:
              We later do a reachability analysis to compute the
              transitive closure of the used variables.

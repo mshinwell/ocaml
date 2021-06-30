@@ -275,7 +275,7 @@ and compute_extra_args_for_block ~pass
   let bak, invalid_const =
     if Tag.equal tag Tag.double_array_tag then
       P.Block_access_kind.Naked_floats { size; },
-      Const.naked_float Numbers.Float_by_bit_pattern.zero
+      Const.naked_float Numeric_types.Float_by_bit_pattern.zero
     else
       P.Block_access_kind.Values {
         size;

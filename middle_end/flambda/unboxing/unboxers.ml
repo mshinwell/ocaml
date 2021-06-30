@@ -68,7 +68,7 @@ module Float = struct
 
   let unboxer = {
     var_name = "unboxed_float";
-    invalid_const = Const.naked_float Numbers.Float_by_bit_pattern.zero;
+    invalid_const = Const.naked_float Numeric_types.Float_by_bit_pattern.zero;
     unboxing_prim;
     prove_simple = T.prove_boxed_float_containing_simple;
   }

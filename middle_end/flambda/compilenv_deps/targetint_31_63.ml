@@ -32,7 +32,7 @@ input int to make it fit, whereas we probably want to make it produce an error ?
 
 module Imm = struct
   module T0 = struct
-    include Numbers.Int64
+    include Numeric_types.Int64
 
     (* CR mshinwell/gbury: Do these need specialising to int64? *)
 

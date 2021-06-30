@@ -97,8 +97,8 @@ end = struct
     mutables_needed_by_continuations : Ident.Set.t Continuation.Map.t;
     try_stack : Continuation.t list;
     try_stack_at_handler : (Continuation.t list) Continuation.Map.t;
-    static_exn_continuation : Continuation.t Numbers.Int.Map.t;
-    recursive_static_catches : Numbers.Int.Set.t;
+    static_exn_continuation : Continuation.t Numeric_types.Int.Map.t;
+    recursive_static_catches : Numeric_types.Int.Set.t;
   }
 
   let create ~current_unit_id ~return_continuation ~exn_continuation =
@@ -113,8 +113,8 @@ end = struct
       mutables_needed_by_continuations;
       try_stack = [];
       try_stack_at_handler = Continuation.Map.empty;
-      static_exn_continuation = Numbers.Int.Map.empty;
-      recursive_static_catches = Numbers.Int.Set.empty;
+      static_exn_continuation = Numeric_types.Int.Map.empty;
+      recursive_static_catches = Numeric_types.Int.Set.empty;
     }
 
   let current_unit_id t = t.current_unit_id
@@ -212,33 +212,33 @@ end = struct
         try_stack_at_handler =
           Continuation.Map.add cont t.try_stack t.try_stack_at_handler;
         static_exn_continuation =
-          Numbers.Int.Map.add static_exn cont t.static_exn_continuation }
+          Numeric_types.Int.Map.add static_exn cont t.static_exn_continuation }
     in
     let recursive : Asttypes.rec_flag =
-      if Numbers.Int.Set.mem static_exn t.recursive_static_catches
+      if Numeric_types.Int.Set.mem static_exn t.recursive_static_catches
       then Recursive
       else Nonrecursive
     in
     add_continuation t cont ~push_to_try_stack:false recursive
 
   let get_static_exn_continuation t static_exn =
-      match Numbers.Int.Map.find static_exn t.static_exn_continuation with
+      match Numeric_types.Int.Map.find static_exn t.static_exn_continuation with
       | exception Not_found ->
         Misc.fatal_errorf "Unbound static exception %d" static_exn
       | continuation -> continuation
 
   let mark_as_recursive_static_catch t static_exn =
-    if Numbers.Int.Set.mem static_exn t.recursive_static_catches then begin
+    if Numeric_types.Int.Set.mem static_exn t.recursive_static_catches then begin
       Misc.fatal_errorf "Static catch with continuation %d already marked as \
         recursive -- is it being redefined?"
         static_exn
     end;
     { t with
-      recursive_static_catches = Numbers.Int.Set.add
+      recursive_static_catches = Numeric_types.Int.Set.add
         static_exn t.recursive_static_catches }
 
   let is_static_exn_recursive t static_exn =
-    Numbers.Int.Set.mem static_exn t.recursive_static_catches
+    Numeric_types.Int.Set.mem static_exn t.recursive_static_catches
 
   let get_try_stack t = t.try_stack
 

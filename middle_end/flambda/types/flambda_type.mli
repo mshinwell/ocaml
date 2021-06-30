@@ -22,9 +22,9 @@
 (* CR mshinwell: Add invariant checks, including e.g. on the bodies of
    functions in types. *)
 
-module Float = Numbers.Float_by_bit_pattern
-module Int32 = Numbers.Int32
-module Int64 = Numbers.Int64
+module Float = Numeric_types.Float_by_bit_pattern
+module Int32 = Numeric_types.Int32
+module Int64 = Numeric_types.Int64
 
 type t
 type flambda_type = t
@@ -331,13 +331,13 @@ val any_rec_info : unit -> t
 (** Building of types representing tagged / boxed values from specified
     constants. *)
 val this_tagged_immediate : Targetint_31_63.t -> t
-val this_boxed_float : Numbers.Float_by_bit_pattern.t -> t
+val this_boxed_float : Numeric_types.Float_by_bit_pattern.t -> t
 val this_boxed_int32 : Int32.t -> t
 val this_boxed_int64 : Int64.t -> t
 val this_boxed_nativeint : Targetint_32_64.t -> t
 
 val these_tagged_immediates : Targetint_31_63.Set.t -> t
-val these_boxed_floats : Numbers.Float_by_bit_pattern.Set.t -> t
+val these_boxed_floats : Numeric_types.Float_by_bit_pattern.Set.t -> t
 val these_boxed_int32s : Int32.Set.t -> t
 val these_boxed_int64s : Int64.Set.t -> t
 val these_boxed_nativeints : Targetint_32_64.Set.t -> t
@@ -345,7 +345,7 @@ val these_boxed_nativeints : Targetint_32_64.Set.t -> t
 (** Building of types representing untagged / unboxed values from
     specified constants. *)
 val this_naked_immediate : Targetint_31_63.t -> t
-val this_naked_float : Numbers.Float_by_bit_pattern.t -> t
+val this_naked_float : Numeric_types.Float_by_bit_pattern.t -> t
 val this_naked_int32 : Int32.t -> t
 val this_naked_int64 : Int64.t -> t
 val this_naked_nativeint : Targetint_32_64.t -> t
@@ -353,7 +353,7 @@ val this_naked_nativeint : Targetint_32_64.t -> t
 val this_rec_info : Rec_info_expr.t -> t
 
 val these_naked_immediates : Targetint_31_63.Set.t -> t
-val these_naked_floats : Numbers.Float_by_bit_pattern.Set.t -> t
+val these_naked_floats : Numeric_types.Float_by_bit_pattern.Set.t -> t
 val these_naked_int32s : Int32.Set.t -> t
 val these_naked_int64s : Int64.Set.t -> t
 val these_naked_nativeints : Targetint_32_64.Set.t -> t
@@ -511,11 +511,11 @@ val prove_equals_single_tagged_immediate
 val prove_naked_floats
    : Typing_env.t
   -> t
-  -> Numbers.Float_by_bit_pattern.Set.t proof
+  -> Numeric_types.Float_by_bit_pattern.Set.t proof
 
-val prove_naked_int32s : Typing_env.t -> t -> Numbers.Int32.Set.t proof
+val prove_naked_int32s : Typing_env.t -> t -> Numeric_types.Int32.Set.t proof
 
-val prove_naked_int64s : Typing_env.t -> t -> Numbers.Int64.Set.t proof
+val prove_naked_int64s : Typing_env.t -> t -> Numeric_types.Int64.Set.t proof
 
 val prove_naked_nativeints : Typing_env.t -> t -> Targetint_32_64.Set.t proof
 
@@ -567,8 +567,8 @@ val prove_is_a_boxed_nativeint
   -> unit proof_allowing_kind_mismatch
 
 val prove_boxed_floats : Typing_env.t -> t -> Float.Set.t proof
-val prove_boxed_int32s : Typing_env.t -> t -> Numbers.Int32.Set.t proof
-val prove_boxed_int64s : Typing_env.t -> t -> Numbers.Int64.Set.t proof
+val prove_boxed_int32s : Typing_env.t -> t -> Numeric_types.Int32.Set.t proof
+val prove_boxed_int64s : Typing_env.t -> t -> Numeric_types.Int64.Set.t proof
 val prove_boxed_nativeints : Typing_env.t -> t -> Targetint_32_64.Set.t proof
 
 val prove_tags_and_sizes

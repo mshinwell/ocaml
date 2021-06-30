@@ -16,7 +16,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Int = Numbers.Int
+module Int = Numeric_types.Int
 module TEE = Typing_env_extension
 
 module Make

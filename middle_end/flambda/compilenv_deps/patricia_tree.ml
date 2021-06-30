@@ -474,7 +474,7 @@ end [@@@inline always]
 
 module Make_map (Key : sig
   val print : Format.formatter -> int -> unit
-end) (Set : Identifiable.Set with module T := Numbers.Int) =
+end) (Set : Identifiable.Set with module T := Numeric_types.Int) =
 struct
   type key = int
 

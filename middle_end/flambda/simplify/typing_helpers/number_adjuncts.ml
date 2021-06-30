@@ -21,9 +21,9 @@ open! Flambda.Import
 module K = Flambda_kind
 module T = Flambda_type
 
-module Float_by_bit_pattern = Numbers.Float_by_bit_pattern
-module Int32 = Numbers.Int32
-module Int64 = Numbers.Int64
+module Float_by_bit_pattern = Numeric_types.Float_by_bit_pattern
+module Int32 = Numeric_types.Int32
+module Int64 = Numeric_types.Int64
 
 module type Num_common = sig
   include Identifiable.S
@@ -49,9 +49,9 @@ module type Num_common = sig
   val to_const : t -> Reg_width_const.t
 
   val to_immediate : t -> Targetint_31_63.t
-  val to_naked_float : t -> Numbers.Float_by_bit_pattern.t
-  val to_naked_int32 : t -> Numbers.Int32.t
-  val to_naked_int64 : t -> Numbers.Int64.t
+  val to_naked_float : t -> Numeric_types.Float_by_bit_pattern.t
+  val to_naked_int32 : t -> Numeric_types.Int32.t
+  val to_naked_int64 : t -> Numeric_types.Int64.t
   val to_naked_nativeint : t -> Targetint_32_64.t
 end
 

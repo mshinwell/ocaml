@@ -47,7 +47,7 @@ module Const : sig
       width [n] bits.) *)
   val naked_immediate : Targetint_31_63.t -> t
   val tagged_immediate : Targetint_31_63.t -> t
-  val naked_float : Numbers.Float_by_bit_pattern.t -> t
+  val naked_float : Numeric_types.Float_by_bit_pattern.t -> t
   val naked_int32 : Int32.t -> t
   val naked_int64 : Int64.t -> t
   val naked_nativeint : Targetint_32_64.t -> t
@@ -56,7 +56,7 @@ module Const : sig
     type t = private
       | Naked_immediate of Targetint_31_63.t
       | Tagged_immediate of Targetint_31_63.t
-      | Naked_float of Numbers.Float_by_bit_pattern.t
+      | Naked_float of Numeric_types.Float_by_bit_pattern.t
       | Naked_int32 of Int32.t
       | Naked_int64 of Int64.t
       | Naked_nativeint of Targetint_32_64.t

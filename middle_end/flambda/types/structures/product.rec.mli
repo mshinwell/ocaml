@@ -25,7 +25,7 @@ module Make (Index : Product_intf.Index)
 
 module Int_indexed : sig
   include Product_intf.S_base
-    with module Index := Numbers.Int
+    with module Index := Numeric_types.Int
     with type flambda_type := Type_grammar.t
     with type typing_env := Typing_env.t
     with type meet_env := Meet_env.t

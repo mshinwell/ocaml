@@ -23,7 +23,7 @@ open Switch
 open Clambda
 module P = Clambda_primitives
 
-module Int = Numbers.Int
+module Int = Numeric_types.Int
 module Storer =
   Switch.Store
     (struct

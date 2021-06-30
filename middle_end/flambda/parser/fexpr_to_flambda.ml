@@ -216,7 +216,7 @@ let find_code_id env code_id =
 let targetint (i:Fexpr.targetint) : Targetint_32_64.t = Targetint_32_64.of_int64 i
 let immediate i =
   i |> Targetint_32_64.of_string |> Targetint_31_63.Imm.of_targetint |> Targetint_31_63.int
-let float f = f |> Numbers.Float_by_bit_pattern.create
+let float f = f |> Numeric_types.Float_by_bit_pattern.create
 
 let value_kind_with_subkind (k : Fexpr.kind_with_subkind)
 : Flambda_kind.With_subkind.t =

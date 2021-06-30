@@ -77,7 +77,7 @@ let const _env cst =
   | Tagged_immediate i ->
     C.targetint (tag_targetint (targetint_of_imm i))
   | Naked_float f ->
-    C.float (Numbers.Float_by_bit_pattern.to_float f)
+    C.float (Numeric_types.Float_by_bit_pattern.to_float f)
   | Naked_int32 i -> C.int32 i
   | Naked_int64 i -> C.int64 i
   | Naked_nativeint t -> C.targetint t

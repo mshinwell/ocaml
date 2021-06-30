@@ -23,9 +23,9 @@
 (* CR mshinwell: Remove when warning 60 fixed *)
 [@@@ocaml.warning "-60"]
 
-module Float = Numbers.Float_by_bit_pattern
-module Int32 = Numbers.Int32
-module Int64 = Numbers.Int64
+module Float = Numeric_types.Float_by_bit_pattern
+module Int32 = Numeric_types.Int32
+module Int64 = Numeric_types.Int64
 
 module K = Flambda_kind
 

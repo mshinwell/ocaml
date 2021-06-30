@@ -60,7 +60,7 @@ val create_block
 
 val create_boxed_float
    : Are_rebuilding_terms.t
-  -> Numbers.Float_by_bit_pattern.t Or_variable.t
+  -> Numeric_types.Float_by_bit_pattern.t Or_variable.t
   -> t
 
 val create_boxed_int32
@@ -80,12 +80,12 @@ val create_boxed_nativeint
 
 val create_immutable_float_block
    : Are_rebuilding_terms.t
-  -> Numbers.Float_by_bit_pattern.t Or_variable.t list
+  -> Numeric_types.Float_by_bit_pattern.t Or_variable.t list
   -> t
 
 val create_immutable_float_array
    : Are_rebuilding_terms.t
-  -> Numbers.Float_by_bit_pattern.t Or_variable.t list
+  -> Numeric_types.Float_by_bit_pattern.t Or_variable.t list
   -> t
 
 val create_mutable_string : Are_rebuilding_terms.t -> initial_value:string -> t

@@ -168,7 +168,7 @@ let dummy_value (kind : K.t) : t =
       Simple.const (Reg_width_const.naked_immediate Targetint_31_63.zero)
     | Naked_number Naked_float ->
       Simple.const (
-        Reg_width_const.naked_float Numbers.Float_by_bit_pattern.zero)
+        Reg_width_const.naked_float Numeric_types.Float_by_bit_pattern.zero)
     | Naked_number Naked_int32 ->
       Simple.const (Reg_width_const.naked_int32 Int32.zero)
     | Naked_number Naked_int64 ->

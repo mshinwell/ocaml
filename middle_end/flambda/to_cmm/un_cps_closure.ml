@@ -99,7 +99,7 @@ let order_closures env l acc =
   List.fold_left (fun acc closure ->
       match EO.closure_offset env closure with
       | Some { size = _; offset; } ->
-        Numbers.Int.Map.add offset (Closure closure) acc
+        Numeric_types.Int.Map.add offset (Closure closure) acc
       | None ->
         Misc.fatal_errorf "No closure offset for %a" Closure_id.print closure
     ) acc l
@@ -107,7 +107,7 @@ let order_closures env l acc =
 let order_env_vars env l acc =
   List.fold_left (fun acc env_var ->
       match EO.env_var_offset env env_var with
-      | Some { offset; } -> Numbers.Int.Map.add offset (Env_var env_var) acc
+      | Some { offset; } -> Numeric_types.Int.Map.add offset (Env_var env_var) acc
       | None ->
           Misc.fatal_errorf "No closure var offset for %a"
             Var_within_closure.print env_var
@@ -148,12 +148,12 @@ let layout_aux j slot (startenv, acc_slots) =
 
 let layout env closures env_vars =
   let map =
-    Numbers.Int.Map.empty
+    Numeric_types.Int.Map.empty
     |> order_env_vars env env_vars
     |> order_closures env closures
   in
   let startenv_opt, acc_slots =
-    Numbers.Int.Map.fold layout_aux map (None, [])
+    Numeric_types.Int.Map.fold layout_aux map (None, [])
   in
   let startenv =
     (* If there are no env vars, the start of env is considered to be the
@@ -228,7 +228,7 @@ module Greedy = struct
     (* Slots to be allocated *)
     mutable unallocated_closure_slots : slot list;
     mutable unallocated_env_var_slots : slot list;
-    mutable allocated_slots : slot Numbers.Int.Map.t;
+    mutable allocated_slots : slot Numeric_types.Int.Map.t;
   }
 
   and slot = {
@@ -266,7 +266,7 @@ module Greedy = struct
          first_slot_used_by_envvar = max_int;
          unallocated_closure_slots = [];
          unallocated_env_var_slots = [];
-         allocated_slots = Numbers.Int.Map.empty;
+         allocated_slots = Numeric_types.Int.Map.empty;
        }
     )
 
@@ -321,7 +321,7 @@ module Greedy = struct
       print_slot_pos s.pos s.size print_set_ids s.sets print_desc s.desc
 
   let print_slots fmt map =
-    Numbers.Int.Map.iter (fun _ slot ->
+    Numeric_types.Int.Map.iter (fun _ slot ->
       print_slot fmt slot
     ) map
 
@@ -385,8 +385,8 @@ module Greedy = struct
   let add_slot_offset_to_set offset slot set =
     update_set_for_slot slot set;
     let map = set.allocated_slots in
-    assert (not (Numbers.Int.Map.mem offset map));
-    let map = Numbers.Int.Map.add offset slot map in
+    assert (not (Numeric_types.Int.Map.mem offset map));
+    let map = Numeric_types.Int.Map.add offset slot map in
     set.allocated_slots <- map
 
   let add_slot_offset env slot offset =
@@ -566,7 +566,7 @@ module Greedy = struct
         then curr
         else max curr set.first_slot_after_closures
       in
-      match Numbers.Int.Map.find_last (fun i -> i <= curr) map with
+      match Numeric_types.Int.Map.find_last (fun i -> i <= curr) map with
       | exception Not_found -> curr
       | (j, s) ->
           assert (Assigned j = s.pos);
@@ -574,7 +574,7 @@ module Greedy = struct
     in
     (* find the first available space for the slot. *)
     let rec loop curr =
-      match Numbers.Int.Map.find_first (fun i -> i >= curr) map with
+      match Numeric_types.Int.Map.find_first (fun i -> i >= curr) map with
       | exception Not_found -> curr
       | (_, next_slot) ->
           let available_space = (first_used_by next_slot) - curr in

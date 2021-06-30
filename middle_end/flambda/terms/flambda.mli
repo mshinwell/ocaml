@@ -514,12 +514,12 @@ end and Static_const : sig
     | Code of Code.t
     | Set_of_closures of Set_of_closures.t
     | Block of Tag.Scannable.t * Mutability.t * (Field_of_block.t list)
-    | Boxed_float of Numbers.Float_by_bit_pattern.t Or_variable.t
+    | Boxed_float of Numeric_types.Float_by_bit_pattern.t Or_variable.t
     | Boxed_int32 of Int32.t Or_variable.t
     | Boxed_int64 of Int64.t Or_variable.t
     | Boxed_nativeint of Targetint_32_64.t Or_variable.t
-    | Immutable_float_block of Numbers.Float_by_bit_pattern.t Or_variable.t list
-    | Immutable_float_array of Numbers.Float_by_bit_pattern.t Or_variable.t list
+    | Immutable_float_block of Numeric_types.Float_by_bit_pattern.t Or_variable.t list
+    | Immutable_float_array of Numeric_types.Float_by_bit_pattern.t Or_variable.t list
     | Mutable_string of { initial_value : string; }
     | Immutable_string of string
 

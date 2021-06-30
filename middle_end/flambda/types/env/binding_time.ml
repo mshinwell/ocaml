@@ -17,8 +17,8 @@
 module T = struct
   include Int
 
-  let print = Numbers.Int.print
-  let output = Numbers.Int.output
+  let print = Numeric_types.Int.print
+  let output = Numeric_types.Int.output
   let hash = Hashtbl.hash
 end
 

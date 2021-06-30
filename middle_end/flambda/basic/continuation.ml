@@ -181,7 +181,7 @@ end)
 module Set = Patricia_tree.Make_set (struct let print = print end)
 module Map = Patricia_tree.Make_map (struct let print = print end) (Set)
 (* CR mshinwell: The [Tbl]s will still print integers! *)
-module Tbl = Identifiable.Make_tbl (Numbers.Int) (Map)
+module Tbl = Identifiable.Make_tbl (Numeric_types.Int) (Map)
 
 let print_with_cache ~cache:_ ppf t = print ppf t
 

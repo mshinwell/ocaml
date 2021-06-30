@@ -19,7 +19,7 @@
 open! Simplify_import
 
 module A = Number_adjuncts
-module Float_by_bit_pattern = Numbers.Float_by_bit_pattern
+module Float_by_bit_pattern = Numeric_types.Float_by_bit_pattern
 
 type 'a binary_arith_outcome_for_one_side_only =
   | Exactly of 'a

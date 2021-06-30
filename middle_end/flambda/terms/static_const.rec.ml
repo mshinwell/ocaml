@@ -96,12 +96,12 @@ type t =
   | Code of Code.t
   | Set_of_closures of Set_of_closures.t
   | Block of Tag.Scannable.t * Mutability.t * (Field_of_block.t list)
-  | Boxed_float of Numbers.Float_by_bit_pattern.t Or_variable.t
+  | Boxed_float of Numeric_types.Float_by_bit_pattern.t Or_variable.t
   | Boxed_int32 of Int32.t Or_variable.t
   | Boxed_int64 of Int64.t Or_variable.t
   | Boxed_nativeint of Targetint_32_64.t Or_variable.t
-  | Immutable_float_block of Numbers.Float_by_bit_pattern.t Or_variable.t list
-  | Immutable_float_array of Numbers.Float_by_bit_pattern.t Or_variable.t list
+  | Immutable_float_block of Numeric_types.Float_by_bit_pattern.t Or_variable.t list
+  | Immutable_float_array of Numeric_types.Float_by_bit_pattern.t Or_variable.t list
   | Mutable_string of { initial_value : string; }
   | Immutable_string of string
 
@@ -134,17 +134,17 @@ let print_with_cache ~cache ppf t =
     fprintf ppf "@[<hov 1>(@<0>%sBoxed_float@<0>%s@ %a)@]"
       (Flambda_colours.static_part ())
       (Flambda_colours.normal ())
-      (Or_variable.print Numbers.Float_by_bit_pattern.print) or_var
+      (Or_variable.print Numeric_types.Float_by_bit_pattern.print) or_var
   | Boxed_int32 or_var ->
     fprintf ppf "@[<hov 1>(@<0>%sBoxed_int32@<0>%s@ %a)@]"
       (Flambda_colours.static_part ())
       (Flambda_colours.normal ())
-      (Or_variable.print Numbers.Int32.print) or_var
+      (Or_variable.print Numeric_types.Int32.print) or_var
   | Boxed_int64 or_var ->
     fprintf ppf "@[<hov 1>(@<0>%sBoxed_int64@<0>%s@ %a)@]"
       (Flambda_colours.static_part ())
       (Flambda_colours.normal ())
-      (Or_variable.print Numbers.Int64.print) or_var
+      (Or_variable.print Numeric_types.Int64.print) or_var
   | Boxed_nativeint or_var ->
     fprintf ppf "@[<hov 1>(@<0>%sBoxed_nativeint@<0>%s@ %a)@]"
       (Flambda_colours.static_part ())
@@ -156,7 +156,7 @@ let print_with_cache ~cache ppf t =
       (Flambda_colours.normal ())
       (Format.pp_print_list
         ~pp_sep:(fun ppf () -> Format.pp_print_string ppf "@; ")
-        (Or_variable.print Numbers.Float_by_bit_pattern.print))
+        (Or_variable.print Numeric_types.Float_by_bit_pattern.print))
       fields
   | Immutable_float_array fields ->
     fprintf ppf "@[<hov 1>(@<0>%sImmutable_float_array@<0>%s@ @[[| %a |]@])@]"
@@ -164,7 +164,7 @@ let print_with_cache ~cache ppf t =
       (Flambda_colours.normal ())
       (Format.pp_print_list
         ~pp_sep:(fun ppf () -> Format.pp_print_string ppf "@; ")
-        (Or_variable.print Numbers.Float_by_bit_pattern.print))
+        (Or_variable.print Numeric_types.Float_by_bit_pattern.print))
       fields
   | Mutable_string { initial_value = s; } ->
     fprintf ppf "@[<hov 1>(@<0>%sMutable_string@<0>%s@ %S)@]"
@@ -196,20 +196,20 @@ include Identifiable.Make (struct
         if c <> 0 then c
         else Misc.Stdlib.List.compare Field_of_block.compare fields1 fields2
     | Boxed_float or_var1, Boxed_float or_var2 ->
-      Or_variable.compare Numbers.Float_by_bit_pattern.compare or_var1 or_var2
+      Or_variable.compare Numeric_types.Float_by_bit_pattern.compare or_var1 or_var2
     | Boxed_int32 or_var1, Boxed_int32 or_var2 ->
-      Or_variable.compare Numbers.Int32.compare or_var1 or_var2
+      Or_variable.compare Numeric_types.Int32.compare or_var1 or_var2
     | Boxed_int64 or_var1, Boxed_int64 or_var2 ->
-      Or_variable.compare Numbers.Int64.compare or_var1 or_var2
+      Or_variable.compare Numeric_types.Int64.compare or_var1 or_var2
     | Boxed_nativeint or_var1, Boxed_nativeint or_var2 ->
       Or_variable.compare Targetint_32_64.compare or_var1 or_var2
     | Immutable_float_block fields1, Immutable_float_array fields2 ->
       Misc.Stdlib.List.compare
-        (Or_variable.compare Numbers.Float_by_bit_pattern.compare)
+        (Or_variable.compare Numeric_types.Float_by_bit_pattern.compare)
         fields1 fields2
     | Immutable_float_array fields1, Immutable_float_array fields2 ->
       Misc.Stdlib.List.compare
-        (Or_variable.compare Numbers.Float_by_bit_pattern.compare)
+        (Or_variable.compare Numeric_types.Float_by_bit_pattern.compare)
         fields1 fields2
     | Mutable_string { initial_value = s1; },
       Mutable_string { initial_value = s2; }

@@ -22,9 +22,9 @@ type tag = t
 include Identifiable.Make (struct
   type nonrec t = t
 
-  let compare = Numbers.Int.compare
-  let equal = Numbers.Int.equal
-  let hash = Numbers.Int.hash
+  let compare = Numeric_types.Int.compare
+  let equal = Numeric_types.Int.equal
+  let hash = Numeric_types.Int.hash
 
   let print ppf t =
     Format.fprintf ppf "@[tag_%d@]" t
@@ -78,7 +78,7 @@ let arbitrary = max_int
 module Scannable = struct
   type nonrec t = t
 
-  include Identifiable.Make (Numbers.Int)
+  include Identifiable.Make (Numeric_types.Int)
 
   let create tag =
     if tag < min_tag || tag >= Obj.no_scan_tag then None
@@ -118,7 +118,7 @@ let is_structured_block t =
 module Non_scannable = struct
   type nonrec t = t
 
-  include Identifiable.Make (Numbers.Int)
+  include Identifiable.Make (Numeric_types.Int)
 
   let create tag =
     if tag < Obj.no_scan_tag then None

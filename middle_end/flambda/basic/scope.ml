@@ -14,7 +14,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-include Numbers.Int
+include Numeric_types.Int
 
 let initial = 0
 
@@ -39,4 +39,4 @@ let max t1 t2 = max t1 t2
 
 module Set = Patricia_tree.Make_set (struct let print = print end)
 module Map = Patricia_tree.Make_map (struct let print = print end) (Set)
-module Tbl = Identifiable.Make_tbl (Numbers.Int) (Map)
+module Tbl = Identifiable.Make_tbl (Numeric_types.Int) (Map)
