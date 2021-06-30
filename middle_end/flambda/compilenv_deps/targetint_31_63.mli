@@ -104,13 +104,13 @@ module Imm : sig
   (** Convert the given ocaml target integer to a 64-bit integer (type [int64]). *)
   val to_int64 : t -> int64
 
-  (** Convert the given target native integer (type [Targetint.t]) to an ocaml
+  (** Convert the given target native integer (type [Targetint_32_64.t]) to an ocaml
       target integer, modulo the size of an ocaml target integer. *)
-  val of_targetint : Targetint.t -> t
+  val of_targetint : Targetint_32_64.t -> t
 
   (** Convert the given ocaml target integer (type [t]) to a target native
-      integer (type [Targetint.t]). *)
-  val to_targetint : t -> Targetint.t
+      integer (type [Targetint_32_64.t]). *)
+  val to_targetint : t -> Targetint_32_64.t
 
   (** Convert the given floating-point number to an ocaml target integer,
       discarding the fractional part (truncate towards 0). The result of the
@@ -159,12 +159,12 @@ module Imm : sig
       32-bit platform and [61] on a 64-bit platform. *)
   val shift_left : t -> int -> t
 
-  (** [Targetint.shift_right x y] shifts [x] to the right by [y] bits. This is
+  (** [Targetint_32_64.shift_right x y] shifts [x] to the right by [y] bits. This is
       an arithmetic shift: the sign bit of [x] is replicated and inserted in the
       vacated bits. The result is unspecified if [y < 0] or [y >= bitsize]. *)
   val shift_right : t -> int -> t
 
-  (** [Targetint.shift_right_logical x y] shifts [x] to the right by [y] bits.
+  (** [Targetint_32_64.shift_right_logical x y] shifts [x] to the right by [y] bits.
       This is a logical shift: zeroes are inserted in the vacated bits
       regardless of the sign of [x]. The result is unspecified if [y < 0] or
       [y >= bitsize]. *)
@@ -224,11 +224,11 @@ val is_non_negative : t -> bool
 (* CR mshinwell: bad names *)
 val to_targetint : t -> Imm.t
 
-val to_targetint' : t -> Targetint.t
+val to_targetint' : t -> Targetint_32_64.t
 
 val set_to_targetint_set : Set.t -> Imm.Set.t
 
-val set_to_targetint_set' : Set.t -> Targetint.Set.t
+val set_to_targetint_set' : Set.t -> Targetint_32_64.Set.t
 
 val neg : t -> t
 

@@ -445,7 +445,7 @@ end = struct
     let rhs = Targetint_31_63.to_targetint rhs in
     match op with
     | Lsl | Lsr | Asr ->
-      (* Shifting either way by [Targetint.size] or above, or by a negative
+      (* Shifting either way by [Targetint_32_64.size] or above, or by a negative
          amount, is undefined.
          However note that we cannot produce [Invalid] unless the code is
          type unsafe, which it is not here.  (Otherwise a GADT match might
@@ -458,7 +458,7 @@ end = struct
         : Num.t binary_arith_outcome_for_one_side_only =
     (* In these cases we are giving a semantics for some cases where the
        right-hand side may be less than zero or greater than or equal to
-       [Targetint.size].  These cases have undefined semantics, as above;
+       [Targetint_32_64.size].  These cases have undefined semantics, as above;
        however, it seems fine to give them a semantics since there is benefit
        to doing so in this particular case.  (This is not the case for
        the situation in [op_lhs_unknown], above, where there would be no

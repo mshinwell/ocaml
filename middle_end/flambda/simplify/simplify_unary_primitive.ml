@@ -321,9 +321,9 @@ module Make_simplify_int_conv (N : A.Number_kind) = struct
         | Naked_nativeint ->
           let is =
             Num.Set.fold (fun i is ->
-                Targetint.Set.add (Num.to_naked_nativeint i) is)
+                Targetint_32_64.Set.add (Num.to_naked_nativeint i) is)
               is
-              Targetint.Set.empty
+              Targetint_32_64.Set.empty
           in
           let ty = T.these_naked_nativeints is in
           let env_extension = TEE.one_equation result ty in

@@ -39,7 +39,7 @@ module type S = sig
   val of_int_option : int -> t option
   val of_int32 : int32 -> t
   val of_int64 : int64 -> t
-  val of_targetint : Targetint.t -> t
+  val of_targetint : Targetint_32_64.t -> t
   val of_float : float -> t
 
   val to_float : t -> float
@@ -48,7 +48,7 @@ module type S = sig
   val to_int_option : t -> int option
   val to_int32 : t -> int32
   val to_int64 : t -> int64
-  val to_targetint : t -> Targetint.t
+  val to_targetint : t -> Targetint_32_64.t
 
   val neg : t -> t
   val get_least_significant_16_bits_then_byte_swap : t -> t

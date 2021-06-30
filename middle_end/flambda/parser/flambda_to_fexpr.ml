@@ -289,14 +289,14 @@ let name env n =
     ~symbol:(fun s : Fexpr.name -> Symbol (Env.find_symbol_exn env s))
 
 let float f = f |> Numbers.Float_by_bit_pattern.to_float
-let targetint i = i |> Targetint.to_int64
+let targetint i = i |> Targetint_32_64.to_int64
 
 let const c : Fexpr.const =
   match Reg_width_things.Const.descr c with
   | Naked_immediate imm ->
-    Naked_immediate (imm |> Targetint_31_63.to_targetint' |> Targetint.to_string)
+    Naked_immediate (imm |> Targetint_31_63.to_targetint' |> Targetint_32_64.to_string)
   | Tagged_immediate imm ->
-    Tagged_immediate (imm |> Targetint_31_63.to_targetint' |> Targetint.to_string)
+    Tagged_immediate (imm |> Targetint_31_63.to_targetint' |> Targetint_32_64.to_string)
   | Naked_float f ->
     Naked_float (f |> float)
   | Naked_int32 i ->
@@ -490,7 +490,7 @@ let field_of_block env (field : Flambda.Static_const.Field_of_block.t)
   | Symbol symbol ->
     Symbol (Env.find_symbol_exn env symbol)
   | Tagged_immediate imm ->
-    Tagged_immediate (imm |> Targetint_31_63.to_targetint' |> Targetint.to_string)
+    Tagged_immediate (imm |> Targetint_31_63.to_targetint' |> Targetint_32_64.to_string)
   | Dynamically_computed var ->
     Dynamically_computed (Env.find_var_exn env var)
 
@@ -898,7 +898,7 @@ and switch_expr env switch : Fexpr.expr =
   let scrutinee = simple env (Switch_expr.scrutinee switch) in
   let cases =
     List.map (fun (imm, app_cont) ->
-      let tag = imm |> Targetint_31_63.to_targetint' |> Targetint.to_int in
+      let tag = imm |> Targetint_31_63.to_targetint' |> Targetint_32_64.to_int in
       let app_cont = apply_cont env app_cont in
       tag, app_cont
     ) (Switch_expr.arms switch |> Targetint_31_63.Map.bindings)

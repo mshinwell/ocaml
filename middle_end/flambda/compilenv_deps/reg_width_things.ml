@@ -32,7 +32,7 @@ module Const_data = struct
     | Naked_float of Numbers.Float_by_bit_pattern.t
     | Naked_int32 of Int32.t
     | Naked_int64 of Int64.t
-    | Naked_nativeint of Targetint.t
+    | Naked_nativeint of Targetint_32_64.t
 
   let flags = const_flags
 
@@ -69,7 +69,7 @@ module Const_data = struct
       | Naked_nativeint n ->
         Format.fprintf ppf "@<0>%s#%an@<0>%s"
           (Flambda_colours.naked_number ())
-          Targetint.print n
+          Targetint_32_64.print n
           (Flambda_colours.normal ())
 
     let output _ _ = Misc.fatal_error "[output] not yet implemented"
@@ -87,7 +87,7 @@ module Const_data = struct
       | Naked_int64 n1, Naked_int64 n2 ->
         Int64.compare n1 n2
       | Naked_nativeint n1, Naked_nativeint n2 ->
-        Targetint.compare n1 n2
+        Targetint_32_64.compare n1 n2
       | Naked_immediate _, _ -> -1
       | _, Naked_immediate _ -> 1
       | Tagged_immediate _, _ -> -1
@@ -114,7 +114,7 @@ module Const_data = struct
         | Naked_int64 n1, Naked_int64 n2 ->
           Int64.equal n1 n2
         | Naked_nativeint n1, Naked_nativeint n2 ->
-          Targetint.equal n1 n2
+          Targetint_32_64.equal n1 n2
         | (Naked_immediate _ | Tagged_immediate _ | Naked_float _
             | Naked_int32 _ | Naked_int64 _ | Naked_nativeint _), _ -> false
 
@@ -125,7 +125,7 @@ module Const_data = struct
       | Naked_float n -> Numbers.Float_by_bit_pattern.hash n
       | Naked_int32 n -> Hashtbl.hash n
       | Naked_int64 n -> Hashtbl.hash n
-      | Naked_nativeint n -> Targetint.hash n
+      | Naked_nativeint n -> Targetint_32_64.hash n
   end)
 end
 

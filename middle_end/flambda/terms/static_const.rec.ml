@@ -99,7 +99,7 @@ type t =
   | Boxed_float of Numbers.Float_by_bit_pattern.t Or_variable.t
   | Boxed_int32 of Int32.t Or_variable.t
   | Boxed_int64 of Int64.t Or_variable.t
-  | Boxed_nativeint of Targetint.t Or_variable.t
+  | Boxed_nativeint of Targetint_32_64.t Or_variable.t
   | Immutable_float_block of Numbers.Float_by_bit_pattern.t Or_variable.t list
   | Immutable_float_array of Numbers.Float_by_bit_pattern.t Or_variable.t list
   | Mutable_string of { initial_value : string; }
@@ -149,7 +149,7 @@ let print_with_cache ~cache ppf t =
     fprintf ppf "@[<hov 1>(@<0>%sBoxed_nativeint@<0>%s@ %a)@]"
       (Flambda_colours.static_part ())
       (Flambda_colours.normal ())
-      (Or_variable.print Targetint.print) or_var
+      (Or_variable.print Targetint_32_64.print) or_var
   | Immutable_float_block fields ->
     fprintf ppf "@[<hov 1>(@<0>%sImmutable_float_block@<0>%s@ @[[| %a |]@])@]"
       (Flambda_colours.static_part ())
@@ -202,7 +202,7 @@ include Identifiable.Make (struct
     | Boxed_int64 or_var1, Boxed_int64 or_var2 ->
       Or_variable.compare Numbers.Int64.compare or_var1 or_var2
     | Boxed_nativeint or_var1, Boxed_nativeint or_var2 ->
-      Or_variable.compare Targetint.compare or_var1 or_var2
+      Or_variable.compare Targetint_32_64.compare or_var1 or_var2
     | Immutable_float_block fields1, Immutable_float_array fields2 ->
       Misc.Stdlib.List.compare
         (Or_variable.compare Numbers.Float_by_bit_pattern.compare)

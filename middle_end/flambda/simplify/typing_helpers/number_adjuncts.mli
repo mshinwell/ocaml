@@ -46,7 +46,7 @@ module type Num_common = sig
   val to_naked_float : t -> Numbers.Float_by_bit_pattern.t
   val to_naked_int32 : t -> Numbers.Int32.t
   val to_naked_int64 : t -> Numbers.Int64.t
-  val to_naked_nativeint : t -> Targetint.t
+  val to_naked_nativeint : t -> Targetint_32_64.t
 end
 
 module type Number_kind_common = sig

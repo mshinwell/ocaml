@@ -279,11 +279,11 @@ let prove_naked_nativeints env t : _ proof =
     Misc.fatal_errorf "Kind error: expected [Naked_nativeint]:@ %a" print t
   in
   match expand_head t env with
-  | Const (Naked_nativeint i) -> Proved (Targetint.Set.singleton i)
+  | Const (Naked_nativeint i) -> Proved (Targetint_32_64.Set.singleton i)
   | Const (Naked_immediate _ | Tagged_immediate _ | Naked_float _
     | Naked_int32 _ | Naked_int64 _) -> wrong_kind ()
   | Naked_nativeint (Ok is) ->
-    if Targetint.Set.is_empty is then Invalid
+    if Targetint_32_64.Set.is_empty is then Invalid
     else Proved is
   | Naked_nativeint Unknown -> Unknown
   | Naked_nativeint Bottom -> Invalid
@@ -967,7 +967,7 @@ type to_lift =
   | Boxed_float of Float.t
   | Boxed_int32 of Int32.t
   | Boxed_int64 of Int64.t
-  | Boxed_nativeint of Targetint.t
+  | Boxed_nativeint of Targetint_32_64.t
 
 type reification_result =
   | Lift of to_lift
@@ -1248,7 +1248,7 @@ let reify ?allowed_if_free_vars_defined_in ?additional_free_var_criterion
       | Some n -> Simple (Simple.const (Reg_width_const.naked_int64 n))
       end
     | Naked_nativeint (Ok ns) ->
-      begin match Targetint.Set.get_singleton ns with
+      begin match Targetint_32_64.Set.get_singleton ns with
       | None -> try_canonical_simple ()
       | Some n -> Simple (Simple.const (Reg_width_const.naked_nativeint n))
       end
@@ -1284,7 +1284,7 @@ let reify ?allowed_if_free_vars_defined_in ?additional_free_var_criterion
       | Unknown -> try_canonical_simple ()
       | Invalid -> Invalid
       | Proved ns ->
-        match Targetint.Set.get_singleton ns with
+        match Targetint_32_64.Set.get_singleton ns with
         | None -> try_canonical_simple ()
         | Some n -> Lift (Boxed_nativeint n)
       end

@@ -50,7 +50,7 @@ module Const : sig
   val naked_float : Numbers.Float_by_bit_pattern.t -> t
   val naked_int32 : Int32.t -> t
   val naked_int64 : Int64.t -> t
-  val naked_nativeint : Targetint.t -> t
+  val naked_nativeint : Targetint_32_64.t -> t
 
   module Descr : sig
     type t = private
@@ -59,7 +59,7 @@ module Const : sig
       | Naked_float of Numbers.Float_by_bit_pattern.t
       | Naked_int32 of Int32.t
       | Naked_int64 of Int64.t
-      | Naked_nativeint of Targetint.t
+      | Naked_nativeint of Targetint_32_64.t
 
     include Identifiable.S with type t := t
   end

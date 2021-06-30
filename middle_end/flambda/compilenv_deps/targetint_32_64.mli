@@ -68,11 +68,11 @@ val unsigned_div : t -> t -> t
 
 val rem : t -> t -> t
 (** Integer remainder.  If [y] is not zero, the result
-   of [Targetint.rem x y] satisfies the following properties:
-   [Targetint.zero <= Nativeint.rem x y < Targetint.abs y] and
-   [x = Targetint.add (Targetint.mul (Targetint.div x y) y)
-                      (Targetint.rem x y)].
-   If [y = 0], [Targetint.rem x y] raises [Division_by_zero]. *)
+   of [Targetint_32_64.rem x y] satisfies the following properties:
+   [Targetint_32_64.zero <= Nativeint.rem x y < Targetint_32_64.abs y] and
+   [x = Targetint_32_64.add (Targetint_32_64.mul (Targetint_32_64.div x y) y)
+                      (Targetint_32_64.rem x y)].
+   If [y = 0], [Targetint_32_64.rem x y] raises [Division_by_zero]. *)
 
 val unsigned_rem : t -> t -> t
 (** Same as {!rem}, except that arguments and result are interpreted as {e
@@ -80,11 +80,11 @@ val unsigned_rem : t -> t -> t
 
 val succ : t -> t
 (** Successor.
-   [Targetint.succ x] is [Targetint.add x Targetint.one]. *)
+   [Targetint_32_64.succ x] is [Targetint_32_64.add x Targetint_32_64.one]. *)
 
 val pred : t -> t
 (** Predecessor.
-   [Targetint.pred x] is [Targetint.sub x Targetint.one]. *)
+   [Targetint_32_64.pred x] is [Targetint_32_64.sub x Targetint_32_64.one]. *)
 
 val abs : t -> t
 (** Return the absolute value of its argument. *)
@@ -123,19 +123,19 @@ val lognot : t -> t
 (** Bitwise logical negation. *)
 
 val shift_left : t -> int -> t
-(** [Targetint.shift_left x y] shifts [x] to the left by [y] bits.
+(** [Targetint_32_64.shift_left x y] shifts [x] to the left by [y] bits.
     The result is unspecified if [y < 0] or [y >= bitsize],
     where [bitsize] is [32] on a 32-bit platform and
     [64] on a 64-bit platform. *)
 
 val shift_right : t -> int -> t
-(** [Targetint.shift_right x y] shifts [x] to the right by [y] bits.
+(** [Targetint_32_64.shift_right x y] shifts [x] to the right by [y] bits.
     This is an arithmetic shift: the sign bit of [x] is replicated
     and inserted in the vacated bits.
     The result is unspecified if [y < 0] or [y >= bitsize]. *)
 
 val shift_right_logical : t -> int -> t
-(** [Targetint.shift_right_logical x y] shifts [x] to the right
+(** [Targetint_32_64.shift_right_logical x y] shifts [x] to the right
     by [y] bits.
     This is a logical shift: zeroes are inserted in the vacated bits
     regardless of the sign of [x].
@@ -159,7 +159,7 @@ val of_float : float -> t
    discarding the fractional part (truncate towards 0).
    The result of the conversion is undefined if, after truncation,
    the number is outside the range
-   \[{!Targetint.min_int}, {!Targetint.max_int}\]. *)
+   \[{!Targetint_32_64.min_int}, {!Targetint_32_64.max_int}\]. *)
 
 val to_float : t -> float
 (** Convert the given target integer to a floating-point number. *)

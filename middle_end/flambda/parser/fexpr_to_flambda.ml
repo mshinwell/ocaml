@@ -213,9 +213,9 @@ let find_var env v =
 let find_code_id env code_id =
   find_with ~descr:"code id" ~find:DM.find_opt env.code_ids code_id
 
-let targetint (i:Fexpr.targetint) : Targetint.t = Targetint.of_int64 i
+let targetint (i:Fexpr.targetint) : Targetint_32_64.t = Targetint_32_64.of_int64 i
 let immediate i =
-  i |> Targetint.of_string |> Targetint_31_63.Imm.of_targetint |> Targetint_31_63.int
+  i |> Targetint_32_64.of_string |> Targetint_31_63.Imm.of_targetint |> Targetint_31_63.int
 let float f = f |> Numbers.Float_by_bit_pattern.create
 
 let value_kind_with_subkind (k : Fexpr.kind_with_subkind)
@@ -311,7 +311,7 @@ let field_of_block env (v:Fexpr.field_of_block)
   | Symbol s ->
     Symbol (get_symbol env s)
   | Tagged_immediate i ->
-    let i = Targetint.of_string i in
+    let i = Targetint_32_64.of_string i in
     Tagged_immediate
       (Targetint_31_63.int (Targetint_31_63.Imm.of_targetint i))
   | Dynamically_computed var ->

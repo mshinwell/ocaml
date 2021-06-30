@@ -58,7 +58,7 @@ let create_from_targetint imm =
   create_from_targetint_imm (Targetint_31_63.to_targetint imm)
 
 let to_int t = t
-let to_targetint t = Targetint.of_int (to_int t)
+let to_targetint t = Targetint_32_64.of_int (to_int t)
 let to_targetint_ocaml t = Targetint_31_63.Imm.of_int (to_int t)
 let to_target_imm t = Targetint_31_63.int (to_targetint_ocaml t)
 
@@ -91,7 +91,7 @@ module Scannable = struct
       Misc.fatal_error (Printf.sprintf "Tag.Scannable.create_exn %d" tag)
 
   let to_int t = t
-  let to_targetint t = Targetint.of_int (to_int t)
+  let to_targetint t = Targetint_32_64.of_int (to_int t)
   let to_tag t = t
 
   let of_tag tag =

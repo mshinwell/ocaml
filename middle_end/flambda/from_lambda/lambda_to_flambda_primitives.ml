@@ -77,7 +77,7 @@ let max_with_zero ~size_int x =
                     x, register_bitsize_minus_one))
   in
   let minus_one =
-    H.Simple (Simple.const (Reg_width_const.naked_nativeint (Targetint.of_int (-1))))
+    H.Simple (Simple.const (Reg_width_const.naked_nativeint (Targetint_32_64.of_int (-1))))
   in
   let sign_negation =
     H.Prim (Binary (Int_arith (Naked_nativeint, Xor),
@@ -757,7 +757,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
         Binary (Phys_equal (K.naked_nativeint, Neq), unbox_bint Pnativeint arg2,
                 Simple
                   (Simple.const
-                     (Reg_width_const.naked_nativeint Targetint.zero)));
+                     (Reg_width_const.naked_nativeint Targetint_32_64.zero)));
       ];
       failure = Division_by_zero;
       dbg;
@@ -772,7 +772,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
         Binary (Phys_equal (K.naked_nativeint, Neq), unbox_bint Pnativeint arg2,
                 Simple
                   (Simple.const
-                     (Reg_width_const.naked_nativeint Targetint.zero)));
+                     (Reg_width_const.naked_nativeint Targetint_32_64.zero)));
       ];
       failure = Division_by_zero;
       dbg;

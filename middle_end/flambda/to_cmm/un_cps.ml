@@ -42,12 +42,12 @@ let typ_void = Cmm.typ_void
 let typ_float = Cmm.typ_float
 let typ_int64 = C.typ_int64
 
-(* CR gbury: {Targetint.to_int} should raise an error when converting
+(* CR gbury: {Targetint_32_64.to_int} should raise an error when converting
    an out-of-range integer. *)
 let int_of_targetint t =
-  let i = Targetint.to_int t in
-  let t' = Targetint.of_int i in
-  if not (Targetint.equal t t') then
+  let i = Targetint_32_64.to_int t in
+  let t' = Targetint_32_64.of_int i in
+  if not (Targetint_32_64.equal t t') then
     Misc.fatal_errorf "Cannot translate targetint to caml int";
   i
 
@@ -67,7 +67,7 @@ let name env name =
 
 (* Constants *)
 
-let tag_targetint t = Targetint.(add (shift_left t 1) one)
+let tag_targetint t = Targetint_32_64.(add (shift_left t 1) one)
 let targetint_of_imm i = Targetint_31_63.Imm.to_targetint i.Targetint_31_63.value
 
 let const _env cst =
@@ -1505,7 +1505,7 @@ let unit (middle_end_result : Flambda_middle_end.middle_end_result) =
     in
     let body, res = expr env R.empty (Flambda_unit.body unit) in
     let body =
-      let unit_value = C.targetint Targetint.one in
+      let unit_value = C.targetint Targetint_32_64.one in
       C.ccatch
         ~rec_flag:false ~body
         ~handlers:[C.handler return_cont return_cont_params unit_value]

@@ -35,7 +35,7 @@ let exttype_of_kind k =
   | Naked_number Naked_int64 -> Cmm.XInt64
   | Naked_number Naked_int32 -> Cmm.XInt32
   | Naked_number (Naked_immediate | Naked_nativeint) ->
-    begin match Targetint.num_bits with
+    begin match Targetint_32_64.num_bits with
     | Thirty_two -> Cmm.XInt32
     | Sixty_four -> Cmm.XInt64
     end
@@ -91,7 +91,7 @@ let nativeint ?(dbg=Debuginfo.none) i =
   natint_const_untagged dbg i
 
 let targetint ?(dbg=Debuginfo.none) t =
-  match Targetint.repr t with
+  match Targetint_32_64.repr t with
   | Int32 i -> int32 ~dbg i
   | Int64 i -> int64 ~dbg i
 

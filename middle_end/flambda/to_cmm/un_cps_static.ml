@@ -34,12 +34,12 @@ module R = Un_cps_result
 let symbol s =
   Linkage_name.to_string (Symbol.linkage_name s)
 
-let tag_targetint t = Targetint.(add (shift_left t 1) one)
+let tag_targetint t = Targetint_32_64.(add (shift_left t 1) one)
 
 let targetint_of_imm i = Targetint_31_63.Imm.to_targetint i.Targetint_31_63.value
 
 let nativeint_of_targetint t =
-  match Targetint.repr t with
+  match Targetint_32_64.repr t with
   | Int32 i -> Nativeint.of_int32 i
   | Int64 i -> Int64.to_nativeint i
 
@@ -339,7 +339,7 @@ let static_const0 env r ~updates ~params_and_body
       in
       env, r, updates
   | Block_like s, Boxed_nativeint v ->
-      let default = Targetint.zero in
+      let default = Targetint_32_64.zero in
       let transl = nativeint_of_targetint in
       let r, updates =
         static_boxed_number

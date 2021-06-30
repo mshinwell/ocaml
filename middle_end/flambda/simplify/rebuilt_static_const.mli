@@ -75,7 +75,7 @@ val create_boxed_int64
 
 val create_boxed_nativeint
    : Are_rebuilding_terms.t
-  -> Targetint.t Or_variable.t
+  -> Targetint_32_64.t Or_variable.t
   -> t
 
 val create_immutable_float_block

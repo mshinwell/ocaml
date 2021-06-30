@@ -334,13 +334,13 @@ val this_tagged_immediate : Targetint_31_63.t -> t
 val this_boxed_float : Numbers.Float_by_bit_pattern.t -> t
 val this_boxed_int32 : Int32.t -> t
 val this_boxed_int64 : Int64.t -> t
-val this_boxed_nativeint : Targetint.t -> t
+val this_boxed_nativeint : Targetint_32_64.t -> t
 
 val these_tagged_immediates : Targetint_31_63.Set.t -> t
 val these_boxed_floats : Numbers.Float_by_bit_pattern.Set.t -> t
 val these_boxed_int32s : Int32.Set.t -> t
 val these_boxed_int64s : Int64.Set.t -> t
-val these_boxed_nativeints : Targetint.Set.t -> t
+val these_boxed_nativeints : Targetint_32_64.Set.t -> t
 
 (** Building of types representing untagged / unboxed values from
     specified constants. *)
@@ -348,7 +348,7 @@ val this_naked_immediate : Targetint_31_63.t -> t
 val this_naked_float : Numbers.Float_by_bit_pattern.t -> t
 val this_naked_int32 : Int32.t -> t
 val this_naked_int64 : Int64.t -> t
-val this_naked_nativeint : Targetint.t -> t
+val this_naked_nativeint : Targetint_32_64.t -> t
 
 val this_rec_info : Rec_info_expr.t -> t
 
@@ -356,7 +356,7 @@ val these_naked_immediates : Targetint_31_63.Set.t -> t
 val these_naked_floats : Numbers.Float_by_bit_pattern.Set.t -> t
 val these_naked_int32s : Int32.Set.t -> t
 val these_naked_int64s : Int64.Set.t -> t
-val these_naked_nativeints : Targetint.Set.t -> t
+val these_naked_nativeints : Targetint_32_64.Set.t -> t
 
 val boxed_float_alias_to : naked_float:Variable.t -> t
 val boxed_int32_alias_to : naked_int32:Variable.t -> t
@@ -517,7 +517,7 @@ val prove_naked_int32s : Typing_env.t -> t -> Numbers.Int32.Set.t proof
 
 val prove_naked_int64s : Typing_env.t -> t -> Numbers.Int64.Set.t proof
 
-val prove_naked_nativeints : Typing_env.t -> t -> Targetint.Set.t proof
+val prove_naked_nativeints : Typing_env.t -> t -> Targetint_32_64.Set.t proof
 
 type variant_like_proof = private {
   const_ctors : Targetint_31_63.Set.t Or_unknown.t;
@@ -569,7 +569,7 @@ val prove_is_a_boxed_nativeint
 val prove_boxed_floats : Typing_env.t -> t -> Float.Set.t proof
 val prove_boxed_int32s : Typing_env.t -> t -> Numbers.Int32.Set.t proof
 val prove_boxed_int64s : Typing_env.t -> t -> Numbers.Int64.Set.t proof
-val prove_boxed_nativeints : Typing_env.t -> t -> Targetint.Set.t proof
+val prove_boxed_nativeints : Typing_env.t -> t -> Targetint_32_64.Set.t proof
 
 val prove_tags_and_sizes
    : Typing_env.t
@@ -686,7 +686,7 @@ type to_lift = (* private *) (* CR mshinwell: resurrect *)
   | Boxed_float of Float.t
   | Boxed_int32 of Int32.t
   | Boxed_int64 of Int64.t
-  | Boxed_nativeint of Targetint.t
+  | Boxed_nativeint of Targetint_32_64.t
 
 type reification_result = private
   | Lift of to_lift  (* CR mshinwell: rename? *)

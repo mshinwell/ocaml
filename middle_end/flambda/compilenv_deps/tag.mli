@@ -30,7 +30,7 @@ val create_from_targetint_imm : Targetint_31_63.Imm.t -> t option
 
 val to_int : t -> int
 val to_target_imm : t -> Targetint_31_63.t
-val to_targetint : t -> Targetint.t
+val to_targetint : t -> Targetint_32_64.t
 val to_targetint_ocaml : t -> Targetint_31_63.Imm.t
 
 val zero : t
@@ -76,7 +76,7 @@ module Scannable : sig
   val of_tag : tag -> t option
 
   val to_int : t -> int
-  val to_targetint : t -> Targetint.t
+  val to_targetint : t -> Targetint_32_64.t
   val to_tag : t -> tag
 
   val zero : t

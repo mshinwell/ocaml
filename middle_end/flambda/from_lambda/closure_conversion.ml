@@ -98,7 +98,7 @@ let rec declare_const acc (const : Lambda.structured_constant)
     register_const acc (Boxed_int64 (Const c)) "int64"
   | Const_base (Const_nativeint c) ->
     (* CR pchambart: this should be pushed further to lambda *)
-    let c = Targetint.of_int64 (Int64.of_nativeint c) in
+    let c = Targetint_32_64.of_int64 (Int64.of_nativeint c) in
     register_const acc (Boxed_nativeint (Const c)) "nativeint"
   | Const_immstring c ->
     register_const acc (Immutable_string c) "immstring"
@@ -220,7 +220,7 @@ let close_c_call acc ~let_bound_var (prim : Primitive.description)
          primitive on 64-bit systems.  (There is no easy way here of
          detecting just the specific ARM case in question.) *)
       when
-        begin match Targetint.num_bits with
+        begin match Targetint_32_64.num_bits with
         | Thirty_two -> false
         | Sixty_four -> true
         end
