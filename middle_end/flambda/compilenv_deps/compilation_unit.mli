@@ -16,7 +16,7 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
-include Identifiable.S
+include Container_types.S
 
 (* The [Ident.t] must be persistent.  This function raises an exception
    if that is not the case. *)

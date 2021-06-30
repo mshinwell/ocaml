@@ -17,7 +17,7 @@
 [@@@ocaml.warning "+a-30-40-41-42"]
 
 let () =
-  match Targetint.num_bits with
+  match Targetint_32_64.num_bits with
   | Sixty_four -> ()
   | Thirty_two ->
     if Config.flambda then begin
@@ -32,7 +32,7 @@ input int to make it fit, whereas we probably want to make it produce an error ?
 
 module Imm = struct
   module T0 = struct
-    include Numbers.Int64
+    include Numeric_types.Int64
 
     (* CR mshinwell/gbury: Do these need specialising to int64? *)
 
@@ -106,9 +106,9 @@ module Imm = struct
 
     let to_float = Int64.to_float
 
-    let to_targetint = Targetint.of_int64
+    let to_targetint = Targetint_32_64.of_int64
 
-    let of_targetint = Targetint.to_int64
+    let of_targetint = Targetint_32_64.to_int64
 
     let max_array_length = Int64.sub (Int64.shift_left 1L 54) 1L
 
@@ -144,7 +144,7 @@ module Imm = struct
   end
 
   include One_bit_fewer.Make (T0)
-  include Identifiable.Make (T0)
+  include Container_types.Make (T0)
 
   let to_string t = Format.asprintf "%a" print t
 end
@@ -182,12 +182,12 @@ module T0 = struct
   let output chan t = print (Format.formatter_of_out_channel chan) t
 end
 
-module Self = Identifiable.Make (T0)
+module Self = Container_types.Make (T0)
 include Self
 
 module Pair = struct
   include
-    Identifiable.Make_pair
+    Container_types.Make_pair
       (struct
         type nonrec t = t
 
@@ -248,11 +248,11 @@ let set_to_targetint_set (set : Set.t) : Imm.Set.t =
     (fun t targetints -> Imm.Set.add t.value targetints)
     set Imm.Set.empty
 
-let set_to_targetint_set' (set : Set.t) : Targetint.Set.t =
+let set_to_targetint_set' (set : Set.t) : Targetint_32_64.Set.t =
   Set.fold
     (fun t targetints ->
-      Targetint.Set.add (Imm.to_targetint t.value) targetints)
-    set Targetint.Set.empty
+      Targetint_32_64.Set.add (Imm.to_targetint t.value) targetints)
+    set Targetint_32_64.Set.empty
 
 let all_bools = Set.of_list [bool_true; bool_false]
 

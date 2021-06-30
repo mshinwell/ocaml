@@ -41,7 +41,7 @@ let apply_renaming t perm =
 let free_names t =
   Name_occurrences.singleton_variable t.var t.name_mode
 
-include Identifiable.Make (struct
+include Container_types.Make (struct
   type nonrec t = t
 
 (*

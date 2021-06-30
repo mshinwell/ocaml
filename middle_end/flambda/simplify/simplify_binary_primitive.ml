@@ -19,7 +19,7 @@
 open! Simplify_import
 
 module A = Number_adjuncts
-module Float_by_bit_pattern = Numbers.Float_by_bit_pattern
+module Float_by_bit_pattern = Numeric_types.Float_by_bit_pattern
 
 type 'a binary_arith_outcome_for_one_side_only =
   | Exactly of 'a
@@ -30,10 +30,10 @@ type 'a binary_arith_outcome_for_one_side_only =
   | Invalid
 
 module type Binary_arith_like_sig = sig
-  module Lhs : Identifiable.S
-  module Rhs : Identifiable.S
-  module Pair : Identifiable.S with type t = Lhs.t * Rhs.t
-  module Result : Identifiable.S
+  module Lhs : Container_types.S
+  module Rhs : Container_types.S
+  module Pair : Container_types.S with type t = Lhs.t * Rhs.t
+  module Result : Container_types.S
 
   val ok_to_evaluate : DE.t -> bool
 
@@ -85,7 +85,7 @@ end = struct
       | Prim of P.t
       | Exactly of N.Result.t
 
-    include Identifiable.Make (struct
+    include Container_types.Make (struct
       type nonrec t = t
 
       let compare t1 t2 =
@@ -418,7 +418,7 @@ end = struct
      the stdlib *)
   module Pair = struct
     type nonrec t = Lhs.t * Rhs.t
-    include Identifiable.Make_pair (Lhs) (Rhs)
+    include Container_types.Make_pair (Lhs) (Rhs)
   end
 
   let cross_product set1 set2 =
@@ -445,7 +445,7 @@ end = struct
     let rhs = Targetint_31_63.to_targetint rhs in
     match op with
     | Lsl | Lsr | Asr ->
-      (* Shifting either way by [Targetint.size] or above, or by a negative
+      (* Shifting either way by [Targetint_32_64.size] or above, or by a negative
          amount, is undefined.
          However note that we cannot produce [Invalid] unless the code is
          type unsafe, which it is not here.  (Otherwise a GADT match might
@@ -458,7 +458,7 @@ end = struct
         : Num.t binary_arith_outcome_for_one_side_only =
     (* In these cases we are giving a semantics for some cases where the
        right-hand side may be less than zero or greater than or equal to
-       [Targetint.size].  These cases have undefined semantics, as above;
+       [Targetint_32_64.size].  These cases have undefined semantics, as above;
        however, it seems fine to give them a semantics since there is benefit
        to doing so in this particular case.  (This is not the case for
        the situation in [op_lhs_unknown], above, where there would be no

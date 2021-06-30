@@ -29,14 +29,14 @@ module Const_data = struct
   type t =
     | Naked_immediate of Targetint_31_63.t
     | Tagged_immediate of Targetint_31_63.t
-    | Naked_float of Numbers.Float_by_bit_pattern.t
+    | Naked_float of Numeric_types.Float_by_bit_pattern.t
     | Naked_int32 of Int32.t
     | Naked_int64 of Int64.t
-    | Naked_nativeint of Targetint.t
+    | Naked_nativeint of Targetint_32_64.t
 
   let flags = const_flags
 
-  include Identifiable.Make (struct
+  include Container_types.Make (struct
     type nonrec t = t
 
     let print ppf (t : t) =
@@ -54,7 +54,7 @@ module Const_data = struct
       | Naked_float f ->
         Format.fprintf ppf "@<0>%s#%a@<0>%s"
           (Flambda_colours.naked_number ())
-          Numbers.Float_by_bit_pattern.print f
+          Numeric_types.Float_by_bit_pattern.print f
           (Flambda_colours.normal ())
       | Naked_int32 n ->
         Format.fprintf ppf "@<0>%s#%ldl@<0>%s"
@@ -69,7 +69,7 @@ module Const_data = struct
       | Naked_nativeint n ->
         Format.fprintf ppf "@<0>%s#%an@<0>%s"
           (Flambda_colours.naked_number ())
-          Targetint.print n
+          Targetint_32_64.print n
           (Flambda_colours.normal ())
 
     let output _ _ = Misc.fatal_error "[output] not yet implemented"
@@ -81,13 +81,13 @@ module Const_data = struct
       | Tagged_immediate i1, Tagged_immediate i2 ->
         Targetint_31_63.compare i1 i2
       | Naked_float f1, Naked_float f2 ->
-        Numbers.Float_by_bit_pattern.compare f1 f2
+        Numeric_types.Float_by_bit_pattern.compare f1 f2
       | Naked_int32 n1, Naked_int32 n2 ->
         Int32.compare n1 n2
       | Naked_int64 n1, Naked_int64 n2 ->
         Int64.compare n1 n2
       | Naked_nativeint n1, Naked_nativeint n2 ->
-        Targetint.compare n1 n2
+        Targetint_32_64.compare n1 n2
       | Naked_immediate _, _ -> -1
       | _, Naked_immediate _ -> 1
       | Tagged_immediate _, _ -> -1
@@ -108,13 +108,13 @@ module Const_data = struct
         | Tagged_immediate i1, Tagged_immediate i2 ->
           Targetint_31_63.equal i1 i2
         | Naked_float f1, Naked_float f2 ->
-          Numbers.Float_by_bit_pattern.equal f1 f2
+          Numeric_types.Float_by_bit_pattern.equal f1 f2
         | Naked_int32 n1, Naked_int32 n2 ->
           Int32.equal n1 n2
         | Naked_int64 n1, Naked_int64 n2 ->
           Int64.equal n1 n2
         | Naked_nativeint n1, Naked_nativeint n2 ->
-          Targetint.equal n1 n2
+          Targetint_32_64.equal n1 n2
         | (Naked_immediate _ | Tagged_immediate _ | Naked_float _
             | Naked_int32 _ | Naked_int64 _ | Naked_nativeint _), _ -> false
 
@@ -122,10 +122,10 @@ module Const_data = struct
       match t with
       | Naked_immediate n -> Targetint_31_63.hash n
       | Tagged_immediate n -> Targetint_31_63.hash n
-      | Naked_float n -> Numbers.Float_by_bit_pattern.hash n
+      | Naked_float n -> Numeric_types.Float_by_bit_pattern.hash n
       | Naked_int32 n -> Hashtbl.hash n
       | Naked_int64 n -> Hashtbl.hash n
-      | Naked_nativeint n -> Targetint.hash n
+      | Naked_nativeint n -> Targetint_32_64.hash n
   end)
 end
 
@@ -309,7 +309,7 @@ module Const = struct
   module Set = Patricia_tree.Make_set (struct let print = print end)
   module Map = Patricia_tree.Make_map (struct let print = print end) (Set)
   (* CR mshinwell: The [Tbl]s will still print integers! *)
-  module Tbl = Identifiable.Make_tbl (Numbers.Int) (Map)
+  module Tbl = Container_types.Make_tbl (Numeric_types.Int) (Map)
 
   let export t = find_data t
 
@@ -383,7 +383,7 @@ module Variable = struct
 
   module Set = Patricia_tree.Make_set (struct let print = print end)
   module Map = Patricia_tree.Make_map (struct let print = print end) (Set)
-  module Tbl = Identifiable.Make_tbl (Numbers.Int) (Map)
+  module Tbl = Container_types.Make_tbl (Numeric_types.Int) (Map)
 
   let export t = find_data t
 
@@ -455,7 +455,7 @@ module Symbol = struct
 
   module Set = Patricia_tree.Make_set (struct let print = print end)
   module Map = Patricia_tree.Make_map (struct let print = print end) (Set)
-  module Tbl = Identifiable.Make_tbl (Numbers.Int) (Map)
+  module Tbl = Container_types.Make_tbl (Numeric_types.Int) (Map)
 
   let export t = find_data t
 
@@ -502,7 +502,7 @@ module Name = struct
 
   module Set = Patricia_tree.Make_set (struct let print = print end)
   module Map = Patricia_tree.Make_map (struct let print = print end) (Set)
-  module Tbl = Identifiable.Make_tbl (Numbers.Int) (Map)
+  module Tbl = Container_types.Make_tbl (Numeric_types.Int) (Map)
 end
 
 module Simple = struct
@@ -604,7 +604,7 @@ module Simple = struct
 
   module Set = Patricia_tree.Make_set (struct let print = print end)
   module Map = Patricia_tree.Make_map (struct let print = print end) (Set)
-  module Tbl = Identifiable.Make_tbl (Numbers.Int) (Map)
+  module Tbl = Container_types.Make_tbl (Numeric_types.Int) (Map)
 
   let export t = find_data t
 

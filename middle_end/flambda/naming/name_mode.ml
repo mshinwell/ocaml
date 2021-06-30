@@ -92,7 +92,7 @@ let compare_partial_order t1 t2 =
   | Phantom, In_types
   | In_types, Phantom -> None
 
-include Identifiable.Make (struct
+include Container_types.Make (struct
   type nonrec t = t
 
   let print ppf t =
@@ -138,7 +138,7 @@ module Or_absent = struct
     | Absent -> false
     | Present _ -> true
 
-  include Identifiable.Make (struct
+  include Container_types.Make (struct
     type nonrec t = t
 
     let print ppf t =

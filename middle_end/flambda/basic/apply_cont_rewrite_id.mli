@@ -18,6 +18,6 @@
 
 type t
 
-include Identifiable.S with type t := t
+include Container_types.S with type t := t
 
 val create : unit -> t

@@ -90,7 +90,7 @@ let rec declare_const acc (const : Lambda.structured_constant)
     in
     register_const acc const name
   | Const_base (Const_float c) ->
-    let c = Numbers.Float_by_bit_pattern.create (float_of_string c) in
+    let c = Numeric_types.Float_by_bit_pattern.create (float_of_string c) in
     register_const acc (Boxed_float (Const c)) "float"
   | Const_base (Const_int32 c) ->
     register_const acc (Boxed_int32 (Const c)) "int32"
@@ -98,7 +98,7 @@ let rec declare_const acc (const : Lambda.structured_constant)
     register_const acc (Boxed_int64 (Const c)) "int64"
   | Const_base (Const_nativeint c) ->
     (* CR pchambart: this should be pushed further to lambda *)
-    let c = Targetint.of_int64 (Int64.of_nativeint c) in
+    let c = Targetint_32_64.of_int64 (Int64.of_nativeint c) in
     register_const acc (Boxed_nativeint (Const c)) "nativeint"
   | Const_immstring c ->
     register_const acc (Immutable_string c) "immstring"
@@ -106,14 +106,14 @@ let rec declare_const acc (const : Lambda.structured_constant)
     register_const acc
       (Immutable_float_block
          (List.map (fun s ->
-           let f = Numbers.Float_by_bit_pattern.create (float_of_string s) in
+           let f = Numeric_types.Float_by_bit_pattern.create (float_of_string s) in
            Or_variable.Const f) c))
       "float_block"
   | Const_float_array c ->
     register_const acc
       (Immutable_float_array
          (List.map (fun s ->
-           let f = Numbers.Float_by_bit_pattern.create (float_of_string s) in
+           let f = Numeric_types.Float_by_bit_pattern.create (float_of_string s) in
            Or_variable.Const f) c))
       "float_array"
   | Const_block (tag, consts) ->
@@ -220,7 +220,7 @@ let close_c_call acc ~let_bound_var (prim : Primitive.description)
          primitive on 64-bit systems.  (There is no easy way here of
          detecting just the specific ARM case in question.) *)
       when
-        begin match Targetint.num_bits with
+        begin match Targetint_32_64.num_bits with
         | Thirty_two -> false
         | Sixty_four -> true
         end
@@ -665,7 +665,7 @@ let close_switch acc env scrutinee (sw : IR.switch)
       match sw.failaction with
       | None -> acc, Targetint_31_63.Map.of_list arms
       | Some (default, trap_action, args) ->
-        Numbers.Int.Set.fold (fun case (acc, cases) ->
+        Numeric_types.Int.Set.fold (fun case (acc, cases) ->
             let case = Targetint_31_63.int (Targetint_31_63.Imm.of_int case) in
             if Targetint_31_63.Map.mem case cases then acc, cases
             else
@@ -677,7 +677,7 @@ let close_switch acc env scrutinee (sw : IR.switch)
               in
               acc,
               Targetint_31_63.Map.add case default cases)
-          (Numbers.Int.zero_to_n (sw.numconsts - 1))
+          (Numeric_types.Int.zero_to_n (sw.numconsts - 1))
           (acc, Targetint_31_63.Map.of_list arms)
     in
     if Targetint_31_63.Map.is_empty arms then

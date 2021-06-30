@@ -22,7 +22,7 @@ module type S_base = sig
   type meet_env
   type typing_env_extension
 
-  module Index : Identifiable.S
+  module Index : Container_types.S
 
   val create_top : Flambda_kind.t -> t
 
@@ -55,7 +55,7 @@ module type S = sig
 end
 
 module type Index = sig
-  include Identifiable.S
+  include Container_types.S
 
   val remove_on_import : t -> Renaming.t -> bool
 end

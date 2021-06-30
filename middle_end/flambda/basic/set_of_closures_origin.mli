@@ -16,7 +16,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-include Identifiable.S
+include Container_types.S
 
 val create : ?name:string -> Compilation_unit.t -> t
 val name : t -> string option

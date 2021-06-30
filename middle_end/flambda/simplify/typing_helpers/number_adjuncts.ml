@@ -21,17 +21,17 @@ open! Flambda.Import
 module K = Flambda_kind
 module T = Flambda_type
 
-module Float_by_bit_pattern = Numbers.Float_by_bit_pattern
-module Int32 = Numbers.Int32
-module Int64 = Numbers.Int64
+module Float_by_bit_pattern = Numeric_types.Float_by_bit_pattern
+module Int32 = Numeric_types.Int32
+module Int64 = Numeric_types.Int64
 
 module type Num_common = sig
-  include Identifiable.S
+  include Container_types.S
 
   module Pair : sig
     type nonrec t = t * t
 
-    include Identifiable.S with type t := t
+    include Container_types.S with type t := t
   end
 
   val cross_product : Set.t -> Set.t -> Pair.Set.t
@@ -49,14 +49,14 @@ module type Num_common = sig
   val to_const : t -> Reg_width_const.t
 
   val to_immediate : t -> Targetint_31_63.t
-  val to_naked_float : t -> Numbers.Float_by_bit_pattern.t
-  val to_naked_int32 : t -> Numbers.Int32.t
-  val to_naked_int64 : t -> Numbers.Int64.t
-  val to_naked_nativeint : t -> Targetint.t
+  val to_naked_float : t -> Numeric_types.Float_by_bit_pattern.t
+  val to_naked_int32 : t -> Numeric_types.Int32.t
+  val to_naked_int64 : t -> Numeric_types.Int64.t
+  val to_naked_nativeint : t -> Targetint_32_64.t
 end
 
 module type Number_kind_common = sig
-  module Num : Identifiable.S
+  module Num : Container_types.S
 
   val kind : K.Standard_int_or_float.t
 
@@ -97,7 +97,7 @@ module type Int_number_kind = sig
 end
 
 module type Boxable = sig
-  module Num : Identifiable.S
+  module Num : Container_types.S
 
   val boxable_number_kind : K.Boxable_number.t
 
@@ -276,7 +276,7 @@ module For_floats : Boxable_number_kind = struct
 
     (* CR mshinwell: We need to validate that the backend compiles
        the [Int_of_float] primitive in the same way as
-       [Targetint.of_float].  Ditto for [Float_of_int].  (For the record,
+       [Targetint_32_64.of_float].  Ditto for [Float_of_int].  (For the record,
        [Pervasives.int_of_float] and [Nativeint.of_float] on [nan] produce
        wildly different results). *)
     let to_immediate t =
@@ -285,7 +285,7 @@ module For_floats : Boxable_number_kind = struct
     let to_naked_float t = t
     let to_naked_int32 t = Int32.of_float (to_float t)
     let to_naked_int64 t = Int64.of_float (to_float t)
-    let to_naked_nativeint t = Targetint.of_float (to_float t)
+    let to_naked_nativeint t = Targetint_32_64.of_float (to_float t)
   end
 
   let kind : K.Standard_int_or_float.t = Naked_float
@@ -349,7 +349,7 @@ module For_int32s : Boxable_int_number_kind = struct
     let to_naked_float t = Float_by_bit_pattern.create (Int32.to_float t)
     let to_naked_int32 t = t
     let to_naked_int64 t = Int64.of_int32 t
-    let to_naked_nativeint t = Targetint.of_int32 t
+    let to_naked_nativeint t = Targetint_32_64.of_int32 t
   end
 
   let kind : K.Standard_int_or_float.t = Naked_int32
@@ -413,7 +413,7 @@ module For_int64s : Boxable_int_number_kind = struct
     let to_naked_float t = Float_by_bit_pattern.create (Int64.to_float t)
     let to_naked_int32 t = Int64.to_int32 t
     let to_naked_int64 t = t
-    let to_naked_nativeint t = Targetint.of_int64 t
+    let to_naked_nativeint t = Targetint_32_64.of_int64 t
   end
 
   let kind : K.Standard_int_or_float.t = Naked_int64
@@ -438,7 +438,7 @@ end
 
 module For_nativeints : Boxable_int_number_kind = struct
   module Num = struct
-    include Targetint
+    include Targetint_32_64
 
     let compare_unsigned _t1 _t2 =
       Misc.fatal_error "Not yet implemented (waiting on upstream stdlib change)"
@@ -467,9 +467,9 @@ module For_nativeints : Boxable_int_number_kind = struct
     let to_const t = Reg_width_const.naked_nativeint t
 
     let to_immediate t = Targetint_31_63.int (Targetint_31_63.Imm.of_targetint t)
-    let to_naked_float t = Float_by_bit_pattern.create (Targetint.to_float t)
-    let to_naked_int32 t = Targetint.to_int32 t
-    let to_naked_int64 t = Targetint.to_int64 t
+    let to_naked_float t = Float_by_bit_pattern.create (Targetint_32_64.to_float t)
+    let to_naked_int32 t = Targetint_32_64.to_int32 t
+    let to_naked_int64 t = Targetint_32_64.to_int64 t
     let to_naked_nativeint t = t
   end
 

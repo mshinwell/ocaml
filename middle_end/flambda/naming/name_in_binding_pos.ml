@@ -48,7 +48,7 @@ let to_name t = t.name
 
 let to_simple t = Simple.name t.name
 
-include Identifiable.Make (struct
+include Container_types.Make (struct
   type nonrec t = t
 
   let print ppf { name; name_mode; } =

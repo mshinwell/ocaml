@@ -44,7 +44,7 @@ let compare0 v1 v2 =
 
 let equal0 t1 t2 = (compare0 t1 t2 = 0)
 
-include Identifiable.Make (struct
+include Container_types.Make (struct
   type nonrec t = t
 
   let compare = compare0

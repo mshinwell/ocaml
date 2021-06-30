@@ -21,7 +21,7 @@
     [Project_var], and not [Var], nodes are tagged with these
     identifiers. *)
 
-include Identifiable.S
+include Container_types.S
 
 val wrap : Compilation_unit.t -> Variable.t -> t
 

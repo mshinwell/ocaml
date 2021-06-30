@@ -26,10 +26,10 @@ type fabricated = private Fabricated
 type rec_info = private Rec_info
 
 type naked_immediate = empty_naked_immediate * Targetint_31_63.Set.t
-type naked_float = empty_naked_float * Numbers.Float_by_bit_pattern.Set.t
-type naked_int32 = empty_naked_int32 * Numbers.Int32.Set.t
-type naked_int64 = empty_naked_int64 * Numbers.Int64.Set.t
-type naked_nativeint = empty_naked_nativeint * Targetint.Set.t
+type naked_float = empty_naked_float * Numeric_types.Float_by_bit_pattern.Set.t
+type naked_int32 = empty_naked_int32 * Numeric_types.Int32.Set.t
+type naked_int64 = empty_naked_int64 * Numeric_types.Int64.Set.t
+type naked_nativeint = empty_naked_nativeint * Targetint_32_64.Set.t
 
 module Naked_number_kind = struct
   type t =
@@ -83,7 +83,7 @@ let unit = Value
 
 let unicode = true  (* CR mshinwell: move elsewhere *)
 
-include Identifiable.Make (struct
+include Container_types.Make (struct
   type nonrec t = t
 
   let compare t1 t2 =
@@ -192,7 +192,7 @@ module Standard_int = struct
     | Naked_int64 -> Naked_number Naked_int64
     | Naked_nativeint -> Naked_number Naked_nativeint
 
-  include Identifiable.Make (struct
+  include Container_types.Make (struct
     type nonrec t = t
 
     let print ppf t =
@@ -249,7 +249,7 @@ module Standard_int_or_float = struct
     | Naked_int64 -> Naked_number Naked_int64
     | Naked_nativeint -> Naked_number Naked_nativeint
 
-  include Identifiable.Make (struct
+  include Container_types.Make (struct
     type nonrec t = t
 
     let print ppf t =
@@ -311,7 +311,7 @@ module Boxable_number = struct
     | Naked_int64 -> Naked_int64
     | Naked_nativeint -> Naked_nativeint
 
-  include Identifiable.Make (struct
+  include Container_types.Make (struct
     type nonrec t = t
 
     let print ppf t =
@@ -376,7 +376,7 @@ module With_subkind = struct
       | Boxed_nativeint
       | Tagged_immediate
 
-    include Identifiable.Make (struct
+    include Container_types.Make (struct
       type nonrec t = t
 
       let print ppf t =
@@ -459,7 +459,7 @@ module With_subkind = struct
     | Naked_int64 -> naked_int64
     | Naked_nativeint -> naked_nativeint
 
-  include Identifiable.Make (struct
+  include Container_types.Make (struct
     type nonrec t = t
 
     let print ppf { kind; subkind; } =

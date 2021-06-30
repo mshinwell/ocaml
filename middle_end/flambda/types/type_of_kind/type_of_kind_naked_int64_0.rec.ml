@@ -16,7 +16,7 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
-module Int64 = Numbers.Int64
+module Int64 = Numeric_types.Int64
 module TEE = Typing_env_extension
 
 type t = Int64.Set.t

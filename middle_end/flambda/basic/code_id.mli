@@ -16,7 +16,7 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
-include Identifiable.S
+include Container_types.S
 type exported
 
 module Lmap : Lmap.S with type key = t

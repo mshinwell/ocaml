@@ -75,7 +75,7 @@ module Rhs_kind : sig
 
   val bound_to : t -> Simple.t
 
-  include Identifiable.S with type t := t
+  include Container_types.S with type t := t
 end = struct
   type t =
     | Needs_extra_binding of { bound_to : Simple.t; }
@@ -86,7 +86,7 @@ end = struct
     | Needs_extra_binding { bound_to; }
     | Rhs_in_scope { bound_to; } -> bound_to
 
-  include Identifiable.Make (struct
+  include Container_types.Make (struct
     type nonrec t = t
 
     let print ppf t =

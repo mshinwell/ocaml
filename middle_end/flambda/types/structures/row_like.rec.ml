@@ -16,13 +16,13 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Int = Numbers.Int
+module Int = Numeric_types.Int
 module TEE = Typing_env_extension
 
 module Make
-  (Tag : Identifiable.S)
+  (Tag : Container_types.S)
   (Index : sig
-     include Identifiable.S
+     include Container_types.S
      val union : t -> t -> t
      val inter : t -> t -> t
      val subset : t -> t -> bool

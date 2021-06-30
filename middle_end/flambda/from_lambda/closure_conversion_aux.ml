@@ -87,7 +87,7 @@ end
 module Env = struct
   type t = {
     variables : Variable.t Ident.Map.t;
-    globals : Symbol.t Numbers.Int.Map.t;
+    globals : Symbol.t Numeric_types.Int.Map.t;
     simples_to_substitute : Simple.t Ident.Map.t;
     backend : (module Flambda_backend_intf.S);
     current_unit_id : Ident.t;
@@ -102,7 +102,7 @@ module Env = struct
     let module Backend = (val backend : Flambda_backend_intf.S) in
     let compilation_unit = Compilation_unit.get_current_exn () in
     { variables = Ident.Map.empty;
-      globals = Numbers.Int.Map.empty;
+      globals = Numeric_types.Int.Map.empty;
       simples_to_substitute = Ident.Map.empty;
       backend;
       current_unit_id = Compilation_unit.get_persistent_ident compilation_unit;
@@ -166,10 +166,10 @@ module Env = struct
     List.map (fun id -> find_var t id) ids
 
   let add_global t pos symbol =
-    { t with globals = Numbers.Int.Map.add pos symbol t.globals }
+    { t with globals = Numeric_types.Int.Map.add pos symbol t.globals }
 
   let find_global t pos =
-    try Numbers.Int.Map.find pos t.globals
+    try Numeric_types.Int.Map.find pos t.globals
     with Not_found ->
       Misc.fatal_error ("Closure_conversion.Env.find_global: global "
         ^ string_of_int pos)

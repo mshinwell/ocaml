@@ -18,7 +18,7 @@
 
 open! Simplify_import
 
-module SCC_lifted_constants = Strongly_connected_components.Make (CIS)
+module SCC_lifted_constants = Strongly_connected_components_flambda2.Make (CIS)
 
 let build_dep_graph lifted_constants =
   (* Format.eprintf "SORTING:\n%!"; *)

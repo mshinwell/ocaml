@@ -53,4 +53,4 @@ val filter_function_declarations
   -> f:(Closure_id.t -> Function_declaration.t -> bool)
   -> t
 
-include Identifiable.S with type t := t
+include Container_types.S with type t := t

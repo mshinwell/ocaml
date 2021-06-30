@@ -33,7 +33,7 @@ let create ~contents ~size =
 let contents t = t.contents
 let size t = t.size
 
-include Identifiable.Make (struct
+include Container_types.Make (struct
   type nonrec t = t
 
   let compare t1 t2 =

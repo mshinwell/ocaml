@@ -436,11 +436,11 @@ module Eligible_for_cse : sig
   val filter_map_args : t -> f:(Simple.t -> Simple.t option) -> t option
 
   (** Total ordering, equality, printing, sets, maps etc. *)
-  include Identifiable.S with type t := t
+  include Container_types.S with type t := t
 end
 
 (** Total ordering, printing, sets, maps etc. *)
-include Identifiable.S with type t := t
+include Container_types.S with type t := t
 
 val equal : t -> t -> bool
 val equal_nullary_primitive : nullary_primitive -> nullary_primitive -> bool

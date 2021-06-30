@@ -16,7 +16,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-include Numbers.Int
+include Numeric_types.Int
 
 let next = ref 0
 

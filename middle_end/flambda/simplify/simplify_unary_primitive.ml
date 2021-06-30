@@ -19,9 +19,9 @@
 open! Simplify_import
 
 module A = Number_adjuncts
-module Float = Numbers.Float_by_bit_pattern
-module Int32 = Numbers.Int32
-module Int64 = Numbers.Int64
+module Float = Numeric_types.Float_by_bit_pattern
+module Int32 = Numeric_types.Int32
+module Int64 = Numeric_types.Int64
 
 (* CR mshinwell: [meet] operations should not return types that are already
    known about.  The majority of problems like this have been fixed.
@@ -321,9 +321,9 @@ module Make_simplify_int_conv (N : A.Number_kind) = struct
         | Naked_nativeint ->
           let is =
             Num.Set.fold (fun i is ->
-                Targetint.Set.add (Num.to_naked_nativeint i) is)
+                Targetint_32_64.Set.add (Num.to_naked_nativeint i) is)
               is
-              Targetint.Set.empty
+              Targetint_32_64.Set.empty
           in
           let ty = T.these_naked_nativeints is in
           let env_extension = TEE.one_equation result ty in
@@ -418,7 +418,7 @@ let simplify_reinterpret_int64_as_float dacc ~original_term ~arg:_ ~arg_ty
 
 let simplify_float_arith_op (op : P.unary_float_arith_op) dacc ~original_term
       ~arg:_ ~arg_ty ~result_var =
-  let module F = Numbers.Float_by_bit_pattern in
+  let module F = Numeric_types.Float_by_bit_pattern in
   let result = Name.var (Var_in_binding_pos.var result_var) in
   let denv = DA.denv dacc in
   let typing_env = DE.typing_env denv in

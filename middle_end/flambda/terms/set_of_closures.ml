@@ -34,7 +34,7 @@ let print_with_cache ~cache ppf
     (Function_declarations.print_with_cache ~cache) function_decls
     (Var_within_closure.Map.print Simple.print) closure_elements
 
-include Identifiable.Make (struct
+include Container_types.Make (struct
   type nonrec t = t
 
   let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t

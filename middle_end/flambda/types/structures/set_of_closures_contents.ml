@@ -21,7 +21,7 @@ type t = {
   closure_vars : Var_within_closure.Set.t;
 }
 
-include Identifiable.Make (struct
+include Container_types.Make (struct
   type nonrec t = t
 
   let print ppf { closures; closure_vars; } =
@@ -86,7 +86,7 @@ let apply_renaming { closures; closure_vars; } renaming =
 module With_closure_id = struct
   type nonrec t = Closure_id.t * t
 
-  include Identifiable.Make (struct
+  include Container_types.Make (struct
     type nonrec t = t
 
     let print ppf (closure_id, contents) =
@@ -111,7 +111,7 @@ end
 module With_closure_id_or_unknown = struct
   type nonrec t = Closure_id.t Or_unknown.t * t
 
-  include Identifiable.Make (struct
+  include Container_types.Make (struct
     type nonrec t = t
 
     let print ppf (closure_id_or_unknown, contents) =

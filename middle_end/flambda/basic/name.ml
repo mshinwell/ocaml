@@ -106,7 +106,7 @@ let must_be_symbol_opt t =
     ~symbol:(fun sym -> Some sym)
 
 module Pair = struct
-  include Identifiable.Make_pair
+  include Container_types.Make_pair
     (Reg_width_things.Name)
     (Reg_width_things.Name)
 

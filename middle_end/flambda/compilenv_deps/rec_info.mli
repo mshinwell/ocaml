@@ -15,7 +15,7 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 type t
 
-include Identifiable.S with type t := t
+include Container_types.S with type t := t
 
 val initial : t
 

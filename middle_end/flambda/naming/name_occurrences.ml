@@ -21,7 +21,7 @@
 module Kind = Name_mode
 
 module For_one_variety_of_names (N : sig
-  include Identifiable.S
+  include Container_types.S
   val apply_renaming : t -> Renaming.t -> t
 end) : sig
   type t

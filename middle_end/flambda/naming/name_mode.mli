@@ -44,7 +44,7 @@ val can_be_in_terms : t -> bool
 
 val max_in_terms : t -> t -> t
 
-include Identifiable.S with type t := t
+include Container_types.S with type t := t
 
 val compare_total_order : t -> t -> int
 val compare_partial_order : t -> t -> int option
@@ -73,7 +73,7 @@ module Or_absent : sig
 
   val is_present : t -> bool
 
-  include Identifiable.S with type t := t
+  include Container_types.S with type t := t
 
   val compare_total_order : t -> t -> int
   val compare_partial_order : t -> t -> int option

@@ -23,7 +23,7 @@ module Const : sig
   type t = private Table_by_int_id.Id.t
   type exported
 
-  include Identifiable.S with type t := t
+  include Container_types.S with type t := t
 
   val const_true : t
   val const_false : t
@@ -47,21 +47,21 @@ module Const : sig
       width [n] bits.) *)
   val naked_immediate : Targetint_31_63.t -> t
   val tagged_immediate : Targetint_31_63.t -> t
-  val naked_float : Numbers.Float_by_bit_pattern.t -> t
+  val naked_float : Numeric_types.Float_by_bit_pattern.t -> t
   val naked_int32 : Int32.t -> t
   val naked_int64 : Int64.t -> t
-  val naked_nativeint : Targetint.t -> t
+  val naked_nativeint : Targetint_32_64.t -> t
 
   module Descr : sig
     type t = private
       | Naked_immediate of Targetint_31_63.t
       | Tagged_immediate of Targetint_31_63.t
-      | Naked_float of Numbers.Float_by_bit_pattern.t
+      | Naked_float of Numeric_types.Float_by_bit_pattern.t
       | Naked_int32 of Int32.t
       | Naked_int64 of Int64.t
-      | Naked_nativeint of Targetint.t
+      | Naked_nativeint of Targetint_32_64.t
 
-    include Identifiable.S with type t := t
+    include Container_types.S with type t := t
   end
 
   val descr : t -> Descr.t
@@ -78,7 +78,7 @@ module Variable : sig
   type t = private Table_by_int_id.Id.t
   type exported
 
-  include Identifiable.S with type t := t
+  include Container_types.S with type t := t
 
   val create : ?user_visible:unit -> string -> t
 
@@ -102,7 +102,7 @@ module Symbol : sig
   type t = private Table_by_int_id.Id.t
   type exported
 
-  include Identifiable.S with type t := t
+  include Container_types.S with type t := t
 
   val create : Compilation_unit.t -> Linkage_name.t -> t
 
@@ -125,7 +125,7 @@ end
 module Name : sig
   type t = private Table_by_int_id.Id.t
 
-  include Identifiable.S with type t := t
+  include Container_types.S with type t := t
 
   val var : Variable.t -> t
 
@@ -142,7 +142,7 @@ module Simple : sig
   type t = private Table_by_int_id.Id.t
   type exported
 
-  include Identifiable.S with type t := t
+  include Container_types.S with type t := t
 
   val name : Name.t -> t
 

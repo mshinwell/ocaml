@@ -14,7 +14,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-include Identifiable.S
+include Container_types.S
 
 val create : Closure_id.t -> t
 

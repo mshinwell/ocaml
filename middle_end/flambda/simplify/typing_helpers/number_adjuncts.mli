@@ -21,11 +21,11 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module type Num_common = sig
-  include Identifiable.S
+  include Container_types.S
 
   module Pair : sig
     type nonrec t = t * t
-    include Identifiable.S with type t := t
+    include Container_types.S with type t := t
   end
 
   val cross_product : Set.t -> Set.t -> Pair.Set.t
@@ -43,14 +43,14 @@ module type Num_common = sig
   val to_const : t -> Reg_width_const.t
 
   val to_immediate : t -> Targetint_31_63.t
-  val to_naked_float : t -> Numbers.Float_by_bit_pattern.t
-  val to_naked_int32 : t -> Numbers.Int32.t
-  val to_naked_int64 : t -> Numbers.Int64.t
-  val to_naked_nativeint : t -> Targetint.t
+  val to_naked_float : t -> Numeric_types.Float_by_bit_pattern.t
+  val to_naked_int32 : t -> Numeric_types.Int32.t
+  val to_naked_int64 : t -> Numeric_types.Int64.t
+  val to_naked_nativeint : t -> Targetint_32_64.t
 end
 
 module type Number_kind_common = sig
-  module Num : Identifiable.S
+  module Num : Container_types.S
 
   (* CR mshinwell: Rename to standard_int_or_float_kind? *)
   val kind : Flambda_kind.Standard_int_or_float.t
@@ -94,7 +94,7 @@ module type Int_number_kind = sig
 end
 
 module type Boxable = sig
-  module Num : Identifiable.S
+  module Num : Container_types.S
 
   val boxable_number_kind : Flambda_kind.Boxable_number.t
 

@@ -409,10 +409,10 @@ let these_naked_int64s0 ~no_alias is =
     else Naked_int64 (T_N64.create_no_alias (Ok is))
 
 let these_naked_nativeints0 ~no_alias is =
-  match Targetint.Set.get_singleton is with
+  match Targetint_32_64.Set.get_singleton is with
   | Some i when not no_alias -> this_naked_nativeint i
   | _ ->
-    if Targetint.Set.is_empty is then bottom K.naked_nativeint
+    if Targetint_32_64.Set.is_empty is then bottom K.naked_nativeint
     else Naked_nativeint (T_NN.create_no_alias (Ok is))
 
 let this_naked_immediate_without_alias i =
@@ -428,7 +428,7 @@ let this_naked_int64_without_alias i =
   these_naked_int64s0 ~no_alias:true (Int64.Set.singleton i)
 
 let this_naked_nativeint_without_alias i =
-  these_naked_nativeints0 ~no_alias:true (Targetint.Set.singleton i)
+  these_naked_nativeints0 ~no_alias:true (Targetint_32_64.Set.singleton i)
 
 let these_naked_immediates is = these_naked_immediates0 ~no_alias:false is
 let these_naked_floats fs = these_naked_floats0 ~no_alias:false fs

@@ -74,10 +74,10 @@ let apply_renaming t renaming rename_contents =
   | Known contents -> Known (rename_contents contents renaming)
   | Unknown -> Unknown
 
-module Lift (I : Identifiable.S) = struct
+module Lift (I : Container_types.S) = struct
   type nonrec t = I.t t
 
-  include Identifiable.Make (struct
+  include Container_types.Make (struct
     type nonrec t = t
 
     let print ppf t = print I.print ppf t

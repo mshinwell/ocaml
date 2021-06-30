@@ -41,4 +41,4 @@ val rename : t -> t
 
 val is_symbol : t -> bool
 
-include Identifiable.S with type t := t
+include Container_types.S with type t := t
