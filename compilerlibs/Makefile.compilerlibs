@@ -192,7 +192,8 @@ MIDDLE_END_FLAMBDA_COMPILENV_DEPS=\
   middle_end/flambda/compilenv_deps/reg_width_things.cmo \
   middle_end/flambda/compilenv_deps/symbol.cmo \
   middle_end/flambda/compilenv_deps/variable.cmo \
-  middle_end/flambda/compilenv_deps/flambda_features.cmo
+  middle_end/flambda/compilenv_deps/flambda_features.cmo \
+  middle_end/flambda/compilenv_deps/strongly_connected_components_flambda2.cmo
 
 MIDDLE_END_FLAMBDA_BASIC=\
   middle_end/flambda/types/kinds/flambda_kind.cmo \

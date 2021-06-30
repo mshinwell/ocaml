@@ -3977,6 +3977,18 @@ middle_end/flambda/compilenv_deps/reg_width_things.cmi : \
     utils/identifiable.cmi \
     middle_end/flambda/compilenv_deps/compilation_unit.cmi \
     middle_end/flambda/compilenv_deps/coercion.cmi
+middle_end/flambda/compilenv_deps/strongly_connected_components_flambda2.cmo : \
+    utils/numbers.cmi \
+    utils/misc.cmi \
+    utils/identifiable.cmi \
+    middle_end/flambda/compilenv_deps/strongly_connected_components_flambda2.cmi
+middle_end/flambda/compilenv_deps/strongly_connected_components_flambda2.cmx : \
+    utils/numbers.cmx \
+    utils/misc.cmx \
+    utils/identifiable.cmx \
+    middle_end/flambda/compilenv_deps/strongly_connected_components_flambda2.cmi
+middle_end/flambda/compilenv_deps/strongly_connected_components_flambda2.cmi : \
+    utils/identifiable.cmi
 middle_end/flambda/compilenv_deps/symbol.cmo : \
     middle_end/flambda/compilenv_deps/reg_width_things.cmi \
     utils/misc.cmi \
@@ -5054,7 +5066,7 @@ middle_end/flambda/from_lambda/lambda_conversions.cmi : \
 middle_end/flambda/from_lambda/lambda_to_flambda.cmo : \
     middle_end/flambda/compilenv_deps/variable.cmi \
     middle_end/flambda/compilenv_deps/tag.cmi \
-    utils/strongly_connected_components.cmi \
+    middle_end/flambda/compilenv_deps/strongly_connected_components_flambda2.cmi \
     lambda/simplif.cmi \
     middle_end/flambda/basic/recursive.cmi \
     lambda/printlambda.cmi \
@@ -5078,7 +5090,7 @@ middle_end/flambda/from_lambda/lambda_to_flambda.cmo : \
 middle_end/flambda/from_lambda/lambda_to_flambda.cmx : \
     middle_end/flambda/compilenv_deps/variable.cmx \
     middle_end/flambda/compilenv_deps/tag.cmx \
-    utils/strongly_connected_components.cmx \
+    middle_end/flambda/compilenv_deps/strongly_connected_components_flambda2.cmx \
     lambda/simplif.cmx \
     middle_end/flambda/basic/recursive.cmx \
     lambda/printlambda.cmx \
@@ -5469,14 +5481,14 @@ middle_end/flambda/lifting/reification.cmi : \
     middle_end/flambda/types/flambda_type.cmi \
     middle_end/flambda/simplify/env/downwards_acc.cmi
 middle_end/flambda/lifting/sort_lifted_constants.cmo : \
-    utils/strongly_connected_components.cmi \
+    middle_end/flambda/compilenv_deps/strongly_connected_components_flambda2.cmi \
     middle_end/flambda/simplify/simplify_import.cmi \
     middle_end/flambda/naming/name_occurrences.cmi \
     middle_end/flambda/basic/closure_id.cmi \
     middle_end/flambda/terms/bound_symbols.cmi \
     middle_end/flambda/lifting/sort_lifted_constants.cmi
 middle_end/flambda/lifting/sort_lifted_constants.cmx : \
-    utils/strongly_connected_components.cmx \
+    middle_end/flambda/compilenv_deps/strongly_connected_components_flambda2.cmx \
     middle_end/flambda/simplify/simplify_import.cmx \
     middle_end/flambda/naming/name_occurrences.cmx \
     middle_end/flambda/basic/closure_id.cmx \
