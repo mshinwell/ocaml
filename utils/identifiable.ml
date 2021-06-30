@@ -14,8 +14,6 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "-55"]
-
 module type Thing = sig
   type t
 
@@ -28,26 +26,22 @@ end
 
 module type Set = sig
   module T : Set.OrderedType
-  include Set.S with type elt = T.t
+  include Set.S
+    with type elt = T.t
+     and type t = Set.Make (T).t
 
   val output : out_channel -> t -> unit
   val print : Format.formatter -> t -> unit
   val to_string : t -> string
   val of_list : elt list -> t
   val map : (elt -> elt) -> t -> t
-  val fixpoint : (elt -> t) -> t -> t
-  val union_list : t list -> t
-  val intersection_is_empty : t -> t -> bool
 end
 
 module type Map = sig
   module T : Map.OrderedType
-  include Map.S with type key = T.t
-
-  module Set : Set with module T := T
-
-  val print_debug :
-    (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
+  include Map.S
+    with type key = T.t
+     and type 'a t = 'a Map.Make (T).t
 
   val of_list : (key * 'a) list -> 'a t
 
@@ -62,22 +56,13 @@ module type Map = sig
   val union_merge : ('a -> 'a -> 'a) -> 'a t -> 'a t -> 'a t
   val rename : key t -> key -> key
   val map_keys : (key -> key) -> 'a t -> 'a t
-  val keys : 'a t -> Set.t
+  val keys : 'a t -> Set.Make(T).t
   val data : 'a t -> 'a list
-  val of_set : (key -> 'a) -> Set.t -> 'a t
+  val of_set : (key -> 'a) -> Set.Make(T).t -> 'a t
   val transpose_keys_and_data : key t -> key t
-  val transpose_keys_and_data_set : key t -> Set.t t
+  val transpose_keys_and_data_set : key t -> Set.Make(T).t t
   val print :
     (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
-  val diff_domains : 'a t -> 'a t -> 'a t
-  val fold2_stop_on_key_mismatch
-      : (key -> 'a -> 'a -> 'b -> 'b)
-        -> 'a t
-        -> 'a t
-        -> 'b
-        -> 'b option
-  val inter : (key -> 'a -> 'a -> 'a) -> 'a t -> 'a t -> 'a t
-  val inter_domain_is_non_empty : 'a t -> 'a t -> bool
 end
 
 module type Tbl = sig
@@ -86,15 +71,15 @@ module type Tbl = sig
     include Map.OrderedType with type t := t
     include Hashtbl.HashedType with type t := t
   end
-  include Hashtbl.S with type key = T.t
-
-  module Map : Map with module T := T
+  include Hashtbl.S
+    with type key = T.t
+     and type 'a t = 'a Hashtbl.Make (T).t
 
   val to_list : 'a t -> (T.t * 'a) list
   val of_list : (T.t * 'a) list -> 'a t
 
-  val to_map : 'a t -> 'a Map.t
-  val of_map : 'a Map.t -> 'a t
+  val to_map : 'a t -> 'a Map.Make(T).t
+  val of_map : 'a Map.Make(T).t -> 'a t
   val memoize : 'a t -> (key -> 'a) -> key -> 'a
   val map : 'a t -> ('a -> 'b) -> 'b t
 end
@@ -113,24 +98,20 @@ module Pair (A : Thing) (B : Thing) : Thing with type t = A.t * B.t = struct
   let print ppf (a, b) = Format.fprintf ppf " (%a, @ %a)" A.print a B.print b
 end
 
-module Make_map (T : Thing) (Set : Set with module T := T) = struct
-  include (Map.Make [@inlined hint]) (T)
-
-  module Set = Set
+module Make_map (T : Thing) = struct
+  include Map.Make (T)
 
   let of_list l =
     List.fold_left (fun map (id, v) -> add id v map) empty l
 
   let disjoint_union ?eq ?print m1 m2 =
-    ignore print;
-    union (fun _id v1 v2 ->
+    union (fun id v1 v2 ->
         let ok = match eq with
           | None -> false
           | Some eq -> eq v1 v2
         in
         if not ok then
-(*
-          let _err =
+          let err =
             match print with
             | None ->
               Format.asprintf "Map.disjoint_union %a" T.print id
@@ -138,8 +119,7 @@ module Make_map (T : Thing) (Set : Set with module T := T) = struct
               Format.asprintf "Map.disjoint_union %a => %a <> %a"
                 T.print id print v1 print v2
           in
-*)
-          invalid_arg "disjoint_union"
+          Misc.fatal_error err
         else Some v1)
       m1 m2
 
@@ -168,16 +148,18 @@ module Make_map (T : Thing) (Set : Set with module T := T) = struct
   let map_keys f m =
     of_list (List.map (fun (k, v) -> f k, v) (bindings m))
 
-  let print print_datum ppf t =
-    Misc.print_assoc T.print print_datum ppf (bindings t)
+  let print f ppf s =
+    let elts ppf s = iter (fun id v ->
+        Format.fprintf ppf "@ (@[%a@ %a@])" T.print id f v) s in
+    Format.fprintf ppf "@[<1>{@[%a@ @]}@]" elts s
 
-  let print_debug = print
+  module T_set = Set.Make (T)
 
-  let keys map = fold (fun k _ set -> Set.add k set) map Set.empty
+  let keys map = fold (fun k _ set -> T_set.add k set) map T_set.empty
 
   let data t = List.map snd (bindings t)
 
-  let of_set f set = Set.fold (fun e map -> add e (f e) map) set empty
+  let of_set f set = T_set.fold (fun e map -> add e (f e) map) set empty
 
   let transpose_keys_and_data map = fold (fun k v m -> add v k m) map empty
   let transpose_keys_and_data_set map =
@@ -185,92 +167,40 @@ module Make_map (T : Thing) (Set : Set with module T := T) = struct
         let set =
           match find v m with
           | exception Not_found ->
-            Set.singleton k
+            T_set.singleton k
           | set ->
-            Set.add k set
+            T_set.add k set
         in
         add v set m)
       map empty
-
-  let diff_domains t1 t2 =
-    merge (fun _key datum1 datum2 ->
-        match datum1, datum2 with
-        | None, None -> None
-        | Some datum1, None -> Some datum1
-        | None, Some _datum2 -> None
-        | Some _datum1, Some _datum2 -> None)
-      t1 t2
-
-  let fold2_stop_on_key_mismatch f t1 t2 init =
-    (* CR mshinwell: Provide a proper implementation *)
-    if cardinal t1 <> cardinal t2 then None
-    else
-      let t1 = bindings t1 in
-      let t2 = bindings t2 in
-      List.fold_left2 (fun acc (key1, datum1) (key2, datum2) ->
-          match acc with
-          | None -> None
-          | Some acc ->
-             if T.compare key1 key2 <> 0 then None
-             else Some (f key1 datum1 datum2 acc))
-        (Some init) t1 t2
-
-  let inter f t1 t2 =
-    merge (fun key datum1_opt datum2_opt ->
-        match datum1_opt, datum2_opt with
-        | None, None | None, Some _ | Some _, None -> None
-        | Some datum1, Some datum2 -> Some (f key datum1 datum2))
-      t1 t2
-
-  let inter_domain_is_non_empty _ _ = Misc.fatal_error "Not yet implemented"
-end [@@@inline always]
+end
 
 module Make_set (T : Thing) = struct
-  module T0 = struct
-    include (Set.Make [@inlined hint]) (T)
+  include Set.Make (T)
 
-    let output oc s =
-      Printf.fprintf oc " ( ";
-      iter (fun v -> Printf.fprintf oc "%a " T.output v) s;
-      Printf.fprintf oc ")"
+  let output oc s =
+    Printf.fprintf oc " ( ";
+    iter (fun v -> Printf.fprintf oc "%a " T.output v) s;
+    Printf.fprintf oc ")"
 
-    let print ppf s =
-      let elts ppf s = iter (fun e -> Format.fprintf ppf "@ %a" T.print e) s in
-      Format.fprintf ppf "@[<1>{@[%a@ @]}@]" elts s
+  let print ppf s =
+    let elts ppf s = iter (fun e -> Format.fprintf ppf "@ %a" T.print e) s in
+    Format.fprintf ppf "@[<1>{@[%a@ @]}@]" elts s
 
-    let to_string s = Format.asprintf "%a" print s
+  let to_string s = Format.asprintf "%a" print s
 
-    let of_list l = match l with
-      | [] -> empty
-      | [t] -> singleton t
-      | t :: q -> List.fold_left (fun acc e -> add e acc) (singleton t) q
-
-    let map f s = of_list (List.map f (elements s))
-  end
-
-  include T0
-
-  let rec union_list ts =
-    match ts with
+  let of_list l = match l with
     | [] -> empty
-    | t::ts -> union t (union_list ts)
+    | [t] -> singleton t
+    | t :: q -> List.fold_left (fun acc e -> add e acc) (singleton t) q
 
-  let intersection_is_empty t1 t2 = is_empty (inter t1 t2)
+  let map f s = of_list (List.map f (elements s))
+end
 
-  let fixpoint f set =
-    let rec aux acc set =
-      if is_empty set then acc else
-        let set' = fold (fun x -> union (f x)) set empty in
-        let acc = union acc set in
-        aux acc (diff set' acc)
-    in
-    aux empty set
-end [@@@inline always]
+module Make_tbl (T : Thing) = struct
+  include Hashtbl.Make (T)
 
-module Make_tbl (T : Thing) (Map : Map with module T := T) = struct
-  include (Hashtbl.Make [@inlined hint]) (T)
-
-  module Map = Map
+  module T_map = Make_map (T)
 
   let to_list t =
     fold (fun key datum elts -> (key, datum)::elts) t []
@@ -280,11 +210,11 @@ module Make_tbl (T : Thing) (Map : Map with module T := T) = struct
     List.iter (fun (key, datum) -> add t key datum) elts;
     t
 
-  let to_map v = fold Map.add v Map.empty
+  let to_map v = fold T_map.add v T_map.empty
 
   let of_map m =
-    let t = create (Map.cardinal m) in
-    Map.iter (fun k v -> add t k v) m;
+    let t = create (T_map.cardinal m) in
+    T_map.iter (fun k v -> add t k v) m;
     t
 
   let memoize t f = fun key ->
@@ -295,8 +225,8 @@ module Make_tbl (T : Thing) (Map : Map with module T := T) = struct
       r
 
   let map t f =
-    of_map (Map.map f (to_map t))
-end [@@@inline always]
+    of_map (T_map.map f (to_map t))
+end
 
 module type S = sig
   type t
@@ -305,8 +235,8 @@ module type S = sig
   include Thing with type t := T.t
 
   module Set : Set with module T := T
-  module Map : Map with module T := T with module Set = Set
-  module Tbl : Tbl with module T := T with module Map = Map
+  module Map : Map with module T := T
+  module Tbl : Tbl with module T := T
 end
 
 module Make (T : Thing) = struct
@@ -314,21 +244,6 @@ module Make (T : Thing) = struct
   include T
 
   module Set = Make_set (T)
-  module Map = Make_map (T) (Set)
-  module Tbl = Make_tbl (T) (Map)
-end [@@@inline always]
-
-module Make_pair (T1 : S) (T2 : S) = struct
-  module Pair = Pair (T1.T) (T2.T)
-
-  include Make (Pair)
-
-  let create_from_cross_product t1_set t2_set =
-    T1.Set.fold (fun t1 result ->
-        T2.Set.fold (fun t2 result ->
-            Set.add (t1, t2) result)
-          t2_set
-          result)
-      t1_set
-      Set.empty
+  module Map = Make_map (T)
+  module Tbl = Make_tbl (T)
 end

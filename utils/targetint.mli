@@ -4,11 +4,9 @@
 (*                                                                        *)
 (*             Xavier Leroy, projet Cristal, INRIA Rocquencourt           *)
 (*                        Nicolas Ojeda Bar, LexiFi                       *)
-(*                    Mark Shinwell, Jane Street Europe                   *)
 (*                                                                        *)
 (*   Copyright 2016 Institut National de Recherche en Informatique et     *)
 (*     en Automatique.                                                    *)
-(*   Copyright 2017--2019 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -33,8 +31,6 @@
 
 type t
 (** The type of target integers. *)
-
-type targetint = t
 
 val zero : t
 (** The target integer 0.*)
@@ -92,14 +88,6 @@ val abs : t -> t
 val size : int
 (** The size in bits of a target native integer. *)
 
-type num_bits =
-  | Thirty_two
-  | Sixty_four (**)
-(** The possible numbers of bits of a target native integer. *)
-
-val num_bits : num_bits
-(* The number of bits of a target native integer. *)
-
 val max_int : t
 (** The greatest representable target integer,
     either 2{^31} - 1 on a 32-bit platform,
@@ -143,7 +131,7 @@ val shift_right_logical : t -> int -> t
 
 val of_int : int -> t
 (** Convert the given integer (type [int]) to a target integer
-    (type [t]), modulo the target word size. *)
+    (type [t]), module the target word size. *)
 
 val of_int_exn : int -> t
 (** Convert the given integer (type [int]) to a target integer
@@ -177,7 +165,7 @@ val to_int32 : t -> int32
 
 val of_int64 : int64 -> t
 (** Convert the given 64-bit integer (type [int64])
-    to a target integer, modulo the target word size. *)
+    to a target integer. *)
 
 val to_int64 : t -> int64
 (** Convert the given target integer to a
@@ -195,9 +183,18 @@ val of_string : string -> t
 val to_string : t -> string
 (** Return the string representation of its argument, in decimal. *)
 
+val compare: t -> t -> int
+(** The comparison function for target integers, with the same specification as
+    {!Stdlib.compare}.  Along with the type [t], this function [compare]
+    allows the module [Targetint] to be passed as argument to the functors
+    {!Set.Make} and {!Map.Make}. *)
+
 val unsigned_compare: t -> t -> int
 (** Same as {!compare}, except that arguments are interpreted as {e unsigned}
     integers. *)
+
+val equal: t -> t -> bool
+(** The equal function for target ints. *)
 
 type repr =
   | Int32 of int32
@@ -206,27 +203,5 @@ type repr =
 val repr : t -> repr
 (** The concrete representation of a native integer. *)
 
-val min : t -> t -> t
-(** Returns the smaller integer. *)
-
-val max : t -> t -> t
-(** Returns the larger integer. *)
-
-val get_least_significant_16_bits_then_byte_swap : t -> t
-(** Extract the least significant 16 bits from the given target integer,
-    exchange the order of the two bytes extracted, then form a new target
-    integer by zero-extending those two bytes. *)
-
-val swap_byte_endianness : t -> t
-
-include Identifiable.S with type t := t
-
-module Targetint_set = Set
-
-module Pair : sig
-  type nonrec t = t * t
-
-  include Identifiable.S with type t := t
-end
-
-val cross_product : Set.t -> Set.t -> Pair.Set.t
+val print : Format.formatter -> t -> unit
+(** Print a target integer to a formatter. *)
