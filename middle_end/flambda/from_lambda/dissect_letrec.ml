@@ -100,6 +100,25 @@ open Lambda
    [Rec_check.value_bindings] case.
 *)
 
+module Ident = struct
+  include Ident
+
+  module Set = struct
+    include Ident.Set
+
+    (* CR-someday mshinwell: For the moment duplicated from [Container_types]
+       to avoid changing [Identifiable] *)
+    let fixpoint f set =
+      let rec aux acc set =
+        if is_empty set then acc else
+          let set' = fold (fun x -> union (f x)) set empty in
+          let acc = union acc set in
+          aux acc (diff set' acc)
+      in
+      aux empty set
+  end
+end
+
 type block_type = Normal of int (* tag *) | Boxed_float
 
 type block = { block_type : block_type; size : int; }
