@@ -108,7 +108,7 @@ end = struct
 end
 
 module type S = sig
-  module Id : Identifiable.S
+  module Id : Container_types.S
 
   type directed_graph = Id.Set.t Id.Map.t
 
@@ -123,7 +123,7 @@ module type S = sig
   val component_graph : directed_graph -> (component * int list) array
 end
 
-module Make (Id : Identifiable.S) = struct
+module Make (Id : Container_types.S) = struct
   type directed_graph = Id.Set.t Id.Map.t
 
   type component =

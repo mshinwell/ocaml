@@ -30,10 +30,10 @@ type 'a binary_arith_outcome_for_one_side_only =
   | Invalid
 
 module type Binary_arith_like_sig = sig
-  module Lhs : Identifiable.S
-  module Rhs : Identifiable.S
-  module Pair : Identifiable.S with type t = Lhs.t * Rhs.t
-  module Result : Identifiable.S
+  module Lhs : Container_types.S
+  module Rhs : Container_types.S
+  module Pair : Container_types.S with type t = Lhs.t * Rhs.t
+  module Result : Container_types.S
 
   val ok_to_evaluate : DE.t -> bool
 
@@ -85,7 +85,7 @@ end = struct
       | Prim of P.t
       | Exactly of N.Result.t
 
-    include Identifiable.Make (struct
+    include Container_types.Make (struct
       type nonrec t = t
 
       let compare t1 t2 =
@@ -418,7 +418,7 @@ end = struct
      the stdlib *)
   module Pair = struct
     type nonrec t = Lhs.t * Rhs.t
-    include Identifiable.Make_pair (Lhs) (Rhs)
+    include Container_types.Make_pair (Lhs) (Rhs)
   end
 
   let cross_product set1 set2 =

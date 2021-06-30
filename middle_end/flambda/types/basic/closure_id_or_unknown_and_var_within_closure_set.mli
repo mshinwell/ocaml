@@ -23,4 +23,4 @@ module Closure_id_or_unknown :
 
 type t = Closure_id_or_unknown.t * Var_within_closure_set.t
 
-include Identifiable.S with type t := t
+include Container_types.S with type t := t

@@ -22,7 +22,7 @@
 *)
 
 module type S = sig
-  module Id : Identifiable.S
+  module Id : Container_types.S
 
   type directed_graph = Id.Set.t Id.Map.t
   (** If (a -> set) belongs to the map, it means that there are edges
@@ -40,4 +40,4 @@ module type S = sig
   val component_graph : directed_graph -> (component * int list) array
 end
 
-module Make (Id : Identifiable.S) : S with module Id := Id
+module Make (Id : Container_types.S) : S with module Id := Id

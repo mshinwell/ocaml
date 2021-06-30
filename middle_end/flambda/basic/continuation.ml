@@ -155,7 +155,7 @@ let name_stamp t = (find_data t).name_stamp
 
 let sort t = (find_data t).sort
 
-include Identifiable.Make (struct
+include Container_types.Make (struct
   type nonrec t = t
 
   let compare t1 t2 =
@@ -181,7 +181,7 @@ end)
 module Set = Patricia_tree.Make_set (struct let print = print end)
 module Map = Patricia_tree.Make_map (struct let print = print end) (Set)
 (* CR mshinwell: The [Tbl]s will still print integers! *)
-module Tbl = Identifiable.Make_tbl (Numeric_types.Int) (Map)
+module Tbl = Container_types.Make_tbl (Numeric_types.Int) (Map)
 
 let print_with_cache ~cache:_ ppf t = print ppf t
 
@@ -202,7 +202,7 @@ let map_compilation_unit f (data : Data.t) : Data.t =
 module With_args = struct
   type nonrec t = t * Variable.t list
 
-  include Identifiable.Make (struct
+  include Container_types.Make (struct
     type nonrec t = t
 
     let compare t1 t2 =

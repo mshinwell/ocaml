@@ -19,7 +19,7 @@
 type t = int
 type tag = t
 
-include Identifiable.Make (struct
+include Container_types.Make (struct
   type nonrec t = t
 
   let compare = Numeric_types.Int.compare
@@ -78,7 +78,7 @@ let arbitrary = max_int
 module Scannable = struct
   type nonrec t = t
 
-  include Identifiable.Make (Numeric_types.Int)
+  include Container_types.Make (Numeric_types.Int)
 
   let create tag =
     if tag < min_tag || tag >= Obj.no_scan_tag then None
@@ -118,7 +118,7 @@ let is_structured_block t =
 module Non_scannable = struct
   type nonrec t = t
 
-  include Identifiable.Make (Numeric_types.Int)
+  include Container_types.Make (Numeric_types.Int)
 
   let create tag =
     if tag < Obj.no_scan_tag then None

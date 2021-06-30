@@ -83,7 +83,7 @@ let unit = Value
 
 let unicode = true  (* CR mshinwell: move elsewhere *)
 
-include Identifiable.Make (struct
+include Container_types.Make (struct
   type nonrec t = t
 
   let compare t1 t2 =
@@ -192,7 +192,7 @@ module Standard_int = struct
     | Naked_int64 -> Naked_number Naked_int64
     | Naked_nativeint -> Naked_number Naked_nativeint
 
-  include Identifiable.Make (struct
+  include Container_types.Make (struct
     type nonrec t = t
 
     let print ppf t =
@@ -249,7 +249,7 @@ module Standard_int_or_float = struct
     | Naked_int64 -> Naked_number Naked_int64
     | Naked_nativeint -> Naked_number Naked_nativeint
 
-  include Identifiable.Make (struct
+  include Container_types.Make (struct
     type nonrec t = t
 
     let print ppf t =
@@ -311,7 +311,7 @@ module Boxable_number = struct
     | Naked_int64 -> Naked_int64
     | Naked_nativeint -> Naked_nativeint
 
-  include Identifiable.Make (struct
+  include Container_types.Make (struct
     type nonrec t = t
 
     let print ppf t =
@@ -376,7 +376,7 @@ module With_subkind = struct
       | Boxed_nativeint
       | Tagged_immediate
 
-    include Identifiable.Make (struct
+    include Container_types.Make (struct
       type nonrec t = t
 
       let print ppf t =
@@ -459,7 +459,7 @@ module With_subkind = struct
     | Naked_int64 -> naked_int64
     | Naked_nativeint -> naked_nativeint
 
-  include Identifiable.Make (struct
+  include Container_types.Make (struct
     type nonrec t = t
 
     let print ppf { kind; subkind; } =

@@ -18,7 +18,7 @@
 
 type t = Closure_id.Set.t
 
-include Identifiable.S with type t := t
+include Container_types.S with type t := t
 include Contains_names.S with type t := t
 
 val subset : t -> t -> bool

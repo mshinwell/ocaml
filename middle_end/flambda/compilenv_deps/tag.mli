@@ -18,7 +18,7 @@
 
 (** Tags on runtime boxed values. *)
 
-include Identifiable.S
+include Container_types.S
 
 type tag = t
 
@@ -82,7 +82,7 @@ module Scannable : sig
   val zero : t
   val object_tag : t
 
-  include Identifiable.S with type t := t
+  include Container_types.S with type t := t
 end
 
 val to_scannable_set : Set.t -> Scannable.Set.t
@@ -100,5 +100,5 @@ module Non_scannable : sig
   val to_int : t -> int
   val to_tag : t -> tag
 
-  include Identifiable.S with type t := t
+  include Container_types.S with type t := t
 end

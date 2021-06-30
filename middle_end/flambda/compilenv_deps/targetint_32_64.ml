@@ -31,7 +31,7 @@ module type S = sig
   val num_bits : num_bits
   val repr: t -> repr
 
-  include Identifiable.S with type t := t
+  include Container_types.S with type t := t
 
   val zero : t
   val one : t
@@ -54,7 +54,7 @@ module type S = sig
 
   module Pair : sig
     type nonrec t = t * t
-    include Identifiable.S with type t := t
+    include Container_types.S with type t := t
   end
 
   val cross_product : Set.t -> Set.t -> Pair.Set.t
@@ -123,7 +123,7 @@ module Int32 = struct
   let to_int64 = Int64.of_int32
   let repr x = Int32 x
 
-  include Identifiable.Make (struct
+  include Container_types.Make (struct
     type nonrec t = t
     let compare = Int32.compare
     let equal = Int32.equal
@@ -144,9 +144,9 @@ module Int32 = struct
   module Pair = struct
     type nonrec t = t * t
 
-    module T_pair = Identifiable.Pair (T) (T)
+    module T_pair = Container_types.Pair (T) (T)
 
-    include Identifiable.Make (T_pair)
+    include Container_types.Make (T_pair)
   end
 
   let cross_product set1 set2 =
@@ -186,7 +186,7 @@ module Int64 = struct
   let max t1 t2 =
     if compare t1 t2 <= 0 then t2 else t1
 
-  include Identifiable.Make (struct
+  include Container_types.Make (struct
     type nonrec t = t
     let compare = Int64.compare
     let equal t1 t2 = (compare t1 t2 = 0)
@@ -201,9 +201,9 @@ module Int64 = struct
   module Pair = struct
     type nonrec t = t * t
 
-    module T_pair = Identifiable.Pair (T) (T)
+    module T_pair = Container_types.Pair (T) (T)
 
-    include Identifiable.Make (T_pair)
+    include Container_types.Make (T_pair)
   end
 
   let cross_product set1 set2 =

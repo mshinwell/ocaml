@@ -24,7 +24,7 @@ let create t = t
 
 let length t = List.length t
 
-include Identifiable.Make (struct
+include Container_types.Make (struct
   type nonrec t = t
 
   let compare t1 t2 = Misc.Stdlib.List.compare Flambda_kind.compare t1 t2
@@ -64,7 +64,7 @@ module With_subkinds = struct
 
   let create t = t
 
-  include Identifiable.Make (struct
+  include Container_types.Make (struct
     type nonrec t = t
 
     let compare t1 t2 =

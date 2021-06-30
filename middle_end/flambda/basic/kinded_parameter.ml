@@ -21,7 +21,7 @@ type t = {
   kind : Flambda_kind.With_subkind.t;
 }
 
-include Identifiable.Make (struct
+include Container_types.Make (struct
   type nonrec t = t
 
   let compare

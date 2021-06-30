@@ -25,7 +25,7 @@
     unit), that identifies a closure within a particular set of closures
     (viz. [Project_closure]). *)
 
-include Identifiable.S
+include Container_types.S
 
 module Lmap : Lmap.S with type key = t
 

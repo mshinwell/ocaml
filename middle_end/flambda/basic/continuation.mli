@@ -21,7 +21,7 @@
 type t = private Table_by_int_id.Id.t
 type exported
 
-include Identifiable.S with type t := t
+include Container_types.S with type t := t
 
 module Sort : sig
   type t =
@@ -54,7 +54,7 @@ val map_compilation_unit :
 
 module With_args : sig
   type nonrec t = t * Variable.t list
-  include Identifiable.S with type t := t
+  include Container_types.S with type t := t
 end
 
 val initialise : unit -> unit

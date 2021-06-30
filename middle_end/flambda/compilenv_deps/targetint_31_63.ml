@@ -144,7 +144,7 @@ module Imm = struct
   end
 
   include One_bit_fewer.Make (T0)
-  include Identifiable.Make (T0)
+  include Container_types.Make (T0)
 
   let to_string t = Format.asprintf "%a" print t
 end
@@ -182,12 +182,12 @@ module T0 = struct
   let output chan t = print (Format.formatter_of_out_channel chan) t
 end
 
-module Self = Identifiable.Make (T0)
+module Self = Container_types.Make (T0)
 include Self
 
 module Pair = struct
   include
-    Identifiable.Make_pair
+    Container_types.Make_pair
       (struct
         type nonrec t = t
 

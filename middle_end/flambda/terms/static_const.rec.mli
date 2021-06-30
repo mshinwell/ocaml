@@ -29,7 +29,7 @@ module Field_of_block : sig
       (** The value of the given variable. *)
 
   (** Printing, total ordering, etc. *)
-  include Identifiable.S with type t := t
+  include Container_types.S with type t := t
 
   include Contains_names.S with type t := t
 end
@@ -51,7 +51,7 @@ type t =
 
 type static_const = t
 
-include Identifiable.S with type t := t
+include Container_types.S with type t := t
 include Contains_names.S with type t := t
 include Contains_ids.S with type t := t
 

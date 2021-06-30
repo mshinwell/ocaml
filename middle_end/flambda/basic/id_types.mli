@@ -41,7 +41,7 @@ end
 (** Fully qualified identifiers *)
 module type UnitId =
 sig
-  module Compilation_unit : Identifiable.Thing
+  module Compilation_unit : Container_types.Thing
   include BaseId
   val create : ?name:string -> Compilation_unit.t -> t
   val unit : t -> Compilation_unit.t
@@ -54,5 +54,5 @@ module Id : functor (_ : sig end) -> Id
 
 module UnitId :
   functor (_ : Id) ->
-  functor (Compilation_unit : Identifiable.Thing) ->
+  functor (Compilation_unit : Container_types.Thing) ->
     UnitId with module Compilation_unit := Compilation_unit

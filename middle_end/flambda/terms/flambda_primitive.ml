@@ -1477,7 +1477,7 @@ let classify_for_printing t =
   | Ternary (prim, _, _, _) -> ternary_classify_for_printing prim
   | Variadic (prim, _) -> variadic_classify_for_printing prim
 
-include Identifiable.Make (struct
+include Container_types.Make (struct
   type nonrec t = t
 
   let compare t1 t2 =
@@ -1838,7 +1838,7 @@ module Eligible_for_cse = struct
   let free_names = free_names
   let apply_renaming = apply_renaming
 
-  include Identifiable.Make (struct
+  include Container_types.Make (struct
     type nonrec t = t
 
     let compare = compare

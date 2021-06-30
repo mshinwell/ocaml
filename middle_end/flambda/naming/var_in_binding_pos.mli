@@ -30,5 +30,5 @@ val rename : t -> t
 
 val with_name_mode : t -> Name_mode.t -> t
 
-include Identifiable.S with type t := t
+include Container_types.S with type t := t
 include Contains_names.S with type t := t

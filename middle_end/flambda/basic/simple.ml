@@ -117,7 +117,7 @@ let apply_renaming t perm =
 module List = struct
   type nonrec t = t list
 
-  include Identifiable.Make (struct
+  include Container_types.Make (struct
     type nonrec t = t
 
     let compare t1 t2 =
@@ -159,7 +159,7 @@ end
 module With_kind = struct
   type nonrec t = t * Flambda_kind.t
 
-  include Identifiable.Make (struct
+  include Container_types.Make (struct
     type nonrec t = t
 
     let compare (s1, k1) (s2, k2) =

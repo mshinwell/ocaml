@@ -443,7 +443,7 @@ end) = struct
 
   let fixpoint _ _ = Misc.fatal_error "fixpoint not yet implemented"
 
-  (* CR mshinwell: copied from [Identifiable] *)
+  (* CR mshinwell: copied from [Container_types] *)
 
   let output _ _ = Misc.fatal_error "output not yet implemented"
 
@@ -474,7 +474,7 @@ end [@@@inline always]
 
 module Make_map (Key : sig
   val print : Format.formatter -> int -> unit
-end) (Set : Identifiable.Set with module T := Numeric_types.Int) =
+end) (Set : Container_types.Set with module T := Numeric_types.Int) =
 struct
   type key = int
 
@@ -1108,7 +1108,7 @@ struct
 
   let of_seq _ = Misc.fatal_error "of_seq not yet implemented"
 
-  (* CR mshinwell: copied from [Identifiable] *)
+  (* CR mshinwell: copied from [Container_types] *)
 
   let filter_map f t =
     fold (fun id v map ->

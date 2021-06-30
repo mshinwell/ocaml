@@ -18,7 +18,7 @@
 
 type t = Closure_id.Set.t
 
-include Identifiable.Make (struct
+include Container_types.Make (struct
   include Closure_id.Set
   let hash = Hashtbl.hash
 end)

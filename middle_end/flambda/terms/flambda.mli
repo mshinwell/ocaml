@@ -500,7 +500,7 @@ end and Static_const : sig
         (** The value of the given variable. *)
 
     (** Printing, total ordering, etc. *)
-    include Identifiable.S with type t := t
+    include Container_types.S with type t := t
 
     include Contains_names.S with type t := t
   end
@@ -523,7 +523,7 @@ end and Static_const : sig
     | Mutable_string of { initial_value : string; }
     | Immutable_string of string
 
-  include Identifiable.S with type t := t
+  include Container_types.S with type t := t
   include Contains_names.S with type t := t
   include Contains_ids.S with type t := t
 

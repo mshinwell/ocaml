@@ -59,6 +59,6 @@ val rename : t -> t
 module Pair : sig
   type nonrec t = t * t
 
-  include Identifiable.S with type t := t
+  include Container_types.S with type t := t
 end
 

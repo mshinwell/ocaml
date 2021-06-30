@@ -178,7 +178,7 @@ module Imm : sig
 
   (* CR mshinwell: Add an [Array] module *)
 
-  include Identifiable.S with type t := t
+  include Container_types.S with type t := t
 
   val to_string : t -> string
 end
@@ -195,7 +195,7 @@ type t = private
 type immediate = t
 
 (** The comparison function for type [t] ignores [print_as_char]. *)
-include Identifiable.S with type t := t
+include Container_types.S with type t := t
 
 val one : t
 
@@ -264,7 +264,7 @@ val zero_one_and_minus_one : Set.t
 module Pair : sig
   type nonrec t = t * t
 
-  include Identifiable.S with type t := t
+  include Container_types.S with type t := t
 end
 
 val cross_product : Set.t -> Set.t -> Pair.Set.t

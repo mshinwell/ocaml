@@ -18,7 +18,7 @@
 
 type t = unit
 
-include Identifiable.Make (struct
+include Container_types.Make (struct
   type nonrec t = t
   let compare () () = 0
   let equal () () = true

@@ -79,7 +79,7 @@ val is_naked_float : t -> bool
 (** The kind of the unit value. *)
 val unit : t
 
-include Identifiable.S with type t := t
+include Container_types.S with type t := t
 
 module Standard_int : sig
   (** These kinds are known as the "standard integer kinds".  They correspond
@@ -99,7 +99,7 @@ module Standard_int : sig
 
   val print_lowercase : Format.formatter -> t -> unit
 
-  include Identifiable.S with type t := t
+  include Container_types.S with type t := t
 end
 
 module Standard_int_or_float : sig
@@ -116,7 +116,7 @@ module Standard_int_or_float : sig
 
   val print_lowercase : Format.formatter -> t -> unit
 
-  include Identifiable.S with type t := t
+  include Container_types.S with type t := t
 end
 
 (* CR mshinwell: If the tagging/untagging experiment works, this and various
@@ -141,7 +141,7 @@ module Boxable_number : sig
 
   val print_lowercase_short : Format.formatter -> t -> unit
 
-  include Identifiable.S with type t := t
+  include Container_types.S with type t := t
 end
 
 (** Witnesses for the naked number kinds, for use when matching on the structure
@@ -167,7 +167,7 @@ module With_subkind : sig
       | Boxed_nativeint
       | Tagged_immediate
 
-    include Identifiable.S with type t := t
+    include Container_types.S with type t := t
   end
 
   type kind = t
@@ -209,5 +209,5 @@ module With_subkind : sig
 
   val compatible : t -> when_used_at:t -> bool
 
-  include Identifiable.S with type t := t
+  include Container_types.S with type t := t
 end

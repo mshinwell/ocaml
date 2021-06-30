@@ -35,7 +35,7 @@ module type Id = sig
 end
 
 module type UnitId = sig
-  module Compilation_unit : Identifiable.Thing
+  module Compilation_unit : Container_types.Thing
   include BaseId
   val create : ?name:string -> Compilation_unit.t -> t
   val unit : t -> Compilation_unit.t
@@ -63,7 +63,7 @@ module Id(_:sig end) : Id = struct
   let print ppf v = Format.pp_print_string ppf (to_string v)
 end
 
-module UnitId(Innerid:Id)(Compilation_unit:Identifiable.Thing) :
+module UnitId(Innerid:Id)(Compilation_unit:Container_types.Thing) :
   UnitId with module Compilation_unit := Compilation_unit = struct
   type t = {
     id : Innerid.t;

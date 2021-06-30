@@ -219,14 +219,14 @@ val get_least_significant_16_bits_then_byte_swap : t -> t
 
 val swap_byte_endianness : t -> t
 
-include Identifiable.S with type t := t
+include Container_types.S with type t := t
 
 module Targetint_set = Set
 
 module Pair : sig
   type nonrec t = t * t
 
-  include Identifiable.S with type t := t
+  include Container_types.S with type t := t
 end
 
 val cross_product : Set.t -> Set.t -> Pair.Set.t

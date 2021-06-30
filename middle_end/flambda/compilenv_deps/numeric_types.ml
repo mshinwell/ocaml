@@ -14,7 +14,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-module Int_base = Identifiable.Make (struct
+module Int_base = Container_types.Make (struct
   type t = int
 
   let compare = Int.compare
@@ -76,7 +76,7 @@ end
 module Float = struct
   type t = float
 
-  include Identifiable.Make (struct
+  include Container_types.Make (struct
     type t = float
 
     let compare x y = Stdlib.compare x y
@@ -112,11 +112,11 @@ module Float_by_bit_pattern = struct
 
   include T0
 
-  module Self = Identifiable.Make (T0)
+  module Self = Container_types.Make (T0)
   include Self
 
   module Pair = struct
-    include Identifiable.Make_pair
+    include Container_types.Make_pair
       (struct type nonrec t = t include Self end)
       (struct type nonrec t = t include Self end)
 
@@ -169,11 +169,11 @@ module Int32 = struct
     let output chan t = Printf.fprintf chan "%ld" t
   end
 
-  module Self = Identifiable.Make (T0)
+  module Self = Container_types.Make (T0)
   include Self
 
   module Pair = struct
-    include Identifiable.Make_pair
+    include Container_types.Make_pair
       (struct type nonrec t = t include Self end)
       (struct type nonrec t = t include Self end)
 
@@ -198,11 +198,11 @@ module Int64 = struct
     let output chan t = Printf.fprintf chan "%Ld" t
   end
 
-  module Self = Identifiable.Make (T0)
+  module Self = Container_types.Make (T0)
   include Self
 
   module Pair = struct
-    include Identifiable.Make_pair
+    include Container_types.Make_pair
       (struct type nonrec t = t include Self end)
       (struct type nonrec t = t include Self end)
 

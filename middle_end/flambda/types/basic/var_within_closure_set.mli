@@ -25,4 +25,4 @@ val empty : t
 
 val subset : t -> t -> bool
 
-include Identifiable.S with type t := t
+include Container_types.S with type t := t

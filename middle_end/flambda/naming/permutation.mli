@@ -18,7 +18,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module Make (N : Identifiable.S) : sig
+module Make (N : Container_types.S) : sig
   type t
 
   val empty : t

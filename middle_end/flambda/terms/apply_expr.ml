@@ -23,7 +23,7 @@ module Result_continuation = struct
     | Return of Continuation.t
     | Never_returns
 
-  include Identifiable.Make(struct
+  include Container_types.Make(struct
       type nonrec t = t
 
       let compare h1 h2 =

@@ -23,7 +23,7 @@ type t = {
   (** [name_stamp]s are unique within any given compilation unit. *)
 }
 
-module Self = Identifiable.Make (struct
+module Self = Container_types.Make (struct
   type nonrec t = t
 
   let compare t1 t2 =

@@ -44,8 +44,8 @@ val apply_renaming
   -> ('a -> Renaming.t -> 'a)
   -> 'a t
 
-module Lift (I : Identifiable.S) : sig
+module Lift (I : Container_types.S) : sig
   type nonrec t = I.t t
 
-  include Identifiable.S with type t := t
+  include Container_types.S with type t := t
 end

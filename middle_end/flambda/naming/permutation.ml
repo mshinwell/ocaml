@@ -18,7 +18,7 @@
 
 let check_invariants = false
 
-module Make (N : Identifiable.S) = struct
+module Make (N : Container_types.S) = struct
   type t = {
     forwards : N.t N.Map.t;
     backwards : N.t N.Map.t;

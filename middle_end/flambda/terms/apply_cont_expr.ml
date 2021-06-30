@@ -23,7 +23,7 @@ type t = {
   dbg : Debuginfo.t;
 }
 
-include Identifiable.Make (struct
+include Container_types.Make (struct
   type nonrec t = t
 
   let print ppf { k; args; trap_action; dbg; } =

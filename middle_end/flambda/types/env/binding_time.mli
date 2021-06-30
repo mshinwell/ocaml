@@ -17,7 +17,7 @@
 type t
 type binding_time = t
 
-include Identifiable.S with type t := t
+include Container_types.S with type t := t
 
 val consts_and_discriminants : t (* CR mshinwell: rename *)
 val symbols : t

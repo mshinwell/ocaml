@@ -18,4 +18,4 @@
 
 type t = Closure_id.t * Var_within_closure.Set.t
 
-include Identifiable.Make_pair (Closure_id) (Var_within_closure_set)
+include Container_types.Make_pair (Closure_id) (Var_within_closure_set)

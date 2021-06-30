@@ -15,7 +15,7 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 type t = unit
 
-include Identifiable.Make (struct
+include Container_types.Make (struct
   type nonrec t = t
 
   let print ppf () =

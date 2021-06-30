@@ -18,7 +18,7 @@ type t =
   | Code_id of Code_id.t
   | Symbol of Symbol.t
 
-include Identifiable.Make (struct
+include Container_types.Make (struct
   type nonrec t = t
 
   let print ppf t =

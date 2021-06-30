@@ -26,7 +26,7 @@ type t
 
 val create : Closure_id.Set.t -> Var_within_closure.Set.t -> t
 
-include Identifiable.S with type t := t
+include Container_types.S with type t := t
 
 val subset : t -> t -> bool
 val inter : t -> t -> t
@@ -40,11 +40,11 @@ val apply_renaming : t -> Renaming.t -> t
 module With_closure_id : sig
   type nonrec t = Closure_id.t * t
 
-  include Identifiable.S with type t := t
+  include Container_types.S with type t := t
 end
 
 module With_closure_id_or_unknown : sig
   type nonrec t = Closure_id.t Or_unknown.t * t
 
-  include Identifiable.S with type t := t
+  include Container_types.S with type t := t
 end

@@ -29,7 +29,7 @@ type t =
   (* CR mshinwell: Add a case here for let-code and move it out of
      Symbols *)
 
-include Identifiable.Make (struct
+include Container_types.Make (struct
   type nonrec t = t
 
   let print ppf t =

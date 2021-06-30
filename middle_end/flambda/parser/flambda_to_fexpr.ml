@@ -4,7 +4,7 @@ module type Convertible_id = sig
   type t
   type fexpr_id
 
-  include Identifiable.S with type t := t
+  include Container_types.S with type t := t
 
   val desc : string
 

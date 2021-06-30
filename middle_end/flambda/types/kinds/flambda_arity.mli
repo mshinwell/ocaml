@@ -35,7 +35,7 @@ val is_all_naked_floats : t -> bool
 
 val is_singleton_value : t -> bool
 
-include Identifiable.S with type t := t
+include Container_types.S with type t := t
 
 module With_subkinds : sig
   type arity = t
@@ -51,5 +51,5 @@ module With_subkinds : sig
 
   val compatible : t -> when_used_at:t -> bool
 
-  include Identifiable.S with type t := t
+  include Container_types.S with type t := t
 end

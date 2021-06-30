@@ -14,7 +14,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Modules about numbers, some of which satisfy {!Identifiable.S}.
+(** Modules about numbers, some of which satisfy {!Container_types.S}.
 
   {b Warning:} this module is unstable and part of
   {{!Compiler_libs}compiler-libs}.
@@ -22,7 +22,7 @@
 *)
 
 module Int : sig
-  include Identifiable.S with type t = int
+  include Container_types.S with type t = int
 
   (** [zero_to_n n] is the set of numbers \{0, ..., n\} (inclusive). *)
   val zero_to_n : int -> Set.t
@@ -48,7 +48,7 @@ module Int16 : sig
   val to_int : t -> int
 end
 
-module Float : Identifiable.S with type t = float
+module Float : Container_types.S with type t = float
 
 module Float_by_bit_pattern : sig
   (** Floating point numbers whose comparison and equality relations are
@@ -61,7 +61,7 @@ module Float_by_bit_pattern : sig
       depending on which semantics you want.  Likewise for equality.
   *)
 
-  include Identifiable.S
+  include Container_types.S
 
   val create : float -> t
 
@@ -91,29 +91,29 @@ module Float_by_bit_pattern : sig
     val equal : t -> t -> bool
   end
 
-  module Pair : Identifiable.S with type t = t * t
+  module Pair : Container_types.S with type t = t * t
 
   val cross_product : Set.t -> Set.t -> Pair.Set.t
 end
 
 module Int32 : sig
   include module type of struct include Int32 end
-  include Identifiable.S with type t := Int32.t
+  include Container_types.S with type t := Int32.t
 
   val swap_byte_endianness : t -> t
 
-  module Pair : Identifiable.S with type t = t * t
+  module Pair : Container_types.S with type t = t * t
 
   val cross_product : Set.t -> Set.t -> Pair.Set.t
 end
 
 module Int64 : sig
   include module type of struct include Int64 end
-  include Identifiable.S with type t := Int64.t
+  include Container_types.S with type t := Int64.t
 
   val swap_byte_endianness : t -> t
 
-  module Pair : Identifiable.S with type t = t * t
+  module Pair : Container_types.S with type t = t * t
 
   val cross_product : Set.t -> Set.t -> Pair.Set.t
 end

@@ -20,4 +20,4 @@ module Tag_or_unknown = Or_unknown.Lift (Tag)
 
 type t = Tag.t Or_unknown.t * Targetint_31_63.Imm.t
 
-include Identifiable.Make_pair (Tag_or_unknown) (Targetint_31_63.Imm)
+include Container_types.Make_pair (Tag_or_unknown) (Targetint_31_63.Imm)

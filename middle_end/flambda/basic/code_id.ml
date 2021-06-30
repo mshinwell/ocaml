@@ -125,7 +125,7 @@ end
 
 module Set = Patricia_tree.Make_set (struct let print = print end)
 module Map = Patricia_tree.Make_map (struct let print = print end) (Set)
-module Tbl = Identifiable.Make_tbl (Numeric_types.Int) (Map)
+module Tbl = Container_types.Make_tbl (Numeric_types.Int) (Map)
 module Lmap = Lmap.Make(T)
 
 let invert_map map =

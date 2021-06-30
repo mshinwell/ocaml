@@ -26,7 +26,7 @@ module Field_of_block = struct
     | Tagged_immediate of Targetint_31_63.t
     | Dynamically_computed of Variable.t
 
-  include Identifiable.Make (struct
+  include Container_types.Make (struct
     type nonrec t = t
 
     let compare t1 t2 =
@@ -177,7 +177,7 @@ let print_with_cache ~cache ppf t =
       (Flambda_colours.normal ())
       s
 
-include Identifiable.Make (struct
+include Container_types.Make (struct
   type nonrec t = t
 
   let print ppf t =
