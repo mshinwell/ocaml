@@ -108,7 +108,33 @@ end = struct
 end
 
 module type S = sig
-  module Id : Container_types.S
+  module Id : sig
+    type t
+
+    module Set : sig
+      type elt = t
+      type t
+
+      val empty : t
+      val add : elt -> t -> t
+      val elements : t -> elt list
+      val iter : (elt -> unit) -> t -> unit
+      val fold : (elt -> 'a -> 'a) -> t -> 'a -> 'a
+    end
+
+    module Map : sig
+      type key = t
+      type 'a t
+
+      val empty : _ t
+      val add : key -> 'a -> 'a t -> 'a t
+      val cardinal : _ t -> int
+      val bindings : 'a t -> (key * 'a) list
+      val find : key -> 'a t -> 'a
+      val iter : (key -> 'a -> unit) -> 'a t -> unit
+      val fold : (key -> 'a -> 'b -> 'b) -> 'a t -> 'b -> 'b
+    end
+  end
 
   type directed_graph = Id.Set.t Id.Map.t
 
