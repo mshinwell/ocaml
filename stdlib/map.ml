@@ -27,7 +27,6 @@ module type S =
     val is_empty: 'a t -> bool
     val mem:  key -> 'a t -> bool
     val add: key -> 'a -> 'a t -> 'a t
-    val replace: key -> ('a -> 'a) -> 'a t -> 'a t
     val update: key -> ('a option -> 'a option) -> 'a t -> 'a t
     val singleton: key -> 'a -> 'a t
     val remove: key -> 'a t -> 'a t
@@ -58,11 +57,8 @@ module type S =
     val find_first_opt: (key -> bool) -> 'a t -> (key * 'a) option
     val find_last: (key -> bool) -> 'a t -> key * 'a
     val find_last_opt: (key -> bool) -> 'a t -> (key * 'a) option
-    val get_singleton : 'a t -> (key * 'a) option
-    val get_singleton_exn : 'a t -> key * 'a
     val map: ('a -> 'b) -> 'a t -> 'b t
     val mapi: (key -> 'a -> 'b) -> 'a t -> 'b t
-    val map_sharing: ('a -> 'a) -> 'a t -> 'a t
     val to_seq : 'a t -> (key * 'a) Seq.t
     val to_rev_seq : 'a t -> (key * 'a) Seq.t
     val to_seq_from : key -> 'a t -> (key * 'a) Seq.t
@@ -224,16 +220,6 @@ module Make(Ord: OrderedType) = struct
           if c = 0 then Some d
           else find_opt x (if c < 0 then l else r)
 
-    let get_singleton t =
-      match t with
-      | Node { l = Empty; v; d; r = Empty; } -> Some (v, d)
-      | Empty | Node _ -> None
-
-    let get_singleton_exn t =
-      match t with
-      | Node { l = Empty; v; d; r = Empty; } -> v, d
-      | Empty | Node _ -> raise Not_found
-
     let rec mem x = function
         Empty ->
           false
@@ -285,20 +271,6 @@ module Make(Ord: OrderedType) = struct
           else
             let rr = remove x r in if r == rr then m else bal l v d rr
 
-    let rec replace x f = function
-        Empty -> Empty
-      | Node {l; v; d; r; h} as m ->
-          let c = Ord.compare x v in
-          if c = 0 then begin
-            let data = f d in
-            if d == data then m else Node{l; v=x; d=data; r; h}
-          end else if c < 0 then
-            let ll = replace x f l in
-            if l == ll then m else bal ll v d r
-          else
-            let rr = replace x f r in
-            if r == rr then m else bal l v d rr
-
     let rec update x f = function
         Empty ->
           begin match f None with
@@ -341,16 +313,6 @@ module Make(Ord: OrderedType) = struct
           let d' = f v d in
           let r' = mapi f r in
           Node{l=l'; v; d=d'; r=r'; h}
-
-    let rec map_sharing f = function
-        Empty ->
-          Empty
-      | (Node {l; v; d; r; h}) as t ->
-          let l' = map_sharing f l in
-          let d' = f d in
-          let r' = map_sharing f r in
-          if l == l' && d == d' && r == r' then t
-          else Node{l=l'; v; d=d'; r=r'; h}
 
     let rec fold f m accu =
       match m with

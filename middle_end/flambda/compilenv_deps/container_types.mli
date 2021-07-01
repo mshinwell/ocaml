@@ -50,6 +50,8 @@ module type Set = sig
 
   val union_list : t list -> t
   val intersection_is_empty : t -> t -> bool
+
+  val get_singleton : t -> elt option
 end
 
 module type Map = sig
@@ -98,6 +100,13 @@ module type Map = sig
 
   val inter : (key -> 'a -> 'a -> 'a) -> 'a t -> 'a t -> 'a t
   val inter_domain_is_non_empty : 'a t -> 'a t -> bool
+
+  val get_singleton : 'a t -> (key * 'a) option
+  val get_singleton_exn : 'a t -> key * 'a
+
+  val replace: key -> ('a -> 'a) -> 'a t -> 'a t
+
+  val map_sharing : ('a -> 'a) -> 'a t -> 'a t
 end
 
 module type Tbl = sig

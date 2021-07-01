@@ -604,9 +604,6 @@ module Map : sig
          of [key] in [m] disappears.
          @before 4.03 Physical equality was not ensured. *)
 
-
-      val replace: key:key -> f:('a -> 'a) -> 'a t -> 'a t
-
       val update: key:key -> f:('a option -> 'a option) -> 'a t -> 'a t
       (** [update ~key ~f m] returns a map containing the same bindings as
           [m], except for the binding of [key]. Depending on the value of
@@ -838,9 +835,6 @@ module Map : sig
           @since 4.05
          *)
 
-      val get_singleton : 'a t -> (key * 'a) option
-      val get_singleton_exn : 'a t -> key * 'a
-
       val map: f:('a -> 'b) -> 'a t -> 'b t
       (** [map ~f m] returns a map with same domain as [m], where the
          associated value [a] of all bindings of [m] has been
@@ -852,8 +846,6 @@ module Map : sig
       (** Same as {!S.map}, but the function receives as arguments both the
          key and the associated value for each binding of the map. *)
 
-      val map_sharing: ('a -> 'a) -> 'a t -> 'a t
-      
       (** {1 Iterators} *)
 
       val to_seq : 'a t -> (key * 'a) Seq.t
@@ -1155,8 +1147,6 @@ module Set : sig
           except perhaps for lists with many duplicated elements.
           @since 4.02.0 *)
 
-      val get_singleton : t -> elt option
-      
       (** {1 Iterators} *)
 
       val to_seq_from : elt -> t -> elt Seq.t

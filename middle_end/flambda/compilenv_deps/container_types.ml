@@ -38,6 +38,7 @@ module type Set = sig
   val fixpoint : (elt -> t) -> t -> t
   val union_list : t list -> t
   val intersection_is_empty : t -> t -> bool
+  val get_singleton : t -> elt option
 end
 
 module type Map = sig
@@ -78,6 +79,13 @@ module type Map = sig
         -> 'b option
   val inter : (key -> 'a -> 'a -> 'a) -> 'a t -> 'a t -> 'a t
   val inter_domain_is_non_empty : 'a t -> 'a t -> bool
+
+  val get_singleton : 'a t -> (key * 'a) option
+  val get_singleton_exn : 'a t -> key * 'a
+
+  val replace: key -> ('a -> 'a) -> 'a t -> 'a t
+
+  val map_sharing : ('a -> 'a) -> 'a t -> 'a t
 end
 
 module type Tbl = sig
@@ -224,7 +232,33 @@ module Make_map (T : Thing) (Set : Set with module T := T) = struct
       t1 t2
 
   let inter_domain_is_non_empty _ _ = Misc.fatal_error "Not yet implemented"
-end [@@@inline always]
+
+  exception More_than_one_binding
+
+  let get_singleton_exn t =
+    (* Not as fast as being in the stdlib, but doesn't allocate. *)
+    if is_empty t then raise Not_found
+    else
+      try
+        let (_ : int) =
+          fold (fun _key _elt iter_count ->
+              if iter_count > 0 then raise More_than_one_binding
+              else 1)
+            t
+            0
+        in
+        choose t
+      with More_than_one_binding -> raise Not_found
+
+  let get_singleton t =
+    match get_singleton_exn t with
+    | exception Not_found -> None
+    | binding -> Some binding
+
+  let replace _ _ _ : _ t = Misc.fatal_error "Not yet implemented"
+
+  let map_sharing = map
+end [@@inline always]
 
 module Make_set (T : Thing) = struct
   module T0 = struct
@@ -266,7 +300,25 @@ module Make_set (T : Thing) = struct
         aux acc (diff set' acc)
     in
     aux empty set
-end [@@@inline always]
+
+  exception More_than_one_element
+
+  let get_singleton t =
+    (* Not as fast as being in the stdlib, but doesn't allocate. *)
+    if is_empty t then None
+    else
+      try
+        let (_ : int) =
+          fold (fun _elt iter_count ->
+              if iter_count > 0 then raise More_than_one_element
+              else 1)
+            t
+            0
+        in
+        choose_opt t
+      with More_than_one_element -> None
+
+end [@@inline always]
 
 module Make_tbl (T : Thing) (Map : Map with module T := T) = struct
   include (Hashtbl.Make [@inlined hint]) (T)
@@ -297,7 +349,7 @@ module Make_tbl (T : Thing) (Map : Map with module T := T) = struct
 
   let map t f =
     of_map (Map.map f (to_map t))
-end [@@@inline always]
+end [@@inline always]
 
 module type S = sig
   type t
@@ -317,7 +369,7 @@ module Make (T : Thing) = struct
   module Set = Make_set (T)
   module Map = Make_map (T) (Set)
   module Tbl = Make_tbl (T) (Map)
-end [@@@inline always]
+end [@@inline always]
 
 module Make_pair (T1 : S) (T2 : S) = struct
   module Pair = Pair (T1.T) (T2.T)
