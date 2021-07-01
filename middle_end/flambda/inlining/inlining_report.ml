@@ -81,6 +81,10 @@ let log : t list ref = ref []
 let stars fmt depth =
   Format.fprintf fmt "%s" (String.make (depth + 1) '*')
 
+let print_debuginfo ppf dbg =
+  if Debuginfo.is_none dbg then Format.pp_print_string ppf "None"
+  else Debuginfo.print_compact ppf dbg
+
 let rec print ~depth fmt = function
   (* end of report log *)
   | [] ->
@@ -91,7 +95,7 @@ let rec print ~depth fmt = function
   | { dbg; decision = At_function_declaration {
       pass = Before_simplify; code_id; decision; } } :: r ->
     Format.fprintf fmt "%a Definition of %s{%a}@\n"
-      stars depth Code_id.(name (import code_id)) Debuginfo.print dbg;
+      stars depth Code_id.(name (import code_id)) print_debuginfo dbg;
     Format.fprintf fmt "%a @[<v>Before simplification:@ @ %a@]@\n@\n"
       stars (depth + 1)
       Inlining_decision.Function_declaration_decision.report decision;
@@ -101,7 +105,7 @@ let rec print ~depth fmt = function
   | { dbg ; decision = At_function_declaration {
       pass = After_simplify; code_id; decision; } } :: r ->
     Format.fprintf fmt "%a @[<v>After simplification of %s{%a}:@ @ %a@]@\n@\n@\n"
-      stars depth Code_id.(name (import code_id)) Debuginfo.print dbg
+      stars depth Code_id.(name (import code_id)) print_debuginfo dbg
       Inlining_decision.Function_declaration_decision.report decision;
     print ~depth:(depth - 1) fmt r
 
@@ -110,7 +114,7 @@ let rec print ~depth fmt = function
     Format.fprintf fmt "%a @[<v>%s of %s{%a}@ @ %s@ %s@]@\n@\n"
       stars depth
       (if depth = 0 then "Toplevel application" else "Application")
-      "<unknown function>" Debuginfo.print dbg
+      "<unknown function>" print_debuginfo dbg
       "The function call has not been inlined"
       "because the optimizer had not enough information about the function";
     print ~depth fmt r
@@ -119,7 +123,7 @@ let rec print ~depth fmt = function
     Format.fprintf fmt "%a @[<v>%s of %s{%a}@ @ %s@ %s@]@\n@\n"
       stars depth
       (if depth = 0 then "Toplevel application" else "Application")
-      Code_id.(name (import code_id)) Debuginfo.print dbg
+      Code_id.(name (import code_id)) print_debuginfo dbg
       "The function call has not been inlined"
       "because its definition was deemed not inlinable";
     print ~depth fmt r
@@ -128,7 +132,7 @@ let rec print ~depth fmt = function
     Format.fprintf fmt "%a @[<v>%s of %s{%a}@ @ %a@]@\n@\n"
       stars depth
       (if depth = 0 then "Toplevel application" else "Application")
-      Code_id.(name (import code_id)) Debuginfo.print dbg
+      Code_id.(name (import code_id)) print_debuginfo dbg
       Inlining_decision.Call_site_decision.report decision;
     print ~depth fmt r
 

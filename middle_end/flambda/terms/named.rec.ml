@@ -29,6 +29,10 @@ let create_set_of_closures set_of_closures = Set_of_closures set_of_closures
 let create_static_consts consts = Static_consts consts
 let create_rec_info rec_info_expr = Rec_info rec_info_expr
 
+let print_or_elide_debuginfo ppf dbg =
+  if Debuginfo.is_none dbg then Format.pp_print_string ppf "None"
+  else Debuginfo.print_compact ppf dbg
+
 let print_with_cache ~cache ppf (t : t) =
   match t with
   | Simple simple -> Simple.print ppf simple
@@ -36,7 +40,7 @@ let print_with_cache ~cache ppf (t : t) =
     fprintf ppf "@[<hov 1>(%a@<0>%s%a@<0>%s)@]"
       Flambda_primitive.print prim
       (Flambda_colours.debuginfo ())
-      Debuginfo.print_or_elide dbg
+      print_or_elide_debuginfo dbg
       (Flambda_colours.normal ())
   | Set_of_closures set_of_closures ->
     Set_of_closures.print_with_cache ~cache ppf set_of_closures

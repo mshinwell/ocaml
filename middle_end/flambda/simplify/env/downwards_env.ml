@@ -49,6 +49,10 @@ type t = {
   closure_info : Closure_info.t;
 }
 
+let print_debuginfo ppf dbg =
+  if Debuginfo.is_none dbg then Format.pp_print_string ppf "None"
+  else Debuginfo.print_compact ppf dbg
+
 let print ppf { backend = _; round; typing_env; get_imported_code = _;
                 inlined_debuginfo; can_inline;
                 inlining_state; float_const_prop;
@@ -78,7 +82,7 @@ let print ppf { backend = _; round; typing_env; get_imported_code = _;
       )@]"
     round
     TE.print typing_env
-    Debuginfo.print inlined_debuginfo
+    print_debuginfo inlined_debuginfo
     can_inline
     Inlining_state.print inlining_state
     float_const_prop

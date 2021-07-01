@@ -23,6 +23,10 @@ type t = {
   dbg : Debuginfo.t;
 }
 
+let print_or_elide_debuginfo ppf dbg =
+  if Debuginfo.is_none dbg then Format.pp_print_string ppf "None"
+  else Debuginfo.print_compact ppf dbg
+
 include Container_types.Make (struct
   type nonrec t = t
 
@@ -74,7 +78,7 @@ include Container_types.Make (struct
     end;
     Format.fprintf ppf "@<0>%s%a@<0>%s@]"
       (Flambda_colours.elide ())
-      Debuginfo.print_or_elide dbg
+      print_or_elide_debuginfo dbg
       (Flambda_colours.normal ())
 
   let output _ _ = Misc.fatal_error "Not yet implemented"

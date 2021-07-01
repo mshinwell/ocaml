@@ -229,27 +229,3 @@ let rec print_compact ppf t =
     print_item item;
     Format.fprintf ppf ";";
     print_compact ppf t
-
-(* CR mshinwell: read the formatter margin? *)
-let print_compact ppf t =
-  let str = Format.asprintf "%a" print_compact t in
-  if String.length str < 300000000 then print_compact ppf t
-  else begin
-    let t =
-      match t with
-      | [] | [_] -> t
-      | item::_ -> [item]
-    in
-    print_compact ppf t;
-    Format.fprintf ppf "; ..."
-  end
-
-let print_or_elide ppf t =
-  if not (is_none t) then begin
-    Format.fprintf ppf "@ @[<h><%a>@]" print_compact t
-  end
-
-(* CR mshinwell: provide an sexp printer here *)
-let print ppf t =
-  if is_none t then Format.pp_print_string ppf "None"
-  else print_compact ppf t
