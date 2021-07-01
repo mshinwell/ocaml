@@ -41,8 +41,7 @@ type 'a t = 'a list = [] | (::) of 'a * 'a list (**)
 (** An alias for the type of lists. *)
 
 val length : 'a list -> int
-(** Return the length (number of elements) of the given list.
- *)
+(** Return the length (number of elements) of the given list. *)
 
 val compare_lengths : 'a list -> 'b list -> int
 (** Compare the lengths of two lists. [compare_lengths l1 l2] is
@@ -89,8 +88,7 @@ val nth_opt : 'a list -> int -> 'a option
  *)
 
 val rev : 'a list -> 'a list
-(** List reversal.
- *)
+(** List reversal. *)
 
 val init : len:int -> f:(int -> 'a) -> 'a list
 (** [init ~len ~f] is [f 0; f 1; ...; f (len-1)], evaluated left to right.
