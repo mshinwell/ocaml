@@ -308,7 +308,6 @@ module type MapT =
     val is_empty : 'a t -> bool
     val mem : key -> 'a t -> bool
     val add : key -> 'a -> 'a t -> 'a t
-    val replace : key -> ('a -> 'a) -> 'a t -> 'a t
     val update : key -> ('a option -> 'a option) -> 'a t -> 'a t
     val singleton : key -> 'a -> 'a t
     val remove : key -> 'a t -> 'a t
@@ -339,11 +338,8 @@ module type MapT =
     val find_first_opt : (key -> bool) -> 'a t -> (key * 'a) option
     val find_last : (key -> bool) -> 'a t -> key * 'a
     val find_last_opt : (key -> bool) -> 'a t -> (key * 'a) option
-    val get_singleton : 'a t -> (key * 'a) option
-    val get_singleton_exn : 'a t -> key * 'a
     val map : ('a -> 'b) -> 'a t -> 'b t
     val mapi : (key -> 'a -> 'b) -> 'a t -> 'b t
-    val map_sharing : ('a -> 'a) -> 'a t -> 'a t
     val to_seq : 'a t -> (key * 'a) Seq.t
     val to_rev_seq : 'a t -> (key * 'a) Seq.t
     val to_seq_from : key -> 'a t -> (key * 'a) Seq.t
@@ -365,7 +361,6 @@ module SSMap :
     val is_empty : 'a t -> bool
     val mem : key -> 'a t -> bool
     val add : key -> 'a -> 'a t -> 'a t
-    val replace : key -> ('a -> 'a) -> 'a t -> 'a t
     val update : key -> ('a option -> 'a option) -> 'a t -> 'a t
     val singleton : key -> 'a -> 'a t
     val remove : key -> 'a t -> 'a t
@@ -396,11 +391,8 @@ module SSMap :
     val find_first_opt : (key -> bool) -> 'a t -> (key * 'a) option
     val find_last : (key -> bool) -> 'a t -> key * 'a
     val find_last_opt : (key -> bool) -> 'a t -> (key * 'a) option
-    val get_singleton : 'a t -> (key * 'a) option
-    val get_singleton_exn : 'a t -> key * 'a
     val map : ('a -> 'b) -> 'a t -> 'b t
     val mapi : (key -> 'a -> 'b) -> 'a t -> 'b t
-    val map_sharing : ('a -> 'a) -> 'a t -> 'a t
     val to_seq : 'a t -> (key * 'a) Seq.t
     val to_rev_seq : 'a t -> (key * 'a) Seq.t
     val to_seq_from : key -> 'a t -> (key * 'a) Seq.t

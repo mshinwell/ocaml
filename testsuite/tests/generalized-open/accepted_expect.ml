@@ -43,7 +43,6 @@ val find_first_opt : (elt -> bool) -> t -> elt option = <fun>
 val find_last : (elt -> bool) -> t -> elt = <fun>
 val find_last_opt : (elt -> bool) -> t -> elt option = <fun>
 val of_list : elt list -> t = <fun>
-val get_singleton : t -> elt option = <fun>
 val to_seq_from : elt -> t -> elt Seq.t = <fun>
 val to_seq : t -> elt Seq.t = <fun>
 val to_rev_seq : t -> elt Seq.t = <fun>
