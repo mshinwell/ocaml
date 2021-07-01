@@ -54,7 +54,7 @@ val contents : t -> string
 val to_bytes : t -> bytes
 (** Return a copy of the current contents of the buffer.
     The buffer itself is unchanged.
-    @since 4.02 *)
+   @since 4.02 *)
 
 val sub : t -> int -> int -> string
 (** [Buffer.sub b off len] returns a copy of [len] bytes from the

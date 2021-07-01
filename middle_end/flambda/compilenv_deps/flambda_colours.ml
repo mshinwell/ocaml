@@ -14,57 +14,74 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module C = Misc.Color
+let colour_enabled = lazy (
+  (* This avoids having to alter misc.ml *)
+  let buf = Buffer.create 10 in
+  let ppf = Format.formatter_of_buffer buf in
+  Misc.Color.set_color_tag_handling ppf;
+  Format.fprintf ppf "@{<error>@}%!";
+  String.length (Buffer.contents buf) > 0
+)
 
-let normal () = C.reset ()
+let normal () =
+  if Lazy.force colour_enabled then "\x1b[0m"
+  else ""
 
-let prim_constructive () = C.fg_256 163
-let prim_destructive () = C.fg_256 62
-let prim_neither () = C.fg_256 130
+let fg_256 n =
+  if Lazy.force colour_enabled then Printf.sprintf "\x1b[38;5;%d;1m" n
+  else ""
 
-let naked_number () = C.fg_256 70
-let tagged_immediate () = C.fg_256 70
-let constructor () = C.fg_256 69
+let bg_256 n =
+  if Lazy.force colour_enabled then Printf.sprintf "\x1b[48;5;%d;1m" n
+  else ""
 
-let kind () = C.fg_256 37
-let subkind () = C.fg_256 39
+let prim_constructive () = fg_256 163
+let prim_destructive () = fg_256 62
+let prim_neither () = fg_256 130
 
-let top_or_bottom_type () = C.fg_256 37
+let naked_number () = fg_256 70
+let tagged_immediate () = fg_256 70
+let constructor () = fg_256 69
 
-let debuginfo () = C.fg_256 243
+let kind () = fg_256 37
+let subkind () = fg_256 39
 
-let discriminant () = C.fg_256 111
-let name () = C.fg_256 111
-let parameter () = C.fg_256 198
-let symbol () = C.fg_256 98
-let variable () = C.fg_256 111
+let top_or_bottom_type () = fg_256 37
 
-let closure_element () = C.fg_256 31
-let closure_var () = C.fg_256 43
+let debuginfo () = fg_256 243
 
-let code_id () = C.fg_256 169
+let discriminant () = fg_256 111
+let name () = fg_256 111
+let parameter () = fg_256 198
+let symbol () = fg_256 98
+let variable () = fg_256 111
 
-let expr_keyword () = C.fg_256 51
-let static_keyword () = (C.fg_256 255) ^ (C.bg_256 240)
+let closure_element () = fg_256 31
+let closure_var () = fg_256 43
 
-let static_part () = (C.fg_256 255) ^ (C.bg_256 237)
+let code_id () = fg_256 169
 
-let continuation () = C.fg_256 35
-let continuation_definition () = C.bg_256 237
-let continuation_annotation () = (C.fg_256 202) ^ (C.bg_256 237)
+let expr_keyword () = fg_256 51
+let static_keyword () = (fg_256 255) ^ (bg_256 240)
 
-let name_abstraction () = C.fg_256 172
+let static_part () = (fg_256 255) ^ (bg_256 237)
 
-let rec_info () = C.fg_256 249
+let continuation () = fg_256 35
+let continuation_definition () = bg_256 237
+let continuation_annotation () = (fg_256 202) ^ (bg_256 237)
 
-let coercion () = C.fg_256 249
+let name_abstraction () = fg_256 172
 
-let depth_variable () = C.fg_256 214
+let rec_info () = fg_256 249
 
-let error () = C.fg_256 160
+let coercion () = fg_256 249
 
-let elide () = C.fg_256 243
+let depth_variable () = fg_256 214
 
-let each_file () = C.fg_256 51
+let error () = fg_256 160
+
+let elide () = fg_256 243
+
+let each_file () = fg_256 51
 
 let lambda () = expr_keyword ()

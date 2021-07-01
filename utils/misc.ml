@@ -722,19 +722,6 @@ module Color = struct
 
   let color_enabled = ref true
 
-  let fg_256 n =
-    if !color_enabled then
-      (Printf.sprintf "\x1b[38;5;%dm" n) ^ (ansi_of_style_l [Bold])
-    else ""
-
-  let bg_256 n =
-    if !color_enabled then
-      (Printf.sprintf "\x1b[48;5;%dm" n) ^ (ansi_of_style_l [Bold])
-    else ""
-
-  let reset () =
-    if !color_enabled then ansi_of_style_l [Reset] else ""
-
   (* either prints the tag of [s] or delegates to [or_else] *)
   let mark_open_tag ~or_else s =
     try
@@ -758,8 +745,6 @@ module Color = struct
     } in
     pp_set_mark_tags ppf true; (* enable tags *)
     pp_set_formatter_stag_functions ppf functions';
-    (* also setup margins *)
-    pp_set_margin ppf (pp_get_margin std_formatter());
     ()
 
   external isatty : out_channel -> bool = "caml_sys_isatty"
