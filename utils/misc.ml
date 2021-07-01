@@ -734,33 +734,6 @@ module Color = struct
       (Printf.sprintf "\x1b[48;5;%dm" n) ^ (ansi_of_style_l [Bold])
     else ""
 
-  let bold_red () =
-    if !color_enabled then ansi_of_style_l [FG Red; Bold] else ""
-
-  let bold_green () =
-    if !color_enabled then ansi_of_style_l [FG Green; Bold] else ""
-
-  let bold_cyan () =
-    if !color_enabled then ansi_of_style_l [FG Cyan; Bold] else ""
-
-  let bold_white () =
-    if !color_enabled then ansi_of_style_l [FG White; Bold] else ""
-
-  let bold_yellow () =
-    if !color_enabled then ansi_of_style_l [FG Yellow; Bold] else ""
-
-  let bold_blue () =
-    if !color_enabled then ansi_of_style_l [FG Blue; Bold] else ""
-
-  let bold_magenta () =
-    if !color_enabled then ansi_of_style_l [FG Magenta; Bold] else ""
-
-  (* CR mshinwell: Consider adding a mode which doesn't have colour but does
-     have underlining *)
-
-  let underline () =
-    if !color_enabled then ansi_of_style_l [Underline] else ""
-
   let reset () =
     if !color_enabled then ansi_of_style_l [Reset] else ""
 
