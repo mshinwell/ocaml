@@ -393,12 +393,6 @@ module Stdlib = struct
       | None -> Format.pp_print_string ppf "None"
       | Some contents ->
         Format.fprintf ppf "@[(Some@ %a)@]" print_contents contents
-
-    let print_compact print_contents ppf t =
-      match t with
-      | None -> Format.pp_print_string ppf "()"
-      | Some contents ->
-        Format.fprintf ppf "%a" print_contents contents
   end
 
   module Array = struct

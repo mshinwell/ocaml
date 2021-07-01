@@ -162,6 +162,16 @@ end) = struct
       Function_params_and_body.print_with_cache ~cache ppf
         params_and_body
 
+  module Option = struct
+    include Option
+
+    let print_compact print_contents ppf t =
+      match t with
+      | None -> Format.pp_print_string ppf "()"
+      | Some contents ->
+        Format.fprintf ppf "%a" print_contents contents
+  end
+
   let print_with_cache ~cache ppf
         { code_id = _; params_and_body; newer_version_of; stub; inline;
           is_a_functor; params_arity; result_arity; recursive;
@@ -183,7 +193,7 @@ end) = struct
           )@]"
         (if Option.is_none newer_version_of then Flambda_colours.elide ()
         else Flambda_colours.normal ())
-        (Misc.Stdlib.Option.print_compact Code_id.print) newer_version_of
+        (Option.print_compact Code_id.print) newer_version_of
         (Flambda_colours.normal ())
         (if not stub then Flambda_colours.elide () else C.normal ())
         stub
@@ -229,7 +239,7 @@ end) = struct
           )@]"
         (if Option.is_none newer_version_of then Flambda_colours.elide ()
         else Flambda_colours.normal ())
-        (Misc.Stdlib.Option.print_compact Code_id.print) newer_version_of
+        (Option.print_compact Code_id.print) newer_version_of
         (Flambda_colours.normal ())
 
   let print ppf code =
