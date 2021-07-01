@@ -523,18 +523,6 @@ let create_hashtable size init =
   List.iter (fun (key, data) -> Hashtbl.add tbl key data) init;
   tbl
 
-let hash_seed =
-  let seed = Random.bits () in
-  if seed mod 2 = 0 then seed + 1 else seed
-
-(* Fast integer hashing algorithm for sdolan.  With the stdlib Hashtbl
-   implementation it's ok that this returns > 30 bits. *)
-let hash2 a b =
-  let a = Hashtbl.hash a in
-  let b = Hashtbl.hash b in
-  let r = a * hash_seed + b in
-  r lxor (r lsr 17)
-
 (* File copy *)
 
 let copy_file ic oc =

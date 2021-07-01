@@ -18,6 +18,18 @@
 
 open! Int_replace_polymorphic_compare
 
+let hash_seed =
+  let seed = Random.bits () in
+  if seed mod 2 = 0 then seed + 1 else seed
+
+(* Fast integer hashing algorithm for sdolan.  With the stdlib Hashtbl
+   implementation it's ok that this returns > 30 bits. *)
+let hash2 a b =
+  let a = Hashtbl.hash a in
+  let b = Hashtbl.hash b in
+  let r = a * hash_seed + b in
+  r lxor (r lsr 17)
+
 module Id = Table_by_int_id.Id
 
 let var_flags = 0
@@ -157,11 +169,11 @@ module Variable_data = struct
              name = _; name_stamp; user_visible = _; } =
     let compilation_unit_hashes =
       List.fold_left (fun hash compilation_unit ->
-          Misc.hash2 hash (Compilation_unit.hash compilation_unit))
+          hash2 hash (Compilation_unit.hash compilation_unit))
         (Compilation_unit.hash compilation_unit)
         previous_compilation_units
     in
-    Misc.hash2 compilation_unit_hashes (Hashtbl.hash name_stamp)
+    hash2 compilation_unit_hashes (Hashtbl.hash name_stamp)
 
   let equal t1 t2 =
     if t1 == t2 then true
