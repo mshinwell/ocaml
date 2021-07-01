@@ -107,34 +107,39 @@ end = struct
     }
 end
 
-module type S = sig
-  module Id : sig
+module type Id = sig
+  type t
+
+  module Set : sig
+    type elt = t
     type t
 
-    module Set : sig
-      type elt = t
-      type t
-
-      val empty : t
-      val add : elt -> t -> t
-      val elements : t -> elt list
-      val iter : (elt -> unit) -> t -> unit
-      val fold : (elt -> 'a -> 'a) -> t -> 'a -> 'a
-    end
-
-    module Map : sig
-      type key = t
-      type 'a t
-
-      val empty : _ t
-      val add : key -> 'a -> 'a t -> 'a t
-      val cardinal : _ t -> int
-      val bindings : 'a t -> (key * 'a) list
-      val find : key -> 'a t -> 'a
-      val iter : (key -> 'a -> unit) -> 'a t -> unit
-      val fold : (key -> 'a -> 'b -> 'b) -> 'a t -> 'b -> 'b
-    end
+    val empty : t
+    val add : elt -> t -> t
+    val elements : t -> elt list
+    val iter : (elt -> unit) -> t -> unit
+    val fold : (elt -> 'a -> 'a) -> t -> 'a -> 'a
   end
+
+  module Map : sig
+    type key = t
+    type 'a t
+
+    val empty : _ t
+    val add : key -> 'a -> 'a t -> 'a t
+    val cardinal : _ t -> int
+    val bindings : 'a t -> (key * 'a) list
+    val find : key -> 'a t -> 'a
+    val iter : (key -> 'a -> unit) -> 'a t -> unit
+    val fold : (key -> 'a -> 'b -> 'b) -> 'a t -> 'b -> 'b
+    val mem : key -> 'a t -> bool
+  end
+
+  val print : Format.formatter -> t -> unit
+end
+
+module type S = sig
+  module Id : Id
 
   type directed_graph = Id.Set.t Id.Map.t
 
@@ -149,7 +154,7 @@ module type S = sig
   val component_graph : directed_graph -> (component * int list) array
 end
 
-module Make (Id : Container_types.S) = struct
+module Make (Id : Id) = struct
   type directed_graph = Id.Set.t Id.Map.t
 
   type component =
