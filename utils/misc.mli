@@ -93,8 +93,6 @@ module Stdlib : sig
   module List : sig
     type 'a t = 'a list
 
-    val is_singleton : 'a t -> bool
-
     val compare : ('a -> 'a -> int) -> 'a t -> 'a t -> int
     (** The lexicographic order supported by the provided order.
         There is no constraint on the relative lengths of the lists. *)
@@ -140,31 +138,6 @@ module Stdlib : sig
     (** Returns the longest list that, with respect to the provided equality
         function, is a prefix of both of the given lists.  The input lists,
         each with such longest common prefix removed, are also returned. *)
-
-    val fold_left3
-       : ('a -> 'b -> 'c -> 'd -> 'a)
-      -> 'a
-      -> 'b list
-      -> 'c list
-      -> 'd list
-      -> 'a
-
-    val fold_left4
-       : ('a -> 'b -> 'c -> 'd -> 'e -> 'a)
-      -> 'a
-      -> 'b list
-      -> 'c list
-      -> 'd list
-      -> 'e list
-      -> 'a
-
-    val map_sharing : ('a -> 'a) -> 'a t -> 'a t
-    (** Returns the original list if the function always returns a value
-        physically equal to its argument *)
-
-    val map_accum_left : ('e -> 'a -> 'b * 'e) -> 'e -> 'a list -> 'b list * 'e
-
-    val for_all_with_fixed_arg : ('a -> 'b -> bool) -> 'a list -> 'b -> bool
   end
 
   module Option : sig
@@ -490,11 +463,6 @@ val pp_two_columns :
     bb  | dddddd
     v}
 *)
-
-(** Format an association list as a sequence of key-value pairs. *)
-val print_assoc :
-  (Format.formatter -> 'a -> unit) -> (Format.formatter -> 'b -> unit) ->
-  Format.formatter -> ('a * 'b) list -> unit
 
 (** configuration variables *)
 val show_config_and_exit : unit -> unit

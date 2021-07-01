@@ -1,5 +1,10 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+let map_accum_left f env l =
+  let next (acc, env) x = let (y, env) = f env x in (y :: acc, env) in
+  let (acc, env) = List.fold_left next ([], env) l in
+  (List.rev acc, env)
+
 (* Continuation variables *)
 module C = struct
   type t = string
@@ -513,7 +518,7 @@ let rec expr env (e : Fexpr.expr) : Flambda.Expr.t =
           let var = Var_in_binding_pos.create var Name_mode.normal in
           var, env
         in
-        Misc.Stdlib.List.map_accum_left convert_binding env
+        map_accum_left convert_binding env
           vars_and_closure_bindings
       in
       let bound = Bindable_let_bound.set_of_closures ~closure_vars in
@@ -671,14 +676,14 @@ let rec expr env (e : Fexpr.expr) : Flambda.Expr.t =
             (closure_id, symbol), env
           in
           let closure_symbols, env =
-            Misc.Stdlib.List.map_accum_left closure_binding env soc.bindings
+            map_accum_left closure_binding env soc.bindings
           in
           Bound_symbols.Pattern.set_of_closures
             (closure_symbols |> Closure_id.Lmap.of_list),
           env
         | Closure _ -> assert false (* should have been filtered out above *)
       in
-      Misc.Stdlib.List.map_accum_left process_binding env bindings
+      map_accum_left process_binding env bindings
     in
     let bound_symbols = bound_symbols |> Bound_symbols.create in
     let static_const env (b : Fexpr.symbol_binding) : Flambda.Static_const.t =
@@ -748,7 +753,7 @@ let rec expr env (e : Fexpr.expr) : Flambda.Expr.t =
           | Deleted -> Deleted
           | Present { params; closure_var; ret_cont; exn_cont; body } ->
             let params, env =
-              Misc.Stdlib.List.map_accum_left
+              map_accum_left
                 (fun env ({ param; kind }:Fexpr.kinded_parameter) ->
                   let var, env = fresh_var env param in
                   let param =

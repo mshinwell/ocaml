@@ -978,6 +978,17 @@ let simplify_lifted_set_of_closures0 context ~closure_symbols
   in
   bound_symbols, static_consts, dacc
 
+module List = struct
+  include List
+
+  let rec fold_left3 f accu l1 l2 l3 =
+    match l1, l2, l3 with
+    | [], [], [] -> accu
+    | a1::l1, a2::l2, a3::l3 ->
+      fold_left3 f (f accu a1 a2 a3) l1 l2 l3
+    | _, _, _ -> invalid_arg "List.fold_left3"
+end
+
 let simplify_lifted_sets_of_closures dacc ~all_sets_of_closures_and_symbols
       ~closure_bound_names_all_sets ~simplify_toplevel =
   let all_sets_of_closures =
@@ -1011,7 +1022,7 @@ let simplify_lifted_sets_of_closures dacc ~all_sets_of_closures_and_symbols
     (* CR mshinwell: make naming consistent *)
     C.closure_bound_names_inside_functions_all_sets context
   in
-  Misc.Stdlib.List.fold_left3
+  List.fold_left3
     (fun (patterns_acc, static_consts_acc, dacc)
          (closure_symbols, set_of_closures)
          closure_bound_names_inside

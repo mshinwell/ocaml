@@ -81,6 +81,14 @@ let free_names t =
   | Symbols { bound_symbols; scoping_rule = _; } ->
     Bound_symbols.free_names bound_symbols
 
+let rec map_sharing f l0 =
+  match l0 with
+  | a::l ->
+    let a' = f a in
+    let l' = map_sharing f l in
+    if a' == a && l' == l then l0 else a' :: l'
+  | [] -> []
+
 let apply_renaming t perm =
   match t with
   | Singleton var ->
@@ -89,7 +97,7 @@ let apply_renaming t perm =
     else Singleton var'
   | Set_of_closures { name_mode; closure_vars; } ->
     let closure_vars' =
-      Misc.Stdlib.List.map_sharing (fun var ->
+      map_sharing (fun var ->
           Var_in_binding_pos.apply_renaming var perm)
         closure_vars
     in

@@ -169,7 +169,8 @@ module Make_map (T : Thing) (Set : Set with module T := T) = struct
     of_list (List.map (fun (k, v) -> f k, v) (bindings m))
 
   let print print_datum ppf t =
-    Misc.print_assoc T.print print_datum ppf (bindings t)
+    let module Lmap = Lmap.Make (T) in
+    Lmap.print print_datum ppf (Lmap.of_list (bindings t))
 
   let print_debug = print
 

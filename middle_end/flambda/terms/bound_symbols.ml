@@ -177,8 +177,17 @@ let everything_being_defined t =
   List.map Pattern.everything_being_defined t
   |> Code_id_or_symbol.Set.union_list
 
+module List = struct
+  include List
+
+  let rec for_all_with_fixed_arg f t fixed_arg =
+    match t with
+    | [] -> true
+    | x::t -> f x fixed_arg && for_all_with_fixed_arg f t fixed_arg
+end
+
 let for_all_everything_being_defined t ~f =
-  Misc.Stdlib.List.for_all_with_fixed_arg (fun pattern f ->
+  List.for_all_with_fixed_arg (fun pattern f ->
       Pattern.for_all_everything_being_defined pattern ~f)
     t
     f

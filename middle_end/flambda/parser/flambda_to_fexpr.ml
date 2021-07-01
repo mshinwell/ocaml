@@ -1,5 +1,11 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+(* CR-someday mshinwell: share with Fexpr_to_flambda / move to Stdlib *)
+let map_accum_left f env l =
+  let next (acc, env) x = let (y, env) = f env x in (y :: acc, env) in
+  let (acc, env) = List.fold_left next ([], env) l in
+  (List.rev acc, env)
+
 module type Convertible_id = sig
   type t
   type fexpr_id
@@ -546,7 +552,7 @@ and let_expr env le =
 and dynamic_let_expr env vars (defining_expr : Flambda.Named.t) body
       : Fexpr.expr =
   let vars, body_env =
-    Misc.Stdlib.List.map_accum_left Env.bind_var_in_binding_pos env vars
+    map_accum_left Env.bind_var_in_binding_pos env vars
   in
   let body = expr body_env body in
   let defining_exprs, closure_elements =
@@ -669,7 +675,7 @@ and static_let_expr env bound_symbols scoping_rule defining_expr body
                     (Exn_continuation.exn_handler exn_continuation)
                 in
                 let params, env =
-                  Misc.Stdlib.List.map_accum_left kinded_parameter
+                  map_accum_left kinded_parameter
                     env params
                 in
                 let closure_var, env = Env.bind_var env my_closure in
@@ -786,7 +792,7 @@ and cont_handler env cont_id (sort : Continuation.Sort.t) h =
   Flambda.Continuation_handler.pattern_match h
     ~f:(fun params ~handler : Fexpr.continuation_binding ->
       let params, env =
-        Misc.Stdlib.List.map_accum_left kinded_parameter env params
+        map_accum_left kinded_parameter env params
       in
       let handler = expr env handler in
       { name = cont_id; params; sort; handler }

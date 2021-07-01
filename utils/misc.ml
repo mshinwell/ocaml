@@ -273,11 +273,6 @@ module Stdlib = struct
   module List = struct
     type 'a t = 'a list
 
-    let is_singleton t =
-      match t with
-      | [_] -> true
-      | [] | _::_ -> false
-
     let rec compare cmp l1 l2 =
       match l1, l2 with
       | [], [] -> 0
@@ -351,38 +346,6 @@ module Stdlib = struct
           }
       in
       find_prefix ~longest_common_prefix_rev:[] first second
-
-    let rec fold_left3 f accu l1 l2 l3 =
-      match l1, l2, l3 with
-      | [], [], [] -> accu
-      | a1::l1, a2::l2, a3::l3 ->
-        fold_left3 f (f accu a1 a2 a3) l1 l2 l3
-      | _, _, _ -> invalid_arg "List.fold_left3"
-
-    let rec fold_left4 f accu l1 l2 l3 l4 =
-      match l1, l2, l3, l4 with
-      | [], [], [], [] -> accu
-      | a1::l1, a2::l2, a3::l3, a4::l4 ->
-        fold_left4 f (f accu a1 a2 a3 a4) l1 l2 l3 l4
-      | _, _, _, _ -> invalid_arg "List.fold_left4"
-
-    let rec map_sharing f l0 =
-      match l0 with
-      | a::l ->
-        let a' = f a in
-        let l' = map_sharing f l in
-        if a' == a && l' == l then l0 else a' :: l'
-      | [] -> []
-
-    let map_accum_left f env l =
-      let next (acc, env) x = let (y, env) = f env x in (y :: acc, env) in
-      let (acc, env) = List.fold_left next ([], env) l in
-      (List.rev acc, env)
-
-    let rec for_all_with_fixed_arg f t fixed_arg =
-      match t with
-      | [] -> true
-      | x::t -> f x fixed_arg && for_all_with_fixed_arg f t fixed_arg
   end
 
   module Option = struct
@@ -893,18 +856,6 @@ let pp_two_columns ?(sep = "|") ?max_lines ppf (lines: (string * string) list) =
     else Format.fprintf ppf "%*s %s %s@," left_column_size line_l sep line_r
   ) lines;
   Format.fprintf ppf "@]"
-
-let print_assoc print_key print_datum ppf l =
-  if l = [] then
-    Format.fprintf ppf "{}"
-  else
-    Format.fprintf ppf "@[<hov 1>{%a}@]"
-      (Format.pp_print_list ~pp_sep:Format.pp_print_space
-        (fun ppf (key, datum) ->
-          Format.fprintf ppf "@[<hov 1>(%a@ %a)@]"
-            print_key key print_datum datum))
-      l
-
 
 (* showing configuration and configuration variables *)
 let show_config_and_exit () =

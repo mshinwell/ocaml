@@ -82,8 +82,19 @@ module Make (T : Thing) : S with type key = T.t = struct
     | _ -> raise Not_found
   let map f m = List.map (fun (k, v) -> k, f v) m
   let mapi f m = List.map (fun (k, v) -> k, f k v) m
-  let map_sharing f m = Misc.Stdlib.List.map_sharing (fun ((k, v) as pair) ->
-    let v' = f v in if v' == v then pair else k, v') m
+
+  let rec map_sharing f l0 =
+    match l0 with
+    | a::l ->
+      let a' = f a in
+      let l' = map_sharing f l in
+      if a' == a && l' == l then l0 else a' :: l'
+    | [] -> []
+
+  let map_sharing f m =
+    map_sharing (fun ((k, v) as pair) ->
+      let v' = f v in if v' == v then pair else k, v') m
+
   let filter_map f m = List.filter_map (fun (k, v) ->
     f k v |> Option.map (fun v' -> k, v')) m
   let to_seq m = List.to_seq m
@@ -91,7 +102,19 @@ module Make (T : Thing) : S with type key = T.t = struct
     | Seq.Nil -> m
     | Seq.Cons (pair, s') -> pair :: add_seq s' m
   let of_seq m = List.of_seq m
-  let print f fmt m = Misc.print_assoc T.print f fmt m
+
+  let print_assoc print_key print_datum ppf l =
+    if l = [] then
+      Format.fprintf ppf "{}"
+    else
+      Format.fprintf ppf "@[<hov 1>{%a}@]"
+        (Format.pp_print_list ~pp_sep:Format.pp_print_space
+          (fun ppf (key, datum) ->
+            Format.fprintf ppf "@[<hov 1>(%a@ %a)@]"
+              print_key key print_datum datum))
+        l
+
+  let print f fmt m = print_assoc T.print f fmt m
 
   let rec invariant m = match m with
     | [] -> ()

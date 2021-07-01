@@ -48,11 +48,22 @@ let refine_decision_based_on_arg_types_at_uses ~pass ~rewrite_ids_seen nth_arg
          end
       ) arg_type_by_use_id decision
 
+module List = struct
+  include List
+
+  let rec fold_left3 f accu l1 l2 l3 =
+    match l1, l2, l3 with
+    | [], [], [] -> accu
+    | a1::l1, a2::l2, a3::l3 ->
+      fold_left3 f (f accu a1 a2 a3) l1 l2 l3
+    | _, _, _ -> invalid_arg "List.fold_left3"
+end
+
 let make_decisions ~continuation_is_recursive ~arg_types_by_use_id
       denv params params_types : DE.t * Decisions.t =
   let empty = Apply_cont_rewrite_id.Set.empty in
   let _, denv, rev_decisions, seen =
-    Misc.Stdlib.List.fold_left3
+    List.fold_left3
       (fun (nth, denv, rev_decisions, seen) param param_type
            arg_type_by_use_id ->
          (* Make an optimistic decision, filter it based on the arg types at the
