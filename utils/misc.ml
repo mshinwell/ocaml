@@ -670,7 +670,6 @@ module Color = struct
     | FG of color (* foreground *)
     | BG of color (* background *)
     | Bold
-    | Underline
     | Reset
 
   let ansi_of_color = function
@@ -687,7 +686,6 @@ module Color = struct
     | FG c -> "3" ^ ansi_of_color c
     | BG c -> "4" ^ ansi_of_color c
     | Bold -> "1"
-    | Underline -> "4"
     | Reset -> "0"
 
   let ansi_of_style_l l =

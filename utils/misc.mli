@@ -404,7 +404,6 @@ module Color : sig
     | FG of color (* foreground *)
     | BG of color (* background *)
     | Bold
-    | Underline
     | Reset
 
   val ansi_of_style_l : style list -> string
