@@ -349,6 +349,8 @@ let dacc_inside_function context ~used_closure_vars ~shareable_constants
   |> DA.with_shareable_constants ~shareable_constants
   |> DA.with_used_closure_vars ~used_closure_vars
 
+external reraise : exn -> 'a = "%reraise"
+
 type simplify_function_result = {
   function_decl : FD.t;
   new_code_id : Code_id.t;
@@ -466,7 +468,7 @@ let simplify_function context ~used_closure_vars ~shareable_constants
               Expr.print body
               DA.print dacc
           end;
-          raise Misc.Fatal_error)
+          reraise Misc.Fatal_error)
   in
   let cost_metrics = UA.cost_metrics uacc_after_upwards_traversal in
   let old_code_id = code_id in

@@ -136,6 +136,8 @@ let record_any_symbol_projection dacc (defining_expr : Simplified_named.t)
     let var = Var_in_binding_pos.var bound_var in
     DA.map_denv dacc ~f:(fun denv -> DE.add_symbol_projection denv var proj)
 
+external reraise : exn -> 'a = "%reraise"
+
 (* It is important that every set of closures returned by this function
    (in [bindings_outermost_first]) arises from simplification in
    [Simplify_set_of_closures], and not some other path such as reification.
@@ -243,7 +245,7 @@ let simplify_named0 dacc (bindable_let_bound : Bindable_let_bound.t)
             Bound_symbols.print bound_symbols
             DA.print dacc
           end;
-          raise Misc.Fatal_error
+          reraise Misc.Fatal_error
       end
     in
     let dacc, lifted_constants =
@@ -378,6 +380,8 @@ let removed_operations (named : Named.t) result =
     end
   | Rec_info _ -> zero
 
+external reraise : exn -> 'a = "%reraise"
+
 let simplify_named dacc bindable_let_bound named ~simplify_toplevel =
   try
     let simplified_named =
@@ -394,5 +398,5 @@ let simplify_named dacc bindable_let_bound named ~simplify_toplevel =
         Named.print named
         DA.print dacc
     end;
-    raise Misc.Fatal_error
+    reraise Misc.Fatal_error
   end

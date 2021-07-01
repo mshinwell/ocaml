@@ -1252,6 +1252,8 @@ let cut_and_n_way_join definition_typing_env ts_and_use_ids ~params
   in
   add_env_extension_from_level definition_typing_env level
 
+external reraise : exn -> 'a = "%reraise"
+
 let type_simple_in_term_exn t ?min_name_mode simple =
   (* If [simple] is a variable then it should not come from a missing .cmx
      file, since this function is only used for typing variables in terms,
@@ -1321,7 +1323,7 @@ let type_simple_in_term_exn t ?min_name_mode simple =
         (Flambda_colours.normal ())
         print t
     end;
-    raise Misc.Fatal_error
+    reraise Misc.Fatal_error
   | alias -> Type_grammar.alias_type_of kind alias
 
 let get_canonical_simple_exn t ?min_name_mode ?name_mode_of_existing_simple
@@ -1403,7 +1405,7 @@ let get_canonical_simple_exn t ?min_name_mode ?name_mode_of_existing_simple
         (Flambda_colours.normal ())
         print t
     end;
-    raise Misc.Fatal_error
+    reraise Misc.Fatal_error
   | alias -> alias
 
 let get_alias_then_canonical_simple_exn t ?min_name_mode

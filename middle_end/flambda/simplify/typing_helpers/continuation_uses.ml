@@ -44,6 +44,8 @@ let print ppf { continuation; arity; uses; } =
     Flambda_arity.print arity
     (Format.pp_print_list ~pp_sep:Format.pp_print_space U.print) uses
 
+external reraise : exn -> 'a = "%reraise"
+
 let add_use t kind ~env_at_use id ~arg_types =
   try
     let arity = T.arity_of_list arg_types in
@@ -68,7 +70,7 @@ let add_use t kind ~env_at_use id ~arg_types =
         print t
         DE.print env_at_use
     end;
-    raise Misc.Fatal_error
+    reraise Misc.Fatal_error
   end
 
 let union t1 t2 =

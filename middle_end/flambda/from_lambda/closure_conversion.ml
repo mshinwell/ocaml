@@ -696,6 +696,8 @@ let close_switch acc env scrutinee (sw : IR.switch)
         untag ~body ~free_names_of_body:Unknown
       |> Expr_with_acc.create_let
 
+external reraise : exn -> 'a = "%reraise"
+
 let close_one_function acc ~external_env ~by_closure_id decl
       ~var_within_closures_from_idents ~closure_ids_from_idents
       function_declarations =
@@ -802,7 +804,7 @@ let close_one_function acc ~external_env ~by_closure_id decl
           Closure_id.print closure_id
           (* print body *)
       end;
-      raise Misc.Fatal_error
+      reraise Misc.Fatal_error
     end
   in
   let contains_subfunctions = Acc.seen_a_function acc in
