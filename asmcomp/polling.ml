@@ -78,7 +78,7 @@ let polled_loops_analysis funbody =
   in
   (* [exnescape] is [Safe] because we can't loop infinitely having
      returned from the function via an unhandled exception. *)
-  snd (PolledLoopsAnalysis.analyze ~exnescape:Safe ~transfer funbody)
+  PolledLoopsAnalysis.analyze ~exnescape:Safe ~transfer funbody
 
 (* Detection of functions that can loop via a tail-call without going
    through a poll point. *)
@@ -227,11 +227,16 @@ let instr_body handler_safe i =
 let instrument_fundecl ~future_funcnames:_ (f : Mach.fundecl) : Mach.fundecl =
   if function_is_assumed_to_never_poll f.fun_name then f
   else begin
-    let handler_needs_poll = polled_loops_analysis f.fun_body in
-    contains_polls := false;
-    let new_body = instr_body handler_needs_poll f.fun_body in
-    let new_contains_calls = f.fun_contains_calls || !contains_polls in
-    { f with fun_body = new_body; fun_contains_calls = new_contains_calls }
+    match polled_loops_analysis f.fun_body with
+    | Safe, _ ->
+      (* No poll insertion is required at back edges, so avoid reallocating
+         the whole function. *)
+      f
+    | Unsafe, handler_needs_poll ->
+      contains_polls := false;
+      let new_body = instr_body handler_needs_poll f.fun_body in
+      let new_contains_calls = f.fun_contains_calls || !contains_polls in
+      { f with fun_body = new_body; fun_contains_calls = new_contains_calls }
   end
 
 let requires_prologue_poll ~future_funcnames ~fun_name i =
