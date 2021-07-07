@@ -608,7 +608,7 @@ let rewrite_use uacc rewrite ~ctx id apply_cont : rewrite_use_result =
               | Apply_expr args -> gen_prim args
               | Apply_cont ->
                 Misc.fatal_errorf "Apply_cont rewrites should not need to name \
-                                   arguments, since they are aleady named."
+                                   arguments, since they are already named."
             in
             let extra_let =
               (Var_in_binding_pos.create temp Name_mode.normal,
