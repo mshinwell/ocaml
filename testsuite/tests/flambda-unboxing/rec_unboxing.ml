@@ -72,6 +72,7 @@ module T = struct
     | C of int
     | D of int * int
 
+  type r = { a : int; r : r }
 end
 
 let () =
@@ -140,8 +141,7 @@ let () =
     aux 1_000 0. 1_000.;
   check_not_many_allocs 5. "float-loop-hard-2-expected-to-fail"
     aux 10_000 0. 10_000.;
-  (* Check tuple.
-     Not currently unboxed. *)
+  (* Check tuple. *)
   let aux n ((_x, _y) as t) res =
     let r = ref t in
     for i = 0 to n do
@@ -151,10 +151,9 @@ let () =
     let x, y = !r in
     x - y = res
   in
-  check_no_alloc "tuple-loop-1-expected-to-fail" aux 0 (1,2) 1;
-  check_no_alloc "tuple-loop-2-expected-to-fail" aux 1 (1,2) ~-1;
-  (* Check nested tuples.
-     Not currently unboxed. *)
+  check_no_alloc "tuple-loop-1" aux 0 (1,2) 1;
+  check_no_alloc "tuple-loop-2" aux 1 (1,2) ~-1;
+  (* Check nested tuples. *)
   let aux n (((_x, _y), _z) as t) res =
     let r = ref t in
     for i = 0 to n do
@@ -164,8 +163,46 @@ let () =
     let (x, y), z = !r in
     x + (y - z) = res
   in
-  check_no_alloc "tuple-loop-3-expected-to-fail" aux 0 ((1,2),3) 4;
-  check_no_alloc "tuple-loop-4-expected-to-fail" aux 1 ((1,2),3) 2;
+  check_no_alloc "tuple-loop-3" aux 0 ((1,2),3) 4;
+  check_no_alloc "tuple-loop-4" aux 1 ((1,2),3) 2;
+  (* Check deeper nested tuples.
+     The value kind is deeper than the limits that is generated,
+     hence currently not completely unboxed. *)
+  let aux n ((((_x, _y), _z), _w) as t) res =
+    let r = ref t in
+    for i = 0 to n do
+      let (((x, y), z), w) = !r in
+      r := ((y, z), x), (w + 1)
+    done;
+    let ((x, y), z), w = !r in
+    x + (y - z) + w = res
+  in
+  check_no_alloc "tuple-loop-5-expected-to-fail" aux 0 (((1,2),3),4) 9;
+  check_no_alloc "tuple-loop-6-expected-to-fail" aux 1 (((1,2),3),4) 8;
+  (* Check simple recursive type. *)
+  let aux n (t:T.r) res =
+    let r = ref t in
+    for i = 0 to n do
+      r := { a = !r.r.a; r = { a = !r.a; r = !r.r.r } };
+    done;
+    !r.a - !r.r.a = res
+  in
+  let rec v = T.{ a = 1; r = { a = 2; r = v } } in
+  check_no_alloc "rec-val-loop-1" aux 4 v 1;
+  check_no_alloc "rec-val-loop-2" aux 5 v (-1);
+  (* Check recursive type.
+     The value kind for recursive type is not generated too deep,
+     so this is currently not completely unboxed. *)
+  let aux n (t:T.r) res =
+    let r = ref t in
+    for i = 0 to n do
+      r := { a = !r.r.a; r = { a = !r.a; r = { a = i; r = !r.r.r.r } } };
+    done;
+    !r.r.r.a * (!r.a - !r.r.a) = res
+  in
+  let rec v = T.{ a = 1; r = { a = 2; r = { a = 3; r = v } } } in
+  check_no_alloc "rec-val-loop-3-expected-to-fail" aux 4 v 4;
+  check_no_alloc "rec-val-loop-4-expected-to-fail" aux 5 v (-5);
   (* Check tuple+floats.
      Not unboxed yet. *)
   let aux n ((_x, _y) as t) res =
@@ -177,8 +214,8 @@ let () =
     let x, y = !r in
     x +. y = res
   in
-  check_no_alloc "tuple-float-1-expected-to-fail" aux 0 (1.,2.) 2.;
-  check_no_alloc "tuple-float-2-expected-to-fail" aux 1 (1.,2.) 6.;
+  check_no_alloc "tuple-float-1" aux 0 (1.,2.) 2.;
+  check_no_alloc "tuple-float-2" aux 1 (1.,2.) 6.;
   (* Check blocks and floats.
      Not unboxed yet. *)
   let aux n (c1, c2) res =

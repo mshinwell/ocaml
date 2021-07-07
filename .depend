@@ -1586,6 +1586,7 @@ typing/typeopt.cmo : \
     typing/typedecl.cmi \
     typing/predef.cmi \
     typing/path.cmi \
+    utils/numbers.cmi \
     lambda/lambda.cmi \
     typing/ident.cmi \
     typing/env.cmi \
@@ -1599,6 +1600,7 @@ typing/typeopt.cmx : \
     typing/typedecl.cmx \
     typing/predef.cmx \
     typing/path.cmx \
+    utils/numbers.cmx \
     lambda/lambda.cmx \
     typing/ident.cmx \
     typing/env.cmx \
@@ -5040,6 +5042,7 @@ middle_end/flambda/from_lambda/dissect_letrec.cmi : \
 middle_end/flambda/from_lambda/lambda_conversions.cmo : \
     middle_end/flambda/basic/trap_action.cmi \
     middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
+    middle_end/flambda/compilenv_deps/tag.cmi \
     typing/primitive.cmi \
     middle_end/flambda/types/basic/or_unknown.cmi \
     middle_end/flambda/basic/mutability.cmi \
@@ -5054,6 +5057,7 @@ middle_end/flambda/from_lambda/lambda_conversions.cmo : \
 middle_end/flambda/from_lambda/lambda_conversions.cmx : \
     middle_end/flambda/basic/trap_action.cmx \
     middle_end/flambda/compilenv_deps/targetint_31_63.cmx \
+    middle_end/flambda/compilenv_deps/tag.cmx \
     typing/primitive.cmx \
     middle_end/flambda/types/basic/or_unknown.cmx \
     middle_end/flambda/basic/mutability.cmx \
@@ -5826,6 +5830,7 @@ middle_end/flambda/naming/with_delayed_permutation.cmi : \
     middle_end/flambda/naming/contains_names.cmo
 middle_end/flambda/parser/fexpr.cmo : \
     middle_end/flambda/basic/trap_action.cmi \
+    middle_end/flambda/compilenv_deps/tag.cmi \
     middle_end/flambda/basic/symbol_scoping_rule.cmi \
     middle_end/flambda/basic/mutability.cmi \
     lambda/lambda.cmi \
@@ -5835,6 +5840,7 @@ middle_end/flambda/parser/fexpr.cmo : \
     middle_end/flambda/types/kinds/flambda_kind.cmi
 middle_end/flambda/parser/fexpr.cmx : \
     middle_end/flambda/basic/trap_action.cmx \
+    middle_end/flambda/compilenv_deps/tag.cmx \
     middle_end/flambda/basic/symbol_scoping_rule.cmx \
     middle_end/flambda/basic/mutability.cmx \
     lambda/lambda.cmx \
@@ -9878,6 +9884,7 @@ middle_end/flambda/types/kinds/flambda_arity.cmi : \
 middle_end/flambda/types/kinds/flambda_kind.cmo : \
     middle_end/flambda/compilenv_deps/targetint_32_64.cmi \
     middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
+    middle_end/flambda/compilenv_deps/tag.cmi \
     middle_end/flambda/compilenv_deps/numeric_types.cmi \
     utils/misc.cmi \
     middle_end/flambda/compilenv_deps/flambda_colours.cmi \
@@ -9886,6 +9893,7 @@ middle_end/flambda/types/kinds/flambda_kind.cmo : \
 middle_end/flambda/types/kinds/flambda_kind.cmx : \
     middle_end/flambda/compilenv_deps/targetint_32_64.cmx \
     middle_end/flambda/compilenv_deps/targetint_31_63.cmx \
+    middle_end/flambda/compilenv_deps/tag.cmx \
     middle_end/flambda/compilenv_deps/numeric_types.cmx \
     utils/misc.cmx \
     middle_end/flambda/compilenv_deps/flambda_colours.cmx \
@@ -9894,6 +9902,7 @@ middle_end/flambda/types/kinds/flambda_kind.cmx : \
 middle_end/flambda/types/kinds/flambda_kind.cmi : \
     middle_end/flambda/compilenv_deps/targetint_32_64.cmi \
     middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
+    middle_end/flambda/compilenv_deps/tag.cmi \
     middle_end/flambda/compilenv_deps/numeric_types.cmi \
     middle_end/flambda/compilenv_deps/container_types.cmi
 middle_end/flambda/types/structures/closures_entry.rec.cmo : \

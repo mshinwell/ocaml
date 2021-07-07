@@ -65,8 +65,8 @@ type 'a type_accessor = Typing_env.t -> 'a
 let unknown_types_from_arity arity =
   List.map (fun kind -> unknown kind) arity
 
-let unknown_with_subkind kind =
-  match Flambda_kind.With_subkind.descr kind with
+let rec unknown_with_descr (descr : Flambda_kind.With_subkind.descr) =
+  match descr with
   | Any_value -> any_value ()
   | Naked_number Naked_immediate -> any_naked_immediate ()
   | Naked_number Naked_float -> any_naked_float ()
@@ -79,6 +79,19 @@ let unknown_with_subkind kind =
   | Boxed_nativeint -> any_boxed_nativeint ()
   | Tagged_immediate -> any_tagged_immediate ()
   | Rec_info -> any_rec_info ()
+  | Block { tag; fields } ->
+    let field_kind, fields =
+      if Tag.equal Tag.double_array_tag tag then
+        Flambda_kind.naked_float,
+        List.map (fun _ -> any_naked_float ()) fields
+      else
+        Flambda_kind.value,
+        List.map unknown_with_descr fields
+    in
+    immutable_block ~is_unique:false tag ~field_kind ~fields
+
+let unknown_with_subkind kind =
+  unknown_with_descr (Flambda_kind.With_subkind.descr kind)
 
 let unknown_types_from_arity_with_subkinds arity =
   List.map (fun kind -> unknown_with_subkind kind) arity

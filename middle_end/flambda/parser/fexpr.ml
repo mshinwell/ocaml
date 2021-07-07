@@ -98,6 +98,7 @@ type kind = (* can't alias because Flambda_kind.t is private *)
 
 type kind_with_subkind = (* can't alias for same reason as [kind] *)
   | Any_value
+  | Block of { tag : Tag.t; fields : kind_with_subkind list }
   | Naked_number of naked_number_kind
   | Boxed_float
   | Boxed_int32
@@ -216,7 +217,7 @@ type unop =
   | Num_conv of {
       src : standard_int_or_float;
       dst : standard_int_or_float;
-    }                  
+    }
   | Opaque_identity
   | Project_var of {
       project_from : closure_id;

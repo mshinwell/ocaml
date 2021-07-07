@@ -166,6 +166,7 @@ module With_subkind : sig
       | Boxed_int64
       | Boxed_nativeint
       | Tagged_immediate
+      | Block of { tag : Tag.t; fields : t list }
 
     include Container_types.S with type t := t
   end
@@ -192,6 +193,7 @@ module With_subkind : sig
   val boxed_nativeint : t
   val tagged_immediate : t
   val rec_info : t
+  val block : Tag.t -> t list -> t
 
   val of_naked_number_kind : Naked_number_kind.t -> t
 
@@ -204,6 +206,7 @@ module With_subkind : sig
     | Boxed_nativeint
     | Tagged_immediate
     | Rec_info
+    | Block of { tag : Tag.t; fields : descr list }
 
   val descr : t -> descr
 

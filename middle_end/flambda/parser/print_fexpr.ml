@@ -150,6 +150,7 @@ let kind_with_subkind ppf (k : kind_with_subkind) =
     @@
     match k with
     | Any_value -> "val"
+    | Block _ -> "block" (* CR mshinwell: improve this *)
     | Naked_number _ -> assert false
     | Boxed_float -> "float boxed"
     | Boxed_int32 -> "int32 boxed"
@@ -457,7 +458,7 @@ let unop ppf u =
   | Project_var { project_from; var } ->
     Format.fprintf ppf "@[<2>%%project_var@ %a.%a@]"
       closure_id project_from
-      var_within_closure var 
+      var_within_closure var
   | Select_closure { move_from; move_to } ->
     Format.fprintf ppf "@[<2>%%select_closure@ (%a@ -> %a)@]"
       closure_id move_from
@@ -657,7 +658,7 @@ let rec expr scope ppf = function
     )
   | Let_cont _ ->
     Format.pp_print_string ppf "<malformed letk>"
-  
+
   | Let_symbol l ->
     parens ~if_scope_is:Where_body scope ppf (fun scope ppf ->
       let_symbol_expr scope ppf l

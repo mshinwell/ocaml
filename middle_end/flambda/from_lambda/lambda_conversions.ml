@@ -27,14 +27,16 @@ let check_float_array_optimisation_enabled () =
       optimisation is disabled"
   end
 
-let value_kind (value_kind : L.value_kind) =
-  match value_kind with
+let rec value_kind (vk : L.value_kind) =
+  match vk with
   | Pgenval -> KS.any_value
   | Pfloatval -> KS.boxed_float
   | Pboxedintval Pint32 -> KS.boxed_int32
   | Pboxedintval Pint64 -> KS.boxed_int64
   | Pboxedintval Pnativeint -> KS.boxed_nativeint
   | Pintval -> KS.tagged_immediate
+  | Pblock { tag; fields } ->
+    KS.block (Tag.create_exn tag) (List.map value_kind fields)
 
 let inline_attribute (attr : L.inline_attribute) : Inline_attribute.t =
   match attr with
@@ -74,6 +76,7 @@ let convert_block_of_values_field (value_kind : L.value_kind)
   | Pboxedintval Pint64 -> Boxed_int64
   | Pboxedintval Pnativeint -> Boxed_nativeint
   | Pintval -> Immediate
+  | Pblock _ -> Any_value
 
 let convert_block_shape (shape : L.block_shape) ~num_fields =
   match shape with

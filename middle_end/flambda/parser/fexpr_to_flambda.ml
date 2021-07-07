@@ -196,7 +196,7 @@ let find_cont env (c : Fexpr.continuation) =
   | Special Error -> Exn_continuation.exn_handler env.error_continuation, 1
   | Named cont_id -> find_cont_id env cont_id
 
-let find_result_cont env (c : Fexpr.result_continuation) 
+let find_result_cont env (c : Fexpr.result_continuation)
   : Apply_expr.Result_continuation.t =
   match c with
   | Return c -> Return (fst (find_cont env c))
@@ -223,11 +223,13 @@ let immediate i =
   i |> Targetint_32_64.of_string |> Targetint_31_63.Imm.of_targetint |> Targetint_31_63.int
 let float f = f |> Numeric_types.Float_by_bit_pattern.create
 
-let value_kind_with_subkind (k : Fexpr.kind_with_subkind)
+let rec value_kind_with_subkind (k : Fexpr.kind_with_subkind)
 : Flambda_kind.With_subkind.t =
   let module KWS = Flambda_kind.With_subkind in
   match k with
   | Any_value -> KWS.any_value
+  | Block { tag; fields; } ->
+    KWS.block tag (List.map value_kind_with_subkind fields)
   | Naked_number naked_number_kind ->
     begin
       match naked_number_kind with

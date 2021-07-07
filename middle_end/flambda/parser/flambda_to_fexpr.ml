@@ -262,7 +262,7 @@ end = struct
     in
     if is_local
     then (None, Symbol_name_map.find_exn t.symbols s) |> nowhere
-    else 
+    else
       let cunit =
         let ident =
           Compilation_unit.get_persistent_ident cunit |> Ident.name
@@ -329,17 +329,23 @@ let kind (k : Flambda_kind.t) : Fexpr.kind =
   | Naked_number nnk -> Naked_number nnk
   | Rec_info -> Rec_info
 
-let kind_with_subkind (k : Flambda_kind.With_subkind.t)
-: Fexpr.kind_with_subkind =
-  match k |> Flambda_kind.With_subkind.descr with
-  | Any_value -> Any_value
-  | Naked_number nnk -> Naked_number nnk
-  | Boxed_float -> Boxed_float
-  | Boxed_int32 -> Boxed_int32
-  | Boxed_int64 -> Boxed_int64
-  | Boxed_nativeint -> Boxed_nativeint
-  | Tagged_immediate -> Tagged_immediate
-  | Rec_info -> Rec_info
+let kind_with_subkind (k : Flambda_kind.With_subkind.t) =
+  let rec convert (k : Flambda_kind.With_subkind.descr)
+        : Fexpr.kind_with_subkind =
+    match k with
+    | Any_value -> Any_value
+    | Block { tag; fields; } ->
+      let fields = List.map convert fields in
+      Block { tag; fields; }
+    | Naked_number nnk -> Naked_number nnk
+    | Boxed_float -> Boxed_float
+    | Boxed_int32 -> Boxed_int32
+    | Boxed_int64 -> Boxed_int64
+    | Boxed_nativeint -> Boxed_nativeint
+    | Tagged_immediate -> Tagged_immediate
+    | Rec_info -> Rec_info
+  in
+  convert (Flambda_kind.With_subkind.descr k)
 
 let arity (a : Flambda_arity.With_subkinds.t) : Fexpr.arity =
   List.map kind_with_subkind a
