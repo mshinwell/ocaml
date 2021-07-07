@@ -819,6 +819,9 @@ type lifting_decision_result = {
   symbol_projections : Symbol_projection.t Variable.Map.t;
 }
 
+(* CR lmaurer: [min_name_mode] doesn't make sense as a name here. It's
+   specifically the name mode of the variables binding the closures (and we rely
+   on this when we compute [can_lift]). *)
 let type_closure_elements_and_make_lifting_decision_for_one_set dacc
       ~min_name_mode ~closure_bound_vars_inverse set_of_closures =
   (* By computing the types of the closure elements, attempt to show that
@@ -868,6 +871,8 @@ let type_closure_elements_and_make_lifting_decision_for_one_set dacc
      not been lifted before, there are never any other mutually-recursive
      sets ([Named.t] does not allow them). *)
   let can_lift =
+    Name_mode.is_normal min_name_mode
+    &&
     Var_within_closure.Map.for_all
       (fun _ simple ->
         Simple.pattern_match' simple
