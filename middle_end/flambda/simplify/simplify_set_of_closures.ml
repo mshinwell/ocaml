@@ -320,7 +320,7 @@ let dacc_inside_function context ~used_closure_vars ~shareable_constants
     DA.map_denv (C.dacc_inside_functions context) ~f:(fun denv ->
       let denv = DE.add_parameters_with_unknown_types denv params in
       let denv =
-        DE.restrict_inlining_arguments inlining_arguments denv
+        DE.set_inlining_arguments inlining_arguments denv
       in
       match
         Closure_id.Map.find closure_id closure_bound_names_inside_function
@@ -368,8 +368,25 @@ let simplify_function context ~used_closure_vars ~shareable_constants
   let params_and_body =
     Code.params_and_body_must_be_present code ~error_context:"Simplifying"
   in
+  let inlining_arguments_from_denv =
+    C.dacc_prior_to_sets context
+    |> DA.denv
+    |> DE.inlining_arguments
+  in
+  (* Compute the set of inlining_arguments used to define this function
+    by taking the "least powerful" set between the one set in the environment
+    and the one used to define the symbol previously. This way, functions that
+    were imported from a foreign compilation unit after inlining will still be
+    considered with a set of inlining arguments coherent with the one used
+    to compile the current file when inlining.
+  *)
+  let inlining_arguments =
+    Inlining_arguments.meet
+      (Code.inlining_arguments code)
+      inlining_arguments_from_denv
+  in
   let params_and_body, dacc_after_body, free_names_of_code,
-      uacc_after_upwards_traversal, inlining_arguments =
+      uacc_after_upwards_traversal =
     Function_params_and_body.pattern_match params_and_body
       ~f:(fun ~return_continuation exn_continuation params ~body
               ~my_closure ~is_my_closure_used:_ ~my_depth ->
@@ -377,7 +394,7 @@ let simplify_function context ~used_closure_vars ~shareable_constants
           dacc_inside_function context ~used_closure_vars ~shareable_constants
             ~params ~my_closure closure_id
             ~closure_bound_names_inside_function
-            ~inlining_arguments:(Code.inlining_arguments code)
+            ~inlining_arguments
         in
         if not (DA.no_lifted_constants dacc) then begin
           Misc.fatal_errorf "Did not expect lifted constants in [dacc]:@ %a"
@@ -400,7 +417,6 @@ let simplify_function context ~used_closure_vars ~shareable_constants
                  put into the environment for subsequent functions. *)
               LCS.add_to_denv denv lifted_consts_prev_functions)
         in
-        let inlining_arguments = DE.inlining_arguments (DA.denv dacc) in
         assert (not (DE.at_unit_toplevel (DA.denv dacc)));
         (* CR mshinwell: DE.no_longer_defining_symbol is redundant now? *)
         match
@@ -450,8 +466,7 @@ let simplify_function context ~used_closure_vars ~shareable_constants
               Variable.print my_closure
               (RE.print (UA.are_rebuilding_terms uacc)) body
           end;
-          params_and_body, dacc_after_body, free_names_of_code, uacc,
-          inlining_arguments
+          params_and_body, dacc_after_body, free_names_of_code, uacc
         | exception Misc.Fatal_error ->
           if !Clflags.flambda_context_on_error then begin
             Format.eprintf "\n%sContext is:%s simplifying function \

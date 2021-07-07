@@ -239,7 +239,7 @@ val closure_info : t -> Closure_info.t
 
 val inlining_arguments : t -> Inlining_arguments.t
 
-val restrict_inlining_arguments : Inlining_arguments.t -> t -> t
+val set_inlining_arguments : Inlining_arguments.t -> t -> t
 
 val enter_inlined_apply : called_code:Code.t -> apply:Apply.t -> t -> t
 

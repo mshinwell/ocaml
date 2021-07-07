@@ -611,11 +611,7 @@ let closure_info t = t.closure_info
 let inlining_arguments { inlining_state; _ } =
   Inlining_state.arguments inlining_state
 
-let restrict_inlining_arguments inlining_arguments t =
-  let arguments =
-    Inlining_state.arguments t.inlining_state
-    |> Inlining_arguments.meet inlining_arguments
-  in
+let set_inlining_arguments arguments t =
   { t with inlining_state =
              Inlining_state.with_arguments arguments t.inlining_state
   }
