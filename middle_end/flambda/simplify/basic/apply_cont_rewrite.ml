@@ -20,12 +20,25 @@ module EA = Continuation_extra_params_and_args.Extra_arg
 module KP = Kinded_parameter
 module Id = Apply_cont_rewrite_id
 
+type used = Used | Unused
+
 type t = {
   original_params : KP.t list;
   used_params : KP.Set.t;
   used_extra_params : KP.t list;
-  extra_args : EA.t list Id.Map.t;
+  extra_args : (EA.t * used) list Id.Map.t;
 }
+
+let print_used ppf = function
+  | Used -> ()
+  | Unused -> Format.fprintf ppf "@ unused"
+
+let print_ea_used ppf t =
+  Format.fprintf ppf "(%a)"
+    (Format.pp_print_list ~pp_sep:Format.pp_print_space
+       (fun ppf (ea, used) ->
+          Format.fprintf ppf "%a%a" EA.print ea print_used used))
+    t
 
 let print ppf { original_params; used_params; used_extra_params;
                 extra_args;
@@ -39,7 +52,7 @@ let print ppf { original_params; used_params; used_extra_params;
     KP.List.print original_params
     KP.Set.print used_params
     KP.List.print used_extra_params
-    (Id.Map.print EA.List.print) extra_args
+    (Id.Map.print print_ea_used) extra_args
 
 let does_nothing t =
   List.length t.original_params = KP.Set.cardinal t.used_params
@@ -69,9 +82,9 @@ let create ~original_params ~used_params ~extra_params ~extra_args
             Continuation_extra_params_and_args.Extra_arg.List.print extra_args
         end;
         let extra_params_and_args = List.combine extra_params extra_args in
-        List.filter_map (fun (extra_param, extra_arg) ->
-            if KP.Set.mem extra_param used_extra_params then Some extra_arg
-            else None)
+        List.map (fun (extra_param, extra_arg) ->
+            extra_arg,
+            if KP.Set.mem extra_param used_extra_params then Used else Unused)
           extra_params_and_args)
       extra_args
   in

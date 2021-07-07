@@ -586,38 +586,57 @@ let rewrite_use uacc rewrite ~ctx id apply_cont : rewrite_use_result =
       original_params_with_args
   in
   let extra_args_list = Apply_cont_rewrite.extra_args rewrite id in
-  let extra_args_rev, extra_lets =
+  let extra_args_rev, extra_lets, _ =
     List.fold_left
-      (fun (extra_args_rev, extra_lets)
-           (arg : Continuation_extra_params_and_args.Extra_arg.t) ->
-        match arg with
-        | Already_in_scope simple -> simple :: extra_args_rev, extra_lets
-        | New_let_binding (temp, prim) ->
-          let extra_args_rev = Simple.var temp :: extra_args_rev in
-          let extra_lets =
-            (Var_in_binding_pos.create temp Name_mode.normal,
-             Code_size.prim prim,
-             Named.create_prim prim Debuginfo.none)
-              :: extra_lets
-          in
-          extra_args_rev, extra_lets
-        | New_let_binding_with_named_args (temp, gen_prim) ->
-          let prim =
-            match (ctx :rewrite_use_ctx) with
-            | Apply_expr args -> gen_prim args
-            | Apply_cont ->
-              Misc.fatal_errorf "Apply_cont rewrites should not need to name \
-                                 arguments, since they are aleady named."
-          in
-          let extra_args_rev = Simple.var temp :: extra_args_rev in
-          let extra_lets =
-            (Var_in_binding_pos.create temp Name_mode.normal,
-             Code_size.prim prim,
-             Named.create_prim prim Debuginfo.none)
-            :: extra_lets
-          in
-          extra_args_rev, extra_lets
-      ) ([], [])
+      (fun (extra_args_rev, extra_lets, required_by_other_extra_args)
+           ((arg : Continuation_extra_params_and_args.Extra_arg.t),
+            (used : Apply_cont_rewrite.used)) ->
+        let extra_arg, extra_let, free_names =
+          match arg with
+          | Already_in_scope simple ->
+            simple, [], Name_occurrences.empty
+          | New_let_binding (temp, prim) ->
+            let extra_let =
+              (Var_in_binding_pos.create temp Name_mode.normal,
+               Code_size.prim prim,
+               Named.create_prim prim Debuginfo.none)
+            in
+            Simple.var temp, [extra_let], Flambda_primitive.free_names prim
+          | New_let_binding_with_named_args (temp, gen_prim) ->
+            let prim =
+              match (ctx :rewrite_use_ctx) with
+              | Apply_expr args -> gen_prim args
+              | Apply_cont ->
+                Misc.fatal_errorf "Apply_cont rewrites should not need to name \
+                                   arguments, since they are aleady named."
+            in
+            let extra_let =
+              (Var_in_binding_pos.create temp Name_mode.normal,
+               Code_size.prim prim,
+               Named.create_prim prim Debuginfo.none)
+            in
+            Simple.var temp, [extra_let], Flambda_primitive.free_names prim
+        in
+        let extra_args_rev =
+          match used with
+          | Used -> extra_arg :: extra_args_rev
+          | Unused -> extra_args_rev
+        in
+        let required_let =
+          match used with
+          | Used -> true
+          | Unused ->
+            let defined_names = Simple.free_names extra_arg in
+            Name_occurrences.inter_domain_is_non_empty
+              defined_names required_by_other_extra_args
+        in
+        if required_let then
+          extra_args_rev,
+          extra_let @ extra_lets,
+          Name_occurrences.union free_names required_by_other_extra_args
+        else
+          extra_args_rev, extra_lets, required_by_other_extra_args
+      ) ([], [], Name_occurrences.empty)
       extra_args_list
   in
   let args = args @ List.rev extra_args_rev in
@@ -665,7 +684,19 @@ let rewrite_exn_continuation rewrite id exn_cont =
       pre_existing_extra_params_with_args
   in
   let extra_args1 =
-    let extra_args_list = Apply_cont_rewrite.extra_args rewrite id in
+    let extra_args_list =
+      List.filter_map (fun
+        ((arg : Continuation_extra_params_and_args.Extra_arg.t),
+         (used : Apply_cont_rewrite.used)) ->
+        match used with
+        | Used -> Some arg
+        | Unused ->
+          match arg with
+          | Already_in_scope _ -> None
+          | New_let_binding _ | New_let_binding_with_named_args _ ->
+            Misc.fatal_error "[New_let_binding] not expected here")
+        (Apply_cont_rewrite.extra_args rewrite id)
+    in
     let used_extra_params = Apply_cont_rewrite.used_extra_params rewrite in
     assert (List.compare_lengths used_extra_params extra_args_list = 0);
     List.map2

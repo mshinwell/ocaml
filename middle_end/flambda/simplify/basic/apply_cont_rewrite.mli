@@ -23,6 +23,8 @@
 
 type t
 
+type used = Used | Unused
+
 val print : Format.formatter -> t -> unit
 
 val create
@@ -43,7 +45,7 @@ val used_extra_params : t -> Kinded_parameter.t list
 val extra_args
    : t
   -> Apply_cont_rewrite_id.t
-  -> Continuation_extra_params_and_args.Extra_arg.t list
+  -> (Continuation_extra_params_and_args.Extra_arg.t * used) list
 
 val original_params_arity : t -> Flambda_arity.With_subkinds.t
 
