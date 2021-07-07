@@ -23,7 +23,7 @@
 
 type t
 
-type used = Used | Unused
+type used = private Used | Unused
 
 val print : Format.formatter -> t -> unit
 
