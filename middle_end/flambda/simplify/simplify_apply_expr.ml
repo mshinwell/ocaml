@@ -25,6 +25,8 @@ let warn_not_inlined_if_needed apply reason =
     Location.prerr_warning (Debuginfo.to_location (Apply.dbg apply))
       (Warnings.Inlining_impossible reason)
 
+(* Note that this considers that the extra arguments of the exn_continuation
+   are always used. *)
 let record_free_names_of_apply_as_used dacc apply =
   DA.map_data_flow dacc ~f:(fun data_flow ->
     let data_flow =
