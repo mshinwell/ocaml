@@ -203,8 +203,7 @@ let () =
   let rec v = T.{ a = 1; r = { a = 2; r = { a = 3; r = v } } } in
   check_no_alloc "rec-val-loop-3-expected-to-fail" aux 4 v 4;
   check_no_alloc "rec-val-loop-4-expected-to-fail" aux 5 v (-5);
-  (* Check tuple+floats.
-     Not unboxed yet. *)
+  (* Check tuple+floats. *)
   let aux n ((_x, _y) as t) res =
     let r = ref t in
     for i = 0 to n do
@@ -216,8 +215,7 @@ let () =
   in
   check_no_alloc "tuple-float-1" aux 0 (1.,2.) 2.;
   check_no_alloc "tuple-float-2" aux 1 (1.,2.) 6.;
-  (* Check blocks and floats.
-     Not unboxed yet. *)
+  (* Check blocks and floats. *)
   let aux n (c1, c2) res =
     let r = ref c1 in
     for i = 0 to n do
@@ -230,9 +228,9 @@ let () =
     in
     f = res
   in
-  check_no_alloc "complex-loop-1-expected-to-fail"
+  check_no_alloc "complex-loop-1"
     aux 0 (Complex.zero, Complex.one) 0.;
-  check_no_alloc "complex-loop-2-expected-to-fail"
+  check_no_alloc "complex-loop-2"
     aux 1 (Complex.zero, Complex.one) 2.;
   (* Check variants.
      Not unboxed yet. *)
