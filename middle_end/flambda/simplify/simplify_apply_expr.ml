@@ -245,17 +245,51 @@ let simplify_direct_partial_application ~simplify_expr dacc apply
           Kinded_parameter.create param kind)
         remaining_param_arity
     in
-    let args = applied_args @ (List.map KP.simple remaining_params) in
     let call_kind =
       Call_kind.direct_function_call callee's_code_id callee's_closure_id
         ~return_arity:result_arity
     in
-    let applied_args_with_closure_vars = (* CR mshinwell: rename *)
-      List.map (fun applied_arg ->
-          Var_within_closure.wrap compilation_unit (Variable.create "arg"),
-            applied_arg)
-        ((Apply.callee apply) :: applied_args)
+    let open struct
+      (* An argument or the callee, with information about its entry in the
+         closure, if any. If the argument is a constant or uncoerced symbol, we
+         don't need to put it in the closure. *)
+      (* CR lmaurer: Also allow coerced symbols to be left out of the closure.
+         Would require putting any depth variables in the closure, which is
+         desirable but currently not possible. This workaround - binding the
+         coerced symbol in the closure - wastes a bit of memory, and it has the
+         effect of turning the callee from a symbol into a variable.
+         Fortunately, the reconstituted [Apply_expr] should retain the original
+         call kind, so it will remain a direct call. *)
+      type applied_value =
+        | Const of Reg_width_things.Const.t
+        | Symbol of Symbol.t
+        | In_closure of {
+            var : Variable.t; (* name to bind to projected variable *)
+            value : Simple.t; (* value to store in closure *)
+            closure_var : Var_within_closure.t;
+          }
+    end in
+    let mk_closure_var () =
+      Var_within_closure.wrap compilation_unit (Variable.create "arg")
     in
+    let applied_value value =
+      Simple.pattern_match' value
+        ~const:(fun const -> Const const)
+        ~symbol:(fun symbol ~coercion ->
+            if Coercion.is_id coercion then
+              Symbol symbol
+            else
+              let var = Variable.create "symbol" in
+              In_closure { var; value; closure_var = mk_closure_var ()
+              }
+          )
+        ~var:(fun var ~coercion:_ ->
+            In_closure { var; value; closure_var = mk_closure_var () }
+          )
+    in
+    let applied_callee = applied_value (Apply.callee apply) in
+    let applied_args = List.map applied_value applied_args in
+    let applied_values = applied_callee :: applied_args in
     let my_closure = Variable.create "my_closure" in
     let my_depth = Variable.create "my_depth" in
     let exn_continuation =
@@ -263,8 +297,17 @@ let simplify_direct_partial_application ~simplify_expr dacc apply
       |> Exn_continuation.without_extra_args
     in
     let body, cost_metrics_of_body =
+      let arg = function
+        | Const const -> Simple.const const
+        | Symbol symbol -> Simple.symbol symbol
+        | In_closure { var; _ } -> Simple.var var
+      in
+      let callee = arg applied_callee in
+      let args =
+        List.map arg applied_args @ List.map KP.simple remaining_params
+      in
       let full_application =
-        Apply.create ~callee:(Apply.callee apply)
+        Apply.create ~callee
           ~continuation:(Return return_continuation)
           exn_continuation
           ~args
@@ -276,12 +319,12 @@ let simplify_direct_partial_application ~simplify_expr dacc apply
       let cost_metrics =
         Cost_metrics.from_size (Code_size.apply full_application)
       in
-      List.fold_left (fun (expr, cost_metrics) (closure_var, arg) ->
-          match Simple.must_be_var arg with
-          | None -> expr, cost_metrics
-          | Some (arg, _coercion) ->
-            (* CR lmaurer: Coercion dropped! *)
-            let arg = VB.create arg Name_mode.normal in
+      List.fold_left (fun (expr, cost_metrics) applied_value ->
+          match applied_value with
+          | Const _
+          | Symbol _ -> expr, cost_metrics
+          | In_closure { var; closure_var; value = _ } ->
+            let arg = VB.create var Name_mode.normal in
             let prim =
               P.Unary (Project_var {
                  project_from = wrapper_closure_id;
@@ -305,7 +348,7 @@ let simplify_direct_partial_application ~simplify_expr dacc apply
                  ~is_phantom:false
                  ~cost_metrics_of_defining_expr))
         (Expr.create_apply full_application, cost_metrics)
-        (List.rev applied_args_with_closure_vars)
+        (List.rev applied_values)
     in
     let params_and_body =
       Function_params_and_body.create ~return_continuation
@@ -347,7 +390,13 @@ let simplify_direct_partial_application ~simplify_expr dacc apply
         (Closure_id.Lmap.singleton wrapper_closure_id function_decl)
     in
     let closure_elements =
-      Var_within_closure.Map.of_list applied_args_with_closure_vars
+      List.filter_map (fun value ->
+          match value with
+          | Const _ | Symbol _ -> None
+          | In_closure { closure_var; value; var = _ } ->
+            Some (closure_var, value)
+        ) applied_values
+      |> Var_within_closure.Map.of_list
     in
     Set_of_closures.create function_decls ~closure_elements, dacc, code_id, code
   in
