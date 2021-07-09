@@ -14,6 +14,7 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
+(* CR lmaurer: Flatten this into the top-level module. *)
 module Args = struct
   type t = {
     max_inlining_depth : int;
@@ -204,50 +205,34 @@ module Args = struct
   }
 end
 
-type t = Args.t Or_unknown.t
+type t = Args.t
 
-let unknown = Or_unknown.Unknown
+let print ppf = Args.print ppf
 
-let print ppf = Or_unknown.print Args.print ppf
+let max_inlining_depth t = t.Args.max_inlining_depth
+let call_cost t = t.Args.call_cost
+let alloc_cost t = t.Args.alloc_cost
+let prim_cost t = t.Args.prim_cost
+let branch_cost t = t.Args.branch_cost
+let indirect_call_cost t = t.Args.indirect_call_cost
+let poly_compare_cost t = t.Args.poly_compare_cost
+let small_function_size t = t.Args.small_function_size
+let large_function_size t = t.Args.large_function_size
+let threshold t = t.Args.threshold
 
-let get_or_fail t : Args.t =
-  match t with
-  | Or_unknown.Unknown ->
-    Misc.fatal_errorf
-      "Trying to access an unknown set of inliner arguments. This should not \
-       happen, usually [meet] should have been called with a known set of \
-       arguments by this point."
-  | Or_unknown.Known s -> s
+let meet t1 t2 =
+  (* If we are sure that args1 is lower than args2 then
+      [meet args1 args2 = args1]. In that case we can avoid calling
+      [Args.meet] and reuse args1 to avoid having to allocate a new Args.t.
+      The same goes if the are sure that args2 is lower than args1.
+  *)
+  if Args.(<=) t1 t2 then
+    t1
+  else if Args.(<=) t2 t1 then
+    t2
+  else
+    Args.meet t1 t2
 
-let max_inlining_depth t = (get_or_fail t).max_inlining_depth
-let call_cost t = (get_or_fail t).call_cost
-let alloc_cost t = (get_or_fail t).alloc_cost
-let prim_cost t = (get_or_fail t).prim_cost
-let branch_cost t = (get_or_fail t).branch_cost
-let indirect_call_cost t = (get_or_fail t).indirect_call_cost
-let poly_compare_cost t = (get_or_fail t).poly_compare_cost
-let small_function_size t = (get_or_fail t).small_function_size
-let large_function_size t = (get_or_fail t).large_function_size
-let threshold t = (get_or_fail t).threshold
+let create ~round = Args.create ~round
 
-let meet (t1 : _ Or_unknown.t) (t2 : _ Or_unknown.t) : t =
-  match t1, t2 with
-  | Unknown, Unknown -> Unknown
-  | Known _, Unknown -> t1
-  | Unknown, Known _ -> t2
-  | Known args1, Known args2 ->
-    (* If we are sure that args1 is lower than args2 then
-       [meet args1 args2 = args1]. In that case we can avoid calling
-       [Args.meet] and reuse args1 to avoid having to allocate a new Args.t.
-       The same goes if the are sure that args2 is lower than args1.
-    *)
-    if Args.(<=) args1 args2 then
-      t1
-    else if Args.(<=) args2 args1 then
-      t2
-    else
-      Known (Args.meet args1 args2)
-
-let create ~round : t = Known (Args.create ~round)
-
-let equal t1 t2 = Or_unknown.equal Args.equal t1 t2
+let equal t1 t2 = Args.equal t1 t2

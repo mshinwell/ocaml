@@ -531,7 +531,7 @@ let static_const env (sc : Flambda.Static_const.t) : Fexpr.static_data =
   | Immutable_string s -> Immutable_string s
 
 let inlining_state (is : Inlining_state.t) : Fexpr.inlining_state option =
-  if Inlining_state.equal is Inlining_state.default then None else
+  if Inlining_state.equal is (Inlining_state.default ~round:0) then None else
     let depth = Inlining_state.depth is in
     (* TODO: inlining arguments *)
     Some { depth; }

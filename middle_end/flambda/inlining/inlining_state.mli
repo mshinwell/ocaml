@@ -24,7 +24,7 @@ val print : Format.formatter -> t -> unit
 
 val equal : t -> t -> bool
 
-val default : t
+val default : round:int -> t
 
 val create : arguments:Inlining_arguments.t -> depth:int -> t
 

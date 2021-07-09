@@ -265,7 +265,7 @@ let close_c_call acc ~let_bound_var (prim : Primitive.description)
           ~call_kind
           dbg
           ~inline:Default_inline
-          ~inlining_state:(Inlining_state.default)
+          ~inlining_state:(Inlining_state.default ~round:0)
       in
       Expr_with_acc.create_apply acc apply
   in
@@ -580,7 +580,7 @@ let close_apply acc env ({ kind; func; args; continuation; exn_continuation;
       ~call_kind
       (Debuginfo.from_location loc)
       ~inline:(LC.inline_attribute inlined)
-      ~inlining_state:(Inlining_state.default)
+      ~inlining_state:(Inlining_state.default ~round:0)
   in
   Expr_with_acc.create_apply acc apply
 
@@ -907,7 +907,7 @@ let close_one_function acc ~external_env ~by_closure_id decl
       ~recursive
       ~newer_version_of:None
       ~cost_metrics
-      ~inlining_arguments:Inlining_arguments.unknown
+      ~inlining_arguments:(Inlining_arguments.create ~round:0)
   in
   let acc = Acc.add_code ~code_id ~code acc in
   let acc = Acc.with_seen_a_function acc true in

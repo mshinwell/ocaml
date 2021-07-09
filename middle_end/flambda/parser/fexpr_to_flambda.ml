@@ -819,7 +819,7 @@ let rec expr env (e : Fexpr.expr) : Flambda.Expr.t =
             ~recursive
             ~cost_metrics
             (* CR poechsel: grab inlining arguments from fexpr. *)
-            ~inlining_arguments:Inlining_arguments.unknown
+            ~inlining_arguments:(Inlining_arguments.create ~round:0)
         in
         Code code
     in
@@ -894,9 +894,9 @@ let rec expr env (e : Fexpr.expr) : Flambda.Expr.t =
       match inlining_state with
       | Some { depth; } ->
         (* TODO inlining arguments *)
-        Inlining_state.create ~arguments:Inlining_arguments.unknown ~depth
+        Inlining_state.create ~arguments:(Inlining_arguments.create ~round:0) ~depth
       | None ->
-        Inlining_state.default
+        Inlining_state.default ~round:0
     in
     let exn_continuation = find_exn_cont env exn_continuation in
     let apply =

@@ -151,7 +151,7 @@ let expression_for_failure acc ~backend exn_cont ~register_const_string
         (* These inlining fields should not be used for C calls since
            they can't really be inlined anyway. *)
         let inline = Inline_attribute.Never_inline in
-        let inlining_state = Inlining_state.default in
+        let inlining_state = Inlining_state.default ~round:0 in
         Apply.create ~callee ~continuation exn_cont
           ~args ~call_kind dbg ~inline ~inlining_state
       in

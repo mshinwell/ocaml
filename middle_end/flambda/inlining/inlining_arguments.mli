@@ -24,8 +24,6 @@
 
 type t
 
-val unknown : t
-
 val create : round:int -> t
 
 val print : Format.formatter -> t -> unit

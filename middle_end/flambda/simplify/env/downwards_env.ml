@@ -110,10 +110,7 @@ let create ~round ~backend ~(resolver : resolver)
     get_imported_code;
     inlined_debuginfo = Debuginfo.none;
     can_inline = true;
-    inlining_state =
-      Inlining_state.default
-      |> Inlining_state.with_arguments
-           (Inlining_arguments.create ~round);
+    inlining_state = Inlining_state.default ~round;
     float_const_prop;
     code = Code_id.Map.empty;
     at_unit_toplevel = true;

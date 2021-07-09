@@ -23,8 +23,8 @@ type t = {
 
 let increment_depth t = { t with depth = t.depth + 1 }
 
-let default = {
-    arguments = Inlining_arguments.unknown;
+let default ~round = {
+    arguments = Inlining_arguments.create ~round;
     depth = 0
   }
 
