@@ -16,6 +16,8 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
+module Simple := Reg_width_things.Simple
+
 (* CR mshinwell: Rename to [Parameter] *)
 
 (** A parameter (to a function, continuation, etc.) together with its kind. *)

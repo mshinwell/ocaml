@@ -57,6 +57,10 @@ module type S = sig
   val print : Format.formatter -> t -> unit
 
   val equal : t -> t -> bool
+
+  val hash : t -> int
+
+  val map_depth_variables : t -> f:(variable -> variable) -> t
 end
 
 module Make(Variable : Container_types.S)
@@ -164,4 +168,29 @@ module Make(Variable : Container_types.S)
     | Unroll_to (unroll_depth1, t1), Unroll_to (unroll_depth2, t2) ->
       unroll_depth1 = unroll_depth2 && equal t1 t2
     | (Const _ | Var _ | Succ _ | Unroll_to _), _ -> false
+
+  let rec hash = function
+    | Const { depth; unrolling } ->
+      Hashtbl.hash (0,
+                    Or_infinity.hash ~f:Hashtbl.hash depth,
+                    Unrolling_state.hash unrolling)
+    | Var dv ->
+      Hashtbl.hash (1, Variable.hash dv)
+    | Succ t ->
+      Hashtbl.hash (2, hash t)
+    | Unroll_to (unroll_depth, t) ->
+      Hashtbl.hash (3, unroll_depth, hash t)
+
+  let rec map_depth_variables t ~f =
+    match t with
+    | Const _ -> t
+    | Var dv ->
+      let new_dv = f dv in
+      if new_dv == dv then t else Var new_dv
+    | Succ t0 ->
+      let new_t0 = map_depth_variables t0 ~f in
+      if new_t0 == t0 then t else Succ new_t0
+    | Unroll_to (depth, t0) ->
+      let new_t0 = map_depth_variables t0 ~f in
+      if new_t0 == t0 then t else Unroll_to (depth, new_t0)
 end

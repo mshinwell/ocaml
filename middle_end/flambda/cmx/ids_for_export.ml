@@ -13,6 +13,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
+module Coercion = Reg_width_things.Coercion
 module Const = Reg_width_things.Const
 module Simple = Reg_width_things.Simple
 
@@ -75,9 +76,8 @@ let add_name t name =
 
 let add_simple t simple =
   let simples =
-    match Simple.coercion simple with
-    | Id -> t.simples
-    | Non_id _ -> Simple.Set.add simple t.simples
+    if Coercion.is_id (Simple.coercion simple) then t.simples else
+      Simple.Set.add simple t.simples
   in
   let t = { t with simples; } in
   Simple.pattern_match simple
@@ -93,11 +93,11 @@ let add_continuation t continuation =
 
 let from_simple simple =
   let simples =
-    match Simple.coercion simple with
-    | Id ->
+    if Coercion.is_id (Simple.coercion simple) then
       (* This simple will not be in the grand_table_of_simples *)
       Simple.Set.empty
-    | Non_id _ -> Simple.Set.singleton simple
+    else
+      Simple.Set.singleton simple
   in
   Simple.pattern_match simple
     ~const:(fun const ->

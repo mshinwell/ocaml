@@ -16,6 +16,8 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+module Simple = Reg_width_things.Simple
+
 type continuation_kind = Normal | Exn_handler
 
 (*

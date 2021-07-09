@@ -25,7 +25,11 @@ let next_time : ?mode:Name_mode.t -> unit -> Binding_time.With_name_mode.t =
 
 let mk_var name = Variable.create name
 let mk_simple name = Simple.var (mk_var name)
-let mk_coercion from to_ = Coercion.change_depth ~from ~to_
+let mk_coercion from to_ =
+  let unrolling = Rec_info_expr.Unrolling_state.not_unrolling in
+  let from = Rec_info_expr.const ~depth:(Finite from) ~unrolling in
+  let to_ = Rec_info_expr.const ~depth:(Finite to_) ~unrolling in
+  Coercion.change_depth ~from ~to_
 
 let mk_symbol : string -> Symbol.t =
   let next = ref 0 in

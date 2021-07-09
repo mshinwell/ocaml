@@ -82,9 +82,9 @@ val check_variables_are_bound : t -> Variable.t list -> unit
 
 val check_name_is_bound : t -> Name.t -> unit
 
-val check_simple_is_bound : t -> Simple.t -> unit
+val check_simple_is_bound : t -> Reg_width_things.Simple.t -> unit
 
-val check_simples_are_bound : t -> Simple.t list -> unit
+val check_simples_are_bound : t -> Reg_width_things.Simple.t list -> unit
 
 (* CR mshinwell: Change the names of these functions to be "and is compatible
    with kind", or similar -- see new naming in Flambda_kind. *)
@@ -102,13 +102,13 @@ val check_name_is_bound_and_of_kind
 
 val check_simple_is_bound_and_of_kind
    : t
-  -> Simple.t
+  -> Reg_width_things.Simple.t
   -> Flambda_kind.t
   -> unit
 
 val check_simples_are_bound_and_of_kind
    : t
-  -> Simple.t list
+  -> Reg_width_things.Simple.t list
   -> Flambda_kind.t
   -> unit
 
@@ -128,7 +128,7 @@ val find_continuation_opt
 
 val continuation_arity : t -> Continuation.t -> Flambda_arity.With_subkinds.t
 
-val kind_of_simple : t -> Simple.t -> Flambda_kind.t
+val kind_of_simple : t -> Reg_width_things.Simple.t -> Flambda_kind.t
 
 val kind_of_name : t -> Name.t -> Flambda_kind.t
 

@@ -15,3 +15,13 @@
 [@@@ocaml.warning "+a-30-40-41-42"]
 
 include module type of struct include Reg_width_things.Coercion end
+
+include Contains_names.S with type t := t
+
+val print : Format.formatter -> t -> unit
+
+val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
+
+val free_names_in_types : t -> Name_occurrences.t
+
+val compose_exn : t -> then_:t -> t

@@ -24,6 +24,7 @@ module Variables = (Permutation.Make [@inlined hint]) (Variable)
 module Code_ids = (Permutation.Make [@inlined hint]) (Code_id)
 module Symbols = (Permutation.Make [@inlined hint]) (Symbol)
 
+module Coercion = Reg_width_things.Coercion
 module Const = Reg_width_things.Const
 module Simple = Reg_width_things.Simple
 
@@ -326,13 +327,15 @@ let apply_simple t simple =
     | None -> simple
     | Some import_map -> Import_map.simple import_map simple
   in
-  let [@inline always] name old_name ~coercion:(old_coercion : Coercion.t) =
+  let [@inline always] name old_name ~coercion:old_coercion =
     let new_name = apply_name t old_name in
-    if old_name == new_name then simple
+    let new_coercion =
+      Coercion.map_depth_variables old_coercion
+        ~f:(fun dv -> apply_variable t dv)
+    in
+    if old_name == new_name && old_coercion == new_coercion then simple
     else
-      match old_coercion with
-      | Id -> Simple.name new_name
-      | Non_id _ as coercion -> Simple.with_coercion (Simple.name new_name) coercion
+      Simple.with_coercion (Simple.name new_name) new_coercion
   in
   (* Constants are never permuted, only freshened upon import. *)
   Simple.pattern_match simple

@@ -16,6 +16,8 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
+module Simple = Reg_width_things.Simple
+
 type t = {
   param : Variable.t;
   kind : Flambda_kind.With_subkind.t;

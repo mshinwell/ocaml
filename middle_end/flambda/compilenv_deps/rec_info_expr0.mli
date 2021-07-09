@@ -70,6 +70,10 @@ module type S = sig
   val print : Format.formatter -> t -> unit
 
   val equal : t -> t -> bool
+
+  val hash : t -> int
+
+  val map_depth_variables : t -> f:(variable -> variable) -> t
 end
 
 module Make(Variable : Container_types.S) : S with type variable = Variable.t
