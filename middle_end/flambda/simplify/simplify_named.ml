@@ -307,11 +307,20 @@ let simplify_named0 dacc (bindable_let_bound : Bindable_let_bound.t)
        will create the "let symbol" binding when it sees the lifted
        constant. *)
     Simplify_named_result.have_simplified_to_zero_terms dacc
-  | Rec_info _ ->
+  | Rec_info rec_info_expr ->
     (* We could simplify away things like [let depth x = y in ...], but those
        don't actually happen (as of this writing). We could also do CSE,
        though. *)
-    let defining_expr = Simplified_named.reachable named in
+    let bound_var = Bindable_let_bound.must_be_singleton bindable_let_bound in
+    let new_rec_info_expr =
+      Simplify_rec_info_expr.simplify_rec_info_expr dacc rec_info_expr
+    in
+    let ty = T.this_rec_info rec_info_expr in
+    let dacc = DA.add_variable dacc bound_var ty in
+    let defining_expr =
+      if rec_info_expr == new_rec_info_expr then Simplified_named.reachable named
+      else Simplified_named.reachable (Named.create_rec_info new_rec_info_expr)
+    in
     Simplify_named_result.have_simplified_to_single_term dacc
       bindable_let_bound defining_expr ~original_defining_expr:named
 
