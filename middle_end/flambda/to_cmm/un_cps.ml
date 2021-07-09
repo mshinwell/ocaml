@@ -1274,7 +1274,7 @@ and make_switch ~tag_discriminant env res e arms =
     let (max_d, _) = Targetint_31_63.Map.max_binding arms in
     let m = prepare_discriminant ~tag:tag_discriminant max_d in
     let cases = Array.make (n + 1) C.unreachable in
-    let index = Array.make (m + 2) n in
+    let index = Array.make (m + 1) n in
     let _, res =
       Targetint_31_63.Map.fold (fun discriminant action (i, res) ->
         let (d, cmm_action), res =
