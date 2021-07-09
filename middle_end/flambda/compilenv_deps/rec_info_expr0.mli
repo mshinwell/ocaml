@@ -16,8 +16,34 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
-include module type of struct include Reg_width_things.Rec_info_expr end
+module type S = sig
+  type variable
 
-include Expr_std.S with type t := t
+  (** An expression for the state of recursive inlining at a given occurrence.
+      Forms the right-hand side of a [Let_expr] binding for a depth variable. Will
+      evaluate (given a suitable environment) to a [Rec_info.t]. *)
+  type t =
+    | Initial
+      (** The initial recursion depth. In user code, all occurrences have depth
+          zero. *)
+    | Var of variable
+      (** A variable of kind [Flambda_kind.rec_info]. *)
+    | Succ of t
+      (** The next depth. If we inline an occurrence with depth [d], then in the
+          inlined body, recursive references will have depth [succ d]. *)
+    | Unroll_to of int * t
+      (** Indicate the depth to which unrolling should proceed. The unroll depth
+          is decremented by [Succ] until it reaches zero, at which
+          point all unrolling should stop. *)
 
-include Contains_ids.S with type t := t
+  val initial : t
+  val var : variable -> t
+  val succ : t -> t
+  val unroll_to : int -> t -> t
+
+  val is_obviously_initial : t -> bool
+
+  val equal : t -> t -> bool
+end
+
+module Make(Variable : Container_types.S) : S with type variable = Variable.t

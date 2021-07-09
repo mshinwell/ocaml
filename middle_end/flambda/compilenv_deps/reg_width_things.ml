@@ -234,32 +234,6 @@ module Symbol_data = struct
       Linkage_name.equal linkage_name1 linkage_name2
 end
 
-module Simple_data = struct
-  type t = {
-    simple : Id.t;  (* always without [Coercion] *)
-    coercion : Coercion.t;
-  }
-
-  let flags = simple_flags
-
-  let print ppf { simple = _; coercion; } =
-    Format.fprintf ppf "@[<hov 1>\
-        @[<hov 1>(coercion@ %a)@]\
-        @]"
-      Coercion.print coercion
-
-  let hash { simple; coercion; } =
-    Hashtbl.hash (Id.hash simple, Coercion.hash coercion)
-
-  let equal t1 t2 =
-    if t1 == t2 then true
-    else
-      let { simple = simple1; coercion = coercion1; } = t1 in
-      let { simple = simple2; coercion = coercion2; } = t2 in
-      Id.equal simple1 simple2
-        && Coercion.equal coercion1 coercion2
-end
-
 module Const = struct
   type t = Id.t
   type exported = Const_data.t
@@ -516,6 +490,37 @@ module Name = struct
   module Map = Patricia_tree.Make_map (struct let print = print end) (Set)
   module Tbl = Container_types.Make_tbl (Numeric_types.Int) (Map)
 end
+
+module Rec_info_expr = Rec_info_expr0.Make(Variable)
+
+module Coercion = Coercion0.Make(Rec_info_expr)
+
+module Simple_data = struct
+  type t = {
+    simple : Id.t;  (* always without [Coercion] *)
+    coercion : Coercion.t;
+  }
+
+  let flags = simple_flags
+
+  let print ppf { simple = _; coercion; } =
+    Format.fprintf ppf "@[<hov 1>\
+        @[<hov 1>(coercion@ %a)@]\
+        @]"
+      Coercion.print coercion
+
+  let hash { simple; coercion; } =
+    Hashtbl.hash (Id.hash simple, Coercion.hash coercion)
+
+  let equal t1 t2 =
+    if t1 == t2 then true
+    else
+      let { simple = simple1; coercion = coercion1; } = t1 in
+      let { simple = simple2; coercion = coercion2; } = t2 in
+      Id.equal simple1 simple2
+        && Coercion.equal coercion1 coercion2
+end
+
 
 module Simple = struct
   type t = Id.t

@@ -16,20 +16,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-type t =
-  | Initial
-  | Var of Variable.t
-  | Succ of t
-  | Unroll_to of int * t
-
-let initial = Initial
-let var dv = Var dv
-let succ t = Succ t
-let unroll_to unroll_depth t = Unroll_to (unroll_depth, t)
-
-let is_obviously_initial = function
-  | Initial -> true
-  | _ -> false
+include Reg_width_things.Rec_info_expr
 
 let rec print ppf = function
   | Initial ->
@@ -45,17 +32,6 @@ let rec print ppf = function
     Format.fprintf ppf "@[<hov 1>(unroll_to@ %d@ %a)@]" unroll_depth print t
 
 let print_with_cache ~cache:_ ppf t = print ppf t
-
-let rec equal t1 t2 =
-  match t1, t2 with
-  | Initial, Initial -> true
-  | Var dv1, Var dv2 ->
-    Variable.equal dv1 dv2
-  | Succ t1, Succ t2 ->
-    equal t1 t2
-  | Unroll_to (unroll_depth1, t1), Unroll_to (unroll_depth2, t2) ->
-    unroll_depth1 = unroll_depth2 && equal t1 t2
-  | (Initial | Var _ | Succ _ | Unroll_to _), _ -> false
 
 let rec apply_renaming t perm =
   match t with

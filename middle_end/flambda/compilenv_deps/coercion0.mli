@@ -30,29 +30,38 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
-type t = private
-  | Id
-  | Non_id of {
-      from_depth : int;
-      to_depth : int;
-    }
+module type S = sig
+  type variable (* currently unused *)
+  type rec_info_expr (* currently unused *)
 
-val change_depth : from:int -> to_:int -> t
+  type t = private
+    | Id
+    | Non_id of {
+        from_depth : int;
+        to_depth : int;
+      }
 
-val id : t
+  val change_depth : from:int -> to_:int -> t
 
-val is_id : t -> bool
+  val id : t
 
-val inverse : t -> t
+  val is_id : t -> bool
 
-val compose : t -> then_:t -> t option
+  val inverse : t -> t
 
-val compose_exn : t -> then_:t -> t
+  val compose : t -> then_:t -> t option
 
-val print : Format.formatter -> t -> unit
+  val compose_exn : t -> then_:t -> t
 
-val equal : t -> t -> bool
+  val print : Format.formatter -> t -> unit
 
-val hash : t -> int
+  val equal : t -> t -> bool
 
-val apply_to_rec_info : t -> Rec_info.t -> Rec_info.t
+  val hash : t -> int
+
+  val apply_to_rec_info : t -> Rec_info.t -> Rec_info.t
+end
+
+module Make(Rec_info_expr : Rec_info_expr0.S)
+  : S with type variable = Rec_info_expr.variable
+       and type rec_info_expr = Rec_info_expr.t

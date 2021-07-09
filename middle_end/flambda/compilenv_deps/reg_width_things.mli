@@ -138,6 +138,12 @@ module Name : sig
     -> 'a
 end
 
+module Rec_info_expr : Rec_info_expr0.S with type variable = Variable.t
+
+module Coercion : Coercion0.S
+  with type variable = Variable.t
+   and type rec_info_expr = Rec_info_expr.t
+
 module Simple : sig
   type t = private Table_by_int_id.Id.t
   type exported
