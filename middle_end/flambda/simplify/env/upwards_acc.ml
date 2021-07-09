@@ -125,10 +125,12 @@ let with_uenv t uenv =
     uenv;
   }
 
-let remember_code_for_cmx t code =
+let remember_code_for_cmx t code_map =
   if ART.do_not_rebuild_terms t.are_rebuilding_terms then t
   else
-    let all_code = Exported_code.add_code code t.all_code in
+    let all_code =
+      Code_id.Map.fold Exported_code.add_code code_map t.all_code
+    in
     { t with all_code; }
 
 let all_code t = t.all_code

@@ -264,7 +264,6 @@ MIDDLE_END_FLAMBDA_NAMING=\
 
 MIDDLE_END_FLAMBDA_TYPES=\
   middle_end/flambda/types/basic/var_within_closure_set.cmo \
-  middle_end/flambda/types/kinds/flambda_arity.cmo \
   middle_end/flambda/types/env/binding_time.cmo \
   middle_end/flambda/types/env/aliases.cmo \
   middle_end/flambda/types/basic/meet_or_join_op.cmo \
@@ -286,6 +285,7 @@ MIDDLE_END_FLAMBDA_TYPES=\
   middle_end/flambda/types/basic/closure_id_and_var_within_closure_set.cmo
 
 MIDDLE_END_FLAMBDA_TERMS=\
+  middle_end/flambda/types/kinds/flambda_arity.cmo \
   middle_end/flambda/inlining/inlining_arguments.cmo \
   middle_end/flambda/inlining/inlining_state.cmo \
   middle_end/flambda/terms/apply_cont_expr.cmo \
@@ -300,11 +300,11 @@ MIDDLE_END_FLAMBDA_TERMS=\
   middle_end/flambda/inlining/metrics/code_size.cmo \
   middle_end/flambda/inlining/metrics/removed_operations.cmo \
   middle_end/flambda/terms/flambda.cmo \
-  middle_end/flambda/terms/flambda_unit.cmo
+  middle_end/flambda/terms/flambda_unit.cmo \
+  middle_end/flambda/cmx/exported_code.cmo
 
 MIDDLE_END_FLAMBDA_CMX=\
   middle_end/flambda/cmx/exported_offsets.cmo \
-  middle_end/flambda/cmx/exported_code.cmo \
   middle_end/flambda/cmx/flambda_cmx_format.cmo
 
 MIDDLE_END_FLAMBDA_SIMPLIFY=\
@@ -395,8 +395,8 @@ MIDDLE_END_FLAMBDA_COMPARE=\
 MIDDLE_END_FLAMBDA=\
   $(MIDDLE_END_FLAMBDA_BASIC) \
   $(MIDDLE_END_FLAMBDA_NAMING) \
-  $(MIDDLE_END_FLAMBDA_TYPES) \
   $(MIDDLE_END_FLAMBDA_TERMS) \
+  $(MIDDLE_END_FLAMBDA_TYPES) \
   $(MIDDLE_END_FLAMBDA_CMX) \
   $(MIDDLE_END_FLAMBDA_SIMPLIFY) \
   $(MIDDLE_END_FLAMBDA_FROM_LAMBDA) \

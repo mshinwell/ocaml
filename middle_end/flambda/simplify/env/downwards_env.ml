@@ -32,12 +32,10 @@ type t = {
   backend : (module Flambda_backend_intf.S);
   round : int;
   typing_env : TE.t;
-  get_imported_code : (unit -> Exported_code.t);
   inlined_debuginfo : Debuginfo.t;
   can_inline : bool;
   inlining_state : Inlining_state.t;
   float_const_prop : bool;
-  code : Code.t Code_id.Map.t;
   at_unit_toplevel : bool;
   unit_toplevel_return_continuation : Continuation.t;
   unit_toplevel_exn_continuation : Continuation.t;
@@ -53,10 +51,10 @@ let print_debuginfo ppf dbg =
   if Debuginfo.is_none dbg then Format.pp_print_string ppf "None"
   else Debuginfo.print_compact ppf dbg
 
-let print ppf { backend = _; round; typing_env; get_imported_code = _;
+let print ppf { backend = _; round; typing_env;
                 inlined_debuginfo; can_inline;
                 inlining_state; float_const_prop;
-                code; at_unit_toplevel; unit_toplevel_exn_continuation;
+                at_unit_toplevel; unit_toplevel_exn_continuation;
                 symbols_currently_being_defined;
                 variables_defined_at_toplevel; cse;
                 closure_var_uses; do_not_rebuild_terms; closure_info;
@@ -95,7 +93,7 @@ let print ppf { backend = _; round; typing_env; get_imported_code = _;
     Var_within_closure.Set.print closure_var_uses
     do_not_rebuild_terms
     Closure_info.print closure_info
-    (Code_id.Map.print Code.print) code
+    (Code_id.Map.print Code.print) (TE.all_code typing_env)
 
 let invariant _t = ()
 
@@ -106,13 +104,11 @@ let create ~round ~backend ~(resolver : resolver)
       ~unit_toplevel_return_continuation =
   { backend;
     round;
-    typing_env = TE.create ~resolver ~get_imported_names;
-    get_imported_code;
+    typing_env = TE.create ~resolver ~get_imported_names ~get_imported_code;
     inlined_debuginfo = Debuginfo.none;
     can_inline = true;
     inlining_state = Inlining_state.default ~round;
     float_const_prop;
-    code = Code_id.Map.empty;
     at_unit_toplevel = true;
     unit_toplevel_return_continuation;
     unit_toplevel_exn_continuation;
@@ -194,10 +190,10 @@ let symbols_currently_being_defined t =
   t.symbols_currently_being_defined
 
 let enter_set_of_closures
-      { backend; round; typing_env; get_imported_code;
+      { backend; round; typing_env;
         inlined_debuginfo = _; can_inline;
         inlining_state;
-        float_const_prop; code; at_unit_toplevel = _;
+        float_const_prop; at_unit_toplevel = _;
         unit_toplevel_return_continuation;
         unit_toplevel_exn_continuation;
         symbols_currently_being_defined;
@@ -208,12 +204,10 @@ let enter_set_of_closures
   { backend;
     round;
     typing_env = TE.closure_env typing_env;
-    get_imported_code;
     inlined_debuginfo = Debuginfo.none;
     can_inline;
     inlining_state;
     float_const_prop;
-    code;
     at_unit_toplevel = false;
     unit_toplevel_return_continuation;
     unit_toplevel_exn_continuation;
@@ -487,13 +481,10 @@ let check_simple_is_bound t (simple : Simple.t) =
     ~name:(fun name ~coercion:_ -> check_name_is_bound t name)
     ~const:(fun _ -> ())
 
-let mem_code t code_id =
-  Code_id.Map.mem code_id t.code
-    || Exported_code.mem code_id (t.get_imported_code ())
+let mem_code t code_id = TE.mem_code t.typing_env code_id
 
 let check_code_id_is_bound t code_id =
-  if (not (Code_id.Map.mem code_id t.code))
-    && (not (Exported_code.mem code_id (t.get_imported_code ())))
+  if not (mem_code t code_id)
   then begin
     Misc.fatal_errorf "Unbound code ID %a in environment:@ %a"
       Code_id.print code_id
@@ -509,11 +500,6 @@ let define_code t ~code_id ~code =
       Code_id.print code_id
       Code.print code
   end;
-  if Code_id.Map.mem code_id t.code then begin
-    Misc.fatal_errorf "Code ID %a is already defined, cannot redefine to@ %a"
-      Code_id.print code_id
-      Code.print code
-  end;
   if not (Code_id.equal code_id (Code.code_id code)) then begin
     Misc.fatal_errorf "Code ID %a does not match code ID in@ %a"
       Code_id.print code_id
@@ -522,23 +508,14 @@ let define_code t ~code_id ~code =
   let typing_env =
     match Code.newer_version_of code with
     | None -> t.typing_env
-    | Some older ->
-      TE.add_to_code_age_relation t.typing_env ~newer:code_id ~older
+    | Some old_code_id ->
+      TE.define_code t.typing_env ~new_code_id:code_id ~old_code_id code
   in
   { t with
     typing_env;
-    code = Code_id.Map.add code_id code t.code;
   }
 
-let find_code t id =
-  match Code_id.Map.find id t.code with
-  | exception Not_found -> Exported_code.find_code (t.get_imported_code ()) id
-  | code -> code
-
-let with_code ~from t =
-  { t with
-    code = from.code;
-  }
+let find_code t id = TE.find_code t.typing_env id
 
 let set_inlined_debuginfo t dbg =
   { t with inlined_debuginfo = dbg; }
