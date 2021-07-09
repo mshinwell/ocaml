@@ -2,11 +2,9 @@
 (*                                                                        *)
 (*                                 OCaml                                  *)
 (*                                                                        *)
-(*                       Pierre Chambart, OCamlPro                        *)
-(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*                   Mark Shinwell, Jane Street Europe                    *)
 (*                                                                        *)
-(*   Copyright 2013--2019 OCamlPro SAS                                    *)
-(*   Copyright 2014--2019 Jane Street Group LLC                           *)
+(*   Copyright 2021 Jane Street Group LLC                                 *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -16,12 +14,11 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
-include module type of struct include Reg_width_things.Rec_info_expr end
+type 'a t =
+  | Finite of 'a
+  | Infinity
 
-include Expr_std.S with type t := t
-
-val free_names : t -> Name_occurrences.t
-
-val free_names_in_types : t -> Name_occurrences.t
-
-include Contains_ids.S with type t := t
+val compare : f:('a -> 'a -> int) -> 'a t -> 'a t -> int
+val equal : f:('a -> 'a -> bool) -> 'a t -> 'a t -> bool
+val hash : f:('a -> int) -> 'a t -> int
+val print : f:(Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit

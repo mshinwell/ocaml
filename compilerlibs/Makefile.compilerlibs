@@ -191,6 +191,7 @@ MIDDLE_END_FLAMBDA_COMPILENV_DEPS=\
   middle_end/flambda/compilenv_deps/flambda_colours.cmo \
   middle_end/flambda/compilenv_deps/compilation_unit.cmo \
   middle_end/flambda/compilenv_deps/rec_info.cmo \
+  middle_end/flambda/compilenv_deps/or_infinity.cmo \
   middle_end/flambda/compilenv_deps/rec_info_expr0.cmo \
   middle_end/flambda/compilenv_deps/coercion0.cmo \
   middle_end/flambda/compilenv_deps/reg_width_things.cmo \

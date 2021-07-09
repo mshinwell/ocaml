@@ -14,45 +14,43 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-30-40-41-42"]
+[@@@ocaml.warning "+a-30-40-41-42"]
 
 include Reg_width_things.Rec_info_expr
 
-let rec print ppf = function
-  | Initial ->
-    Format.pp_print_string ppf "0"
-  | Var dv ->
-    Format.fprintf ppf "@<0>%s%a@<0>%s"
-      (Flambda_colours.depth_variable ())
-      Variable.print dv
-      (Flambda_colours.normal ())
-  | Succ t ->
-    Format.fprintf ppf "@[<hov 1>(succ@ %a)@]" print t
-  | Unroll_to (unroll_depth, t) ->
-    Format.fprintf ppf "@[<hov 1>(unroll_to@ %d@ %a)@]" unroll_depth print t
-
 let print_with_cache ~cache:_ ppf t = print ppf t
 
-let rec apply_renaming t perm =
-  match t with
-  | Initial -> Initial
+let rec apply_renaming orig perm =
+  match orig with
+  | Const _ -> orig
   | Var dv ->
     let new_dv = Renaming.apply_variable perm dv in
-    if dv == new_dv then t else Var new_dv
+    if dv == new_dv then orig else var new_dv
   | Succ t ->
-    Succ (apply_renaming t perm)
+    let new_t = apply_renaming t perm in
+    if t == new_t then orig else succ new_t
   | Unroll_to (unroll_depth, t) ->
-    Unroll_to (unroll_depth, apply_renaming t perm)
+    let new_t = apply_renaming t perm in
+    if t == new_t then orig else unroll_to unroll_depth new_t
 
-let rec free_names t =
+let rec free_names_in_mode t mode =
   match t with
-  | Initial -> Name_occurrences.empty
+  | Const _ -> Name_occurrences.empty
   | Var dv -> Name_occurrences.singleton_variable dv Name_mode.normal
   | Succ t
-  | Unroll_to (_, t) -> free_names t
+  | Unroll_to (_, t) -> free_names_in_mode t mode
+
+let free_names t = free_names_in_mode t Name_mode.normal
+
+let free_names_in_types t = free_names_in_mode t Name_mode.in_types
 
 let invariant _ _ = ()
 
-let all_ids_for_export _ =
-  (* Depth variables don't use the integer id system *)
-  Ids_for_export.empty
+let rec all_ids_for_export = function
+  | Const _ ->
+    Ids_for_export.empty
+  | Var dv ->
+    Ids_for_export.add_variable Ids_for_export.empty dv
+  | Succ t
+  | Unroll_to (_, t) ->
+    all_ids_for_export t

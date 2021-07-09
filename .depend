@@ -3931,6 +3931,11 @@ middle_end/flambda/compilenv_deps/one_bit_fewer.cmx : \
     middle_end/flambda/compilenv_deps/one_bit_fewer.cmi
 middle_end/flambda/compilenv_deps/one_bit_fewer.cmi : \
     middle_end/flambda/compilenv_deps/targetint_32_64.cmi
+middle_end/flambda/compilenv_deps/or_infinity.cmo : \
+    middle_end/flambda/compilenv_deps/or_infinity.cmi
+middle_end/flambda/compilenv_deps/or_infinity.cmx : \
+    middle_end/flambda/compilenv_deps/or_infinity.cmi
+middle_end/flambda/compilenv_deps/or_infinity.cmi :
 middle_end/flambda/compilenv_deps/patricia_tree.cmo : \
     middle_end/flambda/compilenv_deps/numeric_types.cmi \
     utils/misc.cmi \
@@ -3964,13 +3969,20 @@ middle_end/flambda/compilenv_deps/rec_info.cmx : \
 middle_end/flambda/compilenv_deps/rec_info.cmi : \
     middle_end/flambda/compilenv_deps/container_types.cmi
 middle_end/flambda/compilenv_deps/rec_info_expr0.cmo : \
-    utils/identifiable.cmi \
+    middle_end/flambda/compilenv_deps/or_infinity.cmi \
+    utils/int_replace_polymorphic_compare.cmi \
+    middle_end/flambda/compilenv_deps/flambda_colours.cmi \
+    middle_end/flambda/compilenv_deps/container_types.cmi \
     middle_end/flambda/compilenv_deps/rec_info_expr0.cmi
 middle_end/flambda/compilenv_deps/rec_info_expr0.cmx : \
-    utils/identifiable.cmx \
+    middle_end/flambda/compilenv_deps/or_infinity.cmx \
+    utils/int_replace_polymorphic_compare.cmx \
+    middle_end/flambda/compilenv_deps/flambda_colours.cmx \
+    middle_end/flambda/compilenv_deps/container_types.cmx \
     middle_end/flambda/compilenv_deps/rec_info_expr0.cmi
 middle_end/flambda/compilenv_deps/rec_info_expr0.cmi : \
-    utils/identifiable.cmi
+    middle_end/flambda/compilenv_deps/or_infinity.cmi \
+    middle_end/flambda/compilenv_deps/container_types.cmi
 middle_end/flambda/compilenv_deps/reg_width_things.cmo : \
     middle_end/flambda/compilenv_deps/targetint_32_64.cmi \
     middle_end/flambda/compilenv_deps/targetint_31_63.cmi \
@@ -8633,25 +8645,22 @@ middle_end/flambda/terms/non_recursive_let_cont_handler.rec.cmi : \
     middle_end/flambda/basic/continuation.cmi \
     middle_end/flambda/cmx/contains_ids.cmo
 middle_end/flambda/terms/rec_info_expr.cmo : \
-    middle_end/flambda/compilenv_deps/variable.cmi \
     middle_end/flambda/naming/renaming.cmi \
     middle_end/flambda/compilenv_deps/reg_width_things.cmi \
     middle_end/flambda/naming/name_occurrences.cmi \
     middle_end/flambda/naming/name_mode.cmi \
     middle_end/flambda/cmx/ids_for_export.cmi \
-    middle_end/flambda/compilenv_deps/flambda_colours.cmi \
     middle_end/flambda/terms/rec_info_expr.cmi
 middle_end/flambda/terms/rec_info_expr.cmx : \
-    middle_end/flambda/compilenv_deps/variable.cmx \
     middle_end/flambda/naming/renaming.cmx \
     middle_end/flambda/compilenv_deps/reg_width_things.cmx \
     middle_end/flambda/naming/name_occurrences.cmx \
     middle_end/flambda/naming/name_mode.cmx \
     middle_end/flambda/cmx/ids_for_export.cmx \
-    middle_end/flambda/compilenv_deps/flambda_colours.cmx \
     middle_end/flambda/terms/rec_info_expr.cmi
 middle_end/flambda/terms/rec_info_expr.cmi : \
     middle_end/flambda/compilenv_deps/reg_width_things.cmi \
+    middle_end/flambda/naming/name_occurrences.cmi \
     middle_end/flambda/basic/expr_std.cmo \
     middle_end/flambda/cmx/contains_ids.cmo
 middle_end/flambda/terms/recursive_let_cont_handlers.rec.cmo : \
