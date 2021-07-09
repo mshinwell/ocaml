@@ -5312,22 +5312,16 @@ middle_end/flambda/inlining/call_site_inlining_decision.cmi : \
     middle_end/flambda/simplify/env/downwards_acc.cmi
 middle_end/flambda/inlining/function_decl_inlining_decision.cmo : \
     middle_end/flambda/inlining/inlining_arguments.cmi \
-    middle_end/flambda/terms/function_declaration.cmi \
     middle_end/flambda/terms/flambda.cmi \
-    middle_end/flambda/simplify/env/downwards_env.cmi \
     middle_end/flambda/inlining/metrics/code_size.cmi \
     middle_end/flambda/inlining/function_decl_inlining_decision.cmi
 middle_end/flambda/inlining/function_decl_inlining_decision.cmx : \
     middle_end/flambda/inlining/inlining_arguments.cmx \
-    middle_end/flambda/terms/function_declaration.cmx \
     middle_end/flambda/terms/flambda.cmx \
-    middle_end/flambda/simplify/env/downwards_env.cmx \
     middle_end/flambda/inlining/metrics/code_size.cmx \
     middle_end/flambda/inlining/function_decl_inlining_decision.cmi
 middle_end/flambda/inlining/function_decl_inlining_decision.cmi : \
-    middle_end/flambda/terms/function_declaration.cmi \
     middle_end/flambda/terms/flambda.cmi \
-    middle_end/flambda/simplify/env/downwards_env.cmi \
     middle_end/flambda/inlining/metrics/code_size.cmi
 middle_end/flambda/inlining/inlining_arguments.cmo : \
     utils/clflags.cmi \

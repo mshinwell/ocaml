@@ -45,13 +45,4 @@ type inlining_behaviour = private
 
 val behaviour : t -> inlining_behaviour
 
-type cost_metrics_source = From_denv | Metrics of Cost_metrics.t
-
-(* If a cost_metrics is passed it will be used as the cost metrics for
-   the function declaration instead of grabbing the cost metrics from the
-   one stored on the code located in the env. *)
-val make_decision
-   : Downwards_env.t
-  -> cost_metrics_source:cost_metrics_source
-  -> Function_declaration.t
-  -> t
+val make_decision : Code.t -> t

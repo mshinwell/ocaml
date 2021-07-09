@@ -18,8 +18,6 @@
 
 open! Flambda.Import
 
-module DE = Downwards_env
-
 type t =
   | Never_inline_attribute
   | Function_body_too_large of Code_size.t
@@ -133,28 +131,17 @@ let report fmt t =
       | Must_be_inlined -> "must")
     report_reason t
 
-type cost_metrics_source = From_denv | Metrics of Cost_metrics.t
-
-let make_decision denv ~cost_metrics_source function_decl : t =
+let make_decision code : t =
   (* At present, we follow Closure, taking inlining decisions without
      first examining call sites. *)
-  let code_id = Function_declaration.code_id function_decl in
-  let code = DE.find_code denv code_id in
-  let args =
-    Code.inlining_arguments code
-    |> Inlining_arguments.meet (DE.inlining_arguments denv)
-  in
+  let args = Code.inlining_arguments code in
   match Code.inline code with
   | Never_inline -> Never_inline_attribute
   | Hint_inline | Always_inline -> Attribute_inline
   | Default_inline | Unroll _ ->
     if Code.stub code then Stub
     else
-      let metrics =
-        match cost_metrics_source with
-        | Metrics metrics -> metrics
-        | From_denv -> Code.cost_metrics code
-      in
+      let metrics = Code.cost_metrics code in
       let large_function_size =
         Inlining_arguments.large_function_size args |> Code_size.of_int
       in

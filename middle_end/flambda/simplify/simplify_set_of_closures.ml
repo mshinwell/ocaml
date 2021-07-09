@@ -26,13 +26,9 @@ open! Simplify_import
    file tail recursive, although it probably isn't necessary, as
    excessive levels of nesting of functions seems unlikely. *)
 
-let function_decl_type ~pass ~cost_metrics_source denv function_decl ?code_id
-      rec_info =
-  let decision =
-    Function_decl_inlining_decision.make_decision denv ~cost_metrics_source
-      function_decl
-  in
-  let code_id = Option.value code_id ~default:(FD.code_id function_decl) in
+let function_decl_type ~pass denv function_decl code ?new_code_id rec_info =
+  let decision = Function_decl_inlining_decision.make_decision code in
+  let code_id = Option.value new_code_id ~default:(FD.code_id function_decl) in
   Inlining_report.record_decision (
     At_function_declaration { code_id = Code_id.export code_id; pass; decision; })
     ~dbg:(DE.add_inlined_debuginfo' denv (FD.dbg function_decl));
@@ -165,11 +161,11 @@ end = struct
                   Code_id.Map.find (FD.code_id function_decl)
                     old_to_new_code_ids_all_sets
                 in
+                let code = DE.find_code denv (FD.code_id function_decl) in
                 function_decl_type
                   ~pass:Inlining_report.Before_simplify
-                  denv function_decl
-                  ~code_id:new_code_id
-                  ~cost_metrics_source:From_denv
+                  denv function_decl code
+                  ~new_code_id
                   Rec_info.unknown)
               (Function_declarations.funs function_decls)
           in
@@ -510,20 +506,23 @@ let simplify_function context ~used_closure_vars ~shareable_constants
     (* When not rebuilding terms we always give a non-inlinable function type,
        since the body is not available for inlining, but we would still like
        to generate direct calls to the function *)
-    if Are_rebuilding_terms.do_not_rebuild_terms
-         (DA.are_rebuilding_terms dacc_after_body)
-    then
+    match Rebuilt_static_const.to_const code with
+    | None ->
       T.create_non_inlinable_function_declaration
         ~code_id:new_code_id
         ~is_tupled:(FD.is_tupled function_decl)
-    else
-      (* We need to manually specify the cost metrics to use to ensure that
-         they are the one of the body after simplification. *)
-      function_decl_type
-        ~pass:Inlining_report.After_simplify
-        ~cost_metrics_source:(Metrics cost_metrics)
-        (DA.denv dacc_after_body) function_decl
-        Rec_info.unknown
+    | Some const ->
+      begin match Static_const.to_code const with
+      | Some code ->
+        function_decl_type
+          ~pass:Inlining_report.After_simplify
+          (DA.denv dacc_after_body) function_decl code
+          Rec_info.unknown
+      | None ->
+        Misc.fatal_errorf
+          "Expected [Code] from [Rebuilt_static_const.create_code] but got@ %a"
+          Static_const.print const
+      end
   in
   { function_decl;
     new_code_id;
