@@ -40,6 +40,8 @@ val current_scope : t -> Scope.t
 
 val increment_scope : t -> t
 
+val all_code : t -> Exported_code.t
+
 val add_definition : t -> Name_in_binding_pos.t -> Flambda_kind.t -> t
 
 (** The caller is to ensure that the supplied type is the most precise
@@ -128,7 +130,12 @@ val aliases_of_simple
 
 val aliases_of_simple_allowable_in_types : t -> Simple.t -> Aliases.Alias_set.t
 
-val add_to_code_age_relation : t -> newer:Code_id.t -> older:Code_id.t -> t
+val define_code
+   : t
+  -> new_code_id:Code_id.t
+  -> old_code_id:Code_id.t
+  -> Flambda.Code.t
+  -> t
 
 val code_age_relation : t -> Code_age_relation.t
 
@@ -160,6 +167,7 @@ module Serializable : sig
      : t
     -> resolver:(Compilation_unit.t -> typing_env option)
     -> get_imported_names:(unit -> Name.Set.t)
+    -> all_code:Exported_code.t
     -> typing_env
 
   val all_ids_for_export : t -> Ids_for_export.t

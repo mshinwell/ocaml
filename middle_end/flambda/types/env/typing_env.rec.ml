@@ -288,6 +288,7 @@ type t = {
   get_imported_names : (unit -> Name.Set.t);
   defined_symbols : Symbol.Set.t;
   code_age_relation : Code_age_relation.t;
+  all_code : Exported_code.t;
   prev_levels : One_level.t Scope.Map.t;
   current_level : One_level.t;
   next_binding_time : Binding_time.t;
@@ -306,6 +307,7 @@ module Serializable : sig
      : t
     -> resolver:(Compilation_unit.t -> typing_env option)
     -> get_imported_names:(unit -> Name.Set.t)
+    -> all_code:Exported_code.t
     -> typing_env
 
   val all_ids_for_export : t -> Ids_for_export.t
@@ -327,6 +329,7 @@ end = struct
                 get_imported_names = _;
                 defined_symbols;
                 code_age_relation;
+                all_code = _;  (* code is saved elsewhere in the .cmx file *)
                 prev_levels = _;
                 current_level;
                 next_binding_time;
@@ -360,7 +363,7 @@ end = struct
                       just_after_level;
                       next_binding_time;
                     }
-        ~resolver ~get_imported_names =
+        ~resolver ~get_imported_names ~all_code =
     { resolver;
       get_imported_names;
       defined_symbols;
@@ -374,6 +377,7 @@ end = struct
          from the serialized env marks all variables as having mode In_types. *)
       next_binding_time;
       min_binding_time = next_binding_time;
+      all_code;
     }
 
   (* CR mshinwell for vlaviron: Shouldn't some of this be in
@@ -460,7 +464,7 @@ let aliases t =
 let print_with_cache ~cache ppf
       ({ resolver = _; get_imported_names = _;
          prev_levels; current_level; next_binding_time = _;
-         defined_symbols; code_age_relation; min_binding_time;
+         defined_symbols; code_age_relation; all_code = _; min_binding_time;
        } as t) =
   if is_empty t then
     Format.pp_print_string ppf "Empty"
@@ -532,6 +536,8 @@ let code_age_relation_resolver t =
   | None -> None
   | Some t -> Some t.code_age_relation
 
+let all_code t = t.all_code
+
 let current_scope t = One_level.scope t.current_level
 
 let names_to_types t =
@@ -548,6 +554,7 @@ let create ~resolver ~get_imported_names =
     next_binding_time = Binding_time.earliest_var;
     defined_symbols = Symbol.Set.empty;
     code_age_relation = Code_age_relation.empty;
+    all_code = Exported_code.empty;
     min_binding_time = Binding_time.earliest_var;
   }
 
@@ -1201,11 +1208,18 @@ let meet_equations_on_params t ~params ~param_types =
     t
     params param_types
 
-let add_to_code_age_relation t ~newer ~older =
+let define_code t ~new_code_id ~old_code_id code =
   let code_age_relation =
-    Code_age_relation.add t.code_age_relation ~newer ~older
+    Code_age_relation.add t.code_age_relation ~newer:new_code_id
+      ~older:old_code_id
   in
-  { t with code_age_relation; }
+  let all_code =
+    Exported_code.add_code new_code_id code t.all_code
+  in
+  { t with
+    code_age_relation;
+    all_code;
+  }
 
 let code_age_relation t = t.code_age_relation
 
