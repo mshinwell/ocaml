@@ -5,9 +5,10 @@ module TEE = T.Typing_env_extension
 
 let resolver _ = None
 let get_imported_names () = Name.Set.empty
+let get_imported_code () = Exported_code.empty
 
 let test_meet_chains_two_vars () =
-  let env = TE.create ~resolver ~get_imported_names in
+  let env = TE.create ~resolver ~get_imported_names ~get_imported_code in
   let var1 = Variable.create "var1" in
   let var1' = Var_in_binding_pos.create var1 Name_mode.normal in
   let env =
@@ -46,7 +47,7 @@ let test_meet_chains_two_vars () =
     Format.eprintf "Final situation:@ %a\n%!" TE.print env
 
 let test_meet_chains_three_vars () =
-  let env = TE.create ~resolver ~get_imported_names in
+  let env = TE.create ~resolver ~get_imported_names ~get_imported_code in
   let var1 = Variable.create "var1" in
   let var1' = Var_in_binding_pos.create var1 Name_mode.normal in
   let env =
@@ -92,7 +93,7 @@ let test_meet_chains_three_vars () =
     Format.eprintf "Final situation:@ %a\n%!" TE.print env
 
 let meet_variants_don't_lose_aliases () =
-  let env = TE.create ~resolver ~get_imported_names in
+  let env = TE.create ~resolver ~get_imported_names ~get_imported_code in
   let define env v =
       let v' = Var_in_binding_pos.create v Name_mode.normal in
       TE.add_definition env (Name_in_binding_pos.var v') K.value
@@ -149,7 +150,7 @@ let test_meet_two_blocks () =
     TE.add_definition env (Name_in_binding_pos.var v') K.value
   in
   let defines env l = List.fold_left define env l in
-  let env = TE.create ~resolver ~get_imported_names in
+  let env = TE.create ~resolver ~get_imported_names ~get_imported_code in
   let block1 = Variable.create "block1" in
   let field1 = Variable.create "field1" in
   let block2 = Variable.create "block2" in

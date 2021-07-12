@@ -286,8 +286,10 @@ end
 type t = {
   resolver : (Compilation_unit.t -> t option);
   get_imported_names : (unit -> Name.Set.t);
+  get_imported_code : (unit -> Exported_code.t);
   defined_symbols : Symbol.Set.t;
   code_age_relation : Code_age_relation.t;
+  all_code : Flambda.Code.t Code_id.Map.t;
   prev_levels : One_level.t Scope.Map.t;
   current_level : One_level.t;
   next_binding_time : Binding_time.t;
@@ -306,6 +308,7 @@ module Serializable : sig
      : t
     -> resolver:(Compilation_unit.t -> typing_env option)
     -> get_imported_names:(unit -> Name.Set.t)
+    -> get_imported_code:(unit -> Exported_code.t)
     -> typing_env
 
   val all_ids_for_export : t -> Ids_for_export.t
@@ -325,8 +328,10 @@ end = struct
 
   let create ({ resolver = _;
                 get_imported_names = _;
+                get_imported_code = _;
                 defined_symbols;
                 code_age_relation;
+                all_code = _;  (* code is saved elsewhere in the .cmx file *)
                 prev_levels = _;
                 current_level;
                 next_binding_time;
@@ -360,9 +365,10 @@ end = struct
                       just_after_level;
                       next_binding_time;
                     }
-        ~resolver ~get_imported_names =
+        ~resolver ~get_imported_names ~get_imported_code =
     { resolver;
       get_imported_names;
+      get_imported_code;
       defined_symbols;
       code_age_relation;
       prev_levels = Scope.Map.empty;
@@ -374,6 +380,9 @@ end = struct
          from the serialized env marks all variables as having mode In_types. *)
       next_binding_time;
       min_binding_time = next_binding_time;
+      (* Code lookups for imported code will always go via the
+         [get_imported_code] callback, so [all_code] is left empty here. *)
+      all_code = Code_id.Map.empty;
     }
 
   (* CR mshinwell for vlaviron: Shouldn't some of this be in
@@ -458,9 +467,9 @@ let aliases t =
 (* CR mshinwell: Should print name occurrence kinds *)
 (* CR mshinwell: Add option to print [aliases] *)
 let print_with_cache ~cache ppf
-      ({ resolver = _; get_imported_names = _;
+      ({ resolver = _; get_imported_names = _; get_imported_code = _;
          prev_levels; current_level; next_binding_time = _;
-         defined_symbols; code_age_relation; min_binding_time;
+         defined_symbols; code_age_relation; all_code = _; min_binding_time;
        } as t) =
   if is_empty t then
     Format.pp_print_string ppf "Empty"
@@ -532,6 +541,8 @@ let code_age_relation_resolver t =
   | None -> None
   | Some t -> Some t.code_age_relation
 
+let all_code t = t.all_code
+
 let current_scope t = One_level.scope t.current_level
 
 let names_to_types t =
@@ -540,14 +551,16 @@ let names_to_types t =
 let aliases_with_min_binding_time t =
   aliases t, t.min_binding_time
 
-let create ~resolver ~get_imported_names =
+let create ~resolver ~get_imported_names ~get_imported_code =
   { resolver;
     get_imported_names;
+    get_imported_code;
     prev_levels = Scope.Map.empty;
     current_level = One_level.create_empty Scope.initial;
     next_binding_time = Binding_time.earliest_var;
     defined_symbols = Symbol.Set.empty;
     code_age_relation = Code_age_relation.empty;
+    all_code = Code_id.Map.empty;
     min_binding_time = Binding_time.earliest_var;
   }
 
@@ -1201,11 +1214,28 @@ let meet_equations_on_params t ~params ~param_types =
     t
     params param_types
 
-let add_to_code_age_relation t ~newer ~older =
+let define_code t ~new_code_id ~old_code_id code =
   let code_age_relation =
-    Code_age_relation.add t.code_age_relation ~newer ~older
+    match old_code_id with
+    | None -> t.code_age_relation
+    | Some old_code_id ->
+      Code_age_relation.add t.code_age_relation ~newer:new_code_id
+        ~older:old_code_id
   in
-  { t with code_age_relation; }
+  let all_code = Code_id.Map.add new_code_id code t.all_code in
+  { t with
+    code_age_relation;
+    all_code;
+  }
+
+let mem_code t id =
+  Code_id.Map.mem id t.all_code
+    || Exported_code.mem id (t.get_imported_code ())
+
+let find_code t id =
+  match Code_id.Map.find id t.all_code with
+  | exception Not_found -> Exported_code.find_code (t.get_imported_code ()) id
+  | code -> code
 
 let code_age_relation t = t.code_age_relation
 

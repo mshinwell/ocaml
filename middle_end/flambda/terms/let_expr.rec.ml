@@ -16,7 +16,6 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module T = Flambda_type
 module VB = Var_in_binding_pos
 
 module T0 = struct
@@ -398,11 +397,7 @@ let invariant env t =
       | Prim (prim, _dbg), Singleton var ->
         let var = VB.var var in
         E.add_variable env var (Flambda_primitive.result_kind' prim)
-      | Simple simple, Singleton var ->
-        let var = VB.var var in
-        Simple.pattern_match simple
-          ~const:(fun const -> E.add_variable env var (T.kind_for_const const))
-          ~name:(fun name ~coercion:_ -> E.add_variable env var (E.kind_of_name env name))
+      | Simple _simple, Singleton _var -> Misc.fatal_error "To be deleted"
       | Static_consts _, Symbols _ -> env
       | Static_consts _, Singleton _ ->
         Misc.fatal_errorf "Cannot bind a [Static_const] to a [Singleton]:@ %a"

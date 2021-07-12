@@ -36,15 +36,17 @@ let rec load_cmx_file_contents backend comp_unit ~imported_units ~imported_names
           ~imported_units
       in
       let get_imported_names () = !imported_names in
-      let typing_env, code =
+      let get_imported_code () = !imported_code in
+      let typing_env, all_code =
         Flambda_cmx_format.import_typing_env_and_code cmx
       in
       let typing_env =
-        TE.Serializable.to_typing_env ~resolver ~get_imported_names typing_env
+        TE.Serializable.to_typing_env ~resolver ~get_imported_names
+          ~get_imported_code typing_env
       in
       let newly_imported_names = TE.name_domain typing_env in
       imported_names := Name.Set.union newly_imported_names !imported_names;
-      imported_code := Exported_code.merge code !imported_code;
+      imported_code := Exported_code.merge all_code !imported_code;
       let offsets = Flambda_cmx_format.exported_offsets cmx in
       Exported_offsets.import_offsets offsets;
       imported_units :=
