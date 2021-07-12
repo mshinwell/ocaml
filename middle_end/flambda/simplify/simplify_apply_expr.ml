@@ -521,8 +521,9 @@ let simplify_direct_function_call ~simplify_expr dacc apply
          specially:
          - Direct calls adopt the normal calling convention of the code's body,
            i.e. that given by [Code.params_arity].
-         - Indirect calls of unknown arity pass a single tuple argument,
-           irrespective of what [Code.params_arity] says. *)
+         - Indirect calls adopt the calling convention consisting of a
+           single tuple argument, irrespective of what [Code.params_arity]
+           says. *)
       let param_arity = Code.params_arity callee's_code in
       let num_params = List.length param_arity in
       if provided_num_args = num_params then
