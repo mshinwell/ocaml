@@ -32,15 +32,11 @@ let function_decl_type ~pass denv function_decl code ?new_code_id rec_info =
      code's inlining arguments, metrics, etc. *)
   let code = Code.with_code_id code_id code in
   let func_decl_type, decision =
-    T.create_function_declaration
-      ~code
-      ~dbg:(FD.dbg function_decl)
-      ~is_tupled:(FD.is_tupled function_decl)
-      ~rec_info
+    T.create_function_declaration ~code ~rec_info
   in
   Inlining_report.record_decision (
     At_function_declaration { code_id = Code_id.export code_id; pass; decision; })
-    ~dbg:(DE.add_inlined_debuginfo' denv (FD.dbg function_decl));
+    ~dbg:(DE.add_inlined_debuginfo' denv (Code.dbg code));
   func_decl_type
 
 module Context_for_multiple_sets_of_closures : sig
@@ -491,6 +487,8 @@ let simplify_function context ~used_closure_vars ~shareable_constants
       ~recursive:(Code.recursive code)
       ~cost_metrics
       ~inlining_arguments
+      ~dbg:(Code.dbg code)
+      ~is_tupled:(Code.is_tupled code)
   in
   let function_decl = FD.update_code_id function_decl new_code_id in
   let function_type =
@@ -501,7 +499,6 @@ let simplify_function context ~used_closure_vars ~shareable_constants
     | None ->
       T.create_non_inlinable_function_declaration
         ~code_id:new_code_id
-        ~is_tupled:(FD.is_tupled function_decl)
     | Some const ->
       begin match Static_const.to_code const with
       | Some code ->

@@ -240,7 +240,7 @@ expect_test_spec:
 
 (* XCR lwhite: Probably easier to just use some default names for these
    continuations
-   
+
    lmaurer: Makes sense. I went with "done" and "error" for the names. *)
 module_:
   | body = expr
@@ -274,27 +274,29 @@ symbol_binding:
 
 code:
   | header = code_header;
-    params = kinded_args; 
+    params = kinded_args;
     closure_var = variable;
     MINUSGREATER; ret_cont = continuation_id;
     exn_cont = exn_continuation_id;
     ret_arity = return_arity;
+    is_tupled = boption(KWD_TUPLED);
     EQUAL; body = expr;
     { let recursive, inline, id, newer_version_of, code_size = header in
       { id; newer_version_of; param_arity = None; ret_arity; recursive; inline;
         params_and_body = Present { params; closure_var; ret_cont; exn_cont;
                                     body };
-        code_size } }
+        code_size; is_tupled; } }
   | header = code_header;
     KWD_DELETED;
     COLON;
+    is_tupled = boption(KWD_TUPLED);
     param_arity = kinds_with_subkinds;
     MINUSGREATER;
     ret_arity = kinds_with_subkinds;
     { let recursive, inline, id, newer_version_of, code_size = header in
       { id; newer_version_of; param_arity = Some param_arity;
         ret_arity = Some ret_arity; recursive; inline; code_size;
-        params_and_body = Deleted } }
+        params_and_body = Deleted; is_tupled; } }
 ;
 
 code_header:
@@ -637,16 +639,16 @@ closure_element:
 ;
 
 fun_decl:
-  | KWD_CLOSURE; is_tupled = boption(KWD_TUPLED); code_id = code_id;
+  | KWD_CLOSURE; code_id = code_id;
     closure_id = closure_id_opt;
-    { { code_id; closure_id; is_tupled } }
+    { { code_id; closure_id; } }
 ;
 
 apply_expr:
   | call_kind = call_kind;
     inline = option(inline);
     inlining_state = option(inlining_state);
-    func = func_name_with_optional_arities 
+    func = func_name_with_optional_arities
     args = simple_args MINUSGREATER
     r = result_continuation e = exn_continuation
      { let (func, arities) = func in {
@@ -826,7 +828,7 @@ code_id:
 
 code_size:
   | i = plain_int { i }
- 
+
 closure_id:
   | v = variable { v }
 ;

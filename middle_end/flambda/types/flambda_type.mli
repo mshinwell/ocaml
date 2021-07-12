@@ -255,8 +255,6 @@ module Function_declaration_type : sig
     type t
 
     val code_id : t -> Code_id.t
-    val dbg : t -> Debuginfo.t
-    val is_tupled : t -> bool
     val must_be_inlined : t -> bool
   end
 
@@ -264,7 +262,6 @@ module Function_declaration_type : sig
     type t
 
     val code_id : t -> Code_id.t
-    val is_tupled : t -> bool
   end
 
   type t0 = private
@@ -433,16 +430,13 @@ val mutable_string : size:int -> t
     It may be considered inlinable. *)
 val create_function_declaration
    : code:Flambda.Code.t
-  -> dbg:Debuginfo.t
   -> rec_info:Rec_info.t
-  -> is_tupled:bool
   -> Function_declaration_type.t * Function_decl_inlining_decision.t
 
 (** Create a description of a function declaration whose code is unknown.
     Such declarations cannot be inlined, but can be direct called. *)
 val create_non_inlinable_function_declaration
    : code_id:Code_id.t
-  -> is_tupled:bool
   -> Function_declaration_type.t
 
 val exactly_this_closure

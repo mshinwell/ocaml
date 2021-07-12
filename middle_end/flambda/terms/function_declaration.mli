@@ -26,19 +26,11 @@ include Contains_ids.S with type t := t
 (** Create a function declaration. *)
 val create
    : code_id:Code_id.t
-  -> dbg:Debuginfo.t
-  -> is_tupled:bool
   -> t
 
 (** The identifier of the code of the function (which must be bound using
     [Define_symbol]). *)
 val code_id : t -> Code_id.t
-
-(** Debug info for the function declaration. *)
-val dbg : t -> Debuginfo.t
-
-(** Whether the function is a tuplified function *)
-val is_tupled : t -> bool
 
 (** Return a function declaration that is like the supplied one except
     that it has a new code ID. *)

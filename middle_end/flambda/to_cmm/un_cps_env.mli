@@ -76,8 +76,7 @@ val get_function_info : t -> Code_id.t -> Exported_code.Calling_convention.t
 
 val get_func_decl_params_arity : t -> Function_declaration.t -> int
 (** Retrieve the parameter arity of the function declaration (taking into
-    account both the function's own arity and the [is_tupled] flag on the
-    declaration) *)
+    account both the function's own arity and the [is_tupled] flag) *)
 
 
 (** {2 Variable bindings} *)

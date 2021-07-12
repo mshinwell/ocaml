@@ -166,14 +166,11 @@ val kind_for_const : Reg_width_const.t -> Flambda_kind.t
 
 val create_function_declaration
    : code:Flambda.Code.t
-  -> dbg:Debuginfo.t
   -> rec_info:Rec_info.t
-  -> is_tupled:bool
   -> Function_declaration_type.t * Function_decl_inlining_decision.t
 
 val create_non_inlinable_function_declaration
    : code_id:Code_id.t
-  -> is_tupled:bool
   -> Function_declaration_type.t
 
 val exactly_this_closure

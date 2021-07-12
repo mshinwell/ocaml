@@ -41,6 +41,8 @@ val create_code
   -> recursive:Recursive.t
   -> cost_metrics:Cost_metrics.t
   -> inlining_arguments:Inlining_arguments.t
+  -> dbg:Debuginfo.t
+  -> is_tupled:bool
   -> t
 
 (* This function should be used when a [Code.t] is already in hand, e.g. from

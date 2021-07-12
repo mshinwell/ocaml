@@ -38,7 +38,7 @@ let create_normal_non_code const =
 
 let create_code are_rebuilding code_id ~(params_and_body : _ Or_deleted.t)
       ~newer_version_of ~params_arity ~result_arity ~stub ~inline ~is_a_functor
-      ~recursive ~cost_metrics ~inlining_arguments =
+      ~recursive ~cost_metrics ~inlining_arguments ~dbg ~is_tupled =
   if ART.do_not_rebuild_terms are_rebuilding then
     let params_and_body =
       match params_and_body with
@@ -50,6 +50,7 @@ let create_code are_rebuilding code_id ~(params_and_body : _ Or_deleted.t)
       Non_constructed_code.create code_id ~params_and_body
         ~newer_version_of ~params_arity ~result_arity ~stub ~inline
         ~is_a_functor ~recursive ~cost_metrics ~inlining_arguments
+        ~dbg ~is_tupled
     in
     Code_not_rebuilt non_constructed_code
   else
@@ -66,6 +67,7 @@ let create_code are_rebuilding code_id ~(params_and_body : _ Or_deleted.t)
       Code.create code_id ~params_and_body
         ~newer_version_of ~params_arity ~result_arity ~stub ~inline
         ~is_a_functor ~recursive ~cost_metrics ~inlining_arguments
+        ~dbg ~is_tupled
     in
     Normal {
       const = Code code;
@@ -333,7 +335,9 @@ module Group = struct
             ~is_a_functor:(NCC.is_a_functor code)
             ~recursive:(NCC.recursive code)
             ~cost_metrics:(NCC.cost_metrics code)
-            ~inlining_arguments:(NCC.inlining_arguments code)))
+            ~inlining_arguments:(NCC.inlining_arguments code)
+            ~dbg:(NCC.dbg code)
+            ~is_tupled:(NCC.is_tupled code)))
     in
     consts
     |> List.filter_map (fun code ->

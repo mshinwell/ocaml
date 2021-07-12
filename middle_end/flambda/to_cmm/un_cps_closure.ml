@@ -444,9 +444,9 @@ module Greedy = struct
           match find_closure_slot state c with
           | Some s -> s, state
           | None ->
-              let is_tupled = Function_declaration.is_tupled def in
               let code_id = Function_declaration.code_id def in
               let code = Exported_code.find_code exported_code code_id in
+              let is_tupled = Code.is_tupled code in
               let params_arity = Code.params_arity code in
               let arity = List.length params_arity in
               let size = if arity = 1 && not is_tupled then 2 else 3 in

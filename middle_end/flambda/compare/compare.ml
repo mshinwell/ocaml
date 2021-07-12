@@ -284,8 +284,6 @@ let subst_primitive env (p : Flambda_primitive.t) : Flambda_primitive.t =
 let subst_func_decl env decl =
   Function_declaration.create
     ~code_id:(subst_code_id env (Function_declaration.code_id decl))
-    ~dbg:(Function_declaration.dbg decl)
-    ~is_tupled:(Function_declaration.is_tupled decl)
 ;;
 
 let subst_func_decls env decls =
@@ -800,7 +798,6 @@ let function_decls env decl1 decl2 : unit Comparison.t =
   if
     (code_ids env (F.code_id decl1) (F.code_id decl2)
       |> Comparison.is_equivalent)
-    && Bool.equal (F.is_tupled decl1) (F.is_tupled decl2)
   then Equivalent
   else Different { approximant = () }
 ;;
