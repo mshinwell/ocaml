@@ -438,15 +438,14 @@ let defining_expr env (named:Fexpr.named) : Flambda.Named.t =
 let set_of_closures env fun_decls closure_elements =
   let fun_decls : Function_declarations.t =
     let translate_fun_decl (fun_decl : Fexpr.fun_decl)
-          : (Closure_id.t * Function_declaration.t) =
+          : (Closure_id.t * Code_id.t) =
       let code_id = find_code_id env fun_decl.code_id in
       let closure_id =
         (* By default, pun the code id as the closure id *)
         fun_decl.closure_id |> Option.value ~default:fun_decl.code_id
       in
       let closure_id = fresh_or_existing_closure_id env closure_id in
-      let decl = Function_declaration.create ~code_id in
-      closure_id, decl
+      closure_id, code_id
     in
     List.map translate_fun_decl fun_decls
     |> Closure_id.Lmap.of_list

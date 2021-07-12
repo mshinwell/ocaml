@@ -74,7 +74,7 @@ val exn_cont : t -> Continuation.t
 val get_function_info : t -> Code_id.t -> Exported_code.Calling_convention.t
 (** Retrieve known information on the given function *)
 
-val get_func_decl_params_arity : t -> Function_declaration.t -> int
+val get_func_decl_params_arity : t -> Code_id.t -> int
 (** Retrieve the parameter arity of the function declaration (taking into
     account both the function's own arity and the [is_tupled] flag) *)
 

@@ -26,8 +26,8 @@ open! Simplify_import
    file tail recursive, although it probably isn't necessary, as
    excessive levels of nesting of functions seems unlikely. *)
 
-let function_decl_type ~pass denv function_decl code ?new_code_id rec_info =
-  let code_id = Option.value new_code_id ~default:(FD.code_id function_decl) in
+let function_decl_type ~pass denv old_code_id code ?new_code_id rec_info =
+  let code_id = Option.value new_code_id ~default:old_code_id in
   (* Slap the new code id (if any) on the old code, since we want to use the old
      code's inlining arguments, metrics, etc. *)
   let code = Code.with_code_id code_id code in
@@ -148,12 +148,12 @@ end = struct
               closure_element_types_inside_function) ->
           let function_decls = Set_of_closures.function_decls set_of_closures in
           let all_function_decls_in_set =
-            Closure_id.Map.map (fun function_decl ->
+            Closure_id.Map.map (fun old_code_id ->
                 let new_code_id =
-                  Code_id.Map.find (FD.code_id function_decl)
+                  Code_id.Map.find old_code_id
                     old_to_new_code_ids_all_sets
                 in
-                let code = DE.find_code denv (FD.code_id function_decl) in
+                let code = DE.find_code denv old_code_id in
                 let rec_info =
                   (* From inside their own bodies, every function in the set
                      currently being defined has an unknown recursion
@@ -162,7 +162,7 @@ end = struct
                 in
                 function_decl_type
                   ~pass:Inlining_report.Before_simplify
-                  denv function_decl code
+                  denv old_code_id code
                   ~new_code_id
                   rec_info)
               (Function_declarations.funs function_decls)
@@ -225,8 +225,7 @@ end = struct
     List.fold_left
       (fun old_to_new_code_ids_all_sets set_of_closures ->
         let function_decls = Set_of_closures.function_decls set_of_closures in
-        Closure_id.Map.fold (fun _ function_decl old_to_new_code_ids ->
-            let old_code_id = FD.code_id function_decl in
+        Closure_id.Map.fold (fun _ old_code_id old_to_new_code_ids ->
             let new_code_id = Code_id.rename old_code_id in
             Code_id.Map.add old_code_id new_code_id old_to_new_code_ids)
           (Function_declarations.funs function_decls)
@@ -392,7 +391,6 @@ let dacc_inside_function context ~used_closure_vars ~shareable_constants
 external reraise : exn -> 'a = "%reraise"
 
 type simplify_function_result = {
-  function_decl : FD.t;
   new_code_id : Code_id.t;
   code : Rebuilt_static_const.t;
   function_type : T.Function_declaration_type.t;
@@ -401,9 +399,8 @@ type simplify_function_result = {
 }
 
 let simplify_function context ~used_closure_vars ~shareable_constants
-      closure_id function_decl ~closure_bound_names_inside_function
+      closure_id code_id ~closure_bound_names_inside_function
       code_age_relation ~lifted_consts_prev_functions =
-  let code_id = FD.code_id function_decl in
   let code = DE.find_code (DA.denv (C.dacc_prior_to_sets context)) code_id in
   let params_and_body =
     Code.params_and_body_must_be_present code ~error_context:"Simplifying"
@@ -510,7 +507,7 @@ let simplify_function context ~used_closure_vars ~shareable_constants
             Misc.fatal_errorf "Unexpected free name(s):@ %a@ in:@ \n%a@ \n\
                 Simplified version:@ fun %a %a %a ->@ \n  %a"
               Name_occurrences.print free_names_of_code
-              Function_declaration.print function_decl
+              Code_id.print code_id
               KP.List.print params
               Variable.print my_closure
               Variable.print my_depth
@@ -557,7 +554,6 @@ let simplify_function context ~used_closure_vars ~shareable_constants
       ~dbg:(Code.dbg code)
       ~is_tupled:(Code.is_tupled code)
   in
-  let function_decl = FD.update_code_id function_decl new_code_id in
   let function_type =
     (* When not rebuilding terms we always give a non-inlinable function type,
        since the body is not available for inlining, but we would still like
@@ -576,7 +572,7 @@ let simplify_function context ~used_closure_vars ~shareable_constants
         in
         function_decl_type
           ~pass:Inlining_report.After_simplify
-          (DA.denv dacc_after_body) function_decl code
+          (DA.denv dacc_after_body) new_code_id code
           rec_info
       | None ->
         Misc.fatal_errorf
@@ -584,8 +580,7 @@ let simplify_function context ~used_closure_vars ~shareable_constants
           Static_const.print const
       end
   in
-  { function_decl;
-    new_code_id;
+  { new_code_id;
     code;
     function_type;
     dacc_after_body;
@@ -613,14 +608,14 @@ let simplify_set_of_closures0 dacc context set_of_closures
   let all_function_decls_in_set, code, fun_types, code_age_relation,
       used_closure_vars, shareable_constants, lifted_consts =
     Closure_id.Lmap.fold
-      (fun closure_id function_decl
+      (fun closure_id old_code_id
            (result_function_decls_in_set, code, fun_types,
             code_age_relation, used_closure_vars, shareable_constants,
             lifted_consts_prev_functions) ->
-        let { function_decl; new_code_id; code = new_code; function_type;
+        let { new_code_id; code = new_code; function_type;
               dacc_after_body; uacc_after_upwards_traversal; } =
           simplify_function context ~used_closure_vars ~shareable_constants
-            closure_id function_decl
+            closure_id old_code_id
             ~closure_bound_names_inside_function:closure_bound_names_inside
             code_age_relation ~lifted_consts_prev_functions
         in
@@ -637,7 +632,7 @@ let simplify_set_of_closures0 dacc context set_of_closures
           UA.lifted_constants uacc_after_upwards_traversal
         in
         let result_function_decls_in_set =
-          (closure_id, function_decl) :: result_function_decls_in_set
+          (closure_id, new_code_id) :: result_function_decls_in_set
         in
         let code = (new_code_id, new_code) :: code in
         let fun_types = Closure_id.Map.add closure_id function_type fun_types in

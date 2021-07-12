@@ -281,9 +281,8 @@ let subst_primitive env (p : Flambda_primitive.t) : Flambda_primitive.t =
     p
 ;;
 
-let subst_func_decl env decl =
-  Function_declaration.create
-    ~code_id:(subst_code_id env (Function_declaration.code_id decl))
+let subst_func_decl env code_id =
+  subst_code_id env code_id
 ;;
 
 let subst_func_decls env decls =
@@ -793,10 +792,9 @@ let primitives env prim1 prim2 : Flambda_primitive.t Comparison.t =
 ;;
 
 (* Returns unit because the approximant isn't used by sets_of_closures *)
-let function_decls env decl1 decl2 : unit Comparison.t =
-  let module F = Function_declaration in
+let function_decls env code_id1 code_id2 : unit Comparison.t =
   if
-    (code_ids env (F.code_id decl1) (F.code_id decl2)
+    (code_ids env code_id1 code_id2
       |> Comparison.is_equivalent)
   then Equivalent
   else Different { approximant = () }
@@ -868,9 +866,9 @@ let sets_of_closures env set1 set2 : Set_of_closures.t Comparison.t =
   let closure_ids_and_fun_decls_by_code_id set =
     let map = Function_declarations.funs (Set_of_closures.function_decls set) in
     Closure_id.Map.bindings map
-    |> List.map (fun (closure_id, decl) ->
-         subst_code_id env (Function_declaration.code_id decl),
-         (closure_id, decl)
+    |> List.map (fun (closure_id, code_id) ->
+         subst_code_id env code_id,
+         (closure_id, code_id)
        )
     |> Code_id.Map.of_list
   in

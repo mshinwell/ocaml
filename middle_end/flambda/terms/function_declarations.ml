@@ -17,8 +17,8 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 type t = {
-  funs : Function_declaration.t Closure_id.Map.t;
-  in_order : Function_declaration.t Closure_id.Lmap.t
+  funs : Code_id.t Closure_id.Map.t;
+  in_order : Code_id.t Closure_id.Lmap.t
 }
 
 let invariant _env _t = ()
@@ -43,17 +43,17 @@ let funs_in_order t = t.in_order
 let find ({ funs; _ } : t) closure_id =
   Closure_id.Map.find closure_id funs
 
-let print_with_cache ~cache ppf { in_order; _ } =
+let print_with_cache ~cache:_ ppf { in_order; _ } =
   Format.fprintf ppf "@[<hov 1>(%a)@]"
-    (Closure_id.Lmap.print (Function_declaration.print_with_cache ~cache))
+    (Closure_id.Lmap.print Code_id.print)
     in_order
 
 let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
 let free_names { funs; _ } =
   Closure_id.Map.fold
-    (fun _closure_id (func_decl : Function_declaration.t) syms ->
-      Name_occurrences.union syms (Function_declaration.free_names func_decl))
+    (fun _closure_id code_id syms ->
+      Name_occurrences.add_code_id syms code_id Name_mode.normal)
     funs
     (Name_occurrences.empty)
 
@@ -63,8 +63,8 @@ let free_names { funs; _ } =
    field. *)
 let apply_renaming ({ in_order; _ } as t) perm =
   let in_order' =
-    Closure_id.Lmap.map_sharing (fun func_decl ->
-        Function_declaration.apply_renaming func_decl perm)
+    Closure_id.Lmap.map_sharing (fun code_id ->
+        Renaming.apply_code_id perm code_id)
       in_order
   in
   if in_order == in_order' then t
@@ -72,14 +72,13 @@ let apply_renaming ({ in_order; _ } as t) perm =
 
 let all_ids_for_export { funs; _ } =
   Closure_id.Map.fold
-    (fun _closure_id (func_decl : Function_declaration.t) ids ->
-      Ids_for_export.union ids
-        (Function_declaration.all_ids_for_export func_decl))
+    (fun _closure_id code_id ids ->
+      Ids_for_export.add_code_id ids code_id)
     funs
     Ids_for_export.empty
 
 let compare { funs = funs1; _ } { funs = funs2; _ } =
-  Closure_id.Map.compare Function_declaration.compare funs1 funs2
+  Closure_id.Map.compare Code_id.compare funs1 funs2
 
 let filter t ~f =
   let funs = Closure_id.Map.filter f t.funs in
