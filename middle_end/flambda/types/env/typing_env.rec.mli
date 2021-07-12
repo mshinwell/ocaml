@@ -134,7 +134,7 @@ val aliases_of_simple_allowable_in_types : t -> Simple.t -> Aliases.Alias_set.t
 val define_code
    : t
   -> new_code_id:Code_id.t
-  -> old_code_id:Code_id.t
+  -> old_code_id:Code_id.t option
   -> Flambda.Code.t
   -> t
 

@@ -506,10 +506,8 @@ let define_code t ~code_id ~code =
       Code.print code
   end;
   let typing_env =
-    match Code.newer_version_of code with
-    | None -> t.typing_env
-    | Some old_code_id ->
-      TE.define_code t.typing_env ~new_code_id:code_id ~old_code_id code
+    TE.define_code t.typing_env ~new_code_id:code_id
+      ~old_code_id:(Code.newer_version_of code) code
   in
   { t with
     typing_env;

@@ -1216,8 +1216,11 @@ let meet_equations_on_params t ~params ~param_types =
 
 let define_code t ~new_code_id ~old_code_id code =
   let code_age_relation =
-    Code_age_relation.add t.code_age_relation ~newer:new_code_id
-      ~older:old_code_id
+    match old_code_id with
+    | None -> t.code_age_relation
+    | Some old_code_id ->
+      Code_age_relation.add t.code_age_relation ~newer:new_code_id
+        ~older:old_code_id
   in
   let all_code = Code_id.Map.add new_code_id code t.all_code in
   { t with

@@ -171,7 +171,7 @@ module Typing_env : sig
   val define_code
      : t
     -> new_code_id:Code_id.t
-    -> old_code_id:Code_id.t
+    -> old_code_id:Code_id.t option
     -> Flambda.Code.t
     -> t
 
