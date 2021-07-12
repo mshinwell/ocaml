@@ -84,19 +84,21 @@ let print ppf t =
 
 let empty = Code_id.Map.empty
 
-let add_code code_id code t =
-  match C.params_and_body code with
-  | Present params_and_body ->
-    let calling_convention =
-      Calling_convention.compute ~params_and_body
-    in
-    if Code_id.Map.mem code_id t then
-      Misc.fatal_errorf "Cannot redefine code ID %a" Code_id.print code_id
-    else
-      Code_id.Map.add code_id (Present { code; calling_convention; }) t
-  | Deleted ->
-    (* CR lmaurer for vlaviron: Okay to just ignore deleted code? *)
-    t
+let add_code code t =
+  let with_calling_convention =
+    Code_id.Map.filter_map (fun _code_id code ->
+        match C.params_and_body code with
+        | Present params_and_body ->
+          let calling_convention =
+            Calling_convention.compute ~params_and_body
+          in
+          Some (Present { code; calling_convention; })
+        | Deleted ->
+          (* CR lmaurer for vlaviron: Okay to just ignore deleted code? *)
+          None)
+      code
+  in
+  Code_id.Map.disjoint_union with_calling_convention t
 
 let mark_as_imported t =
   let forget_params_and_body t0 =
