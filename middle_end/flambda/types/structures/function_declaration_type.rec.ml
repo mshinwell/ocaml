@@ -184,14 +184,14 @@ let meet (env : Meet_env.t) (t1 : t) (t2 : t)
       dbg = dbg1;
       rec_info = _;
       is_tupled = is_tupled1;
-      must_be_inlined = must_be_inlined1;
+      must_be_inlined = _;
     }),
     Ok (Inlinable {
       code_id = code_id2;
       dbg = dbg2;
       rec_info = _;
       is_tupled = is_tupled2;
-      must_be_inlined = must_be_inlined2;
+      must_be_inlined = _;
     }) ->
     let typing_env = Meet_env.env env in
     let target_code_age_rel = TE.code_age_relation typing_env in
@@ -199,15 +199,11 @@ let meet (env : Meet_env.t) (t1 : t) (t2 : t)
     let check_other_things_and_return code_id : (t * TEE.t) Or_bottom.t =
       assert (Int.equal (Debuginfo.compare dbg1 dbg2) 0);
       assert (Bool.equal is_tupled1 is_tupled2);
-      assert (Bool.equal must_be_inlined1 must_be_inlined2);
-      Ok (Ok (Inlinable {
-          code_id;
-          dbg = dbg1;
-          rec_info = Rec_info.unknown;
-          is_tupled = is_tupled1;
-          must_be_inlined = must_be_inlined1;
-        }),
-        TEE.empty ())
+      let code = TE.find_code typing_env code_id in
+      let t, _inlining_decision =
+        create ~code ~dbg:dbg1 ~is_tupled:is_tupled1 ~rec_info:Rec_info.unknown
+      in
+      Ok (t, TEE.empty ())
     in
     begin match
       Code_age_relation.meet target_code_age_rel ~resolver code_id1 code_id2
@@ -259,14 +255,14 @@ let join (env : Join_env.t) (t1 : t) (t2 : t) : t =
       dbg = dbg1;
       rec_info = _;
       is_tupled = is_tupled1;
-      must_be_inlined = must_be_inlined1;
+      must_be_inlined = _;
     }),
     Ok (Inlinable {
       code_id = code_id2;
       dbg = dbg2;
       rec_info = _;
       is_tupled = is_tupled2;
-      must_be_inlined = must_be_inlined2;
+      must_be_inlined = _;
     }) ->
     let typing_env = Join_env.target_join_env env in
     let target_code_age_rel = TE.code_age_relation typing_env in
@@ -274,14 +270,11 @@ let join (env : Join_env.t) (t1 : t) (t2 : t) : t =
     let check_other_things_and_return code_id : t =
       assert (Int.equal (Debuginfo.compare dbg1 dbg2) 0);
       assert (Bool.equal is_tupled1 is_tupled2);
-      assert (Bool.equal must_be_inlined1 must_be_inlined2);
-      Ok (Inlinable {
-        code_id;
-        dbg = dbg1;
-        rec_info = Rec_info.unknown;
-        is_tupled = is_tupled1;
-        must_be_inlined = must_be_inlined1;
-      })
+      let code = TE.find_code typing_env code_id in
+      let t, _inlining_decision =
+        create ~code ~dbg:dbg1 ~rec_info:Rec_info.unknown ~is_tupled:is_tupled1
+      in
+      t
     in
     let code_age_rel1 =
       TE.code_age_relation (Join_env.left_join_env env)
