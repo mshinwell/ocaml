@@ -548,8 +548,7 @@ let fun_decl ppf (decl : fun_decl) =
   let pp_at_closure_id ppf cid =
     pp_option ~space:Before (pp_like "@@%a" closure_id) ppf cid
   in
-  Format.fprintf ppf "@[<2>closure@ %t%a%a@]"
-    (fun ppf -> if decl.is_tupled then Format.fprintf ppf "tupled@ ")
+  Format.fprintf ppf "@[<2>closure@ %a%a@]"
     code_id decl.code_id
     pp_at_closure_id decl.closure_id
 
@@ -756,7 +755,7 @@ and symbol_binding ppf (sb : symbol_binding) =
 
 and code_binding ppf ({ recursive = rec_; inline; id; newer_version_of;
                         param_arity; ret_arity; params_and_body;
-                        code_size = cs } : code) =
+                        code_size = cs; is_tupled } : code) =
   Format.fprintf ppf "code@[<h>%a%a@ size(%a)%a@] @[<hov2>%a"
     (recursive ~space:Before) rec_
     (inline_attribute_opt ~space:Before) inline
@@ -774,16 +773,20 @@ and code_binding ppf ({ recursive = rec_; inline; id; newer_version_of;
       let ret_arity =
         ret_arity |> Option.value ~default:([(Any_value : kind_with_subkind)])
       in
-      Format.fprintf ppf "@ deleted :@ %t -> %a@]"
+      Format.fprintf ppf "@ deleted :@ %a%t -> %a@]"
+        (fun ppf is_tupled -> if is_tupled then Format.fprintf ppf "tupled@ ")
+          is_tupled
         pp_arity
         arity ret_arity
     | Present { params; closure_var; ret_cont; exn_cont; body } ->
-      Format.fprintf ppf "%a@ %a@ -> %a@ * %a%a@] =@ %a"
+      Format.fprintf ppf "%a@ %a@ -> %a@ * %a%a%a@] =@ %a"
         (kinded_parameters ~space:Before) params
         variable closure_var
         continuation_id ret_cont
         continuation_id exn_cont
         (pp_option ~space:Before (pp_like ": %a" arity)) ret_arity
+        (fun ppf is_tupled -> if is_tupled then Format.fprintf ppf "tupled@ ")
+          is_tupled
         (expr Outer) body
 
 let flambda_unit ppf ({ body } : flambda_unit) =

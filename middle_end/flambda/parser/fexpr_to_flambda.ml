@@ -445,12 +445,7 @@ let set_of_closures env fun_decls closure_elements =
         fun_decl.closure_id |> Option.value ~default:fun_decl.code_id
       in
       let closure_id = fresh_or_existing_closure_id env closure_id in
-      let decl =
-        Function_declaration.create
-          ~code_id
-          ~dbg:Debuginfo.none
-          ~is_tupled:fun_decl.is_tupled
-      in
+      let decl = Function_declaration.create ~code_id in
       closure_id, decl
     in
     List.map translate_fun_decl fun_decls
@@ -725,7 +720,7 @@ let rec expr env (e : Fexpr.expr) : Flambda.Expr.t =
         Set_of_closures set
       | Closure _ -> assert false (* should have been filtered out above *)
       | Code { id; newer_version_of; param_arity; ret_arity; recursive; inline;
-               params_and_body; code_size } ->
+               params_and_body; code_size; is_tupled; } ->
         let code_id = find_code_id env id in
         let newer_version_of =
           Option.map (find_code_id env) newer_version_of
@@ -820,6 +815,8 @@ let rec expr env (e : Fexpr.expr) : Flambda.Expr.t =
             ~cost_metrics
             (* CR poechsel: grab inlining arguments from fexpr. *)
             ~inlining_arguments:(Inlining_arguments.create ~round:0)
+            ~dbg:Debuginfo.none
+            ~is_tupled
         in
         Code code
     in

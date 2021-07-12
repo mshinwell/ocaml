@@ -21,27 +21,36 @@ module Calling_convention = struct
   type t = {
     needs_closure_arg : bool;
     params_arity : Flambda_arity.t;
+    is_tupled : bool;
   }
 
   let needs_closure_arg t = t.needs_closure_arg
   let params_arity t = t.params_arity
+  let is_tupled t = t.is_tupled
 
-  let print ppf { needs_closure_arg; params_arity } =
+  let print ppf { needs_closure_arg; params_arity; is_tupled } =
     Format.fprintf ppf
       "@[<hov 1>(needs_closure_arg@ %b)@] \
+       @[<hov 1>(is_tupled@ %b)@] \
        @[<hov 1>(params_arity@ %a)@]"
       needs_closure_arg
+      is_tupled
       Flambda_arity.print params_arity
 
   let equal
         { needs_closure_arg = needs_closure_arg1;
-          params_arity = params_arity1; }
+          params_arity = params_arity1;
+          is_tupled = is_tupled1;
+        }
         { needs_closure_arg = needs_closure_arg2;
-          params_arity = params_arity2; } =
-    Bool.equal needs_closure_arg1 needs_closure_arg2 &&
-    Flambda_arity.equal params_arity1 params_arity2
+          params_arity = params_arity2;
+          is_tupled = is_tupled2;
+        } =
+    Bool.equal needs_closure_arg1 needs_closure_arg2
+    && Flambda_arity.equal params_arity1 params_arity2
+    && Bool.equal is_tupled1 is_tupled2
 
-  let compute ~params_and_body =
+  let compute ~params_and_body ~is_tupled =
     let f ~return_continuation:_ _exn_continuation params ~body:_
           ~my_closure:_ ~(is_my_closure_used : _ Or_unknown.t) ~my_depth:_ =
       let is_my_closure_used =
@@ -50,7 +59,7 @@ module Calling_convention = struct
         | Known is_my_closure_used -> is_my_closure_used
       in
       let params_arity = Kinded_parameter.List.arity params in
-      { needs_closure_arg = is_my_closure_used; params_arity; }
+      { needs_closure_arg = is_my_closure_used; params_arity; is_tupled; }
     in
     P.pattern_match params_and_body ~f
 end
@@ -89,8 +98,9 @@ let add_code code t =
     Code_id.Map.filter_map (fun _code_id code ->
         match C.params_and_body code with
         | Present params_and_body ->
+          let is_tupled = C.is_tupled code in
           let calling_convention =
-            Calling_convention.compute ~params_and_body
+            Calling_convention.compute ~params_and_body ~is_tupled
           in
           Some (Present { code; calling_convention; })
         | Deleted ->

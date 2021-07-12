@@ -20,8 +20,6 @@ module Inlinable : sig
   type t
 
   val code_id : t -> Code_id.t
-  val dbg : t -> Debuginfo.t
-  val is_tupled : t -> bool
   val must_be_inlined : t -> bool
 end
 
@@ -29,7 +27,6 @@ module Non_inlinable : sig
   type t
 
   val code_id : t -> Code_id.t
-  val is_tupled : t -> bool
 end
 
 type t0 = private
@@ -40,14 +37,11 @@ type t = t0 Or_unknown_or_bottom.t
 
 val create
     : code:Flambda.Code.t
-   -> dbg:Debuginfo.t
    -> rec_info:Rec_info.t
-   -> is_tupled:bool
    -> t * Function_decl_inlining_decision.t
 
 val create_non_inlinable
    : code_id:Code_id.t
-  -> is_tupled:bool
   -> t
 
 include Type_structure_intf.S

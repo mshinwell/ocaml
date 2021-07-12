@@ -644,11 +644,11 @@ let any_boxed_int32 () = box_int32 (any_naked_int32 ())
 let any_boxed_int64 () = box_int64 (any_naked_int64 ())
 let any_boxed_nativeint () = box_nativeint (any_naked_nativeint ())
 
-let create_function_declaration ~code ~dbg ~rec_info ~is_tupled =
-  Function_declaration_type.create ~code ~dbg ~rec_info ~is_tupled
+let create_function_declaration ~code ~rec_info =
+  Function_declaration_type.create ~code ~rec_info
 
-let create_non_inlinable_function_declaration ~code_id ~is_tupled =
-  Function_declaration_type.create_non_inlinable ~code_id ~is_tupled
+let create_non_inlinable_function_declaration ~code_id =
+  Function_declaration_type.create_non_inlinable ~code_id
 
 let exactly_this_closure closure_id ~all_function_decls_in_set:function_decls
       ~all_closures_in_set:closure_types

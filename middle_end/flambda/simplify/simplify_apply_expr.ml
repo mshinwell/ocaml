@@ -379,11 +379,13 @@ let simplify_direct_partial_application ~simplify_expr dacc apply
           ~recursive
           ~cost_metrics:cost_metrics_of_body
           ~inlining_arguments:(DE.inlining_arguments (DA.denv dacc))
+          ~dbg
+          ~is_tupled:false
       in
       Static_const.Code code
     in
     let function_decl =
-      Function_declaration.create ~code_id ~is_tupled:false ~dbg
+      Function_declaration.create ~code_id
     in
     let function_decls =
       Function_declarations.create
@@ -713,7 +715,9 @@ let simplify_function_call ~simplify_expr dacc apply ~callee_ty
       in
       let callee's_code_id_from_type = I.code_id inlinable in
       let callee's_code = DE.find_code denv callee's_code_id_from_type in
-      let must_be_detupled = call_must_be_detupled (I.is_tupled inlinable) in
+      let must_be_detupled =
+        call_must_be_detupled (Code.is_tupled callee's_code)
+      in
       simplify_direct_function_call ~simplify_expr dacc apply
         ~callee's_code_id_from_type
         ~callee's_code_id_from_call_kind ~callee's_closure_id ~arg_types
@@ -731,11 +735,11 @@ let simplify_function_call ~simplify_expr dacc apply ~callee_ty
         | Indirect_unknown_arity
         | Indirect_known_arity _ -> None
       in
-      let must_be_detupled =
-        call_must_be_detupled (N.is_tupled non_inlinable)
-      in
       let callee's_code_from_type =
         DE.find_code denv callee's_code_id_from_type
+      in
+      let must_be_detupled =
+        call_must_be_detupled (Code.is_tupled callee's_code_from_type)
       in
       simplify_direct_function_call ~simplify_expr dacc apply
         ~callee's_code_id_from_type

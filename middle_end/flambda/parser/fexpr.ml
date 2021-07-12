@@ -372,7 +372,6 @@ and named =
 and fun_decl = {
   code_id : code_id;
   closure_id : closure_id option; (* defaults to same name as code id *)
-  is_tupled : bool;
 }
 
 and let_cont = {
@@ -416,6 +415,7 @@ and code = {
   inline : inline_attribute option;
   params_and_body : params_and_body or_deleted;
   code_size : code_size;
+  is_tupled : bool;
 }
 
 and code_size = int

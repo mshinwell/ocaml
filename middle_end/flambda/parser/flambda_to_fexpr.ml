@@ -472,14 +472,13 @@ let closure_elements env map =
 
 let function_declaration env fd closure_id : Fexpr.fun_decl =
   let code_id = Function_declaration.code_id fd in
-  let is_tupled = Function_declaration.is_tupled fd in
   let code_id = Env.find_code_id_exn env code_id in
   let closure_id = Env.translate_closure_id env closure_id in
   (* Omit the closure id when possible *)
   let closure_id =
     if String.equal code_id.txt closure_id.txt then None else Some closure_id
   in
-  { code_id; closure_id; is_tupled }
+  { code_id; closure_id; }
 
 let set_of_closures env sc =
   let fun_decls = List.map (fun (closure_id, fun_decl) ->
@@ -664,6 +663,7 @@ and static_let_expr env bound_symbols scoping_rule defining_expr body
         | Default_inline -> None
         | other -> Some other
       in
+      let is_tupled = Flambda.Code.is_tupled code in
       let params_and_body : Fexpr.params_and_body Fexpr.or_deleted =
         match Flambda.Code.params_and_body code with
         | Deleted -> Deleted
@@ -701,7 +701,7 @@ and static_let_expr env bound_symbols scoping_rule defining_expr body
         |> Code_size.to_int
       in
       Code { id = code_id; newer_version_of; param_arity; ret_arity; recursive;
-             inline; params_and_body; code_size; }
+             inline; params_and_body; code_size; is_tupled; }
     | _, _ ->
       Misc.fatal_errorf "Mismatched pattern and constant: %a vs. %a"
         Bound_symbols.Pattern.print pat

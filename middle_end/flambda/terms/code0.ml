@@ -51,6 +51,8 @@ end) = struct
     recursive : Recursive.t;
     cost_metrics : Cost_metrics.t;
     inlining_arguments : Inlining_arguments.t;
+    dbg : Debuginfo.t;
+    is_tupled : bool;
   }
 
   let code_id { code_id; _ } = code_id
@@ -84,6 +86,10 @@ end) = struct
   let cost_metrics { cost_metrics; _ } = cost_metrics
 
   let inlining_arguments { inlining_arguments; _ } = inlining_arguments
+
+  let dbg { dbg; _ } = dbg
+
+  let is_tupled { is_tupled; _ } = is_tupled
 
   let check_params_and_body code_id (params_and_body : _ Or_deleted.t) =
     let free_names_of_params_and_body =
@@ -119,7 +125,9 @@ end) = struct
         ~is_a_functor
         ~recursive
         ~cost_metrics
-        ~inlining_arguments =
+        ~inlining_arguments
+        ~dbg
+        ~is_tupled =
     begin match stub, inline with
     | true, (Hint_inline | Never_inline | Default_inline)
     | false, (Never_inline | Default_inline | Always_inline | Hint_inline
@@ -143,6 +151,8 @@ end) = struct
       recursive;
       cost_metrics;
       inlining_arguments;
+      dbg;
+      is_tupled;
     }
 
   let with_code_id code_id t = { t with code_id }
@@ -175,7 +185,8 @@ end) = struct
   let print_with_cache ~cache ppf
         { code_id = _; params_and_body; newer_version_of; stub; inline;
           is_a_functor; params_arity; result_arity; recursive;
-          free_names_of_params_and_body = _; cost_metrics; inlining_arguments } =
+          free_names_of_params_and_body = _; cost_metrics; inlining_arguments;
+          dbg; is_tupled; } =
     let module C = Flambda_colours in
     match params_and_body with
     | Present _ ->
@@ -189,6 +200,8 @@ end) = struct
           @[<hov 1>@<0>%s(recursive@ %a)@<0>%s@]@ \
           @[<hov 1>(cost_metrics@ %a)@]@ \
           @[<hov 1>(inlining_arguments@ %a)@]@ \
+          @[<hov 1>@<0>%s(dbg@ %a)@<0>%s@]@ \
+          @[<hov 1>@<0>%s(is_tupled @ %b)@<0>%s@]@ \
           %a\
           )@]"
         (if Option.is_none newer_version_of then Flambda_colours.elide ()
@@ -231,6 +244,14 @@ end) = struct
         (Flambda_colours.normal ())
         Cost_metrics.print cost_metrics
         Inlining_arguments.print inlining_arguments
+        (Flambda_colours.debuginfo ())
+        Debuginfo.print_compact dbg
+        (Flambda_colours.normal ())
+        (if is_tupled
+        then Flambda_colours.normal ()
+        else Flambda_colours.elide ())
+        is_tupled
+        (Flambda_colours.normal ())
         (print_params_and_body_with_cache ~cache) params_and_body
     | Deleted ->
       Format.fprintf ppf "@[<hov 1>(\
@@ -264,7 +285,7 @@ end) = struct
         ({ code_id; params_and_body; newer_version_of; params_arity = _;
           result_arity = _; stub = _; inline = _; is_a_functor = _;
            recursive = _; cost_metrics = _; free_names_of_params_and_body;
-           inlining_arguments = _; } as t)
+           inlining_arguments = _; dbg = _; is_tupled = _; } as t)
         perm =
     (* inlined and modified version of Option.map to preserve sharing *)
     let newer_version_of' =
@@ -308,7 +329,7 @@ end) = struct
                           params_arity = _; result_arity = _; stub = _;
                           inline = _; is_a_functor = _; recursive = _;
                            cost_metrics = _; free_names_of_params_and_body = _;
-                           inlining_arguments = _; } =
+                           inlining_arguments = _; dbg = _; is_tupled = _; } =
     let newer_version_of_ids =
       match newer_version_of with
       | None -> Ids_for_export.empty

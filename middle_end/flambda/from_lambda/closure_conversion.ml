@@ -891,8 +891,6 @@ let close_one_function acc ~external_env ~by_closure_id decl
   in
   let fun_decl =
     Function_declaration.create ~code_id
-      ~dbg
-      ~is_tupled
   in
   let code =
     Code.create
@@ -908,6 +906,8 @@ let close_one_function acc ~external_env ~by_closure_id decl
       ~newer_version_of:None
       ~cost_metrics
       ~inlining_arguments:(Inlining_arguments.create ~round:0)
+      ~dbg
+      ~is_tupled
   in
   let acc = Acc.add_code ~code_id ~code acc in
   let acc = Acc.with_seen_a_function acc true in
