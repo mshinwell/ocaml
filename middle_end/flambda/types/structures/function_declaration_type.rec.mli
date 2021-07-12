@@ -19,14 +19,6 @@
 module Inlinable : sig
   type t
 
-  val create
-     : code_id:Code_id.t
-    -> dbg:Debuginfo.t
-    -> rec_info:Rec_info.t
-    -> is_tupled:bool
-    -> must_be_inlined:bool
-    -> t
-
   val code_id : t -> Code_id.t
   val dbg : t -> Debuginfo.t
   val is_tupled : t -> bool
@@ -36,22 +28,27 @@ end
 module Non_inlinable : sig
   type t
 
-  val create
-     : code_id:Code_id.t
-    -> is_tupled:bool
-    -> t
-
   val code_id : t -> Code_id.t
   val is_tupled : t -> bool
 end
 
-type t0 =
+type t0 = private
   | Inlinable of Inlinable.t
   | Non_inlinable of Non_inlinable.t
 
 type t = t0 Or_unknown_or_bottom.t
 
-(* CR mshinwell: Add [create] and make [private]. *)
+val create
+    : code:Flambda.Code.t
+   -> dbg:Debuginfo.t
+   -> rec_info:Rec_info.t
+   -> is_tupled:bool
+   -> t * Function_decl_inlining_decision.t
+
+val create_non_inlinable
+   : code_id:Code_id.t
+  -> is_tupled:bool
+  -> t
 
 include Type_structure_intf.S
   with type t := t

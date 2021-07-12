@@ -425,14 +425,18 @@ val this_immutable_string : string -> t
 
 val mutable_string : size:int -> t
 
-(** Create a description of a function declaration whose code is known. *)
-val create_inlinable_function_declaration
-   : code_id:Code_id.t
+(* CR lmaurer: Returning a pair here seems clumsy. Could also keep the inlining
+   decision in the [Function_declaration_type.t] at the cost of a bit more
+   storage that hangs around long after its only use. *)
+
+(** Create a description of a function declaration whose code is known.
+    It may be considered inlinable. *)
+val create_function_declaration
+   : code:Flambda.Code.t
   -> dbg:Debuginfo.t
   -> rec_info:Rec_info.t
   -> is_tupled:bool
-  -> must_be_inlined:bool
-  -> Function_declaration_type.t
+  -> Function_declaration_type.t * Function_decl_inlining_decision.t
 
 (** Create a description of a function declaration whose code is unknown.
     Such declarations cannot be inlined, but can be direct called. *)

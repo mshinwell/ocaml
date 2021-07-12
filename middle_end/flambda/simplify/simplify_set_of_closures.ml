@@ -27,30 +27,21 @@ open! Simplify_import
    excessive levels of nesting of functions seems unlikely. *)
 
 let function_decl_type ~pass denv function_decl code ?new_code_id rec_info =
-  let decision = Function_decl_inlining_decision.make_decision code in
   let code_id = Option.value new_code_id ~default:(FD.code_id function_decl) in
+  (* Slap the new code id (if any) on the old code, since we want to use the old
+     code's inlining arguments, metrics, etc. *)
+  let code = Code.with_code_id code_id code in
+  let func_decl_type, decision =
+    T.create_function_declaration
+      ~code
+      ~dbg:(FD.dbg function_decl)
+      ~is_tupled:(FD.is_tupled function_decl)
+      ~rec_info
+  in
   Inlining_report.record_decision (
     At_function_declaration { code_id = Code_id.export code_id; pass; decision; })
     ~dbg:(DE.add_inlined_debuginfo' denv (FD.dbg function_decl));
-  match Function_decl_inlining_decision.behaviour decision with
-  | Cannot_be_inlined ->
-    T.create_non_inlinable_function_declaration
-      ~code_id
-      ~is_tupled:(FD.is_tupled function_decl)
-  | Must_be_inlined ->
-    T.create_inlinable_function_declaration
-      ~code_id
-      ~dbg:(FD.dbg function_decl)
-      ~is_tupled:(FD.is_tupled function_decl)
-      ~must_be_inlined:true
-      ~rec_info
-  | Could_possibly_be_inlined ->
-    T.create_inlinable_function_declaration
-      ~code_id
-      ~dbg:(FD.dbg function_decl)
-      ~is_tupled:(FD.is_tupled function_decl)
-      ~must_be_inlined:false
-      ~rec_info
+  func_decl_type
 
 module Context_for_multiple_sets_of_closures : sig
   (* This module deals with a sub-problem of the problem of simplifying multiple

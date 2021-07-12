@@ -43,14 +43,6 @@ module Inlinable = struct
       is_tupled
       must_be_inlined
 
-  let create ~code_id ~dbg ~rec_info ~is_tupled ~must_be_inlined =
-    { code_id;
-      dbg;
-      rec_info;
-      is_tupled;
-      must_be_inlined;
-    }
-
   let code_id t = t.code_id
   let dbg t = t.dbg
   let is_tupled t = t.is_tupled
@@ -80,11 +72,6 @@ module Non_inlinable = struct
       Code_id.print code_id
       is_tupled
 
-  let create ~code_id ~is_tupled =
-    { code_id;
-      is_tupled;
-    }
-
   let code_id t = t.code_id
   let is_tupled t = t.is_tupled
 
@@ -99,6 +86,25 @@ type t0 =
   | Non_inlinable of Non_inlinable.t
 
 type t = t0 Or_unknown_or_bottom.t
+
+let create ~code ~dbg ~rec_info ~is_tupled =
+  let code_id = Flambda.Code.code_id code in
+  let inlining_decision = Function_decl_inlining_decision.make_decision code in
+  let t : t =
+    match Function_decl_inlining_decision.behaviour inlining_decision with
+    | Cannot_be_inlined ->
+      Ok (Non_inlinable { code_id; is_tupled; })
+    | Must_be_inlined ->
+      Ok (Inlinable { code_id; dbg; is_tupled; rec_info;
+                      must_be_inlined = true; })
+    | Could_possibly_be_inlined ->
+      Ok (Inlinable { code_id; dbg; is_tupled; rec_info;
+                      must_be_inlined = false; })
+  in
+  t, inlining_decision
+
+let create_non_inlinable ~code_id ~is_tupled : t =
+  Ok (Non_inlinable { code_id; is_tupled; })
 
 let print_t0 ppf t0 =
   match t0 with

@@ -202,6 +202,7 @@ MIDDLE_END_FLAMBDA_COMPILENV_DEPS=\
 
 MIDDLE_END_FLAMBDA_BASIC=\
   middle_end/flambda/types/kinds/flambda_kind.cmo \
+  middle_end/flambda/types/kinds/flambda_arity.cmo \
   middle_end/flambda/basic/reg_width_const.cmo \
   middle_end/flambda/basic/continuation.cmo \
   middle_end/flambda/basic/name.cmo \
@@ -263,6 +264,7 @@ MIDDLE_END_FLAMBDA_NAMING=\
   middle_end/flambda/naming/bindable_variable_in_terms.cmo
 
 MIDDLE_END_FLAMBDA_TYPES=\
+  middle_end/flambda/inlining/function_decl_inlining_decision.cmo \
   middle_end/flambda/types/basic/var_within_closure_set.cmo \
   middle_end/flambda/types/env/binding_time.cmo \
   middle_end/flambda/types/env/aliases.cmo \
@@ -285,7 +287,6 @@ MIDDLE_END_FLAMBDA_TYPES=\
   middle_end/flambda/types/basic/closure_id_and_var_within_closure_set.cmo
 
 MIDDLE_END_FLAMBDA_TERMS=\
-  middle_end/flambda/types/kinds/flambda_arity.cmo \
   middle_end/flambda/inlining/inlining_arguments.cmo \
   middle_end/flambda/inlining/inlining_state.cmo \
   middle_end/flambda/terms/apply_cont_expr.cmo \
@@ -334,7 +335,6 @@ MIDDLE_END_FLAMBDA_SIMPLIFY=\
   middle_end/flambda/simplify/expr_builder.cmo \
   middle_end/flambda/simplify/simplify_rec_info_expr.cmo \
   middle_end/flambda/inlining/inlining_transforms.cmo \
-  middle_end/flambda/inlining/function_decl_inlining_decision.cmo \
   middle_end/flambda/inlining/call_site_inlining_decision.cmo \
   middle_end/flambda/inlining/inlining_report.cmo \
   middle_end/flambda/simplify/simplify_coercion.cmo \
