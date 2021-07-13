@@ -712,6 +712,7 @@ let close_one_function acc ~external_env ~by_closure_id decl
   let closure_id = Function_decl.closure_id decl in
   let my_closure_id = closure_id in
   let my_depth = Variable.create "my_depth" in
+  let next_depth = Variable.create "next_depth" in
   let our_let_rec_ident = Function_decl.let_rec_ident decl in
   let compilation_unit = Compilation_unit.get_current_exn () in
   let code_id =
@@ -741,9 +742,14 @@ let close_one_function acc ~external_env ~by_closure_id decl
       var_within_closures_from_idents
       (Variable.Map.empty, Ident.Map.empty)
   in
+  let coerce_to_deeper =
+    Coercion.change_depth
+      ~from:(Rec_info_expr.var my_depth)
+      ~to_:(Rec_info_expr.var next_depth)
+  in
   (* CR mshinwell: Remove "project_closure" names *)
-  let project_closure_to_bind, vars_for_project_closure =
-    List.fold_left (fun (to_bind, vars_for_idents) function_decl ->
+  let project_closure_to_bind, simples_for_project_closure =
+    List.fold_left (fun (to_bind, simples_for_idents) function_decl ->
         let let_rec_ident = Function_decl.let_rec_ident function_decl in
         let to_bind, var =
           if Ident.same our_let_rec_ident let_rec_ident && is_curried then
@@ -762,15 +768,16 @@ let close_one_function acc ~external_env ~by_closure_id decl
             in
             Variable.Map.add variable closure_id to_bind, variable
         in
+        let simple = Simple.with_coercion (Simple.var var) coerce_to_deeper in
         to_bind,
-        Ident.Map.add let_rec_ident var vars_for_idents)
+        Ident.Map.add let_rec_ident simple simples_for_idents)
       (Variable.Map.empty, Ident.Map.empty)
       (Function_decls.to_list function_declarations)
   in
   let closure_env_without_parameters =
     let empty_env = Env.clear_local_bindings external_env in
-    Env.add_var_map (Env.add_var_map empty_env var_within_closures_for_idents)
-      vars_for_project_closure
+    let env = Env.add_var_map empty_env var_within_closures_for_idents in
+    Env.add_simple_to_substitute_map env simples_for_project_closure
   in
   let closure_env =
     List.fold_right (fun (id, _) env ->
@@ -859,6 +866,17 @@ let close_one_function acc ~external_env ~by_closure_id decl
         |> Expr_with_acc.create_let)
       var_within_closures_to_bind
       (acc, body)
+  in
+  let next_depth_expr = Rec_info_expr.succ (Rec_info_expr.var my_depth) in
+  let bound =
+    Bindable_let_bound.singleton
+      (Var_in_binding_pos.create next_depth Name_mode.normal)
+  in
+  let acc, body =
+    Let_with_acc.create acc bound (Named.create_rec_info next_depth_expr)
+      ~body
+      ~free_names_of_body:Unknown
+    |> Expr_with_acc.create_let
   in
   let cost_metrics = Acc.cost_metrics acc in
   let acc, exn_continuation =

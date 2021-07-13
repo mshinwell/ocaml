@@ -187,6 +187,11 @@ module Env = struct
       simples_to_substitute = Ident.Map.add id simple t.simples_to_substitute;
     }
 
+  let add_simple_to_substitute_map t map =
+    { t with
+      simples_to_substitute = Ident.Map.disjoint_union map t.simples_to_substitute;
+    }
+
   let find_simple_to_substitute_exn t id =
     Ident.Map.find id t.simples_to_substitute
 end

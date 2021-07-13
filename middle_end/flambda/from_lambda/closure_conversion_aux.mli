@@ -105,6 +105,7 @@ module Env : sig
   val find_global : t -> int -> Symbol.t
 
   val add_simple_to_substitute : t -> Ident.t -> Simple.t -> t
+  val add_simple_to_substitute_map : t -> Simple.t Ident.Map.t -> t
 
   val find_simple_to_substitute_exn : t -> Ident.t -> Simple.t
 

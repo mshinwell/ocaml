@@ -23,9 +23,9 @@ module DE = Downwards_env
 module I = Flambda_type.Function_declaration_type.Inlinable
 module VB = Var_in_binding_pos
 
-let make_inlined_body ~callee ~unroll_to ~params ~args ~my_closure ~body
-      ~exn_continuation ~return_continuation ~apply_exn_continuation
-      ~apply_return_continuation =
+let make_inlined_body ~callee ~unroll_to ~params ~args ~my_closure ~my_depth
+      ~rec_info ~body ~exn_continuation ~return_continuation
+      ~apply_exn_continuation ~apply_return_continuation =
   let perm = Renaming.empty in
   let perm =
     match (apply_return_continuation : Apply.Result_continuation.t) with
@@ -39,24 +39,46 @@ let make_inlined_body ~callee ~unroll_to ~params ~args ~my_closure ~body
       (Exn_continuation.exn_handler exn_continuation)
       apply_exn_continuation
   in
-  let callee =
-    (* CR xclerc for xclerc: build the proper coercion. *)
-    Simple.apply_coercion callee (ignore unroll_to; Coercion.id)
-    |> Option.get  (* CR mshinwell: improve *)
+  let callee, rec_info =
+    match unroll_to with
+    | None ->
+      callee, rec_info
+    | Some unroll_depth ->
+      let unrolled_rec_info =
+        Rec_info_expr.unroll_to unroll_depth rec_info
+      in
+      let coercion_from_callee_to_unrolled_callee =
+        Coercion.change_depth
+          ~from:rec_info
+          ~to_:(Rec_info_expr.var my_depth)
+      in
+      let callee =
+        Simple.apply_coercion_exn callee coercion_from_callee_to_unrolled_callee
+      in
+      callee, unrolled_rec_info
+  in
+  let body =
+    Let.create
+      (Bindable_let_bound.singleton (VB.create my_closure Name_mode.normal))
+      (Named.create_simple callee)
+      ~body
+      (* Here and below, we don't need to give any name occurrence
+         information (thank goodness!) since the entirety of the
+         expression we're building will be re-simplified. *)
+      ~free_names_of_body:Unknown
+    |> Expr.create_let
+  in
+  let body =
+    let bound =
+      Bindable_let_bound.singleton (VB.create my_depth Name_mode.normal)
+    in
+    Let.create bound (Named.create_rec_info rec_info) ~body
+    ~free_names_of_body:Unknown
+    |> Expr.create_let
   in
   Expr.apply_renaming
     (Expr.bind_parameters_to_args_no_simplification
-       ~params ~args
-       ~body:(Let.create
-                (Bindable_let_bound.singleton
-                   (VB.create my_closure Name_mode.normal))
-                (Named.create_simple callee)
-                ~body
-                (* Here and below, we don't need to give any name occurrence
-                   information (thank goodness!) since the entirety of the
-                   expression we're building will be re-simplified. *)
-                ~free_names_of_body:Unknown
-              |> Expr.create_let))
+       ~params ~args ~body)
     perm
 
 let wrap_inlined_body_for_exn_support ~extra_args ~apply_exn_continuation
@@ -173,16 +195,22 @@ let inline dacc ~apply ~unroll_to function_decl =
   (* CR mshinwell: Add meet constraint to the return continuation *)
   let denv = DA.denv dacc in
   let code = DE.find_code denv (I.code_id function_decl) in
+  let rec_info =
+    match T.prove_rec_info (DE.typing_env denv) (I.rec_info function_decl) with
+    | Proved rec_info -> rec_info
+    | Unknown -> Rec_info_expr.unknown
+    | Invalid -> Rec_info_expr.do_not_inline
+  in
   let denv = DE.enter_inlined_apply ~called_code:code ~apply denv in
   let params_and_body =
     Code.params_and_body_must_be_present code ~error_context:"Inlining"
   in
   Function_params_and_body.pattern_match params_and_body
     ~f:(fun ~return_continuation exn_continuation params ~body ~my_closure
-            ~is_my_closure_used:_ ~my_depth:_->
+            ~is_my_closure_used:_ ~my_depth ->
           let make_inlined_body =
-            make_inlined_body ~callee ~unroll_to ~params ~args ~my_closure ~body
-              ~exn_continuation ~return_continuation
+            make_inlined_body ~callee ~unroll_to ~params ~args ~my_closure
+               ~my_depth ~rec_info ~body ~exn_continuation ~return_continuation
           in
           let expr =
             assert (Exn_continuation.extra_args exn_continuation = []);
