@@ -20,6 +20,7 @@ module Inlinable : sig
   type t
 
   val code_id : t -> Code_id.t
+  val rec_info : t -> Type_grammar.t
   val must_be_inlined : t -> bool
 end
 
@@ -37,7 +38,7 @@ type t = t0 Or_unknown_or_bottom.t
 
 val create
     : code:Flambda.Code.t
-   -> rec_info:Rec_info.t
+   -> rec_info:Type_grammar.t
    -> t * Function_decl_inlining_decision.t
 
 val create_non_inlinable

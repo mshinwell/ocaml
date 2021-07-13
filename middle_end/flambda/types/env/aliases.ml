@@ -36,16 +36,15 @@ module Map_to_canonical = struct
       Coercion.print coercion2
 
   let inter map1 map2 =
-    Name.Map.merge (fun elt coercion1 coercion2 ->
+    Name.Map.merge (fun _elt coercion1 coercion2 ->
         match coercion1, coercion2 with
         | None, None | Some _, None | None, Some _ -> None
         | Some coercion1, Some coercion2 ->
+          (* See documentation of [Alias_set.inter] *)
           if Coercion.equal coercion1 coercion2 then
             Some coercion1
           else
-            fatal_inconsistent
-              ~func_name:"Aliases.Map_to_canonical.inter"
-              elt coercion1 coercion2)
+            None)
       map1
       map2
 
@@ -206,11 +205,12 @@ end = struct
           Some (Map_to_canonical.inter elts1 elts2))
         t1.aliases t2.aliases
     in
-    let t =
-      { aliases;
-        all = Map_to_canonical.inter t1.all t2.all;
-      }
+    let all =
+      (* This assumes that there aren't any names that occur on both sides but in
+       * different modes, which indeed shouldn't happen *)
+      Map_to_canonical.inter t1.all t2.all
     in
+    let t = { aliases; all } in
     invariant t;
     t
 
@@ -267,7 +267,8 @@ module Alias_set = struct
         let const = Some canonical_const in
         let names = alias_names_with_coercions_to_element in
         { const; names })
-      ~name:(fun canonical_name ~coercion:_ ->
+      ~name:(fun canonical_name ~coercion ->
+        assert (Coercion.is_id coercion);
         let const = None in
         let names =
           Name.Map.add canonical_name coercion_from_canonical_to_element
@@ -707,10 +708,14 @@ let invariant_add_result
   end
 
 let add_alias t ~element1 ~coercion_from_element2_to_element1 ~element2 =
+  assert (not (Simple.has_coercion element1));
+  assert (not (Simple.has_coercion element2));
   let add ~canonical_element1 ~canonical_element2
         ~coercion_from_element1_to_canonical_element1
         ~coercion_from_element2_to_canonical_element2
         ~coercion_from_canonical_element2_to_canonical_element1 =
+    assert (not (Simple.has_coercion canonical_element1));
+    assert (not (Simple.has_coercion canonical_element2));
     if Simple.equal canonical_element1 canonical_element2
     then
       let canonical_element = canonical_element1 in
@@ -770,7 +775,7 @@ let add_alias t ~element1 ~coercion_from_element2_to_element1 ~element2 =
     else
       let canonical_element, demoted_canonical, alias_of_demoted_element,
           coercion_from_demoted_canonical_to_canonical,
-          coercion_from_demoted_alias_to_demoted_canonical = 
+          coercion_from_demoted_alias_to_demoted_canonical =
         let which_element =
           choose_canonical_element_to_be_demoted t
             ~canonical_element1 ~canonical_element2
@@ -789,7 +794,7 @@ let add_alias t ~element1 ~coercion_from_element2_to_element1 ~element2 =
           coercion_from_canonical_element2_to_canonical_element1,
           coercion_from_element2_to_canonical_element2
       in
-      let t = 
+      let t =
         add_alias_between_canonical_elements
           t
           ~canonical_element
@@ -851,7 +856,7 @@ let add_alias t ~element1 ~coercion_from_element2_to_element1 ~element2 =
     let canonical_element1 = element1 in
     let coercion_from_element1_to_canonical_element1 = Coercion.id in
     let coercion_from_canonical_element2_to_canonical_element1 =
-      (* canonical_element1=element1 <--[c]-- element2 
+      (* canonical_element1=element1 <--[c]-- element2
          +
          canonical_element2 <--[c2]-- element2
          ~>
@@ -982,11 +987,12 @@ let get_canonical_element_exn t element elt_name_mode ~min_name_mode
   let canonical_element, name_mode, coercion_from_canonical_to_element =
     match canonical t element with
     | Is_canonical ->
-      element, elt_name_mode, Coercion.id
+      Simple.without_coercion element, elt_name_mode, Simple.coercion element
     | Alias_of_canonical { canonical_element; coercion_to_canonical; } ->
       let name_mode = name_mode t canonical_element ~min_binding_time in
       canonical_element, name_mode, Coercion.inverse coercion_to_canonical
   in
+  assert (not (Simple.has_coercion canonical_element));
   (*
 Format.eprintf "looking for canonical for %a, candidate canonical %a, min order %a\n%!"
   Simple.print element
@@ -1052,14 +1058,17 @@ Format.eprintf "looking for canonical for %a, candidate canonical %a, min order 
 let get_aliases t element =
   match canonical t element with
   | Is_canonical ->
-    let canonical_element = element in
+    let canonical_element = Simple.without_coercion element in
+    assert (not (Simple.has_coercion canonical_element));
     let alias_names_with_coercions_to_canonical =
       Aliases_of_canonical_element.all
         (get_aliases_of_canonical_element t ~canonical_element)
     in
-    let coercion_from_canonical_to_element = Coercion.id in
+    let coercion_from_canonical_to_element = Simple.coercion element in
     let alias_names_with_coercions_to_element =
-      alias_names_with_coercions_to_canonical
+      compose_map_values_exn
+        alias_names_with_coercions_to_canonical
+        ~then_:coercion_from_canonical_to_element
     in
     Alias_set.create_aliases_of_element
       ~element
@@ -1068,9 +1077,10 @@ let get_aliases t element =
       ~alias_names_with_coercions_to_element
   | Alias_of_canonical { canonical_element;
       coercion_to_canonical = coercion_from_element_to_canonical; } ->
-    if !Clflags.flambda_invariant_checks then begin
-      assert (not (Simple.equal element canonical_element))
-    end;
+    assert (not (Simple.has_coercion canonical_element));
+    assert (not (Simple.equal
+                   (Simple.without_coercion element)
+                   canonical_element));
     let alias_names_with_coercions_to_canonical =
       Aliases_of_canonical_element.all
         (get_aliases_of_canonical_element t ~canonical_element)
@@ -1084,7 +1094,6 @@ let get_aliases t element =
       compose_map_values_exn alias_names_with_coercions_to_canonical
         ~then_:coercion_from_canonical_to_element
     in
-    
     if !Clflags.flambda_invariant_checks then begin
       let element_coerced_to_canonical =
         Simple.apply_coercion_exn element coercion_from_element_to_canonical
@@ -1092,7 +1101,7 @@ let get_aliases t element =
       (* These aliases are all equivalent to the canonical element, and so is
          our original [element] if we coerce it first, so the coerced form of
          [element] should be among the aliases. *)
-      assert (Name.Map.exists 
+      assert (Name.Map.exists
         (fun name coercion_from_name_to_canonical ->
           let name_coerced_to_canonical =
             Simple.apply_coercion_exn

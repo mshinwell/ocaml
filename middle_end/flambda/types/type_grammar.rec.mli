@@ -166,7 +166,7 @@ val kind_for_const : Reg_width_const.t -> Flambda_kind.t
 
 val create_function_declaration
    : code:Flambda.Code.t
-  -> rec_info:Rec_info.t
+  -> rec_info:t
   -> Function_declaration_type.t * Function_decl_inlining_decision.t
 
 val create_non_inlinable_function_declaration

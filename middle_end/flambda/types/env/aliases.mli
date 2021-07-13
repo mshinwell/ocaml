@@ -100,8 +100,9 @@ val get_canonical_element_exn
   -> Simple.t
 
 module Alias_set : sig
-  (** The set of aliases of one particular [Simple.t], or an intersection of
-      such sets. *)
+  (** A set of aliases of one particular [Simple.t]. Each name occurs at most
+      once: if an alias carries a coercion, no other alias in the set will have
+      the same name. *)
   type t
 
   val empty : t
@@ -110,6 +111,9 @@ module Alias_set : sig
 
   val get_singleton : t -> Simple.t option
 
+  (** Find the aliases that occur in both sets. If a name occurs on both sides
+      but under {e syntactically} different coercions, it will be dropped. *)
+  (* CR lmaurer: Could conceivably also do a join on the coercions. *)
   val inter : t -> t -> t
 
   val filter : t -> f:(Simple.t -> bool) -> t

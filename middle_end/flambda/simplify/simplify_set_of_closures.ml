@@ -66,6 +66,8 @@ module Context_for_multiple_sets_of_closures : sig
     -> Name_in_binding_pos.t Closure_id.Map.t list
 
   val simplify_toplevel : t -> Simplify_common.simplify_toplevel
+
+  val previously_free_depth_variables : t -> Variable.Set.t
 end = struct
   type t = {
     dacc_prior_to_sets : DA.t;
@@ -74,6 +76,7 @@ end = struct
     closure_bound_names_inside_functions_all_sets
       : Name_in_binding_pos.t Closure_id.Map.t list;
     old_to_new_code_ids_all_sets : Code_id.t Code_id.Map.t;
+    previously_free_depth_variables : Variable.Set.t;
   }
 
   let simplify_toplevel t = t.simplify_toplevel
@@ -85,6 +88,8 @@ end = struct
 
   let closure_bound_names_inside_functions_all_sets t =
     t.closure_bound_names_inside_functions_all_sets
+
+  let previously_free_depth_variables t = t.previously_free_depth_variables
 
   let compute_closure_element_types_inside_function ~env_prior_to_sets
         ~env_inside_function ~closure_element_types =
@@ -149,11 +154,17 @@ end = struct
                     old_to_new_code_ids_all_sets
                 in
                 let code = DE.find_code denv (FD.code_id function_decl) in
+                let rec_info =
+                  (* From inside their own bodies, every function in the set
+                     currently being defined has an unknown recursion
+                     depth *)
+                  T.unknown K.rec_info
+                in
                 function_decl_type
                   ~pass:Inlining_report.Before_simplify
                   denv function_decl code
                   ~new_code_id
-                  Rec_info.unknown)
+                  rec_info)
               (Function_declarations.funs function_decls)
           in
           Closure_id.Map.mapi (fun closure_id _function_decl ->
@@ -267,6 +278,49 @@ end = struct
     let closure_element_types_inside_functions_all_sets =
       List.rev closure_element_types_all_sets_inside_functions_rev
     in
+    let free_depth_variables =
+      List.concat_map (fun closure_element_types ->
+          List.map (fun ty ->
+              let vars = TE.free_names_transitive (DE.typing_env denv) ty in
+              Name_occurrences.fold_variables vars ~init:Variable.Set.empty
+                ~f:(fun free_depth_variables var ->
+                    let ty = TE.find env_inside_functions (Name.var var) None in
+                    match T.kind ty with
+                    | Rec_info ->
+                      Variable.Set.add var free_depth_variables
+                    | Value | Naked_number _ | Fabricated ->
+                      free_depth_variables
+                  )
+            ) (closure_element_types |> Var_within_closure.Map.data)
+        ) closure_element_types_all_sets
+      |> Variable.Set.union_list
+    in
+    (* Pretend that any depth variables appearing free in the closure elements
+       are bound to "never inline anything" in the function. This causes them to
+       be skipped over by [make_suitable_for_environment], thus avoiding dealing
+       with in-types depth variables ending up in terms. *)
+    (* CR lmaurer: It would be better to propagate depth variables into closures
+       properly, as this would allow things like unrolling [Seq.map] where the
+       recursive call goes through a closure. For the moment, we often just stop
+       unrolling cold in that situation. (It's important that we use
+       [Rec_info_expr.do_not_inline] here so that we don't start unrolling,
+       since without propagating the rec info into the closure, we don't know
+       when to stop unrolling.)
+       mshinwell: Leo and I have discussed allowing In_types variables in
+       closures, which should cover this case, if we allowed such variables
+       to be of kinds other than [Value]. *)
+    let env_inside_functions =
+      Variable.Set.fold (fun dv env_inside_functions ->
+          let name = Name.var dv in
+          let env_inside_functions =
+            TE.add_definition env_inside_functions
+              (Name_in_binding_pos.create name Name_mode.normal)
+              K.rec_info
+          in
+          TE.add_equation env_inside_functions name
+            (T.this_rec_info Rec_info_expr.do_not_inline)
+        ) free_depth_variables env_inside_functions
+    in
     let old_to_new_code_ids_all_sets =
       compute_old_to_new_code_ids_all_sets ~all_sets_of_closures
     in
@@ -291,34 +345,42 @@ end = struct
       closure_bound_names_inside_functions_all_sets;
       old_to_new_code_ids_all_sets;
       simplify_toplevel;
+      previously_free_depth_variables = free_depth_variables;
     }
 end
 
 module C = Context_for_multiple_sets_of_closures
 
 let dacc_inside_function context ~used_closure_vars ~shareable_constants
-      ~params ~my_closure closure_id ~closure_bound_names_inside_function
-      ~inlining_arguments =
+      ~params ~my_closure ~my_depth closure_id
+      ~closure_bound_names_inside_function ~inlining_arguments =
   let dacc =
     DA.map_denv (C.dacc_inside_functions context) ~f:(fun denv ->
       let denv = DE.add_parameters_with_unknown_types denv params in
       let denv =
         DE.set_inlining_arguments inlining_arguments denv
       in
-      match
-        Closure_id.Map.find closure_id closure_bound_names_inside_function
-      with
-      | exception Not_found ->
-        Misc.fatal_errorf "No closure name for closure ID %a.@ \
-            closure_bound_names_inside_function = %a."
-          Closure_id.print closure_id
-          (Closure_id.Map.print Name_in_binding_pos.print)
-          closure_bound_names_inside_function
-      | name ->
-        let name = Name_in_binding_pos.name name in
-        DE.add_variable denv
-          (Var_in_binding_pos.create my_closure NM.normal)
-          (T.alias_type_of K.value (Simple.name name)))
+      let denv =
+        match
+          Closure_id.Map.find closure_id closure_bound_names_inside_function
+        with
+        | exception Not_found ->
+          Misc.fatal_errorf "No closure name for closure ID %a.@ \
+              closure_bound_names_inside_function = %a."
+            Closure_id.print closure_id
+            (Closure_id.Map.print Name_in_binding_pos.print)
+            closure_bound_names_inside_function
+        | name ->
+          let name = Name_in_binding_pos.name name in
+          DE.add_variable denv
+            (Var_in_binding_pos.create my_closure NM.normal)
+            (T.alias_type_of K.value (Simple.name name))
+     in
+     let denv =
+       let my_depth = Var_in_binding_pos.create my_depth Name_mode.normal in
+       DE.add_variable denv my_depth (T.unknown K.rec_info)
+     in
+     denv)
   in
   dacc
   |> DA.map_denv ~f:(fun denv ->
@@ -375,7 +437,7 @@ let simplify_function context ~used_closure_vars ~shareable_constants
               ~my_closure ~is_my_closure_used:_ ~my_depth ->
         let dacc =
           dacc_inside_function context ~used_closure_vars ~shareable_constants
-            ~params ~my_closure closure_id
+            ~params ~my_closure ~my_depth closure_id
             ~closure_bound_names_inside_function
             ~inlining_arguments
         in
@@ -434,19 +496,29 @@ let simplify_function context ~used_closure_vars ~shareable_constants
             Name_occurrences.remove_var free_names_of_code my_closure
           in
           let free_names_of_code =
+            Name_occurrences.remove_var free_names_of_code my_depth
+          in
+          let free_names_of_code =
             Name_occurrences.diff free_names_of_code
               (KP.List.free_names params)
+          in
+          let free_names_of_code =
+            Name_occurrences.diff free_names_of_code
+              (Name_occurrences.create_variables
+                (C.previously_free_depth_variables context)
+                NM.normal)
           in
           if not (
             Name_occurrences.no_variables free_names_of_code
             && Name_occurrences.no_continuations free_names_of_code)
           then begin
             Misc.fatal_errorf "Unexpected free name(s):@ %a@ in:@ \n%a@ \n\
-                Simplified version:@ fun %a %a ->@ \n  %a"
+                Simplified version:@ fun %a %a %a ->@ \n  %a"
               Name_occurrences.print free_names_of_code
               Function_declaration.print function_decl
               KP.List.print params
               Variable.print my_closure
+              Variable.print my_depth
               (RE.print (UA.are_rebuilding_terms uacc)) body
           end;
           params_and_body, dacc_after_body, free_names_of_code, uacc
@@ -502,10 +574,15 @@ let simplify_function context ~used_closure_vars ~shareable_constants
     | Some const ->
       begin match Static_const.to_code const with
       | Some code ->
+        let rec_info =
+          (* This is the intrinsic type of the function as seen outside its
+             own scope, so its [Rec_info] needs to say its depth is zero *)
+          T.this_rec_info Rec_info_expr.initial
+        in
         function_decl_type
           ~pass:Inlining_report.After_simplify
           (DA.denv dacc_after_body) function_decl code
-          Rec_info.unknown
+          rec_info
       | None ->
         Misc.fatal_errorf
           "Expected [Code] from [Rebuilt_static_const.create_code] but got@ %a"
@@ -867,6 +944,9 @@ let type_closure_elements_and_make_lifting_decision_for_one_set dacc
       (Var_within_closure.Map.empty, Var_within_closure.Map.empty,
        Variable.Map.empty)
   in
+  let can_lift_coercion coercion =
+    Name_occurrences.no_variables (Coercion.free_names coercion)
+  in
   (* Note that [closure_bound_vars_inverse] doesn't need to include
      variables binding closures in other mutually-recursive sets, since if
      we get here in the case where we are considering lifting a set that has
@@ -877,6 +957,8 @@ let type_closure_elements_and_make_lifting_decision_for_one_set dacc
     &&
     Var_within_closure.Map.for_all
       (fun _ simple ->
+        can_lift_coercion (Simple.coercion simple)
+        &&
         Simple.pattern_match' simple
           ~const:(fun _ -> true)
           ~symbol:(fun _ ~coercion:_ -> true)

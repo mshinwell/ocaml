@@ -751,7 +751,11 @@ let type_for_const const =
 let kind_for_const const = kind (type_for_const const)
 
 let this_rec_info (rec_info_expr : Rec_info_expr.t) =
-  Rec_info (T_RI.create rec_info_expr)
+  match rec_info_expr with
+  | Var dv ->
+    Rec_info (T_RI.create_equals (Simple.var dv))
+  | Const _ | Succ _ | Unroll_to _ ->
+    Rec_info (T_RI.create rec_info_expr)
 
 let expand_head t env : Resolved_type.t =
   match t with

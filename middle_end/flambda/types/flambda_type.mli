@@ -255,6 +255,7 @@ module Function_declaration_type : sig
     type t
 
     val code_id : t -> Code_id.t
+    val rec_info : t -> flambda_type
     val must_be_inlined : t -> bool
   end
 
@@ -430,7 +431,7 @@ val mutable_string : size:int -> t
     It may be considered inlinable. *)
 val create_function_declaration
    : code:Flambda.Code.t
-  -> rec_info:Rec_info.t
+  -> rec_info:t
   -> Function_declaration_type.t * Function_decl_inlining_decision.t
 
 (** Create a description of a function declaration whose code is unknown.
