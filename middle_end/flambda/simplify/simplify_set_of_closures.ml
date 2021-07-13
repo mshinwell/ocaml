@@ -258,33 +258,13 @@ end = struct
 	 term and not knowing it prohibits us from inlining it.*)
       |> DE.set_rebuild_terms
     in
-    let env_inside_functions,
-        closure_element_types_all_sets_inside_functions_rev =
-      List.fold_left
-        (fun (env_inside_functions,
-              closure_element_types_all_sets_inside_functions_rev)
-             closure_element_types ->
-          let env_inside_functions, closure_element_types_inside_function =
-            compute_closure_element_types_inside_function
-              ~env_prior_to_sets:(DE.typing_env denv)
-              ~env_inside_function:env_inside_functions ~closure_element_types
-          in
-          env_inside_functions,
-            closure_element_types_inside_function
-              :: closure_element_types_all_sets_inside_functions_rev)
-        (DE.typing_env denv_inside_functions, [])
-        closure_element_types_all_sets
-    in
-    let closure_element_types_inside_functions_all_sets =
-      List.rev closure_element_types_all_sets_inside_functions_rev
-    in
     let free_depth_variables =
       List.concat_map (fun closure_element_types ->
           List.map (fun ty ->
               let vars = TE.free_names_transitive (DE.typing_env denv) ty in
               Name_occurrences.fold_variables vars ~init:Variable.Set.empty
                 ~f:(fun free_depth_variables var ->
-                    let ty = TE.find env_inside_functions (Name.var var) None in
+                    let ty = DE.find_variable denv_inside_functions var in
                     match T.kind ty with
                     | Rec_info ->
                       Variable.Set.add var free_depth_variables
@@ -309,12 +289,32 @@ end = struct
        mshinwell: Leo and I have discussed allowing In_types variables in
        closures, which should cover this case, if we allowed such variables
        to be of kinds other than [Value]. *)
-    let env_inside_functions =
+    let denv_inside_functions =
       Variable.Set.fold (fun dv env_inside_functions ->
           let name = Name.var dv in
-          TE.add_equation env_inside_functions name
+          DE.add_equation_on_name env_inside_functions name
             (T.this_rec_info Rec_info_expr.do_not_inline)
-        ) free_depth_variables env_inside_functions
+        ) free_depth_variables denv_inside_functions
+    in
+    let env_inside_functions,
+        closure_element_types_all_sets_inside_functions_rev =
+      List.fold_left
+        (fun (env_inside_functions,
+              closure_element_types_all_sets_inside_functions_rev)
+             closure_element_types ->
+          let env_inside_functions, closure_element_types_inside_function =
+            compute_closure_element_types_inside_function
+              ~env_prior_to_sets:(DE.typing_env denv)
+              ~env_inside_function:env_inside_functions ~closure_element_types
+          in
+          env_inside_functions,
+            closure_element_types_inside_function
+              :: closure_element_types_all_sets_inside_functions_rev)
+        (DE.typing_env denv_inside_functions, [])
+        closure_element_types_all_sets
+    in
+    let closure_element_types_inside_functions_all_sets =
+      List.rev closure_element_types_all_sets_inside_functions_rev
     in
     let old_to_new_code_ids_all_sets =
       compute_old_to_new_code_ids_all_sets ~all_sets_of_closures
