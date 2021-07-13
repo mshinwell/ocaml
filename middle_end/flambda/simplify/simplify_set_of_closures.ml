@@ -312,11 +312,6 @@ end = struct
     let env_inside_functions =
       Variable.Set.fold (fun dv env_inside_functions ->
           let name = Name.var dv in
-          let env_inside_functions =
-            TE.add_definition env_inside_functions
-              (Name_in_binding_pos.create name Name_mode.normal)
-              K.rec_info
-          in
           TE.add_equation env_inside_functions name
             (T.this_rec_info Rec_info_expr.do_not_inline)
         ) free_depth_variables env_inside_functions

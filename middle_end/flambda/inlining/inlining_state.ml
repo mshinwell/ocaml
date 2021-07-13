@@ -38,10 +38,7 @@ let print ppf t =
 let depth t = t.depth
 
 let is_depth_exceeded t =
-  (* CR-soon lmaurer: Fix this once rec_info is functional again; hardcoding
-     depth of 1 until then *)
-  if true then t.depth >= 1 else
-    t.depth >= (Inlining_arguments.max_inlining_depth t.arguments)
+  t.depth >= (Inlining_arguments.max_inlining_depth t.arguments)
   
 let meet t1 t2 = {
   depth = t1.depth + t2.depth;

@@ -133,3 +133,10 @@ let known_remaining_unrolling_depth dacc rec_info_expr =
     Some remaining_depth
   | { unrolling = (Not_unrolling | Do_not_unroll); _ } ->
     None
+
+let can_unroll dacc rec_info_expr =
+  match evaluate_rec_info_expr dacc rec_info_expr with
+  | { unrolling = Do_not_unroll; _ } ->
+    false
+  | { unrolling = (Not_unrolling | Unrolling _); _ } ->
+    true

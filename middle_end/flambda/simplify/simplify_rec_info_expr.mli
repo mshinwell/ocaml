@@ -47,3 +47,8 @@ val known_remaining_unrolling_depth
    : Downwards_acc.t
   -> Rec_info_expr.t
   -> int option
+
+val can_unroll
+   : Downwards_acc.t
+  -> Rec_info_expr.t
+  -> bool

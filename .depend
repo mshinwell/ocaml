@@ -5324,6 +5324,8 @@ middle_end/flambda/inlining/inlining_arguments.cmi :
 middle_end/flambda/inlining/inlining_decision.cmo : \
     middle_end/flambda/simplify/env/upwards_env.cmi \
     middle_end/flambda/simplify/env/upwards_acc.cmi \
+    middle_end/flambda/simplify/simplify_rec_info_expr.cmi \
+    middle_end/flambda/terms/rec_info_expr.cmi \
     middle_end/flambda/inlining/inlining_transforms.cmi \
     middle_end/flambda/inlining/inlining_state.cmi \
     middle_end/flambda/inlining/inlining_arguments.cmi \
@@ -5340,6 +5342,8 @@ middle_end/flambda/inlining/inlining_decision.cmo : \
 middle_end/flambda/inlining/inlining_decision.cmx : \
     middle_end/flambda/simplify/env/upwards_env.cmx \
     middle_end/flambda/simplify/env/upwards_acc.cmx \
+    middle_end/flambda/simplify/simplify_rec_info_expr.cmx \
+    middle_end/flambda/terms/rec_info_expr.cmx \
     middle_end/flambda/inlining/inlining_transforms.cmx \
     middle_end/flambda/inlining/inlining_state.cmx \
     middle_end/flambda/inlining/inlining_arguments.cmx \
