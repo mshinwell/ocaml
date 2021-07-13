@@ -140,12 +140,13 @@ let simplify_direct_full_application ~simplify_expr dacc apply function_decl_opt
           Inlinable_function { code_id = Code_id.export code_id; decision; }))
         ~dbg:(DE.add_inlined_debuginfo' (DA.denv dacc) (Apply.dbg apply));
       match Call_site_inlining_decision.can_inline decision with
-      | Do_not_inline ->
+      | Do_not_inline { warn_if_attribute_ignored } ->
         (* emission of the warning at this point should not happen,
            if it does, then that means that
            {Inlining_decision.make_decision_for_call_site}
            did not honour the attributes on the call site *)
-        if not (DA.do_not_rebuild_terms dacc) then begin
+        if warn_if_attribute_ignored && not (DA.do_not_rebuild_terms dacc)
+        then begin
           warn_not_inlined_if_needed apply
             "[@inlined] attribute was not used on this function application\
             {Do_not_inline}"

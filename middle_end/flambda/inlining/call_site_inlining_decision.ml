@@ -97,17 +97,22 @@ let print ppf t =
       threshold
 
 type can_inline =
-  | Do_not_inline
+  | Do_not_inline of { warn_if_attribute_ignored : bool; }
   | Inline of { unroll_to : int option; }
 
 let can_inline (t : t) : can_inline =
   match t with
   | Environment_says_never_inline
-  | Unrolling_depth_exceeded
   | Max_inlining_depth_exceeded
   | Recursion_depth_exceeded
   | Speculatively_not_inline _
-  | Never_inline_attribute -> Do_not_inline
+  | Never_inline_attribute ->
+    (* If there's an inline attribute on this, something's gone wrong *)
+    Do_not_inline { warn_if_attribute_ignored = true }
+  | Unrolling_depth_exceeded ->
+    (* If there's an [@unrolled] attribute on this, then we'll ignore the
+        attribute when we stop unrolling, which is fine *)
+    Do_not_inline { warn_if_attribute_ignored = false }
   | Attribute_unroll unroll_to -> Inline { unroll_to = Some unroll_to; }
   | Definition_says_inline
   | Speculatively_inline _
@@ -156,7 +161,7 @@ let report fmt t =
     "@[<v>The function call %s been inlined@ because @[<hov>%a@]@]"
     (match can_inline t with
       | Inline _ -> "has"
-      | Do_not_inline -> "has not")
+      | Do_not_inline _ -> "has not")
     report_reason t
 
 (* CR mshinwell: Overhaul handling of the inlining depth tracking so that
