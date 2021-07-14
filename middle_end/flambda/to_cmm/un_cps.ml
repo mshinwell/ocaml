@@ -1389,15 +1389,14 @@ and fill_slot decls startenv elts env acc offset slot =
     let field, env, eff = simple env (Var_within_closure.Map.find v elts) in
     field :: acc, offset + 1, env, eff
   | Closure (c : Closure_id.t) ->
-    let decl = Closure_id.Map.find c decls in
-    let code_id = Function_declaration.code_id decl in
+    let code_id = Closure_id.Map.find c decls in
     (* CR-someday mshinwell: We should probably use the code's [dbg], but it
        would be tricky to get hold of, and this is very unlikely to make any
        difference in practice. *)
     let dbg = Debuginfo.none in
     let code_symbol = Code_id.code_symbol code_id in
     let code_name = Linkage_name.to_string (Symbol.linkage_name code_symbol) in
-    let arity = Env.get_func_decl_params_arity env decl in
+    let arity = Env.get_func_decl_params_arity env code_id in
     let closure_info = C.closure_info ~arity ~startenv:(startenv - offset) in
     (* We build here the **reverse** list of fields for the closure *)
     if arity = 1 || arity = 0 then begin

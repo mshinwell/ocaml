@@ -50,7 +50,7 @@ val environment_doesn't_mention_variables : t -> bool
 
 val filter_function_declarations
    : t
-  -> f:(Closure_id.t -> Function_declaration.t -> bool)
+  -> f:(Closure_id.t -> Code_id.t -> bool)
   -> t
 
 include Container_types.S with type t := t

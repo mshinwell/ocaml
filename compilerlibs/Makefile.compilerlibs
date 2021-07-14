@@ -239,7 +239,6 @@ MIDDLE_END_FLAMBDA_BASIC=\
   middle_end/flambda/basic/invalid_term_semantics.cmo \
   middle_end/flambda/basic/set_of_closures_origin.cmo \
   middle_end/flambda/basic/num_continuation_uses.cmo \
-  middle_end/flambda/basic/function_decl_intf.cmo \
   middle_end/flambda/basic/effects_and_coeffects.cmo \
   middle_end/flambda/basic/closure_origin.cmo \
   middle_end/flambda/basic/apply_cont_rewrite_id.cmo \
@@ -294,7 +293,6 @@ MIDDLE_END_FLAMBDA_TERMS=\
   middle_end/flambda/terms/switch_expr.cmo \
   middle_end/flambda/terms/code0.cmo \
   middle_end/flambda/terms/code_intf.cmo \
-  middle_end/flambda/terms/function_declaration.cmo \
   middle_end/flambda/terms/function_declarations.cmo \
   middle_end/flambda/terms/set_of_closures.cmo \
   middle_end/flambda/inlining/metrics/code_size.cmo \

@@ -37,7 +37,7 @@ val filter_closure_vars
     variables are returned. *)
 
 (* val map_on_function_decl :
- *   (string -> Closure_id.t -> Flambda.Function_declaration.t -> 'a) ->
+ *   (string -> Closure_id.t -> Flambda.Code_id.t -> 'a) ->
  *   Flambda_unit.t -> 'a Closure_id.Map.t
  * (\** Map a function on each function body exactly once, and return the
  *     resulting mapping. *\) *)

@@ -4364,12 +4364,6 @@ middle_end/flambda/basic/expr_std.cmx : \
     middle_end/flambda/compilenv_deps/printing_cache.cmx \
     middle_end/flambda/basic/invariant_env.cmx \
     middle_end/flambda/naming/contains_names.cmx
-middle_end/flambda/basic/function_decl_intf.cmo : \
-    middle_end/flambda/naming/name_occurrences.cmi \
-    middle_end/flambda/basic/code_id.cmi
-middle_end/flambda/basic/function_decl_intf.cmx : \
-    middle_end/flambda/naming/name_occurrences.cmx \
-    middle_end/flambda/basic/code_id.cmx
 middle_end/flambda/basic/id_types.cmo : \
     utils/int_replace_polymorphic_compare.cmi \
     middle_end/flambda/compilenv_deps/container_types.cmi \
@@ -4803,7 +4797,6 @@ middle_end/flambda/compare/compare.cmo : \
     middle_end/flambda/inlining/inlining_state.cmi \
     middle_end/flambda/basic/inline_attribute.cmi \
     middle_end/flambda/terms/function_declarations.cmi \
-    middle_end/flambda/terms/function_declaration.cmi \
     middle_end/flambda/terms/flambda_unit.cmi \
     middle_end/flambda/terms/flambda_primitive.cmi \
     middle_end/flambda/types/kinds/flambda_arity.cmi \
@@ -4843,7 +4836,6 @@ middle_end/flambda/compare/compare.cmx : \
     middle_end/flambda/inlining/inlining_state.cmx \
     middle_end/flambda/basic/inline_attribute.cmx \
     middle_end/flambda/terms/function_declarations.cmx \
-    middle_end/flambda/terms/function_declaration.cmx \
     middle_end/flambda/terms/flambda_unit.cmx \
     middle_end/flambda/terms/flambda_primitive.cmx \
     middle_end/flambda/types/kinds/flambda_arity.cmx \
@@ -4893,7 +4885,6 @@ middle_end/flambda/from_lambda/closure_conversion.cmo : \
     middle_end/flambda/basic/inline_attribute.cmi \
     typing/ident.cmi \
     middle_end/flambda/terms/function_declarations.cmi \
-    middle_end/flambda/terms/function_declaration.cmi \
     middle_end/flambda/terms/flambda_unit.cmi \
     middle_end/flambda/terms/flambda_primitive.cmi \
     middle_end/flambda/types/kinds/flambda_kind.cmi \
@@ -4949,7 +4940,6 @@ middle_end/flambda/from_lambda/closure_conversion.cmx : \
     middle_end/flambda/basic/inline_attribute.cmx \
     typing/ident.cmx \
     middle_end/flambda/terms/function_declarations.cmx \
-    middle_end/flambda/terms/function_declaration.cmx \
     middle_end/flambda/terms/flambda_unit.cmx \
     middle_end/flambda/terms/flambda_primitive.cmx \
     middle_end/flambda/types/kinds/flambda_kind.cmx \
@@ -5902,7 +5892,6 @@ middle_end/flambda/parser/fexpr_to_flambda.cmo : \
     middle_end/flambda/basic/inline_attribute.cmi \
     typing/ident.cmi \
     middle_end/flambda/terms/function_declarations.cmi \
-    middle_end/flambda/terms/function_declaration.cmi \
     middle_end/flambda/terms/flambda_unit.cmi \
     middle_end/flambda/terms/flambda_primitive.cmi \
     middle_end/flambda/types/kinds/flambda_kind.cmi \
@@ -5952,7 +5941,6 @@ middle_end/flambda/parser/fexpr_to_flambda.cmx : \
     middle_end/flambda/basic/inline_attribute.cmx \
     typing/ident.cmx \
     middle_end/flambda/terms/function_declarations.cmx \
-    middle_end/flambda/terms/function_declaration.cmx \
     middle_end/flambda/terms/flambda_unit.cmx \
     middle_end/flambda/terms/flambda_primitive.cmx \
     middle_end/flambda/types/kinds/flambda_kind.cmx \
@@ -6034,7 +6022,6 @@ middle_end/flambda/parser/flambda_to_fexpr.cmo : \
     middle_end/flambda/inlining/inlining_state.cmi \
     typing/ident.cmi \
     middle_end/flambda/terms/function_declarations.cmi \
-    middle_end/flambda/terms/function_declaration.cmi \
     middle_end/flambda/terms/flambda_unit.cmi \
     middle_end/flambda/terms/flambda_primitive.cmi \
     middle_end/flambda/types/kinds/flambda_kind.cmi \
@@ -6077,7 +6064,6 @@ middle_end/flambda/parser/flambda_to_fexpr.cmx : \
     middle_end/flambda/inlining/inlining_state.cmx \
     typing/ident.cmx \
     middle_end/flambda/terms/function_declarations.cmx \
-    middle_end/flambda/terms/function_declaration.cmx \
     middle_end/flambda/terms/flambda_unit.cmx \
     middle_end/flambda/terms/flambda_primitive.cmx \
     middle_end/flambda/types/kinds/flambda_kind.cmx \
@@ -6483,7 +6469,6 @@ middle_end/flambda/simplify/simplify_apply_expr.cmo : \
     middle_end/flambda/inlining/inlining_state.cmi \
     middle_end/flambda/inlining/inlining_report.cmi \
     middle_end/flambda/terms/function_declarations.cmi \
-    middle_end/flambda/terms/function_declaration.cmi \
     middle_end/flambda/types/kinds/flambda_arity.cmi \
     middle_end/flambda/basic/exn_continuation.cmi \
     lambda/debuginfo.cmi \
@@ -6522,7 +6507,6 @@ middle_end/flambda/simplify/simplify_apply_expr.cmx : \
     middle_end/flambda/inlining/inlining_state.cmx \
     middle_end/flambda/inlining/inlining_report.cmx \
     middle_end/flambda/terms/function_declarations.cmx \
-    middle_end/flambda/terms/function_declaration.cmx \
     middle_end/flambda/types/kinds/flambda_arity.cmx \
     middle_end/flambda/basic/exn_continuation.cmx \
     lambda/debuginfo.cmx \
@@ -7054,7 +7038,6 @@ middle_end/flambda/simplify/simplify_set_of_closures.cmo : \
     middle_end/flambda/inlining/inlining_report.cmi \
     middle_end/flambda/inlining/inlining_arguments.cmi \
     middle_end/flambda/terms/function_declarations.cmi \
-    middle_end/flambda/terms/function_declaration.cmi \
     middle_end/flambda/compilenv_deps/flambda_colours.cmi \
     middle_end/flambda/terms/flambda.cmi \
     middle_end/flambda/basic/exn_continuation.cmi \
@@ -7095,7 +7078,6 @@ middle_end/flambda/simplify/simplify_set_of_closures.cmx : \
     middle_end/flambda/inlining/inlining_report.cmx \
     middle_end/flambda/inlining/inlining_arguments.cmx \
     middle_end/flambda/terms/function_declarations.cmx \
-    middle_end/flambda/terms/function_declaration.cmx \
     middle_end/flambda/compilenv_deps/flambda_colours.cmx \
     middle_end/flambda/terms/flambda.cmx \
     middle_end/flambda/basic/exn_continuation.cmx \
@@ -8118,7 +8100,6 @@ middle_end/flambda/terms/cost_metrics.rec.cmo : \
     middle_end/flambda/inlining/metrics/removed_operations.cmi \
     middle_end/flambda/naming/name_mode.cmi \
     middle_end/flambda/terms/function_declarations.cmi \
-    middle_end/flambda/terms/function_declaration.cmi \
     middle_end/flambda/basic/continuation.cmi \
     middle_end/flambda/inlining/metrics/code_size.cmi \
     middle_end/flambda/basic/closure_id.cmi \
@@ -8132,7 +8113,6 @@ middle_end/flambda/terms/cost_metrics.rec.cmx : \
     middle_end/flambda/inlining/metrics/removed_operations.cmx \
     middle_end/flambda/naming/name_mode.cmx \
     middle_end/flambda/terms/function_declarations.cmx \
-    middle_end/flambda/terms/function_declaration.cmx \
     middle_end/flambda/basic/continuation.cmx \
     middle_end/flambda/inlining/metrics/code_size.cmx \
     middle_end/flambda/basic/closure_id.cmx \
@@ -8216,7 +8196,6 @@ middle_end/flambda/terms/flambda.cmo : \
     middle_end/flambda/inlining/inlining_arguments.cmi \
     middle_end/flambda/cmx/ids_for_export.cmi \
     middle_end/flambda/terms/function_declarations.cmi \
-    middle_end/flambda/terms/function_declaration.cmi \
     middle_end/flambda/terms/flambda_primitive.cmi \
     middle_end/flambda/types/kinds/flambda_kind.cmi \
     middle_end/flambda/compilenv_deps/flambda_colours.cmi \
@@ -8276,7 +8255,6 @@ middle_end/flambda/terms/flambda.cmx : \
     middle_end/flambda/inlining/inlining_arguments.cmx \
     middle_end/flambda/cmx/ids_for_export.cmx \
     middle_end/flambda/terms/function_declarations.cmx \
-    middle_end/flambda/terms/function_declaration.cmx \
     middle_end/flambda/terms/flambda_primitive.cmx \
     middle_end/flambda/types/kinds/flambda_kind.cmx \
     middle_end/flambda/compilenv_deps/flambda_colours.cmx \
@@ -8329,7 +8307,6 @@ middle_end/flambda/terms/flambda.cmi : \
     middle_end/flambda/basic/inline_attribute.cmi \
     middle_end/flambda/cmx/ids_for_export.cmi \
     middle_end/flambda/terms/function_declarations.cmi \
-    middle_end/flambda/terms/function_declaration.cmi \
     middle_end/flambda/terms/flambda_primitive.cmi \
     middle_end/flambda/types/kinds/flambda_kind.cmi \
     middle_end/flambda/types/kinds/flambda_arity.cmi \
@@ -8440,44 +8417,28 @@ middle_end/flambda/terms/flambda_unit.cmi : \
     middle_end/flambda/basic/continuation.cmi \
     middle_end/flambda/basic/code_id.cmi \
     middle_end/flambda/basic/closure_id.cmi
-middle_end/flambda/terms/function_declaration.cmo : \
+middle_end/flambda/terms/function_declarations.cmo : \
     middle_end/flambda/naming/renaming.cmi \
     middle_end/flambda/compilenv_deps/printing_cache.cmi \
     middle_end/flambda/naming/name_occurrences.cmi \
     middle_end/flambda/naming/name_mode.cmi \
     middle_end/flambda/cmx/ids_for_export.cmi \
     middle_end/flambda/basic/code_id.cmi \
-    middle_end/flambda/terms/function_declaration.cmi
-middle_end/flambda/terms/function_declaration.cmx : \
+    middle_end/flambda/basic/closure_id.cmi \
+    middle_end/flambda/terms/function_declarations.cmi
+middle_end/flambda/terms/function_declarations.cmx : \
     middle_end/flambda/naming/renaming.cmx \
     middle_end/flambda/compilenv_deps/printing_cache.cmx \
     middle_end/flambda/naming/name_occurrences.cmx \
     middle_end/flambda/naming/name_mode.cmx \
     middle_end/flambda/cmx/ids_for_export.cmx \
     middle_end/flambda/basic/code_id.cmx \
-    middle_end/flambda/terms/function_declaration.cmi
-middle_end/flambda/terms/function_declaration.cmi : \
-    middle_end/flambda/basic/expr_std.cmo \
-    middle_end/flambda/cmx/contains_ids.cmo \
-    middle_end/flambda/basic/code_id.cmi
-middle_end/flambda/terms/function_declarations.cmo : \
-    middle_end/flambda/compilenv_deps/printing_cache.cmi \
-    middle_end/flambda/naming/name_occurrences.cmi \
-    middle_end/flambda/cmx/ids_for_export.cmi \
-    middle_end/flambda/terms/function_declaration.cmi \
-    middle_end/flambda/basic/closure_id.cmi \
-    middle_end/flambda/terms/function_declarations.cmi
-middle_end/flambda/terms/function_declarations.cmx : \
-    middle_end/flambda/compilenv_deps/printing_cache.cmx \
-    middle_end/flambda/naming/name_occurrences.cmx \
-    middle_end/flambda/cmx/ids_for_export.cmx \
-    middle_end/flambda/terms/function_declaration.cmx \
     middle_end/flambda/basic/closure_id.cmx \
     middle_end/flambda/terms/function_declarations.cmi
 middle_end/flambda/terms/function_declarations.cmi : \
-    middle_end/flambda/terms/function_declaration.cmi \
     middle_end/flambda/basic/expr_std.cmo \
     middle_end/flambda/cmx/contains_ids.cmo \
+    middle_end/flambda/basic/code_id.cmi \
     middle_end/flambda/basic/closure_id.cmi
 middle_end/flambda/terms/function_params_and_body.rec.cmo : \
     middle_end/flambda/compilenv_deps/printing_cache.cmi \
@@ -8730,10 +8691,10 @@ middle_end/flambda/terms/set_of_closures.cmi : \
     middle_end/flambda/basic/var_within_closure.cmi \
     middle_end/flambda/basic/simple.cmi \
     middle_end/flambda/terms/function_declarations.cmi \
-    middle_end/flambda/terms/function_declaration.cmi \
     middle_end/flambda/basic/expr_std.cmo \
     middle_end/flambda/cmx/contains_ids.cmo \
     middle_end/flambda/compilenv_deps/container_types.cmi \
+    middle_end/flambda/basic/code_id.cmi \
     middle_end/flambda/basic/closure_id.cmi
 middle_end/flambda/terms/static_const.rec.cmo : \
     middle_end/flambda/compilenv_deps/variable.cmi \
@@ -8879,7 +8840,6 @@ middle_end/flambda/to_cmm/un_cps.cmo : \
     middle_end/flambda/basic/kinded_parameter.cmi \
     typing/ident.cmi \
     middle_end/flambda/terms/function_declarations.cmi \
-    middle_end/flambda/terms/function_declaration.cmi \
     middle_end/flambda/terms/flambda_unit.cmi \
     middle_end/flambda/terms/flambda_primitive.cmi \
     middle_end/flambda/flambda_middle_end.cmi \
@@ -8943,7 +8903,6 @@ middle_end/flambda/to_cmm/un_cps.cmx : \
     middle_end/flambda/basic/kinded_parameter.cmx \
     typing/ident.cmx \
     middle_end/flambda/terms/function_declarations.cmx \
-    middle_end/flambda/terms/function_declaration.cmx \
     middle_end/flambda/terms/flambda_unit.cmx \
     middle_end/flambda/terms/flambda_primitive.cmx \
     middle_end/flambda/flambda_middle_end.cmx \
@@ -8988,7 +8947,6 @@ middle_end/flambda/to_cmm/un_cps_closure.cmo : \
     utils/misc.cmi \
     middle_end/flambda/compilenv_deps/linkage_name.cmi \
     middle_end/flambda/terms/function_declarations.cmi \
-    middle_end/flambda/terms/function_declaration.cmi \
     middle_end/flambda/terms/flambda_unit.cmi \
     middle_end/flambda/terms/flambda.cmi \
     middle_end/flambda/cmx/exported_offsets.cmi \
@@ -9005,7 +8963,6 @@ middle_end/flambda/to_cmm/un_cps_closure.cmx : \
     utils/misc.cmx \
     middle_end/flambda/compilenv_deps/linkage_name.cmx \
     middle_end/flambda/terms/function_declarations.cmx \
-    middle_end/flambda/terms/function_declaration.cmx \
     middle_end/flambda/terms/flambda_unit.cmx \
     middle_end/flambda/terms/flambda.cmx \
     middle_end/flambda/cmx/exported_offsets.cmx \
@@ -9033,7 +8990,6 @@ middle_end/flambda/to_cmm/un_cps_env.cmo : \
     utils/misc.cmi \
     lambda/lambda.cmi \
     middle_end/flambda/basic/kinded_parameter.cmi \
-    middle_end/flambda/terms/function_declaration.cmi \
     middle_end/flambda/compilenv_deps/flambda_features.cmi \
     middle_end/flambda/terms/flambda.cmi \
     middle_end/flambda/cmx/exported_offsets.cmi \
@@ -9056,7 +9012,6 @@ middle_end/flambda/to_cmm/un_cps_env.cmx : \
     utils/misc.cmx \
     lambda/lambda.cmx \
     middle_end/flambda/basic/kinded_parameter.cmx \
-    middle_end/flambda/terms/function_declaration.cmx \
     middle_end/flambda/compilenv_deps/flambda_features.cmx \
     middle_end/flambda/terms/flambda.cmx \
     middle_end/flambda/cmx/exported_offsets.cmx \
@@ -9076,7 +9031,6 @@ middle_end/flambda/to_cmm/un_cps_env.cmi : \
     middle_end/flambda/types/basic/or_unknown.cmi \
     middle_end/flambda/naming/num_occurrences.cmi \
     middle_end/flambda/basic/kinded_parameter.cmi \
-    middle_end/flambda/terms/function_declaration.cmi \
     middle_end/flambda/types/kinds/flambda_kind.cmi \
     middle_end/flambda/types/kinds/flambda_arity.cmi \
     middle_end/flambda/terms/flambda.cmi \
@@ -9181,7 +9135,6 @@ middle_end/flambda/to_cmm/un_cps_static.cmo : \
     middle_end/flambda/compilenv_deps/linkage_name.cmi \
     lambda/lambda.cmi \
     middle_end/flambda/terms/function_declarations.cmi \
-    middle_end/flambda/terms/function_declaration.cmi \
     middle_end/flambda/compilenv_deps/flambda_colours.cmi \
     middle_end/flambda/terms/flambda.cmi \
     lambda/debuginfo.cmi \
@@ -9217,7 +9170,6 @@ middle_end/flambda/to_cmm/un_cps_static.cmx : \
     middle_end/flambda/compilenv_deps/linkage_name.cmx \
     lambda/lambda.cmx \
     middle_end/flambda/terms/function_declarations.cmx \
-    middle_end/flambda/terms/function_declaration.cmx \
     middle_end/flambda/compilenv_deps/flambda_colours.cmx \
     middle_end/flambda/terms/flambda.cmx \
     lambda/debuginfo.cmx \

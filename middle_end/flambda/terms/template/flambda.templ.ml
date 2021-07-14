@@ -39,7 +39,6 @@ let fprintf = Format.fprintf
    overapplication" be an invariant throughout.  At the moment I think this is
    only true after [Simplify] has split overapplications. *)
 
-module Function_declaration = Function_declaration
 module Function_declarations = Function_declarations
 module Let = Let_expr
 module Let_cont = Let_cont_expr
@@ -52,7 +51,6 @@ module Import = struct
   module Continuation_handler = Continuation_handler
   module Continuation_handlers = Continuation_handlers
   module Expr = Expr
-  module Function_declaration = Function_declaration
   module Function_declarations = Function_declarations
   module Function_params_and_body = Function_params_and_body
   module Let = Let

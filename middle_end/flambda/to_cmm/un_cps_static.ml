@@ -210,14 +210,13 @@ and fill_static_slot s symbs decls startenv elts env acc offset updates slot =
       in
       env, List.rev fields @ acc, offset + 1, updates
   | Closure c ->
-      let decl = Closure_id.Map.find c decls in
+      let code_id = Closure_id.Map.find c decls in
       let symb = Closure_id.Map.find c symbs in
       let external_name = symbol symb in
-      let code_id = Function_declaration.code_id decl in
       let code_symbol = Code_id.code_symbol code_id in
       let code_name = Linkage_name.to_string (Symbol.linkage_name code_symbol) in
       let acc = List.rev (C.define_symbol ~global:true external_name) @ acc in
-      let arity = Env.get_func_decl_params_arity env decl in
+      let arity = Env.get_func_decl_params_arity env code_id in
       let closure_info = C.closure_info ~arity ~startenv:(startenv - offset) in
       (* We build here the **reverse** list of fields for the closure *)
       if arity = 1 || arity = 0 then begin

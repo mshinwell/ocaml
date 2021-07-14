@@ -470,8 +470,7 @@ let closure_elements env map =
     { Fexpr.var; value }
   ) (map |> Var_within_closure.Map.bindings)
 
-let function_declaration env fd closure_id : Fexpr.fun_decl =
-  let code_id = Function_declaration.code_id fd in
+let function_declaration env code_id closure_id : Fexpr.fun_decl =
   let code_id = Env.find_code_id_exn env code_id in
   let closure_id = Env.translate_closure_id env closure_id in
   (* Omit the closure id when possible *)

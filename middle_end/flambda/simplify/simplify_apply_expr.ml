@@ -384,12 +384,9 @@ let simplify_direct_partial_application ~simplify_expr dacc apply
       in
       Static_const.Code code
     in
-    let function_decl =
-      Function_declaration.create ~code_id
-    in
     let function_decls =
       Function_declarations.create
-        (Closure_id.Lmap.singleton wrapper_closure_id function_decl)
+        (Closure_id.Lmap.singleton wrapper_closure_id code_id)
     in
     let closure_elements =
       List.filter_map (fun value ->

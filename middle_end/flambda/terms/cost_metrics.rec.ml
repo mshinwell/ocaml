@@ -71,8 +71,7 @@ and named_size ~find_code (named : Named.t) size =
       |> Var_within_closure.Map.cardinal
     in
     Closure_id.Map.fold
-      (fun _ func_decl size ->
-         let code_id = Function_declaration.code_id func_decl in
+      (fun _ code_id size ->
          let code = find_code code_id in
          let arity = List.length (Code.params_arity code) in
          let size =
@@ -152,8 +151,7 @@ let set_of_closures ~find_code_characteristics set_of_closures =
     |> Var_within_closure.Map.cardinal
   in
   let cost_metrics, num_words =
-    Closure_id.Map.fold (fun _ func_decl (metrics, num_words) ->
-      let code_id = Function_declaration.code_id func_decl in
+    Closure_id.Map.fold (fun _ code_id (metrics, num_words) ->
       let { cost_metrics; params_arity } = find_code_characteristics code_id in
       metrics + cost_metrics,
       (* CR poechsel: valid until OCaml 4.13, as for named_size *)

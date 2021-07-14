@@ -907,9 +907,6 @@ let close_one_function acc ~external_env ~by_closure_id decl
     | Curried -> false
     | Tupled -> true
   in
-  let fun_decl =
-    Function_declaration.create ~code_id
-  in
   let code =
     Code.create
       code_id
@@ -929,7 +926,7 @@ let close_one_function acc ~external_env ~by_closure_id decl
   in
   let acc = Acc.add_code ~code_id ~code acc in
   let acc = Acc.with_seen_a_function acc true in
-  acc, Closure_id.Map.add my_closure_id fun_decl by_closure_id
+  acc, Closure_id.Map.add my_closure_id code_id by_closure_id
 
 let close_functions acc external_env function_declarations =
   let compilation_unit = Compilation_unit.get_current_exn () in

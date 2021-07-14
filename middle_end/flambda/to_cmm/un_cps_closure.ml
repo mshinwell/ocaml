@@ -439,12 +439,11 @@ module Greedy = struct
 
   let rec create_closure_slots set state exported_code = function
     | [] -> state
-    | (c, def) :: r ->
+    | (c, code_id) :: r ->
         let s, state =
           match find_closure_slot state c with
           | Some s -> s, state
           | None ->
-              let code_id = Function_declaration.code_id def in
               let code = Exported_code.find_code exported_code code_id in
               let is_tupled = Code.is_tupled code in
               let params_arity = Code.params_arity code in
