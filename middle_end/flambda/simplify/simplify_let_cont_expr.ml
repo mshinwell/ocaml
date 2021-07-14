@@ -130,10 +130,12 @@ let rebuild_one_continuation_handler cont ~at_unit_toplevel
                           (UA.required_variables uacc))
                 then begin
                   Misc.fatal_errorf
-                      "The data_flow analysis marked the following \
-                      original param as not required, but the free_names \
-                      indicate it is actually used [2]: %a"
+                      "The data_flow analysis marked the original param %a@ \
+                      but the free_names indicate it is actually used [2]:@ \n\
+                      free_names = %a@ \nhandler = %a"
                     KP.print param
+                    Name_occurrences.print free_names
+                    (RE.print (UA.are_rebuilding_terms uacc)) handler
                 end;
                 true
             end) params
