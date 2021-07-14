@@ -28,6 +28,8 @@ val create
   -> used_closure_vars:Var_within_closure.Set.t
   -> t
 
+val empty : t
+
 val import_typing_env_and_code
    : t
   -> Flambda_type.Typing_env.Serializable.t *
@@ -52,3 +54,17 @@ val merge : t option -> t option -> t option
 
 (** For ocamlobjinfo *)
 val print : Format.formatter -> t -> unit
+
+(** The following is for writing values of type [t] into different sections
+    of a .cmx file.  This in particular allows code to be demarshalled
+    lazily. *)
+
+val header_contents
+   : t
+  -> add_code_section:(Obj.t -> int)
+  -> Obj.t
+
+val associate_with_loaded_cmx_file
+   : header_contents:Obj.t
+  -> read_flambda_section_from_cmx_file:(index:int -> Obj.t)
+  -> t

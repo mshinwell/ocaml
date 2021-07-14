@@ -212,8 +212,8 @@ MIDDLE_END_FLAMBDA_BASIC=\
   middle_end/flambda/basic/mutability.cmo \
   middle_end/flambda/naming/name_mode.cmo \
   middle_end/flambda/naming/permutation.cmo \
-  middle_end/flambda/cmx/ids_for_export.cmo \
   middle_end/flambda/naming/renaming.cmo \
+  middle_end/flambda/cmx/ids_for_export.cmo \
   middle_end/flambda/naming/num_occurrences.cmo \
   middle_end/flambda/naming/name_occurrences.cmo \
   middle_end/flambda/types/basic/unit.cmo \
@@ -413,9 +413,9 @@ MIDDLE_END=\
   middle_end/semantics_of_primitives.cmo \
   middle_end/convert_primitives.cmo \
   $(MIDDLE_END_FLAMBDA_COMPILENV_DEPS) \
+  $(MIDDLE_END_FLAMBDA) \
   middle_end/compilenv.cmo \
-  $(MIDDLE_END_CLOSURE) \
-  $(MIDDLE_END_FLAMBDA)
+  $(MIDDLE_END_CLOSURE)
 MIDDLE_END_CMI=\
   middle_end/backend_intf.cmi \
   $(MIDDLE_END_CLOSURE_CMI) \

@@ -154,18 +154,6 @@ let make_package_object ~ppf_dump members targetobj targetname coercion
 
 (* Make the .cmx file for the package *)
 
-let get_export_info ui =
-  assert(Config.flambda);
-  match ui.ui_export_info with
-  | Clambda _ -> assert false
-  | Flambda info -> info
-
-let get_approx ui =
-  assert(not Config.flambda);
-  match ui.ui_export_info with
-  | Clambda info -> info
-  | Flambda _ -> assert false
-
 let build_package_cmx members cmxfile =
   let unit_names =
     List.map (fun m -> m.pm_name) members in
@@ -190,23 +178,6 @@ let build_package_cmx members cmxfile =
       Compilation_unit.Set.empty units
   in
   let ui = Compilenv.current_unit_infos() in
-  let ui_export_info =
-    if Config.flambda then
-      let pack = Compilenv.current_unit () in
-      let flambda_export_info =
-        List.fold_left (fun acc info ->
-            Flambda_cmx_format.merge
-              (Flambda_cmx_format.update_for_pack ~pack_units ~pack
-                 (get_export_info info))
-              acc)
-          (Flambda_cmx_format.update_for_pack ~pack_units ~pack
-             (get_export_info ui))
-          units
-      in
-      Flambda flambda_export_info
-    else
-      Clambda (get_approx ui)
-  in
   let pkg_infos =
     { ui_name = ui.ui_name;
       ui_symbol = ui.ui_symbol;
@@ -226,8 +197,35 @@ let build_package_cmx members cmxfile =
           union(List.map (fun info -> info.ui_send_fun) units);
       ui_force_link =
           List.exists (fun info -> info.ui_force_link) units;
-      ui_export_info;
-    } in
+      ui_section_toc = [];
+      ui_channel = None;
+      ui_sections = [| |];
+      ui_index_of_next_section_to_write = 0;
+      ui_sections_to_write_rev = [];
+    }
+  in
+  if Config.flambda then begin
+    let pack = Compilenv.current_unit () in
+    let flambda_cmx =
+      List.fold_left (fun acc info ->
+          Flambda_cmx_format.merge
+            (Flambda_cmx_format.update_for_pack ~pack_units ~pack
+              (Compilenv.read_flambda_header_section_for_unit_from_cmx_file
+                info))
+            acc)
+        (Some Flambda_cmx_format.empty)
+        (* CR mshinwell: don't understand existing code
+        (Flambda_cmx_format.update_for_pack ~pack_units ~pack
+            (Compilenv.read_flambda_header_section_for_unit_from_cmx_file ui))
+        *)
+        units
+    in
+    Option.iter (Compilenv.set_flambda_export_info_for_unit pkg_infos)
+      flambda_cmx
+  end else begin
+    Compilenv.set_global_approx_for_unit pkg_infos
+      (Compilenv.global_approx_for_unit ui)
+  end;
   Compilenv.write_unit_info pkg_infos cmxfile
 
 (* Make the .cmx and the .o for the package *)

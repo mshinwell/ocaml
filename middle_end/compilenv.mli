@@ -75,8 +75,19 @@ val symbol_for_global: Ident.t -> string
            flambda-only *)
 val symbol_for_global': Ident.t -> Symbol.t
         (* flambda-only *)
+val global_approx_for_unit
+   : Cmx_format.unit_infos
+  -> Clambda.value_approximation
+        (* Return the approximation from the given unit infos record
+           clambda-only *)
 val global_approx: Ident.t -> Clambda.value_approximation
         (* Return the approximation for the given global identifier
+           clambda-only *)
+val set_global_approx_for_unit
+   : Cmx_format.unit_infos
+  -> Clambda.value_approximation
+  -> unit
+        (* Record the approximation for the given unit
            clambda-only *)
 val set_global_approx: Clambda.value_approximation -> unit
         (* Record the approximation of the unit being compiled
@@ -84,18 +95,25 @@ val set_global_approx: Clambda.value_approximation -> unit
 val record_global_approx_toplevel: unit -> unit
         (* Record the current approximation for the current toplevel phrase
            clambda-only *)
-val get_global_info' : Ident.t -> Cmx_format.export_info option
-val set_global_info : Cmx_format.export_info -> unit
 
-(* val set_export_info: Export_info.t -> unit *)
-        (* Record the information of the unit being compiled
-           flambda-only *)
-(* val approx_env: unit -> Export_info.t *)
-        (* Returns all the information loaded from external compilation units
-           flambda-only *)
-(* val approx_for_global: Compilation_unit.t -> Export_info.t option *)
-        (* Loads the exported information declaring the compilation_unit
-           flambda-only *)
+val clear_export_info_for_unit : Cmx_format.unit_infos -> unit
+
+val read_flambda_header_section_for_unit_from_cmx_file
+   : Cmx_format.unit_infos
+  -> Flambda_cmx_format.t option
+
+val read_flambda_header_section_from_cmx_file
+   : Ident.t
+  -> Flambda_cmx_format.t option
+
+val read_flambda_section_from_cmx_file : unit_infos -> index:int -> Obj.t option
+
+val set_flambda_export_info_for_unit
+   : Cmx_format.unit_infos
+  -> Flambda_cmx_format.t
+  -> unit
+
+val set_flambda_export_info : Flambda_cmx_format.t -> unit
 
 val need_curry_fun: int -> unit
 val need_apply_fun: int -> unit

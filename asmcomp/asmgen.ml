@@ -324,8 +324,6 @@ module Flambda_backend = struct
   let max_sensible_number_of_arguments =
     Proc.max_arguments_for_tailcalls - 1
 
-  let set_global_info info = Compilenv.set_global_info (Flambda (Some info))
-
   let get_global_info comp_unit =
     (* The Flambda simplifier should have returned the typing information
        for the predefined exception compilation unit before getting here. *)
@@ -337,14 +335,7 @@ module Flambda_backend = struct
           in Closure_conversion about the linkage names of module blocks *)
         Compilation_unit.get_persistent_ident comp_unit
       in
-      match Compilenv.get_global_info' id with
-      | None | Some (Flambda None) -> None
-      | Some (Flambda (Some info)) -> Some info
-      | Some (Clambda _) ->
-        (* CR mshinwell: This should be a user error, not a fatal error. *)
-        Misc.fatal_errorf "The .cmx file for unit %a was compiled with \
-            the Closure middle-end, not Flambda, and cannot be loaded"
-          Compilation_unit.print comp_unit
+      Compilenv.read_flambda_header_section_from_cmx_file id
 end
 
 let linear_gen_implementation filename =
