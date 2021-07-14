@@ -99,7 +99,7 @@ let rebuild_one_continuation_handler cont ~at_unit_toplevel
                 Misc.fatal_errorf
                   "The data_flow analysis marked the following \
                     extra_param as not required, but the free_names \
-                    indicate it is actually used: %a"
+                    indicate it is actually used [1]: %a"
                   KP.print extra_param;
               used)
       in
@@ -130,9 +130,9 @@ let rebuild_one_continuation_handler cont ~at_unit_toplevel
                           (UA.required_variables uacc))
                 then begin
                   Misc.fatal_errorf
-                      "The data_flow analyis marked the following \
+                      "The data_flow analysis marked the following \
                       original param as not required, but the free_names \
-                      indicate it is actually used: %a"
+                      indicate it is actually used [2]: %a"
                     KP.print param
                 end;
                 true
