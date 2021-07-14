@@ -150,10 +150,13 @@ let rebuild_switch ~simplify_let dacc ~arms ~scrutinee ~scrutinee_ty uacc
        from the simplification of the existing uses.  We must clear these to
        avoid a lookup failure for our new [Apply_cont] when
        [Simplify_apply_cont] tries to rewrite the use.  There is no need for
-       the rewrites anyway; they have already been applied.
+       the rewrites anyway; they have already been applied.  It is of course
+       necessary to restore any rewrite before returning [uacc], since the
+       surrounding context may need it.
        Likewise, we need to clear the continuation uses environment for
        [dest] in [dacc], since our new [Apply_cont] might not match the
        original uses (e.g. if a parameter has been removed). *)
+    let rewrite = UE.find_apply_cont_rewrite (UA.uenv uacc) dest in
     let uacc =
       UA.map_uenv uacc ~f:(fun uenv ->
         UE.delete_apply_cont_rewrite uenv dest)
@@ -174,7 +177,15 @@ let rebuild_switch ~simplify_let dacc ~arms ~scrutinee ~scrutinee_ty uacc
     in
     simplify_let dacc let_expr
       ~down_to_up:(fun _dacc ~rebuild ->
-        rebuild uacc ~after_rebuild:(fun expr uacc -> expr, uacc))
+        rebuild uacc ~after_rebuild:(fun expr uacc ->
+          let uacc =
+            match rewrite with
+            | None -> uacc
+            | Some rewrite ->
+              UA.map_uenv uacc ~f:(fun uenv ->
+                UE.add_apply_cont_rewrite uenv dest rewrite)
+          in
+          expr, uacc))
   in
   (* CR mshinwell: Here and elsewhere [UA.name_occurrences] should be empty
      (maybe except for closure vars? -- check).  We should add asserts. *)
