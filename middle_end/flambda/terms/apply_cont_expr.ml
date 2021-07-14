@@ -25,7 +25,10 @@ type t = {
 
 let print_or_elide_debuginfo ppf dbg =
   if Debuginfo.is_none dbg then Format.pp_print_string ppf ""
-  else Debuginfo.print_compact ppf dbg
+  else begin
+    Format.pp_print_string ppf " ";
+    Debuginfo.print_compact ppf dbg
+  end
 
 include Container_types.Make (struct
   type nonrec t = t
