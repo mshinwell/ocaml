@@ -95,12 +95,16 @@ let rebuild_one_continuation_handler cont ~at_unit_toplevel
                 Variable.Set.mem (KP.var extra_param)
                   (UA.required_variables uacc)
               in
-              if used && not marked_as_required then
+              if used && not marked_as_required then begin
                 Misc.fatal_errorf
-                  "The data_flow analysis marked the following \
-                    extra_param as not required, but the free_names \
-                    indicate it is actually used [1]: %a"
-                  KP.print extra_param;
+                  "The data_flow analysis marked the extra param %a@ \
+                    as not required, but the free_names indicate it is \
+                    actually used:@ \n\
+                    free_names = %a@ \nhandler = %a"
+                  KP.print extra_param
+                  Name_occurrences.print free_names
+                  (RE.print (UA.are_rebuilding_terms uacc)) handler
+              end;
               used)
       in
       let used_as_normal, not_used_as_normal =
@@ -130,9 +134,10 @@ let rebuild_one_continuation_handler cont ~at_unit_toplevel
                           (UA.required_variables uacc))
                 then begin
                   Misc.fatal_errorf
-                      "The data_flow analysis marked the original param %a@ \
-                      but the free_names indicate it is actually used [2]:@ \n\
-                      free_names = %a@ \nhandler = %a"
+                    "The data_flow analysis marked the original param %a@ \
+                     as not required, but the free_names indicate it is \
+                     actually used:@ \n\
+                     free_names = %a@ \nhandler = %a"
                     KP.print param
                     Name_occurrences.print free_names
                     (RE.print (UA.are_rebuilding_terms uacc)) handler
