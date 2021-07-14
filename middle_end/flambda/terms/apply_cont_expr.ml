@@ -24,7 +24,7 @@ type t = {
 }
 
 let print_or_elide_debuginfo ppf dbg =
-  if Debuginfo.is_none dbg then Format.pp_print_string ppf "None"
+  if Debuginfo.is_none dbg then Format.pp_print_string ppf ""
   else Debuginfo.print_compact ppf dbg
 
 include Container_types.Make (struct

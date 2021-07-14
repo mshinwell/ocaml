@@ -30,7 +30,7 @@ let create_static_consts consts = Static_consts consts
 let create_rec_info rec_info_expr = Rec_info rec_info_expr
 
 let print_or_elide_debuginfo ppf dbg =
-  if Debuginfo.is_none dbg then Format.pp_print_string ppf "None"
+  if Debuginfo.is_none dbg then Format.pp_print_string ppf ""
   else Debuginfo.print_compact ppf dbg
 
 let print_with_cache ~cache ppf (t : t) =
