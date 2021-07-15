@@ -372,7 +372,8 @@ let binop (binop:Fexpr.binop) : Flambda_primitive.binary_primitive =
       | Values { field_kind; tag; size = s } ->
         let tag = tag |> Tag.Scannable.create_exn in
         let size = size s in
-        Values { field_kind; tag; size }
+        (* CR mshinwell: add support for "Unknown" tags *)
+        Values { field_kind; tag = Known tag; size }
       | Naked_floats { size = s } ->
         let size = size s in
         Naked_floats { size }

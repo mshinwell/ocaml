@@ -953,7 +953,7 @@ let simplify_immutable_block_load (access_kind : P.Block_access_kind.t)
          to constrain the type of the block *)
       let tag : _ Or_unknown.t =
         match access_kind with
-        | Values { tag; _ } -> Known (Tag.Scannable.to_tag tag)
+        | Values { tag; _ } -> Or_unknown.map tag ~f:Tag.Scannable.to_tag
         | Naked_floats { size; } ->
           match size with
           | Known size ->

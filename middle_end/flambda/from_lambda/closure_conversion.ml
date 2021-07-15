@@ -1105,7 +1105,7 @@ let close_program ~backend ~module_ident ~module_block_size_in_words
     in
     let block_access : P.Block_access_kind.t =
       Values {
-        tag = Tag.Scannable.zero;
+        tag = Known Tag.Scannable.zero;
         size = Known (Targetint_31_63.Imm.of_int module_block_size_in_words);
         field_kind = Any_value;
       }

@@ -110,7 +110,7 @@ end
 module Block_access_kind : sig
   type t =
     | Values of {
-        tag : Tag.Scannable.t;
+        tag : Tag.Scannable.t Or_unknown.t;
         size : Targetint_31_63.Imm.t Or_unknown.t;
         field_kind : Block_access_field_kind.t;
       }

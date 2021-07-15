@@ -204,7 +204,7 @@ end
 module Block_access_kind = struct
   type t =
     | Values of {
-        tag : Tag.Scannable.t;
+        tag : Tag.Scannable.t Or_unknown.t;
         size : Targetint_31_63.Imm.t Or_unknown.t;
         field_kind : Block_access_field_kind.t;
       }
@@ -219,7 +219,7 @@ module Block_access_kind = struct
           @[<hov 1>(size@ %a)@]@ \
           @[<hov 1>(field_kind@ %a)@]\
           )@]"
-        Tag.Scannable.print tag
+        (Or_unknown.print Tag.Scannable.print) tag
         (Or_unknown.print Targetint_31_63.Imm.print) size
         Block_access_field_kind.print field_kind
     | Naked_floats { size; } ->
@@ -240,7 +240,7 @@ module Block_access_kind = struct
     match t1, t2 with
     | Values { tag = tag1; size = size1; field_kind = field_kind1; },
         Values { tag = tag2; size = size2; field_kind = field_kind2; } ->
-      let c = Tag.Scannable.compare tag1 tag2 in
+      let c = Or_unknown.compare Tag.Scannable.compare tag1 tag2 in
       if c <> 0 then c
       else
         let c = Or_unknown.compare Targetint_31_63.Imm.compare size1 size2 in
