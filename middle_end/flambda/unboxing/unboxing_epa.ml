@@ -279,7 +279,7 @@ and compute_extra_args_for_block ~pass
     else
       P.Block_access_kind.Values {
         size;
-        tag = Option.get (Tag.Scannable.of_tag tag);
+        tag = Known (Option.get (Tag.Scannable.of_tag tag));
         field_kind = Any_value;
       }, Const.const_zero
   in
@@ -391,7 +391,7 @@ and compute_extra_args_for_variant ~pass
       let bak : Flambda_primitive.Block_access_kind.t =
         Values {
           size = Known (Targetint_31_63.Imm.of_int size);
-          tag = tag_decision;
+          tag = Known tag_decision;
           field_kind = Any_value;
         }
       in

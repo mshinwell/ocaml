@@ -416,7 +416,7 @@ let create_let_symbols uacc (scoping_rule : Symbol_scoping_rule.t)
               let index = Simple.const_int index in
               let block_access_kind : P.Block_access_kind.t =
                 Values {
-                  tag = Tag.Scannable.zero;
+                  tag = Known Tag.Scannable.zero;
                   size = Unknown;
                   field_kind = Any_value;
                 }

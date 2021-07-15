@@ -406,7 +406,15 @@ let binop (op : Flambda_primitive.binary_primitive) : Fexpr.binop =
       match access_kind with
       | Values { field_kind; size = s; tag } ->
         let size = s |> size in
-        let tag = tag |> Tag.Scannable.to_int in
+        let tag =
+          match tag with
+          | Unknown ->
+            (* CR mshinwell: add support for "Unknown" tags *)
+            Misc.fatal_error "[tag = Unknown] in [Block_access_kind] \
+              not supported"
+          | Known tag ->
+            tag |> Tag.Scannable.to_int
+        in
         Values { field_kind; size; tag }
       | Naked_floats { size = s } ->
         let size = s |> size in

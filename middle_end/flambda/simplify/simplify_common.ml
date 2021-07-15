@@ -115,7 +115,7 @@ let project_tuple ~dbg ~size ~field tuple =
   let module BAK = P.Block_access_kind in
   let bak : BAK.t = Values {
     field_kind = Any_value;
-    tag = Tag.Scannable.zero;
+    tag = Known Tag.Scannable.zero;
     size = Known (Targetint_31_63.Imm.of_int size);
   } in
   let mutability : Mutability.t = Immutable in

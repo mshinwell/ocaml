@@ -378,7 +378,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
       (* Pfield_computed is only used for class access, on blocks of tag
          [Object_tag], created in [CamlinternalOO]. *)
       Values {
-        tag = Tag.Scannable.object_tag;
+        tag = Known Tag.Scannable.object_tag;
         size = Unknown;
         field_kind = Any_value;
       }
@@ -390,7 +390,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
     let field_kind = C.convert_block_access_field_kind imm_or_pointer in
     let block_access : P.Block_access_kind.t =
       Values {
-        tag = Tag.Scannable.object_tag;
+        tag = Known Tag.Scannable.object_tag;
         size = Unknown;
         field_kind;
       }
@@ -620,7 +620,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
     let tag = Tag.Scannable.create_exn tag in
     let size = C.convert_lambda_block_size size in
     let block_access : P.Block_access_kind.t =
-      Values { tag; size; field_kind = Any_value; }
+      Values { tag = Known tag; size; field_kind = Any_value; }
     in
     Binary (Block_load (block_access, mutability), arg, Simple field)
   | Pfloatfield (field, sem), [arg] ->
@@ -640,7 +640,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
     let field = Simple.const (Reg_width_const.tagged_immediate imm) in
     let size = C.convert_lambda_block_size size in
     let block_access : P.Block_access_kind.t =
-      Values { tag = Tag.Scannable.create_exn tag; size; field_kind; }
+      Values { tag = Known (Tag.Scannable.create_exn tag); size; field_kind; }
     in
     Ternary (Block_set (block_access,
          C.convert_init_or_assign initialization_or_assignment),
@@ -849,7 +849,7 @@ let convert_lprim ~backend (prim : L.primitive) (args : Simple.t list)
   | Poffsetref n, [block] ->
     let block_access : P.Block_access_kind.t =
       Values {
-        tag = Tag.Scannable.zero;
+        tag = Known Tag.Scannable.zero;
         size = Known Targetint_31_63.Imm.one;
         field_kind = Immediate;
       }
