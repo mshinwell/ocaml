@@ -643,8 +643,7 @@ let unary_primitive_eligible_for_cse p ~arg =
   | Int_as_pointer -> true
   | Opaque_identity -> false
   | Int_arith _ -> true
-    (* CR mshinwell: See CR below about [Clflags]. *)
-  | Float_arith _ -> !Clflags.float_const_prop
+  | Float_arith _ -> Flambda_features.float_const_prop ()
   | Num_conv _
   | Boolean_not
   | Reinterpret_int64_as_float -> true
@@ -1001,8 +1000,6 @@ let binary_primitive_eligible_for_cse p =
   | Int_arith _
   | Int_shift _
   | Int_comp _  -> true
-    (* CR mshinwell: Elsewhere, we don't directly depend on [Clflags].
-       Maybe that's a mistake? *)
   | Float_arith _
   | Float_comp _ ->
     (* We believe that under the IEEE standard it is correct to CSE
@@ -1011,7 +1008,7 @@ let binary_primitive_eligible_for_cse p =
        floating-point support on Intel processors (and indeed whether we
        make use of that).  As such, we don't CSE these comparisons unless
        we would also CSE floating-point arithmetic operations. *)
-    !Clflags.float_const_prop
+    Flambda_features.float_const_prop ()
 
 let compare_binary_primitive p1 p2 =
   let binary_primitive_numbering p =

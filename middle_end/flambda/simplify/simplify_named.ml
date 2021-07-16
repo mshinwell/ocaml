@@ -237,7 +237,7 @@ let simplify_named0 dacc (bindable_let_bound : Bindable_let_bound.t)
         Simplify_static_const.simplify_static_consts dacc bound_symbols
           static_consts ~simplify_toplevel
       with Misc.Fatal_error -> begin
-        if !Clflags.flambda_context_on_error then begin
+        if Flambda_features.context_on_error () then begin
           Format.eprintf "\n%sContext is:%s simplifying 'let symbol' binding \
                             of@ %a@ with downwards accumulator:@ %a\n"
             (Flambda_colours.error ())
@@ -398,7 +398,7 @@ let simplify_named dacc bindable_let_bound named ~simplify_toplevel =
     in
     simplified_named, removed_operations named simplified_named
   with Misc.Fatal_error -> begin
-    if !Clflags.flambda_context_on_error then begin
+    if Flambda_features.context_on_error () then begin
       Format.eprintf "\n%sContext is:%s simplifying [Let] binding@ %a =@ %a@ \
           with downwards accumulator:@ %a\n"
         (Flambda_colours.error ())

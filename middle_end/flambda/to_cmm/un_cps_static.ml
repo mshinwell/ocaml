@@ -438,7 +438,7 @@ let static_consts env r ~params_and_body bound_symbols static_consts =
     let r = R.add_gc_roots r roots in
     static_consts0 env r ~params_and_body bound_symbols static_consts
   with Misc.Fatal_error as e ->
-    if !Clflags.flambda_context_on_error then begin
+    if Flambda_features.context_on_error () then begin
       (* Create a new "let symbol" with a dummy body to better print the bound
          symbols and static consts. *)
       let dummy_body = Expr.create_invalid () in

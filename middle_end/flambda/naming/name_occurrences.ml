@@ -270,7 +270,7 @@ end = struct
     N.Map.print For_one_name.print ppf (map t)
 
   let invariant t =
-    if !Clflags.flambda_invariant_checks then begin
+    if Flambda_features.check_invariants () then begin
       N.Map.iter (fun _name for_one_name ->
           For_one_name.invariant for_one_name)
         (map t)

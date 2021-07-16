@@ -57,7 +57,7 @@ let lift dacc ty ~bound_to static_const =
     in
     match existing_symbol with
     | Some symbol ->
-      if !Clflags.flambda_invariant_checks
+      if Flambda_features.check_invariants ()
         && not (DE.mem_symbol (DA.denv dacc) symbol)
       then begin
         Misc.fatal_errorf "Constant with symbol %a is shareable but not in \

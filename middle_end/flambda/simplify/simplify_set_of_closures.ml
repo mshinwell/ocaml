@@ -515,7 +515,7 @@ let simplify_function context ~used_closure_vars ~shareable_constants
           end;
           params_and_body, dacc_after_body, free_names_of_code, uacc
         | exception Misc.Fatal_error ->
-          if !Clflags.flambda_context_on_error then begin
+          if Flambda_features.context_on_error () then begin
             Format.eprintf "\n%sContext is:%s simplifying function \
                 with closure ID %a,@ params %a,@ return continuation %a,@ \
                 exn continuation %a,@ my_closure %a,@ body:@ %a@ \

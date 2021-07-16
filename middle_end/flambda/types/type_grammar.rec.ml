@@ -1016,7 +1016,7 @@ let equation_is_directly_recursive name ty =
       ~const:(fun _ -> false)
 
 let check_equation name ty =
-  if !Clflags.flambda_invariant_checks then begin
+  if Flambda_features.check_invariants () then begin
     if equation_is_directly_recursive name ty then begin
       Misc.fatal_errorf "Directly recursive equation@ %a = %a@ \
           disallowed"

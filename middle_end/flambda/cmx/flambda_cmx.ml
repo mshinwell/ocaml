@@ -113,7 +113,7 @@ let prepare_cmx_file_contents ~return_cont_env:cont_uses_env
       cont_uses_env return_continuation
   with
   | None -> None
-  | Some _ when !Clflags.opaque -> None
+  | Some _ when Flambda_features.opaque () -> None
   | Some final_typing_env ->
     (* CR mshinwell: We should remove typing information about names that
        do not occur (transitively) in the type of the module block. *)

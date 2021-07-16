@@ -32,13 +32,13 @@ let check_invariants unit =
   end
 
 let print_rawflambda ppf unit =
-  if !Clflags.dump_rawflambda then begin
+  if Flambda_features.dump_rawflambda () then begin
     Format.fprintf ppf "\n%sAfter CPS conversion:%s@ %a@."
       (Flambda_colours.each_file ())
       (Flambda_colours.normal ())
       Flambda_unit.print unit
   end;
-  if !Clflags.dump_rawfexpr then begin
+  if Flambda_features.dump_rawfexpr () then begin
     Format.fprintf ppf "\n%sAfter CPS conversion:%s@ %a@."
       (Flambda_colours.each_file ())
       (Flambda_colours.normal ())
@@ -46,14 +46,14 @@ let print_rawflambda ppf unit =
   end
 
 let print_flambda name ppf unit =
-  if !Clflags.dump_flambda then begin
+  if Flambda_features.dump_flambda () then begin
     Format.fprintf ppf "\n%sAfter %s:%s@ %a@."
       (Flambda_colours.each_file ())
       name
       (Flambda_colours.normal ())
       Flambda_unit.print unit
   end;
-  if !Clflags.dump_fexpr then begin
+  if Flambda_features.dump_fexpr () then begin
     Format.fprintf ppf "\n%sAfter %s:%s@ %a@."
       (Flambda_colours.each_file ())
       name
@@ -62,7 +62,7 @@ let print_flambda name ppf unit =
   end
 
 let output_flexpect ~ml_filename old_unit new_unit =
-  if !Clflags.dump_flexpect then begin
+  if Flambda_features.dump_flexpect () then begin
     let basename = Filename.chop_suffix ml_filename ".ml" in
     let filename = basename ^ ".flt" in
     let before = old_unit |> Flambda_to_fexpr.conv in
@@ -78,7 +78,7 @@ let output_flexpect ~ml_filename old_unit new_unit =
 
 let middle_end0 ppf ~prefixname ~backend ~filename ~module_ident
       ~module_block_size_in_words ~module_initializer =
-  Misc.Color.setup !Clflags.color;
+  Misc.Color.setup (Flambda_features.colour ());
   Profile.record_call "flambda.0" (fun () ->
     let flambda =
       Profile.record_call "lambda_to_flambda" (fun () ->
@@ -88,7 +88,7 @@ let middle_end0 ppf ~prefixname ~backend ~filename ~module_ident
     print_rawflambda ppf flambda;
     check_invariants flambda;
     let flambda =
-      if !Clflags.Flambda.Debug.permute_every_name
+      if Flambda_features.Debug.permute_every_name ()
       then Flambda_unit.permute_everything flambda
       else flambda
     in
@@ -97,7 +97,7 @@ let middle_end0 ppf ~prefixname ~backend ~filename ~module_ident
       Profile.record_call ~accumulate:true "simplify"
         (fun () -> Simplify.run ~backend ~round flambda)
     in
-    if !Clflags.inlining_report then begin
+    if Flambda_features.inlining_report () then begin
       let output_prefix = Printf.sprintf "%s.%d" prefixname round in
       Inlining_report.output_then_forget_decisions ~output_prefix
     end;

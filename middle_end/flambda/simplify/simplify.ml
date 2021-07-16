@@ -75,7 +75,7 @@ let run ~backend ~round unit =
       ~resolver
       ~get_imported_names
       ~get_imported_code
-      ~float_const_prop:!Clflags.float_const_prop
+      ~float_const_prop:(Flambda_features.float_const_prop ())
       ~unit_toplevel_return_continuation:return_continuation
       ~unit_toplevel_exn_continuation:exn_continuation
   in

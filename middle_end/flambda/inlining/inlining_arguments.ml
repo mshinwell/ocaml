@@ -184,25 +184,19 @@ module Args = struct
       threshold = Float.min t1_threshold t2_threshold
     }
 
-
-  let cost_i (flag : Clflags.Int_arg_helper.parsed) ~round =
-    Clflags.Int_arg_helper.get ~key:round flag
-
-  let cost_f (flag : Clflags.Float_arg_helper.parsed) ~round =
-    Clflags.Float_arg_helper.get ~key:round flag
-
-  let create ~round = {
-    max_inlining_depth = cost_i !Clflags.inline_max_depth ~round;
-    call_cost = cost_f !Clflags.inline_call_cost ~round;
-    alloc_cost = cost_f !Clflags.inline_alloc_cost ~round;
-    prim_cost = cost_f !Clflags.inline_prim_cost ~round;
-    branch_cost = cost_f !Clflags.inline_branch_cost ~round;
-    indirect_call_cost = cost_f !Clflags.inline_indirect_call_cost ~round;
-    poly_compare_cost = cost_f !Clflags.inline_poly_compare_cost ~round;
-    small_function_size = cost_i !Clflags.inline_small_function_size ~round;
-    large_function_size = cost_i !Clflags.inline_large_function_size ~round;
-    threshold = cost_f !Clflags.inline_threshold ~round;
-  }
+  let create ~round =
+    let module I = Flambda_features.Inlining in
+    { max_inlining_depth = I.max_depth ~round;
+      call_cost = I.call_cost ~round;
+      alloc_cost = I.alloc_cost ~round;
+      prim_cost = I.prim_cost ~round;
+      branch_cost = I.branch_cost ~round;
+      indirect_call_cost = I.indirect_call_cost ~round;
+      poly_compare_cost = I.poly_compare_cost ~round;
+      small_function_size = I.small_function_size ~round;
+      large_function_size = I.large_function_size ~round;
+      threshold = I.threshold ~round;
+    }
 end
 
 type t = Args.t

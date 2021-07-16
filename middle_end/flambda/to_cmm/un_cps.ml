@@ -650,7 +650,7 @@ let function_args vars my_closure ~(is_my_closure_used : _ Or_unknown.t) =
     vars
 
 let function_flags () =
-  if !Clflags.optimize_for_speed then
+  if Flambda_features.optimize_for_speed () then
     []
   else
     [ Cmm.Reduce_code_size ]

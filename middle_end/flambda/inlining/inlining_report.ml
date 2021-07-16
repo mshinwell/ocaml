@@ -141,7 +141,7 @@ let rec print ~depth fmt = function
 (* Exposed interface *)
 
 let record_decision ~dbg decision =
-  if !Clflags.inlining_report || !Clflags.inlining_report_bin then begin
+  if Flambda_features.inlining_report () || Flambda_features.inlining_report_bin () then begin
     log := { dbg; decision; } :: !log
   end
 
@@ -154,13 +154,13 @@ let output_then_forget_decisions ~output_prefix =
       Format.eprintf "WARNING: inlining report output failed@.")
     (fun () ->
        let l = lazy (List.rev !log) in
-       if !Clflags.inlining_report then begin
+       if Flambda_features.inlining_report () then begin
          let out_channel = open_out (output_prefix ^ ".inlining.org") in
          let fmt = Format.formatter_of_out_channel out_channel in
          Format.fprintf fmt "%a@." (print ~depth:0) (Lazy.force l);
          close_out out_channel;
        end;
-       if !Clflags.inlining_report_bin then begin
+       if Flambda_features.inlining_report_bin () then begin
          let ch = open_out_bin (output_prefix ^ ".inlining") in
          let metadata = {
            compilation_unit = Compilation_unit.get_current_exn ();

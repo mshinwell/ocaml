@@ -219,5 +219,5 @@ val join
   -> t Or_unknown.t
 
 (* Checks that the equation is not directly recursive (x : =x)
-   (Depends on Clflags.flambda_invariant_checks) *)
+   (Depends on [Flambda_features.invariant_checks ()]) *)
 val check_equation : Name.t -> t -> unit

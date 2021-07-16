@@ -113,7 +113,7 @@ let add_symbol_projection t var proj =
   { t with symbol_projections; }
 
 let add_definition t var kind binding_time =
-  if !Clflags.flambda_invariant_checks
+  if Flambda_features.check_invariants ()
     && Variable.Map.mem var t.defined_vars
   then begin
     Misc.fatal_errorf "Environment extension already binds variable %a:@ %a"

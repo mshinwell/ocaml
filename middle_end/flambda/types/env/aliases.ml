@@ -145,7 +145,7 @@ end = struct
         (function
           | None -> Some (Name.Map.singleton elt coercion_to_canonical)
           | Some elts ->
-            if !Clflags.flambda_invariant_checks then begin
+            if Flambda_features.check_invariants () then begin
               assert (not (Name.Map.mem elt elts))
             end;
             Some (Name.Map.add elt coercion_to_canonical elts))
@@ -450,7 +450,7 @@ let name_mode t elt ~min_binding_time =
     ~min_binding_time
 
 let invariant t =
-  if !Clflags.flambda_invariant_checks then begin
+  if Flambda_features.check_invariants () then begin
     let all_aliases_of_names : Map_to_canonical.t =
       Name.Map.fold (fun canonical_element aliases all_aliases ->
           Aliases_of_canonical_element.invariant aliases;
@@ -522,7 +522,7 @@ let canonical t element : canonical =
             coercion_from_element_to_bare_element
             ~then_:coercion_from_bare_element_to_canonical
         in
-        if !Clflags.flambda_invariant_checks then begin
+        if Flambda_features.check_invariants () then begin
           assert (not (Simple.equal element canonical_element))
         end;
         Alias_of_canonical
@@ -606,7 +606,7 @@ let add_alias_between_canonical_elements t ~canonical_element
     let aliases_of_to_be_demoted =
       get_aliases_of_canonical_element t ~canonical_element:to_be_demoted
     in
-    if !Clflags.flambda_invariant_checks then begin
+    if Flambda_features.check_invariants () then begin
       Simple.pattern_match canonical_element
         ~const:(fun _ -> ())
         ~name:(fun canonical_element ~coercion ->
@@ -627,7 +627,7 @@ let add_alias_between_canonical_elements t ~canonical_element
     let aliases_of_canonical_element =
       get_aliases_of_canonical_element t ~canonical_element
     in
-    if !Clflags.flambda_invariant_checks then begin
+    if Flambda_features.check_invariants () then begin
       assert (not (Aliases_of_canonical_element.mem
         aliases_of_canonical_element name_to_be_demoted));
       assert (Aliases_of_canonical_element.is_empty (
@@ -684,7 +684,7 @@ type add_result = {
 
 let invariant_add_result
       ~original_t { canonical_element; alias_of_demoted_element; t; } =
-  if !Clflags.flambda_invariant_checks then begin
+  if Flambda_features.check_invariants () then begin
     invariant t;
     if not (defined_earlier t canonical_element ~than:alias_of_demoted_element) then begin
       Misc.fatal_errorf "Canonical element %a should be defined earlier \
@@ -918,7 +918,7 @@ let add t ~element1:element1_with_coercion ~binding_time_and_mode1
     Coercion.compose_exn (Simple.coercion element2_with_coercion)
       ~then_:(Coercion.inverse (Simple.coercion element1_with_coercion))
   in
-  if !Clflags.flambda_invariant_checks then begin
+  if Flambda_features.check_invariants () then begin
     if Simple.equal element1 element2 then begin
       Misc.fatal_errorf
         "Cannot alias an element to itself: %a" Simple.print element1
@@ -948,7 +948,7 @@ let add t ~element1:element1_with_coercion ~binding_time_and_mode1
     }
   in
   let add_result = add_alias t ~element1 ~coercion_from_element2_to_element1 ~element2 in
-  if !Clflags.flambda_invariant_checks then begin
+  if Flambda_features.check_invariants () then begin
     invariant_add_result ~original_t add_result
   end;
   add_result
@@ -1094,7 +1094,7 @@ let get_aliases t element =
       compose_map_values_exn alias_names_with_coercions_to_canonical
         ~then_:coercion_from_canonical_to_element
     in
-    if !Clflags.flambda_invariant_checks then begin
+    if Flambda_features.check_invariants () then begin
       let element_coerced_to_canonical =
         Simple.apply_coercion_exn element coercion_from_element_to_canonical
       in

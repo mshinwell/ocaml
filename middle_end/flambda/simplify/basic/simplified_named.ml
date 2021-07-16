@@ -94,7 +94,7 @@ let reachable_with_known_free_names ~find_code_characteristics
   }
 
 let invalid () =
-  if !Clflags.treat_invalid_code_as_unreachable then
+  if Flambda_features.treat_invalid_code_as_unreachable () then
     Invalid Treat_as_unreachable
   else
     Invalid Halt_and_catch_fire
