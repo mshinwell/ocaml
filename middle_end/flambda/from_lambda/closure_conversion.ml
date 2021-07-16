@@ -83,7 +83,7 @@ let rec declare_const acc (const : Lambda.structured_constant)
     acc, Tagged_immediate (Targetint_31_63.char c), "char"
   | Const_base (Const_string (s, _, _)) ->
     let const, name =
-      if Config.safe_string then
+      if Flambda_features.safe_string () then
         Static_const.Immutable_string s, "immstring"
       else
         Static_const.Mutable_string { initial_value = s; }, "string"

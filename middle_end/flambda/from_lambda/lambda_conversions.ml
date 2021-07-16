@@ -22,7 +22,7 @@ module L = Lambda
 module P = Flambda_primitive
 
 let check_float_array_optimisation_enabled () =
-  if not Config.flat_float_array then begin
+  if not (Flambda_features.flat_float_array ()) then begin
     Misc.fatal_error "[Pgenarray] is not expected when the float array \
       optimisation is disabled"
   end

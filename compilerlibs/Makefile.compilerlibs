@@ -181,6 +181,7 @@ MIDDLE_END_FLAMBDA_COMPILENV_DEPS=\
   middle_end/flambda/compilenv_deps/one_bit_fewer.cmo \
   middle_end/flambda/compilenv_deps/lmap.cmo \
   middle_end/flambda/compilenv_deps/container_types.cmo \
+  middle_end/flambda/compilenv_deps/flambda_features.cmo \
   middle_end/flambda/compilenv_deps/targetint_32_64.cmo \
   middle_end/flambda/compilenv_deps/numeric_types.cmo \
   middle_end/flambda/compilenv_deps/targetint_31_63.cmo \
@@ -196,7 +197,6 @@ MIDDLE_END_FLAMBDA_COMPILENV_DEPS=\
   middle_end/flambda/compilenv_deps/reg_width_things.cmo \
   middle_end/flambda/compilenv_deps/symbol.cmo \
   middle_end/flambda/compilenv_deps/variable.cmo \
-  middle_end/flambda/compilenv_deps/flambda_features.cmo \
   middle_end/flambda/compilenv_deps/strongly_connected_components_flambda2.cmo
 
 MIDDLE_END_FLAMBDA_BASIC=\

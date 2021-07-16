@@ -20,7 +20,7 @@ let () =
   match Targetint_32_64.num_bits with
   | Sixty_four -> ()
   | Thirty_two ->
-    if Config.flambda then begin
+    if Flambda_features.flambda2_is_enabled () then begin
       Misc.fatal_error "Flambda 2 does not yet support 32-bit compilation"
     end
 

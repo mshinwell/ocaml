@@ -14,11 +14,16 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
+let flambda2_is_enabled () = Config.flambda
+
 let join_points () = !Clflags.Flambda.join_points
 let unbox_along_intra_function_control_flow () =
   !Clflags.Flambda.unbox_along_intra_function_control_flow
 let backend_cse_at_toplevel () = !Clflags.Flambda.backend_cse_at_toplevel
 let cse_depth () = !Clflags.Flambda.cse_depth
+
+let safe_string () = Config.safe_string
+let flat_float_array () = Config.flat_float_array
 
 let debug () = !Clflags.debug
 let opaque () = !Clflags.opaque

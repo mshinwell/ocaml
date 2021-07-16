@@ -14,10 +14,15 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
+val flambda2_is_enabled : unit -> bool
+
 val join_points : unit -> bool
 val unbox_along_intra_function_control_flow : unit -> bool
 val backend_cse_at_toplevel : unit -> bool
 val cse_depth : unit -> int
+
+val safe_string : unit -> bool
+val flat_float_array : unit -> bool
 
 val debug : unit -> bool
 val opaque : unit -> bool
