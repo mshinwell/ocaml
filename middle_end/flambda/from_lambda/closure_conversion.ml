@@ -801,7 +801,7 @@ let close_one_function acc ~external_env ~by_closure_id decl
   let acc, body =
     try body acc closure_env
     with Misc.Fatal_error -> begin
-      if !Clflags.flambda_context_on_error then begin
+      if Flambda_features.context_on_error () then begin
         Format.eprintf "\n%sContext is:%s closure converting \
           function@ with [our_let_rec_ident] %a (closure ID %a)"(* @ \ *)
           (* and body:@ %a *)
@@ -891,7 +891,7 @@ let close_one_function acc ~external_env ~by_closure_id decl
        been lifted by our other check in [Inlining_cost] (thus preventing us
        seeing they were originally there). *)
     if contains_subfunctions
-      && !Clflags.Flambda.Expert.fallback_inlining_heuristic
+      && Flambda_features.Expert.fallback_inlining_heuristic ()
     then Never_inline
     else LC.inline_attribute (Function_decl.inline decl)
   in

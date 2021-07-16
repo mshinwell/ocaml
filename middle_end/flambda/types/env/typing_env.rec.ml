@@ -499,7 +499,7 @@ let print ppf t =
   print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
 let invariant0 ?force _t =
-  if !Clflags.flambda_invariant_checks || Option.is_some (force : unit option)
+  if Flambda_features.check_invariants () || Option.is_some (force : unit option)
   then begin
 (* CR mshinwell: Fix things so this check passes, or delete it.
     let no_empty_prev_levels =
@@ -825,7 +825,7 @@ let add_variable_definition t var kind name_mode =
       print t
   end;
   let name = Name.var var in
-  if !Clflags.flambda_invariant_checks && mem t name then begin
+  if Flambda_features.check_invariants () && mem t name then begin
     Misc.fatal_errorf "Cannot rebind %a in environment:@ %a"
       Name.print name
       print t
@@ -895,7 +895,7 @@ let add_definition t (name : Name_in_binding_pos.t) kind =
 
 let invariant_for_alias (t:t) name ty =
   (* Check that no canonical element gets an [Equals] type *)
-  if !Clflags.flambda_invariant_checks || true then begin
+  if Flambda_features.check_invariants () || true then begin
     match Type_grammar.get_alias_exn ty with
     | exception Not_found -> ()
     | alias ->
@@ -918,7 +918,7 @@ let invariant_for_aliases (t:t) =
 *)
 
 let invariant_for_new_equation (t:t) name ty =
-  if !Clflags.flambda_invariant_checks then begin
+  if Flambda_features.check_invariants () then begin
     invariant_for_alias t name ty;
     (* CR mshinwell: This should check that precision is not decreasing. *)
     let defined_names =
@@ -941,7 +941,7 @@ let invariant_for_new_equation (t:t) name ty =
   end
 
 let rec add_equation0 (t:t) name ty =
-  if !Clflags.Flambda.Debug.concrete_types_only_on_canonicals then begin
+  if Flambda_features.Debug.concrete_types_only_on_canonicals () then begin
     let is_concrete =
       match Type_grammar.get_alias_exn ty with
       | exception Not_found -> true
@@ -998,7 +998,7 @@ let rec add_equation0 (t:t) name ty =
   res
 
 and add_equation t name ty =
-  if !Clflags.flambda_invariant_checks then begin
+  if Flambda_features.check_invariants () then begin
     let existing_ty = find t name None in
     if not (K.equal (Type_grammar.kind existing_ty) (Type_grammar.kind ty))
     then begin
@@ -1026,7 +1026,7 @@ and add_equation t name ty =
   end;
   *)
   end;
-  if !Clflags.flambda_invariant_checks then begin
+  if Flambda_features.check_invariants () then begin
     match Type_grammar.get_alias_exn ty with
     | exception Not_found -> ()
     | simple ->
@@ -1179,7 +1179,7 @@ let add_definitions_of_params t ~params =
     params
 
 let check_params_and_types ~params ~param_types =
-  if !Clflags.flambda_invariant_checks
+  if Flambda_features.check_invariants ()
     && List.compare_lengths params param_types <> 0
   then begin
     Misc.fatal_errorf "Mismatch between number of [params] and \
@@ -1347,7 +1347,7 @@ let type_simple_in_term_exn t ?min_name_mode simple =
       ~min_name_mode ~min_binding_time
   with
   | exception Misc.Fatal_error ->
-    if !Clflags.flambda_context_on_error then begin
+    if Flambda_features.context_on_error () then begin
       Format.eprintf "\n%sContext is:%s typing environment@ %a\n"
         (Flambda_colours.error ())
         (Flambda_colours.normal ())
@@ -1429,7 +1429,7 @@ let get_canonical_simple_exn t ?min_name_mode ?name_mode_of_existing_simple
       ~min_name_mode ~min_binding_time
   with
   | exception Misc.Fatal_error ->
-    if !Clflags.flambda_context_on_error then begin
+    if Flambda_features.context_on_error () then begin
       Format.eprintf "\n%sContext is:%s typing environment@ %a\n"
         (Flambda_colours.error ())
         (Flambda_colours.normal ())

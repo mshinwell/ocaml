@@ -28,7 +28,7 @@ type t =
 let invariant _env _t = ()
 
 let print_with_cache ~cache ppf t =
-  if !Clflags.dump_let_cont then begin
+  if Flambda_features.dump_let_cont () then begin
     (* Printing the same way as for [Let] is easier when debugging lifting
        passes. *)
     Misc.fatal_error "Needs re-enabling"

@@ -44,7 +44,7 @@ let fold ~equation t acc =
   Name.Map.fold equation t.equations acc
 
 let invariant { equations; } =
-  if !Clflags.flambda_invariant_checks then
+  if Flambda_features.check_invariants () then
     Name.Map.iter Type_grammar.check_equation equations
 
 let empty () = { equations = Name.Map.empty; }
@@ -60,7 +60,7 @@ let one_equation name ty =
 
 let add_or_replace_equation t name ty =
   Type_grammar.check_equation name ty;
-  if !Clflags.flambda_invariant_checks
+  if Flambda_features.check_invariants ()
   && Name.Map.mem name t.equations
   then begin
     Format.eprintf

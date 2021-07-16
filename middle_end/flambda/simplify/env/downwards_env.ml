@@ -603,7 +603,7 @@ let enter_inlined_apply ~called_code ~apply t =
   }
 
 let generate_phantom_lets t =
-  !Clflags.debug && !Clflags.Flambda.Expert.phantom_lets
+  Flambda_features.debug () && Flambda_features.Expert.phantom_lets ()
     (* It would be a waste of time generating phantom lets when not
        rebuilding terms, since they have no effect on cost metrics. *)
     && are_rebuilding_terms t

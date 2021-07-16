@@ -156,7 +156,7 @@ let create_invalid ?semantics () =
     | Some semantics ->
       semantics
     | None ->
-      if !Clflags.treat_invalid_code_as_unreachable then
+      if Flambda_features.treat_invalid_code_as_unreachable () then
         Treat_as_unreachable
       else
         Halt_and_catch_fire

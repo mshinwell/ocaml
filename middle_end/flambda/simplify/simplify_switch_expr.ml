@@ -236,7 +236,7 @@ let rebuild_switch ~simplify_let dacc ~arms ~scrutinee ~scrutinee_ty uacc
              branches wouldn't have been taken during execution anyway.
           *)
           let expr, uacc = EB.create_switch uacc ~scrutinee ~arms in
-          if !Clflags.flambda_invariant_checks
+          if Flambda_features.check_invariants ()
             && Simple.is_const scrutinee
             && Targetint_31_63.Map.cardinal arms > 1
           then begin

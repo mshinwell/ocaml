@@ -189,7 +189,7 @@ let apply_cont_use_kind ~context apply_cont : Continuation_use_kind.t =
            at Cmm level; see [Cmm_helpers.raise_prim].)
            We set [escaping = true] for the cases we do not want to
            convert into jumps. *)
-        if !Clflags.debug then Non_inlinable { escaping = true; }
+        if Flambda_features.debug () then Non_inlinable { escaping = true; }
         else Non_inlinable { escaping = false; }
       | Some No_trace ->
         Non_inlinable { escaping = false; }
